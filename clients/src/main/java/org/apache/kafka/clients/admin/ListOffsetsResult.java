@@ -18,7 +18,6 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -27,10 +26,7 @@ import java.util.concurrent.ExecutionException;
 
 /**
  * The result of the {@link AdminClient#listOffsets(Map)} call.
- *
- * The API of this class is evolving, see {@link AdminClient} for details.
  */
-@InterfaceStability.Evolving
 public class ListOffsetsResult {
 
     private final Map<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> futures;
@@ -56,7 +52,7 @@ public class ListOffsetsResult {
      * retrieved.
      */
     public KafkaFuture<Map<TopicPartition, ListOffsetsResultInfo>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]))
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]))
                 .thenApply(v -> {
                     Map<TopicPartition, ListOffsetsResultInfo> offsets = new HashMap<>(futures.size());
                     for (Map.Entry<TopicPartition, KafkaFuture<ListOffsetsResultInfo>> entry : futures.entrySet()) {

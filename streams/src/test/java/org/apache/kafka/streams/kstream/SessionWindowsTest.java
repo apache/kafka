@@ -66,13 +66,13 @@ public class SessionWindowsTest {
     }
 
     @Test
-    public void windowSizeMustNotBeNegative() {
+    public void sessionGapCannotBeNegative() {
         assertThrows(IllegalArgumentException.class, () -> SessionWindows.ofInactivityGapWithNoGrace(ofMillis(-1)));
     }
 
     @Test
-    public void windowSizeMustNotBeZero() {
-        assertThrows(IllegalArgumentException.class, () -> SessionWindows.ofInactivityGapWithNoGrace(ofMillis(0)));
+    public void sessionGapCanBeZero() {
+        SessionWindows.ofInactivityGapWithNoGrace(ofMillis(0));
     }
 
     @Test

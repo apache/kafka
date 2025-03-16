@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tiered.storage;
 
-import kafka.log.UnifiedLog;
 import kafka.utils.TestUtils;
 
 import org.apache.kafka.clients.CommonClientConfigs;
@@ -45,6 +44,7 @@ import org.apache.kafka.server.log.remote.storage.LocalTieredStorage;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageHistory;
 import org.apache.kafka.server.log.remote.storage.LocalTieredStorageSnapshot;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
+import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.tiered.storage.specs.ExpandPartitionCountSpec;
 import org.apache.kafka.tiered.storage.specs.TopicSpec;
 import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
@@ -302,11 +302,7 @@ public final class TieredStorageTestContext implements AutoCloseable {
 
     // unused now, but it can be reused later as this is an utility method.
     public Optional<LeaderEpochFileCache> leaderEpochFileCache(int brokerId, TopicPartition partition) {
-        Optional<UnifiedLog> unifiedLogOpt = log(brokerId, partition);
-        if (unifiedLogOpt.isPresent() && unifiedLogOpt.get().leaderEpochCache().isDefined()) {
-            return Optional.of(unifiedLogOpt.get().leaderEpochCache().get());
-        }
-        return Optional.empty();
+        return log(brokerId, partition).map(UnifiedLog::leaderEpochCache);
     }
 
     public List<LocalTieredStorage> remoteStorageManagers() {

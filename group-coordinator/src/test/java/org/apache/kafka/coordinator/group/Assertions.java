@@ -37,7 +37,6 @@ import org.opentest4j.AssertionFailedError;
 
 import java.nio.ByteBuffer;
 import java.util.Comparator;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
@@ -63,13 +62,6 @@ public class Assertions {
         ConsumerGroupTargetAssignmentMemberValue.class, Assertions::assertConsumerGroupTargetAssignmentMemberValue,
         ShareGroupPartitionMetadataValue.class, Assertions::assertShareGroupPartitionMetadataValue
     );
-
-    public static <T> void assertUnorderedListEquals(
-        List<T> expected,
-        List<T> actual
-    ) {
-        assertEquals(new HashSet<>(expected), new HashSet<>(actual));
-    }
 
     public static void assertResponseEquals(
         ApiMessage expected,
@@ -100,12 +92,54 @@ public class Assertions {
         }
     }
 
+    /**
+     * Assert that the expected records are equal to the provided records.
+     *
+     * @param expectedRecords   An ordered list of groupings. Each grouping
+     *                          defines a list of records that must be present,
+     *                          but they could be in any order.
+     * @param actualRecords     An ordered list of records.
+     * @throws AssertionFailedError if the expected and the actual records do
+     *                              not match.
+     */
+    public static void assertUnorderedRecordsEquals(
+        List<List<CoordinatorRecord>> expectedRecords,
+        List<CoordinatorRecord> actualRecords
+    ) {
+        try {
+            int i = 0, j = 0;
+            while (i < expectedRecords.size()) {
+                List<CoordinatorRecord> slice = expectedRecords.get(i);
+                assertRecordsEquals(
+                    slice
+                        .stream()
+                        .sorted(Comparator.comparing(Object::toString))
+                        .toList(),
+                    actualRecords
+                        .subList(j, j + slice.size())
+                        .stream()
+                        .sorted(Comparator.comparing(Object::toString))
+                        .toList()
+                );
+
+                j += slice.size();
+                i++;
+            }
+            assertEquals(j, actualRecords.size());
+        } catch (AssertionFailedError e) {
+            assertionFailure()
+                .expected(expectedRecords)
+                .actual(actualRecords)
+                .buildAndThrow();
+        }
+    }
+
     public static void assertRecordEquals(
         CoordinatorRecord expected,
         CoordinatorRecord actual
     ) {
         try {
-            assertApiMessageAndVersionEquals(expected.key(), actual.key());
+            assertApiMessage(expected.key(), actual.key());
             assertApiMessageAndVersionEquals(expected.value(), actual.value());
         } catch (AssertionFailedError e) {
             assertionFailure()
@@ -153,6 +187,18 @@ public class Assertions {
         normalize.accept(actual);
 
         assertEquals(expected, actual);
+    }
+
+    private static void assertApiMessage(
+        ApiMessage expected,
+        ApiMessage actual
+    ) {
+        if (expected == actual) return;
+        assertNotNull(expected);
+        assertNotNull(actual);
+        BiConsumer<ApiMessage, ApiMessage> asserter = API_MESSAGE_COMPARATORS
+            .getOrDefault(expected.getClass(), API_MESSAGE_DEFAULT_COMPARATOR);
+        asserter.accept(expected, actual);
     }
 
     private static void assertApiMessageAndVersionEquals(

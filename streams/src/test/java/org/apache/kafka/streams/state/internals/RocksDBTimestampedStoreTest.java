@@ -21,7 +21,6 @@ import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
 
 import org.hamcrest.core.IsNull;
@@ -55,7 +54,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
     @Test
     public void shouldOpenNewStoreInRegularMode() {
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBTimestampedStore.class)) {
-            rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+            rocksDBStore.init(context, rocksDBStore);
 
             assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
         }
@@ -68,13 +67,13 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
     @Test
     public void shouldOpenExistingStoreInRegularMode() throws Exception {
         // prepare store
-        rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+        rocksDBStore.init(context, rocksDBStore);
         rocksDBStore.put(new Bytes("key".getBytes()), "timestamped".getBytes());
         rocksDBStore.close();
 
         // re-open store
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBTimestampedStore.class)) {
-            rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+            rocksDBStore.init(context, rocksDBStore);
 
             assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
         } finally {
@@ -127,7 +126,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
         prepareOldStore();
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBTimestampedStore.class)) {
-            rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+            rocksDBStore.init(context, rocksDBStore);
 
             assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in upgrade mode"));
         }
@@ -425,7 +424,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
         // check that still in upgrade mode
         try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBTimestampedStore.class)) {
-            rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+            rocksDBStore.init(context, rocksDBStore);
 
             assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in upgrade mode"));
         } finally {
@@ -459,7 +458,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
 
         // check that still in regular mode
         try (LogCaptureAppender appender = LogCaptureAppender.createAndRegister(RocksDBTimestampedStore.class)) {
-            rocksDBStore.init((StateStoreContext) context, rocksDBStore);
+            rocksDBStore.init(context, rocksDBStore);
 
             assertThat(appender.getMessages(), hasItem("Opening store " + DB_NAME + " in regular mode"));
         }
@@ -468,7 +467,7 @@ public class RocksDBTimestampedStoreTest extends RocksDBStoreTest {
     private void prepareOldStore() {
         final RocksDBStore keyValueStore = new RocksDBStore(DB_NAME, METRICS_SCOPE);
         try {
-            keyValueStore.init((StateStoreContext) context, keyValueStore);
+            keyValueStore.init(context, keyValueStore);
 
             keyValueStore.put(new Bytes("key1".getBytes()), "1".getBytes());
             keyValueStore.put(new Bytes("key2".getBytes()), "22".getBytes());

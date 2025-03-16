@@ -190,8 +190,7 @@ public class TopicIds implements Set<Uuid> {
 
     @Override
     public boolean contains(Object o) {
-        if (o instanceof Uuid) {
-            Uuid topicId = (Uuid) o;
+        if (o instanceof Uuid topicId) {
             String topicName = resolver.name(topicId);
             if (topicName == null) return false;
             return topicNames.contains(topicName);
@@ -265,7 +264,7 @@ public class TopicIds implements Set<Uuid> {
     }
 
     @Override
-    public boolean addAll(Collection c) {
+    public boolean addAll(Collection<? extends Uuid> c) {
         throw new UnsupportedOperationException();
     }
 
@@ -275,17 +274,17 @@ public class TopicIds implements Set<Uuid> {
     }
 
     @Override
-    public boolean removeAll(Collection c) {
+    public boolean removeAll(Collection<?> c) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public boolean retainAll(Collection c) {
+    public boolean retainAll(Collection<?> c) {
         throw new UnsupportedOperationException();
     }
 
     @Override
-    public boolean containsAll(Collection c) {
+    public boolean containsAll(Collection<?> c) {
         for (Object o : c) {
             if (!contains(o)) return false;
         }

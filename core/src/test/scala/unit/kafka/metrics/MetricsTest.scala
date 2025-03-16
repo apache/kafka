@@ -20,7 +20,7 @@ package kafka.metrics
 import java.lang.management.ManagementFactory
 import java.util.Properties
 import javax.management.ObjectName
-import com.yammer.metrics.core.{Gauge, MetricPredicate}
+import com.yammer.metrics.core.MetricPredicate
 import org.junit.jupiter.api.Assertions._
 import kafka.integration.KafkaServerTestHarness
 import kafka.server._
@@ -33,7 +33,6 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.metrics.JmxReporter
 import org.apache.kafka.common.utils.Time
-import org.apache.kafka.metadata.migration.ZkMigrationState
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
@@ -52,7 +51,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   overridingProps.put(JmxReporter.EXCLUDE_CONFIG, s"$requiredKafkaServerPrefix=ClusterId")
 
   def generateConfigs: Seq[KafkaConfig] =
-    TestUtils.createBrokerConfigs(numNodes, null, enableControlledShutdown = false).
+    TestUtils.createBrokerConfigs(numNodes, enableControlledShutdown = false).
       map(KafkaConfig.fromProps(_, overridingProps))
 
   val nMessages = 2
@@ -63,7 +62,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     val topic = "test-topic-metric"
     createTopic(topic)
     deleteTopic(topic)
-    TestUtils.verifyTopicDeletion(zkClientOrNull, topic, 1, brokers)
+    TestUtils.verifyTopicDeletion(topic, 1, brokers)
     assertEquals(Set.empty, topicMetricGroups(topic), "Topic metrics exists after deleteTopic")
   }
 
@@ -78,7 +77,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertTrue(topicMetricGroups(topic).nonEmpty, "Topic metrics don't exist")
     brokers.foreach(b => assertNotNull(b.brokerTopicStats.topicStats(topic)))
     deleteTopic(topic)
-    TestUtils.verifyTopicDeletion(zkClientOrNull, topic, 1, brokers)
+    TestUtils.verifyTopicDeletion(topic, 1, brokers)
     assertEquals(Set.empty, topicMetricGroups(topic), "Topic metrics exists after deleteTopic")
   }
 
@@ -229,32 +228,10 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
       "kafka.controller:type=KafkaController,name=MetadataErrorCount",
       "kafka.controller:type=KafkaController,name=OfflinePartitionsCount",
       "kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount",
-      "kafka.controller:type=KafkaController,name=ZkMigrationState",
     ).foreach(expected => {
       assertEquals(1, metrics.keySet.asScala.count(_.getMBeanName.equals(expected)),
         s"Unable to find $expected")
     })
-
-    val zkStateMetricName = metrics.keySet.asScala.filter(_.getMBeanName == "kafka.controller:type=KafkaController,name=ZkMigrationState").head
-    val zkStateGauge = metrics.get(zkStateMetricName).asInstanceOf[Gauge[Int]]
-    assertEquals(ZkMigrationState.NONE.value().intValue(), zkStateGauge.value())
-  }
-
-  /**
-   * Test that the metrics are created with the right name, testZooKeeperStateChangeRateMetrics
-   * and testZooKeeperSessionStateMetric in ZooKeeperClientTest test the metrics behaviour.
-   */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testSessionExpireListenerMetrics(quorum: String): Unit = {
-    val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
-    val expectedNumMetrics = 0
-    assertEquals(expectedNumMetrics, metrics.keySet.asScala.
-      count(_.getMBeanName == "kafka.server:type=SessionExpireListener,name=SessionState"))
-    assertEquals(expectedNumMetrics, metrics.keySet.asScala.
-      count(_.getMBeanName == "kafka.server:type=SessionExpireListener,name=ZooKeeperExpiresPerSec"))
-    assertEquals(expectedNumMetrics, metrics.keySet.asScala.
-      count(_.getMBeanName == "kafka.server:type=SessionExpireListener,name=ZooKeeperDisconnectsPerSec"))
   }
 
   private def topicMetrics(topic: Option[String]): Set[String] = {

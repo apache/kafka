@@ -29,8 +29,8 @@ import org.apache.kafka.raft.DynamicVoters;
 import org.apache.kafka.raft.KafkaRaftClient;
 import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.FeatureVersion;
-import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.snapshot.FileRawSnapshotWriter;
@@ -43,7 +43,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -69,7 +68,7 @@ public class Formatter {
     /**
      * The features that are supported.
      */
-    private List<Features> supportedFeatures = Features.PRODUCTION_FEATURES;
+    private List<Feature> supportedFeatures = Feature.PRODUCTION_FEATURES;
 
     /**
      * The current node id.
@@ -116,7 +115,7 @@ public class Formatter {
     /**
      * The arguments passed to --add-scram
      */
-    private List<String> scramArguments = Collections.emptyList();
+    private List<String> scramArguments = List.of();
 
     /**
      * The name of the initial controller listener.
@@ -139,7 +138,7 @@ public class Formatter {
         return this;
     }
 
-    public Formatter setSupportedFeatures(List<Features> supportedFeatures) {
+    public Formatter setSupportedFeatures(List<Feature> supportedFeatures) {
         this.supportedFeatures = supportedFeatures;
         return this;
     }
@@ -284,10 +283,6 @@ public class Formatter {
     }
 
     MetadataVersion verifyReleaseVersion(MetadataVersion metadataVersion) {
-        if (!metadataVersion.isKRaftSupported()) {
-            throw new FormatterException(MetadataVersion.FEATURE_NAME + " " + metadataVersion +
-                " is too old to be supported.");
-        }
         if (!unstableFeatureVersionsEnabled) {
             if (!metadataVersion.isProduction()) {
                 throw new FormatterException(MetadataVersion.FEATURE_NAME + " " + metadataVersion +
@@ -298,7 +293,7 @@ public class Formatter {
     }
 
     Map<String, Short> calculateEffectiveFeatureLevels() {
-        Map<String, Features> nameToSupportedFeature = new TreeMap<>();
+        Map<String, Feature> nameToSupportedFeature = new TreeMap<>();
         supportedFeatures.forEach(feature -> nameToSupportedFeature.put(feature.featureName(), feature));
         Map<String, Short> newFeatureLevels = new TreeMap<>();
         // Verify that all specified features are known to us.
@@ -321,7 +316,7 @@ public class Formatter {
                     Optional.ofNullable(newFeatureLevels.get(KRaftVersion.FEATURE_NAME))));
             } else if (!newFeatureLevels.containsKey(supportedFeature.featureName())) {
                 newFeatureLevels.put(supportedFeature.featureName(),
-                    supportedFeature.defaultValue(releaseVersion));
+                    supportedFeature.defaultLevel(releaseVersion));
             }
         });
         // Verify that the specified features support the given levels. This requires the full
@@ -330,10 +325,10 @@ public class Formatter {
             String featureName = entry.getKey();
             if (!featureName.equals(MetadataVersion.FEATURE_NAME)) {
                 short level = entry.getValue();
-                Features supportedFeature = nameToSupportedFeature.get(featureName);
+                Feature supportedFeature = nameToSupportedFeature.get(featureName);
                 FeatureVersion featureVersion =
                     supportedFeature.fromFeatureLevel(level, unstableFeatureVersionsEnabled);
-                Features.validateVersion(featureVersion, newFeatureLevels);
+                Feature.validateVersion(featureVersion, newFeatureLevels);
             }
         }
         return newFeatureLevels;
@@ -435,7 +430,7 @@ public class Formatter {
                     directoryTypes.get(writeLogDir).description(), writeLogDir,
                     MetadataVersion.FEATURE_NAME, releaseVersion);
                 Files.createDirectories(Paths.get(writeLogDir));
-                BootstrapDirectory bootstrapDirectory = new BootstrapDirectory(writeLogDir, Optional.empty());
+                BootstrapDirectory bootstrapDirectory = new BootstrapDirectory(writeLogDir);
                 bootstrapDirectory.writeBinaryFile(bootstrapMetadata);
                 if (directoryTypes.get(writeLogDir).isDynamicMetadataDirectory()) {
                     writeDynamicQuorumSnapshot(writeLogDir,
@@ -514,7 +509,7 @@ public class Formatter {
                 Snapshots.BOOTSTRAP_SNAPSHOT_ID)).
             setKraftVersion(KRaftVersion.fromFeatureLevel(kraftVersion)).
             setVoterSet(Optional.of(voterSet));
-        try (RecordsSnapshotWriter writer = builder.build(new MetadataRecordSerde())) {
+        try (RecordsSnapshotWriter<ApiMessageAndVersion> writer = builder.build(new MetadataRecordSerde())) {
             writer.freeze();
         }
     }

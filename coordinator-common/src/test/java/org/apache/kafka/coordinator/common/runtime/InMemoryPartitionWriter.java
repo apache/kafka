@@ -89,7 +89,7 @@ public class InMemoryPartitionWriter implements PartitionWriter {
 
     @Override
     public LogConfig config(TopicPartition tp) {
-        return new LogConfig(Collections.emptyMap());
+        return new LogConfig(Map.of());
     }
 
     @Override
@@ -113,6 +113,14 @@ public class InMemoryPartitionWriter implements PartitionWriter {
         } finally {
             state.lock.unlock();
         }
+    }
+
+    @Override
+    public CompletableFuture<Void> deleteRecords(
+        TopicPartition tp,
+        long deleteBeforeOffset
+    ) throws KafkaException {
+        throw new RuntimeException("method not implemented");
     }
 
     @Override

@@ -34,8 +34,10 @@
         <subpackage name="transaction">
             <allow pkg="org.apache.kafka.server.common" />
             <allow pkg="org.apache.kafka.clients" />
+            <allow pkg="org.apache.kafka.coordinator.common.runtime" />
             <allow pkg="org.apache.kafka.coordinator.transaction" />
             <allow pkg="org.apache.kafka.common" />
+            <allow pkg="org.apache.kafka.common.test.api" />
             <allow pkg="org.slf4j" />
             <subpackage name="generated">
                 <allow pkg="org.apache.kafka.common.protocol" />

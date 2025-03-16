@@ -35,8 +35,7 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
                                                  final String sinkName,
                                                  final String sourceName,
                                                  final String repartitionTopic,
-                                                 final ProcessorParameters<K, V, ?, ?> processorParameters) {
-
+                                                 final ProcessorParameters<K, V, K, V> processorParameters) {
         super(
             nodeName,
             sourceName,
@@ -98,15 +97,13 @@ public class GroupedTableOperationRepartitionNode<K, V> extends BaseRepartitionN
             valueDeserializer(),
             repartitionTopic
         );
-
     }
 
-    public static <K1, V1> GroupedTableOperationRepartitionNodeBuilder<K1, V1> groupedTableOperationNodeBuilder() {
+    public static <K, V> GroupedTableOperationRepartitionNodeBuilder<K, V> groupedTableOperationNodeBuilder() {
         return new GroupedTableOperationRepartitionNodeBuilder<>();
     }
 
     public static final class GroupedTableOperationRepartitionNodeBuilder<K, V> extends BaseRepartitionNodeBuilder<K, V, GroupedTableOperationRepartitionNode<K, V>> {
-
         @Override
         public GroupedTableOperationRepartitionNode<K, V> build() {
             return new GroupedTableOperationRepartitionNode<>(

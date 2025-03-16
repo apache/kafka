@@ -24,8 +24,8 @@ import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
 import org.apache.kafka.clients.admin.UpdateFeaturesResult;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.FeatureVersion;
-import org.apache.kafka.server.common.Features;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.util.CommandLineUtils;
 
@@ -118,10 +118,10 @@ public class FeatureCommand {
                     handleDisable(namespace, adminClient);
                     break;
                 case "version-mapping":
-                    handleVersionMapping(namespace, Features.PRODUCTION_FEATURES);
+                    handleVersionMapping(namespace, Feature.PRODUCTION_FEATURES);
                     break;
                 case "feature-dependencies":
-                    handleFeatureDependencies(namespace, Features.PRODUCTION_FEATURES);
+                    handleFeatureDependencies(namespace, Feature.PRODUCTION_FEATURES);
                     break;
                 default:
                     throw new TerseException("Unknown command " + command);
@@ -196,7 +196,7 @@ public class FeatureCommand {
                 );
         versionMappingParser.addArgument("--release-version")
                 .help("The release version to use for the corresponding feature mapping. The minimum is " +
-                        MetadataVersion.IBP_3_0_IV0 + "; the default is " + MetadataVersion.LATEST_PRODUCTION)
+                        MetadataVersion.MINIMUM_VERSION + "; the default is " + MetadataVersion.LATEST_PRODUCTION)
                 .action(store());
     }
 
@@ -298,11 +298,11 @@ public class FeatureCommand {
             } catch (Throwable e) {
                 throw new TerseException("Unknown metadata.version " + releaseVersion +
                         ". Supported metadata.version are " + metadataVersionsToString(
-                        MetadataVersion.MINIMUM_BOOTSTRAP_VERSION, MetadataVersion.latestProduction()));
+                        MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestProduction()));
             }
             try {
-                for (Features feature : Features.PRODUCTION_FEATURES) {
-                    short featureLevel = feature.defaultValue(metadataVersion);
+                for (Feature feature : Feature.PRODUCTION_FEATURES) {
+                    short featureLevel = feature.defaultLevel(metadataVersion);
                     // Don't send a request to upgrade a feature to 0.
                     if (upgradeType != FeatureUpdate.UpgradeType.UPGRADE || featureLevel > 0) {
                         updates.put(feature.featureName(), new FeatureUpdate(featureLevel, upgradeType));
@@ -320,7 +320,7 @@ public class FeatureCommand {
                 } catch (Throwable e) {
                     throw new TerseException("Unknown metadata.version " + metadata +
                             ". Supported metadata.version are " + metadataVersionsToString(
-                            MetadataVersion.MINIMUM_BOOTSTRAP_VERSION, MetadataVersion.latestProduction()));
+                            MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestProduction()));
                 }
                 updates.put(MetadataVersion.FEATURE_NAME, new FeatureUpdate(metadataVersion.featureLevel(), upgradeType));
             }
@@ -356,7 +356,7 @@ public class FeatureCommand {
         update("disable", adminClient, updates, namespace.getBoolean("dry_run"));
     }
 
-    static void handleVersionMapping(Namespace namespace, List<Features> validFeatures) throws TerseException {
+    static void handleVersionMapping(Namespace namespace, List<Feature> validFeatures) throws TerseException {
         // Get the release version from the command-line arguments or default to the latest stable version
         String releaseVersion = Optional.ofNullable(namespace.getString("release_version"))
             .orElseGet(() -> MetadataVersion.latestProduction().version());
@@ -367,18 +367,18 @@ public class FeatureCommand {
             short metadataVersionLevel = version.featureLevel();
             System.out.printf("metadata.version=%d (%s)%n", metadataVersionLevel, releaseVersion);
 
-            for (Features feature : validFeatures) {
-                short featureLevel = feature.defaultValue(version);
+            for (Feature feature : validFeatures) {
+                short featureLevel = feature.defaultLevel(version);
                 System.out.printf("%s=%d%n", feature.featureName(), featureLevel);
             }
         } catch (IllegalArgumentException e) {
             throw new TerseException("Unknown release version '" + releaseVersion + "'." +
-                " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION +
+                " Supported versions are: " + MetadataVersion.MINIMUM_VERSION +
                 " to " + MetadataVersion.LATEST_PRODUCTION);
         }
     }
 
-    static void handleFeatureDependencies(Namespace namespace, List<Features> validFeatures) throws TerseException {
+    static void handleFeatureDependencies(Namespace namespace, List<Feature> validFeatures) throws TerseException {
         List<String> featureArgs = namespace.getList("feature");
 
         // Iterate over each feature specified with --feature
@@ -400,7 +400,7 @@ public class FeatureCommand {
                     // Assuming metadata versions do not have dependencies.
                     System.out.printf("%s=%d (%s) has no dependencies.%n", featureName, featureLevel, metadataVersion.version());
                 } else {
-                    Features featureEnum = validFeatures.stream()
+                    Feature featureEnum = validFeatures.stream()
                             .filter(f -> f.featureName().equals(featureName))
                             .findFirst()
                             .orElseThrow(() -> new TerseException("Unknown feature: " + featureName));

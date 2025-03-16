@@ -35,8 +35,8 @@ import java.util.Objects;
  */
 public final class ClusterImage {
     public static final ClusterImage EMPTY = new ClusterImage(
-            Collections.emptyMap(),
-            Collections.emptyMap());
+            Map.of(),
+            Map.of());
 
     private final Map<Integer, BrokerRegistration> brokers;
 
@@ -100,8 +100,7 @@ public final class ClusterImage {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof ClusterImage)) return false;
-        ClusterImage other = (ClusterImage) o;
+        if (!(o instanceof ClusterImage other)) return false;
         return brokers.equals(other.brokers) &&
             controllers.equals(other.controllers);
     }

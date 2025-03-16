@@ -31,24 +31,13 @@ class EmptyTestInfo extends TestInfo {
 }
 
 object TestInfoUtils {
-  def isKRaft(testInfo: TestInfo): Boolean = {
-    if (testInfo.getDisplayName.contains("quorum=")) {
-      if (testInfo.getDisplayName.contains("quorum=kraft")) {
-        true
-      } else if (testInfo.getDisplayName.contains("quorum=zk")) {
-        false
-      } else {
-        throw new RuntimeException(s"Unknown quorum value")
-      }
-    } else {
-      false
-    }
-  }
-
+  
   final val TestWithParameterizedQuorumAndGroupProtocolNames = "{displayName}.quorum={0}.groupProtocol={1}"
 
+  final val TestWithParameterizedGroupProtocolNames = "{displayName}.groupProtocol={0}"
+
   def isShareGroupTest(testInfo: TestInfo): Boolean = {
-    testInfo.getDisplayName.contains("kraft+kip932")
+    testInfo.getDisplayName.contains("kip932")
   }
 
   def maybeGroupProtocolSpecified(testInfo: TestInfo): Option[GroupProtocol] = {

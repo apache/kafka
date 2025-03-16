@@ -26,7 +26,6 @@ import org.slf4j.LoggerFactory;
 import java.io.Serializable;
 import java.math.BigDecimal;
 import java.math.BigInteger;
-import java.math.RoundingMode;
 import java.nio.ByteBuffer;
 import java.text.CharacterIterator;
 import java.text.DateFormat;
@@ -584,8 +583,7 @@ public class Values {
             SchemaAndValue parsed = parseString(value.toString());
             value = parsed.value();
         }
-        if (value instanceof java.util.Date) {
-            java.util.Date date = (java.util.Date) value;
+        if (value instanceof java.util.Date date) {
             if (fromSchema != null) {
                 String fromSchemaName = fromSchema.name();
                 if (Date.LOGICAL_NAME.equals(fromSchemaName)) {
@@ -655,8 +653,7 @@ public class Values {
      */
     protected static long asLong(Object value, Schema fromSchema, Throwable error) {
         try {
-            if (value instanceof Number) {
-                Number number = (Number) value;
+            if (value instanceof Number number) {
                 return number.longValue();
             }
             if (value instanceof String) {
@@ -695,8 +692,7 @@ public class Values {
      */
     protected static double asDouble(Object value, Schema schema, Throwable error) {
         try {
-            if (value instanceof Number) {
-                Number number = (Number) value;
+            if (value instanceof Number number) {
                 return number.doubleValue();
             }
             if (value instanceof String) {
@@ -733,18 +729,15 @@ public class Values {
         } else if (value instanceof ByteBuffer) {
             byte[] bytes = Utils.readBytes((ByteBuffer) value);
             append(sb, bytes, embedded);
-        } else if (value instanceof List) {
-            List<?> list = (List<?>) value;
+        } else if (value instanceof List<?> list) {
             sb.append('[');
             appendIterable(sb, list.iterator());
             sb.append(']');
-        } else if (value instanceof Map) {
-            Map<?, ?> map = (Map<?, ?>) value;
+        } else if (value instanceof Map<?, ?> map) {
             sb.append('{');
             appendIterable(sb, map.entrySet().iterator());
             sb.append('}');
-        } else if (value instanceof Struct) {
-            Struct struct = (Struct) value;
+        } else if (value instanceof Struct struct) {
             Schema schema = struct.schema();
             boolean first = true;
             sb.append('{');
@@ -759,13 +752,11 @@ public class Values {
                 append(sb, struct.get(field), true);
             }
             sb.append('}');
-        } else if (value instanceof Map.Entry) {
-            Map.Entry<?, ?> entry = (Map.Entry<?, ?>) value;
+        } else if (value instanceof Map.Entry<?, ?> entry) {
             append(sb, entry.getKey(), true);
             sb.append(':');
             append(sb, entry.getValue(), true);
-        } else if (value instanceof java.util.Date) {
-            java.util.Date dateValue = (java.util.Date) value;
+        } else if (value instanceof java.util.Date dateValue) {
             String formatted = dateFormatFor(dateValue).format(dateValue);
             sb.append(formatted);
         } else {
@@ -1020,6 +1011,7 @@ public class Values {
             return parseAsTemporal(token);
         }
 
+
         private static SchemaAndValue parseAsNumber(String token) {
             // Try to parse as a number ...
             BigDecimal decimal = new BigDecimal(token);
@@ -1040,12 +1032,20 @@ public class Values {
             }
         }
 
+        private static boolean isWholeNumber(BigDecimal bd) {
+            return bd.signum() == 0 || bd.scale() <= 0 || bd.stripTrailingZeros().scale() <= 0;
+        }
+
+        private static final BigDecimal BIGGER_THAN_LONG = new BigDecimal("1e19");
+
         private static SchemaAndValue parseAsExactDecimal(BigDecimal decimal) {
-            BigDecimal ceil = decimal.setScale(0, RoundingMode.CEILING);
-            BigDecimal floor = decimal.setScale(0, RoundingMode.FLOOR);
-            if (ceil.equals(floor)) {
-                BigInteger num = ceil.toBigIntegerExact();
-                if (ceil.precision() >= 19 && (num.compareTo(LONG_MIN) < 0 || num.compareTo(LONG_MAX) > 0)) {
+            BigDecimal abs = decimal.abs();
+            if (abs.compareTo(BIGGER_THAN_LONG) > 0 || (abs.compareTo(BigDecimal.ONE) < 0 && abs.compareTo(BigDecimal.ZERO) != 0)) {
+                return null;
+            }
+            if (isWholeNumber(decimal)) {
+                BigInteger num = decimal.toBigIntegerExact();
+                if (num.compareTo(LONG_MIN) < 0 || num.compareTo(LONG_MAX) > 0) {
                     return null;
                 }
                 long integral = num.longValue();

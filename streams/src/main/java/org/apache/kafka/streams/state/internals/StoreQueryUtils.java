@@ -205,11 +205,11 @@ public final class StoreQueryUtils {
         final ResultOrder order = rangeQuery.resultOrder();
         final KeyValueIterator<Bytes, byte[]> iterator;
         try {
-            if (!lowerRange.isPresent() && !upperRange.isPresent() && !order.equals(ResultOrder.DESCENDING)) {
+            if (lowerRange.isEmpty() && upperRange.isEmpty() && !order.equals(ResultOrder.DESCENDING)) {
                 iterator = kvStore.all();
             } else if (!order.equals(ResultOrder.DESCENDING)) {
                 iterator = kvStore.range(lowerRange.orElse(null), upperRange.orElse(null));
-            } else if (!lowerRange.isPresent() && !upperRange.isPresent()) {
+            } else if (lowerRange.isEmpty() && upperRange.isEmpty()) {
                 iterator = kvStore.reverseAll();
             } else {
                 iterator = kvStore.reverseRange(lowerRange.orElse(null), upperRange.orElse(null));

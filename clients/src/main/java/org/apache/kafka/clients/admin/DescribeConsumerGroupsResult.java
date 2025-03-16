@@ -18,20 +18,15 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
-
 /**
  * The result of the {@link KafkaAdminClient#describeConsumerGroups(Collection, DescribeConsumerGroupsOptions)}} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DescribeConsumerGroupsResult {
 
     private final Map<String, KafkaFuture<ConsumerGroupDescription>> futures;
@@ -51,7 +46,7 @@ public class DescribeConsumerGroupsResult {
      * Return a future which yields all ConsumerGroupDescription objects, if all the describes succeed.
      */
     public KafkaFuture<Map<String, ConsumerGroupDescription>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0])).thenApply(
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0])).thenApply(
             nil -> {
                 Map<String, ConsumerGroupDescription> descriptions = new HashMap<>(futures.size());
                 futures.forEach((key, future) -> {

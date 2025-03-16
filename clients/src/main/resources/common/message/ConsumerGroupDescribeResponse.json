@@ -17,7 +17,8 @@
   "apiKey": 69,
   "type": "response",
   "name": "ConsumerGroupDescribeResponse",
-  "validVersions": "0",
+  // Version 1 adds MemberType field (KIP-1099).
+  "validVersions": "0-1",
   "flexibleVersions": "0+",
   // Supported errors:
   // - GROUP_AUTHORIZATION_FAILED (version 0+)
@@ -27,6 +28,7 @@
   // - INVALID_REQUEST (version 0+)
   // - INVALID_GROUP_ID (version 0+)
   // - GROUP_ID_NOT_FOUND (version 0+)
+  // - TOPIC_AUTHORIZATION_FAILED (version 0+)
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
       "about": "The duration in milliseconds for which the request was throttled due to a quota violation, or zero if the request did not violate any quota." },
@@ -69,7 +71,9 @@
             { "name": "Assignment", "type": "Assignment", "versions": "0+",
               "about": "The current assignment." },
             { "name": "TargetAssignment", "type": "Assignment", "versions": "0+",
-              "about": "The target assignment." }
+              "about": "The target assignment." },
+            { "name": "MemberType", "type": "int8", "versions": "1+", "default": "-1", "ignorable": true,
+              "about": "-1 for unknown. 0 for classic member. +1 for consumer member." }
           ]},
         { "name": "AuthorizedOperations", "type": "int32", "versions": "0+", "default": "-2147483648",
           "about": "32-bit bitfield to represent authorized operations for this group." }

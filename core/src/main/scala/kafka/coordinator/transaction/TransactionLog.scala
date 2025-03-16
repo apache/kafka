@@ -19,9 +19,9 @@ package kafka.coordinator.transaction
 import java.nio.ByteBuffer
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.protocol.{ByteBufferAccessor, MessageUtil}
-import org.apache.kafka.common.record.{Record, RecordBatch}
+import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogValue}
+import org.apache.kafka.coordinator.transaction.generated.{CoordinatorRecordType, TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.server.common.TransactionVersion
 
 import scala.collection.mutable
@@ -51,8 +51,7 @@ object TransactionLog {
     * @return key bytes
     */
   private[transaction] def keyToBytes(transactionalId: String): Array[Byte] = {
-    MessageUtil.toVersionPrefixedBytes(TransactionLogKey.HIGHEST_SUPPORTED_VERSION,
-      new TransactionLogKey().setTransactionalId(transactionalId))
+    MessageUtil.toCoordinatorTypePrefixedBytes(new TransactionLogKey().setTransactionalId(transactionalId))
   }
 
   /**
@@ -91,19 +90,15 @@ object TransactionLog {
   /**
     * Decodes the transaction log messages' key
     *
-    * @return the key
+    * @return left with the version if the key is not a transaction log key, right with the transactional id otherwise
     */
-  def readTxnRecordKey(buffer: ByteBuffer): BaseKey = {
+  def readTxnRecordKey(buffer: ByteBuffer): Either[Short, String] = {
     val version = buffer.getShort
-    if (version >= TransactionLogKey.LOWEST_SUPPORTED_VERSION && version <= TransactionLogKey.HIGHEST_SUPPORTED_VERSION) {
-      val value = new TransactionLogKey(new ByteBufferAccessor(buffer), version)
-      TxnKey(
-        version = version,
-        transactionalId = value.transactionalId
-      )
-    } else {
-      UnknownKey(version)
-    }
+    Either.cond(
+      version == CoordinatorRecordType.TRANSACTION_LOG.id,
+      new TransactionLogKey(new ByteBufferAccessor(buffer), 0.toShort).transactionalId,
+      version
+    )
   }
 
   /**
@@ -121,7 +116,7 @@ object TransactionLog {
         val transactionMetadata = new TransactionMetadata(
           transactionalId = transactionalId,
           producerId = value.producerId,
-          previousProducerId = value.previousProducerId,
+          prevProducerId = value.previousProducerId,
           nextProducerId = value.nextProducerId,
           producerEpoch = value.producerEpoch,
           lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
@@ -143,46 +138,4 @@ object TransactionLog {
       } else throw new IllegalStateException(s"Unknown version $version from the transaction log message value")
     }
   }
-
-  /**
-   * Exposed for printing records using [[kafka.tools.DumpLogSegments]]
-   */
-  def formatRecordKeyAndValue(record: Record): (Option[String], Option[String]) = {
-    TransactionLog.readTxnRecordKey(record.key) match {
-      case txnKey: TxnKey =>
-        val keyString = s"transaction_metadata::transactionalId=${txnKey.transactionalId}"
-
-        val valueString = TransactionLog.readTxnRecordValue(txnKey.transactionalId, record.value) match {
-          case None => "<DELETE>"
-
-          case Some(txnMetadata) => s"producerId:${txnMetadata.producerId}," +
-            s"producerEpoch:${txnMetadata.producerEpoch}," +
-            s"state=${txnMetadata.state}," +
-            s"partitions=${txnMetadata.topicPartitions.mkString("[", ",", "]")}," +
-            s"txnLastUpdateTimestamp=${txnMetadata.txnLastUpdateTimestamp}," +
-            s"txnTimeoutMs=${txnMetadata.txnTimeoutMs}"
-        }
-
-        (Some(keyString), Some(valueString))
-
-      case unknownKey: UnknownKey =>
-        (Some(s"unknown::version=${unknownKey.version}"), None)
-    }
-  }
-
 }
-
-sealed trait BaseKey{
-  def version: Short
-  def transactionalId: String
-}
-
-case class TxnKey(version: Short, transactionalId: String) extends BaseKey {
-  override def toString: String = transactionalId
-}
-
-case class UnknownKey(version: Short) extends BaseKey {
-  override def transactionalId: String = null
-  override def toString: String = transactionalId
-}
-

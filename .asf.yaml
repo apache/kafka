@@ -15,6 +15,10 @@
 # specific language governing permissions and limitations
 # under the License.
 
+# Enable the next-gen .asf.yaml parser
+meta:
+  nextgen: true
+
 notifications:
   commits: commits@kafka.apache.org
   issues: jira@kafka.apache.org
@@ -35,3 +39,13 @@ github:
     - gaurav-narula
     - apourchet
     - apoorvmittal10
+
+  enabled_merge_buttons:
+    squash: true
+    squash_commit_message: PR_TITLE_AND_DESC
+    merge: false
+    rebase: false
+
+  # Disable legacy branch protections. We have manual rulesets which protect trunk
+  # and our release branches. See INFRA-26603
+  protected_branches: ~

@@ -21,7 +21,6 @@ import org.apache.kafka.common.acl.AccessControlEntryFilter;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
-import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
 import org.apache.kafka.common.resource.ResourceType;
@@ -32,7 +31,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class DescribeAclsRequestTest {
-    private static final short V0 = 0;
     private static final short V1 = 1;
 
     private static final AclBindingFilter LITERAL_FILTER = new AclBindingFilter(new ResourcePatternFilter(ResourceType.TOPIC, "foo", PatternType.LITERAL),
@@ -48,42 +46,8 @@ public class DescribeAclsRequestTest {
         new AccessControlEntryFilter("User:ANONYMOUS", "127.0.0.1", AclOperation.READ, AclPermissionType.DENY));
 
     @Test
-    public void shouldThrowOnV0IfPrefixed() {
-        assertThrows(UnsupportedVersionException.class, () -> new DescribeAclsRequest.Builder(PREFIXED_FILTER).build(V0));
-    }
-
-    @Test
     public void shouldThrowIfUnknown() {
-        assertThrows(IllegalArgumentException.class, () -> new DescribeAclsRequest.Builder(UNKNOWN_FILTER).build(V0));
-    }
-
-    @Test
-    public void shouldRoundTripLiteralV0() {
-        final DescribeAclsRequest original = new DescribeAclsRequest.Builder(LITERAL_FILTER).build(V0);
-        final DescribeAclsRequest result = DescribeAclsRequest.parse(original.serialize(), V0);
-
-        assertRequestEquals(original, result);
-    }
-
-    @Test
-    public void shouldRoundTripAnyV0AsLiteral() {
-        final DescribeAclsRequest original = new DescribeAclsRequest.Builder(ANY_FILTER).build(V0);
-        final DescribeAclsRequest expected = new DescribeAclsRequest.Builder(
-            new AclBindingFilter(new ResourcePatternFilter(
-                ANY_FILTER.patternFilter().resourceType(),
-                ANY_FILTER.patternFilter().name(),
-                PatternType.LITERAL),
-                ANY_FILTER.entryFilter())).build(V0);
-
-        final DescribeAclsRequest result = DescribeAclsRequest.parse(original.serialize(), V0);
-        assertRequestEquals(expected, result);
-    }
-
-    @Test
-    public void shouldRoundTripLiteralV1() {
-        final DescribeAclsRequest original = new DescribeAclsRequest.Builder(LITERAL_FILTER).build(V1);
-        final DescribeAclsRequest result = DescribeAclsRequest.parse(original.serialize(), V1);
-        assertRequestEquals(original, result);
+        assertThrows(IllegalArgumentException.class, () -> new DescribeAclsRequest.Builder(UNKNOWN_FILTER).build(V1));
     }
 
     @Test

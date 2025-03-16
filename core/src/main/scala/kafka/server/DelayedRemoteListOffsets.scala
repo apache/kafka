@@ -23,9 +23,12 @@ import org.apache.kafka.common.errors.ApiException
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.ListOffsetsResponse
+import org.apache.kafka.server.ListOffsetsPartitionStatus
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.purgatory.DelayedOperation
+import org.apache.kafka.storage.internals.log.OffsetResultHolder.FileRecordsOrError
 
+import java.util.Optional
 import java.util.concurrent.TimeUnit
 import scala.collection.{Map, mutable}
 import scala.jdk.CollectionConverters._
@@ -39,9 +42,9 @@ class DelayedRemoteListOffsets(delayMs: Long,
   // Mark the status as completed, if there is no async task to track.
   // If there is a task to track, then build the response as REQUEST_TIMED_OUT by default.
   statusByPartition.foreachEntry { (topicPartition, status) =>
-    status.completed = status.futureHolderOpt.isEmpty
-    if (status.futureHolderOpt.isDefined) {
-      status.responseOpt = Some(buildErrorResponse(Errors.REQUEST_TIMED_OUT, topicPartition.partition()))
+    status.completed(status.futureHolderOpt.isEmpty)
+    if (status.futureHolderOpt.isPresent) {
+      status.responseOpt(Optional.of(buildErrorResponse(Errors.REQUEST_TIMED_OUT, topicPartition.partition())))
     }
     trace(s"Initial partition status for $topicPartition is $status")
   }
@@ -53,7 +56,7 @@ class DelayedRemoteListOffsets(delayMs: Long,
     statusByPartition.foreachEntry { (topicPartition, status) =>
       if (!status.completed) {
         debug(s"Expiring list offset request for partition $topicPartition with status $status")
-        status.futureHolderOpt.foreach(futureHolder => futureHolder.jobFuture.cancel(true))
+        status.futureHolderOpt.ifPresent(futureHolder => futureHolder.jobFuture.cancel(true))
         DelayedRemoteListOffsetsMetrics.recordExpiration(topicPartition)
       }
     }
@@ -66,7 +69,7 @@ class DelayedRemoteListOffsets(delayMs: Long,
   override def onComplete(): Unit = {
     val responseTopics = statusByPartition.groupBy(e => e._1.topic()).map {
       case (topic, status) =>
-        new ListOffsetsTopicResponse().setName(topic).setPartitions(status.values.flatMap(s => s.responseOpt).toList.asJava)
+        new ListOffsetsTopicResponse().setName(topic).setPartitions(status.values.flatMap(s => Some(s.responseOpt.get())).toList.asJava)
     }.toList
     responseCallback(responseTopics)
   }
@@ -86,28 +89,28 @@ class DelayedRemoteListOffsets(delayMs: Long,
           replicaManager.getPartitionOrException(partition)
         } catch {
           case e: ApiException =>
-            status.futureHolderOpt.foreach { futureHolder =>
+            status.futureHolderOpt.ifPresent { futureHolder =>
               futureHolder.jobFuture.cancel(false)
-              futureHolder.taskFuture.complete(Left(e))
+              futureHolder.taskFuture.complete(new FileRecordsOrError(Optional.of(e), Optional.empty()))
             }
         }
 
-        status.futureHolderOpt.foreach { futureHolder =>
+        status.futureHolderOpt.ifPresent { futureHolder =>
           if (futureHolder.taskFuture.isDone) {
-            val response = futureHolder.taskFuture.get() match {
-              case Left(e) =>
-                buildErrorResponse(Errors.forException(e), partition.partition())
-
-              case Right(None) =>
+            val taskFuture = futureHolder.taskFuture.get()
+            val response = {
+              if (taskFuture.hasException) {
+                buildErrorResponse(Errors.forException(taskFuture.exception().get()), partition.partition())
+              } else if (!taskFuture.hasTimestampAndOffset) {
                 val error = status.maybeOffsetsError
                   .map(e => if (version >= 5) Errors.forException(e) else Errors.LEADER_NOT_AVAILABLE)
-                  .getOrElse(Errors.NONE)
+                  .orElse(Errors.NONE)
                 buildErrorResponse(error, partition.partition())
-
-              case Right(Some(found)) =>
+              } else {
                 var partitionResponse = buildErrorResponse(Errors.NONE, partition.partition())
-                if (status.lastFetchableOffset.isDefined && found.offset >= status.lastFetchableOffset.get) {
-                  if (status.maybeOffsetsError.isDefined) {
+                val found = taskFuture.timestampAndOffset().get()
+                if (status.lastFetchableOffset.isPresent && found.offset >= status.lastFetchableOffset.get) {
+                  if (status.maybeOffsetsError.isPresent) {
                     val error = if (version >= 5) Errors.forException(status.maybeOffsetsError.get) else Errors.LEADER_NOT_AVAILABLE
                     partitionResponse.setErrorCode(error.code())
                   }
@@ -123,9 +126,10 @@ class DelayedRemoteListOffsets(delayMs: Long,
                   }
                 }
                 partitionResponse
+              }
             }
-            status.responseOpt = Some(response)
-            status.completed = true
+            status.responseOpt(Optional.of(response))
+            status.completed(true)
           }
           completable = completable && futureHolder.taskFuture.isDone
         }

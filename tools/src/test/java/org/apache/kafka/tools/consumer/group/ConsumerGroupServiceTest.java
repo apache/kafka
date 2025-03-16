@@ -32,6 +32,7 @@ import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.RangeAssignor;
 import org.apache.kafka.common.GroupState;
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -102,6 +103,7 @@ public class ConsumerGroupServiceTest {
     }
 
     @Test
+    @SuppressWarnings("deprecation")
     public void testAdminRequestsForDescribeNegativeOffsets() throws Exception {
         String[] args = new String[]{"--bootstrap-server", "localhost:9092", "--group", GROUP, "--describe", "--offsets"};
         ConsumerGroupCommand.ConsumerGroupService groupService = consumerGroupService(args);
@@ -116,10 +118,10 @@ public class ConsumerGroupServiceTest {
         // Some topic's partitions gets valid OffsetAndMetadata values, other gets nulls values (negative integers) and others aren't defined
         Map<TopicPartition, OffsetAndMetadata> committedOffsets = new HashMap<>();
 
-        committedOffsets.put(testTopicPartition1, new OffsetAndMetadata(100));
+        committedOffsets.put(testTopicPartition1, new OffsetAndMetadata(100, Optional.of(1), ""));
         committedOffsets.put(testTopicPartition2, null);
-        committedOffsets.put(testTopicPartition3, new OffsetAndMetadata(100));
-        committedOffsets.put(testTopicPartition4, new OffsetAndMetadata(100));
+        committedOffsets.put(testTopicPartition3, new OffsetAndMetadata(100, Optional.of(1), ""));
+        committedOffsets.put(testTopicPartition4, new OffsetAndMetadata(100, Optional.of(1), ""));
         committedOffsets.put(testTopicPartition5, null);
 
         ListOffsetsResultInfo resultInfo = new ListOffsetsResultInfo(100, System.currentTimeMillis(), Optional.of(1));
@@ -137,10 +139,19 @@ public class ConsumerGroupServiceTest {
 
         ConsumerGroupDescription consumerGroupDescription = new ConsumerGroupDescription(GROUP,
                 true,
-                Collections.singleton(new MemberDescription("member1", Optional.of("instance1"), "client1", "host1", new MemberAssignment(assignedTopicPartitions))),
+                Collections.singleton(
+                    new MemberDescription(
+                        "member1", Optional.of("instance1"), "client1", "host1", new MemberAssignment(assignedTopicPartitions),
+                        Optional.empty(), Optional.empty(), Optional.empty()
+                    )
+                ),
                 RangeAssignor.class.getName(),
+                GroupType.CLASSIC,
                 GroupState.STABLE,
-                new Node(1, "localhost", 9092));
+                new Node(1, "localhost", 9092),
+                Set.of(),
+                Optional.empty(),
+                Optional.empty());
 
         Function<Collection<TopicPartition>, ArgumentMatcher<Map<TopicPartition, OffsetSpec>>> offsetsArgMatcher = expectedPartitions ->
                 topicPartitionOffsets -> topicPartitionOffsets != null && topicPartitionOffsets.keySet().equals(expectedPartitions);
@@ -173,18 +184,32 @@ public class ConsumerGroupServiceTest {
                 assignment -> new TopicPartition(assignment.topic.get(), assignment.partition.get()),
                 assignment -> assignment.offset))
         ).orElse(Collections.emptyMap());
+        Map<TopicPartition, Optional<Integer>> returnedLeaderEpoch = assignments.map(results ->
+            results.stream().collect(Collectors.toMap(
+                assignment -> new TopicPartition(assignment.topic.get(), assignment.partition.get()),
+                assignment -> assignment.leaderEpoch))
+        ).orElse(Collections.emptyMap());
 
-        Map<TopicPartition, Optional<Long>> expectedOffsets = new HashMap<>();
-
-        expectedOffsets.put(testTopicPartition0, Optional.empty());
-        expectedOffsets.put(testTopicPartition1, Optional.of(100L));
-        expectedOffsets.put(testTopicPartition2, Optional.empty());
-        expectedOffsets.put(testTopicPartition3, Optional.of(100L));
-        expectedOffsets.put(testTopicPartition4, Optional.of(100L));
-        expectedOffsets.put(testTopicPartition5, Optional.empty());
+        Map<TopicPartition, Optional<Long>> expectedOffsets = Map.of(
+            testTopicPartition0, Optional.empty(),
+            testTopicPartition1, Optional.of(100L),
+            testTopicPartition2, Optional.empty(),
+            testTopicPartition3, Optional.of(100L),
+            testTopicPartition4, Optional.of(100L),
+            testTopicPartition5, Optional.empty()
+        );
+        Map<TopicPartition, Optional<Integer>> expectedLeaderEpoch = Map.of(
+            testTopicPartition0, Optional.empty(),
+            testTopicPartition1, Optional.of(1),
+            testTopicPartition2, Optional.empty(),
+            testTopicPartition3, Optional.of(1),
+            testTopicPartition4, Optional.of(1),
+            testTopicPartition5, Optional.empty()
+        );
 
         assertEquals(Optional.of(GroupState.STABLE), state);
         assertEquals(expectedOffsets, returnedOffsets);
+        assertEquals(expectedLeaderEpoch, returnedLeaderEpoch);
 
         verify(admin, times(1)).describeConsumerGroups(ArgumentMatchers.eq(Collections.singletonList(GROUP)), any());
         verify(admin, times(1)).listConsumerGroupOffsets(ArgumentMatchers.eq(listConsumerGroupOffsetsSpec()), any());
@@ -227,14 +252,21 @@ public class ConsumerGroupServiceTest {
         };
     }
 
+    @SuppressWarnings("deprecation")
     private DescribeConsumerGroupsResult describeGroupsResult(GroupState groupState) {
-        MemberDescription member1 = new MemberDescription("member1", Optional.of("instance1"), "client1", "host1", null);
+        MemberDescription member1 = new MemberDescription(
+            "member1", Optional.of("instance1"), "client1", "host1", null,
+            Optional.empty(), Optional.empty(), Optional.empty());
         ConsumerGroupDescription description = new ConsumerGroupDescription(GROUP,
                 true,
                 Collections.singleton(member1),
                 RangeAssignor.class.getName(),
+                GroupType.CLASSIC,
                 groupState,
-                new Node(1, "localhost", 9092));
+                new Node(1, "localhost", 9092),
+                Set.of(),
+                Optional.empty(),
+                Optional.empty());
         KafkaFutureImpl<ConsumerGroupDescription> future = new KafkaFutureImpl<>();
         future.complete(description);
         return new DescribeConsumerGroupsResult(Collections.singletonMap(GROUP, future));

@@ -25,9 +25,11 @@ on:
   # * https://securitylab.github.com/resources/github-actions-preventing-pwn-requests/
   pull_request_target:
     types: [opened, reopened, synchronize]
+    branches:
+      - trunk
 
 jobs:
-  label_PRs:
+  add-labeler-labels:
     name: Labeler
     permissions:
       contents: read
@@ -45,3 +47,24 @@ jobs:
         PR_NUM: ${{github.event.number}}
       run: |
         ./.github/scripts/label_small.sh
+
+  add-triage-label:
+    if: github.event.action == 'opened' || github.event.action == 'reopened'
+    name: Add triage label
+    runs-on: ubuntu-latest
+    permissions:
+      pull-requests: write
+    steps:
+      - name: Env
+        run: printenv
+        env:
+          GITHUB_CONTEXT: ${{ toJson(github) }}
+        # If the PR is from a non-committer, add triage label
+      - if: |  
+          github.event.pull_request.author_association != 'MEMBER' && 
+          github.event.pull_request.author_association != 'OWNER'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          NUMBER: ${{ github.event.pull_request.number }}
+        run: gh pr edit "$NUMBER" --add-label triage

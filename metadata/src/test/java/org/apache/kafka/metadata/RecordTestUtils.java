@@ -36,8 +36,6 @@ import java.lang.reflect.Field;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -92,7 +90,7 @@ public class RecordTestUtils {
         Object target,
         ApiMessageAndVersion recordAndVersion
     ) {
-        replayAll(target, Collections.singletonList(recordAndVersion));
+        replayAll(target, List.of(recordAndVersion));
     }
 
     public static <T extends ApiMessage> Optional<T> recordAtIndexAs(
@@ -276,8 +274,7 @@ public class RecordTestUtils {
     public static void deepSortRecords(Object o) throws Exception {
         if (o == null) {
             return;
-        } else if (o instanceof List) {
-            List<?> list = (List<?>) o;
+        } else if (o instanceof List<?> list) {
             for (Object entry : list) {
                 if (entry != null) {
                     if (Number.class.isAssignableFrom(entry.getClass())) {
@@ -287,8 +284,7 @@ public class RecordTestUtils {
                 }
             }
             list.sort(Comparator.comparing(Object::toString));
-        } else if (o instanceof ImplicitLinkedHashCollection) {
-            ImplicitLinkedHashCollection<?> coll = (ImplicitLinkedHashCollection<?>) o;
+        } else if (o instanceof ImplicitLinkedHashCollection<?> coll) {
             for (Object entry : coll) {
                 deepSortRecords(entry);
             }
@@ -359,7 +355,7 @@ public class RecordTestUtils {
             setIncarnationId(new Uuid(3465346L, id)).
             setZkMigrationReady(zkMigrationReady).
             setEndPoints(new RegisterControllerRecord.ControllerEndpointCollection(
-                Arrays.asList(
+                List.of(
                     new RegisterControllerRecord.ControllerEndpoint().
                         setName("CONTROLLER").
                         setHost("localhost").
@@ -373,10 +369,10 @@ public class RecordTestUtils {
                 ).iterator()
             )).
             setFeatures(new RegisterControllerRecord.ControllerFeatureCollection(
-                Collections.singletonList(
+                List.of(
                     new RegisterControllerRecord.ControllerFeature().
                         setName(MetadataVersion.FEATURE_NAME).
-                        setMinSupportedVersion(MetadataVersion.MINIMUM_KRAFT_VERSION.featureLevel()).
+                        setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
                         setMaxSupportedVersion(MetadataVersion.IBP_3_6_IV1.featureLevel())
                 ).iterator()
             ));

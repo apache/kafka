@@ -21,15 +21,13 @@ import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.{Collections, Optional, Properties}
-import kafka.controller.KafkaController
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.{ClientResponse, NodeApiVersions, RequestCompletionHandler}
 import org.apache.kafka.common.Node
-import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, SHARE_GROUP_STATE_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME}
 import org.apache.kafka.common.message.{ApiVersionsResponseData, CreateTopicsRequestData}
-import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
+import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicConfig, CreatableTopicConfigCollection}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
@@ -37,14 +35,14 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.{SecurityUtils, Utils}
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
-import org.apache.kafka.coordinator.share.ShareCoordinator
-import org.apache.kafka.server.config.{ServerConfigs, ShareCoordinatorConfig}
+import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorConfig}
+import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
-import org.mockito.invocation.InvocationOnMock
+import org.mockito.Mockito.never
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
 import scala.collection.{Map, Seq}
@@ -55,8 +53,6 @@ class AutoTopicCreationManagerTest {
   private var config: KafkaConfig = _
   private val metadataCache = Mockito.mock(classOf[MetadataCache])
   private val brokerToController = Mockito.mock(classOf[NodeToControllerChannelManager])
-  private val adminManager = Mockito.mock(classOf[ZkAdminManager])
-  private val controller = Mockito.mock(classOf[KafkaController])
   private val groupCoordinator = Mockito.mock(classOf[GroupCoordinator])
   private val transactionCoordinator = Mockito.mock(classOf[TransactionCoordinator])
   private val shareCoordinator = Mockito.mock(classOf[ShareCoordinator])
@@ -67,7 +63,7 @@ class AutoTopicCreationManagerTest {
 
   @BeforeEach
   def setup(): Unit = {
-    val props = TestUtils.createBrokerConfig(1, "localhost")
+    val props = TestUtils.createBrokerConfig(1)
     props.setProperty(ServerConfigs.REQUEST_TIMEOUT_MS_CONFIG, requestTimeout.toString)
 
     props.setProperty(GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, internalTopicPartitions.toString)
@@ -80,8 +76,6 @@ class AutoTopicCreationManagerTest {
 
     config = KafkaConfig.fromProps(props)
     val aliveBrokers = Seq(new Node(0, "host0", 0), new Node(1, "host1", 1))
-
-    Mockito.reset(metadataCache, controller, brokerToController, groupCoordinator, transactionCoordinator, shareCoordinator)
 
     Mockito.when(metadataCache.getAliveBrokerNodes(any(classOf[ListenerName]))).thenReturn(aliveBrokers)
   }
@@ -115,9 +109,7 @@ class AutoTopicCreationManagerTest {
                               replicationFactor: Short = 1): Unit = {
     autoTopicCreationManager = new DefaultAutoTopicCreationManager(
       config,
-      Some(brokerToController),
-      Some(adminManager),
-      Some(controller),
+      brokerToController,
       groupCoordinator,
       transactionCoordinator,
       Some(shareCoordinator))
@@ -129,8 +121,6 @@ class AutoTopicCreationManagerTest {
         .setTopics(topicsCollection)
         .setTimeoutMs(requestTimeout))
 
-    Mockito.when(controller.isActive).thenReturn(false)
-
     // Calling twice with the same topic will only trigger one forwarding.
     createTopicAndVerifyResult(Errors.UNKNOWN_TOPIC_OR_PARTITION, topicName, isInternal)
     createTopicAndVerifyResult(Errors.UNKNOWN_TOPIC_OR_PARTITION, topicName, isInternal)
@@ -138,106 +128,6 @@ class AutoTopicCreationManagerTest {
     Mockito.verify(brokerToController).sendRequest(
       ArgumentMatchers.eq(requestBody),
       any(classOf[ControllerRequestCompletionHandler]))
-  }
-
-  @Test
-  def testCreateTopicsWithForwardingDisabled(): Unit = {
-    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
-      config,
-      None,
-      Some(adminManager),
-      Some(controller),
-      groupCoordinator,
-      transactionCoordinator,
-      Some(shareCoordinator))
-
-    val topicName = "topic"
-
-    Mockito.when(controller.isActive).thenReturn(false)
-
-    createTopicAndVerifyResult(Errors.UNKNOWN_TOPIC_OR_PARTITION, topicName, isInternal = false)
-
-    Mockito.verify(adminManager).createTopics(
-      ArgumentMatchers.eq(0),
-      ArgumentMatchers.eq(false),
-      ArgumentMatchers.eq(Map(topicName -> getNewTopic(topicName))),
-      ArgumentMatchers.eq(Map.empty),
-      any(classOf[ControllerMutationQuota]),
-      any(classOf[Map[String, ApiError] => Unit]))
-  }
-
-  @Test
-  def testInvalidReplicationFactorForNonInternalTopics(): Unit = {
-    testErrorWithCreationInZk(Errors.INVALID_REPLICATION_FACTOR, "topic", isInternal = false)
-  }
-
-  @Test
-  def testInvalidReplicationFactorForConsumerOffsetsTopic(): Unit = {
-    Mockito.when(groupCoordinator.groupMetadataTopicConfigs).thenReturn(new Properties)
-    testErrorWithCreationInZk(Errors.INVALID_REPLICATION_FACTOR, Topic.GROUP_METADATA_TOPIC_NAME, isInternal = true)
-  }
-
-  @Test
-  def testInvalidReplicationFactorForTxnOffsetTopic(): Unit = {
-    Mockito.when(transactionCoordinator.transactionTopicConfigs).thenReturn(new Properties)
-    testErrorWithCreationInZk(Errors.INVALID_REPLICATION_FACTOR, Topic.TRANSACTION_STATE_TOPIC_NAME, isInternal = true)
-  }
-
-  @Test
-  def testTopicExistsErrorSwapForNonInternalTopics(): Unit = {
-    testErrorWithCreationInZk(Errors.TOPIC_ALREADY_EXISTS, "topic", isInternal = false,
-      expectedError = Some(Errors.LEADER_NOT_AVAILABLE))
-  }
-
-  @Test
-  def testTopicExistsErrorSwapForConsumerOffsetsTopic(): Unit = {
-    Mockito.when(groupCoordinator.groupMetadataTopicConfigs).thenReturn(new Properties)
-    testErrorWithCreationInZk(Errors.TOPIC_ALREADY_EXISTS, Topic.GROUP_METADATA_TOPIC_NAME, isInternal = true,
-      expectedError = Some(Errors.LEADER_NOT_AVAILABLE))
-  }
-
-  @Test
-  def testTopicExistsErrorSwapForTxnOffsetTopic(): Unit = {
-    Mockito.when(transactionCoordinator.transactionTopicConfigs).thenReturn(new Properties)
-    testErrorWithCreationInZk(Errors.TOPIC_ALREADY_EXISTS, Topic.TRANSACTION_STATE_TOPIC_NAME, isInternal = true,
-      expectedError = Some(Errors.LEADER_NOT_AVAILABLE))
-  }
-
-  @Test
-  def testRequestTimeoutErrorSwapForNonInternalTopics(): Unit = {
-    testErrorWithCreationInZk(Errors.REQUEST_TIMED_OUT, "topic", isInternal = false,
-      expectedError = Some(Errors.LEADER_NOT_AVAILABLE))
-  }
-
-  @Test
-  def testRequestTimeoutErrorSwapForConsumerOffsetTopic(): Unit = {
-    Mockito.when(groupCoordinator.groupMetadataTopicConfigs).thenReturn(new Properties)
-    testErrorWithCreationInZk(Errors.REQUEST_TIMED_OUT, Topic.GROUP_METADATA_TOPIC_NAME, isInternal = true,
-      expectedError = Some(Errors.LEADER_NOT_AVAILABLE))
-  }
-
-  @Test
-  def testRequestTimeoutErrorSwapForTxnOffsetTopic(): Unit = {
-    Mockito.when(transactionCoordinator.transactionTopicConfigs).thenReturn(new Properties)
-    testErrorWithCreationInZk(Errors.REQUEST_TIMED_OUT, Topic.TRANSACTION_STATE_TOPIC_NAME, isInternal = true,
-      expectedError = Some(Errors.LEADER_NOT_AVAILABLE))
-  }
-
-  @Test
-  def testUnknownTopicPartitionForNonIntervalTopic(): Unit = {
-    testErrorWithCreationInZk(Errors.UNKNOWN_TOPIC_OR_PARTITION, "topic", isInternal = false)
-  }
-
-  @Test
-  def testUnknownTopicPartitionForConsumerOffsetTopic(): Unit = {
-    Mockito.when(groupCoordinator.groupMetadataTopicConfigs).thenReturn(new Properties)
-    testErrorWithCreationInZk(Errors.UNKNOWN_TOPIC_OR_PARTITION, Topic.GROUP_METADATA_TOPIC_NAME, isInternal = true)
-  }
-
-  @Test
-  def testUnknownTopicPartitionForTxnOffsetTopic(): Unit = {
-    Mockito.when(transactionCoordinator.transactionTopicConfigs).thenReturn(new Properties)
-    testErrorWithCreationInZk(Errors.UNKNOWN_TOPIC_OR_PARTITION, Topic.TRANSACTION_STATE_TOPIC_NAME, isInternal = true)
   }
 
   @Test
@@ -255,7 +145,7 @@ class AutoTopicCreationManagerTest {
       override def deserialize(bytes: Array[Byte]): KafkaPrincipal = SecurityUtils.parseKafkaPrincipal(Utils.utf8(bytes))
     }
 
-    val requestContext = initializeRequestContext(topicName, userPrincipal, Optional.of(principalSerde))
+    val requestContext = initializeRequestContext(userPrincipal, Optional.of(principalSerde))
 
     autoTopicCreationManager.createTopics(
       Set(topicName), UnboundedControllerMutationQuota, Some(requestContext))
@@ -274,7 +164,7 @@ class AutoTopicCreationManagerTest {
   def testTopicCreationWithMetadataContextWhenPrincipalSerdeNotDefined(): Unit = {
     val topicName = "topic"
 
-    val requestContext = initializeRequestContext(topicName, KafkaPrincipal.ANONYMOUS, Optional.empty())
+    val requestContext = initializeRequestContext(KafkaPrincipal.ANONYMOUS, Optional.empty())
 
     // Throw upon undefined principal serde when building the forward request
     assertThrows(classOf[IllegalArgumentException], () => autoTopicCreationManager.createTopics(
@@ -292,7 +182,7 @@ class AutoTopicCreationManagerTest {
       override def deserialize(bytes: Array[Byte]): KafkaPrincipal = SecurityUtils.parseKafkaPrincipal(Utils.utf8(bytes))
     }
 
-    val requestContext = initializeRequestContext(topicName, KafkaPrincipal.ANONYMOUS, Optional.of(principalSerde))
+    val requestContext = initializeRequestContext(KafkaPrincipal.ANONYMOUS, Optional.of(principalSerde))
     autoTopicCreationManager.createTopics(
       Set(topicName), UnboundedControllerMutationQuota, Some(requestContext))
     autoTopicCreationManager.createTopics(
@@ -322,76 +212,159 @@ class AutoTopicCreationManagerTest {
       argumentCaptor.capture())
   }
 
-  private def initializeRequestContext(topicName: String,
-                                       kafkaPrincipal: KafkaPrincipal,
-                                       principalSerde: Optional[KafkaPrincipalSerde]): RequestContext = {
+  @Test
+  def testCreateStreamsInternalTopics(): Unit = {
+    val topicConfig = new CreatableTopicConfigCollection()
+    topicConfig.add(new CreatableTopicConfig().setName("cleanup.policy").setValue("compact"));
+
+    val topics = Map(
+      "stream-topic-1" -> new CreatableTopic().setName("stream-topic-1").setNumPartitions(3).setReplicationFactor(2).setConfigs(topicConfig),
+      "stream-topic-2" -> new CreatableTopic().setName("stream-topic-2").setNumPartitions(1).setReplicationFactor(1)
+    )
+    val requestContext = initializeRequestContextWithUserPrincipal()
 
     autoTopicCreationManager = new DefaultAutoTopicCreationManager(
       config,
-      Some(brokerToController),
-      Some(adminManager),
-      Some(controller),
+      brokerToController,
       groupCoordinator,
       transactionCoordinator,
       Some(shareCoordinator))
 
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
+
+    val argumentCaptor = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[_ <: AbstractRequest]])
+    Mockito.verify(brokerToController).sendRequest(
+      argumentCaptor.capture(),
+      any(classOf[ControllerRequestCompletionHandler]))
+
+    val requestHeader = new RequestHeader(ApiKeys.CREATE_TOPICS, ApiKeys.CREATE_TOPICS.latestVersion(), "clientId", 0)
+    val capturedRequest = argumentCaptor.getValue.asInstanceOf[EnvelopeRequest.Builder].build(ApiKeys.ENVELOPE.latestVersion())
     val topicsCollection = new CreateTopicsRequestData.CreatableTopicCollection
-    topicsCollection.add(getNewTopic(topicName))
+    topicsCollection.add(getNewTopic("stream-topic-1", 3, 2.toShort).setConfigs(topicConfig))
+    topicsCollection.add(getNewTopic("stream-topic-2", 1, 1.toShort))
+    val requestBody = new CreateTopicsRequest.Builder(
+      new CreateTopicsRequestData()
+        .setTopics(topicsCollection)
+        .setTimeoutMs(requestTimeout))
+      .build(ApiKeys.CREATE_TOPICS.latestVersion())
+
+    val forwardedRequestBuffer = capturedRequest.requestData().duplicate()
+    assertEquals(requestHeader, RequestHeader.parse(forwardedRequestBuffer));
+    assertEquals(requestBody.data(), CreateTopicsRequest.parse(forwardedRequestBuffer, ApiKeys.CREATE_TOPICS.latestVersion()).data())
+  }
+
+  @Test
+  def testCreateStreamsInternalTopicsWithEmptyTopics(): Unit = {
+    val topics = Map.empty[String, CreatableTopic]
+    val requestContext = initializeRequestContextWithUserPrincipal()
+
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      brokerToController,
+      groupCoordinator,
+      transactionCoordinator,
+      Some(shareCoordinator))
+
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext)
+
+    Mockito.verify(brokerToController, never()).sendRequest(
+      any(classOf[AbstractRequest.Builder[_ <: AbstractRequest]]),
+      any(classOf[ControllerRequestCompletionHandler]))
+  }
+
+  @Test
+  def testCreateStreamsInternalTopicsWithDefaultConfig(): Unit = {
+    val topics = Map(
+      "stream-topic-1" -> new CreatableTopic().setName("stream-topic-1").setNumPartitions(-1).setReplicationFactor(-1)
+    )
+    val requestContext = initializeRequestContextWithUserPrincipal()
+
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      brokerToController,
+      groupCoordinator,
+      transactionCoordinator,
+      Some(shareCoordinator))
+
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext);
+
+    val argumentCaptor = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[_ <: AbstractRequest]])
+    Mockito.verify(brokerToController).sendRequest(
+      argumentCaptor.capture(),
+      any(classOf[ControllerRequestCompletionHandler]))
+
+    val capturedRequest = argumentCaptor.getValue.asInstanceOf[EnvelopeRequest.Builder].build(ApiKeys.ENVELOPE.latestVersion())
+
+    val requestHeader = new RequestHeader(ApiKeys.CREATE_TOPICS, ApiKeys.CREATE_TOPICS.latestVersion(), "clientId", 0)
+    val topicsCollection = new CreateTopicsRequestData.CreatableTopicCollection
+    topicsCollection.add(getNewTopic("stream-topic-1", config.numPartitions, config.defaultReplicationFactor.toShort))
+    val requestBody = new CreateTopicsRequest.Builder(
+      new CreateTopicsRequestData()
+        .setTopics(topicsCollection)
+        .setTimeoutMs(requestTimeout))
+      .build(ApiKeys.CREATE_TOPICS.latestVersion())
+    val forwardedRequestBuffer = capturedRequest.requestData().duplicate()
+    assertEquals(requestHeader, RequestHeader.parse(forwardedRequestBuffer));
+    assertEquals(requestBody.data(), CreateTopicsRequest.parse(forwardedRequestBuffer, ApiKeys.CREATE_TOPICS.latestVersion()).data())
+  }
+
+  @Test
+  def testCreateStreamsInternalTopicsPassesPrincipal(): Unit = {
+    val topics = Map(
+      "stream-topic-1" -> new CreatableTopic().setName("stream-topic-1").setNumPartitions(-1).setReplicationFactor(-1)
+    )
+    val requestContext = initializeRequestContextWithUserPrincipal()
+
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      brokerToController,
+      groupCoordinator,
+      transactionCoordinator,
+      Some(shareCoordinator))
+
+    autoTopicCreationManager.createStreamsInternalTopics(topics, requestContext);
+
+    val argumentCaptor = ArgumentCaptor.forClass(classOf[AbstractRequest.Builder[_ <: AbstractRequest]])
+    Mockito.verify(brokerToController).sendRequest(
+      argumentCaptor.capture(),
+      any(classOf[ControllerRequestCompletionHandler]))
+    val capturedRequest = argumentCaptor.getValue.asInstanceOf[EnvelopeRequest.Builder].build(ApiKeys.ENVELOPE.latestVersion())
+    assertEquals(new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user"), SecurityUtils.parseKafkaPrincipal(Utils.utf8(capturedRequest.requestPrincipal)))
+  }
+
+  private def initializeRequestContextWithUserPrincipal(): RequestContext = {
+    val userPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "user")
+    val principalSerde = new KafkaPrincipalSerde {
+      override def serialize(principal: KafkaPrincipal): Array[Byte] = {
+        Utils.utf8(principal.toString)
+      }
+      override def deserialize(bytes: Array[Byte]): KafkaPrincipal = SecurityUtils.parseKafkaPrincipal(Utils.utf8(bytes))
+    }
+    initializeRequestContext(userPrincipal, Optional.of(principalSerde))
+  }
+
+  private def initializeRequestContext(kafkaPrincipal: KafkaPrincipal,
+                                       principalSerde: Optional[KafkaPrincipalSerde]): RequestContext = {
+
+    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
+      config,
+      brokerToController,
+      groupCoordinator,
+      transactionCoordinator,
+      Some(shareCoordinator))
+
     val createTopicApiVersion = new ApiVersionsResponseData.ApiVersion()
       .setApiKey(ApiKeys.CREATE_TOPICS.id)
-      .setMinVersion(0)
-      .setMaxVersion(0)
+      .setMinVersion(ApiKeys.CREATE_TOPICS.oldestVersion())
+      .setMaxVersion(ApiKeys.CREATE_TOPICS.latestVersion())
     Mockito.when(brokerToController.controllerApiVersions())
       .thenReturn(Optional.of(NodeApiVersions.create(Collections.singleton(createTopicApiVersion))))
-
-    Mockito.when(controller.isActive).thenReturn(false)
 
     val requestHeader = new RequestHeader(ApiKeys.METADATA, ApiKeys.METADATA.latestVersion,
       "clientId", 0)
     new RequestContext(requestHeader, "1", InetAddress.getLocalHost, Optional.empty(),
       kafkaPrincipal, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
       SecurityProtocol.PLAINTEXT, ClientInformation.EMPTY, false, principalSerde)
-  }
-
-  private def testErrorWithCreationInZk(error: Errors,
-                                        topicName: String,
-                                        isInternal: Boolean,
-                                        expectedError: Option[Errors] = None): Unit = {
-    autoTopicCreationManager = new DefaultAutoTopicCreationManager(
-      config,
-      None,
-      Some(adminManager),
-      Some(controller),
-      groupCoordinator,
-      transactionCoordinator,
-      Some(shareCoordinator))
-
-    Mockito.when(controller.isActive).thenReturn(false)
-    val newTopic = if (isInternal) {
-      topicName match {
-        case Topic.GROUP_METADATA_TOPIC_NAME => getNewTopic(topicName,
-          numPartitions = config.groupCoordinatorConfig.offsetsTopicPartitions, replicationFactor = config.groupCoordinatorConfig.offsetsTopicReplicationFactor)
-        case Topic.TRANSACTION_STATE_TOPIC_NAME => getNewTopic(topicName,
-          numPartitions = config.transactionLogConfig.transactionTopicPartitions, replicationFactor = config.transactionLogConfig.transactionTopicReplicationFactor)
-      }
-    } else {
-      getNewTopic(topicName)
-    }
-
-    val topicErrors = if (error == Errors.UNKNOWN_TOPIC_OR_PARTITION) null else
-      Map(topicName -> new ApiError(error))
-    Mockito.when(adminManager.createTopics(
-      ArgumentMatchers.eq(0),
-      ArgumentMatchers.eq(false),
-      ArgumentMatchers.eq(Map(topicName -> newTopic)),
-      ArgumentMatchers.eq(Map.empty),
-      any(classOf[ControllerMutationQuota]),
-      any(classOf[Map[String, ApiError] => Unit]))).thenAnswer((invocation: InvocationOnMock) => {
-      invocation.getArgument(5).asInstanceOf[Map[String, ApiError] => Unit]
-        .apply(topicErrors)
-    })
-
-    createTopicAndVerifyResult(expectedError.getOrElse(error), topicName, isInternal = isInternal)
   }
 
   private def createTopicAndVerifyResult(error: Errors,
@@ -409,7 +382,7 @@ class AutoTopicCreationManagerTest {
     assertEquals(expectedResponses, topicResponses)
   }
 
-  private def getNewTopic(topicName: String, numPartitions: Int = 1, replicationFactor: Short = 1): CreatableTopic = {
+  private def getNewTopic(topicName: String, numPartitions: Int, replicationFactor: Short): CreatableTopic = {
     new CreatableTopic()
       .setName(topicName)
       .setNumPartitions(numPartitions)
