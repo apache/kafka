@@ -51,10 +51,13 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.atLeastOnce;
+import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -516,6 +519,52 @@ public class FileRecordsTest {
         fileRecords.writeTo(channel, firstWritten, secondWrittenLength);
         // But we still only write (size - firstWritten), which is not fulfilled in the old version
         verify(channel).transferFrom(any(), anyLong(), eq((long) size - firstWritten));
+    }
+
+    @Test
+    public void testSearchForOffsetWithSizeLastOffsetCallCountFirstBatchMatch() throws IOException {
+        File mockFile = mock(File.class);
+        FileChannel mockChannel = mock(FileChannel.class);
+        FileLogInputStream.FileChannelRecordBatch batch = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(batch.baseOffset()).thenReturn(10L);
+
+        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 0, 100, false));
+
+        List<FileLogInputStream.FileChannelRecordBatch> batches = new ArrayList<>();
+        batches.add(batch);
+        doReturn((Iterable<FileLogInputStream.FileChannelRecordBatch>) batches::iterator)
+                .when(fileRecords)
+                .batchesFrom(anyInt());
+        
+        FileRecords.LogOffsetPosition result = fileRecords.searchForOffsetWithSize(5L, 0);
+
+        assertEquals(new FileRecords.LogOffsetPosition(batch), result);
+        verify(batch, never()).lastOffset();
+    }
+
+    @Test
+    public void testSearchForOffsetWithSizeLastOffsetCallCountPrevBatchMatches() throws IOException {
+        File mockFile = mock(File.class);
+        FileChannel mockChannel = mock(FileChannel.class);
+        FileLogInputStream.FileChannelRecordBatch prevBatch = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(prevBatch.baseOffset()).thenReturn(5L);
+        when(prevBatch.lastOffset()).thenReturn(12L); // > targetOffset
+        FileLogInputStream.FileChannelRecordBatch currentBatch = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(currentBatch.baseOffset()).thenReturn(15L); // >= targetOffset
+
+        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 0, 100, false));
+        
+        List<FileLogInputStream.FileChannelRecordBatch> batches = new ArrayList<>();
+        batches.add(prevBatch);
+        batches.add(currentBatch);
+        doReturn((Iterable<FileLogInputStream.FileChannelRecordBatch>) batches::iterator)
+                .when(fileRecords)
+                .batchesFrom(anyInt());
+
+        FileRecords.LogOffsetPosition result = fileRecords.searchForOffsetWithSize(10L, 0);
+
+        assertEquals(new FileRecords.LogOffsetPosition(prevBatch), result);
+        verify(prevBatch, times(1)).lastOffset();
     }
 
     private void doTestConversion(Compression compression, byte toMagic) throws IOException {
