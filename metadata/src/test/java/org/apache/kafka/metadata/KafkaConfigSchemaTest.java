@@ -26,12 +26,10 @@ import org.apache.kafka.server.config.ConfigSynonym;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static java.util.Collections.emptyList;
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
 import static org.apache.kafka.server.config.ConfigSynonym.HOURS_TO_MILLISECONDS;
@@ -62,10 +60,10 @@ public class KafkaConfigSchemaTest {
     public static final Map<String, List<ConfigSynonym>> SYNONYMS = new HashMap<>();
 
     static {
-        SYNONYMS.put("abc", Arrays.asList(new ConfigSynonym("foo.bar")));
-        SYNONYMS.put("def", Arrays.asList(new ConfigSynonym("quux", HOURS_TO_MILLISECONDS)));
-        SYNONYMS.put("ghi", Arrays.asList(new ConfigSynonym("ghi")));
-        SYNONYMS.put("xyz", Arrays.asList(new ConfigSynonym("quuux"), new ConfigSynonym("quuux2")));
+        SYNONYMS.put("abc", List.of(new ConfigSynonym("foo.bar")));
+        SYNONYMS.put("def", List.of(new ConfigSynonym("quux", HOURS_TO_MILLISECONDS)));
+        SYNONYMS.put("ghi", List.of(new ConfigSynonym("ghi")));
+        SYNONYMS.put("xyz", List.of(new ConfigSynonym("quuux"), new ConfigSynonym("quuux2")));
     }
 
     private static final KafkaConfigSchema SCHEMA = new KafkaConfigSchema(CONFIGS, SYNONYMS);
@@ -153,16 +151,16 @@ public class KafkaConfigSchemaTest {
         dynamicTopicConfigs.put("ghi", "true");
         Map<String, ConfigEntry> expected = new HashMap<>();
         expected.put("abc", new ConfigEntry("abc", "the,dynamic,cluster,config,value",
-            ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG, false, false, emptyList(),
+            ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG, false, false, List.of(),
                 ConfigEntry.ConfigType.LIST, "abc doc"));
         expected.put("def", new ConfigEntry("def", "2840400000",
-            ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG, false, false, emptyList(),
+            ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG, false, false, List.of(),
             ConfigEntry.ConfigType.LONG, "def doc"));
         expected.put("ghi", new ConfigEntry("ghi", "true",
-            ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, emptyList(),
+            ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, false, false, List.of(),
             ConfigEntry.ConfigType.BOOLEAN, "ghi doc"));
         expected.put("xyz", new ConfigEntry("xyz", "thedefault",
-            ConfigEntry.ConfigSource.DEFAULT_CONFIG, true, false, emptyList(),
+            ConfigEntry.ConfigSource.DEFAULT_CONFIG, true, false, List.of(),
             ConfigEntry.ConfigType.PASSWORD, "xyz doc"));
         assertEquals(expected, SCHEMA.resolveEffectiveTopicConfigs(staticNodeConfig,
             dynamicClusterConfigs,
