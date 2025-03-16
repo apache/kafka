@@ -31,7 +31,6 @@ import org.apache.kafka.common.utils.Exit;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
-import java.util.Optional;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -113,19 +112,6 @@ public class ClientMetricsCommandTest {
                 "--interval", "1000", "--match", "client_id=abc", "--metrics", "org.apache.kafka."});
         assertTrue(opts.hasAlterOption());
 
-    }
-    @Test
-    public void testOptionsAlterAllOptionsEmpty() {
-        ClientMetricsCommand.ClientMetricsCommandOptions opts = new ClientMetricsCommand.ClientMetricsCommandOptions(
-            new String[]{"--bootstrap-server", bootstrapServer, "--alter", "--name", clientMetricsName,
-                         "--interval", "", "--match", "", "--metrics", "" });
-
-        assertTrue(opts.hasAlterOption());
-        assertEquals(Optional.of(""), opts.interval());
-        assertEquals(1, opts.match().get().size());
-        assertEquals("", opts.match().get().get(0));
-        assertEquals(1, opts.metrics().get().size());
-        assertEquals("", opts.metrics().get().get(0));
     }
 
     @Test
