@@ -43,7 +43,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -116,7 +115,7 @@ public class Formatter {
     /**
      * The arguments passed to --add-scram
      */
-    private List<String> scramArguments = Collections.emptyList();
+    private List<String> scramArguments = List.of();
 
     /**
      * The name of the initial controller listener.
