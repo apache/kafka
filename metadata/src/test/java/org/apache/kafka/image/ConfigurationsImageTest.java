@@ -29,7 +29,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -87,10 +86,10 @@ public class ConfigurationsImageTest {
         RecordTestUtils.replayAll(DELTA1, DELTA1_RECORDS);
 
         Map<ConfigResource, ConfigurationImage> map2 = new HashMap<>();
-        Map<String, String> broker1Map2 = Collections.singletonMap("barfoo", "bazfoo");
+        Map<String, String> broker1Map2 = Map.of("barfoo", "bazfoo");
         map2.put(new ConfigResource(BROKER, "1"),
             new ConfigurationImage(new ConfigResource(BROKER, "1"), broker1Map2));
-        Map<String, String> broker2Map = Collections.singletonMap("foo", "bar");
+        Map<String, String> broker2Map = Map.of("foo", "bar");
         map2.put(new ConfigResource(BROKER, "2"), new ConfigurationImage(new ConfigResource(BROKER, "2"), broker2Map));
         IMAGE2 = new ConfigurationsImage(map2);
     }
