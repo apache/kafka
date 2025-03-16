@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.metadata;
 
-import org.apache.kafka.admin.BrokerMetadata;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
@@ -216,18 +215,11 @@ public interface MetadataCache extends ConfigRepository {
     }
 
     private static Optional<Integer> getRandomAliveBroker(MetadataImage image) {
-        List<BrokerMetadata> aliveBrokers = getAliveBrokers(image);
-        if (aliveBrokers.isEmpty()) {
-            return Optional.empty();
-        } else {
-            return Optional.of(aliveBrokers.get(ThreadLocalRandom.current().nextInt(aliveBrokers.size())).id);
-        }
-    }
-
-    private static List<BrokerMetadata> getAliveBrokers(MetadataImage image) {
-        return image.cluster().brokers().values().stream()
+        List<Integer> aliveBrokers = image.cluster().brokers().values().stream()
             .filter(broker -> !broker.fenced())
-            .map(broker -> new BrokerMetadata(broker.id(), broker.rack()))
-            .collect(Collectors.toList());
+            .map(BrokerRegistration::id)
+            .toList();
+        if (aliveBrokers.isEmpty()) return Optional.empty();
+        return Optional.of(aliveBrokers.get(ThreadLocalRandom.current().nextInt(aliveBrokers.size())));
     }
 }
