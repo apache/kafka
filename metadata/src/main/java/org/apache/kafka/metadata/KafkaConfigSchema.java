@@ -33,8 +33,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
 
-import static java.util.Collections.emptyList;
-import static java.util.Collections.emptyMap;
 import static org.apache.kafka.common.config.TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG;
 
 
@@ -44,7 +42,7 @@ import static org.apache.kafka.common.config.TopicConfig.MIN_IN_SYNC_REPLICAS_CO
  * determining the type of config keys (string, int, password, etc.)
  */
 public class KafkaConfigSchema {
-    public static final KafkaConfigSchema EMPTY = new KafkaConfigSchema(emptyMap(), emptyMap());
+    public static final KafkaConfigSchema EMPTY = new KafkaConfigSchema(Map.of(), Map.of());
 
     private static final ConfigDef EMPTY_CONFIG_DEF = new ConfigDef();
 
@@ -203,7 +201,7 @@ public class KafkaConfigSchema {
                 dynamicTopicConfigs.get(configKey.name),
                 ConfigSource.DYNAMIC_TOPIC_CONFIG, Function.identity());
         }
-        List<ConfigSynonym> synonyms = logConfigSynonyms.getOrDefault(configKey.name, emptyList());
+        List<ConfigSynonym> synonyms = logConfigSynonyms.getOrDefault(configKey.name, List.of());
         for (ConfigSynonym synonym : synonyms) {
             if (dynamicNodeConfigs.containsKey(synonym.name())) {
                 return toConfigEntry(configKey, dynamicNodeConfigs.get(synonym.name()),
@@ -233,7 +231,7 @@ public class KafkaConfigSchema {
         ConfigDef configDef = configDefs.getOrDefault(ConfigResource.Type.BROKER, EMPTY_CONFIG_DEF);
         ConfigDef.ConfigKey configKey = configDef.configKeys().get(configName);
         if (configKey == null) return null;
-        List<ConfigSynonym> synonyms = logConfigSynonyms.getOrDefault(configKey.name, emptyList());
+        List<ConfigSynonym> synonyms = logConfigSynonyms.getOrDefault(configKey.name, List.of());
         for (ConfigSynonym synonym : synonyms) {
             if (staticNodeConfig.containsKey(synonym.name())) {
                 return toConfigEntry(configKey, staticNodeConfig.get(synonym.name()),
@@ -278,7 +276,7 @@ public class KafkaConfigSchema {
             source,
             configKey.type().isSensitive(),
             false, // "readonly" is always false, for now.
-            emptyList(), // we don't populate synonyms, for now.
+            List.of(), // we don't populate synonyms, for now.
             translateConfigType(configKey.type()),
             configKey.documentation);
     }
