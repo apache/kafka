@@ -32,7 +32,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -124,10 +123,10 @@ public class SnapshotGeneratorTest {
             // Publish a log delta batch. This one will be ignored because there are other images
             // queued for writing.
             generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, logDeltaManifestBuilder().numBytes(2000).build());
-            assertEquals(Collections.emptyList(), emitter.images());
+            assertEquals(List.of(), emitter.images());
             emitter.setReady();
         }
-        assertEquals(Collections.singletonList(TEST_IMAGE), emitter.images());
+        assertEquals(List.of(TEST_IMAGE), emitter.images());
         faultHandler.maybeRethrowFirstException();
     }
 
@@ -144,10 +143,10 @@ public class SnapshotGeneratorTest {
             generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, notBatchAlignedLogDeltaManifestBuilder().build());
             generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, notBatchAlignedLogDeltaManifestBuilder().build());
             generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, notBatchAlignedLogDeltaManifestBuilder().build());
-            assertEquals(Collections.emptyList(), emitter.images());
+            assertEquals(List.of(), emitter.images());
             emitter.setReady();
         }
-        assertEquals(Collections.emptyList(), emitter.images());
+        assertEquals(List.of(), emitter.images());
         faultHandler.maybeRethrowFirstException();
     }
 
@@ -167,10 +166,10 @@ public class SnapshotGeneratorTest {
             generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, notBatchAlignedLogDeltaManifestBuilder().build());
             // This snapshot should get published since it is batch aligned.
             generator.publishLogDelta(TEST_DELTA, batchAlignedImage, logDeltaManifestBuilder().build());
-            assertEquals(Collections.emptyList(), emitter.images());
+            assertEquals(List.of(), emitter.images());
             emitter.setReady();
         }
-        assertEquals(Collections.singletonList(batchAlignedImage), emitter.images());
+        assertEquals(List.of(batchAlignedImage), emitter.images());
         faultHandler.maybeRethrowFirstException();
     }
 
@@ -189,7 +188,7 @@ public class SnapshotGeneratorTest {
             // No snapshots are generated because snapshots are disabled.
             generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, logDeltaManifestBuilder().build());
         }
-        assertEquals(Collections.emptyList(), emitter.images());
+        assertEquals(List.of(), emitter.images());
         faultHandler.maybeRethrowFirstException();
     }
 
@@ -206,7 +205,7 @@ public class SnapshotGeneratorTest {
                 build()) {
             // This image isn't published yet.
             generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, logDeltaManifestBuilder().numBytes(50).build());
-            assertEquals(Collections.emptyList(), emitter.images());
+            assertEquals(List.of(), emitter.images());
             mockTime.sleep(TimeUnit.MINUTES.toNanos(40));
             // Next image is published because of the time delay.
             generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, logDeltaManifestBuilder().numBytes(50).build());
@@ -215,7 +214,7 @@ public class SnapshotGeneratorTest {
             // so this does not trigger a new snapshot.
             generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, logDeltaManifestBuilder().numBytes(150).build());
         }
-        assertEquals(Collections.singletonList(TEST_IMAGE), emitter.images());
+        assertEquals(List.of(TEST_IMAGE), emitter.images());
         faultHandler.maybeRethrowFirstException();
     }
 
@@ -232,7 +231,7 @@ public class SnapshotGeneratorTest {
                     logDeltaManifestBuilder().elapsedNs(10000).numBytes(50000).build());
             }
         }
-        assertEquals(Collections.emptyList(), emitter.images());
+        assertEquals(List.of(), emitter.images());
         assertNotNull(faultHandler.firstException());
         assertEquals(FaultHandlerException.class, faultHandler.firstException().getClass());
         assertEquals("SnapshotGenerator: KRaft snapshot file generation error: oops",

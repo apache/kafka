@@ -64,7 +64,7 @@ public class BrokerRegistration {
             this.fenced = false;
             this.inControlledShutdown = false;
             this.isMigratingZkBroker = false;
-            this.directories = Collections.emptyList();
+            this.directories = List.of();
         }
 
         public Builder setId(int id) {
