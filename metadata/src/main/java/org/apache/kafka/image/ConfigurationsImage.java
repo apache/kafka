@@ -36,7 +36,7 @@ import java.util.Properties;
  */
 public final class ConfigurationsImage {
     public static final ConfigurationsImage EMPTY =
-        new ConfigurationsImage(Collections.emptyMap());
+        new ConfigurationsImage(Map.of());
 
     private final Map<ConfigResource, ConfigurationImage> data;
 
@@ -70,7 +70,7 @@ public final class ConfigurationsImage {
         if (configurationImage != null) {
             return configurationImage.toMap();
         } else {
-            return Collections.emptyMap();
+            return Map.of();
         }
     }
 
