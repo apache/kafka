@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.errors;
 
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -47,5 +48,31 @@ public class TransactionExceptionHierarchyTest {
                 exceptionClass.getSimpleName() + " should extend RetriableException");
         assertFalse(RefreshRetriableException.class.isAssignableFrom(exceptionClass),
                 exceptionClass.getSimpleName() + " should NOT extend RefreshRetriableException");
+    }
+
+    /**
+     * Verifies that RefreshRetriableException extends RetriableException.
+     */
+    @Test
+    void testRefreshRetriableException() {
+        assertTrue(RetriableException.class.isAssignableFrom(RefreshRetriableException.class),
+                "RefreshRetriableException should extend RetriableException");
+    }
+
+    /**
+     * Verifies that the given exception class extends `RefreshRetriableException`
+     *
+     * @param exceptionClass the exception class to check
+     */
+    @ParameterizedTest
+    @ValueSource(classes = {
+        UnknownTopicOrPartitionException.class,
+        NotLeaderOrFollowerException.class,
+        NotCoordinatorException.class,
+        CoordinatorNotAvailableException.class
+    })
+    void testRefreshRetriableExceptionHierarchy(Class<? extends Exception> exceptionClass) {
+        assertTrue(RefreshRetriableException.class.isAssignableFrom(exceptionClass),
+                exceptionClass.getSimpleName() + " should extend RefreshRetriableException");
     }
 }
