@@ -31,7 +31,6 @@ import org.apache.kafka.server.authorizer.AuthorizerServerInfo;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -190,7 +189,7 @@ public class StandardAuthorizer implements ClusterMetadataAuthorizer {
 
     static Set<String> getConfiguredSuperUsers(Map<String, ?> configs) {
         Object configValue = configs.get(SUPER_USERS_CONFIG);
-        if (configValue == null) return Collections.emptySet();
+        if (configValue == null) return Set.of();
         String[] values = configValue.toString().split(";");
         Set<String> result = new HashSet<>();
         for (String value : values) {

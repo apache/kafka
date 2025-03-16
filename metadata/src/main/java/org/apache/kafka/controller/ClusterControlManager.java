@@ -365,7 +365,7 @@ public class ClusterControlManager {
             throw new BrokerIdNotRegisteredException("Controller does not support registering ZK brokers.");
         }
 
-        if (featureControl.metadataVersion().isDirectoryAssignmentSupported()) {
+        if (featureControl.metadataVersionOrThrow().isDirectoryAssignmentSupported()) {
             if (request.logDirs().isEmpty()) {
                 throw new InvalidRegistrationException("No directories specified in request");
             }
@@ -415,7 +415,7 @@ public class ClusterControlManager {
                         setMaxSupportedVersion((short) 0));
             }
         });
-        if (featureControl.metadataVersion().isDirectoryAssignmentSupported()) {
+        if (featureControl.metadataVersionOrThrow().isDirectoryAssignmentSupported()) {
             record.setLogDirs(request.logDirs());
         }
 
@@ -444,7 +444,7 @@ public class ClusterControlManager {
             record.setInControlledShutdown(existing.inControlledShutdown());
             record.setBrokerEpoch(existing.epoch());
         }
-        records.add(new ApiMessageAndVersion(record, featureControl.metadataVersion().
+        records.add(new ApiMessageAndVersion(record, featureControl.metadataVersionOrThrow().
             registerBrokerRecordVersion()));
 
         if (!request.incarnationId().equals(prevIncarnationId)) {
@@ -461,7 +461,7 @@ public class ClusterControlManager {
     }
 
     ControllerResult<Void> registerController(ControllerRegistrationRequestData request) {
-        if (!featureControl.metadataVersion().isControllerRegistrationSupported()) {
+        if (!featureControl.metadataVersionOrThrow().isControllerRegistrationSupported()) {
             throw new UnsupportedVersionException("The current MetadataVersion is too old to " +
                     "support controller registrations.");
         }
@@ -830,7 +830,7 @@ public class ClusterControlManager {
     }
 
     Iterator<Entry<Integer, Map<String, VersionRange>>> controllerSupportedFeatures() {
-        if (!featureControl.metadataVersion().isControllerRegistrationSupported()) {
+        if (!featureControl.metadataVersionOrThrow().isControllerRegistrationSupported()) {
             throw new UnsupportedVersionException("The current MetadataVersion is too old to " +
                     "support controller registrations.");
         }

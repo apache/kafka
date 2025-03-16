@@ -121,7 +121,6 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.function.IntPredicate;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
 import static org.apache.kafka.common.config.ConfigResource.Type.TOPIC;
@@ -240,7 +239,7 @@ public class ReplicationControlManager {
 
         @Override
         public Uuid defaultDir(int brokerId) {
-            if (featureControl.metadataVersion().isDirectoryAssignmentSupported()) {
+            if (featureControl.metadataVersionOrThrow().isDirectoryAssignmentSupported()) {
                 return clusterControl.defaultDir(brokerId);
             } else {
                 return DirectoryId.MIGRATING;
@@ -611,8 +610,8 @@ public class ReplicationControlManager {
                     new PartitionChangeRecord().
                         setPartitionId(partitionId).
                         setTopicId(topic.id).
-                        setEligibleLeaderReplicas(Collections.emptyList()).
-                        setLastKnownElr(Collections.emptyList())));
+                        setEligibleLeaderReplicas(List.of()).
+                        setLastKnownElr(List.of())));
                 numRemoved++;
             }
         }
@@ -660,7 +659,7 @@ public class ReplicationControlManager {
                     configRecords = configResult.records();
                 }
             } else {
-                configRecords = Collections.emptyList();
+                configRecords = List.of();
             }
             ApiError error;
             try {
@@ -697,7 +696,7 @@ public class ReplicationControlManager {
         }
         if (request.validateOnly()) {
             log.info("Validate-only CreateTopics result(s): {}", resultsBuilder);
-            return ControllerResult.atomicOf(Collections.emptyList(), data);
+            return ControllerResult.atomicOf(List.of(), data);
         } else {
             log.info("CreateTopics result(s): {}", resultsBuilder);
             return ControllerResult.atomicOf(records, data);
@@ -734,7 +733,7 @@ public class ReplicationControlManager {
                 validateManualPartitionAssignment(partitionAssignment, replicationFactor);
                 replicationFactor = OptionalInt.of(assignment.brokerIds().size());
                 List<Integer> isr = assignment.brokerIds().stream().
-                    filter(clusterControl::isActive).collect(Collectors.toList());
+                    filter(clusterControl::isActive).toList();
                 if (isr.isEmpty()) {
                     return new ApiError(Errors.INVALID_REPLICA_ASSIGNMENT,
                         "All brokers specified in the manual partition assignment for " +
@@ -778,7 +777,7 @@ public class ReplicationControlManager {
                 for (int partitionId = 0; partitionId < topicAssignment.assignments().size(); partitionId++) {
                     PartitionAssignment partitionAssignment = topicAssignment.assignments().get(partitionId);
                     List<Integer> isr = partitionAssignment.replicas().stream().
-                        filter(clusterControl::isActive).collect(Collectors.toList());
+                        filter(clusterControl::isActive).toList();
                     // If the ISR is empty, it means that all brokers are fenced or
                     // in controlled shutdown. To be consistent with the replica placer,
                     // we reject the create topic request with INVALID_REPLICATION_FACTOR.
@@ -844,7 +843,7 @@ public class ReplicationControlManager {
         for (Entry<Integer, PartitionRegistration> partEntry : newParts.entrySet()) {
             int partitionIndex = partEntry.getKey();
             PartitionRegistration info = partEntry.getValue();
-            records.add(info.toRecord(topicId, partitionIndex, new ImageWriterOptions.Builder(featureControl.metadataVersion()).
+            records.add(info.toRecord(topicId, partitionIndex, new ImageWriterOptions.Builder(featureControl.metadataVersionOrThrow()).
                 setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled()).
                 build()));
         }
@@ -1121,7 +1120,7 @@ public class ReplicationControlManager {
                     topic.id,
                     partitionId,
                     new LeaderAcceptor(clusterControl, partition),
-                    featureControl.metadataVersion(),
+                    featureControl.metadataVersionOrThrow(),
                     getTopicEffectiveMinIsr(topic.name)
                 )
                     .setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
@@ -1583,7 +1582,7 @@ public class ReplicationControlManager {
             topicId,
             partitionId,
             new LeaderAcceptor(clusterControl, partition),
-            featureControl.metadataVersion(),
+            featureControl.metadataVersionOrThrow(),
             getTopicEffectiveMinIsr(topic)
         )
             .setElection(election)
@@ -1629,7 +1628,7 @@ public class ReplicationControlManager {
         heartbeatManager.touch(brokerId,
             states.next().fenced(),
             request.currentMetadataOffset());
-        if (featureControl.metadataVersion().isDirectoryAssignmentSupported()) {
+        if (featureControl.metadataVersionOrThrow().isDirectoryAssignmentSupported()) {
             handleDirectoriesOffline(brokerId, brokerEpoch, request.offlineLogDirs(), records);
         }
         boolean isCaughtUp = request.currentMetadataOffset() >= registerBrokerRecordOffset;
@@ -1673,7 +1672,7 @@ public class ReplicationControlManager {
         Optional<BrokerIdAndEpoch> idAndEpoch = heartbeatManager.tracker().maybeRemoveExpired();
         if (idAndEpoch.isEmpty()) {
             log.debug("No stale brokers found.");
-            return ControllerResult.of(Collections.emptyList(), false);
+            return ControllerResult.of(List.of(), false);
         }
         int id = idAndEpoch.get().id();
         long epoch = idAndEpoch.get().epoch();
@@ -1681,12 +1680,12 @@ public class ReplicationControlManager {
             log.info("Removing heartbeat tracker entry for unknown broker {} at epoch {}.",
                     id, epoch);
             heartbeatManager.remove(id);
-            return ControllerResult.of(Collections.emptyList(), true);
+            return ControllerResult.of(List.of(), true);
         } else if (clusterControl.brokerRegistrations().get(id).epoch() != epoch) {
             log.info("Removing heartbeat tracker entry for broker {} at previous epoch {}. " +
                 "Current epoch is {}", id, epoch,
                 clusterControl.brokerRegistrations().get(id).epoch());
-            return ControllerResult.of(Collections.emptyList(), true);
+            return ControllerResult.of(List.of(), true);
         }
         // Even though multiple brokers can go stale at a time, we will process
         // fencing one at a time so that the effect of fencing each broker is visible
@@ -1747,7 +1746,7 @@ public class ReplicationControlManager {
                 topicPartition.topicId(),
                 topicPartition.partitionId(),
                 new LeaderAcceptor(clusterControl, partition),
-                featureControl.metadataVersion(),
+                featureControl.metadataVersionOrThrow(),
                 getTopicEffectiveMinIsr(topic.name)
             )
                 .setElection(PartitionChangeBuilder.Election.PREFERRED)
@@ -1887,7 +1886,7 @@ public class ReplicationControlManager {
                 validateManualPartitionAssignment(partitionAssignment, OptionalInt.of(replicationFactor));
                 partitionAssignments.add(partitionAssignment);
                 List<Integer> isr = partitionAssignment.replicas().stream().
-                    filter(clusterControl::isActive).collect(Collectors.toList());
+                    filter(clusterControl::isActive).toList();
                 if (isr.isEmpty()) {
                     throw new InvalidReplicaAssignmentException(
                         "All brokers specified in the manual partition assignment for " +
@@ -1900,13 +1899,13 @@ public class ReplicationControlManager {
                 new PlacementSpec(startPartitionId, additional, replicationFactor),
                 clusterDescriber
             ).assignments();
-            isrs = partitionAssignments.stream().map(PartitionAssignment::replicas).collect(Collectors.toList());
+            isrs = partitionAssignments.stream().map(PartitionAssignment::replicas).toList();
         }
         int partitionId = startPartitionId;
         for (int i = 0; i < partitionAssignments.size(); i++) {
             PartitionAssignment partitionAssignment = partitionAssignments.get(i);
             List<Integer> isr = isrs.get(i).stream().
-                filter(clusterControl::isActive).collect(Collectors.toList());
+                filter(clusterControl::isActive).toList();
             // If the ISR is empty, it means that all brokers are fenced or
             // in controlled shutdown. To be consistent with the replica placer,
             // we reject the create topic request with INVALID_REPLICATION_FACTOR.
@@ -1916,7 +1915,7 @@ public class ReplicationControlManager {
                         " time(s): All brokers are currently fenced or in controlled shutdown.");
             }
             records.add(buildPartitionRegistration(partitionAssignment, isr)
-                .toRecord(topicId, partitionId, new ImageWriterOptions.Builder(featureControl.metadataVersion()).
+                .toRecord(topicId, partitionId, new ImageWriterOptions.Builder(featureControl.metadataVersionOrThrow()).
                         setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled()).
                         build()));
             partitionId++;
@@ -2017,7 +2016,7 @@ public class ReplicationControlManager {
                 topicIdPart.topicId(),
                 topicIdPart.partitionId(),
                 new LeaderAcceptor(clusterControl, partition, isAcceptableLeader),
-                featureControl.metadataVersion(),
+                featureControl.metadataVersionOrThrow(),
                 getTopicEffectiveMinIsr(topic.name)
             );
             builder.setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
@@ -2025,7 +2024,7 @@ public class ReplicationControlManager {
                 builder.setElection(PartitionChangeBuilder.Election.UNCLEAN);
             }
             if (brokerWithUncleanShutdown != NO_LEADER) {
-                builder.setUncleanShutdownReplicas(Collections.singletonList(brokerWithUncleanShutdown));
+                builder.setUncleanShutdownReplicas(List.of(brokerWithUncleanShutdown));
             }
 
             // Note: if brokerToRemove and brokerWithUncleanShutdown were passed as NO_LEADER, this is a no-op (the new
@@ -2138,7 +2137,7 @@ public class ReplicationControlManager {
             tp.topicId(),
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
-            featureControl.metadataVersion(),
+            featureControl.metadataVersionOrThrow(),
             getTopicEffectiveMinIsr(topicName)
         );
         builder.setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
@@ -2148,8 +2147,8 @@ public class ReplicationControlManager {
         return builder
             .setTargetIsr(revert.isr()).
             setTargetReplicas(revert.replicas()).
-            setTargetRemoving(Collections.emptyList()).
-            setTargetAdding(Collections.emptyList()).
+            setTargetRemoving(List.of()).
+            setTargetAdding(List.of()).
             setDefaultDirProvider(clusterDescriber).
             build();
     }
@@ -2204,7 +2203,7 @@ public class ReplicationControlManager {
             tp.topicId(),
             tp.partitionId(),
             new LeaderAcceptor(clusterControl, part),
-            featureControl.metadataVersion(),
+            featureControl.metadataVersionOrThrow(),
             getTopicEffectiveMinIsr(topics.get(tp.topicId()).name)
         );
         builder.setEligibleLeaderReplicasEnabled(featureControl.isElrFeatureEnabled());
@@ -2244,7 +2243,7 @@ public class ReplicationControlManager {
     }
 
     ControllerResult<AssignReplicasToDirsResponseData> handleAssignReplicasToDirs(AssignReplicasToDirsRequestData request) {
-        if (!featureControl.metadataVersion().isDirectoryAssignmentSupported()) {
+        if (!featureControl.metadataVersionOrThrow().isDirectoryAssignmentSupported()) {
             throw new UnsupportedVersionException("Directory assignment is not supported yet.");
         }
         int brokerId = request.brokerId();
@@ -2287,7 +2286,7 @@ public class ReplicationControlManager {
                                     topicId,
                                     partitionIndex,
                                     new LeaderAcceptor(clusterControl, partitionRegistration),
-                                    featureControl.metadataVersion(),
+                                    featureControl.metadataVersionOrThrow(),
                                     getTopicEffectiveMinIsr(topicName)
                             )
                                     .setDirectory(brokerId, dirId)
