@@ -38,10 +38,10 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ProducerRebootstrapTest {
     private static final String TOPIC = "topic";
-    private static final int PARTITIONS = 2;
+    private static final int REPLICAS = 2;
 
     @ClusterTest(
-        brokers = PARTITIONS,
+        brokers = REPLICAS,
         types = {Type.KRAFT},
         serverProperties = {
             @ClusterConfigProperty(key = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, value = "true"),
@@ -50,7 +50,7 @@ public class ProducerRebootstrapTest {
     )
     public void testRebootstrap(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         try (var admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) 2)));
+            admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) REPLICAS)));
         }
 
         var part = 0;
@@ -77,7 +77,7 @@ public class ProducerRebootstrapTest {
     }
 
     @ClusterTest(
-        brokers = PARTITIONS,
+        brokers = REPLICAS,
         types = {Type.KRAFT},
         serverProperties = {
             @ClusterConfigProperty(key = TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, value = "true"),
@@ -86,7 +86,7 @@ public class ProducerRebootstrapTest {
     )
     public void testRebootstrapDisabled(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         try (var admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) 2)));
+            admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) REPLICAS)));
         }
 
         var part = 0;
