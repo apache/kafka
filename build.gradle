@@ -1972,6 +1972,9 @@ project(':clients:clients-integration-tests') {
     testImplementation libs.slf4jApi
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
+    testImplementation project(':metadata')
+    testImplementation project(':server')
+    testImplementation project(':storage')
     implementation project(':server-common')
     implementation project(':group-coordinator')
     implementation project(':transaction-coordinator')

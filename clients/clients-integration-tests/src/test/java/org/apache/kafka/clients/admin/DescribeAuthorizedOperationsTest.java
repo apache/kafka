@@ -15,17 +15,9 @@
  * limitations under the License.
  */
 
-package kafka.admin;
+package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.ConsumerGroupDescription;
-import org.apache.kafka.clients.admin.DescribeClusterOptions;
-import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
-import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
-import org.apache.kafka.clients.admin.DescribeTopicsOptions;
-import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
@@ -48,6 +40,7 @@ import org.apache.kafka.common.test.junit.ClusterTestExtensions;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.security.authorizer.AclEntry;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.HashMap;
@@ -154,7 +147,7 @@ public class DescribeAuthorizedOperationsTest {
             assertEquals(3, describeConsumerGroupsResult.describedGroups().size());
 
             ConsumerGroupDescription group1Description = describeConsumerGroupsResult.describedGroups().get(GROUP1).get();
-            assertEquals(AclEntry.supportedOperations(ResourceType.GROUP), group1Description.authorizedOperations());
+            Assertions.assertEquals(AclEntry.supportedOperations(ResourceType.GROUP), group1Description.authorizedOperations());
 
             ConsumerGroupDescription group2Description = describeConsumerGroupsResult.describedGroups().get(GROUP2).get();
             assertEquals(Set.of(DESCRIBE), group2Description.authorizedOperations());
@@ -189,7 +182,7 @@ public class DescribeAuthorizedOperationsTest {
 
         try (Admin admin = clusterInstance.admin(createAdminConfig(JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD))) {
             Set<AclOperation> authorizedOperations = admin.describeCluster(new DescribeClusterOptions().includeAuthorizedOperations(true)).authorizedOperations().get();
-            assertEquals(AclEntry.supportedOperations(ResourceType.CLUSTER), authorizedOperations);
+            Assertions.assertEquals(AclEntry.supportedOperations(ResourceType.CLUSTER), authorizedOperations);
         }
     }
 
@@ -245,7 +238,7 @@ public class DescribeAuthorizedOperationsTest {
             Map<String, TopicDescription> topicDescriptions = admin.describeTopics(
                 List.of(topic1, topic2),
                 new DescribeTopicsOptions().includeAuthorizedOperations(true)).allTopicNames().get();
-            assertEquals(AclEntry.supportedOperations(ResourceType.TOPIC), topicDescriptions.get(topic1).authorizedOperations());
+            Assertions.assertEquals(AclEntry.supportedOperations(ResourceType.TOPIC), topicDescriptions.get(topic1).authorizedOperations());
             assertEquals(Set.of(DESCRIBE, DELETE), topicDescriptions.get(topic2).authorizedOperations());
         }
     }
