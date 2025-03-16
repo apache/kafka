@@ -44,8 +44,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -56,7 +54,6 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
 
-import static java.util.Arrays.asList;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.APPEND;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.DELETE;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
@@ -95,12 +92,12 @@ public class ConfigurationControlManagerTest {
     public static final Map<String, List<ConfigSynonym>> SYNONYMS = new HashMap<>();
 
     static {
-        SYNONYMS.put("abc", Collections.singletonList(new ConfigSynonym("foo.bar")));
-        SYNONYMS.put("def", Collections.singletonList(new ConfigSynonym("baz")));
+        SYNONYMS.put("abc", List.of(new ConfigSynonym("foo.bar")));
+        SYNONYMS.put("def", List.of(new ConfigSynonym("baz")));
         SYNONYMS.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
-            Collections.singletonList(new ConfigSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)));
-        SYNONYMS.put("quuux", Collections.singletonList(new ConfigSynonym("quux", HOURS_TO_MILLISECONDS)));
-        SYNONYMS.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, Collections.singletonList(new ConfigSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)));
+            List.of(new ConfigSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)));
+        SYNONYMS.put("quuux", List.of(new ConfigSynonym("quux", HOURS_TO_MILLISECONDS)));
+        SYNONYMS.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, List.of(new ConfigSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)));
     }
 
     static final KafkaConfigSchema SCHEMA = new KafkaConfigSchema(CONFIGS, SYNONYMS);
@@ -137,16 +134,16 @@ public class ConfigurationControlManagerTest {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setKafkaConfigSchema(SCHEMA).
             build();
-        assertEquals(Collections.emptyMap(), manager.getConfigs(BROKER0));
+        assertEquals(Map.of(), manager.getConfigs(BROKER0));
         manager.replay(new ConfigRecord().
             setResourceType(BROKER.id()).setResourceName("0").
             setName("foo.bar").setValue("1,2"));
-        assertEquals(Collections.singletonMap("foo.bar", "1,2"),
+        assertEquals(Map.of("foo.bar", "1,2"),
             manager.getConfigs(BROKER0));
         manager.replay(new ConfigRecord().
             setResourceType(BROKER.id()).setResourceName("0").
             setName("foo.bar").setValue(null));
-        assertEquals(Collections.emptyMap(), manager.getConfigs(BROKER0));
+        assertEquals(Map.of(), manager.getConfigs(BROKER0));
         manager.replay(new ConfigRecord().
             setResourceType(TOPIC.id()).setResourceName("mytopic").
             setName("abc").setValue("x,y,z"));
@@ -172,7 +169,7 @@ public class ConfigurationControlManagerTest {
                 entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123"))))),
                 true);
 
-        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
+        assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
                     setName("abc").setValue("123"), CONFIG_RECORD.highestSupportedVersion())),
                 toMap(entry(BROKER0, new ApiError(Errors.INVALID_CONFIG,
@@ -181,7 +178,7 @@ public class ConfigurationControlManagerTest {
 
         RecordTestUtils.replayAll(manager, result.records());
 
-        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
+        assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
                     setName("abc").setValue(null), CONFIG_RECORD.highestSupportedVersion())),
                 toMap(entry(MYTOPIC, ApiError.NONE))),
@@ -201,14 +198,14 @@ public class ConfigurationControlManagerTest {
         ControllerResult<ApiError> result = manager.
             incrementalAlterConfig(MYTOPIC, keyToOps, true);
 
-        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
+        assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
                     setName("abc").setValue("123"), CONFIG_RECORD.highestSupportedVersion())),
             ApiError.NONE), result);
 
         RecordTestUtils.replayAll(manager, result.records());
 
-        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
+        assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                     new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
                         setName("abc").setValue(null), CONFIG_RECORD.highestSupportedVersion())),
                 ApiError.NONE),
@@ -234,7 +231,7 @@ public class ConfigurationControlManagerTest {
         ControllerResult<Map<ConfigResource, ApiError>> result = manager.
             incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123,456,789"))))), true);
 
-        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
+        assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
                     setName("abc").setValue("123,456,789"), CONFIG_RECORD.highestSupportedVersion())),
                 toMap(entry(MYTOPIC, ApiError.NONE))), result);
@@ -245,14 +242,14 @@ public class ConfigurationControlManagerTest {
         result = manager
             .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(APPEND, "123,456"))))), true);
         assertEquals(
-            ControllerResult.atomicOf(Collections.emptyList(), toMap(entry(MYTOPIC, ApiError.NONE))),
+            ControllerResult.atomicOf(List.of(), toMap(entry(MYTOPIC, ApiError.NONE))),
             result
         );
         RecordTestUtils.replayAll(manager, result.records());
 
         result = manager
             .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123,456"))))), true);
-        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
+        assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("mytopic").
                     setName("abc").setValue("789"), CONFIG_RECORD.highestSupportedVersion())),
                 toMap(entry(MYTOPIC, ApiError.NONE))),
@@ -263,7 +260,7 @@ public class ConfigurationControlManagerTest {
         result = manager
             .incrementalAlterConfigs(toMap(entry(MYTOPIC, toMap(entry("abc", entry(SUBTRACT, "123456"))))), true);
         assertEquals(
-            ControllerResult.atomicOf(Collections.emptyList(), toMap(entry(MYTOPIC, ApiError.NONE))),
+            ControllerResult.atomicOf(List.of(), toMap(entry(MYTOPIC, ApiError.NONE))),
             result
         );
         RecordTestUtils.replayAll(manager, result.records());
@@ -286,7 +283,7 @@ public class ConfigurationControlManagerTest {
                 entry(existingTopic, toMap(entry("def", entry(SET, "newVal"))))),
                 false);
 
-        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
+        assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(TOPIC.id()).setResourceName("ExistingTopic").
                     setName("def").setValue("newVal"), CONFIG_RECORD.highestSupportedVersion())),
             toMap(entry(BROKER0, new ApiError(Errors.UNKNOWN_TOPIC_OR_PARTITION,
@@ -329,8 +326,8 @@ public class ConfigurationControlManagerTest {
 
     @Test
     public void testIncrementalAlterConfigsWithPolicy() {
-        MockAlterConfigsPolicy policy = new MockAlterConfigsPolicy(asList(
-            new RequestMetadata(MYTOPIC, Collections.emptyMap()),
+        MockAlterConfigsPolicy policy = new MockAlterConfigsPolicy(List.of(
+            new RequestMetadata(MYTOPIC, Map.of()),
             new RequestMetadata(BROKER0, toMap(
                 entry("foo.bar", "123"),
                 entry("quux", "456"),
@@ -347,7 +344,7 @@ public class ConfigurationControlManagerTest {
                 setName("topic.config").setValue("123"));
         manager.replay(new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
                 setName("broker.config.to.remove").setValue("123"));
-        assertEquals(ControllerResult.atomicOf(asList(new ApiMessageAndVersion(
+        assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
                 new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
                     setName("foo.bar").setValue("123"), CONFIG_RECORD.highestSupportedVersion()), new ApiMessageAndVersion(
                                 new ConfigRecord().setResourceType(BROKER.id()).setResourceName("0").
@@ -399,7 +396,7 @@ public class ConfigurationControlManagerTest {
             setKafkaConfigSchema(SCHEMA).
             setAlterConfigPolicy(Optional.of(new CheckForNullValuesPolicy())).
             build();
-        List<ApiMessageAndVersion> expectedRecords1 = asList(
+        List<ApiMessageAndVersion> expectedRecords1 = List.of(
             new ApiMessageAndVersion(new ConfigRecord().
                 setResourceType(TOPIC.id()).setResourceName("mytopic").
                 setName("abc").setValue("456"), CONFIG_RECORD.highestSupportedVersion()),
@@ -414,7 +411,7 @@ public class ConfigurationControlManagerTest {
         for (ApiMessageAndVersion message : expectedRecords1) {
             manager.replay((ConfigRecord) message.message());
         }
-        assertEquals(ControllerResult.atomicOf(Collections.singletonList(
+        assertEquals(ControllerResult.atomicOf(List.of(
             new ApiMessageAndVersion(
                 new ConfigRecord()
                     .setResourceType(TOPIC.id())
@@ -441,9 +438,9 @@ public class ConfigurationControlManagerTest {
             toMap(entry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, entry(SET, "3")));
         ConfigResource brokerConfigResource = new ConfigResource(ConfigResource.Type.BROKER, "1");
         ControllerResult<ApiError> result = manager.incrementalAlterConfig(brokerConfigResource, keyToOps, true);
-        assertEquals(Collections.emptySet(), manager.brokersWithConfigs());
+        assertEquals(Set.of(), manager.brokersWithConfigs());
 
-        assertEquals(ControllerResult.atomicOf(Collections.singletonList(new ApiMessageAndVersion(
+        assertEquals(ControllerResult.atomicOf(List.of(new ApiMessageAndVersion(
             new ConfigRecord().setResourceType(BROKER.id()).setResourceName("1").
                 setName(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG).setValue("3"), (short) 0)),
             ApiError.NONE), result);
@@ -457,7 +454,7 @@ public class ConfigurationControlManagerTest {
             effectiveMinInsync + ". Removing broker-level min.insync.replicas " +
             "for brokers: 1.", manager.maybeGenerateElrSafetyRecords(records));
 
-        assertEquals(Arrays.asList(new ApiMessageAndVersion(
+        assertEquals(List.of(new ApiMessageAndVersion(
             new ConfigRecord().
                 setResourceType(BROKER.id()).
                 setResourceName("").
@@ -470,7 +467,7 @@ public class ConfigurationControlManagerTest {
                 setValue(null), (short) 0)),
             records);
         RecordTestUtils.replayAll(manager, records);
-        assertEquals(Collections.emptySet(), manager.brokersWithConfigs());
+        assertEquals(Set.of(), manager.brokersWithConfigs());
     }
 
     @ParameterizedTest
@@ -479,7 +476,7 @@ public class ConfigurationControlManagerTest {
         FeatureControlManager featureManager = new FeatureControlManager.Builder().
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                Collections.emptyList())).
+                List.of())).
             build();
         featureManager.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -490,9 +487,9 @@ public class ConfigurationControlManagerTest {
             setKafkaConfigSchema(SCHEMA).
             build();
         ControllerResult<ApiError> result = manager.updateFeatures(
-            Collections.singletonMap(EligibleLeaderReplicasVersion.FEATURE_NAME,
+            Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
                 EligibleLeaderReplicasVersion.ELRV_1.featureLevel()),
-            Collections.singletonMap(EligibleLeaderReplicasVersion.FEATURE_NAME,
+            Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
                 FeatureUpdate.UpgradeType.UPGRADE),
             false);
         assertNotNull(result.response());
@@ -529,7 +526,7 @@ public class ConfigurationControlManagerTest {
         FeatureControlManager featureManager = new FeatureControlManager.Builder().
             setQuorumFeatures(new QuorumFeatures(0,
                 QuorumFeatures.defaultSupportedFeatureMap(true),
-                Collections.emptyList())).
+                List.of())).
             build();
         featureManager.replay(new FeatureLevelRecord().
             setName(MetadataVersion.FEATURE_NAME).
@@ -541,9 +538,9 @@ public class ConfigurationControlManagerTest {
             build();
         assertFalse(featureManager.isElrFeatureEnabled());
         ControllerResult<ApiError> result = manager.updateFeatures(
-            Collections.singletonMap(EligibleLeaderReplicasVersion.FEATURE_NAME,
+            Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
                 EligibleLeaderReplicasVersion.ELRV_1.featureLevel()),
-            Collections.singletonMap(EligibleLeaderReplicasVersion.FEATURE_NAME,
+            Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
                 FeatureUpdate.UpgradeType.UPGRADE),
             false);
         assertNotNull(result.response());

@@ -63,9 +63,9 @@ public final class MetaPropertiesEnsemble {
     /**
      * A completely empty MetaPropertiesEnsemble object.
      */
-    public static final MetaPropertiesEnsemble EMPTY = new MetaPropertiesEnsemble(Collections.emptySet(),
-        Collections.emptySet(),
-        Collections.emptyMap(),
+    public static final MetaPropertiesEnsemble EMPTY = new MetaPropertiesEnsemble(Set.of(),
+        Set.of(),
+        Map.of(),
         Optional.empty());
 
     /**

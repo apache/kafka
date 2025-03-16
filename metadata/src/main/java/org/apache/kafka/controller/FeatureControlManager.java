@@ -95,7 +95,7 @@ public class FeatureControlManager {
                 localSupportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
                         MetadataVersion.MINIMUM_VERSION.featureLevel(),
                         MetadataVersion.latestProduction().featureLevel()));
-                quorumFeatures = new QuorumFeatures(0, localSupportedFeatures, Collections.singletonList(0));
+                quorumFeatures = new QuorumFeatures(0, localSupportedFeatures, List.of(0));
             }
             return new FeatureControlManager(
                 logContext,
@@ -157,12 +157,12 @@ public class FeatureControlManager {
             ApiError error = updateFeature(entry.getKey(), entry.getValue(),
                 upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE), records, proposedUpdatedVersions);
             if (!error.error().equals(Errors.NONE)) {
-                return ControllerResult.of(Collections.emptyList(), error);
+                return ControllerResult.of(List.of(), error);
             }
         }
 
         if (validateOnly) {
-            return ControllerResult.of(Collections.emptyList(), ApiError.NONE);
+            return ControllerResult.of(List.of(), ApiError.NONE);
         } else {
             return ControllerResult.atomicOf(records, ApiError.NONE);
         }
