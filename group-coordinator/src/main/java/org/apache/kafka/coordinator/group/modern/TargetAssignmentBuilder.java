@@ -97,7 +97,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         /**
          * The resolved regular expressions.
          */
-        private Map<String, ResolvedRegularExpression> resolvedRegularExpressions = Collections.emptyMap();
+        private Map<String, ResolvedRegularExpression> resolvedRegularExpressions = Map.of();
 
         public ConsumerTargetAssignmentBuilder(
             String groupId,
@@ -248,12 +248,12 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
     /**
      * The members in the group.
      */
-    private Map<String, T> members = Collections.emptyMap();
+    private Map<String, T> members = Map.of();
 
     /**
      * The subscription metadata.
      */
-    private Map<String, TopicMetadata> subscriptionMetadata = Collections.emptyMap();
+    private Map<String, TopicMetadata> subscriptionMetadata = Map.of();
 
     /**
      * The subscription type of the consumer group.
@@ -263,13 +263,13 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
     /**
      * The existing target assignment.
      */
-    private Map<String, Assignment> targetAssignment = Collections.emptyMap();
+    private Map<String, Assignment> targetAssignment = Map.of();
 
     /**
      * Reverse lookup map representing topic partitions with
      * their current member assignments.
      */
-    private Map<Uuid, Map<Integer, String>> invertedTargetAssignment = Collections.emptyMap();
+    private Map<Uuid, Map<Integer, String>> invertedTargetAssignment = Map.of();
 
     /**
      * The topics image.

@@ -63,7 +63,7 @@ public class DeleteConsumerGroupOffsetsResultTest {
         partitionFutures.completeExceptionally(Errors.GROUP_AUTHORIZATION_FAILED.exception());
         DeleteConsumerGroupOffsetsResult topLevelErrorResult =
             new DeleteConsumerGroupOffsetsResult(partitionFutures, partitions);
-        TestUtils.assertFutureThrows(topLevelErrorResult.all(), GroupAuthorizationException.class);
+        TestUtils.assertFutureThrows(GroupAuthorizationException.class, topLevelErrorResult.all());
     }
 
     @Test
@@ -79,9 +79,9 @@ public class DeleteConsumerGroupOffsetsResultTest {
         DeleteConsumerGroupOffsetsResult missingPartitionResult =
             new DeleteConsumerGroupOffsetsResult(partitionFutures, partitions);
 
-        TestUtils.assertFutureThrows(missingPartitionResult.all(), IllegalArgumentException.class);
+        TestUtils.assertFutureThrows(IllegalArgumentException.class, missingPartitionResult.all());
         assertNull(missingPartitionResult.partitionResult(tpZero).get());
-        TestUtils.assertFutureThrows(missingPartitionResult.partitionResult(tpOne), IllegalArgumentException.class);
+        TestUtils.assertFutureThrows(IllegalArgumentException.class, missingPartitionResult.partitionResult(tpOne));
     }
 
     @Test
@@ -110,9 +110,9 @@ public class DeleteConsumerGroupOffsetsResultTest {
         DeleteConsumerGroupOffsetsResult partitionLevelErrorResult =
             new DeleteConsumerGroupOffsetsResult(partitionFutures, partitions);
 
-        TestUtils.assertFutureThrows(partitionLevelErrorResult.all(), UnknownTopicOrPartitionException.class);
+        TestUtils.assertFutureThrows(UnknownTopicOrPartitionException.class, partitionLevelErrorResult.all());
         assertNull(partitionLevelErrorResult.partitionResult(tpZero).get());
-        TestUtils.assertFutureThrows(partitionLevelErrorResult.partitionResult(tpOne), UnknownTopicOrPartitionException.class);
+        TestUtils.assertFutureThrows(UnknownTopicOrPartitionException.class, partitionLevelErrorResult.partitionResult(tpOne));
         return partitionLevelErrorResult;
     }
 }

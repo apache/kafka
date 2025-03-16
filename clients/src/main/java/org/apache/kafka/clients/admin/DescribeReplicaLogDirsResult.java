@@ -18,7 +18,6 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartitionReplica;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.requests.DescribeLogDirsResponse;
 
 import java.util.Collection;
@@ -26,13 +25,9 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
-
 /**
  * The result of {@link Admin#describeReplicaLogDirs(Collection)}.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DescribeReplicaLogDirsResult {
     private final Map<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>> futures;
 
@@ -51,7 +46,7 @@ public class DescribeReplicaLogDirsResult {
      * Return a future which succeeds if log directory information of all replicas are available
      */
     public KafkaFuture<Map<TopicPartitionReplica, ReplicaLogDirInfo>> all() {
-        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture[0]))
+        return KafkaFuture.allOf(futures.values().toArray(new KafkaFuture<?>[0]))
             .thenApply(v -> {
                 Map<TopicPartitionReplica, ReplicaLogDirInfo> replicaLogDirInfos = new HashMap<>();
                 for (Map.Entry<TopicPartitionReplica, KafkaFuture<ReplicaLogDirInfo>> entry : futures.entrySet()) {

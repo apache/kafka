@@ -18,7 +18,6 @@
 package kafka.server;
 
 import kafka.cluster.Partition;
-import kafka.log.UnifiedLog;
 import kafka.log.remote.RemoteLogManager;
 
 import org.apache.kafka.common.KafkaException;
@@ -36,6 +35,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
 import org.apache.kafka.storage.internals.log.EpochEntry;
 import org.apache.kafka.storage.internals.log.LogFileUtils;
+import org.apache.kafka.storage.internals.log.UnifiedLog;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -53,6 +53,7 @@ import java.nio.file.StandardCopyOption;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import scala.Option;
 import scala.jdk.javaapi.CollectionConverters;
@@ -186,7 +187,7 @@ public class TierStateMachine {
                                         Long leaderLogStartOffset,
                                         UnifiedLog unifiedLog) throws IOException, RemoteStorageException {
 
-        if (!unifiedLog.remoteStorageSystemEnable() || !unifiedLog.config().remoteStorageEnable()) {
+        if (!unifiedLog.remoteLogEnabled()) {
             // If the tiered storage is not enabled throw an exception back so that it will retry until the tiered storage
             // is set as expected.
             throw new RemoteStorageException("Couldn't build the state from remote store for partition " + topicPartition + ", as remote log storage is not yet enabled");
@@ -240,7 +241,7 @@ public class TierStateMachine {
 
         // Truncate the existing local log before restoring the leader epoch cache and producer snapshots.
         Partition partition = replicaMgr.getPartitionOrException(topicPartition);
-        partition.truncateFullyAndStartAt(nextOffset, useFutureLog, Option.apply(leaderLogStartOffset));
+        partition.truncateFullyAndStartAt(nextOffset, useFutureLog, Optional.of(leaderLogStartOffset));
         // Increment start offsets
         unifiedLog.maybeIncrementLogStartOffset(leaderLogStartOffset, LeaderOffsetIncremented);
         unifiedLog.maybeIncrementLocalLogStartOffset(nextOffset, LeaderOffsetIncremented);

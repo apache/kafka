@@ -25,17 +25,16 @@ import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.builders.LogManagerBuilder;
 import kafka.server.builders.ReplicaManagerBuilder;
-import kafka.server.metadata.ConfigRepository;
-import kafka.server.metadata.MockConfigRepository;
 import kafka.utils.TestUtils;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.requests.LeaderAndIsrRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.metadata.ConfigRepository;
+import org.apache.kafka.metadata.MockConfigRepository;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
@@ -136,12 +135,10 @@ public class PartitionCreationBench {
             setFlushStartOffsetCheckpointMs(10000L).
             setRetentionCheckMs(1000L).
             setProducerStateManagerConfig(60000, false).
-            setInterBrokerProtocolVersion(MetadataVersion.latestTesting()).
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(failureChannel).
             setTime(Time.SYSTEM).
-            setKeepPartitionMetadataFile(true).
             build();
         scheduler.startup();
         this.quotaManagers = QuotaFactory.instantiate(this.brokerProperties, this.metrics, this.time, "");
@@ -200,7 +197,7 @@ public class PartitionCreationBench {
             inSync.add(1);
             inSync.add(2);
 
-            LeaderAndIsrRequestData.LeaderAndIsrPartitionState partitionState = new LeaderAndIsrRequestData.LeaderAndIsrPartitionState()
+            LeaderAndIsrRequest.PartitionState partitionState = new LeaderAndIsrRequest.PartitionState()
                     .setControllerEpoch(0)
                     .setLeader(0)
                     .setLeaderEpoch(0)

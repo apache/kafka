@@ -196,14 +196,6 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return LeaveGroupRequest.parse(buffer, apiVersion);
             case SYNC_GROUP:
                 return SyncGroupRequest.parse(buffer, apiVersion);
-            case STOP_REPLICA:
-                return StopReplicaRequest.parse(buffer, apiVersion);
-            case CONTROLLED_SHUTDOWN:
-                return ControlledShutdownRequest.parse(buffer, apiVersion);
-            case UPDATE_METADATA:
-                return UpdateMetadataRequest.parse(buffer, apiVersion);
-            case LEADER_AND_ISR:
-                return LeaderAndIsrRequest.parse(buffer, apiVersion);
             case DESCRIBE_GROUPS:
                 return DescribeGroupsRequest.parse(buffer, apiVersion);
             case LIST_GROUPS:
@@ -356,6 +348,10 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
                 return StreamsGroupDescribeRequest.parse(buffer, apiVersion);
             case DESCRIBE_SHARE_GROUP_OFFSETS:
                 return DescribeShareGroupOffsetsRequest.parse(buffer, apiVersion);
+            case ALTER_SHARE_GROUP_OFFSETS:
+                return AlterShareGroupOffsetsRequest.parse(buffer, apiVersion);
+            case DELETE_SHARE_GROUP_OFFSETS:
+                return DeleteShareGroupOffsetsRequest.parse(buffer, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

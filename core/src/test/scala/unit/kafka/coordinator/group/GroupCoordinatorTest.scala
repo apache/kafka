@@ -29,7 +29,6 @@ import org.apache.kafka.common.requests.{JoinGroupRequest, OffsetCommitRequest, 
 import java.util.concurrent.TimeUnit
 import java.util.concurrent.locks.ReentrantLock
 import kafka.cluster.Partition
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.internals.Topic
@@ -79,7 +78,6 @@ class GroupCoordinatorTest {
   var groupCoordinator: GroupCoordinator = _
   var replicaManager: ReplicaManager = _
   var scheduler: KafkaScheduler = _
-  var zkClient: KafkaZkClient = _
 
   private val groupId = "groupId"
   private val protocolType = "consumer"
@@ -111,10 +109,6 @@ class GroupCoordinatorTest {
 
     replicaManager = mock(classOf[ReplicaManager])
 
-    zkClient = mock(classOf[KafkaZkClient])
-    // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
-    when(zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME)).thenReturn(Some(2))
-
     timer = new MockTimer
 
     val config = KafkaConfig.fromProps(props)
@@ -123,8 +117,8 @@ class GroupCoordinatorTest {
     val rebalancePurgatory = new DelayedOperationPurgatory[DelayedRebalance]("Rebalance", timer, 1000, config.brokerId, false, true)
 
     groupCoordinator = GroupCoordinator(config, replicaManager, heartbeatPurgatory, rebalancePurgatory, timer.time, new Metrics())
-    groupCoordinator.startup(() => zkClient.getTopicPartitionCount(Topic.GROUP_METADATA_TOPIC_NAME).getOrElse(config.groupCoordinatorConfig.offsetsTopicPartitions),
-      enableMetadataExpiration = false)
+    // make two partitions of the group topic to make sure some partitions are not owned by the coordinator
+    groupCoordinator.startup(() => 2, enableMetadataExpiration = false)
 
     // add the partition into the owned partition list
     groupPartitionId = groupCoordinator.partitionFor(groupId)
@@ -4169,7 +4163,7 @@ class GroupCoordinatorTest {
     // a non request handler thread. Set this to avoid error.
     KafkaRequestHandler.setBypassThreadCheck(true)
 
-    when(replicaManager.maybeStartTransactionVerificationForPartition(
+    when(replicaManager.maybeSendPartitionToTransactionCoordinator(
       ArgumentMatchers.eq(offsetTopicPartition),
       ArgumentMatchers.eq(transactionalId),
       ArgumentMatchers.eq(producerId),

@@ -106,7 +106,8 @@ public class ShareMembershipManager extends AbstractMembershipManager<ShareGroup
                 metadata,
                 logContext.logger(ShareMembershipManager.class),
                 time,
-                metricsManager);
+                metricsManager,
+                false);
         this.rackId = rackId;
     }
 

@@ -1109,7 +1109,7 @@ public class SaslAuthenticatorTest {
 
     /**
      * Test that callback handlers are only applied to connections for the mechanisms
-     * configured for the handler. Test enables two mechanisms 'PLAIN` and `DIGEST-MD5`
+     * configured for the handler. Test enables two mechanisms `PLAIN` and `DIGEST-MD5`
      * on the servers with different callback handlers for the two mechanisms. Verifies
      * that clients using both mechanisms authenticate successfully.
      */
@@ -2018,7 +2018,7 @@ public class SaslAuthenticatorTest {
 
         Function<Short, ApiVersionsResponse> apiVersionSupplier = version -> {
             ApiVersionsResponse defaultApiVersionResponse = TestUtils.defaultApiVersionsResponse(
-                ApiMessageType.ListenerType.ZK_BROKER);
+                ApiMessageType.ListenerType.BROKER);
             ApiVersionCollection apiVersions = new ApiVersionCollection();
             for (ApiVersion apiVersion : defaultApiVersionResponse.data().apiKeys()) {
                 if (apiVersion.apiKey() != ApiKeys.SASL_AUTHENTICATE.id) {
@@ -2647,7 +2647,7 @@ public class SaslAuthenticatorTest {
                 DelegationTokenCache tokenCache, Time time) {
             super(connectionMode, jaasContexts, securityProtocol, listenerName, isInterBrokerListener, clientSaslMechanism,
                 credentialCache, tokenCache, null, time, new LogContext(),
-                version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER));
+                version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER));
         }
 
         @Override

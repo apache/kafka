@@ -29,6 +29,7 @@ import java.util.TreeMap;
 import java.util.TreeSet;
 
 public class ShareInFlightBatch<K, V> {
+    private final int nodeId;
     final TopicIdPartition partition;
     private final Map<Long, ConsumerRecord<K, V>> inFlightRecords;
     private final Set<Long> acknowledgedRecords;
@@ -36,7 +37,8 @@ public class ShareInFlightBatch<K, V> {
     private KafkaException exception;
     private boolean hasCachedException = false;
 
-    public ShareInFlightBatch(TopicIdPartition partition) {
+    public ShareInFlightBatch(int nodeId, TopicIdPartition partition) {
+        this.nodeId = nodeId;
         this.partition = partition;
         inFlightRecords = new TreeMap<>();
         acknowledgedRecords = new TreeSet<>();
@@ -85,6 +87,10 @@ public class ShareInFlightBatch<K, V> {
 
     int numRecords() {
         return inFlightRecords.size();
+    }
+
+    int nodeId() {
+        return nodeId;
     }
 
     Acknowledgements takeAcknowledgedRecords() {

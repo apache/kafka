@@ -21,7 +21,8 @@ import org.apache.kafka.streams.processor.api.Record;
 import java.time.Duration;
 
 /**
- * A functional interface used as an argument to {@link ProcessorContext#schedule(Duration, PunctuationType, Punctuator)}.
+ * A functional interface used as an argument to
+ * {@link org.apache.kafka.streams.processor.api.ProcessorContext#schedule(Duration, PunctuationType, Punctuator)}.
  *
  * @see Cancellable
  */
@@ -30,14 +31,16 @@ public interface Punctuator {
     /**
      * Perform the scheduled periodic operation.
      *
-     * <p> If this method accesses {@link ProcessorContext} or
+     * <p> If this method accesses {@link org.apache.kafka.streams.processor.api.ProcessorContext} or
      * {@link org.apache.kafka.streams.processor.api.ProcessorContext}, record metadata like topic,
      * partition, and offset or {@link org.apache.kafka.streams.processor.api.RecordMetadata} won't
      * be available.
      *
-     * <p> Furthermore, for any record that is sent downstream via {@link ProcessorContext#forward(Object, Object)}
+     * <p> Furthermore, for any record that is sent downstream via
+     * {@link org.apache.kafka.streams.processor.api.ProcessorContext#forward(Record)}
      * or {@link org.apache.kafka.streams.processor.api.ProcessorContext#forward(Record)}, there
-     * won't be any record metadata. If {@link ProcessorContext#forward(Object, Object)} is used,
+     * won't be any record metadata. If
+     * {@link org.apache.kafka.streams.processor.api.ProcessorContext#forward(Record)} is used,
      * it's also not possible to set records headers.
      *
      * @param timestamp when the operation is being called, depending on {@link PunctuationType}

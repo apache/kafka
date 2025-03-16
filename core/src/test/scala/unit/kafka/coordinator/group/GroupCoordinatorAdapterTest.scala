@@ -19,7 +19,7 @@ package kafka.coordinator.group
 import kafka.coordinator.group.GroupCoordinatorConcurrencyTest.{JoinGroupCallback, SyncGroupCallback}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.errors.{InvalidGroupIdException, UnsupportedVersionException}
-import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, DeleteGroupsResponseData, DescribeGroupsResponseData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, ShareGroupHeartbeatRequestData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
+import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, DeleteGroupsResponseData, DescribeGroupsResponseData, DescribeShareGroupOffsetsRequestData, HeartbeatRequestData, HeartbeatResponseData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupRequestData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, ShareGroupHeartbeatRequestData, StreamsGroupHeartbeatRequestData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
 import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProtocol
 import org.apache.kafka.common.message.JoinGroupResponseData.JoinGroupResponseMember
 import org.apache.kafka.common.message.OffsetDeleteRequestData.{OffsetDeleteRequestPartition, OffsetDeleteRequestTopic, OffsetDeleteRequestTopicCollection}
@@ -76,7 +76,23 @@ class GroupCoordinatorAdapterTest {
 
     assertTrue(future.isDone)
     assertTrue(future.isCompletedExceptionally)
-    assertFutureThrows(future, classOf[UnsupportedVersionException])
+    assertFutureThrows(classOf[UnsupportedVersionException], future)
+  }
+
+  @Test
+  def testStreamsGroupHeartbeat(): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+
+    val ctx = makeContext(ApiKeys.STREAMS_GROUP_HEARTBEAT, ApiKeys.STREAMS_GROUP_HEARTBEAT.latestVersion)
+    val request = new StreamsGroupHeartbeatRequestData()
+      .setGroupId("group")
+
+    val future = adapter.streamsGroupHeartbeat(ctx, request)
+
+    assertTrue(future.isDone)
+    assertTrue(future.isCompletedExceptionally)
+    assertFutureThrows(classOf[UnsupportedVersionException], future)
   }
 
   @Test
@@ -92,7 +108,23 @@ class GroupCoordinatorAdapterTest {
 
     assertTrue(future.isDone)
     assertTrue(future.isCompletedExceptionally)
-    assertFutureThrows(future, classOf[UnsupportedVersionException])
+    assertFutureThrows(classOf[UnsupportedVersionException], future)
+  }
+
+  @Test
+  def testDescribeShareGroupOffsets(): Unit = {
+    val groupCoordinator = mock(classOf[GroupCoordinator])
+    val adapter = new GroupCoordinatorAdapter(groupCoordinator, Time.SYSTEM)
+
+    val context = makeContext(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS, ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS.latestVersion)
+    val request = new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup()
+      .setGroupId("group")
+
+    val future = adapter.describeShareGroupOffsets(context, request)
+
+    assertTrue(future.isDone)
+    assertTrue(future.isCompletedExceptionally)
+    assertFutureThrows(classOf[UnsupportedVersionException], future)
   }
 
   @ParameterizedTest
@@ -902,7 +934,7 @@ class GroupCoordinatorAdapterTest {
     val future = adapter.deleteOffsets(ctx, data, bufferSupplier)
     assertTrue(future.isDone)
     assertTrue(future.isCompletedExceptionally)
-    assertFutureThrows(future, classOf[InvalidGroupIdException])
+    assertFutureThrows(classOf[InvalidGroupIdException], future)
   }
 
   @Test
@@ -915,7 +947,7 @@ class GroupCoordinatorAdapterTest {
     val future = adapter.consumerGroupDescribe(context, groupIds)
     assertTrue(future.isDone)
     assertTrue(future.isCompletedExceptionally)
-    assertFutureThrows(future, classOf[UnsupportedVersionException])
+    assertFutureThrows(classOf[UnsupportedVersionException], future)
   }
 
   @Test
@@ -928,7 +960,7 @@ class GroupCoordinatorAdapterTest {
     val future = adapter.shareGroupDescribe(context, groupIds)
     assertTrue(future.isDone)
     assertTrue(future.isCompletedExceptionally)
-    assertFutureThrows(future, classOf[UnsupportedVersionException])
+    assertFutureThrows(classOf[UnsupportedVersionException], future)
   }
 
   @Test
@@ -950,6 +982,6 @@ class GroupCoordinatorAdapterTest {
 
     assertTrue(future.isDone)
     assertTrue(future.isCompletedExceptionally)
-    assertFutureThrows(future, classOf[IllegalStateException])
+    assertFutureThrows(classOf[IllegalStateException], future)
   }
 }

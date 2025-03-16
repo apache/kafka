@@ -1011,6 +1011,7 @@ public abstract class ConsumerCoordinatorTest {
 
     @Test
     public void testOutdatedCoordinatorAssignment() {
+        createMockHeartbeatThreadCoordinator();
         final String consumerId = "outdated_assignment";
         final List<TopicPartition> owned = Collections.emptyList();
         final List<String> oldSubscription = singletonList(topic2);
@@ -4141,5 +4142,29 @@ public abstract class ConsumerCoordinatorTest {
             });
             return super.assign(partitionsPerTopic, subscriptions);
         }
+    }
+
+    private void createMockHeartbeatThreadCoordinator() {
+        metrics.close();
+        coordinator.close(time.timer(0));
+
+        metrics = new Metrics(time);
+        coordinator = new ConsumerCoordinator(
+            rebalanceConfig,
+            new LogContext(),
+            consumerClient,
+            assignors,
+            metadata,
+            subscriptions,
+            metrics,
+            consumerId + groupId,
+            time,
+            false,
+            autoCommitIntervalMs,
+            null,
+            false,
+            null,
+            Optional.empty(),
+            Optional.of(() -> Mockito.mock(BaseHeartbeatThread.class)));
     }
 }

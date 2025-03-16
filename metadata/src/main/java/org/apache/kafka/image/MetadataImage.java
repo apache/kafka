@@ -156,7 +156,7 @@ public final class MetadataImage {
         configs.write(writer, options);
         clientQuotas.write(writer, options);
         producerIds.write(writer, options);
-        acls.write(writer, options);
+        acls.write(writer);
         scram.write(writer, options);
         delegationTokens.write(writer, options);
         writer.close(true);

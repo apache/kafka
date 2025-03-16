@@ -18,10 +18,9 @@
 package kafka.server.builders;
 
 import kafka.log.LogManager;
-import kafka.server.metadata.ConfigRepository;
 
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.metadata.ConfigRepository;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
@@ -51,12 +50,10 @@ public class LogManagerBuilder {
     private long retentionCheckMs = 1000L;
     private int maxTransactionTimeoutMs = 15 * 60 * 1000;
     private ProducerStateManagerConfig producerStateManagerConfig = new ProducerStateManagerConfig(60000, false);
-    private MetadataVersion interBrokerProtocolVersion = MetadataVersion.latestProduction();
     private Scheduler scheduler = null;
     private BrokerTopicStats brokerTopicStats = null;
     private LogDirFailureChannel logDirFailureChannel = null;
     private Time time = Time.SYSTEM;
-    private boolean keepPartitionMetadataFile = true;
     private boolean remoteStorageSystemEnable = false;
     private long initialTaskDelayMs = ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT;
 
@@ -120,11 +117,6 @@ public class LogManagerBuilder {
         return this;
     }
 
-    public LogManagerBuilder setInterBrokerProtocolVersion(MetadataVersion interBrokerProtocolVersion) {
-        this.interBrokerProtocolVersion = interBrokerProtocolVersion;
-        return this;
-    }
-
     public LogManagerBuilder setScheduler(Scheduler scheduler) {
         this.scheduler = scheduler;
         return this;
@@ -142,11 +134,6 @@ public class LogManagerBuilder {
 
     public LogManagerBuilder setTime(Time time) {
         this.time = time;
-        return this;
-    }
-
-    public LogManagerBuilder setKeepPartitionMetadataFile(boolean keepPartitionMetadataFile) {
-        this.keepPartitionMetadataFile = keepPartitionMetadataFile;
         return this;
     }
 
@@ -181,12 +168,10 @@ public class LogManagerBuilder {
                               maxTransactionTimeoutMs,
                               producerStateManagerConfig,
                               PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS,
-                              interBrokerProtocolVersion,
                               scheduler,
                               brokerTopicStats,
                               logDirFailureChannel,
                               time,
-                              keepPartitionMetadataFile,
                               remoteStorageSystemEnable,
                               initialTaskDelayMs);
     }

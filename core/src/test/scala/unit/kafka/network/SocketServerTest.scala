@@ -19,7 +19,6 @@ package kafka.network
 
 import com.fasterxml.jackson.databind.node.{JsonNodeFactory, ObjectNode, TextNode}
 import com.yammer.metrics.core.{Gauge, Meter}
-import kafka.cluster.EndPoint
 import kafka.server._
 import kafka.utils.Implicits._
 import kafka.utils.TestUtils
@@ -37,6 +36,7 @@ import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils._
 import org.apache.kafka.network.RequestConvertToJson
 import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.network.EndPoint
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.config.QuotaConfig
@@ -84,7 +84,7 @@ class SocketServerTest {
   TestUtils.clearYammerMetrics()
 
   private val apiVersionManager = new SimpleApiVersionManager(ListenerType.BROKER, true,
-    () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0, true))
+    () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0))
   var server: SocketServer = _
   val sockets = new ArrayBuffer[Socket]
 
@@ -1857,7 +1857,7 @@ class SocketServerTest {
       val failedFuture = new CompletableFuture[Void]()
       failedFuture.completeExceptionally(new RuntimeException("authorizer startup failed"))
       assertThrows(classOf[ExecutionException], () => {
-        newServer.enableRequestProcessing(Map(endpoint.toJava -> failedFuture)).get()
+        newServer.enableRequestProcessing(Map(endpoint.toPublic -> failedFuture)).get()
       })
     } finally {
       shutdownServerAndMetrics(newServer)
@@ -1890,7 +1890,7 @@ class SocketServerTest {
       val authorizerFuture = new CompletableFuture[Void]()
       val enableFuture = newServer.enableRequestProcessing(
         newServer.dataPlaneAcceptors.keys().asScala.
-          map(_.toJava).map(k => k -> authorizerFuture).toMap)
+          map(_.toPublic).map(k => k -> authorizerFuture).toMap)
       assertFalse(authorizerFuture.isDone)
       assertFalse(enableFuture.isDone)
       newServer.dataPlaneAcceptors.values().forEach(a => assertNull(a.serverChannel))

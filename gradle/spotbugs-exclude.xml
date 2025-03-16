@@ -152,13 +152,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- Add a suppression for auto-generated calls to instanceof in kafka.utils.Json -->
-        <Source name="Json.scala"/>
-        <Package name="kafka.utils"/>
-        <Bug pattern="BC_VACUOUS_INSTANCEOF"/>
-    </Match>
-
-    <Match>
         <!-- A spurious null check after inlining by the scalac optimizer confuses spotBugs -->
         <Class name="kafka.log.Log"/>
         <Bug pattern="NP_NULL_ON_SOME_PATH_EXCEPTION"/>
@@ -561,6 +554,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.common.Node"/>
             <Class name="org.apache.kafka.common.record.UnalignedMemoryRecords"/>
             <Class name="org.apache.kafka.clients.Metadata$LeaderAndEpoch"/>
+            <Class name="org.apache.kafka.server.share.fetch.ShareAcquiredRecords"/>
         </Or>
         <Bug pattern="SING_SINGLETON_HAS_NONPRIVATE_CONSTRUCTOR"/>
     </Match>
