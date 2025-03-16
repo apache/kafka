@@ -181,6 +181,27 @@ public class ClientMetricsCommandTest {
     }
 
     @Test
+    public void testAlterResetConfigs() {
+        Admin adminClient = mock(Admin.class);
+        ClientMetricsCommand.ClientMetricsService service = new ClientMetricsCommand.ClientMetricsService(adminClient);
+
+        AlterConfigsResult result = AdminClientTestUtils.alterConfigsResult(new ConfigResource(ConfigResource.Type.CLIENT_METRICS, clientMetricsName));
+        when(adminClient.incrementalAlterConfigs(any(), any())).thenReturn(result);
+
+        String capturedOutput = ToolsTestUtils.captureStandardOut(() -> {
+            try {
+                service.alterClientMetrics(new ClientMetricsCommand.ClientMetricsCommandOptions(
+                        new String[]{"--bootstrap-server", bootstrapServer, "--alter",
+                                     "--name", clientMetricsName, "--metrics", "",
+                                     "--interval", "", "--match", ""}));
+            } catch (Throwable t) {
+                fail(t);
+            }
+        });
+        assertTrue(capturedOutput.contains("Altered client metrics config for " + clientMetricsName + "."));
+    }
+
+    @Test
     public void testDelete() {
         Admin adminClient = mock(Admin.class);
         ClientMetricsCommand.ClientMetricsService service = new ClientMetricsCommand.ClientMetricsService(adminClient);
