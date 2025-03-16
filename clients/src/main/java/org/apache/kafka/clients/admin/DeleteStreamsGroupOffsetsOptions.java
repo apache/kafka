@@ -14,26 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.clients.admin;
 
-package org.apache.kafka.trogdor.workload;
+import org.apache.kafka.common.annotation.InterfaceStability;
+
+import java.util.Set;
 
 /**
- * Describes a key in producer payload
+ * Options for the {@link Admin#deleteStreamsGroupOffsets(String, Set, DeleteStreamsGroupOffsetsOptions)} call.
+ * <p>
+ * The API of this class is evolving, see {@link Admin} for details.
  */
-public enum PayloadKeyType {
-    // null key
-    KEY_NULL(0),
-    // fixed size key containing a long integer representing a message index (i.e., position of
-    // the payload generator)
-    KEY_MESSAGE_INDEX(8);
+@InterfaceStability.Evolving
+public class DeleteStreamsGroupOffsetsOptions extends AbstractOptions<DeleteStreamsGroupOffsetsOptions> {
 
-    private final int maxSizeInBytes;
-
-    PayloadKeyType(int maxSizeInBytes) {
-        this.maxSizeInBytes = maxSizeInBytes;
-    }
-
-    public int maxSizeInBytes() {
-        return maxSizeInBytes;
-    }
 }

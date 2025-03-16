@@ -25,7 +25,7 @@ import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
-import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Consumer;
@@ -222,7 +222,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
 
     @Override
     public void close() {
-        registry.ifPresent(r -> Arrays.asList(
+        registry.ifPresent(r -> List.of(
             ACTIVE_CONTROLLER_COUNT,
             EVENT_QUEUE_TIME_MS,
             EVENT_QUEUE_PROCESSING_TIME_MS,

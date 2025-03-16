@@ -21,7 +21,6 @@ import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 public class LeaderAndIsr {
     public static final int INITIAL_LEADER_EPOCH = 0;
@@ -56,7 +55,7 @@ public class LeaderAndIsr {
                 leader,
                 leaderEpoch,
                 leaderRecoveryState,
-                isr.stream().map(brokerId -> new BrokerState().setBrokerId(brokerId)).collect(Collectors.toList()),
+                isr.stream().map(brokerId -> new BrokerState().setBrokerId(brokerId)).toList(),
                 partitionEpoch
         );
     }
@@ -130,7 +129,7 @@ public class LeaderAndIsr {
     public List<Integer> isr() {
         return isrWithBrokerEpoch.stream()
                 .map(BrokerState::brokerId)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     public boolean equalsAllowStalePartitionEpoch(LeaderAndIsr other) {
