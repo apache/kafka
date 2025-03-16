@@ -44,7 +44,6 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -85,7 +84,7 @@ public class ConfigurationControlManager {
         private Consumer<ConfigResource> existenceChecker = __ -> { };
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
         private ConfigurationValidator validator = ConfigurationValidator.NO_OP;
-        private Map<String, Object> staticConfig = Collections.emptyMap();
+        private Map<String, Object> staticConfig = Map.of();
         private int nodeId = 0;
         private FeatureControlManager featureControl = null;
 
@@ -174,7 +173,7 @@ public class ConfigurationControlManager {
         this.validator = validator;
         this.configData = new TimelineHashMap<>(snapshotRegistry, 0);
         this.brokersWithConfigs = new TimelineHashSet<>(snapshotRegistry, 0);
-        this.staticConfig = Collections.unmodifiableMap(new HashMap<>(staticConfig));
+        this.staticConfig = Map.copyOf(staticConfig);
         this.currentController = new ConfigResource(Type.BROKER, Integer.toString(nodeId));
         this.featureControl = featureControl;
     }
@@ -217,7 +216,7 @@ public class ConfigurationControlManager {
 
     List<ApiMessageAndVersion> createClearElrRecordsAsNeeded(List<ApiMessageAndVersion> input) {
         if (!featureControl.isElrFeatureEnabled()) {
-            return Collections.emptyList();
+            return List.of();
         }
         List<ApiMessageAndVersion> output = new ArrayList<>();
         for (ApiMessageAndVersion messageAndVersion : input) {
@@ -309,7 +308,7 @@ public class ConfigurationControlManager {
                     setValue(newValue), (short) 0));
             }
         }
-        ApiError error = validateAlterConfig(configResource, newRecords, Collections.emptyList(), newlyCreatedResource);
+        ApiError error = validateAlterConfig(configResource, newRecords, List.of(), newlyCreatedResource);
         if (error.isFailure()) {
             return error;
         }
@@ -452,7 +451,7 @@ public class ConfigurationControlManager {
         List<ApiMessageAndVersion> recordsExplicitlyAltered = new ArrayList<>();
         Map<String, String> currentConfigs = configData.get(configResource);
         if (currentConfigs == null) {
-            currentConfigs = Collections.emptyMap();
+            currentConfigs = Map.of();
         }
         for (Entry<String, String> entry : newConfigs.entrySet()) {
             String key = entry.getKey();
@@ -544,7 +543,7 @@ public class ConfigurationControlManager {
     Map<String, String> getConfigs(ConfigResource configResource) {
         Map<String, String> map = configData.get(configResource);
         if (map == null) {
-            return Collections.emptyMap();
+            return Map.of();
         } else {
             return Map.copyOf(map);
         }
@@ -711,17 +710,17 @@ public class ConfigurationControlManager {
 
     Map<String, String> clusterConfig() {
         Map<String, String> result = configData.get(DEFAULT_NODE);
-        return (result == null) ? Collections.emptyMap() : result;
+        return (result == null) ? Map.of() : result;
     }
 
     Map<String, String> currentControllerConfig() {
         Map<String, String> result = configData.get(currentController);
-        return (result == null) ? Collections.emptyMap() : result;
+        return (result == null) ? Map.of() : result;
     }
 
     Map<String, String> currentTopicConfig(String topicName) {
         Map<String, String> result = configData.get(new ConfigResource(Type.TOPIC, topicName));
-        return (result == null) ? Collections.emptyMap() : result;
+        return (result == null) ? Map.of() : result;
     }
 
     // Visible to test
