@@ -31,9 +31,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.AbstractMap.SimpleEntry;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -45,13 +44,13 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(value = 40)
 public class BrokerRegistrationTest {
-    private static final List<BrokerRegistration> REGISTRATIONS = Arrays.asList(
+    private static final List<BrokerRegistration> REGISTRATIONS = List.of(
         new BrokerRegistration.Builder().
             setId(0).
             setEpoch(0).
             setIncarnationId(Uuid.fromString("pc1GhUlBS92cGGaKXl6ipw")).
-            setListeners(Collections.singletonList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
-            setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2))).
+            setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
+            setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 2))).
             setRack(Optional.empty()).
             setFenced(false).
             setInControlledShutdown(false).build(),
@@ -59,8 +58,8 @@ public class BrokerRegistrationTest {
             setId(1).
             setEpoch(0).
             setIncarnationId(Uuid.fromString("3MfdxWlNSn2UDYsmDP1pYg")).
-            setListeners(Collections.singletonList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9091))).
-            setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2))).
+            setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9091))).
+            setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 2))).
             setRack(Optional.empty()).
             setFenced(true).
             setInControlledShutdown(false).build(),
@@ -68,7 +67,7 @@ public class BrokerRegistrationTest {
             setId(2).
             setEpoch(0).
             setIncarnationId(Uuid.fromString("eY7oaG1RREie5Kk9uy1l6g")).
-            setListeners(Collections.singletonList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
+            setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9092))).
             setSupportedFeatures(Stream.of(new SimpleEntry<>("foo", VersionRange.of((short) 2, (short) 3)),
                 new SimpleEntry<>("bar", VersionRange.of((short) 1, (short) 4))).collect(
                         Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue))).
@@ -79,14 +78,14 @@ public class BrokerRegistrationTest {
             setId(3).
             setEpoch(0).
             setIncarnationId(Uuid.fromString("1t8VyWx2TCSTpUWuqj-FOw")).
-            setListeners(Collections.singletonList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
+            setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9093))).
             setSupportedFeatures(Stream.of(new SimpleEntry<>("metadata.version", VersionRange.of((short) 7, (short) 7)))
                 .collect(Collectors.toMap(SimpleEntry::getKey, SimpleEntry::getValue))).
             setRack(Optional.empty()).
             setFenced(false).
             setInControlledShutdown(true).
             setIsMigratingZkBroker(true).
-            setDirectories(Collections.singletonList(Uuid.fromString("r4HpEsMuST6nQ4rznIEJVA"))).
+            setDirectories(List.of(Uuid.fromString("r4HpEsMuST6nQ4rznIEJVA"))).
             build());
 
     @Test
@@ -174,12 +173,12 @@ public class BrokerRegistrationTest {
                 setId(0).
                 setEpoch(0).
                 setIncarnationId(Uuid.fromString("ik32HZbLTW6ulw1yyrC8jQ")).
-                setListeners(Collections.singletonList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
-                setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2))).
+                setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
+                setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 2))).
                 setRack(Optional.empty()).
                 setFenced(false).
                 setInControlledShutdown(false).
-                setDirectories(Arrays.asList(
+                setDirectories(List.of(
                     Uuid.fromString("3MWIBL9NR4eXhtdfBVA7Bw"),
                     Uuid.fromString("SZQIVeLMQGiNi68StNSNZA"),
                     Uuid.fromString("LWZsWPBrQruOMMrnEBj7bw"),
@@ -188,7 +187,7 @@ public class BrokerRegistrationTest {
                     Uuid.fromString("VNetSHnySxSbvjwKrBzpkw"))
                 ).
                 build();
-        assertEquals(Arrays.asList(
+        assertEquals(List.of(
                 Uuid.fromString("3MWIBL9NR4eXhtdfBVA7Bw"),
                 Uuid.fromString("JhYia5HRTLihf2FFJVxopQ"),
                 Uuid.fromString("LWZsWPBrQruOMMrnEBj7bw"),
@@ -204,12 +203,12 @@ public class BrokerRegistrationTest {
                 setId(0).
                 setEpoch(0).
                 setIncarnationId(Uuid.fromString("m6CiJvfITZeKVC6UuhlZew")).
-                setListeners(Collections.singletonList(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
-                setSupportedFeatures(Collections.singletonMap("foo", VersionRange.of((short) 1, (short) 2))).
+                setListeners(List.of(new Endpoint("INTERNAL", SecurityProtocol.PLAINTEXT, "localhost", 9090))).
+                setSupportedFeatures(Map.of("foo", VersionRange.of((short) 1, (short) 2))).
                 setRack(Optional.empty()).
                 setFenced(false).
                 setInControlledShutdown(false).
-                setDirectories(Arrays.asList(
+                setDirectories(List.of(
                     Uuid.fromString("dir1G6EtuR1OTdAzFw1AFQ"),
                     Uuid.fromString("dir2gwpjTvKC7sMfcLNd8g"),
                     Uuid.fromString("dir3Ir8mQ0mMxfv93RITDA")
