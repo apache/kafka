@@ -26,10 +26,10 @@ import com.yammer.metrics.core.MetricsRegistry;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
@@ -70,14 +70,14 @@ public class MetadataLoaderMetricsTest {
         try {
             try (FakeMetadataLoaderMetrics fakeMetrics = new FakeMetadataLoaderMetrics(registry)) {
                 ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
-                    new HashSet<>(Arrays.asList(
+                    new HashSet<>(List.of(
                         "kafka.server:type=MetadataLoader,name=CurrentControllerId",
                         "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
                         "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount"
                     )));
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
-                    Collections.emptySet());
+                    Set.of());
         } finally {
             registry.shutdown();
         }
@@ -134,7 +134,7 @@ public class MetadataLoaderMetricsTest {
                 assertEquals(2L, loadSnapshotCount.value().longValue());
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
-                Collections.emptySet());
+                Set.of());
         } finally {
             registry.shutdown();
         }
