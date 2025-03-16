@@ -373,7 +373,7 @@ class KafkaApisTest extends Logging {
     val subscriptionName = "client_metric_subscription_1"
     val authorizedResource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, subscriptionName)
 
-    val props = ClientMetricsTestUtils.defaultProperties
+    val props = ClientMetricsTestUtils.defaultTestProperties
     val configEntries = new util.ArrayList[AlterConfigsRequest.ConfigEntry]()
     props.forEach((x, y) =>
       configEntries.add(new AlterConfigsRequest.ConfigEntry(x.asInstanceOf[String], y.asInstanceOf[String])))
@@ -444,7 +444,7 @@ class KafkaApisTest extends Logging {
 
     val resource = new ConfigResource(ConfigResource.Type.CLIENT_METRICS, subscriptionName)
     val configRepository: ConfigRepository = mock(classOf[ConfigRepository])
-    val cmConfigs = ClientMetricsTestUtils.defaultProperties
+    val cmConfigs = ClientMetricsTestUtils.defaultTestProperties
     when(configRepository.config(resource)).thenReturn(cmConfigs)
 
     metadataCache = mock(classOf[KRaftMetadataCache])
