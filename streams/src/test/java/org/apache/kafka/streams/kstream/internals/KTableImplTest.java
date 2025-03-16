@@ -52,7 +52,6 @@ import org.apache.kafka.test.MockMapper;
 import org.apache.kafka.test.MockReducer;
 import org.apache.kafka.test.MockValueJoiner;
 import org.apache.kafka.test.StreamsTestUtils;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -65,13 +64,13 @@ import java.util.List;
 import java.util.Properties;
 
 import static java.util.Arrays.asList;
+import static org.hamcrest.MatcherAssert.assertThat;
+import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.mock;
 
 @ExtendWith(MockitoExtension.class)
@@ -389,7 +388,7 @@ public class KTableImplTest {
         final var table = assertInstanceOf(KTableImpl.class, builder.table("topic1", consumed));
         table.enableSendingOldValues(false);
 
-        assertFalse(table.sendingOldValueEnabled());
+        assertThat(table.sendingOldValueEnabled(), is(false));
     }
 
     @Test
@@ -399,7 +398,7 @@ public class KTableImplTest {
         final var table = assertInstanceOf(KTableImpl.class, builder.table("topic1", consumed));
         table.enableSendingOldValues(true);
 
-        assertTrue(table.sendingOldValueEnabled());
+        assertThat(table.sendingOldValueEnabled(), is(true));
     }
 
     private void assertTopologyContainsProcessor(final Topology topology, final String processorName) {
