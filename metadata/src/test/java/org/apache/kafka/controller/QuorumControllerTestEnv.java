@@ -35,7 +35,6 @@ import java.util.OptionalLong;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -101,7 +100,7 @@ public class QuorumControllerTestEnv implements AutoCloseable {
         int numControllers = logEnv.logManagers().size();
         this.controllers = new ArrayList<>(numControllers);
         try {
-            List<Integer> nodeIds = IntStream.range(0, numControllers).boxed().collect(Collectors.toList());
+            List<Integer> nodeIds = IntStream.range(0, numControllers).boxed().toList();
             for (int nodeId = 0; nodeId < numControllers; nodeId++) {
                 QuorumController.Builder builder = new QuorumController.Builder(nodeId, logEnv.clusterId());
                 builder.setRaftClient(logEnv.logManagers().get(nodeId));

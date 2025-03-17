@@ -26,10 +26,10 @@ import com.yammer.metrics.core.MetricsRegistry;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -42,7 +42,7 @@ public class QuorumControllerMetricsTest {
             try (QuorumControllerMetrics metrics = new QuorumControllerMetrics(
                     Optional.of(registry),
                     time)) {
-                HashSet<String> expected = new HashSet<>(Arrays.asList(
+                HashSet<String> expected = new HashSet<>(List.of(
                     "kafka.controller:type=ControllerEventManager,name=EventQueueProcessingTimeMs",
                     "kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs",
                     "kafka.controller:type=KafkaController,name=ActiveControllerCount",
@@ -58,7 +58,7 @@ public class QuorumControllerMetricsTest {
                 ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.controller", expected);
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.controller",
-                    Collections.emptySet());
+                    Set.of());
         } finally {
             registry.shutdown();
         }

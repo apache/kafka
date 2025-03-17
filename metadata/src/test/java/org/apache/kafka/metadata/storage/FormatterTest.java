@@ -51,12 +51,10 @@ import java.io.File;
 import java.io.IOException;
 import java.io.PrintStream;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.OptionalInt;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.metadata.storage.ScramParserTest.TEST_SALT;
@@ -132,7 +130,7 @@ public class FormatterTest {
         }
 
         List<String> outputLines() {
-            return Arrays.asList(stream.toString().trim().split("\\r*\\n"));
+            return List.of(stream.toString().trim().split("\\r*\\n"));
         }
     }
 
@@ -197,7 +195,7 @@ public class FormatterTest {
     @Test
     public void testOneDirectoryFormattedAndOthersNotFormatted() throws Exception {
         try (TestEnv testEnv = new TestEnv(2)) {
-            testEnv.newFormatter().formatter.setDirectories(Arrays.asList(testEnv.directory(0))).run();
+            testEnv.newFormatter().formatter.setDirectories(List.of(testEnv.directory(0))).run();
             assertEquals("Log directory " + testEnv.directory(0) + " is already formatted. " +
                 "Use --ignore-formatted to ignore this directory and format the others.",
                     assertThrows(FormatterException.class,
@@ -208,7 +206,7 @@ public class FormatterTest {
     @Test
     public void testOneDirectoryFormattedAndOthersNotFormattedWithIgnoreFormatted() throws Exception {
         try (TestEnv testEnv = new TestEnv(2)) {
-            testEnv.newFormatter().formatter.setDirectories(Arrays.asList(testEnv.directory(0))).run();
+            testEnv.newFormatter().formatter.setDirectories(List.of(testEnv.directory(0))).run();
 
             FormatterContext formatter2 = testEnv.newFormatter();
             formatter2.formatter.setIgnoreFormatted(true);
@@ -280,7 +278,7 @@ public class FormatterTest {
         try (TestEnv testEnv = new TestEnv(1)) {
             FormatterContext formatter1 = testEnv.newFormatter();
             formatter1.formatter.setReleaseVersion(MetadataVersion.IBP_3_4_IV0);
-            formatter1.formatter.setScramArguments(Arrays.asList(
+            formatter1.formatter.setScramArguments(List.of(
                 "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\"," +
                     "saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\"]",
                 "SCRAM-SHA-512=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\"," +
@@ -296,7 +294,7 @@ public class FormatterTest {
         try (TestEnv testEnv = new TestEnv(1)) {
             FormatterContext formatter1 = testEnv.newFormatter();
             formatter1.formatter.setReleaseVersion(MetadataVersion.IBP_3_8_IV0);
-            formatter1.formatter.setScramArguments(Arrays.asList(
+            formatter1.formatter.setScramArguments(List.of(
                 "SCRAM-SHA-256=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\"," +
                     "saltedpassword=\"mT0yyUUxnlJaC99HXgRTSYlbuqa4FSGtJCJfTMvjYCE=\"]",
                 "SCRAM-SHA-512=[name=alice,salt=\"MWx2NHBkbnc0ZndxN25vdGN4bTB5eTFrN3E=\"," +
@@ -310,10 +308,10 @@ public class FormatterTest {
             assertEquals(MetadataVersion.IBP_3_8_IV0, bootstrapMetadata.metadataVersion());
             List<ApiMessageAndVersion> scramRecords = bootstrapMetadata.records().stream().
                 filter(r -> r.message() instanceof UserScramCredentialRecord).
-                    collect(Collectors.toList());
+                    toList();
             ScramFormatter scram256 = new ScramFormatter(ScramMechanism.SCRAM_SHA_256);
             ScramFormatter scram512 = new ScramFormatter(ScramMechanism.SCRAM_SHA_512);
-            assertEquals(Arrays.asList(
+            assertEquals(List.of(
                 new ApiMessageAndVersion(new UserScramCredentialRecord().
                     setName("alice").
                     setMechanism(ScramMechanism.SCRAM_SHA_256.type()).
@@ -390,7 +388,7 @@ public class FormatterTest {
                 parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
             formatter1.formatter.run();
             assertEquals((short) 1, formatter1.formatter.featureLevels.getOrDefault("kraft.version", (short) 0));
-            assertEquals(Arrays.asList(
+            assertEquals(List.of(
                 String.format("Formatting data directory %s with %s %s.",
                     testEnv.directory(1),
                     MetadataVersion.FEATURE_NAME,
@@ -399,7 +397,7 @@ public class FormatterTest {
                     testEnv.directory(0),
                     MetadataVersion.FEATURE_NAME,
                     MetadataVersion.latestTesting())),
-                formatter1.outputLines().stream().sorted().collect(Collectors.toList()));
+                formatter1.outputLines().stream().sorted().toList());
             MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble.Loader().
                 addLogDirs(testEnv.directories).
                 load();
@@ -500,7 +498,7 @@ public class FormatterTest {
 
             formatter1.formatter.run();
             assertEquals((short) 1, formatter1.formatter.featureLevels.getOrDefault("kraft.version", (short) 0));
-            assertEquals(Arrays.asList(
+            assertEquals(List.of(
                     String.format("Formatting data directory %s with %s %s.",
                         testEnv.directory(1),
                         MetadataVersion.FEATURE_NAME,
@@ -509,7 +507,7 @@ public class FormatterTest {
                         testEnv.directory(0),
                         MetadataVersion.FEATURE_NAME,
                         MetadataVersion.latestTesting())),
-                formatter1.outputLines().stream().sorted().collect(Collectors.toList()));
+                formatter1.outputLines().stream().sorted().toList());
             MetaPropertiesEnsemble ensemble = new MetaPropertiesEnsemble.Loader().
                 addLogDirs(testEnv.directories).
                 load();

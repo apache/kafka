@@ -27,9 +27,10 @@ import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 
-import java.util.OptionalInt
+import java.util.Optional
 import scala.collection.{Map, Set, mutable}
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
                         val mockTierStateMachine: MockTierStateMachine,
@@ -46,7 +47,7 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
     brokerTopicStats = new BrokerTopicStats) {
 
   private val replicaPartitionStates = mutable.Map[TopicPartition, PartitionState]()
-  private var latestEpochDefault: Option[Int] = Some(0)
+  private var latestEpochDefault: Optional[Integer] = Optional.of(0)
 
   mockTierStateMachine.setFetcher(this)
 
@@ -60,9 +61,9 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
   }
 
   def addPartitions(initialFetchStates: Map[TopicPartition, InitialFetchState], forceTruncation: Boolean): Set[TopicPartition] = {
-    latestEpochDefault = if (forceTruncation) None else Some(0)
+    latestEpochDefault = if (forceTruncation) Optional.empty else Optional.of(0)
     val partitions = super.addPartitions(initialFetchStates)
-    latestEpochDefault = Some(0)
+    latestEpochDefault = Optional.of(0)
     partitions
   }
 
@@ -89,13 +90,13 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
     var maxTimestamp = RecordBatch.NO_TIMESTAMP
     var shallowOffsetOfMaxTimestamp = -1L
     var lastOffset = state.logEndOffset
-    var lastEpoch: OptionalInt = OptionalInt.empty()
+    var lastEpoch: Optional[Integer] = Optional.empty()
     var skipRemainingBatches = false
 
     for (batch <- batches) {
       batch.ensureValid()
 
-      skipRemainingBatches = skipRemainingBatches || hasHigherPartitionLeaderEpoch(batch, leaderEpochForReplica);
+      skipRemainingBatches = skipRemainingBatches || hasHigherPartitionLeaderEpoch(batch, leaderEpochForReplica)
       if (skipRemainingBatches) {
         info(s"Skipping batch $batch because leader epoch is $leaderEpochForReplica")
       } else {
@@ -106,7 +107,7 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
         state.log.append(batch)
         state.logEndOffset = batch.nextOffset
         lastOffset = batch.lastOffset
-        lastEpoch = OptionalInt.of(batch.partitionLeaderEpoch)
+        lastEpoch = Optional.of(batch.partitionLeaderEpoch)
       }
     }
 
@@ -151,30 +152,34 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
     state.highWatermark = offset
   }
 
-  override def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
+  override def latestEpoch(topicPartition: TopicPartition): Optional[Integer] = {
     val state = replicaPartitionState(topicPartition)
-    state.log.lastOption.map(_.partitionLeaderEpoch).orElse(latestEpochDefault)
+    val partitionLeaderEpoch: Optional[Integer] = state.log.lastOption.toJava.map(_.partitionLeaderEpoch)
+    if (partitionLeaderEpoch.isPresent)
+      partitionLeaderEpoch
+    else
+      latestEpochDefault
   }
 
   override def logStartOffset(topicPartition: TopicPartition): Long = replicaPartitionState(topicPartition).logStartOffset
 
   override def logEndOffset(topicPartition: TopicPartition): Long = replicaPartitionState(topicPartition).logEndOffset
 
-  override def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = {
+  override def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Optional[OffsetAndEpoch] = {
     val epochData = new EpochData()
       .setPartition(topicPartition.partition)
       .setLeaderEpoch(epoch)
     val result = mockLeader.lookupEndOffsetForEpoch(topicPartition, epochData, replicaPartitionState(topicPartition))
     if (result.endOffset == UNDEFINED_EPOCH_OFFSET)
-      None
+      Optional.empty
     else
-      Some(new OffsetAndEpoch(result.endOffset, result.leaderEpoch))
+      Optional.of(new OffsetAndEpoch(result.endOffset, result.leaderEpoch))
   }
 
   def verifyLastFetchedEpoch(partition: TopicPartition, expectedEpoch: Option[Int]): Unit = {
     if (leader.isTruncationOnFetchSupported) {
       assertEquals(Some(Fetching), fetchState(partition).map(_.state))
-      assertEquals(expectedEpoch, fetchState(partition).flatMap(_.lastFetchedEpoch))
+      assertEquals(expectedEpoch, fetchState(partition).map(_.lastFetchedEpoch.get()))
     }
   }
 }
