@@ -2414,7 +2414,7 @@ public class ShareConsumerTest {
         }
     }
 
-    private static class SerializerImpl implements Serializer<byte[]> {
+    public static class SerializerImpl implements Serializer<byte[]> {
 
         @Override
         public byte[] serialize(String topic, Headers headers, byte[] data) {
@@ -2429,7 +2429,7 @@ public class ShareConsumerTest {
         }
     }
 
-    private static class DeserializerImpl implements Deserializer<byte[]> {
+    public static class DeserializerImpl implements Deserializer<byte[]> {
 
         @Override
         public byte[] deserialize(String topic, Headers headers, byte[] data) {
