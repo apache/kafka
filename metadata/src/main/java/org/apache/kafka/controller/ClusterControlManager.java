@@ -89,7 +89,7 @@ public class ClusterControlManager {
         private SnapshotRegistry snapshotRegistry = null;
         private long sessionTimeoutNs = DEFAULT_SESSION_TIMEOUT_NS;
         private ReplicaPlacer replicaPlacer = null;
-        private FeatureControlManager featureControl = null;
+        private LimitedFeatureControlManager featureControl = null;
         private BrokerShutdownHandler brokerShutdownHandler = null;
         private String interBrokerListenerName = "PLAINTEXT";
 
@@ -123,7 +123,7 @@ public class ClusterControlManager {
             return this;
         }
 
-        Builder setFeatureControlManager(FeatureControlManager featureControl) {
+        Builder setFeatureControlManager(LimitedFeatureControlManager featureControl) {
             this.featureControl = featureControl;
             return this;
         }
@@ -250,7 +250,7 @@ public class ClusterControlManager {
     /**
      * The feature control manager.
      */
-    private final FeatureControlManager featureControl;
+    private final LimitedFeatureControlManager featureControl;
 
     private final BrokerShutdownHandler brokerShutdownHandler;
 
@@ -276,7 +276,7 @@ public class ClusterControlManager {
         SnapshotRegistry snapshotRegistry,
         long sessionTimeoutNs,
         ReplicaPlacer replicaPlacer,
-        FeatureControlManager featureControl,
+        LimitedFeatureControlManager featureControl,
         BrokerShutdownHandler brokerShutdownHandler,
         String interBrokerListenerName
     ) {

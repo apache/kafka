@@ -189,6 +189,8 @@ public final class QuorumController implements Controller {
      */
     static final int MAX_RECORDS_PER_USER_OP = DEFAULT_MAX_RECORDS_PER_BATCH;
 
+    private final UnsafeControllerManagerAccessible accessor = new UnsafeControlManagerAccessor();
+
     /**
      * A builder class which creates the QuorumController.
      */
@@ -523,7 +525,7 @@ public final class QuorumController implements Controller {
             EnumSet<ControllerOperationFlag> flags = EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME);
             queue.scheduleDeferred(tag,
                 new EarliestDeadlineFunction(deadlineNs),
-                new ControllerWriteEvent<>(tag, op::get, flags));
+                new ControllerWriteEvent<>(tag, (accessor) -> op.get(), flags));
         }
 
         @Override
@@ -693,7 +695,7 @@ public final class QuorumController implements Controller {
     }
 
     // Visible for testing
-    FeatureControlManager featureControl() {
+    LimitedFeatureControlManager featureControl() {
         return featureControl;
     }
 
@@ -742,7 +744,7 @@ public final class QuorumController implements Controller {
          *
          * @return A result containing a list of records, and the RPC result.
          */
-        ControllerResult<T> generateRecordsAndResult() throws Exception;
+        ControllerResult<T> generateRecordsAndResult(UnsafeControllerManagerAccessible accessor) throws Exception;
 
         /**
          * Once we've passed the records to the Raft layer, we will invoke this function
@@ -751,6 +753,10 @@ public final class QuorumController implements Controller {
          */
         default void processBatchEndOffset(long offset) {
         }
+    }
+
+    interface UnsafeControllerManagerAccessible {
+        FeatureControlManager featureControlManager();
     }
 
     /**
@@ -792,7 +798,7 @@ public final class QuorumController implements Controller {
             if (!isActiveController(controllerEpoch)) {
                 throw ControllerExceptions.newWrongControllerException(latestController());
             }
-            ControllerResult<T> result = op.generateRecordsAndResult();
+            ControllerResult<T> result = op.generateRecordsAndResult(accessor);
             if (result.records().isEmpty()) {
                 op.processBatchEndOffset(offsetControl.nextWriteOffset() - 1);
                 // If the operation did not return any records, then it was actually just
@@ -1151,13 +1157,13 @@ public final class QuorumController implements Controller {
 
     class CompleteActivationEvent implements ControllerWriteOperation<Void> {
         @Override
-        public ControllerResult<Void> generateRecordsAndResult() {
+        public ControllerResult<Void> generateRecordsAndResult(UnsafeControllerManagerAccessible accessor) {
             try {
                 return ActivationRecordsGenerator.generate(
                     log::warn,
                     offsetControl.transactionStartOffset(),
                     bootstrapMetadata,
-                    featureControl.metadataVersion(),
+                    accessor.featureControlManager().metadataVersion(),
                     configurationControl.getStaticallyConfiguredMinInsyncReplicas());
             } catch (Throwable t) {
                 throw fatalFaultHandler.handleFault("exception while completing controller " +
@@ -1397,7 +1403,7 @@ public final class QuorumController implements Controller {
      * An object which stores the controller's view of the cluster features.
      * This must be accessed only by the event queue thread.
      */
-    private final FeatureControlManager featureControl;
+    private final LimitedFeatureControlManager featureControl;
 
     /**
      * An object which stores the controller's view of the latest producer ID
@@ -1731,7 +1737,7 @@ public final class QuorumController implements Controller {
             return CompletableFuture.completedFuture(new AlterPartitionResponseData());
         }
         return appendWriteEvent("alterPartition", context.deadlineNs(),
-            () -> replicationControl.alterPartition(context, request));
+            (accessor) -> replicationControl.alterPartition(context, request));
     }
 
     @Override
@@ -1743,7 +1749,7 @@ public final class QuorumController implements Controller {
             return CompletableFuture.completedFuture(new AlterUserScramCredentialsResponseData());
         }
         return appendWriteEvent("alterUserScramCredentials", context.deadlineNs(),
-            () -> scramControlManager.alterCredentials(request, featureControl.metadataVersionOrThrow()));
+            (accessor) -> scramControlManager.alterCredentials(request, featureControl.metadataVersionOrThrow()));
     }
 
     @Override
@@ -1752,7 +1758,7 @@ public final class QuorumController implements Controller {
         CreateDelegationTokenRequestData request
     ) {
         return appendWriteEvent("createDelegationToken", context.deadlineNs(),
-            () -> delegationTokenControlManager.createDelegationToken(context, request, featureControl.metadataVersionOrThrow()));
+            (accessor) -> delegationTokenControlManager.createDelegationToken(context, request, featureControl.metadataVersionOrThrow()));
     }
 
     @Override
@@ -1761,7 +1767,7 @@ public final class QuorumController implements Controller {
         RenewDelegationTokenRequestData request
     ) {
         return appendWriteEvent("renewDelegationToken", context.deadlineNs(),
-            () -> delegationTokenControlManager.renewDelegationToken(context, request, featureControl.metadataVersionOrThrow()));
+            (accessor) -> delegationTokenControlManager.renewDelegationToken(context, request, featureControl.metadataVersionOrThrow()));
     }
 
     @Override
@@ -1770,7 +1776,7 @@ public final class QuorumController implements Controller {
         ExpireDelegationTokenRequestData request
     ) {
         return appendWriteEvent("expireDelegationToken", context.deadlineNs(),
-            () -> delegationTokenControlManager.expireDelegationToken(context, request, featureControl.metadataVersionOrThrow()));
+            (accessor) -> delegationTokenControlManager.expireDelegationToken(context, request, featureControl.metadataVersionOrThrow()));
     }
 
     @Override
@@ -1782,7 +1788,7 @@ public final class QuorumController implements Controller {
             return CompletableFuture.completedFuture(new CreateTopicsResponseData());
         }
         return appendWriteEvent("createTopics", context.deadlineNs(),
-            () -> replicationControl.createTopics(context, request, describable));
+            (accessor) -> replicationControl.createTopics(context, request, describable));
     }
 
     @Override
@@ -1791,7 +1797,7 @@ public final class QuorumController implements Controller {
         int brokerId
     ) {
         return appendWriteEvent("unregisterBroker", context.deadlineNs(),
-            () -> replicationControl.unregisterBroker(brokerId),
+            (accessor) -> replicationControl.unregisterBroker(brokerId),
                 EnumSet.noneOf(ControllerOperationFlag.class));
     }
 
@@ -1833,7 +1839,7 @@ public final class QuorumController implements Controller {
         if (ids.isEmpty())
             return CompletableFuture.completedFuture(Map.of());
         return appendWriteEvent("deleteTopics", context.deadlineNs(),
-            () -> replicationControl.deleteTopics(context, ids));
+            (accessor) -> replicationControl.deleteTopics(context, ids));
     }
 
     @Override
@@ -1856,7 +1862,7 @@ public final class QuorumController implements Controller {
             return CompletableFuture.completedFuture(new ElectLeadersResponseData());
         }
         return appendWriteEvent("electLeaders", context.deadlineNs(),
-            () -> replicationControl.electLeaders(request));
+            (accessor) -> replicationControl.electLeaders(request));
     }
 
     @Override
@@ -1864,7 +1870,7 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context
     ) {
         return appendReadEvent("getFinalizedFeatures", context.deadlineNs(),
-            () -> featureControl.finalizedFeatures(offsetControl.lastStableOffset()));
+            () -> accessor.featureControlManager().finalizedFeatures(offsetControl.lastStableOffset()));
     }
 
     @Override
@@ -1876,7 +1882,7 @@ public final class QuorumController implements Controller {
         if (configChanges.isEmpty()) {
             return CompletableFuture.completedFuture(Map.of());
         }
-        return appendWriteEvent("incrementalAlterConfigs", context.deadlineNs(), () -> {
+        return appendWriteEvent("incrementalAlterConfigs", context.deadlineNs(), (accessoraccessor) -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
                 configurationControl.incrementalAlterConfigs(configChanges, false);
             if (validateOnly) {
@@ -1896,7 +1902,7 @@ public final class QuorumController implements Controller {
             return CompletableFuture.completedFuture(new AlterPartitionReassignmentsResponseData());
         }
         return appendWriteEvent("alterPartitionReassignments", context.deadlineNs(),
-            () -> replicationControl.alterPartitionReassignments(request));
+            (accessor) -> replicationControl.alterPartitionReassignments(request));
     }
 
     @Override
@@ -1921,7 +1927,7 @@ public final class QuorumController implements Controller {
         if (newConfigs.isEmpty()) {
             return CompletableFuture.completedFuture(Map.of());
         }
-        return appendWriteEvent("legacyAlterConfigs", context.deadlineNs(), () -> {
+        return appendWriteEvent("legacyAlterConfigs", context.deadlineNs(), (accessor) -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
                 configurationControl.legacyAlterConfigs(newConfigs, false);
             if (validateOnly) {
@@ -1954,7 +1960,7 @@ public final class QuorumController implements Controller {
                 private boolean inControlledShutdown = false;
 
                 @Override
-                public ControllerResult<BrokerHeartbeatReply> generateRecordsAndResult() {
+                public ControllerResult<BrokerHeartbeatReply> generateRecordsAndResult(UnsafeControllerManagerAccessible accessor) {
                     // Get the offset of the broker registration. Note: although the offset
                     // we get back here could be the offset for a previous epoch of the
                     // broker registration, we will check the broker epoch in
@@ -1993,9 +1999,9 @@ public final class QuorumController implements Controller {
         BrokerRegistrationRequestData request
     ) {
         return appendWriteEvent("registerBroker", context.deadlineNs(),
-            () -> {
+            (accessor) -> {
                 // Read and write data in the controller event handling thread to avoid stale information.
-                Map<String, Short> controllerFeatures = new HashMap<>(featureControl.finalizedFeatures(Long.MAX_VALUE).featureMap());
+                Map<String, Short> controllerFeatures = new HashMap<>(accessor.featureControlManager().finalizedFeatures(Long.MAX_VALUE).featureMap());
                 // Populate finalized features map with latest known kraft version for validation.
                 controllerFeatures.put(KRaftVersion.FEATURE_NAME, raftClient.kraftVersion().featureLevel());
                 return clusterControl.
@@ -2015,7 +2021,7 @@ public final class QuorumController implements Controller {
         if (quotaAlterations.isEmpty()) {
             return CompletableFuture.completedFuture(Map.of());
         }
-        return appendWriteEvent("alterClientQuotas", context.deadlineNs(), () -> {
+        return appendWriteEvent("alterClientQuotas", context.deadlineNs(), (accessor) -> {
             ControllerResult<Map<ClientQuotaEntity, ApiError>> result =
                 clientQuotaControlManager.alterClientQuotas(quotaAlterations);
             if (validateOnly) {
@@ -2032,7 +2038,7 @@ public final class QuorumController implements Controller {
         AllocateProducerIdsRequestData request
     ) {
         return appendWriteEvent("allocateProducerIds", context.deadlineNs(),
-            () -> producerIdControlManager.generateNextProducerId(request.brokerId(), request.brokerEpoch()))
+            (accessor) -> producerIdControlManager.generateNextProducerId(request.brokerId(), request.brokerEpoch()))
             .thenApply(result -> new AllocateProducerIdsResponseData()
                 .setProducerIdStart(result.firstProducerId())
                 .setProducerIdLen(result.size()));
@@ -2043,7 +2049,7 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context,
         UpdateFeaturesRequestData request
     ) {
-        return appendWriteEvent("updateFeatures", context.deadlineNs(), () -> {
+        return appendWriteEvent("updateFeatures", context.deadlineNs(), (accessor) -> {
             Map<String, Short> updates = new HashMap<>();
             Map<String, FeatureUpdate.UpgradeType> upgradeTypes = new HashMap<>();
             request.featureUpdates().forEach(featureUpdate -> {
@@ -2087,7 +2093,7 @@ public final class QuorumController implements Controller {
             return CompletableFuture.completedFuture(List.of());
         }
 
-        return appendWriteEvent("createPartitions", context.deadlineNs(), () -> {
+        return appendWriteEvent("createPartitions", context.deadlineNs(), (accessor) -> {
             final ControllerResult<List<CreatePartitionsTopicResult>> result =
                     replicationControl.createPartitions(context, topics);
             if (validateOnly) {
@@ -2106,7 +2112,7 @@ public final class QuorumController implements Controller {
         ControllerRegistrationRequestData request
     ) {
         return appendWriteEvent("registerController", context.deadlineNs(),
-            () -> clusterControl.registerController(request),
+            (accessor) -> clusterControl.registerController(request),
             EnumSet.noneOf(ControllerOperationFlag.class));
     }
 
@@ -2116,7 +2122,7 @@ public final class QuorumController implements Controller {
         List<AclBinding> aclBindings
     ) {
         return appendWriteEvent("createAcls", context.deadlineNs(),
-            () -> aclControlManager.createAcls(aclBindings));
+            (accessor) -> aclControlManager.createAcls(aclBindings));
     }
 
     @Override
@@ -2125,7 +2131,7 @@ public final class QuorumController implements Controller {
         List<AclBindingFilter> filters
     ) {
         return appendWriteEvent("deleteAcls", context.deadlineNs(),
-            () -> aclControlManager.deleteAcls(filters));
+            (accessor) -> aclControlManager.deleteAcls(filters));
     }
 
     @Override
@@ -2134,7 +2140,7 @@ public final class QuorumController implements Controller {
         AssignReplicasToDirsRequestData request
     ) {
         return appendWriteEvent("assignReplicasToDirs", context.deadlineNs(),
-                () -> replicationControl.handleAssignReplicasToDirs(request));
+                (accessor) -> replicationControl.handleAssignReplicasToDirs(request));
     }
 
     @Override
@@ -2182,5 +2188,12 @@ public final class QuorumController implements Controller {
 
     void handleBrokerShutdown(int brokerId, boolean isCleanShutdown, List<ApiMessageAndVersion> records) {
         replicationControl.handleBrokerShutdown(brokerId, isCleanShutdown, records);
+    }
+
+    private class UnsafeControlManagerAccessor implements UnsafeControllerManagerAccessible {
+        @Override
+        public FeatureControlManager featureControlManager() {
+            return (FeatureControlManager) featureControl;
+        }
     }
 }

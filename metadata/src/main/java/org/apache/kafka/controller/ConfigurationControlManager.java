@@ -75,7 +75,7 @@ public class ConfigurationControlManager {
     private final TimelineHashSet<Integer> brokersWithConfigs;
     private final Map<String, Object> staticConfig;
     private final ConfigResource currentController;
-    private final FeatureControlManager featureControl;
+    private final LimitedFeatureControlManager featureControl;
 
     static class Builder {
         private LogContext logContext = null;
@@ -86,7 +86,7 @@ public class ConfigurationControlManager {
         private ConfigurationValidator validator = ConfigurationValidator.NO_OP;
         private Map<String, Object> staticConfig = Map.of();
         private int nodeId = 0;
-        private FeatureControlManager featureControl = null;
+        private LimitedFeatureControlManager featureControl = null;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -128,7 +128,7 @@ public class ConfigurationControlManager {
             return this;
         }
 
-        Builder setFeatureControl(FeatureControlManager featureControl) {
+        Builder setFeatureControl(LimitedFeatureControlManager featureControl) {
             this.featureControl = featureControl;
             return this;
         }
@@ -163,7 +163,7 @@ public class ConfigurationControlManager {
             ConfigurationValidator validator,
             Map<String, Object> staticConfig,
             int nodeId,
-            FeatureControlManager featureControl
+            LimitedFeatureControlManager featureControl
     ) {
         this.log = logContext.logger(ConfigurationControlManager.class);
         this.snapshotRegistry = snapshotRegistry;

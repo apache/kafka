@@ -50,7 +50,7 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_
 import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
 
-public class FeatureControlManager {
+public class FeatureControlManager implements LimitedFeatureControlManager {
     public static class Builder {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
@@ -141,7 +141,8 @@ public class FeatureControlManager {
         this.clusterSupportDescriber = clusterSupportDescriber;
     }
 
-    ControllerResult<ApiError> updateFeatures(
+    @Override
+    public ControllerResult<ApiError> updateFeatures(
         Map<String, Short> updates,
         Map<String, FeatureUpdate.UpgradeType> upgradeTypes,
         boolean validateOnly
@@ -168,11 +169,13 @@ public class FeatureControlManager {
         }
     }
 
-    Optional<MetadataVersion> metadataVersion() {
+    @Override
+    public Optional<MetadataVersion> metadataVersion() {
         return metadataVersion.get();
     }
 
-    MetadataVersion metadataVersionOrThrow() {
+    @Override
+    public MetadataVersion metadataVersionOrThrow() {
         return metadataVersionOrThrow(SnapshotRegistry.LATEST_EPOCH);
     }
 
@@ -361,6 +364,7 @@ public class FeatureControlManager {
         return new FinalizedControllerFeatures(features, epoch);
     }
 
+    @Override
     public void replay(FeatureLevelRecord record) {
         VersionRange range = quorumFeatures.localSupportedFeature(record.name());
         if (!range.contains(record.featureLevel())) {
@@ -387,11 +391,13 @@ public class FeatureControlManager {
         }
     }
 
-    boolean isControllerId(int nodeId) {
+    @Override
+    public boolean isControllerId(int nodeId) {
         return quorumFeatures.isControllerId(nodeId);
     }
 
-    boolean isElrFeatureEnabled() {
+    @Override
+    public boolean isElrFeatureEnabled() {
         return finalizedVersions.getOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 0) >=
             EligibleLeaderReplicasVersion.ELRV_1.featureLevel();
     }

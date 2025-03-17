@@ -161,7 +161,7 @@ public class ReplicationControlManager {
         private ConfigurationControlManager configurationControl = null;
         private ClusterControlManager clusterControl = null;
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
-        private FeatureControlManager featureControl = null;
+        private LimitedFeatureControlManager featureControl = null;
 
         Builder setSnapshotRegistry(SnapshotRegistry snapshotRegistry) {
             this.snapshotRegistry = snapshotRegistry;
@@ -203,7 +203,7 @@ public class ReplicationControlManager {
             return this;
         }
 
-        public Builder setFeatureControl(FeatureControlManager featureControl) {
+        public Builder setFeatureControl(LimitedFeatureControlManager featureControl) {
             this.featureControl = featureControl;
             return this;
         }
@@ -318,7 +318,7 @@ public class ReplicationControlManager {
     /**
      * The feature control manager.
      */
-    private final FeatureControlManager featureControl;
+    private final LimitedFeatureControlManager featureControl;
 
     /**
      * Maps topic names to topic UUIDs.
@@ -387,7 +387,7 @@ public class ReplicationControlManager {
         ConfigurationControlManager configurationControl,
         ClusterControlManager clusterControl,
         Optional<CreateTopicPolicy> createTopicPolicy,
-        FeatureControlManager featureControl
+        LimitedFeatureControlManager featureControl
     ) {
         this.snapshotRegistry = snapshotRegistry;
         this.log = logContext.logger(ReplicationControlManager.class);
