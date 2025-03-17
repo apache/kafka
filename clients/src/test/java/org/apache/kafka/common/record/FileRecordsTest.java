@@ -681,6 +681,7 @@ public class FileRecordsTest {
         FileRecords.LogOffsetPosition result = fileRecords.searchForOffsetWithSize(13L, 0);
 
         assertEquals(FileRecords.LogOffsetPosition.fromBatch(batch2), result);
+        // Because the target offset is between the two batches, we should call lastOffset on the batch1
         verify(batch1, times(1)).lastOffset();
         verify(batch2, never()).lastOffset();
     }
