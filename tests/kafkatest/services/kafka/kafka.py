@@ -239,7 +239,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 The value passed in is determined by the broker service when that is instantiated, and it uses the
                 same algorithm as described above: 1, 3, or 5 unless override_num_isolated_controllers is provided.
             5) In Combined KRaft quorum mode, the controller node count tries to be at least 3 unless the broker count is
-                less than 3.
+                less than 3(then only 1 controller node).
         :param ZookeeperService zk:
         :param dict topics: which topics to create automatically
         :param str security_protocol: security protocol for clients to use
