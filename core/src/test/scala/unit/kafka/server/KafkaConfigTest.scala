@@ -593,8 +593,8 @@ class KafkaConfigTest {
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, "plaintext://localhost:9091,SsL://localhost:9092")
     props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,SSL:SSL,CONTROLLER:PLAINTEXT")
     val config = KafkaConfig.fromProps(props)
-    assertEquals(Some("SSL://localhost:9092"), config.listeners.find(_.name == "SSL").map(JTestUtils.endpointToString))
-    assertEquals(Some("PLAINTEXT://localhost:9091"), config.listeners.find(_.name == "PLAINTEXT").map(JTestUtils.endpointToString))
+    assertEquals(Some("SSL://localhost:9092"), config.listeners.find(_.listener == "SSL").map(JTestUtils.endpointToString))
+    assertEquals(Some("PLAINTEXT://localhost:9091"), config.listeners.find(_.listener == "PLAINTEXT").map(JTestUtils.endpointToString))
   }
 
   private def listenerListToEndPoints(listenerList: String,

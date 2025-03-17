@@ -180,7 +180,7 @@ class SocketServer(
       // Because of ephemeral ports, we need to match acceptors to futures by looking at
       // the listener name, rather than the endpoint object.
       val authorizerFuture = authorizerFutures.find {
-        case (endpoint, _) => acceptor.endPoint.name.equals(endpoint.name())
+        case (endpoint, _) => acceptor.endPoint.listener.equals(endpoint.listener())
       } match {
         case None => allAuthorizerFuturesComplete
         case Some((_, future)) => future
@@ -213,7 +213,7 @@ class SocketServer(
     if (stopped) {
       throw new RuntimeException("Can't create new data plane acceptor and processors: SocketServer is stopped.")
     }
-    val listenerName =  ListenerName.normalised(endpoint.name)
+    val listenerName =  ListenerName.normalised(endpoint.listener)
     val parsedConfigs = config.valuesFromThisConfigWithPrefixOverride(listenerName.configPrefix)
     connectionQuotas.addListener(config, listenerName)
     val isPrivilegedListener = config.interBrokerListenerName == listenerName
@@ -224,7 +224,7 @@ class SocketServer(
     info(s"Created data-plane acceptor and processors for endpoint : ${listenerName}")
   }
 
-  private def endpoints = config.listeners.map(l => ListenerName.normalised(l.name) -> l).toMap
+  private def endpoints = config.listeners.map(l => ListenerName.normalised(l.listener) -> l).toMap
 
   protected def createDataPlaneAcceptor(endPoint: Endpoint, isPrivilegedListener: Boolean, requestChannel: RequestChannel): DataPlaneAcceptor = {
     new DataPlaneAcceptor(this, endPoint, config, nodeId, connectionQuotas, time, isPrivilegedListener, requestChannel, metrics, credentialProvider, logContext, memoryPool, apiVersionManager)
@@ -300,7 +300,7 @@ class SocketServer(
   def removeListeners(listenersRemoved: Seq[Endpoint]): Unit = synchronized {
     info(s"Removing data-plane listeners for endpoints $listenersRemoved")
     listenersRemoved.foreach { endpoint =>
-      connectionQuotas.removeListener(config, ListenerName.normalised(endpoint.name))
+      connectionQuotas.removeListener(config, ListenerName.normalised(endpoint.listener))
       dataPlaneAcceptors.asScala.remove(endpoint).foreach { acceptor =>
         acceptor.beginShutdown()
         acceptor.close()
@@ -345,7 +345,7 @@ class SocketServer(
   // For test usage
   def dataPlaneAcceptor(listenerName: String): Option[DataPlaneAcceptor] = {
     dataPlaneAcceptors.asScala.foreach { case (endPoint, acceptor) =>
-      if (endPoint.name == listenerName)
+      if (endPoint.listener == listenerName)
         return Some(acceptor)
     }
     None
@@ -409,7 +409,7 @@ class DataPlaneAcceptor(socketServer: SocketServer,
    * Returns the listener name associated with this reconfigurable. Listener-specific
    * configs corresponding to this listener name are provided for reconfiguration.
    */
-  override def listenerName(): ListenerName = ListenerName.normalised(endPoint.name)
+  override def listenerName(): ListenerName = ListenerName.normalised(endPoint.listener)
 
   /**
    * Returns the names of configs that may be reconfigured.
@@ -456,7 +456,7 @@ class DataPlaneAcceptor(socketServer: SocketServer,
     val newNumNetworkThreads = configs.get(SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG).asInstanceOf[Int]
 
     if (newNumNetworkThreads != processors.length) {
-      info(s"Resizing network thread pool size for ${endPoint.name} listener from ${processors.length} to $newNumNetworkThreads")
+      info(s"Resizing network thread pool size for ${endPoint.listener} listener from ${processors.length} to $newNumNetworkThreads")
       if (newNumNetworkThreads > processors.length) {
         addProcessors(newNumNetworkThreads - processors.length)
       } else if (newNumNetworkThreads < processors.length) {
@@ -523,7 +523,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   private val backwardCompatibilityMetricGroup = new KafkaMetricsGroup("kafka.network", "Acceptor")
   private val blockedPercentMeterMetricName = backwardCompatibilityMetricGroup.metricName(
     s"${metricPrefix()}AcceptorBlockedPercent",
-    Map(ListenerMetricTag -> endPoint.name).asJava)
+    Map(ListenerMetricTag -> endPoint.listener).asJava)
   private val blockedPercentMeter = metricsGroup.newMeter(blockedPercentMeterMetricName,"blocked time", TimeUnit.NANOSECONDS)
   private var currentProcessorIndex = 0
   private[network] val throttledSockets = new mutable.PriorityQueue[DelayedCloseSocket]()
@@ -531,7 +531,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   private[network] val startedFuture = new CompletableFuture[Void]()
 
   val thread: KafkaThread = KafkaThread.nonDaemon(
-    s"${threadPrefix()}-kafka-socket-acceptor-${endPoint.name}-${endPoint.securityProtocol}-${endPoint.port}",
+    s"${threadPrefix()}-kafka-socket-acceptor-${endPoint.listener}-${endPoint.securityProtocol}-${endPoint.port}",
     this)
 
   def start(): Unit = synchronized {
@@ -543,19 +543,19 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
         serverChannel = openServerSocket(endPoint.host, endPoint.port, listenBacklogSize)
         debug(s"Opened endpoint ${endPoint.host}:${endPoint.port}")
       }
-      debug(s"Starting processors for listener ${endPoint.name}")
+      debug(s"Starting processors for listener ${endPoint.listener}")
       processors.foreach(_.start())
-      debug(s"Starting acceptor thread for listener ${endPoint.name}")
+      debug(s"Starting acceptor thread for listener ${endPoint.listener}")
       thread.start()
       startedFuture.complete(null)
       started.set(true)
     } catch {
       case e: ClosedChannelException =>
-        debug(s"Refusing to start acceptor for ${endPoint.name} since the acceptor has already been shut down.")
+        debug(s"Refusing to start acceptor for ${endPoint.listener} since the acceptor has already been shut down.")
         startedFuture.completeExceptionally(e)
       case t: Throwable =>
-        error(s"Unable to start acceptor for ${endPoint.name}", t)
-        startedFuture.completeExceptionally(new RuntimeException(s"Unable to start acceptor for ${endPoint.name}", t))
+        error(s"Unable to start acceptor for ${endPoint.listener}", t)
+        startedFuture.completeExceptionally(new RuntimeException(s"Unable to start acceptor for ${endPoint.listener}", t))
     }
   }
 
@@ -636,7 +636,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
       new InetSocketAddress(host, port)
     }
     val serverChannel = socketServer.socketFactory.openServerSocket(
-      endPoint.name,
+      endPoint.listener,
       socketAddress,
       listenBacklogSize,
       recvBufferSize)
@@ -690,7 +690,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   private def accept(key: SelectionKey): Option[SocketChannel] = {
     val serverSocketChannel = key.channel().asInstanceOf[ServerSocketChannel]
     val socketChannel = serverSocketChannel.accept()
-    val listenerName = ListenerName.normalised(endPoint.name)
+    val listenerName = ListenerName.normalised(endPoint.listener)
     try {
       connectionQuotas.inc(listenerName, socketChannel.socket.getInetAddress, blockedPercentMeter)
       configureAcceptedSocketChannel(socketChannel)
@@ -750,7 +750,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   def wakeup(): Unit = nioSelector.wakeup()
 
   def addProcessors(toCreate: Int): Unit = synchronized {
-    val listenerName = ListenerName.normalised(endPoint.name)
+    val listenerName = ListenerName.normalised(endPoint.listener)
     val securityProtocol = endPoint.securityProtocol
     val listenerProcessors = new ArrayBuffer[Processor]()
 
@@ -770,7 +770,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
                    listenerName: ListenerName,
                    securityProtocol: SecurityProtocol,
                    connectionDisconnectListeners: Seq[ConnectionDisconnectListener]): Processor = {
-    val name = s"${threadPrefix()}-kafka-network-thread-$nodeId-${endPoint.name}-${endPoint.securityProtocol}-$id"
+    val name = s"${threadPrefix()}-kafka-network-thread-$nodeId-${endPoint.listener}-${endPoint.securityProtocol}-$id"
     new Processor(id,
                   time,
                   config.socketRequestMaxBytes,
