@@ -56,23 +56,25 @@ public class StaticBrokerConfigTest {
             Admin admin = cluster.admin();
             Admin adminUsingBootstrapController = cluster.admin(Map.of(), true)
         ) {
-            String value = admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) 1)))
-                .config(TOPIC).get().get(TopicConfig.SEGMENT_BYTES_CONFIG).value();
-            assertEquals(CUSTOM_VALUE, value, "Config value should be custom value since controller have related static config");
+            ConfigEntry configEntry = admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) 1)))
+                .config(TOPIC).get().get(TopicConfig.SEGMENT_BYTES_CONFIG);
+            assertEquals(ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG, configEntry.source());
+            assertEquals(CUSTOM_VALUE, configEntry.value(), "Config value should be custom value since controller has related static config");
 
             ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
-            String valueFromBroker = admin.describeConfigs(List.of(brokerResource))
-                .all().get().get(brokerResource).get(LOG_SEGMENT_BYTES).value();
+            configEntry = admin.describeConfigs(List.of(brokerResource)).all().get().get(brokerResource).get(LOG_SEGMENT_BYTES);
+            assertEquals(ConfigEntry.ConfigSource.DEFAULT_CONFIG, configEntry.source());
             assertNotEquals(CUSTOM_VALUE,
-                valueFromBroker,
-                "Config value should not be custom value since broker don't have related static config");
+                configEntry.value(),
+                "Config value should not be custom value since broker doesn't have related static config");
 
             ConfigResource controllerResource = new ConfigResource(ConfigResource.Type.BROKER, "3000");
-            String valueFromController = adminUsingBootstrapController.describeConfigs(List.of(controllerResource))
-                .all().get().get(controllerResource).get(LOG_SEGMENT_BYTES).value();
+            configEntry = adminUsingBootstrapController.describeConfigs(List.of(controllerResource))
+                .all().get().get(controllerResource).get(LOG_SEGMENT_BYTES);
+            assertEquals(ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG, configEntry.source());
             assertEquals(CUSTOM_VALUE,
-                valueFromController,
-                "Config value should be custom value since controller have related static config");
+                configEntry.value(),
+                "Config value should be custom value since controller has related static config");
         }
     }
 
@@ -87,25 +89,27 @@ public class StaticBrokerConfigTest {
             Admin admin = cluster.admin();
             Admin adminUsingBootstrapController = cluster.admin(Map.of(), true)
         ) {
-            String value = admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) 1)))
-                .config(TOPIC).get().get(TopicConfig.SEGMENT_BYTES_CONFIG).value();
+            ConfigEntry configEntry = admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) 1)))
+                .config(TOPIC).get().get(TopicConfig.SEGMENT_BYTES_CONFIG);
+            assertEquals(ConfigEntry.ConfigSource.DEFAULT_CONFIG, configEntry.source());
             assertNotEquals(CUSTOM_VALUE,
-                value,
-                "Config value should not be custom value since controller don't have static config");
+                configEntry.value(),
+                "Config value should not be custom value since controller doesn't have static config");
 
             ConfigResource brokerResource = new ConfigResource(ConfigResource.Type.BROKER, "0");
-            String valueFromBroker = admin.describeConfigs(List.of(brokerResource))
-                .all().get().get(brokerResource).get(LOG_SEGMENT_BYTES).value();
+            configEntry = admin.describeConfigs(List.of(brokerResource)).all().get().get(brokerResource).get(LOG_SEGMENT_BYTES);
+            assertEquals(ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG, configEntry.source());
             assertEquals(CUSTOM_VALUE,
-                valueFromBroker,
-                "Config value should be custom value since broker have related static config");
+                configEntry.value(),
+                "Config value should be custom value since broker has related static config");
 
             ConfigResource controllerResource = new ConfigResource(ConfigResource.Type.BROKER, "3000");
-            String valueFromController = adminUsingBootstrapController.describeConfigs(List.of(controllerResource))
-                .all().get().get(controllerResource).get(LOG_SEGMENT_BYTES).value();
+            configEntry = adminUsingBootstrapController.describeConfigs(List.of(controllerResource))
+                .all().get().get(controllerResource).get(LOG_SEGMENT_BYTES);
+            assertEquals(ConfigEntry.ConfigSource.DEFAULT_CONFIG, configEntry.source());
             assertNotEquals(CUSTOM_VALUE,
-                valueFromController,
-                "Config value should not be custom value since controller don't have related static config");
+                configEntry.value(),
+                "Config value should not be custom value since controller doesn't have related static config");
         }
     }
 }

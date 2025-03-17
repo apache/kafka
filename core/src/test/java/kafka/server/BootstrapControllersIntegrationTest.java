@@ -78,6 +78,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_CONTROLLERS_CONFIG;
 import static org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DYNAMIC_BROKER_CONFIG;
+import static org.apache.kafka.clients.admin.ConfigEntry.ConfigSource.DYNAMIC_DEFAULT_BROKER_CONFIG;
 import static org.apache.kafka.common.config.ConfigResource.Type.BROKER;
 import static org.apache.kafka.server.config.ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
@@ -357,6 +358,7 @@ public class BootstrapControllersIntegrationTest {
             Config config = resourceToConfig.get(resource);
             assertNotNull(config);
             ConfigEntry configEntry = config.get(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
+            assertEquals(DYNAMIC_DEFAULT_BROKER_CONFIG, configEntry.source());
             assertNotNull(configEntry);
             assertEquals("2", configEntry.value());
         }
