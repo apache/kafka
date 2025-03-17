@@ -17,6 +17,7 @@
 package org.apache.kafka.common.record;
 
 import org.apache.kafka.common.InvalidRecordException;
+import org.apache.kafka.common.message.ControlRecordTypeSchema;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.MessageUtil;
 
@@ -62,8 +63,8 @@ public enum ControlRecordType {
 
     ControlRecordType(short type) {
         this.type = type;
-        org.apache.kafka.common.message.ControlRecordType schema = new org.apache.kafka.common.message.ControlRecordType().setType(type);
-        buffer = MessageUtil.toVersionPrefixedByteBuffer(org.apache.kafka.common.message.ControlRecordType.HIGHEST_SUPPORTED_VERSION, schema);
+        ControlRecordTypeSchema schema = new ControlRecordTypeSchema().setType(type);
+        buffer = MessageUtil.toVersionPrefixedByteBuffer(ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION, schema);
     }
 
     public short type() {
@@ -85,16 +86,16 @@ public enum ControlRecordType {
         // read by KafkaRaftClient and RaftClient.Listener
         ByteBuffer buffer = key.duplicate();
         short version = buffer.getShort();
-        if (version < org.apache.kafka.common.message.ControlRecordType.LOWEST_SUPPORTED_VERSION)
+        if (version < ControlRecordTypeSchema.LOWEST_SUPPORTED_VERSION)
             throw new InvalidRecordException("Invalid version found for control record: " + version +
                     ". May indicate data corruption");
 
-        if (version > org.apache.kafka.common.message.ControlRecordType.HIGHEST_SUPPORTED_VERSION) {
+        if (version > ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION) {
             log.debug("Received unknown control record key version {}. Parsing as version {}", version,
-                    org.apache.kafka.common.message.ControlRecordType.HIGHEST_SUPPORTED_VERSION);
-            version = org.apache.kafka.common.message.ControlRecordType.HIGHEST_SUPPORTED_VERSION;
+                    ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION);
+            version = ControlRecordTypeSchema.HIGHEST_SUPPORTED_VERSION;
         }
-        org.apache.kafka.common.message.ControlRecordType schema = new org.apache.kafka.common.message.ControlRecordType(new ByteBufferAccessor(buffer), version);
+        ControlRecordTypeSchema schema = new ControlRecordTypeSchema(new ByteBufferAccessor(buffer), version);
         return schema.type();
     }
 
