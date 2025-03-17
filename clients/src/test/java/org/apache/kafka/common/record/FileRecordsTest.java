@@ -564,6 +564,7 @@ public class FileRecordsTest {
         FileRecords.LogOffsetPosition result = fileRecords.searchForOffsetWithSize(10L, 0);
 
         assertEquals(new FileRecords.LogOffsetPosition(prevBatch), result);
+        // Because the target offset is not in the current batch, we should call lastOffset on the previous batch
         verify(prevBatch, times(1)).lastOffset();
     }
 
