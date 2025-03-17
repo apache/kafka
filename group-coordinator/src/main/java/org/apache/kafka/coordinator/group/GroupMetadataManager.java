@@ -1813,6 +1813,27 @@ public class GroupMetadataManager {
     }
 
     /**
+     * Checks whether the streams group can accept a new member or not based on the
+     * max group size defined.
+     *
+     * @param group     The streams group.
+     * @param memberId  The member id.
+     *
+     * @throws GroupMaxSizeReachedException if the maximum capacity has been reached.
+     */
+    private void throwIfStreamsGroupIsFull(
+        StreamsGroup group,
+        String memberId
+    ) throws GroupMaxSizeReachedException {
+        // If the streams group has reached its maximum capacity, the member is rejected if it is not
+        // already a member of the streams group.
+        if (group.numMembers() >= config.streamsGroupMaxSize() && (memberId.isEmpty() || !group.hasMember(memberId))) {
+            throw new GroupMaxSizeReachedException("The streams group has reached its maximum capacity of "
+                + config.streamsGroupMaxSize() + " members.");
+        }
+    }
+
+    /**
      * Validates the member epoch provided in the heartbeat request.
      *
      * @param member                The Streams group member.
@@ -2079,6 +2100,7 @@ public class GroupMetadataManager {
         // Get or create the streams group.
         boolean isJoining = memberEpoch == 0;
         final StreamsGroup group = isJoining ? getOrCreateStreamsGroup(groupId) : getStreamsGroupOrThrow(groupId);
+        throwIfStreamsGroupIsFull(group, memberId);
 
         // Get or create the member.
         StreamsGroupMember member;
@@ -8127,14 +8149,18 @@ public class GroupMetadataManager {
      * Get the session timeout of the provided streams group.
      */
     private int streamsGroupSessionTimeoutMs(String groupId) {
-        return 45000;
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.map(GroupConfig::streamsSessionTimeoutMs)
+            .orElse(config.streamsGroupSessionTimeoutMs());
     }
 
     /**
      * Get the heartbeat interval of the provided streams group.
      */
     private int streamsGroupHeartbeatIntervalMs(String groupId) {
-        return 5000;
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.map(GroupConfig::streamsHeartbeatIntervalMs)
+            .orElse(config.streamsGroupHeartbeatIntervalMs());
     }
 
     /**
@@ -8148,7 +8174,10 @@ public class GroupMetadataManager {
      * Get the assignor of the provided streams group.
      */
     private Map<String, String> streamsGroupAssignmentConfigs(String groupId) {
-        return Map.of("group.streams.num.standby.replicas", "0");
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        final Integer numStandbyReplicas = groupConfig.map(GroupConfig::streamsNumStandbyReplicas)
+            .orElse(config.streamsGroupNumStandbyReplicas());
+        return Map.of("num.standby.replicas", numStandbyReplicas.toString());
     }
     
     /**
