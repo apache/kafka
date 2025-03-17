@@ -306,19 +306,19 @@ public class FileRecords extends AbstractRecords implements Closeable {
             if (batch.baseOffset() >= targetOffset) {
                 // Check if the previous batch contains the target
                 if (prevBatch != null && prevBatch.lastOffset() >= targetOffset)
-                    return new LogOffsetPosition(prevBatch);
-                else
+                    return LogOffsetPosition.fromBatch(prevBatch);
+                else {
                     // If there's no previous batch or the previous batch doesn't contain the 
                     // target, return the current batch
-                    return new LogOffsetPosition(batch);
+                    return LogOffsetPosition.fromBatch(batch);
+                }
             }
             prevBatch = batch;
         }
         // Only one case would reach here: all batches have baseOffset less than or equal to targetOffset
         // Check if the last batch contains the target
-        if (prevBatch != null && prevBatch.lastOffset() >= targetOffset) {
-            return new LogOffsetPosition(prevBatch);
-        }
+        if (prevBatch != null && prevBatch.lastOffset() >= targetOffset) 
+            return LogOffsetPosition.fromBatch(prevBatch);
 
         return null;
     }
@@ -480,11 +480,9 @@ public class FileRecords extends AbstractRecords implements Closeable {
         public final long offset;
         public final int position;
         public final int size;
-
-        public LogOffsetPosition(FileChannelRecordBatch batch) {
-            this.offset = batch.baseOffset();
-            this.position = batch.position();
-            this.size = batch.sizeInBytes();
+        
+        public static LogOffsetPosition fromBatch(FileChannelRecordBatch batch) {
+            return new LogOffsetPosition(batch.baseOffset(), batch.position(), batch.sizeInBytes());
         }
 
         public LogOffsetPosition(long offset, int position, int size) {
