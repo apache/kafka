@@ -15874,7 +15874,6 @@ public class GroupMetadataManagerTest {
     public void testStreamsGroupMemberJoiningWithMissingSourceTopic() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
-
         String subtopology1 = "subtopology1";
         String fooTopicName = "foo";
         Uuid fooTopicId = Uuid.randomUuid();
@@ -15936,9 +15935,11 @@ public class GroupMetadataManagerTest {
         List<CoordinatorRecord> expectedRecords = List.of(
             StreamsCoordinatorRecordHelpers.newStreamsGroupMemberRecord(groupId, expectedMember),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord(groupId, topology),
-            StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataRecord(groupId, Map.of(
-                fooTopicName, new org.apache.kafka.coordinator.group.streams.TopicMetadata(fooTopicId, fooTopicName, 6)
-            )),
+            StreamsCoordinatorRecordHelpers.newStreamsGroupPartitionMetadataRecord(groupId,
+                Map.of(
+                    fooTopicName, new org.apache.kafka.coordinator.group.streams.TopicMetadata(fooTopicId, fooTopicName, 6)
+                )
+            ),
             StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(groupId, 1),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentRecord(groupId, memberId, TasksTuple.EMPTY),
             StreamsCoordinatorRecordHelpers.newStreamsGroupTargetAssignmentEpochRecord(groupId, 1),
@@ -15952,7 +15953,6 @@ public class GroupMetadataManagerTest {
     public void testStreamsGroupMemberJoiningWithMissingInternalTopic() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
-
         String subtopology1 = "subtopology1";
         String fooTopicName = "foo";
         Uuid fooTopicId = Uuid.randomUuid();
@@ -15987,7 +15987,12 @@ public class GroupMetadataManagerTest {
                 .setWarmupTasks(List.of()));
 
         assertEquals(
-            Map.of(barTopicName, new CreatableTopic().setName(barTopicName).setNumPartitions(6).setReplicationFactor((short) -1)),
+            Map.of(barTopicName,
+                new CreatableTopic()
+                    .setName(barTopicName)
+                    .setNumPartitions(6)
+                    .setReplicationFactor((short) -1)
+            ),
             result.response().creatableTopics()
         );
         assertResponseEquals(
@@ -16032,7 +16037,6 @@ public class GroupMetadataManagerTest {
     public void testStreamsGroupMemberJoiningWithIncorrectlyPartitionedTopic() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
-
         String subtopology1 = "subtopology1";
         String fooTopicName = "foo";
         Uuid fooTopicId = Uuid.randomUuid();
@@ -16115,7 +16119,6 @@ public class GroupMetadataManagerTest {
     public void testStreamsGroupMemberJoiningWithStaleTopology() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
-
         String subtopology1 = "subtopology1";
         String fooTopicName = "foo";
         Uuid fooTopicId = Uuid.randomUuid();
@@ -16210,7 +16213,6 @@ public class GroupMetadataManagerTest {
     public void testStreamsUpdatingMemberMetadataTriggersNewTargetAssignment() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
-
         String subtopology1 = "subtopology1";
         String fooTopicName = "foo";
         Uuid fooTopicId = Uuid.randomUuid();
@@ -16414,7 +16416,6 @@ public class GroupMetadataManagerTest {
         String memberId1 = Uuid.randomUuid().toString();
         String memberId2 = Uuid.randomUuid().toString();
         String memberId3 = Uuid.randomUuid().toString();
-
         String subtopology1 = "subtopology1";
         String fooTopicName = "foo";
         Uuid fooTopicId = Uuid.randomUuid();
@@ -16510,7 +16511,6 @@ public class GroupMetadataManagerTest {
         String groupId = "fooup";
         String memberId1 = Uuid.randomUuid().toString();
         String memberId2 = Uuid.randomUuid().toString();
-
         String subtopology1 = "subtopology1";
         String fooTopicName = "foo";
         Uuid fooTopicId = Uuid.randomUuid();
@@ -16581,7 +16581,6 @@ public class GroupMetadataManagerTest {
     public void testStreamsGroupHeartbeatPartialResponseWhenNothingChanges() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
-
         String subtopology1 = "subtopology1";
         String fooTopicName = "foo";
         Uuid fooTopicId = Uuid.randomUuid();
@@ -16651,7 +16650,6 @@ public class GroupMetadataManagerTest {
         String memberId1 = Uuid.randomUuid().toString();
         String memberId2 = Uuid.randomUuid().toString();
         String memberId3 = Uuid.randomUuid().toString();
-
         String subtopology1 = "subtopology1";
         String fooTopicName = "foo";
         Uuid fooTopicId = Uuid.randomUuid();
@@ -17164,7 +17162,6 @@ public class GroupMetadataManagerTest {
     public void testStreamsTaskAssignorExceptionOnRegularHeartbeat() {
         String groupId = "fooup";
         String memberId1 = Uuid.randomUuid().toString();
-
         String subtopology1 = "subtopology1";
         String fooTopicName = "foo";
         Uuid fooTopicId = Uuid.randomUuid();
@@ -17207,7 +17204,6 @@ public class GroupMetadataManagerTest {
     public void testStreamsPartitionMetadataRefreshedAfterGroupIsLoaded() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
-
         String subtopology1 = "subtopology1";
         String fooTopicName = "foo";
         Uuid fooTopicId = Uuid.randomUuid();
@@ -17304,7 +17300,6 @@ public class GroupMetadataManagerTest {
     public void testStreamsPartitionMetadataRefreshedAgainAfterWriteFailure() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
-
         String subtopology1 = "subtopology1";
         String fooTopicName = "foo";
         Uuid fooTopicId = Uuid.randomUuid();
@@ -17421,7 +17416,6 @@ public class GroupMetadataManagerTest {
     public void testStreamsSessionTimeoutLifecycle() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
-
         String subtopology1 = "subtopology1";
         String fooTopicName = "foo";
         Uuid fooTopicId = Uuid.randomUuid();
@@ -17498,7 +17492,6 @@ public class GroupMetadataManagerTest {
     public void testStreamsSessionTimeoutExpiration() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
-
         String subtopology1 = "subtopology1";
         String fooTopicName = "foo";
         Uuid fooTopicId = Uuid.randomUuid();
@@ -17564,7 +17557,6 @@ public class GroupMetadataManagerTest {
         String groupId = "fooup";
         String memberId1 = Uuid.randomUuid().toString();
         String memberId2 = Uuid.randomUuid().toString();
-
         String subtopology1 = "subtopology1";
         String fooTopicName = "foo";
         Uuid fooTopicId = Uuid.randomUuid();
@@ -17721,7 +17713,6 @@ public class GroupMetadataManagerTest {
         String groupId = "fooup";
         String memberId1 = Uuid.randomUuid().toString();
         String memberId2 = Uuid.randomUuid().toString();
-
         String subtopology1 = "subtopology1";
         String fooTopicName = "foo";
         Uuid fooTopicId = Uuid.randomUuid();

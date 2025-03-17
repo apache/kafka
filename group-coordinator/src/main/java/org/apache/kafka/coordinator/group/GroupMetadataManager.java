@@ -2281,7 +2281,7 @@ public class GroupMetadataManager {
                 records.add(newStreamsGroupTopologyRecord(groupId, recordValue));
                 return streamsTopologyFromRequest;
             } else if (group.topology().get().topologyEpoch() > topology.epoch()) {
-                log.info("[GroupId {}][MemberId {}] Member joined with stake topology epoch {}", groupId, memberId, topology.epoch());
+                log.info("[GroupId {}][MemberId {}] Member joined with stale topology epoch {}", groupId, memberId, topology.epoch());
                 return group.topology().get();
             } else if (!group.topology().get().equals(streamsTopologyFromRequest)) {
                 throw new InvalidRequestException("Topology updates are not supported yet.");
