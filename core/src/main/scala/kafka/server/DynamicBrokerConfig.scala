@@ -885,9 +885,9 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
 
   def validateReconfiguration(newConfig: KafkaConfig): Unit = {
     val oldConfig = server.config
-    val newListeners = newConfig.listeners.map(l => ListenerName.normalised(l.listenerName)).toSet
-    val oldAdvertisedListeners = oldConfig.effectiveAdvertisedBrokerListeners.map(l => ListenerName.normalised(l.listenerName)).toSet
-    val oldListeners = oldConfig.listeners.map(l => ListenerName.normalised(l.listenerName)).toSet
+    val newListeners = newConfig.listeners.map(l => ListenerName.normalised(l.listener)).toSet
+    val oldAdvertisedListeners = oldConfig.effectiveAdvertisedBrokerListeners.map(l => ListenerName.normalised(l.listener)).toSet
+    val oldListeners = oldConfig.listeners.map(l => ListenerName.normalised(l.listener)).toSet
     if (!oldAdvertisedListeners.subsetOf(newListeners))
       throw new ConfigException(s"Advertised listeners '$oldAdvertisedListeners' must be a subset of listeners '$newListeners'")
     if (!newListeners.subsetOf(newConfig.effectiveListenerSecurityProtocolMap.keySet))
@@ -912,8 +912,8 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
     val newListenerMap = listenersToMap(newListeners)
     val oldListeners = oldConfig.listeners
     val oldListenerMap = listenersToMap(oldListeners)
-    val listenersRemoved = oldListeners.filterNot(e => newListenerMap.contains(ListenerName.normalised(e.listenerName)))
-    val listenersAdded = newListeners.filterNot(e => oldListenerMap.contains(ListenerName.normalised(e.listenerName)))
+    val listenersRemoved = oldListeners.filterNot(e => newListenerMap.contains(ListenerName.normalised(e.listener)))
+    val listenersAdded = newListeners.filterNot(e => oldListenerMap.contains(ListenerName.normalised(e.listener)))
     if (listenersRemoved.nonEmpty || listenersAdded.nonEmpty) {
       LoginManager.closeAll() // Clear SASL login cache to force re-login
       if (listenersRemoved.nonEmpty) server.socketServer.removeListeners(listenersRemoved)
@@ -922,7 +922,7 @@ class DynamicListenerConfig(server: KafkaBroker) extends BrokerReconfigurable wi
   }
 
   private def listenersToMap(listeners: Seq[Endpoint]): Map[ListenerName, Endpoint] =
-    listeners.map(e => (ListenerName.normalised(e.listenerName), e)).toMap
+    listeners.map(e => (ListenerName.normalised(e.listener), e)).toMap
 
 }
 

@@ -134,8 +134,8 @@ public class StandardAuthorizerTest {
         public Collection<String> earlyStartListeners() {
             List<String> result = new ArrayList<>();
             for (Endpoint endpoint : endpoints) {
-                if (endpoint.listenerName().equals("CONTROLLER")) {
-                    result.add(endpoint.listenerName());
+                if (endpoint.listener().equals("CONTROLLER")) {
+                    result.add(endpoint.listener());
                 }
             }
             return result;

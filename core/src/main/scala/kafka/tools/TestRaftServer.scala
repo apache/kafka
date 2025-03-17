@@ -88,7 +88,7 @@ class TestRaftServer(
     val endpoints = Endpoints.fromInetSocketAddresses(
       config.effectiveAdvertisedControllerListeners
         .map { endpoint =>
-          (ListenerName.normalised(endpoint.listenerName), InetSocketAddress.createUnresolved(endpoint.host, endpoint.port))
+          (ListenerName.normalised(endpoint.listener), InetSocketAddress.createUnresolved(endpoint.host, endpoint.port))
         }
         .toMap
         .asJava

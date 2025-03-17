@@ -109,7 +109,7 @@ public class TestUtils {
     public static String endpointToString(Endpoint endPoint) {
         String host = endPoint.host();
         int port = endPoint.port();
-        ListenerName listenerName = ListenerName.normalised(endPoint.listenerName());
+        ListenerName listenerName = ListenerName.normalised(endPoint.listener());
 
         String hostport = (host == null) ? (":" + port) : Utils.formatAddress(host, port);
         return listenerName.value() + "://" + hostport;

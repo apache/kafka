@@ -94,16 +94,16 @@ public class ListenerInfoTest {
             endpoints.add(ALL.get((i + startIndex) % ALL.size()));
         }
         ListenerInfo listenerInfo = ListenerInfo.create(endpoints);
-        assertEquals(ALL.get(startIndex).listenerName(),
-            listenerInfo.firstListener().listenerName());
+        assertEquals(ALL.get(startIndex).listener(),
+            listenerInfo.firstListener().listener());
     }
 
     @ParameterizedTest
     @ValueSource(ints = {0, 1, 2, 3})
     public void testCreateWithExplicitFirstListener(int startIndex) {
-        ListenerInfo listenerInfo = ListenerInfo.create(Optional.of(ALL.get(startIndex).listenerName()), ALL);
-        assertEquals(ALL.get(startIndex).listenerName(),
-            listenerInfo.firstListener().listenerName());
+        ListenerInfo listenerInfo = ListenerInfo.create(Optional.of(ALL.get(startIndex).listener()), ALL);
+        assertEquals(ALL.get(startIndex).listener(),
+            listenerInfo.firstListener().listener());
     }
 
     @Test

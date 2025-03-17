@@ -20,6 +20,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 
 import java.util.Locale;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Represents a broker endpoint.
@@ -48,11 +49,20 @@ public class Endpoint {
     }
 
     /**
+     * Returns the listener name of this endpoint.
+     */
+    public String listener() {
+        return listenerName;
+    }
+
+    /**
      * Returns the listener name of this endpoint. This is non-empty for endpoints provided
      * to broker plugins, but may be empty when used in clients.
+     * @deprecated Since 4.1. Use {@link #listener} instead. This function will be removed in 5.0.
      */
-    public String listenerName() {
-        return listenerName;
+    @Deprecated
+    public Optional<String> listenerName() {
+        return Optional.ofNullable(listenerName);
     }
 
     /**

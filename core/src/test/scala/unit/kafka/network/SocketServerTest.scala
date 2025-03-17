@@ -93,7 +93,7 @@ class SocketServerTest {
   def endpoint: Endpoint = {
     KafkaConfig.fromProps(props, doLog = false).dataPlaneListeners.head
   }
-  def listener: String = endpoint.listenerName
+  def listener: String = endpoint.listener
   val uncaughtExceptions = new AtomicInteger(0)
 
   @BeforeEach

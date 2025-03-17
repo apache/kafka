@@ -478,7 +478,7 @@ class BrokerServer(
         if (listenerName != null) {
           val endpoint = listenerInfo.listeners().values().stream
             .filter(e =>
-                ListenerName.normalised(e.listenerName()).equals(ListenerName.normalised(listenerName))
+                ListenerName.normalised(e.listener()).equals(ListenerName.normalised(listenerName))
             )
             .findFirst()
             .orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
