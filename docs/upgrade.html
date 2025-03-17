@@ -71,9 +71,7 @@
     <li>Upgrade the brokers one at a time: shut down the broker, update the code, and restart it. Once you have done so, the
         brokers will be running the latest version and you can verify that the cluster's behavior and performance meet expectations.
     </li>
-    <li>Once the cluster's behavior and performance have been verified, finalize the upgrade by running
-        <code>bin/kafka-features.sh --bootstrap-server localhost:9092 upgrade --release-version 4.0</code> 
-        (use <code>--bootstrap-controller</code> when running against a controller node).</li>
+    <li>Once the cluster's behavior and performance have been verified, finalize the upgrade by running code>bin/kafka-features.sh upgrade --release-version 4.0</code>.</li>
     <li>Note that cluster metadata downgrade is not supported in this version since it has metadata changes.
         Every <a href="https://github.com/apache/kafka/blob/trunk/server-common/src/main/java/org/apache/kafka/server/common/MetadataVersion.java">MetadataVersion</a>
         has a boolean parameter that indicates if there are metadata changes (i.e. <code>IBP_4_0_IV1(23, "4.0", "IV1", true)</code> means this version has metadata changes).
