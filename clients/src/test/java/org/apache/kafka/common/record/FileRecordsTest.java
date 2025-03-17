@@ -664,6 +664,27 @@ public class FileRecordsTest {
         }
     }
 
+    @Test
+    public void testSearchForOffsetWithSizeLastOffsetCallCountTargetBetweenTwoBatches() throws IOException {
+        File mockFile = mock(File.class);
+        FileChannel mockChannel = mock(FileChannel.class);
+        FileLogInputStream.FileChannelRecordBatch batch1 = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(batch1.baseOffset()).thenReturn(5L);  
+        when(batch1.lastOffset()).thenReturn(10L); 
+        FileLogInputStream.FileChannelRecordBatch batch2 = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(batch2.baseOffset()).thenReturn(15L);  
+        when(batch2.lastOffset()).thenReturn(20L);  
+
+        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 0, 100, false));
+        mockFileRecordBatches(fileRecords, batch1, batch2);
+
+        FileRecords.LogOffsetPosition result = fileRecords.searchForOffsetWithSize(13L, 0);
+
+        assertEquals(FileRecords.LogOffsetPosition.fromBatch(batch2), result);
+        verify(batch1, times(1)).lastOffset();
+        verify(batch2, never()).lastOffset();
+    }
+
     private void mockFileRecordBatches(FileRecords fileRecords, FileLogInputStream.FileChannelRecordBatch... batch) {
         List<FileLogInputStream.FileChannelRecordBatch> batches = new ArrayList<>(asList(batch));
         doReturn((Iterable<FileLogInputStream.FileChannelRecordBatch>) batches::iterator)
