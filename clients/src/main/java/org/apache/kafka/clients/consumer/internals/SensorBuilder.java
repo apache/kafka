@@ -28,6 +28,7 @@ import org.apache.kafka.common.metrics.stats.SampledStat;
 import org.apache.kafka.common.metrics.stats.Value;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -46,10 +47,10 @@ public class SensorBuilder {
     private final Map<String, String> tags;
 
     public SensorBuilder(Metrics metrics, String name) {
-        this(metrics, name, Collections::emptyMap);
+        this(metrics, name, LinkedHashMap::new);
     }
 
-    public SensorBuilder(Metrics metrics, String name, Supplier<Map<String, String>> tagsSupplier) {
+    public SensorBuilder(Metrics metrics, String name, Supplier<LinkedHashMap<String, String>> tagsSupplier) {
         this.metrics = metrics;
         Sensor s = metrics.getSensor(name);
 
