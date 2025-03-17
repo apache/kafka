@@ -3342,8 +3342,8 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Creates the member metadatarecord record if the updatedMember is different from
-     * the old member. Returns true if the metadata has changed, which is always true
+     * Creates the member metadata record record if the updatedMember is different from
+     * the old member. Returns true if the metadata has changed, which is always the case
      * when a member is first created.
      *
      * @param groupId       The group id.

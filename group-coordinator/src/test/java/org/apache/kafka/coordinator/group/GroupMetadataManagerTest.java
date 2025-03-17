@@ -15816,10 +15816,9 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testStreamsUpdatingPartitonMetadataTriggersNewTargetAssignment() {
+    public void testStreamsUpdatingPartitionMetadataTriggersNewTargetAssignment() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
-
         String subtopology1 = "subtopology1";
         String fooTopicName = "foo";
         Uuid fooTopicId = Uuid.randomUuid();
