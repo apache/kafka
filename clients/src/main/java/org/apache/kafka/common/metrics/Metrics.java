@@ -191,7 +191,7 @@ public final class Metrics implements Closeable {
      * @param description A human-readable description to include in the metric
      * @param tags        additional key/value attributes of the metric
      */
-    public MetricName metricName(String name, String group, String description, Map<String, String> tags) {
+    public MetricName metricName(String name, String group, String description, LinkedHashMap<String, String> tags) {
         Map<String, String> combinedTag = new LinkedHashMap<>(config.tags());
         combinedTag.putAll(tags);
         return new MetricName(name, group, description, combinedTag);

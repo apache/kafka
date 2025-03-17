@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common;
 
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 
@@ -65,18 +66,18 @@ public final class MetricName {
     private final String name;
     private final String group;
     private final String description;
-    private final Map<String, String> tags;
+    private final LinkedHashMap<String, String> tags;
     private int hash = 0;
 
     /**
-     * Please create MetricName by method {@link org.apache.kafka.common.metrics.Metrics#metricName(String, String, String, Map)}
+     * Please create MetricName by method {@link org.apache.kafka.common.metrics.Metrics#metricName(String, String, String, LinkedHashMap)}
      *
      * @param name        The name of the metric
      * @param group       logical group name of the metrics to which this metric belongs
      * @param description A human-readable description to include in the metric
      * @param tags        additional key/value attributes of the metric
      */
-    public MetricName(String name, String group, String description, Map<String, String> tags) {
+    public MetricName(String name, String group, String description, LinkedHashMap<String, String> tags) {
         this.name = Objects.requireNonNull(name);
         this.group = Objects.requireNonNull(group);
         this.description = Objects.requireNonNull(description);
