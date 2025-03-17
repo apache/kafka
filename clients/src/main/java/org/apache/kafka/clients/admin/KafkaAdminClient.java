@@ -55,6 +55,7 @@ import org.apache.kafka.clients.admin.internals.DescribeClassicGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeConsumerGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeProducersHandler;
 import org.apache.kafka.clients.admin.internals.DescribeShareGroupsHandler;
+import org.apache.kafka.clients.admin.internals.DescribeStreamsGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeTransactionsHandler;
 import org.apache.kafka.clients.admin.internals.FenceProducersHandler;
 import org.apache.kafka.clients.admin.internals.ListConsumerGroupOffsetsHandler;
@@ -3841,6 +3842,17 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
+    public DescribeStreamsGroupsResult describeStreamsGroups(final Collection<String> groupIds,
+                                                             final DescribeStreamsGroupsOptions options) {
+        SimpleAdminApiFuture<CoordinatorKey, StreamsGroupDescription> future =
+            DescribeStreamsGroupsHandler.newFuture(groupIds);
+        DescribeStreamsGroupsHandler handler = new DescribeStreamsGroupsHandler(options.includeAuthorizedOperations(), logContext);
+        invokeDriver(handler, future, options.timeoutMs);
+        return new DescribeStreamsGroupsResult(future.all().entrySet().stream()
+            .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
+    }
+    
+    @Override
     public DescribeClassicGroupsResult describeClassicGroups(final Collection<String> groupIds,
                                                              final DescribeClassicGroupsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, ClassicGroupDescription> future =
@@ -4782,11 +4794,11 @@ public class KafkaAdminClient extends AdminClient {
                         future.complete(null);
                         break;
                     case REQUEST_TIMED_OUT:
-                        throw error.exception();
+                        throw error.exception(response.data().errorMessage());
                     default:
                         log.error("Unregister broker request for broker ID {} failed: {}",
-                            brokerId, error.message());
-                        future.completeExceptionally(error.exception());
+                            brokerId, response.data().errorMessage());
+                        future.completeExceptionally(error.exception(response.data().errorMessage()));
                         break;
                 }
             }

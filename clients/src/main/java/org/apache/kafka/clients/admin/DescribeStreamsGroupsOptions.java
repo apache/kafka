@@ -15,24 +15,27 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.metadata.NoOpRecord;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
+import java.util.Collection;
 
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+/**
+ * Options for {@link Admin#describeStreamsGroups(Collection, DescribeStreamsGroupsOptions)}.
+ * <p>
+ * The API of this class is evolving, see {@link Admin} for details.
+ */
+@InterfaceStability.Evolving
+public class DescribeStreamsGroupsOptions extends AbstractOptions<DescribeStreamsGroupsOptions> {
+    private boolean includeAuthorizedOperations;
 
+    public DescribeStreamsGroupsOptions includeAuthorizedOperations(boolean includeAuthorizedOperations) {
+        this.includeAuthorizedOperations = includeAuthorizedOperations;
+        return this;
+    }
 
-@Timeout(value = 40)
-public class LogReplayTrackerTest {
-    @Test
-    public void testEmpty() {
-        LogReplayTracker tracker = new LogReplayTracker.Builder().build();
-        assertTrue(tracker.empty());
-        tracker.replay(new NoOpRecord());
-        assertFalse(tracker.empty());
+    public boolean includeAuthorizedOperations() {
+        return includeAuthorizedOperations;
     }
 }

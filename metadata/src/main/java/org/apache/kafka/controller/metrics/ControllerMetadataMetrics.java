@@ -24,7 +24,7 @@ import com.yammer.metrics.core.Meter;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
-import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -223,7 +223,7 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
 
     @Override
     public void close() {
-        registry.ifPresent(r -> Arrays.asList(
+        registry.ifPresent(r -> List.of(
             FENCED_BROKER_COUNT,
             ACTIVE_BROKER_COUNT,
             GLOBAL_TOPIC_COUNT,
