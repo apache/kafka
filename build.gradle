@@ -1977,6 +1977,8 @@ project(':clients:clients-integration-tests') {
     testImplementation project(':metadata')
     testImplementation project(':server')
     testImplementation project(':storage')
+    testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':clients').sourceSets.test.output
     implementation project(':server-common')
     implementation project(':group-coordinator')
     implementation project(':transaction-coordinator')
