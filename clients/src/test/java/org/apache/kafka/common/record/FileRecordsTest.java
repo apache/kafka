@@ -564,8 +564,66 @@ public class FileRecordsTest {
         FileRecords.LogOffsetPosition result = fileRecords.searchForOffsetWithSize(10L, 0);
 
         assertEquals(new FileRecords.LogOffsetPosition(prevBatch), result);
-        // Because the target offset is not in the current batch, we should call lastOffset on the previous batch
+        // Because the target offset is in the current batch, we should call lastOffset 
+        // on the previous batch
         verify(prevBatch, times(1)).lastOffset();
+    }
+
+    @Test
+    public void testSearchForOffsetWithSizeLastOffsetCallCountAllBatchesSmallerLastBatchDoesntMatch() throws IOException {
+        File mockFile = mock(File.class);
+        FileChannel mockChannel = mock(FileChannel.class);
+        FileLogInputStream.FileChannelRecordBatch batch1 = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(batch1.baseOffset()).thenReturn(5L);  // < targetOffset
+        FileLogInputStream.FileChannelRecordBatch batch2 = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(batch2.baseOffset()).thenReturn(8L);  // < targetOffset
+        when(batch2.lastOffset()).thenReturn(9L);  // < targetOffset
+
+        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 0, 100, false));
+
+        List<FileLogInputStream.FileChannelRecordBatch> batches = new ArrayList<>();
+        batches.add(batch1);
+        batches.add(batch2);
+        doReturn((Iterable<FileLogInputStream.FileChannelRecordBatch>) batches::iterator)
+                .when(fileRecords)
+                .batchesFrom(anyInt());
+
+        FileRecords.LogOffsetPosition result = fileRecords.searchForOffsetWithSize(10L, 0);
+
+        assertNull(result);
+        // Because the target offset is exceeded by the last offset of the batch2, 
+        // we should call lastOffset on the batch2
+        verify(batch1, never()).lastOffset();
+        verify(batch2, times(1)).lastOffset();
+    }
+
+    @Test
+    public void testSearchForOffsetWithSizeLastOffsetCallCountAllBatchesSmallerLastBatchMatches() throws IOException {
+        File mockFile = mock(File.class);
+        FileChannel mockChannel = mock(FileChannel.class);
+        FileLogInputStream.FileChannelRecordBatch batch1 = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(batch1.baseOffset()).thenReturn(5L);  // < targetOffset
+        FileLogInputStream.FileChannelRecordBatch batch2 = mock(FileLogInputStream.FileChannelRecordBatch.class);
+        when(batch2.baseOffset()).thenReturn(8L);  // < targetOffset
+        when(batch2.lastOffset()).thenReturn(12L); // >= targetOffset
+
+        FileRecords fileRecords = Mockito.spy(new FileRecords(mockFile, mockChannel, 0, 100, false));
+
+        List<FileLogInputStream.FileChannelRecordBatch> batches = new ArrayList<>();
+        batches.add(batch1);
+        batches.add(batch2);
+        doReturn((Iterable<FileLogInputStream.FileChannelRecordBatch>) batches::iterator)
+                .when(fileRecords)
+                .batchesFrom(anyInt());
+
+        FileRecords.LogOffsetPosition result = fileRecords.searchForOffsetWithSize(10L, 0);
+
+        assertEquals(new FileRecords.LogOffsetPosition(batch2), result);
+
+        // Because the target offset is in the batch2, we should not call 
+        // lastOffset on batch1
+        verify(batch1, never()).lastOffset();
+        verify(batch2, times(1)).lastOffset();
     }
 
     private void doTestConversion(Compression compression, byte toMagic) throws IOException {
