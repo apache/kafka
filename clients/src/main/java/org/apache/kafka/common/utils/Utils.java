@@ -821,6 +821,23 @@ public final class Utils {
     }
 
     /**
+     * Creates a map from a sequence of entries
+     *
+     * @param entries The entries to map
+     * @param <K>     The key type
+     * @param <V>     The value type
+     * @return A linked map
+     */
+    @SafeVarargs
+    public static <K, V> LinkedHashMap<K, V> mkSeqMap(final Map.Entry<K, V>... entries) {
+        final LinkedHashMap<K, V> result = new LinkedHashMap<>();
+        for (final Map.Entry<K, V> entry : entries) {
+            result.put(entry.getKey(), entry.getValue());
+        }
+        return result;
+    }
+
+    /**
      * Creates a {@link Properties} from a map
      *
      * @param properties A map of properties to add
