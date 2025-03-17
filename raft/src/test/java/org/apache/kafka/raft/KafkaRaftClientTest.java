@@ -4027,7 +4027,7 @@ class KafkaRaftClientTest {
             .build();
         context.pollUntil(() -> context.log.endOffset().offset() == 1L);
 
-        List<String> metricNames = Arrays.asList(
+        var metricNames = Set.of(
                 "current-state", "current-leader", "current-vote", "current-epoch", "high-watermark",
                 "log-end-offset", "log-end-epoch", "number-unknown-voter-connections", "poll-idle-ratio-avg",
                 "commit-latency-avg", "commit-latency-max", "election-latency-avg", "election-latency-max",
