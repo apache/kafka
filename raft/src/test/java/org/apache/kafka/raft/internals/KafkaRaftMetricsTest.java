@@ -144,7 +144,7 @@ public class KafkaRaftMetricsTest {
             getMetric(metrics, "current-vote-directory-id").metricValue()
         );
         assertEquals(0, getMetric(metrics, "current-epoch").metricValue());
-        assertEquals(-1, getMetric(metrics, "high-watermark").metricValue());
+        assertEquals(-1L, getMetric(metrics, "high-watermark").metricValue());
 
         // prospective
         state.transitionToProspective();
@@ -283,8 +283,8 @@ public class KafkaRaftMetricsTest {
         state.initialize(new OffsetAndEpoch(0L, 0));
 
         assertEquals("unattached", getMetric(metrics, "current-state").metricValue());
-        assertEquals(-1L, getMetric(metrics, "current-leader").metricValue());
-        assertEquals(-1L, getMetric(metrics, "current-vote").metricValue());
+        assertEquals(-1, getMetric(metrics, "current-leader").metricValue());
+        assertEquals(-1, getMetric(metrics, "current-vote").metricValue());
         assertEquals(
             Uuid.ZERO_UUID.toString(),
             getMetric(metrics, "current-vote-directory-id").metricValue()
