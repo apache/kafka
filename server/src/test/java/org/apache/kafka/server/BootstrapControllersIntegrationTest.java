@@ -15,7 +15,7 @@
  * limitations under the License.
  */
 
-package kafka.server;
+package org.apache.kafka.server;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
@@ -60,6 +60,7 @@ import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.test.TestUtils;
 
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.Arrays;
@@ -132,9 +133,9 @@ public class BootstrapControllersIntegrationTest {
     private void testDescribeCluster(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
         try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             DescribeClusterResult result = admin.describeCluster();
-            assertEquals(clusterInstance.clusterId(), result.clusterId().get(1, TimeUnit.MINUTES));
+            Assertions.assertEquals(clusterInstance.clusterId(), result.clusterId().get(1, TimeUnit.MINUTES));
             if (usingBootstrapControllers) {
-                assertTrue(clusterInstance.controllerIds().contains(result.controller().get().id()));
+                Assertions.assertTrue(clusterInstance.controllerIds().contains(result.controller().get().id()));
             }
         }
     }
@@ -198,7 +199,7 @@ public class BootstrapControllersIntegrationTest {
     private void testDescribeMetadataQuorum(ClusterInstance clusterInstance, boolean usingBootstrapControllers) throws Exception {
         try (Admin admin = Admin.create(adminConfig(clusterInstance, usingBootstrapControllers))) {
             DescribeMetadataQuorumResult result = admin.describeMetadataQuorum();
-            assertTrue(clusterInstance.controllerIds().contains(
+            Assertions.assertTrue(clusterInstance.controllerIds().contains(
                     result.quorumInfo().get(1, TimeUnit.MINUTES).leaderId()));
         }
     }
