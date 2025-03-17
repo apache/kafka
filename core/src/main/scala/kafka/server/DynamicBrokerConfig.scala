@@ -196,6 +196,13 @@ object DynamicBrokerConfig {
     config: KafkaConfig,
     quotaManagers: QuotaFactory.QuotaManagers
   ): Unit = {
+    def putOrRemoveIfNull(props: Properties, key: String, value: String): Unit = {
+      if (value == null) {
+        props.remove(key)
+      } else {
+        props.put(key, value)
+      }
+    }
     raftManager.replicatedLog.latestSnapshotId().ifPresent(latestSnapshotId => {
       raftManager.replicatedLog.readSnapshot(latestSnapshotId).ifPresent(rawSnapshotReader => {
         val reader = RecordsSnapshotReader.of(
@@ -215,9 +222,9 @@ object DynamicBrokerConfig {
               if (DynamicBrokerConfig.AllDynamicConfigs.contains(configRecord.name()) &&
                 configRecord.resourceType() == ConfigResource.Type.BROKER.id()) {
                 if (configRecord.resourceName().isEmpty) {
-                  dynamicDefaultConfigs.put(configRecord.name(), configRecord.value())
+                  putOrRemoveIfNull(dynamicDefaultConfigs, configRecord.name(), configRecord.value())
                 } else if (configRecord.resourceName() == config.brokerId.toString) {
-                  dynamicPerBrokerConfigs.put(configRecord.name(), configRecord.value())
+                  putOrRemoveIfNull(dynamicPerBrokerConfigs, configRecord.name(), configRecord.value())
                 }
               }
             }
