@@ -137,7 +137,7 @@ object CoreUtils {
         (inetAddressValidator.isValidInet6Address(first) && inetAddressValidator.isValidInet4Address(second))
 
     def validate(endPoints: Seq[Endpoint]): Unit = {
-      val distinctListenerNames = endPoints.map(_.listener).distinct
+      val distinctListenerNames = endPoints.map(_.name).distinct
       require(distinctListenerNames.size == endPoints.size, s"Each listener must have a different name, listeners: $listeners")
 
       val (duplicatePorts, _) = endPoints.filter {

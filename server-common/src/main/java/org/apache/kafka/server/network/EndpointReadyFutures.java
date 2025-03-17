@@ -113,7 +113,7 @@ public class EndpointReadyFutures {
                 List<String> notInInfo = new ArrayList<>();
                 for (Endpoint endpoint : effectiveStartFutures.keySet()) {
                     if (!info.endpoints().contains(endpoint)) {
-                        notInInfo.add(endpoint.listener());
+                        notInInfo.add(endpoint.name());
                     }
                 }
                 throw new RuntimeException("Found authorizer futures that weren't included " +
@@ -146,7 +146,7 @@ public class EndpointReadyFutures {
         final CompletableFuture<Void> future;
 
         EndpointReadyFuture(Endpoint endpoint, Collection<String> stageNames) {
-            this.endpointName = endpoint.listener();
+            this.endpointName = endpoint.name();
             this.incomplete = new TreeSet<>(stageNames);
             this.future = new CompletableFuture<>();
         }
