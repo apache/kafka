@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import kafka.api.BaseConsumerTest;
 import kafka.server.KafkaBroker;
 
 import org.apache.kafka.clients.admin.Admin;
@@ -41,6 +40,7 @@ import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.record.TimestampType;
@@ -60,6 +60,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.test.TestUtils;
 
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
 
@@ -128,12 +129,15 @@ public class ShareConsumerTest {
     private final TopicPartition tp2 = new TopicPartition("topic2", 0);
     private final TopicPartition warmupTp = new TopicPartition("warmup", 0);
     private List<TopicPartition> sgsTopicPartitions;
-
+    private static final String KEY = "content-type";
+    private static final String VALUE = "application/octet-stream";
+    
     public ShareConsumerTest(ClusterInstance cluster) {
         this.cluster = cluster;
     }
 
-    private void setup() {
+    @BeforeEach
+    public void setup() {
         try {
             this.cluster.waitForReadyBrokers();
             createTopic("topic");
@@ -149,7 +153,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testPollNoSubscribeFails() {
-        setup();
         try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             assertEquals(Set.of(), shareConsumer.subscription());
             // "Consumer is not subscribed to any topics."
@@ -159,7 +162,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testSubscribeAndPollNoRecords() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             Set<String> subscription = Set.of(tp.topic());
@@ -173,7 +175,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testSubscribePollUnsubscribe() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             Set<String> subscription = Set.of(tp.topic());
@@ -189,7 +190,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testSubscribePollSubscribe() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             Set<String> subscription = Set.of(tp.topic());
@@ -207,7 +207,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testSubscribeUnsubscribePollFails() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             Set<String> subscription = Set.of(tp.topic());
@@ -225,7 +224,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testSubscribeSubscribeEmptyPollFails() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             Set<String> subscription = Set.of(tp.topic());
@@ -243,7 +241,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testSubscriptionAndPoll() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -260,7 +257,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testSubscriptionAndPollMultiple() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -283,7 +279,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testPollRecordsGreaterThanMaxBytes() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
@@ -302,7 +297,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testAcknowledgementSentOnSubscriptionChange() throws ExecutionException, InterruptedException {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -339,7 +333,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testAcknowledgementCommitCallbackSuccessfulAcknowledgement() throws Exception {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -370,7 +363,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testAcknowledgementCommitCallbackOnClose() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -401,7 +393,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testAcknowledgementCommitCallbackInvalidRecordStateException() throws Exception {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -456,7 +447,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testHeaders() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -508,14 +498,12 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testHeadersSerializerDeserializer() {
-        setup();
-        testHeadersSerializeDeserialize(new BaseConsumerTest.SerializerImpl(), new BaseConsumerTest.DeserializerImpl());
+        testHeadersSerializeDeserialize(new SerializerImpl(), new DeserializerImpl());
         verifyShareGroupStateTopicRecordsProduced();
     }
 
     @ClusterTest
     public void testMaxPollRecords() {
-        setup();
         int numRecords = 10000;
         int maxPollRecords = 2;
 
@@ -549,7 +537,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testControlRecordsSkipped() throws Exception {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> transactionalProducer = createProducer("T1");
              Producer<byte[], byte[]> nonTransactionalProducer = createProducer();
@@ -595,7 +582,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testExplicitAcknowledgeSuccess() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -617,7 +603,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testExplicitAcknowledgeCommitSuccess() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -641,7 +626,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testExplicitAcknowledgementCommitAsync() throws InterruptedException {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1");
@@ -698,7 +682,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testImplicitModeNotTriggeredByPollWhenNoAcksToSend() throws InterruptedException {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -736,7 +719,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testExplicitAcknowledgementCommitAsyncPartialBatch() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1")) {
@@ -800,7 +782,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testExplicitAcknowledgeReleasePollAccept() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -824,7 +805,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testExplicitAcknowledgeReleaseAccept() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -845,7 +825,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testExplicitAcknowledgeReleaseClose() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -864,7 +843,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testExplicitAcknowledgeThrowsNotInBatch() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -887,7 +865,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testImplicitAcknowledgeFailsExplicit() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -909,7 +886,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testImplicitAcknowledgeCommitSync() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -933,7 +909,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testImplicitAcknowledgementCommitAsync() throws InterruptedException {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -973,7 +948,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testConfiguredExplicitAcknowledgeCommitSuccess() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
@@ -999,7 +973,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testConfiguredImplicitAcknowledgeExplicitAcknowledgeFails() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
@@ -1019,7 +992,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testFetchRecordLargerThanMaxPartitionFetchBytes() throws Exception {
-        setup();
         int maxPartitionFetchBytes = 10000;
 
         alterShareAutoOffsetReset("group1", "earliest");
@@ -1044,7 +1016,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testMultipleConsumersWithDifferentGroupIds() throws InterruptedException {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         alterShareAutoOffsetReset("group2", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
@@ -1095,7 +1066,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testMultipleConsumersInGroupSequentialConsumption() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1");
@@ -1133,7 +1103,6 @@ public class ShareConsumerTest {
     @ClusterTest
     public void testMultipleConsumersInGroupConcurrentConsumption()
             throws InterruptedException, ExecutionException, TimeoutException {
-        setup();
         AtomicInteger totalMessagesConsumed = new AtomicInteger(0);
 
         int consumerCount = 4;
@@ -1168,7 +1137,6 @@ public class ShareConsumerTest {
     @ClusterTest
     public void testMultipleConsumersInMultipleGroupsConcurrentConsumption()
             throws ExecutionException, InterruptedException, TimeoutException {
-        setup();
         AtomicInteger totalMessagesConsumedGroup1 = new AtomicInteger(0);
         AtomicInteger totalMessagesConsumedGroup2 = new AtomicInteger(0);
         AtomicInteger totalMessagesConsumedGroup3 = new AtomicInteger(0);
@@ -1231,7 +1199,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testConsumerCloseInGroupSequential() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1");
@@ -1280,7 +1247,6 @@ public class ShareConsumerTest {
     @ClusterTest
     public void testMultipleConsumersInGroupFailureConcurrentConsumption()
             throws InterruptedException, ExecutionException, TimeoutException {
-        setup();
         AtomicInteger totalMessagesConsumed = new AtomicInteger(0);
 
         int consumerCount = 4;
@@ -1325,7 +1291,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testAcquisitionLockTimeoutOnConsumer() throws InterruptedException {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -1390,7 +1355,6 @@ public class ShareConsumerTest {
      */
     @ClusterTest
     public void testAcknowledgementCommitCallbackCallsShareConsumerDisallowed() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -1434,7 +1398,6 @@ public class ShareConsumerTest {
      */
     @ClusterTest
     public void testAcknowledgementCommitCallbackCallsShareConsumerWakeup() throws InterruptedException {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -1459,7 +1422,7 @@ public class ShareConsumerTest {
             TestUtils.waitForCondition(() -> {
                 try {
                     shareConsumer.poll(Duration.ofMillis(500));
-                } catch (org.apache.kafka.common.errors.WakeupException e) {
+                } catch (WakeupException e) {
                     exceptionThrown.set(true);
                 }
                 return exceptionThrown.get();
@@ -1487,7 +1450,6 @@ public class ShareConsumerTest {
      */
     @ClusterTest
     public void testAcknowledgementCommitCallbackThrowsException() throws InterruptedException {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -1528,7 +1490,6 @@ public class ShareConsumerTest {
      */
     @ClusterTest
     public void testPollThrowsInterruptExceptionIfInterrupted() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
@@ -1553,7 +1514,6 @@ public class ShareConsumerTest {
      */
     @ClusterTest
     public void testSubscribeOnInvalidTopicThrowsInvalidTopicException() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
 
@@ -1571,7 +1531,6 @@ public class ShareConsumerTest {
      */
     @ClusterTest
     public void testWakeupWithFetchedRecordsAvailable() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -1593,7 +1552,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testSubscriptionFollowedByTopicCreation() throws InterruptedException {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
@@ -1623,7 +1581,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testSubscriptionAndPollFollowedByTopicDeletion() throws InterruptedException, ExecutionException {
-        setup();
         String topic1 = "bar";
         String topic2 = "baz";
         createTopic(topic1);
@@ -1666,7 +1623,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testLsoMovementByRecordsDeletion() {
-        setup();
         String groupId = "group1";
 
         alterShareAutoOffsetReset(groupId, "earliest");
@@ -1712,7 +1668,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testShareAutoOffsetResetDefaultValue() {
-        setup();
         try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1");
              Producer<byte[], byte[]> producer = createProducer()) {
 
@@ -1739,7 +1694,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testShareAutoOffsetResetEarliest() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1");
              Producer<byte[], byte[]> producer = createProducer()) {
@@ -1765,7 +1719,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testShareAutoOffsetResetEarliestAfterLsoMovement() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (
             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1");
@@ -1792,7 +1745,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testShareAutoOffsetResetMultipleGroupsWithDifferentValue() {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         alterShareAutoOffsetReset("group2", "latest");
         try (ShareConsumer<byte[], byte[]> shareConsumerEarliest = createShareConsumer("group1");
@@ -1832,7 +1784,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testShareAutoOffsetResetByDuration() throws Exception {
-        setup();
         // Set auto offset reset to 1 hour before current time
         alterShareAutoOffsetReset("group1", "by_duration:PT1H");
         
@@ -1884,7 +1835,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testShareAutoOffsetResetByDurationInvalidFormat() throws Exception {
-        setup();
         // Test invalid duration format
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, "group1");
         Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
@@ -1923,7 +1873,6 @@ public class ShareConsumerTest {
     )
     @Timeout(90)
     public void testShareConsumerAfterCoordinatorMovement() throws Exception {
-        setup();
         String topicName = "multipart";
         String groupId = "multipartGrp";
         Uuid topicId = createTopic(topicName, 3, 3);
@@ -2076,7 +2025,6 @@ public class ShareConsumerTest {
     )
     @Timeout(150)
     public void testComplexShareConsumer() throws Exception {
-        setup();
         String topicName = "multipart";
         String groupId = "multipartGrp";
         createTopic(topicName, 3, 3);
@@ -2463,6 +2411,37 @@ public class ShareConsumerTest {
         } catch (Exception e) {
             service.shutdownNow();
             Thread.currentThread().interrupt();
+        }
+    }
+
+    public static class SerializerImpl implements Serializer<byte[]> {
+
+        @Override
+        public byte[] serialize(String topic, Headers headers, byte[] data) {
+            headers.add(KEY, VALUE.getBytes());
+            return data;
+        }
+
+        @Override
+        public byte[] serialize(String topic, byte[] data) {
+            fail("method should not be invoked");
+            return null;
+        }
+    }
+
+    public static class DeserializerImpl implements Deserializer<byte[]> {
+
+        @Override
+        public byte[] deserialize(String topic, Headers headers, byte[] data) {
+            Header header = headers.lastHeader(KEY);
+            assertEquals("application/octet-stream", header == null ? null : new String(header.value()));
+            return data;
+        }
+
+        @Override
+        public byte[] deserialize(String topic, byte[] data) {
+            fail("method should not be invoked");
+            return null;
         }
     }
 }
