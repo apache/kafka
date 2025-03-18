@@ -26,6 +26,7 @@ import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartiti
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AddPartitionsToTxnRequest, AddPartitionsToTxnResponse, MetadataResponse}
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
@@ -185,7 +186,7 @@ class AddPartitionsToTxnManager(
     }
   }
 
-  private def getTransactionCoordinator(partition: Int): Option[Node] = {
+  private def getTransactionCoordinator(partition: Int): util.Optional[Node] = {
    metadataCache.getLeaderAndIsr(Topic.TRANSACTION_STATE_TOPIC_NAME, partition)
       .filter(_.leader != MetadataResponse.NO_LEADER_ID)
       .flatMap(metadata => metadataCache.getAliveBrokerNode(metadata.leader, interBrokerListenerName))

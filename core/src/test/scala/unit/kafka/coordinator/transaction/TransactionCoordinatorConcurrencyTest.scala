@@ -18,11 +18,12 @@ package kafka.coordinator.transaction
 
 import java.nio.ByteBuffer
 import java.util.Collections
+import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.transaction.TransactionCoordinatorConcurrencyTest._
-import kafka.server.{KafkaConfig, MetadataCache}
+import kafka.server.KafkaConfig
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.compress.Compression
@@ -35,6 +36,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
 import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.coordinator.transaction.ProducerIdManager
+import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogConfig, LogOffsetMetadata, UnifiedLog}
@@ -79,7 +81,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       anyString,
       anyInt,
       any[ListenerName])
-    ).thenReturn(Some(brokerNode))
+    ).thenReturn(Optional.of(brokerNode))
     when(metadataCache.features()).thenReturn {
       new FinalizedFeatures(
         MetadataVersion.latestTesting(),
