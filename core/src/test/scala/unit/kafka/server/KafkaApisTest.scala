@@ -10013,15 +10013,17 @@ class KafkaApisTest extends Logging {
     val fooTopicName = "foo"
     val barTopicName = "bar"
     val zarTopicName = "zar"
+    val tarTopicName = "tar"
 
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId(groupId).setTopology(
       new StreamsGroupHeartbeatRequestData.Topology()
         .setEpoch(3)
         .setSubtopologies(
-          Collections.singletonList(new StreamsGroupHeartbeatRequestData.Subtopology().setSubtopologyId("subtopology")
+          util.List.of(new StreamsGroupHeartbeatRequestData.Subtopology().setSubtopologyId("subtopology")
             .setSourceTopics(Collections.singletonList(fooTopicName))
             .setRepartitionSinkTopics(Collections.singletonList(barTopicName))
             .setRepartitionSourceTopics(Collections.singletonList(new StreamsGroupHeartbeatRequestData.TopicInfo().setName(zarTopicName)))
+            .setStateChangelogTopics(Collections.singletonList(new StreamsGroupHeartbeatRequestData.TopicInfo().setName(tarTopicName)))
           )
         )
     )
@@ -10033,6 +10035,8 @@ class KafkaApisTest extends Logging {
       groupId -> AuthorizationResult.ALLOWED,
       fooTopicName -> AuthorizationResult.ALLOWED,
       barTopicName -> AuthorizationResult.DENIED,
+      zarTopicName -> AuthorizationResult.ALLOWED,
+      tarTopicName -> AuthorizationResult.ALLOWED
     )
     when(authorizer.authorize(
       any[RequestContext],
@@ -10400,16 +10404,16 @@ class KafkaApisTest extends Logging {
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
-    val subtotplogy0 = new StreamsGroupDescribeResponseData.Subtopology()
-      .setSubtopologyId("subtotplogy0")
+    val subtopology0 = new StreamsGroupDescribeResponseData.Subtopology()
+      .setSubtopologyId("subtopology0")
       .setSourceTopics(Collections.singletonList(fooTopicName))
 
-    val subtotplogy1 = new StreamsGroupDescribeResponseData.Subtopology()
-      .setSubtopologyId("subtotplogy1")
+    val subtopology1 = new StreamsGroupDescribeResponseData.Subtopology()
+      .setSubtopologyId("subtopology1")
       .setRepartitionSinkTopics(Collections.singletonList(barTopicName))
 
-    val subtotplogy2 = new StreamsGroupDescribeResponseData.Subtopology()
-      .setSubtopologyId("subtotplogy2")
+    val subtopology2 = new StreamsGroupDescribeResponseData.Subtopology()
+      .setSubtopologyId("subtopology2")
       .setSourceTopics(Collections.singletonList(fooTopicName))
       .setRepartitionSinkTopics(Collections.singletonList(barTopicName))
 
@@ -10417,15 +10421,15 @@ class KafkaApisTest extends Logging {
       new StreamsGroupDescribeResponseData.DescribedGroup()
         .setGroupId(groupIds.get(0))
         .setTopology(new StreamsGroupDescribeResponseData.Topology()
-          .setSubtopologies(Collections.singletonList(subtotplogy0))),
+          .setSubtopologies(Collections.singletonList(subtopology0))),
       new StreamsGroupDescribeResponseData.DescribedGroup()
         .setGroupId(groupIds.get(1))
         .setTopology(new StreamsGroupDescribeResponseData.Topology()
-          .setSubtopologies(Collections.singletonList(subtotplogy1))),
+          .setSubtopologies(Collections.singletonList(subtopology1))),
       new StreamsGroupDescribeResponseData.DescribedGroup()
         .setGroupId(groupIds.get(2))
         .setTopology(new StreamsGroupDescribeResponseData.Topology()
-          .setSubtopologies(Collections.singletonList(subtotplogy2)))
+          .setSubtopologies(Collections.singletonList(subtopology2)))
     ).asJava)
 
     var authorizedOperationsInt = Int.MinValue;
@@ -10440,15 +10444,15 @@ class KafkaApisTest extends Logging {
       new StreamsGroupDescribeResponseData.DescribedGroup()
         .setGroupId(groupIds.get(0))
         .setTopology(new StreamsGroupDescribeResponseData.Topology()
-          .setSubtopologies(Collections.singletonList(subtotplogy0))),
+          .setSubtopologies(Collections.singletonList(subtopology0))),
       new StreamsGroupDescribeResponseData.DescribedGroup()
         .setGroupId(groupIds.get(1))
         .setTopology(new StreamsGroupDescribeResponseData.Topology()
-          .setSubtopologies(Collections.singletonList(subtotplogy1))),
+          .setSubtopologies(Collections.singletonList(subtopology1))),
       new StreamsGroupDescribeResponseData.DescribedGroup()
         .setGroupId(groupIds.get(2))
         .setTopology(new StreamsGroupDescribeResponseData.Topology()
-          .setSubtopologies(Collections.singletonList(subtotplogy2)))
+          .setSubtopologies(Collections.singletonList(subtopology2)))
     ).map(group => group.setAuthorizedOperations(authorizedOperationsInt))
     val expectedStreamsGroupDescribeResponseData = new StreamsGroupDescribeResponseData()
       .setGroups(describedGroups.asJava)
@@ -10542,7 +10546,7 @@ class KafkaApisTest extends Logging {
   def testStreamsGroupDescribeFilterUnauthorizedTopics(includeAuthorizedOperations: Boolean): Unit = {
     val fooTopicName = "foo"
     val barTopicName = "bar"
-    val errorMessage = "The group has described topic(s) that the client is not authorized to describe."
+    val errorMessage = "The described group uses topics that the client is not authorized to describe."
 
     metadataCache = mock(classOf[KRaftMetadataCache])
 
@@ -10581,16 +10585,16 @@ class KafkaApisTest extends Logging {
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
-    val subtotplogy0 = new StreamsGroupDescribeResponseData.Subtopology()
-      .setSubtopologyId("subtotplogy0")
+    val subtopology0 = new StreamsGroupDescribeResponseData.Subtopology()
+      .setSubtopologyId("subtopology0")
       .setSourceTopics(Collections.singletonList(fooTopicName))
 
-    val subtotplogy1 = new StreamsGroupDescribeResponseData.Subtopology()
-      .setSubtopologyId("subtotplogy1")
+    val subtopology1 = new StreamsGroupDescribeResponseData.Subtopology()
+      .setSubtopologyId("subtopology1")
       .setRepartitionSinkTopics(Collections.singletonList(barTopicName))
 
-    val subtotplogy2 = new StreamsGroupDescribeResponseData.Subtopology()
-      .setSubtopologyId("subtotplogy2")
+    val subtopology2 = new StreamsGroupDescribeResponseData.Subtopology()
+      .setSubtopologyId("subtopology2")
       .setSourceTopics(Collections.singletonList(fooTopicName))
       .setRepartitionSinkTopics(Collections.singletonList(barTopicName))
 
@@ -10598,15 +10602,15 @@ class KafkaApisTest extends Logging {
       new StreamsGroupDescribeResponseData.DescribedGroup()
         .setGroupId(groupIds.get(0))
         .setTopology(new StreamsGroupDescribeResponseData.Topology()
-          .setSubtopologies(Collections.singletonList(subtotplogy0))),
+          .setSubtopologies(Collections.singletonList(subtopology0))),
       new StreamsGroupDescribeResponseData.DescribedGroup()
         .setGroupId(groupIds.get(1))
         .setTopology(new StreamsGroupDescribeResponseData.Topology()
-          .setSubtopologies(Collections.singletonList(subtotplogy1))),
+          .setSubtopologies(Collections.singletonList(subtopology1))),
       new StreamsGroupDescribeResponseData.DescribedGroup()
         .setGroupId(groupIds.get(2))
         .setTopology(new StreamsGroupDescribeResponseData.Topology()
-          .setSubtopologies(Collections.singletonList(subtotplogy2)))
+          .setSubtopologies(Collections.singletonList(subtopology2)))
     ).asJava)
 
     val response = verifyNoThrottling[StreamsGroupDescribeResponse](requestChannelRequest)

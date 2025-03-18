@@ -2798,33 +2798,35 @@ class KafkaApis(val requestChannel: RequestChannel,
           if (authorizer.isDefined) {
             val topicsToCheck = response.groups.stream()
               .flatMap(group => group.topology.subtopologies.stream)
-              .flatMap(subtopology => util.stream.Stream.of(
-                subtopology.sourceTopics,
-                subtopology.repartitionSinkTopics,
-                subtopology.repartitionSourceTopics.iterator.asScala.map(_.name).toList.asJava,
-                subtopology.stateChangelogTopics.iterator.asScala.map(_.name).toList.asJava))
-              .flatMap(_.stream)
+              .flatMap(subtopology => java.util.stream.Stream.concat(
+                java.util.stream.Stream.concat(
+                  java.util.stream.Stream.concat(
+                    subtopology.sourceTopics.stream,
+                    subtopology.repartitionSinkTopics.stream),
+                  subtopology.repartitionSourceTopics.stream.map(_.name)),
+                subtopology.stateChangelogTopics.stream.map(_.name)))
               .collect(Collectors.toSet[String])
               .asScala
 
             val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
               topicsToCheck)(identity)
 
-            val updatedGroups = response.groups.stream.map { group =>
-              val hasUnauthorizedTopic = group.topology.subtopologies.stream()
-                .flatMap(subtopology => util.stream.Stream.of(
-                  subtopology.sourceTopics,
-                  subtopology.repartitionSinkTopics,
-                  subtopology.repartitionSourceTopics.iterator.asScala.map(_.name).toList.asJava,
-                  subtopology.stateChangelogTopics.iterator.asScala.map(_.name).toList.asJava))
-                .flatMap(_.stream)
-                .anyMatch(topic => !authorizedTopics.contains(topic))
+              val updatedGroups = response.groups.stream.map { group =>
+                val hasUnauthorizedTopic = group.topology.subtopologies.stream()
+                  .flatMap(subtopology => java.util.stream.Stream.concat(
+                    java.util.stream.Stream.concat(
+                      java.util.stream.Stream.concat(
+                        subtopology.sourceTopics.stream,
+                        subtopology.repartitionSinkTopics.stream),
+                      subtopology.repartitionSourceTopics.stream.map(_.name)),
+                    subtopology.stateChangelogTopics.stream.map(_.name)))
+                  .anyMatch(topic => !authorizedTopics.contains(topic))
 
               if (hasUnauthorizedTopic) {
                 new StreamsGroupDescribeResponseData.DescribedGroup()
                   .setGroupId(group.groupId)
                   .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
-                  .setErrorMessage("The group has described topic(s) that the client is not authorized to describe.")
+                  .setErrorMessage("The described group uses topics that the client is not authorized to describe.")
                   .setMembers(List.empty.asJava)
                   .setTopology(null)
               } else {

@@ -43,7 +43,6 @@ import java.util.Map;
  * - {@link Errors#STREAMS_INVALID_TOPOLOGY}
  * - {@link Errors#STREAMS_INVALID_TOPOLOGY_EPOCH}
  * - {@link Errors#STREAMS_TOPOLOGY_FENCED}
- * - {@link Errors#TOPIC_AUTHORIZATION_FAILED}
  */
 public class StreamsGroupHeartbeatResponse extends AbstractResponse {
     private final StreamsGroupHeartbeatResponseData data;
