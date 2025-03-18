@@ -332,10 +332,6 @@ abstract class AbstractFetcherThread(name: String,
       inLock(partitionMapLock) {
         responseData.foreachEntry { (topicPartition, partitionData) =>
           Option(partitionStates.stateValue(topicPartition)).foreach { currentFetchState =>
-            def isCurrentLeaderEpochMatch(topicPartition: TopicPartition) = {
-              fetchRequest.fetchData().get(topicPartition).currentLeaderEpoch
-                .map[Boolean](_ == currentFetchState.currentLeaderEpoch).orElse(true)
-            }
             // It's possible that a partition is removed and re-added or truncated when there is a pending fetch request.
             // In this case, we only want to process the fetch response if:
             // - the partition state is ready for fetch
@@ -344,7 +340,7 @@ abstract class AbstractFetcherThread(name: String,
             val fetchPartitionData = sessionPartitions.get(topicPartition)
             if (fetchPartitionData != null &&
                 fetchPartitionData.fetchOffset == currentFetchState.fetchOffset &&
-                isCurrentLeaderEpochMatch(topicPartition) &&
+                fetchPartitionData.currentLeaderEpoch.map[Boolean](_ == currentFetchState.currentLeaderEpoch).orElse(true) &&
                 currentFetchState.isReadyForFetch) {
               Errors.forCode(partitionData.errorCode) match {
                 case Errors.NONE =>
