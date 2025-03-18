@@ -18,9 +18,9 @@
 package kafka.server.metadata
 
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
-
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.publisher.MetadataPublisher
+import org.apache.kafka.metadata.KRaftMetadataCache
 
 class KRaftMetadataCachePublisher(
   val metadataCache: KRaftMetadataCache

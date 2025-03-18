@@ -16,7 +16,6 @@
   */
 package kafka.server
 
-import kafka.server.metadata.KRaftMetadataCache
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponsePartition
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.{BrokerEndpoint, BrokerEndpointCollection}
 import org.apache.kafka.common.metadata._
@@ -26,7 +25,7 @@ import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.{DirectoryId, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
-import org.apache.kafka.metadata.{LeaderRecoveryState, MetadataCache}
+import org.apache.kafka.metadata.{KRaftMetadataCache, LeaderRecoveryState, MetadataCache}
 import org.apache.kafka.server.common.KRaftVersion
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -278,7 +277,7 @@ class MetadataCacheTest {
     assertEquals(0, partitionMetadata.partitionIndex)
     assertEquals(expectedError.code, partitionMetadata.errorCode)
     assertFalse(partitionMetadata.isrNodes.isEmpty)
-    assertEquals(List(0), partitionMetadata.replicaNodes.asScala)
+    assertEquals(util.List.of(0), partitionMetadata.replicaNodes)
   }
 
   @ParameterizedTest
@@ -815,6 +814,7 @@ class MetadataCacheTest {
     checkTopicMetadata(topic0, Set(1, 2), resultTopic.partitions().asScala)
 
     // With start index and quota reached
+    System.out.println("here")
     response = metadataCache.describeTopicResponse(util.List.of(topic0, topic1).iterator, listenerName, t => if (t.equals(topic0)) 2 else 0, 1, false)
     result = response.topics().asScala.toList
     assertEquals(1, result.size)
@@ -909,7 +909,7 @@ class MetadataCacheTest {
           setLeader(partition.replicas.get(0)).setIsr(partition.replicas)))
       val cache = new KRaftMetadataCache(1, () => KRaftVersion.KRAFT_VERSION_0)
       cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      val topicMetadata = cache.getTopicMetadata(util.Set.of("foo"), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT)).asScala.head
+      val topicMetadata = cache.getTopicMetadata(util.Set.of("foo"), ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT), false, false).asScala.head
       topicMetadata.partitions().asScala.map(p => (p.partitionIndex(), p.offlineReplicas())).toMap
     }
 

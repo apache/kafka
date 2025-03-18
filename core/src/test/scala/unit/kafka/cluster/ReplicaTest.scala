@@ -16,9 +16,9 @@
  */
 package kafka.cluster
 
-import kafka.server.metadata.KRaftMetadataCache
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
+import org.apache.kafka.metadata.KRaftMetadataCache
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{LogOffsetMetadata, UnifiedLog}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
