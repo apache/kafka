@@ -158,7 +158,7 @@ public class ClientTelemetryTest {
 
     /**
      * We should add a ClientTelemetry into plugins to test the clientInstanceId method Otherwise the
-     * {@link  org.apache.kafka.common.protocol.ApiKeys#GET_TELEMETRY_SUBSCRIPTIONS } command will not be supported
+     * {@link org.apache.kafka.common.protocol.ApiKeys#GET_TELEMETRY_SUBSCRIPTIONS} command will not be supported
      * by the server
      **/
     public static class GetIdClientTelemetry implements ClientTelemetry, MetricsReporter {
