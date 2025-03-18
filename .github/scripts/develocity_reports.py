@@ -935,11 +935,13 @@ def get_develocity_class_link(class_name: str, start_time, end_time=None) -> str
     }
     
     if isinstance(start_time, datetime):
-        params["search.absoluteStartTime"] = start_time.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-        
+        params["search.startTimeMin"] = int(start_time.timestamp() * 1000)
+
         if end_time and isinstance(end_time, datetime):
-            params["search.absoluteEndTime"] = end_time.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-        
+            params["search.startTimeMax"] = int(end_time.timestamp() * 1000)
+        else:
+            params["search.startTimeMax"] = int(datetime.now(pytz.UTC).timestamp() * 1000)
+
     return f"{base_url}?{'&'.join(f'{k}={requests.utils.quote(str(v))}' for k, v in params.items())}"
 
 def get_develocity_method_link(class_name: str, method_name: str, start_time, end_time=None) -> str:
@@ -967,13 +969,14 @@ def get_develocity_method_link(class_name: str, method_name: str, start_time, en
         "search.tasks": "test"
     }
     
-    # Use absolute time range instead of relative
     if isinstance(start_time, datetime):
-        params["search.absoluteStartTime"] = start_time.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-        
+        params["search.startTimeMin"] = int(start_time.timestamp() * 1000)
+
         if end_time and isinstance(end_time, datetime):
-            params["search.absoluteEndTime"] = end_time.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-        
+            params["search.startTimeMax"] = int(end_time.timestamp() * 1000)
+        else:
+            params["search.startTimeMax"] = int(datetime.now(pytz.UTC).timestamp() * 1000)
+
     return f"{base_url}?{'&'.join(f'{k}={requests.utils.quote(str(v))}' for k, v in params.items())}"
 
 def print_most_problematic_tests(problematic_tests: Dict[str, Dict], start_time, end_time=None, threshold_days=None):
