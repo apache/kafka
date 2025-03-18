@@ -297,13 +297,17 @@ public class FileRecords extends AbstractRecords implements Closeable {
      * @param startingPosition The starting position in the file to begin searching from.
      * @return the batch's base offset, its physical position, and its size (including log overhead)
      */
-    public LogOffsetPosition searchForOffsetWithSize(long targetOffset, int startingPosition) {
+    public LogOffsetPosition searchForOffsetFromPosition(long targetOffset, int startingPosition) {
         FileChannelRecordBatch prevBatch = null;
 
         for (FileChannelRecordBatch batch : batchesFrom(startingPosition)) {
+            // if baseOffset exactly equals targetOffset, return immediately
+            if (batch.baseOffset() == targetOffset) {
+                return LogOffsetPosition.fromBatch(batch);
+            }
             // This indicates that either the current batch or the previous batch 
             // contains the target we are looking for.
-            if (batch.baseOffset() >= targetOffset) {
+            if (batch.baseOffset() > targetOffset) {
                 // Check if the previous batch contains the target
                 if (prevBatch != null && prevBatch.lastOffset() >= targetOffset)
                     return LogOffsetPosition.fromBatch(prevBatch);
