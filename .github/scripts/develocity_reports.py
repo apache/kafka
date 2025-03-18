@@ -983,7 +983,7 @@ def print_most_problematic_tests(problematic_tests: Dict[str, Dict], start_time,
         print("No high-priority problematic tests found.")
         return
         
-    print(f"Found {len(problematic_tests)} tests that have been quarantined for ${threshold_days} days and are still failing frequently.")
+    print(f"Found {len(problematic_tests)} tests that have been quarantined for {threshold_days} days and are still failing frequently.")
     
     # Print table with class and method information
     print("\n<table>")
@@ -1029,7 +1029,6 @@ def print_most_problematic_tests(problematic_tests: Dict[str, Dict], start_time,
                                 if x.outcome_distribution.total > 0 else 0,
                                 reverse=True):
             if test_method.timeline:
-                method_name = test_method.name.split('.')[-1]
                 print(f"\n#### {method_name}")
                 print("Recent Executions:")
                 print("```")
@@ -1140,8 +1139,7 @@ def print_persistent_failing_tests(persistent_failures: Dict[str, Dict], start_t
         for test_name, test_details in sorted(class_details['test_cases'].items(),
                                             key=lambda x: x[1]['failure_rate'],
                                             reverse=True):
-            print(f"\n#### {test_name}")
-            print("Recent Executions:")
+            print("\nRecent Executions:")
             print("```")
             print("Date/Time (UTC)      Outcome    Build ID")
             print("-" * 44)
