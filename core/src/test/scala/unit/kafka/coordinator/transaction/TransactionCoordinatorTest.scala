@@ -1061,8 +1061,7 @@ class TransactionCoordinatorTest {
     )
 
     assertEquals(InitProducerIdResult(-1, -1, Errors.CONCURRENT_TRANSACTIONS), result)
-    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
-      .thenReturn(true)
+    verify(transactionManager).validateTransactionTimeoutMs(anyBoolean(), anyInt())
     verify(transactionManager, times(3)).getTransactionState(ArgumentMatchers.eq(transactionalId))
     verify(transactionManager).appendTransactionToLog(
       ArgumentMatchers.eq(transactionalId),
@@ -1100,8 +1099,7 @@ class TransactionCoordinatorTest {
 
     assertEquals(InitProducerIdResult(-1, -1, Errors.PRODUCER_FENCED), result)
 
-    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
-      .thenReturn(true)
+    verify(transactionManager).validateTransactionTimeoutMs(anyBoolean(), anyInt())
     verify(transactionManager, times(2)).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
@@ -1186,7 +1184,7 @@ class TransactionCoordinatorTest {
     assertEquals((producerEpoch + 1).toShort, txnMetadata.producerEpoch)
     assertFalse(txnMetadata.hasFailedEpochFence)
 
-    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt())).thenReturn(true)
+    verify(transactionManager, times(3)).validateTransactionTimeoutMs(anyBoolean(), anyInt())
     verify(transactionManager, times(9)).getTransactionState(ArgumentMatchers.eq(transactionalId))
     verify(transactionManager, times(3)).appendTransactionToLog(
       ArgumentMatchers.eq(transactionalId),
@@ -1247,8 +1245,7 @@ class TransactionCoordinatorTest {
     assertEquals(Short.MaxValue, txnMetadata.producerEpoch)
 
     assertEquals(InitProducerIdResult(-1, -1, Errors.CONCURRENT_TRANSACTIONS), result)
-    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
-      .thenReturn(true)
+    verify(transactionManager).validateTransactionTimeoutMs(anyBoolean(), anyInt())
     verify(transactionManager, times(3)).getTransactionState(ArgumentMatchers.eq(transactionalId))
     verify(transactionManager).appendTransactionToLog(
       ArgumentMatchers.eq(transactionalId),
@@ -1681,8 +1678,7 @@ class TransactionCoordinatorTest {
     )
     assertEquals(InitProducerIdResult(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Errors.CONCURRENT_TRANSACTIONS), result)
 
-    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
-      .thenReturn(true)
+    verify(transactionManager).validateTransactionTimeoutMs(anyBoolean(), anyInt())
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
