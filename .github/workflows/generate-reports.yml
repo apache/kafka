@@ -15,10 +15,14 @@
 
 name: Flaky Test Report
 on:
-  workflow_dispatch:      # Let us run manually
-
-  schedule:
-    - cron: '0 6 * * *'   # Run daily at 6am UTC
+  pull_request_target:
+    types: [ opened, reopened, synchronize ]
+    branches:
+      - trunk
+#  workflow_dispatch:      # Let us run manually
+#
+#  schedule:
+#    - cron: '0 6 * * *'   # Run daily at 6am UTC
 
 jobs:
   flaky-test-report:
