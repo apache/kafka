@@ -1552,7 +1552,7 @@ class ReplicaManager(val config: KafkaConfig,
         delayedRemoteFetchPurgatory.checkAndComplete(key)
       })
       val remoteFetchTask = remoteLogManager.get.asyncRead(remoteLogReader)
-      remoteFetchFuture = new RemoteFetchFuture(remoteLogReader, remoteFetchTask)
+      remoteFetchFuture = new RemoteFetchFuture(remoteFetchTask)
     } catch {
       case e: RejectedExecutionException =>
         // Return the error if any in scheduling the remote fetch task

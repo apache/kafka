@@ -88,7 +88,7 @@ class DelayedRemoteFetch(remoteFetchFuture: RemoteFetchFuture,
 
   override def onExpiration(): Unit = {
     // cancel the remote storage read task, if it has not been executed yet
-    val cancelled = remoteFetchFuture.cancel()
+    val cancelled = remoteFetchFuture.cancel(false)
     if (cancelled)
       debug(s"Remote fetch task for RemoteStorageFetchInfo: $remoteFetchInfo could not be cancelled and its isDone value is ${remoteFetchFuture.isDone}")
 
@@ -128,15 +128,12 @@ class DelayedRemoteFetch(remoteFetchFuture: RemoteFetchFuture,
   }
 }
 
-class RemoteFetchFuture(remoteLogReader: RemoteLogReader, taskFuture: Future[Void]) extends CompletableFuture[RemoteLogReadResult] {
+class RemoteFetchFuture(taskFuture: Future[Void]) extends CompletableFuture[RemoteLogReadResult] {
   private val task = taskFuture
-  private val reader = remoteLogReader
 
-  def cancel(): Boolean = {
-    super.cancel(false)
-    val taskCancelled = task.cancel(false)
-    if (taskCancelled) reader.cancel()
-    taskCancelled
+  override def cancel(mayInterrupt: Boolean): Boolean = {
+    super.cancel(mayInterrupt)
+    task.cancel(mayInterrupt)
   }
 }
 
