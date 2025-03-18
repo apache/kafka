@@ -19,7 +19,7 @@ package kafka.server
 import com.yammer.metrics.core.Meter
 import kafka.cluster.{Partition, PartitionListener}
 import kafka.controller.StateChangeLogger
-import kafka.log.remote.{RemoteLogManager, RemoteLogReader}
+import kafka.log.remote.RemoteLogManager
 import kafka.log.LogManager
 import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
@@ -69,7 +69,7 @@ import java.nio.file.{Files, Paths}
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.Lock
-import java.util.concurrent.{CompletableFuture, Future, RejectedExecutionException, TimeUnit}
+import java.util.concurrent.{CompletableFuture, RejectedExecutionException, TimeUnit}
 import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.jdk.CollectionConverters._
@@ -1544,15 +1544,14 @@ class ReplicaManager(val config: KafkaConfig,
                                  logReadResults: Seq[(TopicIdPartition, LogReadResult)],
                                  fetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)]): Option[LogReadResult] = {
     val key = new TopicPartitionOperationKey(remoteFetchInfo.topicPartition.topic(), remoteFetchInfo.topicPartition.partition())
-    val remoteFetchResult = new CompletableFuture[RemoteLogReadResult]
     var remoteFetchFuture: RemoteFetchFuture = null
     try {
-      val remoteLogReader = remoteLogManager.get.remoteLogReaderTask(remoteFetchInfo, (result: RemoteLogReadResult) => {
+      val remoteFetchResult = new CompletableFuture[RemoteLogReadResult]
+      val remoteFetchTask = remoteLogManager.get.asyncRead(remoteFetchInfo, (result: RemoteLogReadResult) => {
         remoteFetchResult.complete(result)
         delayedRemoteFetchPurgatory.checkAndComplete(key)
       })
-      val remoteFetchTask = remoteLogManager.get.asyncRead(remoteLogReader)
-      remoteFetchFuture = new RemoteFetchFuture(remoteFetchTask)
+      remoteFetchFuture = new RemoteFetchFuture(remoteFetchTask, remoteFetchResult)
     } catch {
       case e: RejectedExecutionException =>
         // Return the error if any in scheduling the remote fetch task
