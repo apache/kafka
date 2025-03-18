@@ -221,7 +221,7 @@ public class CompletedFetchTest {
         FetchMetricsAggregator metricAggregator = new FetchMetricsAggregator(metrics, Collections.singleton(TP));
 
         return new CompletedFetch(
-                logContext,
+                logContext.logger(CompletedFetch.class),
                 subscriptions,
                 BufferSupplier.create(),
                 TP,

@@ -35,8 +35,8 @@ import java.util.Objects;
  */
 public final class ClusterImage {
     public static final ClusterImage EMPTY = new ClusterImage(
-            Collections.emptyMap(),
-            Collections.emptyMap());
+            Map.of(),
+            Map.of());
 
     private final Map<Integer, BrokerRegistration> brokers;
 

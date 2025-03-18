@@ -42,6 +42,7 @@ import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRec
 import org.apache.kafka.coordinator.transaction.ProducerIdManager
 import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPublisher}
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo}
+import org.apache.kafka.metadata.publisher.AclPublisher
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, DirectoryEventHandler, NodeToControllerChannelManager, TopicIdPartition}
@@ -206,7 +207,7 @@ class BrokerServer(
 
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
-      metadataCache = MetadataCache.kRaftMetadataCache(config.nodeId, () => raftManager.client.kraftVersion())
+      metadataCache = new KRaftMetadataCache(config.nodeId, () => raftManager.client.kraftVersion())
 
       // Create log manager, but don't start it because we need to delay any potential unclean shutdown log recovery
       // until we catch up on the metadata log and have up-to-date topic and broker configs.
@@ -528,7 +529,7 @@ class BrokerServer(
           config.nodeId,
           sharedServer.metadataPublishingFaultHandler,
           "broker",
-          authorizer
+          authorizer.toJava
         ),
         sharedServer.initialBrokerMetadataLoadFaultHandler,
         sharedServer.metadataPublishingFaultHandler

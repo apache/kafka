@@ -25,7 +25,6 @@ import com.yammer.metrics.core.Gauge
 
 import javax.management.ObjectName
 import kafka.cluster.Partition
-import kafka.log.UnifiedLog
 import kafka.server.{HostedPartition, KafkaConfig, ReplicaManager}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
@@ -48,7 +47,7 @@ import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LogAppendInfo, LogOffsetMetadata, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LogAppendInfo, LogOffsetMetadata, UnifiedLog, VerificationGuard}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
@@ -812,9 +811,9 @@ class GroupMetadataManagerTest {
 
     verify(logMock).logStartOffset
     verify(logMock).read(ArgumentMatchers.eq(startOffset),
-      maxLength = anyInt(),
-      isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
-      minOneMessage = ArgumentMatchers.eq(true))
+      anyInt(),
+      ArgumentMatchers.eq(FetchIsolation.LOG_END),
+      ArgumentMatchers.eq(true))
     verify(replicaManager).getLog(groupTopicPartition)
     verify(replicaManager, times(2)).getLogEndOffset(groupTopicPartition)
 
@@ -893,14 +892,14 @@ class GroupMetadataManagerTest {
       .thenReturn(segment1End)
       .thenReturn(segment2End)
     when(logMock.read(ArgumentMatchers.eq(segment1End),
-      maxLength = anyInt(),
-      isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
-      minOneMessage = ArgumentMatchers.eq(true)))
+      anyInt(),
+      ArgumentMatchers.eq(FetchIsolation.LOG_END),
+      ArgumentMatchers.eq(true)))
       .thenReturn(new FetchDataInfo(new LogOffsetMetadata(segment1End), fileRecordsMock))
     when(logMock.read(ArgumentMatchers.eq(segment2End),
-      maxLength = anyInt(),
-      isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
-      minOneMessage = ArgumentMatchers.eq(true)))
+      anyInt(),
+      ArgumentMatchers.eq(FetchIsolation.LOG_END),
+     ArgumentMatchers.eq(true)))
       .thenReturn(new FetchDataInfo(new LogOffsetMetadata(segment2End), fileRecordsMock))
     when(fileRecordsMock.sizeInBytes())
       .thenReturn(segment1Records.sizeInBytes)
@@ -2823,9 +2822,9 @@ class GroupMetadataManagerTest {
     val logMock: UnifiedLog = mock(classOf[UnifiedLog])
     when(logMock.logStartOffset).thenReturn(startOffset)
     when(logMock.read(ArgumentMatchers.eq(startOffset),
-      maxLength = anyInt(),
-      isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
-      minOneMessage = ArgumentMatchers.eq(true)))
+      anyInt(),
+      ArgumentMatchers.eq(FetchIsolation.LOG_END),
+      ArgumentMatchers.eq(true)))
       .thenReturn(new FetchDataInfo(new LogOffsetMetadata(startOffset), mockRecords))
     when(replicaManager.getLog(groupMetadataTopicPartition)).thenReturn(Some(logMock))
     when(replicaManager.getLogEndOffset(groupMetadataTopicPartition)).thenReturn(Some[Long](18))
@@ -2928,9 +2927,9 @@ class GroupMetadataManagerTest {
 
     when(logMock.logStartOffset).thenReturn(startOffset)
     when(logMock.read(ArgumentMatchers.eq(startOffset),
-      maxLength = anyInt(),
-      isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
-      minOneMessage = ArgumentMatchers.eq(true)))
+      anyInt(),
+      ArgumentMatchers.eq(FetchIsolation.LOG_END),
+      ArgumentMatchers.eq(true)))
       .thenReturn(new FetchDataInfo(new LogOffsetMetadata(startOffset), fileRecordsMock))
 
     when(fileRecordsMock.sizeInBytes()).thenReturn(records.sizeInBytes)

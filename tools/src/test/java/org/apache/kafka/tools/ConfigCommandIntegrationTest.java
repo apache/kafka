@@ -14,7 +14,9 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.admin;
+package org.apache.kafka.tools;
+
+import kafka.admin.ConfigCommand;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
@@ -35,9 +37,6 @@ import org.apache.kafka.test.TestUtils;
 
 import org.mockito.Mockito;
 
-import java.io.ByteArrayOutputStream;
-import java.io.PrintStream;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -62,12 +61,15 @@ import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_SESSION_TI
 import static org.apache.kafka.server.config.ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG;
 import static org.apache.kafka.server.config.ServerConfigs.MESSAGE_MAX_BYTES_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
+import static org.apache.kafka.tools.ToolsTestUtils.captureStandardErr;
+import static org.apache.kafka.tools.ToolsTestUtils.captureStandardOut;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 
 public class ConfigCommandIntegrationTest {
     private final String defaultBrokerId = "0";
@@ -107,7 +109,7 @@ public class ConfigCommandIntegrationTest {
             "--entity-type", "users",
             "--entity-name", "admin",
             "--alter", "--add-config", "consumer_byte_rate=20000"));
-        String message = captureStandardStream(false, run(command));
+        String message = captureStandardOut(run(command));
         assertEquals("Completed updating config for user admin.", message);
     }
 
@@ -117,14 +119,14 @@ public class ConfigCommandIntegrationTest {
             "--entity-type", "groups",
             "--entity-name", "group",
             "--alter", "--add-config", "consumer.session.timeout.ms=50000"));
-        String message = captureStandardStream(false, run(command));
+        String message = captureStandardOut(run(command));
         assertEquals("Completed updating config for group group.", message);
 
         // Test for the --group alias
         command = Stream.concat(quorumArgs(), Stream.of(
             "--group", "group",
             "--alter", "--add-config", "consumer.session.timeout.ms=50000"));
-        message = captureStandardStream(false, run(command));
+        message = captureStandardOut(run(command));
         assertEquals("Completed updating config for group group.", message);
     }
 
@@ -134,14 +136,14 @@ public class ConfigCommandIntegrationTest {
                 "--entity-type", "client-metrics",
                 "--entity-name", "cm",
                 "--alter", "--add-config", "metrics=org.apache"));
-        String message = captureStandardStream(false, run(command));
+        String message = captureStandardOut(run(command));
         assertEquals("Completed updating config for client-metric cm.", message);
 
         // Test for the --client-metrics alias
         command = Stream.concat(quorumArgs(), Stream.of(
                 "--client-metrics", "cm",
                 "--alter", "--add-config", "metrics=org.apache"));
-        message = captureStandardStream(false, run(command));
+        message = captureStandardOut(run(command));
         assertEquals("Completed updating config for client-metric cm.", message);
     }
 
@@ -149,19 +151,19 @@ public class ConfigCommandIntegrationTest {
     public void testAddConfigKeyValuesUsingCommand() throws Exception {
         try (Admin client = cluster.admin()) {
             NewTopic newTopic = new NewTopic("topic", 1, (short) 1);
-            client.createTopics(Collections.singleton(newTopic)).all().get();
+            client.createTopics(Set.of(newTopic)).all().get();
             cluster.waitForTopic("topic", 1);
             Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
                     "--entity-type", "topics",
                     "--entity-name", "topic",
                     "--alter", "--add-config", "cleanup.policy=[delete,compact]"));
-            String message = captureStandardStream(false, run(command));
+            String message = captureStandardOut(run(command));
             assertEquals("Completed updating config for topic topic.", message);
             command = Stream.concat(quorumArgs(), Stream.of(
                     "--entity-type", "topics",
                     "--entity-name", "topic",
                     "--describe"));
-            message = captureStandardStream(false, run(command));
+            message = captureStandardOut(run(command));
             assertTrue(message.contains("cleanup.policy=delete,compact"), "Config entry was not added correctly");
         }
     }
@@ -249,12 +251,14 @@ public class ConfigCommandIntegrationTest {
         try (Admin client = cluster.admin()) {
             // Add config
             Map<String, String> configs = new HashMap<>();
-            configs.put("metrics", "");
+            configs.put("metrics", "org.apache.kafka.producer.");
             configs.put("interval.ms", "6000");
             alterAndVerifyClientMetricsConfig(client, defaultClientMetricsName, configs, alterOpts);
 
             // Delete config
-            deleteAndVerifyClientMetricsConfigValue(client, defaultClientMetricsName, configs.keySet(), alterOpts);
+            configs.put("metrics", "");
+            configs.put("interval.ms", "300000");
+            deleteAndVerifyClientMetricsConfigValue(client, defaultClientMetricsName, configs, alterOpts);
 
             // Unknown config configured should fail
             assertThrows(ExecutionException.class, () -> alterConfigWithAdmin(client, singletonMap("unknown.config", "20000"), alterOpts));
@@ -335,14 +339,14 @@ public class ConfigCommandIntegrationTest {
     private void updateAndCheckInvalidBrokerConfig(Optional<String> brokerIdOrDefault) {
         List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
         try (Admin client = cluster.admin()) {
-            alterConfigWithAdmin(client, brokerIdOrDefault, Collections.singletonMap("invalid", "2"), alterOpts);
+            alterConfigWithAdmin(client, brokerIdOrDefault, Map.of("invalid", "2"), alterOpts);
 
             Stream<String> describeCommand = Stream.concat(
                     Stream.concat(
                             Stream.of("--bootstrap-server", cluster.bootstrapServers()),
                             Stream.of(entityOp(brokerIdOrDefault).toArray(new String[0]))),
                     Stream.of("--entity-type", "brokers", "--describe"));
-            String describeResult = captureStandardStream(false, run(describeCommand));
+            String describeResult = captureStandardOut(run(describeCommand));
 
             // We will treat unknown config as sensitive
             assertTrue(describeResult.contains("sensitive=true"), describeResult);
@@ -355,7 +359,7 @@ public class ConfigCommandIntegrationTest {
     public void testUpdateInvalidTopicConfigs() throws ExecutionException, InterruptedException {
         List<String> alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--entity-type", "topics", "--alter");
         try (Admin client = cluster.admin()) {
-            client.createTopics(Collections.singletonList(new NewTopic("test-config-topic", 1, (short) 1))).all().get();
+            client.createTopics(List.of(new NewTopic("test-config-topic", 1, (short) 1))).all().get();
             assertInstanceOf(
                     InvalidConfigurationException.class,
                     assertThrows(
@@ -410,7 +414,7 @@ public class ConfigCommandIntegrationTest {
             AlterConfigsResult mockResult = AdminClientTestUtils.alterConfigsResult(
                     new ConfigResource(ConfigResource.Type.BROKER, ""), new UnsupportedVersionException("simulated error"));
             Mockito.doReturn(mockResult).when(spyAdmin)
-                    .incrementalAlterConfigs(any(java.util.Map.class), any(AlterConfigsOptions.class));
+                    .incrementalAlterConfigs(anyMap(), any(AlterConfigsOptions.class));
             assertEquals(
                     "The INCREMENTAL_ALTER_CONFIGS API is not supported by the cluster. The API is supported starting from version 2.3.0. You may want to use an older version of this tool to interact with your cluster, or upgrade your brokers to version 2.3.0 or newer to avoid this error.",
                     assertThrows(UnsupportedVersionException.class, () -> {
@@ -423,7 +427,7 @@ public class ConfigCommandIntegrationTest {
                                         "--entity-default"))));
                     }).getMessage()
             );
-            Mockito.verify(spyAdmin).incrementalAlterConfigs(any(java.util.Map.class), any(AlterConfigsOptions.class));
+            Mockito.verify(spyAdmin).incrementalAlterConfigs(anyMap(), any(AlterConfigsOptions.class));
         }
     }
 
@@ -434,7 +438,7 @@ public class ConfigCommandIntegrationTest {
             throw new RuntimeException();
         });
 
-        String errOut = captureStandardStream(true, run(args));
+        String errOut = captureStandardErr(run(args));
 
         checkErrOut.accept(errOut);
         assertNotNull(exitStatus.get());
@@ -573,17 +577,16 @@ public class ConfigCommandIntegrationTest {
 
     private void deleteAndVerifyClientMetricsConfigValue(Admin client,
                                                          String clientMetricsName,
-                                                         Set<String> defaultConfigs,
+                                                         Map<String, String> defaultConfigs,
                                                          List<String> alterOpts) throws Exception {
         List<String> bootstrapOpts = quorumArgs().collect(Collectors.toList());
         ConfigCommand.ConfigCommandOptions deleteOpts =
             new ConfigCommand.ConfigCommandOptions(toArray(bootstrapOpts,
                     alterOpts,
-                    asList("--delete-config", String.join(",", defaultConfigs))));
+                    asList("--delete-config", String.join(",", defaultConfigs.keySet()))));
         deleteOpts.checkArgs();
         ConfigCommand.alterConfig(client, deleteOpts);
-        // There are no default configs returned for client metrics
-        verifyClientMetricsConfig(client, clientMetricsName, Collections.emptyMap());
+        verifyClientMetricsConfig(client, clientMetricsName, defaultConfigs);
     }
 
     private void verifyPerBrokerConfigValue(Admin client,
@@ -624,27 +627,5 @@ public class ConfigCommandIntegrationTest {
                 .stream()
                 .map(e -> e.getKey() + "=" + e.getValue())
                 .collect(Collectors.joining(","));
-    }
-
-    // Copied from ToolsTestUtils.java, can be removed after we move ConfigCommand to tools module
-    static String captureStandardStream(boolean isErr, Runnable runnable) {
-        ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
-        PrintStream currentStream = isErr ? System.err : System.out;
-        PrintStream tempStream = new PrintStream(outputStream);
-        if (isErr)
-            System.setErr(tempStream);
-        else
-            System.setOut(tempStream);
-        try {
-            runnable.run();
-            return outputStream.toString().trim();
-        } finally {
-            if (isErr)
-                System.setErr(currentStream);
-            else
-                System.setOut(currentStream);
-
-            tempStream.close();
-        }
     }
 }

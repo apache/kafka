@@ -79,7 +79,8 @@ public class ShareConsumerPerformance {
                 shareConsumers.forEach(shareConsumer -> shareConsumersMetrics.add(shareConsumer.metrics()));
             }
             shareConsumers.forEach(shareConsumer -> {
-                Map<TopicIdPartition, Optional<KafkaException>> val = shareConsumer.commitSync();
+                @SuppressWarnings("UnusedLocalVariable")
+                Map<TopicIdPartition, Optional<KafkaException>> ignored = shareConsumer.commitSync();
                 shareConsumer.close(Duration.ofMillis(500));
             });
 

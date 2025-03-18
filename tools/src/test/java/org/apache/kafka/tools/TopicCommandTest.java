@@ -672,7 +672,7 @@ public class TopicCommandTest {
 
             TestUtils.waitForCondition(
                     () -> clusterInstance.brokers().values().stream().allMatch(
-                            b -> b.metadataCache().getTopicPartitions(testTopicName).size() == 3),
+                            b -> b.metadataCache().numPartitions(testTopicName).orElse(0) == 3),
                     TestUtils.DEFAULT_MAX_WAIT_MS, "Timeout waiting for new assignment propagating to broker");
             TopicDescription topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).topicNameValues().get(testTopicName).get();
             assertEquals(3, topicDescription.partitions().size(), "Expected partition count to be 3. Got: " + topicDescription.partitions().size());
@@ -700,7 +700,7 @@ public class TopicCommandTest {
 
             TestUtils.waitForCondition(
                     () -> clusterInstance.brokers().values().stream().allMatch(
-                            b -> b.metadataCache().getTopicPartitions(testTopicName).size() == 3),
+                            b -> b.metadataCache().numPartitions(testTopicName).orElse(0) == 3),
                     TestUtils.DEFAULT_MAX_WAIT_MS, "Timeout waiting for new assignment propagating to broker");
 
             TopicDescription topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName)).topicNameValues().get(testTopicName).get();
@@ -827,7 +827,7 @@ public class TopicCommandTest {
                     CLUSTER_WAIT_MS, testTopicName + String.format("reassignmet not finished after %s ms", CLUSTER_WAIT_MS)
             );
             TestUtils.waitForCondition(
-                    () -> clusterInstance.brokers().values().stream().allMatch(p -> p.metadataCache().getTopicPartitions(testTopicName).size() == alteredNumPartitions),
+                    () -> clusterInstance.brokers().values().stream().allMatch(p -> p.metadataCache().numPartitions(testTopicName).orElse(0) == alteredNumPartitions),
                     TestUtils.DEFAULT_MAX_WAIT_MS, "Timeout waiting for new assignment propagating to broker");
 
             assignment = adminClient.describeTopics(Collections.singletonList(testTopicName))
@@ -863,7 +863,7 @@ public class TopicCommandTest {
             topicService.alterTopic(alterOpts);
 
             TestUtils.waitForCondition(
-                    () -> clusterInstance.brokers().values().stream().allMatch(p -> p.metadataCache().getTopicPartitions(testTopicName).size() == numPartitionsModified),
+                    () -> clusterInstance.brokers().values().stream().allMatch(p -> p.metadataCache().numPartitions(testTopicName).orElse(0) == numPartitionsModified),
                     TestUtils.DEFAULT_MAX_WAIT_MS, "Timeout waiting for new assignment propagating to broker");
 
             Config newProps = adminClient.describeConfigs(Collections.singleton(configResource)).all().get().get(configResource);
@@ -1110,7 +1110,7 @@ public class TopicCommandTest {
                     () -> clusterInstance.aliveBrokers().values().stream().allMatch(
                             broker -> {
                                 Optional<LeaderAndIsr> partitionState = Optional.ofNullable(
-                                        broker.metadataCache().getLeaderAndIsr(testTopicName, 0).getOrElse(null));
+                                        broker.metadataCache().getLeaderAndIsr(testTopicName, 0).orElseGet(null));
                                 return partitionState.map(s -> FetchRequest.isValidBrokerId(s.leader())).orElse(false);
                             }
                     ), CLUSTER_WAIT_MS, String.format("Meta data propogation fail in %s ms", CLUSTER_WAIT_MS));

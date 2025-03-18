@@ -56,7 +56,7 @@ import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfi
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, UnifiedLog => JUnifiedLog}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.Assertions._
@@ -802,7 +802,7 @@ object TestUtils extends Logging {
       timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     val expectedBrokerIds = brokers.map(_.config.brokerId).toSet
     waitUntilTrue(() => brokers.forall(server =>
-      expectedBrokerIds == server.dataPlaneRequestProcessor.metadataCache.getAliveBrokers().map(_.id).toSet
+      expectedBrokerIds.forall(server.dataPlaneRequestProcessor.metadataCache.hasAliveBroker(_))
     ), "Timed out waiting for broker metadata to propagate to all servers", timeout)
   }
 
@@ -821,17 +821,19 @@ object TestUtils extends Logging {
     waitUntilTrue(
       () => brokers.forall { broker =>
         if (expectedNumPartitions == 0) {
-          broker.metadataCache.numPartitions(topic) == None
+          broker.metadataCache.numPartitions(topic).isEmpty()
         } else {
-          broker.metadataCache.numPartitions(topic) == Some(expectedNumPartitions)
+          broker.metadataCache.numPartitions(topic).orElse(null) == expectedNumPartitions
         }
       },
       s"Topic [$topic] metadata not propagated after 60000 ms", waitTimeMs = 60000L)
 
     // since the metadata is propagated, we should get the same metadata from each server
     (0 until expectedNumPartitions).map { i =>
-      new TopicPartition(topic, i) -> brokers.head.metadataCache.getLeaderAndIsr(topic, i).getOrElse(
-          throw new IllegalStateException(s"Cannot get topic: $topic, partition: $i in server metadata cache"))
+      new TopicPartition(topic, i) -> {
+        brokers.head.metadataCache.getLeaderAndIsr(topic, i).orElseThrow(() =>
+          new IllegalStateException(s"Cannot get topic: $topic, partition: $i in server metadata cache"))
+      }
     }.toMap
   }
 
@@ -850,7 +852,7 @@ object TestUtils extends Logging {
       timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): LeaderAndIsr = {
     waitUntilTrue(
       () => brokers.forall { broker =>
-        broker.metadataCache.getLeaderAndIsr(topic, partition) match {
+        OptionConverters.toScala(broker.metadataCache.getLeaderAndIsr(topic, partition)) match {
           case Some(partitionState) => FetchRequest.isValidBrokerId(partitionState.leader)
           case _ => false
         }
@@ -858,8 +860,8 @@ object TestUtils extends Logging {
       "Partition [%s,%d] metadata not propagated after %d ms".format(topic, partition, timeout),
       waitTimeMs = timeout)
 
-    brokers.head.metadataCache.getLeaderAndIsr(topic, partition).getOrElse(
-      throw new IllegalStateException(s"Cannot get topic: $topic, partition: $partition in server metadata cache"))
+    brokers.head.metadataCache.getLeaderAndIsr(topic, partition).orElseThrow(() =>
+      new IllegalStateException(s"Cannot get topic: $topic, partition: $partition in server metadata cache"))
   }
 
   /**
@@ -896,7 +898,7 @@ object TestUtils extends Logging {
         }.map(_.config.brokerId)
 
       } else if (oldLeaderOpt.isDefined) {
-          debug(s"Checking leader that has changed from ${oldLeaderOpt}")
+          debug(s"Checking leader that has changed from $oldLeaderOpt")
           brokers.find { broker =>
             broker.replicaManager.onlinePartition(tp).exists(_.leaderLogIfLocal.isDefined)
             broker.config.brokerId != oldLeaderOpt.get &&
@@ -934,7 +936,7 @@ object TestUtils extends Logging {
   }
 
   def appendNonsenseToFile(file: File, size: Int): Unit = {
-    val outputStream = Files.newOutputStream(file.toPath(), StandardOpenOption.APPEND)
+    val outputStream = Files.newOutputStream(file.toPath, StandardOpenOption.APPEND)
     try {
       for (_ <- 0 until size)
         outputStream.write(random.nextInt(255))
@@ -961,7 +963,7 @@ object TestUtils extends Logging {
                        time: MockTime = new MockTime(),
                        recoveryThreadsPerDataDir: Int = 4,
                        transactionVerificationEnabled: Boolean = false,
-                       log: Option[kafka.log.UnifiedLog] = None,
+                       log: Option[UnifiedLog] = None,
                        remoteStorageSystemEnable: Boolean = false,
                        initialTaskDelayMs: Long = ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT): LogManager = {
     val logManager = new LogManager(logDirs = logDirs.map(_.getAbsoluteFile),
@@ -986,7 +988,7 @@ object TestUtils extends Logging {
 
     if (log.isDefined) {
       val spyLogManager = Mockito.spy(logManager)
-      Mockito.doReturn(log.get, Nil: _*).when(spyLogManager).getOrCreateLog(any(classOf[TopicPartition]), anyBoolean(), anyBoolean(), any(classOf[Option[Uuid]]), any(classOf[Option[Uuid]]))
+      Mockito.doReturn(log.get, Nil: _*).when(spyLogManager).getOrCreateLog(any(classOf[TopicPartition]), anyBoolean(), anyBoolean(), any(classOf[Optional[Uuid]]), any(classOf[Option[Uuid]]))
       spyLogManager
     } else
       logManager
@@ -1109,7 +1111,7 @@ object TestUtils extends Logging {
           !util.Arrays.asList(new File(logDir).list()).asScala.exists { partitionDirectoryNames =>
             partitionDirectoryNames.exists { directoryName =>
               directoryName.startsWith(tp.topic + "-" + tp.partition) &&
-                directoryName.endsWith(JUnifiedLog.DELETE_DIR_SUFFIX)
+                directoryName.endsWith(UnifiedLog.DELETE_DIR_SUFFIX)
             }
           }
         }

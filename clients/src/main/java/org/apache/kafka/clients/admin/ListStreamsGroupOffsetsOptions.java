@@ -15,24 +15,30 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.controller;
+package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.metadata.NoOpRecord;
-
-import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.Timeout;
-
-import static org.junit.jupiter.api.Assertions.assertFalse;
-import static org.junit.jupiter.api.Assertions.assertTrue;
+import org.apache.kafka.common.annotation.InterfaceStability;
 
 
-@Timeout(value = 40)
-public class LogReplayTrackerTest {
-    @Test
-    public void testEmpty() {
-        LogReplayTracker tracker = new LogReplayTracker.Builder().build();
-        assertTrue(tracker.empty());
-        tracker.replay(new NoOpRecord());
-        assertFalse(tracker.empty());
+/**
+ * Options for {@link Admin#listStreamsGroupOffsets(Map, ListStreamsGroupOffsetsOptions)}.
+ * <p>
+ * The API of this class is evolving, see {@link Admin} for details.
+ */
+@InterfaceStability.Evolving
+public class ListStreamsGroupOffsetsOptions extends AbstractOptions<ListStreamsGroupOffsetsOptions> {
+
+    private boolean requireStable = false;
+
+    /**
+     * Sets an optional requireStable flag.
+     */
+    public ListStreamsGroupOffsetsOptions requireStable(final boolean requireStable) {
+        this.requireStable = requireStable;
+        return this;
+    }
+
+    public boolean requireStable() {
+        return requireStable;
     }
 }

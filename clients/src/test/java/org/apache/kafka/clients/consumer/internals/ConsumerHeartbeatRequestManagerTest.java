@@ -444,7 +444,7 @@ public class ConsumerHeartbeatRequestManagerTest {
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
-        ClientResponse response = createHeartbeatResponse(result.unsentRequests.get(0), Errors.GROUP_AUTHORIZATION_FAILED);
+        createHeartbeatResponse(result.unsentRequests.get(0), Errors.GROUP_AUTHORIZATION_FAILED);
         result.unsentRequests.get(0).handler().onFailure(time.milliseconds(), new AuthenticationException("Fatal error in HB"));
 
         // The error should be propagated before notifying the group manager. This ensures that the app thread is aware
