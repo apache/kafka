@@ -50,14 +50,14 @@ public class DynamicProducerStateManagerConfig implements BrokerReconfigurable {
     public void reconfigure(AbstractKafkaConfig oldConfig, AbstractKafkaConfig newConfig) {
         TransactionLogConfig transactionLogConfig = newConfig.transactionLogConfig();
         if (producerStateManagerConfig.producerIdExpirationMs() != transactionLogConfig.producerIdExpirationMs()) {
-            log.info("Reconfigure {}  from {} to {}",
+            log.info("Reconfigure {} from {} to {}",
                 TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_CONFIG,
                 producerStateManagerConfig.producerIdExpirationMs(),
                 transactionLogConfig.producerIdExpirationMs());
             producerStateManagerConfig.setProducerIdExpirationMs(transactionLogConfig.producerIdExpirationMs());
         }
         if (producerStateManagerConfig.transactionVerificationEnabled() != transactionLogConfig.transactionPartitionVerificationEnable()) {
-            log.info("Reconfigure {}  from {} to {}",
+            log.info("Reconfigure {} from {} to {}",
                 TransactionLogConfig.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG,
                 producerStateManagerConfig.transactionVerificationEnabled(),
                 transactionLogConfig.transactionPartitionVerificationEnable());

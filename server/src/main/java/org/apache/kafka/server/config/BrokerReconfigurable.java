@@ -18,8 +18,52 @@ package org.apache.kafka.server.config;
 
 import java.util.Set;
 
+/**
+ * An interface for Kafka broker configs that support dynamic reconfiguration.
+ * <p>
+ * Components that implement this interface can have their configurations updated
+ * at runtime without requiring a broker restart.
+ * <p>
+ * The reconfiguration process follows three steps:
+ * <ol>
+ *   <li>Determining which configurations can be dynamically updated via {@link #reconfigurableConfigs()}</li>
+ *   <li>Validating the new configuration before applying it via {@link #validateReconfiguration(AbstractKafkaConfig)}</li>
+ *   <li>Applying the new configuration via {@link #reconfigure(AbstractKafkaConfig, AbstractKafkaConfig)}</li>
+ * </ol>
+ * <strong>Note: Since Kafka is eliminating Scala, developers should implement this interface instead of {@link kafka.server.BrokerReconfigurable}</strong>
+ *
+ *
+ * @see AbstractKafkaConfig
+ */
 public interface BrokerReconfigurable {
+    /**
+     * Returns the set of configuration keys that can be dynamically reconfigured.
+     *
+     * <p>
+     * Only the configurations returned by this method will be considered for
+     * dynamic updates by the broker.
+     *
+     * @return a set of configuration key names that can be dynamically updated
+     */
     Set<String> reconfigurableConfigs();
+
+    /**
+     * Validates the new configuration before applying it.
+     * <p>
+     * This method should verify that the new configuration values are valid and
+     * can be safely applied.
+     *
+     * @param newConfig the new configuration to validate
+     */
     void validateReconfiguration(AbstractKafkaConfig newConfig);
+
+    /**
+     * Applies the new configuration.
+     * <p>
+     * This method is called after the new configuration has been validated.
+     *
+     * @param oldConfig the previous configuration
+     * @param newConfig the new configuration to apply
+     */
     void reconfigure(AbstractKafkaConfig oldConfig, AbstractKafkaConfig newConfig);
 }

@@ -565,6 +565,9 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
   }
 }
 
+/**
+ * Implement [[org.apache.kafka.server.config.BrokerReconfigurable]] instead.
+ */
 trait BrokerReconfigurable {
 
   def reconfigurableConfigs: Set[String]
