@@ -57,7 +57,7 @@ import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
 import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.{Group, GroupCoordinator}
 import org.apache.kafka.coordinator.share.ShareCoordinator
-import org.apache.kafka.metadata.ConfigRepository
+import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.{GroupVersion, RequestLocal, TransactionVersion}
@@ -78,6 +78,7 @@ import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
+import scala.jdk.javaapi.OptionConverters
 
 /**
  * Logic to handle the various Kafka requests
@@ -299,7 +300,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           val topicWithValidPartitions = new OffsetCommitRequestData.OffsetCommitRequestTopic().setName(topic.name)
 
           topic.partitions.forEach { partition =>
-            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).nonEmpty) {
+            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).isPresent()) {
               topicWithValidPartitions.partitions.add(partition)
             } else {
               responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
@@ -365,12 +366,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         (x.leaderReplicaIdOpt.getOrElse(-1), x.getLeaderEpoch)
       case Left(x) =>
         debug(s"Unable to retrieve local leaderId and Epoch with error $x, falling back to metadata cache")
-        metadataCache.getLeaderAndIsr(tp.topic, tp.partition) match {
+        OptionConverters.toScala(metadataCache.getLeaderAndIsr(tp.topic, tp.partition)) match {
           case Some(pinfo) => (pinfo.leader(), pinfo.leaderEpoch())
           case None => (-1, -1)
         }
     }
-    LeaderNode(leaderId, leaderEpoch, metadataCache.getAliveBrokerNode(leaderId, ln))
+    LeaderNode(leaderId, leaderEpoch, OptionConverters.toScala(metadataCache.getAliveBrokerNode(leaderId, ln)))
   }
 
   /**
@@ -631,7 +632,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
         }
 
-        data.divergingEpoch.ifPresent(partitionData.setDivergingEpoch(_))
+        data.divergingEpoch.ifPresent(epoch => partitionData.setDivergingEpoch(epoch))
         partitions.put(tp, partitionData)
       }
       erroneous.foreach { case (tp, data) => partitions.put(tp, data) }
@@ -808,13 +809,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     errorUnavailableEndpoints: Boolean,
     errorUnavailableListeners: Boolean
   ): Seq[MetadataResponseTopic] = {
-    val topicResponses = metadataCache.getTopicMetadata(topics, listenerName,
+    val topicResponses = metadataCache.getTopicMetadata(topics.asJava, listenerName,
       errorUnavailableEndpoints, errorUnavailableListeners)
 
     if (topics.isEmpty || topicResponses.size == topics.size || fetchAllTopics) {
-      topicResponses
+      topicResponses.asScala
     } else {
-      val nonExistingTopics = topics.diff(topicResponses.map(_.name).toSet)
+      val nonExistingTopics = topics.diff(topicResponses.asScala.map(_.name).toSet)
       val nonExistingTopicResponses = if (allowAutoTopicCreation) {
         val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request)
         autoTopicCreationManager.createTopics(nonExistingTopics, controllerMutationQuota, Some(request.context))
@@ -838,7 +839,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
 
-      topicResponses ++ nonExistingTopicResponses
+      topicResponses.asScala ++ nonExistingTopicResponses
     }
   }
 
@@ -863,13 +864,13 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // Only get topicIds and topicNames when supporting topicId
     val unknownTopicIds = topicIds.filter(metadataCache.getTopicName(_).isEmpty)
-    val knownTopicNames = topicIds.flatMap(metadataCache.getTopicName)
+    val knownTopicNames = topicIds.flatMap(id => OptionConverters.toScala(metadataCache.getTopicName(id)))
 
     val unknownTopicIdsTopicMetadata = unknownTopicIds.map(topicId =>
         metadataResponseTopic(Errors.UNKNOWN_TOPIC_ID, null, topicId, isInternal = false, util.Collections.emptyList())).toSeq
 
     val topics = if (metadataRequest.isAllTopics)
-      metadataCache.getAllTopics()
+      metadataCache.getAllTopics.asScala
     else if (useTopicId)
       knownTopicNames
     else
@@ -951,16 +952,16 @@ class KafkaApis(val requestChannel: RequestChannel,
     val brokers = metadataCache.getAliveBrokerNodes(request.context.listenerName)
 
     trace("Sending topic metadata %s and brokers %s for correlation id %d to client %s".format(completeTopicMetadata.mkString(","),
-      brokers.mkString(","), request.header.correlationId, request.header.clientId))
-    val controllerId = metadataCache.getRandomAliveBrokerId
+      brokers.asScala.mkString(","), request.header.correlationId, request.header.clientId))
+    val controllerId = metadataCache.getRandomAliveBrokerId.orElse(MetadataResponse.NO_CONTROLLER_ID)
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
        MetadataResponse.prepareResponse(
          requestVersion,
          requestThrottleMs,
-         brokers.toList.asJava,
+         brokers,
          clusterId,
-         controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
+         controllerId,
          completeTopicMetadata.asJava,
          clusterAuthorizedOperations
       ))
@@ -1182,7 +1183,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           (shareCoordinator.foreach(coordinator => coordinator.partitionFor(SharePartitionKey.getInstance(key))), SHARE_GROUP_STATE_TOPIC_NAME)
       }
 
-      val topicMetadata = metadataCache.getTopicMetadata(Set(internalTopicName), request.context.listenerName)
+      val topicMetadata = metadataCache.getTopicMetadata(Set(internalTopicName).asJava, request.context.listenerName, false, false).asScala
 
       if (topicMetadata.headOption.isEmpty) {
         val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request)
@@ -1192,17 +1193,16 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (topicMetadata.head.errorCode != Errors.NONE.code) {
           (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
         } else {
-          val coordinatorEndpoint = topicMetadata.head.partitions.asScala
-            .find(_.partitionIndex == partition)
+          val coordinatorEndpoint = topicMetadata.head.partitions.stream()
+            .filter(_.partitionIndex() == partition)
             .filter(_.leaderId != MetadataResponse.NO_LEADER_ID)
-            .flatMap(metadata => metadataCache.
-                getAliveBrokerNode(metadata.leaderId, request.context.listenerName))
+            .flatMap(metadata => metadataCache.getAliveBrokerNode(metadata.leaderId, request.context.listenerName).stream())
+            .findFirst()
 
-          coordinatorEndpoint match {
-            case Some(endpoint) =>
-              (Errors.NONE, endpoint)
-            case _ =>
-              (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
+          if (coordinatorEndpoint.isPresent) {
+            (Errors.NONE, coordinatorEndpoint.get)
+          } else {
+            (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
           }
         }
       }
@@ -1997,7 +1997,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           val topicWithValidPartitions = new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic().setName(topic.name)
 
           topic.partitions.forEach { partition =>
-            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).nonEmpty) {
+            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).isPresent()) {
               topicWithValidPartitions.partitions.add(partition)
             } else {
               responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
@@ -2318,7 +2318,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           val topicWithValidPartitions = new OffsetDeleteRequestData.OffsetDeleteRequestTopic().setName(topic.name)
 
           topic.partitions.forEach { partition =>
-            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).nonEmpty) {
+            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).isPresent) {
               topicWithValidPartitions.partitions.add(partition)
             } else {
               responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
@@ -2385,7 +2385,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       () => {
         val brokers = new DescribeClusterResponseData.DescribeClusterBrokerCollection()
         val describeClusterRequest = request.body[DescribeClusterRequest]
-        metadataCache.getBrokerNodes(request.context.listenerName).foreach { node =>
+        metadataCache.getBrokerNodes(request.context.listenerName).forEach { node =>
           if (!node.isFenced || describeClusterRequest.data().includeFencedBrokers()) {
           brokers.add(new DescribeClusterResponseData.DescribeClusterBroker().
             setBrokerId(node.id).
@@ -2398,7 +2398,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         brokers
       },
       () => {
-        metadataCache.getRandomAliveBrokerId.getOrElse(-1)
+        metadataCache.getRandomAliveBrokerId.orElse(-1)
       }
     )
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -2819,7 +2819,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       val data = new ListClientMetricsResourcesResponseData().setClientMetricsResources(
         clientMetricsManager.listClientMetricsResources.stream.map(
-          name => new ClientMetricsResource().setName(name)).toList)
+          name => new ClientMetricsResource().setName(name)).collect(Collectors.toList()))
       requestHelper.sendMaybeThrottle(request, new ListClientMetricsResourcesResponse(data))
     }
   }
