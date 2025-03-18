@@ -1973,6 +1973,8 @@ project(':clients:clients-integration-tests') {
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
     implementation project(':server-common')
+    testImplementation project(':metadata')
+    implementation project(':clients').sourceSets.test.output
     implementation project(':group-coordinator')
     implementation project(':transaction-coordinator')
 
