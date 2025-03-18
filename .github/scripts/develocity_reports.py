@@ -939,9 +939,6 @@ def get_develocity_class_link(class_name: str, start_time, end_time=None) -> str
         
         if end_time and isinstance(end_time, datetime):
             params["search.absoluteEndTime"] = end_time.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-    
-    if test_type:
-        params["search.tasks"] = test_type
         
     return f"{base_url}?{'&'.join(f'{k}={requests.utils.quote(str(v))}' for k, v in params.items())}"
 
@@ -976,13 +973,10 @@ def get_develocity_method_link(class_name: str, method_name: str, start_time, en
         
         if end_time and isinstance(end_time, datetime):
             params["search.absoluteEndTime"] = end_time.strftime('%Y-%m-%dT%H:%M:%S.%fZ')
-    
-    if test_type:
-        params["search.tasks"] = test_type
         
     return f"{base_url}?{'&'.join(f'{k}={requests.utils.quote(str(v))}' for k, v in params.items())}"
 
-def print_most_problematic_tests(problematic_tests: Dict[str, Dict], start_time, end_time=None):
+def print_most_problematic_tests(problematic_tests: Dict[str, Dict], start_time, end_time=None, threshold_days=None):
     """Print a summary of the most problematic tests with absolute time range in links"""
     print("\n## Most Problematic Tests")
     if not problematic_tests:
@@ -1187,7 +1181,7 @@ def print_cleared_tests(cleared_tests: Dict[str, Dict], start_time, end_time=Non
         
         for test_case in details['test_cases']:
             method_name = test_case['name'].split('.')[-1]
-            method_link = get_develocity_method_link(test_name, test_case['name'], start_time, end_time, test_type=test_type)
+            method_link = get_develocity_method_link(test_name, test_case['name'], start_time, end_time)
             recent_status = "N/A"
             if test_case['recent_executions']:
                 recent_status = test_case['recent_executions'][-1].outcome
@@ -1304,7 +1298,7 @@ def main():
         print(f"Data range: {quarantine_start_time.strftime('%Y-%m-%d %H:%M:%S')} to {current_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
         
         # Print each section
-        print_most_problematic_tests(problematic_tests, quarantine_start_time, current_time)
+        print_most_problematic_tests(problematic_tests, quarantine_start_time, current_time, threshold_days=QUARANTINE_THRESHOLD_DAYS)
         print_flaky_regressions(flaky_regressions, regular_start_time, current_time)
         print_persistent_failing_tests(persistent_failures, regular_start_time, current_time)
         print_cleared_tests(cleared_tests, quarantine_start_time, current_time)
