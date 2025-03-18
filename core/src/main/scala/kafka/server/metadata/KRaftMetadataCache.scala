@@ -18,7 +18,6 @@
 package kafka.server.metadata
 
 import kafka.utils.Logging
-import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.InvalidTopicException
@@ -31,6 +30,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.MetadataResponse
 import org.apache.kafka.image.MetadataImage
 import org.apache.kafka.metadata.{BrokerRegistration, LeaderAndIsr, MetadataCache, PartitionRegistration, Replicas}
+import org.apache.kafka.metadata.placement.UsableBroker
 import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion}
 
 import java.util
@@ -341,10 +341,10 @@ class KRaftMetadataCache(
     Option(_currentImage.cluster.broker(brokerId)).count(_.inControlledShutdown) == 1
   }
 
-  private def getAliveBrokers(image: MetadataImage): util.List[BrokerMetadata] = {
+  private def getAliveBrokers(image: MetadataImage): util.List[UsableBroker] = {
     image.cluster().brokers().values().stream()
       .filter(Predicate.not(_.fenced))
-      .map(broker => new BrokerMetadata(broker.id, broker.rack))
+      .map(broker => new UsableBroker(broker.id, broker.rack, false))
       .collect(Collectors.toList())
   }
 
