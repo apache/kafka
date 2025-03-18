@@ -524,13 +524,16 @@ public class FileRecordsTest {
     }
 
     /**
-     * Test two conditions
-     * 1. If the target offset equals to the base offset of the first batch
-     * 2. If the target offset < the base offset of the first batch
+     * Test two conditions:
+     * 1. If the target offset equals the base offset of the first batch
+     * 2. If the target offset is less than the base offset of the first batch
+     * <p>
+     * If the base offset of the first batch is equal to or greater than the target offset, it should return the 
+     * position of the first batch and the lastOffset method should not be called.
      */
     @ParameterizedTest
     @ValueSource(longs = {5, 10})
-    public void testSearchForOffsetFromPositionAndFirstBatchMatch(long baseOffset) throws IOException {
+    public void testSearchForOffsetFromPosition1(long baseOffset) throws IOException {
         File mockFile = mock(File.class);
         FileChannel mockChannel = mock(FileChannel.class);
         FileLogInputStream.FileChannelRecordBatch batch = mock(FileLogInputStream.FileChannelRecordBatch.class);
@@ -545,8 +548,11 @@ public class FileRecordsTest {
         verify(batch, never()).lastOffset();
     }
 
+    /**
+     * Test the case when the target offset equals the last offset of the first batch.
+     */
     @Test
-    public void testSearchForOffsetFromPositionAndFirstBatchLastOffsetMatch() throws IOException {
+    public void testSearchForOffsetFromPosition2() throws IOException {
         File mockFile = mock(File.class);
         FileChannel mockChannel = mock(FileChannel.class);
         FileLogInputStream.FileChannelRecordBatch batch = mock(FileLogInputStream.FileChannelRecordBatch.class);
@@ -563,8 +569,11 @@ public class FileRecordsTest {
         verify(batch, times(1)).lastOffset();
     }
 
+    /**
+     * Test the case when the target offset equals the last offset of the last batch.
+     */
     @Test
-    public void testSearchForOffsetFromPositionAndLastBatchLastOffsetMatch() throws IOException {
+    public void testSearchForOffsetFromPosition3() throws IOException {
         File mockFile = mock(File.class);
         FileChannel mockChannel = mock(FileChannel.class);
         FileLogInputStream.FileChannelRecordBatch prevBatch = mock(FileLogInputStream.FileChannelRecordBatch.class);
@@ -585,8 +594,11 @@ public class FileRecordsTest {
         verify(currentBatch, times(1)).lastOffset();
     }
 
+    /**
+     * Test the case when the target offset is within the range of the previous batch.
+     */
     @Test
-    public void testSearchForOffsetFromPositionAndPrevBatchMatches() throws IOException {
+    public void testSearchForOffsetFromPosition4() throws IOException {
         File mockFile = mock(File.class);
         FileChannel mockChannel = mock(FileChannel.class);
         FileLogInputStream.FileChannelRecordBatch prevBatch = mock(FileLogInputStream.FileChannelRecordBatch.class);
@@ -606,8 +618,11 @@ public class FileRecordsTest {
         verify(prevBatch, times(1)).lastOffset();
     }
 
+    /**
+     * Test the case when no batch matches the target offset.
+     */
     @Test
-    public void testSearchForOffsetFromPositionAndAllBatchesNonMatch() throws IOException {
+    public void testSearchForOffsetFromPosition5() throws IOException {
         File mockFile = mock(File.class);
         FileChannel mockChannel = mock(FileChannel.class);
         FileLogInputStream.FileChannelRecordBatch batch1 = mock(FileLogInputStream.FileChannelRecordBatch.class);
@@ -629,13 +644,13 @@ public class FileRecordsTest {
     }
 
     /**
-     * Test two conditions
-     * 1. If the target offset < the base offset of the last batch
-     * 2. If the target offset equals to the base offset of the last batch
+     * Test two conditions:
+     * 1. If the target offset is less than the base offset of the last batch
+     * 2. If the target offset equals the base offset of the last batch
      */
     @ParameterizedTest
     @ValueSource(longs = {8, 10})
-    public void testSearchForOffsetFromPositionLastBatchMatches(long baseOffset) throws IOException {
+    public void testSearchForOffsetFromPosition6(long baseOffset) throws IOException {
         File mockFile = mock(File.class);
         FileChannel mockChannel = mock(FileChannel.class);
         FileLogInputStream.FileChannelRecordBatch batch1 = mock(FileLogInputStream.FileChannelRecordBatch.class);
@@ -664,8 +679,11 @@ public class FileRecordsTest {
         }
     }
 
+    /**
+     * Test the case when the target offset is between two batches.
+     */
     @Test
-    public void testSearchForOffsetFromPositionTargetBetweenTwoBatches() throws IOException {
+    public void testSearchForOffsetFromPosition7() throws IOException {
         File mockFile = mock(File.class);
         FileChannel mockChannel = mock(FileChannel.class);
         FileLogInputStream.FileChannelRecordBatch batch1 = mock(FileLogInputStream.FileChannelRecordBatch.class);
