@@ -891,7 +891,6 @@ def get_develocity_class_link(class_name: str, start_time, end_time=None, test_t
         test_type: Type of test (e.g., "quarantinedTest", "test")
     """
     base_url = "https://develocity.apache.org/scans/tests"
-    
     params = {
         "search.rootProjectNames": "kafka",
         "search.tags": "github,trunk",
@@ -947,14 +946,15 @@ def get_develocity_method_link(class_name: str, method_name: str, start_time, en
         
     return f"{base_url}?{'&'.join(f'{k}={requests.utils.quote(str(v))}' for k, v in params.items())}"
 
-def print_most_problematic_tests(problematic_tests: Dict[str, Dict], start_time, end_time=None, test_type: str = None):
+def print_most_problematic_tests(problematic_tests: Dict[str, Dict], start_time, end_time=None, test_type: str = None,
+                                 threshold_days=None):
     """Print a summary of the most problematic tests with absolute time range in links"""
     print("\n## Most Problematic Tests")
     if not problematic_tests:
         print("No high-priority problematic tests found.")
         return
         
-    print(f"Found {len(problematic_tests)} tests that have been quarantined for a long time and are still failing frequently.")
+    print(f"Found {len(problematic_tests)} tests that have been quarantined for ${threshold_days} days and are still failing frequently.")
     
     # Print table with class and method information
     print("\n<table>")
@@ -1212,7 +1212,7 @@ def main():
 
     current_time = datetime.now(pytz.UTC)
     quarantine_start_time = current_time - timedelta(days=QUARANTINE_THRESHOLD_DAYS)
-    regular_start_time = current_time - timedelta(days=7)  # Last 7 days for regular tests
+    regular_start_time = current_time - timedelta(days=QUARANTINE_THRESHOLD_DAYS)
     analyzer = TestAnalyzer(BASE_URL, token)
     
     try:
@@ -1269,7 +1269,7 @@ def main():
         print(f"Data range: {quarantine_start_time.strftime('%Y-%m-%d %H:%M:%S')} to {current_time.strftime('%Y-%m-%d %H:%M:%S')} UTC")
         
         # Print each section with absolute time ranges for links
-        print_most_problematic_tests(problematic_tests, quarantine_start_time, current_time, test_type="quarantinedTest")
+        print_most_problematic_tests(problematic_tests, quarantine_start_time, current_time, test_type="quarantinedTest", threshold_days=QUARANTINE_THRESHOLD_DAYS)
         print_flaky_regressions(flaky_regressions, regular_start_time, current_time)
         print_persistent_failing_tests(persistent_failures, regular_start_time, current_time)
         print_cleared_tests(cleared_tests, quarantine_start_time, current_time, test_type="quarantinedTest")
