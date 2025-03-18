@@ -21,6 +21,7 @@ import java.util.{Collections, Optional, Properties}
 import kafka.cluster.{Partition, PartitionTest}
 import kafka.log.LogManager
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils._
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.metrics.Metrics
@@ -305,7 +306,7 @@ class ReplicaManagerQuotasTest {
       scheduler = scheduler,
       logManager = logManager,
       quotaManagers = quotaManager,
-      metadataCache = MetadataCache.kRaftMetadataCache(leaderBrokerId, () => KRaftVersion.KRAFT_VERSION_0),
+      metadataCache = new KRaftMetadataCache(leaderBrokerId, () => KRaftVersion.KRAFT_VERSION_0),
       logDirFailureChannel = new LogDirFailureChannel(configs.head.logDirs.size),
       alterPartitionManager = alterIsrManager)
 
