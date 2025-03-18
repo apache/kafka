@@ -24,7 +24,7 @@ import java.util.concurrent.ExecutionException
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import kafka.utils._
 import org.apache.kafka.clients.admin.Admin
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecords}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecords, GroupProtocol}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
@@ -430,7 +430,18 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
     // Verify that records are consumed if all topics are authorized
     consumer.subscribe(List(topic).asJava)
-    consumeRecordsIgnoreOneAuthorizationException(consumer)
+    if (groupProtocol.equals(GroupProtocol.CLASSIC)) {
+      consumeRecordsIgnoreOneAuthorizationException(consumer)
+    } else {
+      TestUtils.waitUntilTrue(() => {
+        try {
+          consumeRecords(consumer, numRecords, 0, topic)
+          true
+        } catch {
+          case _: TopicAuthorizationException => false
+        }
+      }, "Consumer didn't manage to consume the records within timeout.")
+    }
   }
 
   private def noConsumeWithoutDescribeAclSetup(): Unit = {

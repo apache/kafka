@@ -64,6 +64,7 @@ import org.junit.jupiter.api.function.Executable
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
+import scala.jdk.javaapi.OptionConverters
 
 class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   val groupReadAcl = Map(groupResource -> Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)))
@@ -601,7 +602,8 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   private def consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
     new ConsumerGroupHeartbeatRequestData()
       .setGroupId(group)
-      .setMemberEpoch(0)).build()
+      .setMemberEpoch(0)
+      .setSubscribedTopicNames(List(topic).asJava)).build()
 
   private def consumerGroupDescribeRequest = new ConsumerGroupDescribeRequest.Builder(
     new ConsumerGroupDescribeRequestData()
@@ -1263,7 +1265,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     waitUntilTrue(() => {
       consumer.poll(Duration.ofMillis(50L))
       brokers.forall { broker =>
-        broker.metadataCache.getLeaderAndIsr(newTopic, 0) match {
+        OptionConverters.toScala(broker.metadataCache.getLeaderAndIsr(newTopic, 0)) match {
           case Some(partitionState) => FetchRequest.isValidBrokerId(partitionState.leader)
           case _ => false
         }
@@ -1276,7 +1278,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   def testCreatePermissionMetadataRequestAutoCreate(quorum: String): Unit = {
     val readAcls = topicReadAcl(topicResource)
     addAndVerifyAcls(readAcls, topicResource)
-    brokers.foreach(b => assertEquals(None, b.metadataCache.getLeaderAndIsr(topic, 0)))
+    brokers.foreach(b => assertEquals(Optional.empty, b.metadataCache.getLeaderAndIsr(topic, 0)))
 
     val metadataRequest = new MetadataRequest.Builder(List(topic).asJava, true).build()
     val metadataResponse = connectAndReceive[MetadataResponse](metadataRequest)
@@ -1622,7 +1624,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   def testDescribeGroupApiWithNoGroupAcl(quorum: String): Unit = {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DESCRIBE, ALLOW)), topicResource)
     val result = createAdminClient().describeConsumerGroups(Seq(group).asJava)
-    JTestUtils.assertFutureThrows(result.describedGroups().get(group), classOf[GroupAuthorizationException])
+    JTestUtils.assertFutureThrows(classOf[GroupAuthorizationException], result.describedGroups().get(group))
   }
 
   @ParameterizedTest
@@ -1632,7 +1634,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DESCRIBE, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DESCRIBE, ALLOW)), topicResource)
     val result = createAdminClient().describeConsumerGroups(Seq(group).asJava)
-    JTestUtils.assertFutureThrows(result.describedGroups().get(group), classOf[GroupIdNotFoundException])
+    JTestUtils.assertFutureThrows(classOf[GroupIdNotFoundException], result.describedGroups().get(group))
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
@@ -1709,14 +1711,14 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     consumer.assign(List(tp).asJava)
     consumer.commitSync(Map(tp -> new OffsetAndMetadata(5, "")).asJava)
     val result = createAdminClient().deleteConsumerGroups(Seq(group).asJava)
-    JTestUtils.assertFutureThrows(result.deletedGroups().get(group), classOf[GroupAuthorizationException])
+    JTestUtils.assertFutureThrows(classOf[GroupAuthorizationException], result.deletedGroups().get(group))
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testDeleteGroupApiWithNoDeleteGroupAcl2(quorum: String): Unit = {
     val result = createAdminClient().deleteConsumerGroups(Seq(group).asJava)
-    JTestUtils.assertFutureThrows(result.deletedGroups().get(group), classOf[GroupAuthorizationException])
+    JTestUtils.assertFutureThrows(classOf[GroupAuthorizationException], result.deletedGroups().get(group))
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
@@ -1747,7 +1749,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     consumer.commitSync(Map(tp -> new OffsetAndMetadata(5, "")).asJava)
     consumer.close()
     val result = createAdminClient().deleteConsumerGroupOffsets(group, Set(tp).asJava)
-    JTestUtils.assertFutureThrows(result.all(), classOf[GroupAuthorizationException])
+    JTestUtils.assertFutureThrows(classOf[GroupAuthorizationException], result.all())
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
@@ -1767,15 +1769,15 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DELETE, ALLOW)), groupResource)
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), groupResource)
     val result = createAdminClient().deleteConsumerGroupOffsets(group, Set(tp).asJava)
-    JTestUtils.assertFutureThrows(result.all(), classOf[TopicAuthorizationException])
-    JTestUtils.assertFutureThrows(result.partitionResult(tp), classOf[TopicAuthorizationException])
+    JTestUtils.assertFutureThrows(classOf[TopicAuthorizationException], result.all())
+    JTestUtils.assertFutureThrows(classOf[TopicAuthorizationException], result.partitionResult(tp))
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testDeleteGroupOffsetsWithNoAcl(quorum: String): Unit = {
     val result = createAdminClient().deleteConsumerGroupOffsets(group, Set(tp).asJava)
-    JTestUtils.assertFutureThrows(result.all(), classOf[GroupAuthorizationException])
+    JTestUtils.assertFutureThrows(classOf[GroupAuthorizationException], result.all())
   }
 
   @ParameterizedTest
@@ -2044,7 +2046,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     producer.beginTransaction()
 
     val future = producer.send(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes))
-    val e = JTestUtils.assertFutureThrows(future, classOf[TopicAuthorizationException])
+    val e = JTestUtils.assertFutureThrows(classOf[TopicAuthorizationException], future)
     assertEquals(Set(topic), e.unauthorizedTopics.asScala)
   }
 
@@ -2078,7 +2080,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, WRITE, ALLOW)), topicResource)
     producer.beginTransaction()
     val future = producer.send(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes))
-    JTestUtils.assertFutureThrows(future, classOf[TransactionalIdAuthorizationException])
+    JTestUtils.assertFutureThrows(classOf[TransactionalIdAuthorizationException], future)
   }
 
   @ParameterizedTest
@@ -2167,7 +2169,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     producer.send(new ProducerRecord(tp.topic, tp.partition, "1".getBytes, "1".getBytes)).get
     // try and add a partition resulting in TopicAuthorizationException
     val future = producer.send(new ProducerRecord("otherTopic", 0, "1".getBytes, "1".getBytes))
-    val e = JTestUtils.assertFutureThrows(future, classOf[TopicAuthorizationException])
+    val e = JTestUtils.assertFutureThrows(classOf[TopicAuthorizationException], future)
     assertEquals(Set("otherTopic"), e.unauthorizedTopics.asScala)
     // now rollback
     producer.abortTransaction()
@@ -2492,11 +2494,12 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
-  def testConsumerGroupHeartbeatWithReadAcl(quorum: String): Unit = {
+  def testConsumerGroupHeartbeatWithGroupReadAndTopicDescribeAcl(quorum: String): Unit = {
     addAndVerifyAcls(groupReadAcl(groupResource), groupResource)
+    addAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
 
     val request = consumerGroupHeartbeatRequest
-    val resource = Set[ResourceType](GROUP)
+    val resource = Set[ResourceType](GROUP, TOPIC)
     sendRequestAndVerifyResponseError(request, resource, isAuthorized = true)
   }
 
@@ -2505,50 +2508,115 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   def testConsumerGroupHeartbeatWithOperationAll(quorum: String): Unit = {
     val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
     addAndVerifyAcls(Set(allowAllOpsAcl), groupResource)
+    addAndVerifyAcls(Set(allowAllOpsAcl), topicResource)
 
     val request = consumerGroupHeartbeatRequest
-    val resource = Set[ResourceType](GROUP)
+    val resource = Set[ResourceType](GROUP, TOPIC)
     sendRequestAndVerifyResponseError(request, resource, isAuthorized = true)
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
-  def testConsumerGroupHeartbeatWithoutReadAcl(quorum: String): Unit = {
+  def testConsumerGroupHeartbeatWithoutGroupReadOrTopicDescribeAcl(quorum: String): Unit = {
     removeAllClientAcls()
 
     val request = consumerGroupHeartbeatRequest
-    val resource = Set[ResourceType](GROUP)
+    val resource = Set[ResourceType](GROUP, TOPIC)
     sendRequestAndVerifyResponseError(request, resource, isAuthorized = false)
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
-  def testConsumerGroupDescribeWithDescribeAcl(quorum: String): Unit = {
+  def testConsumerGroupHeartbeatWithoutGroupReadAcl(quorum: String): Unit = {
+    addAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
+
+    val request = consumerGroupHeartbeatRequest
+
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = false)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testConsumerGroupHeartbeatWithoutTopicDescribeAcl(quorum: String): Unit = {
+    addAndVerifyAcls(groupReadAcl(groupResource), groupResource)
+
+    val request = consumerGroupHeartbeatRequest
+
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = false)
+  }
+
+  private def createConsumerGroupToDescribe(): Unit = {
+    createTopicWithBrokerPrincipal(topic)
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), groupResource)
+    addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), topicResource)
+    consumerConfig.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "consumer")
+    consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, group)
+    val consumer = createConsumer()
+    consumer.subscribe(Collections.singleton(topic))
+    consumer.poll(Duration.ofMillis(500L))
+    removeAllClientAcls()
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testConsumerGroupDescribeWithGroupDescribeAndTopicDescribeAcl(quorum: String): Unit = {
+    createConsumerGroupToDescribe()
+
     addAndVerifyAcls(groupDescribeAcl(groupResource), groupResource)
+    addAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
 
     val request = consumerGroupDescribeRequest
-    val resource = Set[ResourceType](GROUP)
+    val resource = Set[ResourceType](GROUP, TOPIC)
     sendRequestAndVerifyResponseError(request, resource, isAuthorized = true)
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testConsumerGroupDescribeWithOperationAll(quorum: String): Unit = {
+    createConsumerGroupToDescribe()
+
     val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
     addAndVerifyAcls(Set(allowAllOpsAcl), groupResource)
+    addAndVerifyAcls(Set(allowAllOpsAcl), topicResource)
 
     val request = consumerGroupDescribeRequest
-    val resource = Set[ResourceType](GROUP)
+    val resource = Set[ResourceType](GROUP, TOPIC)
     sendRequestAndVerifyResponseError(request, resource, isAuthorized = true)
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
-  def testConsumerGroupDescribeWithoutDescribeAcl(quorum: String): Unit = {
-    removeAllClientAcls()
+  def testConsumerGroupDescribeWithoutGroupDescribeAcl(quorum: String): Unit = {
+    createConsumerGroupToDescribe()
+
+    addAndVerifyAcls(topicDescribeAcl(topicResource), topicResource)
 
     val request = consumerGroupDescribeRequest
-    val resource = Set[ResourceType](GROUP)
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = false)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testConsumerGroupDescribeWithoutTopicDescribeAcl(quorum: String): Unit = {
+    createConsumerGroupToDescribe()
+
+    addAndVerifyAcls(groupDescribeAcl(groupResource), groupResource)
+
+    val request = consumerGroupDescribeRequest
+    val resource = Set[ResourceType](GROUP, TOPIC)
+    sendRequestAndVerifyResponseError(request, resource, isAuthorized = false)
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testConsumerGroupDescribeWithoutGroupDescribeOrTopicDescribeAcl(quorum: String): Unit = {
+    createConsumerGroupToDescribe()
+
+    val request = consumerGroupDescribeRequest
+    val resource = Set[ResourceType](GROUP, TOPIC)
     sendRequestAndVerifyResponseError(request, resource, isAuthorized = false)
   }
 

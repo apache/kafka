@@ -17,7 +17,6 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.util.LinkedList;
@@ -26,10 +25,7 @@ import java.util.Optional;
 
 /**
  * Options for {@link Admin#createDelegationToken(CreateDelegationTokenOptions)}.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class CreateDelegationTokenOptions extends AbstractOptions<CreateDelegationTokenOptions> {
     private long maxLifetimeMs = -1;
     private List<KafkaPrincipal> renewers =  new LinkedList<>();

@@ -16,7 +16,6 @@
  */
 package kafka.coordinator.group
 
-import kafka.log.UnifiedLog
 import kafka.server.ReplicaManager
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
@@ -27,7 +26,7 @@ import org.apache.kafka.common.utils.{MockTime, Time}
 import org.apache.kafka.coordinator.common.runtime.Deserializer.UnknownRecordTypeException
 import org.apache.kafka.coordinator.common.runtime.{CoordinatorPlayback, Deserializer}
 import org.apache.kafka.server.storage.log.FetchIsolation
-import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogOffsetMetadata}
+import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogOffsetMetadata, UnifiedLog}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotNull}
 import org.junit.jupiter.api.{Test, Timeout}
@@ -68,7 +67,7 @@ class CoordinatorLoaderImplTest {
       when(replicaManager.getLog(tp)).thenReturn(None)
 
       val result = loader.load(tp, coordinator)
-      assertFutureThrows(result, classOf[NotLeaderOrFollowerException])
+      assertFutureThrows(classOf[NotLeaderOrFollowerException], result)
     }
   }
 
@@ -88,7 +87,7 @@ class CoordinatorLoaderImplTest {
       loader.close()
 
       val result = loader.load(tp, coordinator)
-      assertFutureThrows(result, classOf[RuntimeException])
+      assertFutureThrows(classOf[RuntimeException], result)
     }
   }
 
@@ -116,11 +115,7 @@ class CoordinatorLoaderImplTest {
         new SimpleRecord("k2".getBytes, "v2".getBytes)
       ))
 
-      when(log.read(
-        startOffset = 0L,
-        maxLength = 1000,
-        isolation = FetchIsolation.LOG_END,
-        minOneMessage = true
+      when(log.read(0L, 1000, FetchIsolation.LOG_END, true
       )).thenReturn(readResult1)
 
       val readResult2 = logReadResult(startOffset = 2, records = Seq(
@@ -129,11 +124,7 @@ class CoordinatorLoaderImplTest {
         new SimpleRecord("k5".getBytes, "v5".getBytes)
       ))
 
-      when(log.read(
-        startOffset = 2L,
-        maxLength = 1000,
-        isolation = FetchIsolation.LOG_END,
-        minOneMessage = true
+      when(log.read(2L, 1000, FetchIsolation.LOG_END, true
       )).thenReturn(readResult2)
 
       val readResult3 = logReadResult(startOffset = 5, producerId = 100L, producerEpoch = 5, records = Seq(
@@ -141,11 +132,7 @@ class CoordinatorLoaderImplTest {
         new SimpleRecord("k7".getBytes, "v7".getBytes)
       ))
 
-      when(log.read(
-        startOffset = 5L,
-        maxLength = 1000,
-        isolation = FetchIsolation.LOG_END,
-        minOneMessage = true
+      when(log.read(5L, 1000, FetchIsolation.LOG_END, true
       )).thenReturn(readResult3)
 
       val readResult4 = logReadResult(
@@ -155,11 +142,7 @@ class CoordinatorLoaderImplTest {
         controlRecordType = ControlRecordType.COMMIT
       )
 
-      when(log.read(
-        startOffset = 7L,
-        maxLength = 1000,
-        isolation = FetchIsolation.LOG_END,
-        minOneMessage = true
+      when(log.read(7L, 1000, FetchIsolation.LOG_END, true
       )).thenReturn(readResult4)
 
       val readResult5 = logReadResult(
@@ -169,11 +152,7 @@ class CoordinatorLoaderImplTest {
         controlRecordType = ControlRecordType.ABORT
       )
 
-      when(log.read(
-        startOffset = 8L,
-        maxLength = 1000,
-        isolation = FetchIsolation.LOG_END,
-        minOneMessage = true
+      when(log.read(8L, 1000, FetchIsolation.LOG_END, true
       )).thenReturn(readResult5)
 
       assertNotNull(loader.load(tp, coordinator).get(10, TimeUnit.SECONDS))
@@ -220,10 +199,10 @@ class CoordinatorLoaderImplTest {
 
       val latch = new CountDownLatch(1)
       when(log.read(
-        startOffset = ArgumentMatchers.anyLong(),
-        maxLength = ArgumentMatchers.eq(1000),
-        isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
-        minOneMessage = ArgumentMatchers.eq(true)
+        ArgumentMatchers.anyLong(),
+        ArgumentMatchers.eq(1000),
+        ArgumentMatchers.eq(FetchIsolation.LOG_END),
+        ArgumentMatchers.eq(true)
       )).thenAnswer { _ =>
         latch.countDown()
         readResult
@@ -233,7 +212,7 @@ class CoordinatorLoaderImplTest {
       latch.await(10, TimeUnit.SECONDS)
       loader.close()
 
-      val ex = assertFutureThrows(result, classOf[RuntimeException])
+      val ex = assertFutureThrows(classOf[RuntimeException], result)
       assertEquals("Coordinator loader is closed.", ex.getMessage)
     }
   }
@@ -261,11 +240,7 @@ class CoordinatorLoaderImplTest {
         new SimpleRecord("k2".getBytes, "v2".getBytes)
       ))
 
-      when(log.read(
-        startOffset = 0L,
-        maxLength = 1000,
-        isolation = FetchIsolation.LOG_END,
-        minOneMessage = true
+      when(log.read(0L, 1000, FetchIsolation.LOG_END, true
       )).thenReturn(readResult)
 
       when(serde.deserialize(ArgumentMatchers.any(), ArgumentMatchers.any()))
@@ -301,17 +276,13 @@ class CoordinatorLoaderImplTest {
         new SimpleRecord("k2".getBytes, "v2".getBytes)
       ))
 
-      when(log.read(
-        startOffset = 0L,
-        maxLength = 1000,
-        isolation = FetchIsolation.LOG_END,
-        minOneMessage = true
+      when(log.read(0L, 1000, FetchIsolation.LOG_END, true
       )).thenReturn(readResult)
 
       when(serde.deserialize(ArgumentMatchers.any(), ArgumentMatchers.any()))
         .thenThrow(new RuntimeException("Error!"))
 
-      val ex = assertFutureThrows(loader.load(tp, coordinator), classOf[RuntimeException])
+      val ex = assertFutureThrows(classOf[RuntimeException], loader.load(tp, coordinator))
 
       assertEquals(s"Deserializing record DefaultRecord(offset=0, timestamp=-1, key=2 bytes, value=2 bytes) from $tp failed due to: Error!", ex.getMessage)
     }
@@ -340,11 +311,7 @@ class CoordinatorLoaderImplTest {
 
       val readResult = logReadResult(startOffset = 0, records = Seq())
 
-      when(log.read(
-        startOffset = 0L,
-        maxLength = 1000,
-        isolation = FetchIsolation.LOG_END,
-        minOneMessage = true
+      when(log.read(0L, 1000, FetchIsolation.LOG_END, true
       )).thenReturn(readResult)
 
       assertNotNull(loader.load(tp, coordinator).get(10, TimeUnit.SECONDS))
@@ -376,11 +343,7 @@ class CoordinatorLoaderImplTest {
         new SimpleRecord("k2".getBytes, "v2".getBytes)
       ))
 
-      when(log.read(
-        startOffset = 0L,
-        maxLength = 1000,
-        isolation = FetchIsolation.LOG_END,
-        minOneMessage = true
+      when(log.read(0L, 1000, FetchIsolation.LOG_END, true
       )).thenAnswer((_: InvocationOnMock) => {
         time.sleep(1000)
         readResult1
@@ -392,11 +355,7 @@ class CoordinatorLoaderImplTest {
         new SimpleRecord("k5".getBytes, "v5".getBytes)
       ))
 
-      when(log.read(
-        startOffset = 2L,
-        maxLength = 1000,
-        isolation = FetchIsolation.LOG_END,
-        minOneMessage = true
+      when(log.read(2L, 1000, FetchIsolation.LOG_END, true
       )).thenReturn(readResult2)
 
       val summary = loader.load(tp, coordinator).get(10, TimeUnit.SECONDS)
@@ -431,11 +390,7 @@ class CoordinatorLoaderImplTest {
         new SimpleRecord("k2".getBytes, "v2".getBytes)
       ))
 
-      when(log.read(
-        startOffset = 0L,
-        maxLength = 1000,
-        isolation = FetchIsolation.LOG_END,
-        minOneMessage = true
+      when(log.read(0L, 1000, FetchIsolation.LOG_END, true
       )).thenReturn(readResult1)
 
       val readResult2 = logReadResult(startOffset = 2, records = Seq(
@@ -444,11 +399,7 @@ class CoordinatorLoaderImplTest {
         new SimpleRecord("k5".getBytes, "v5".getBytes)
       ))
 
-      when(log.read(
-        startOffset = 2L,
-        maxLength = 1000,
-        isolation = FetchIsolation.LOG_END,
-        minOneMessage = true
+      when(log.read(2L, 1000, FetchIsolation.LOG_END, true
       )).thenReturn(readResult2)
 
       val readResult3 = logReadResult(startOffset = 5, records = Seq(
@@ -456,11 +407,7 @@ class CoordinatorLoaderImplTest {
         new SimpleRecord("k7".getBytes, "v7".getBytes)
       ))
 
-      when(log.read(
-        startOffset = 5L,
-        maxLength = 1000,
-        isolation = FetchIsolation.LOG_END,
-        minOneMessage = true
+      when(log.read(5L, 1000, FetchIsolation.LOG_END, true
       )).thenReturn(readResult3)
 
       assertNotNull(loader.load(tp, coordinator).get(10, TimeUnit.SECONDS))
@@ -532,11 +479,7 @@ class CoordinatorLoaderImplTest {
         new SimpleRecord("k2".getBytes, "v2".getBytes)
       ))
 
-      when(log.read(
-        startOffset = 0L,
-        maxLength = 1000,
-        isolation = FetchIsolation.LOG_END,
-        minOneMessage = true
+      when(log.read(0L, 1000, FetchIsolation.LOG_END, true
       )).thenReturn(readResult1)
 
       val readResult2 = logReadResult(startOffset = 2, records = Seq(
@@ -545,11 +488,7 @@ class CoordinatorLoaderImplTest {
         new SimpleRecord("k5".getBytes, "v5".getBytes)
       ))
 
-      when(log.read(
-        startOffset = 2L,
-        maxLength = 1000,
-        isolation = FetchIsolation.LOG_END,
-        minOneMessage = true
+      when(log.read(2L, 1000, FetchIsolation.LOG_END, true
       )).thenReturn(readResult2)
 
       val readResult3 = logReadResult(startOffset = 5, records = Seq(
@@ -557,11 +496,7 @@ class CoordinatorLoaderImplTest {
         new SimpleRecord("k7".getBytes, "v7".getBytes)
       ))
 
-      when(log.read(
-        startOffset = 5L,
-        maxLength = 1000,
-        isolation = FetchIsolation.LOG_END,
-        minOneMessage = true
+      when(log.read(5L, 1000, FetchIsolation.LOG_END, true
       )).thenReturn(readResult3)
 
       assertNotNull(loader.load(tp, coordinator).get(10, TimeUnit.SECONDS))
@@ -608,11 +543,7 @@ class CoordinatorLoaderImplTest {
         new SimpleRecord("k2".getBytes, "v2".getBytes)
       ))
 
-      when(log.read(
-        startOffset = 0L,
-        maxLength = 1000,
-        isolation = FetchIsolation.LOG_END,
-        minOneMessage = true
+      when(log.read(0L, 1000, FetchIsolation.LOG_END, true
       )).thenReturn(readResult1)
 
       val readResult2 = logReadResult(startOffset = 2, records = Seq(
@@ -621,14 +552,10 @@ class CoordinatorLoaderImplTest {
         new SimpleRecord("k5".getBytes, "v5".getBytes)
       ))
 
-      when(log.read(
-        startOffset = 2L,
-        maxLength = 1000,
-        isolation = FetchIsolation.LOG_END,
-        minOneMessage = true
+      when(log.read(2L, 1000, FetchIsolation.LOG_END, true
       )).thenReturn(readResult2)
 
-      assertFutureThrows(loader.load(tp, coordinator), classOf[NotLeaderOrFollowerException])
+      assertFutureThrows(classOf[NotLeaderOrFollowerException], loader.load(tp, coordinator))
     }
   }
 

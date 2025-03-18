@@ -22,7 +22,6 @@ import org.apache.kafka.image.TopicsImage;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
@@ -40,12 +39,12 @@ public class TopicIdsTest {
 
     @Test
     public void testTopicsImageCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new TopicIds(Collections.emptySet(), (TopicsImage) null));
+        assertThrows(NullPointerException.class, () -> new TopicIds(Set.of(), (TopicsImage) null));
     }
 
     @Test
     public void testTopicResolverCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new TopicIds(Collections.emptySet(), (TopicIds.TopicResolver) null));
+        assertThrows(NullPointerException.class, () -> new TopicIds(Set.of(), (TopicIds.TopicResolver) null));
     }
 
     @Test
@@ -57,7 +56,7 @@ public class TopicIdsTest {
 
     @Test
     public void testIsEmpty() {
-        Set<String> topicNames = Collections.emptySet();
+        Set<String> topicNames = Set.of();
         Set<Uuid> topicIds = new TopicIds(topicNames, TopicsImage.EMPTY);
         assertEquals(topicNames.size(), topicIds.size());
     }
@@ -176,14 +175,14 @@ public class TopicIdsTest {
     @Test
     public void testEquals() {
         Uuid topicId = Uuid.randomUuid();
-        TopicIds topicIds1 = new TopicIds(Collections.singleton("topic"),
+        TopicIds topicIds1 = new TopicIds(Set.of("topic"),
             new MetadataImageBuilder()
                 .addTopic(topicId, "topicId", 3)
                 .build()
                 .topics()
         );
 
-        TopicIds topicIds2 = new TopicIds(Collections.singleton("topic"),
+        TopicIds topicIds2 = new TopicIds(Set.of("topic"),
             new MetadataImageBuilder()
                 .addTopic(topicId, "topicId", 3)
                 .build()

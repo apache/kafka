@@ -64,7 +64,7 @@ public class BrokerRegistration {
             this.fenced = false;
             this.inControlledShutdown = false;
             this.isMigratingZkBroker = false;
-            this.directories = Collections.emptyList();
+            this.directories = List.of();
         }
 
         public Builder setId(int id) {
@@ -294,15 +294,8 @@ public class BrokerRegistration {
             setRack(rack.orElse(null)).
             setBrokerEpoch(epoch).
             setIncarnationId(incarnationId).
-            setFenced(fenced);
-
-        if (inControlledShutdown) {
-            if (options.metadataVersion().isInControlledShutdownStateSupported()) {
-                registrationRecord.setInControlledShutdown(true);
-            } else {
-                options.handleLoss("the inControlledShutdown state of one or more brokers");
-            }
-        }
+            setFenced(fenced).
+            setInControlledShutdown(inControlledShutdown);
 
         if (isMigratingZkBroker) {
             if (options.metadataVersion().isMigrationSupported()) {

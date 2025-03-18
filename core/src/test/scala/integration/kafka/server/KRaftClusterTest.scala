@@ -437,18 +437,6 @@ class KRaftClusterTest {
     }
   }
 
-  @Test
-  def testCreateClusterInvalidMetadataVersion(): Unit = {
-    assertEquals("Bootstrap metadata.version before 3.3-IV0 are not supported. Can't load " +
-      "metadata from testkit", assertThrows(classOf[RuntimeException], () => {
-        new KafkaClusterTestKit.Builder(
-          new TestKitNodes.Builder().
-            setBootstrapMetadataVersion(MetadataVersion.IBP_3_0_IV1).
-            setNumBrokerNodes(1).
-            setNumControllerNodes(1).build()).build()
-    }).getMessage)
-  }
-
   private def doOnStartedKafkaCluster(nodes: TestKitNodes)
                                      (action: KafkaClusterTestKit => Unit): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(nodes).build()
@@ -845,8 +833,9 @@ class KRaftClusterTest {
     Option(image.brokers().get(brokerId)).isEmpty
   }
 
-  @Test
-  def testUnregisterBroker(): Unit = {
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testUnregisterBroker(usingBootstrapController: Boolean): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumBrokerNodes(4).
@@ -860,7 +849,7 @@ class KRaftClusterTest {
       cluster.brokers().get(0).shutdown()
       TestUtils.waitUntilTrue(() => !brokerIsUnfenced(clusterImage(cluster, 1), 0),
         "Timed out waiting for broker 0 to be fenced.")
-      val admin = Admin.create(cluster.clientProperties())
+      val admin = createAdminClient(cluster, bootstrapController = usingBootstrapController);
       try {
         admin.unregisterBroker(0)
       } finally {
@@ -990,7 +979,7 @@ class KRaftClusterTest {
   def testUpdateMetadataVersion(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setBootstrapMetadataVersion(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION).
+        setBootstrapMetadataVersion(MetadataVersion.MINIMUM_VERSION).
         setNumBrokerNodes(4).
         setNumControllerNodes(3).build()).build()
     try {
@@ -1008,8 +997,37 @@ class KRaftClusterTest {
       } finally {
         admin.close()
       }
-      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).metadataCache.currentImage().features().metadataVersion().equals(MetadataVersion.latestTesting()),
-        "Timed out waiting for metadata.version update")
+      TestUtils.waitUntilTrue(() => cluster.brokers().get(0).metadataCache.currentImage().features().metadataVersion()
+        .equals(Optional.of(MetadataVersion.latestTesting())), "Timed out waiting for metadata.version update")
+    } finally {
+      cluster.close()
+    }
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testDescribeKRaftVersion(usingBootstrapControlers: Boolean): Unit = {
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).
+        setFeature(KRaftVersion.FEATURE_NAME, 1.toShort).build()).build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+      val admin = Admin.create(cluster.newClientPropertiesBuilder().
+        setUsingBootstrapControllers(usingBootstrapControlers).
+        build())
+      try {
+        val featureMetadata = admin.describeFeatures().featureMetadata().get()
+        assertEquals(new SupportedVersionRange(0, 1),
+          featureMetadata.supportedFeatures().get(KRaftVersion.FEATURE_NAME))
+        assertEquals(new FinalizedVersionRange(1.toShort, 1.toShort),
+          featureMetadata.finalizedFeatures().get(KRaftVersion.FEATURE_NAME))
+      } finally {
+        admin.close()
+      }
     } finally {
       cluster.close()
     }
@@ -1143,7 +1161,7 @@ class KRaftClusterTest {
   def testSingleControllerSingleBrokerCluster(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
-        setBootstrapMetadataVersion(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION).
+        setBootstrapMetadataVersion(MetadataVersion.MINIMUM_VERSION).
         setNumBrokerNodes(1).
         setNumControllerNodes(1).build()).build()
     try {
@@ -1403,7 +1421,7 @@ class KRaftClusterTest {
         broker0.shutdown()
         TestUtils.retry(60000) {
           val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
-          assertTrue(info.isDefined)
+          assertTrue(info.isPresent())
           assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
         }
 
@@ -1417,7 +1435,7 @@ class KRaftClusterTest {
         broker0.startup()
         TestUtils.retry(60000) {
           val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
-          assertTrue(info.isDefined)
+          assertTrue(info.isPresent)
           assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
         }
       } finally {
@@ -1458,7 +1476,7 @@ class KRaftClusterTest {
         broker0.shutdown()
         TestUtils.retry(60000) {
           val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
-          assertTrue(info.isDefined)
+          assertTrue(info.isPresent())
           assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
         }
 
@@ -1466,13 +1484,13 @@ class KRaftClusterTest {
         // This is equivalent to a failure during the promotion of the future replica and a restart with directory for
         // the main replica being offline
         val log = broker0.logManager.getLog(foo0).get
-        log.renameDir(UnifiedLog.logFutureDirName(foo0), shouldReinitialize = false)
+        log.renameDir(UnifiedLog.logFutureDirName(foo0), false)
 
         // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
         broker0.startup()
         TestUtils.retry(60000) {
           val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
-          assertTrue(info.isDefined)
+          assertTrue(info.isPresent())
           assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
           assertTrue(broker0.logManager.getLog(foo0, isFuture = true).isEmpty)
         }
@@ -1523,7 +1541,7 @@ class KRaftClusterTest {
         broker0.shutdown()
         TestUtils.retry(60000) {
           val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
-          assertTrue(info.isDefined)
+          assertTrue(info.isPresent())
           assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
         }
 
@@ -1542,14 +1560,14 @@ class KRaftClusterTest {
         // This is equivalent to a failure during the promotion of the future replica and a restart with directory for
         // the main replica being online
         val originalLogFile = log.dir
-        log.renameDir(UnifiedLog.logFutureDirName(foo0), shouldReinitialize = false)
+        log.renameDir(UnifiedLog.logFutureDirName(foo0), false)
         assertFalse(originalLogFile.exists())
 
         // Start up broker0 and wait until the ISR of foo-0 is set to [0, 1, 2]
         broker0.startup()
         TestUtils.retry(60000) {
           val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
-          assertTrue(info.isDefined)
+          assertTrue(info.isPresent())
           assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
           assertTrue(broker0.logManager.getLog(foo0, isFuture = true).isEmpty)
           assertFalse(targetDirFile.exists())

@@ -35,6 +35,7 @@
   <allow pkg="kafka.common" />
   <allow pkg="kafka.utils" />
   <allow pkg="kafka.serializer" />
+  <allow pkg="org.apache.kafka.clients" class="CommonClientConfigs"/>
   <allow pkg="org.apache.kafka.common" />
   <allow pkg="org.apache.kafka.common.test.api" />
   <allow pkg="org.mockito" class="AssignmentsManagerTest"/>
@@ -45,23 +46,6 @@
   <disallow class="com.yammer.metrics.Metrics" />
   <allow pkg="com.yammer.metrics"/>
 
-  <subpackage name="testkit">
-    <allow pkg="kafka.metrics"/>
-    <allow pkg="kafka.raft"/>
-    <allow pkg="kafka.server"/>
-    <allow pkg="kafka.tools"/>
-    <allow pkg="org.apache.kafka.clients"/>
-    <allow pkg="org.apache.kafka.controller"/>
-    <allow pkg="org.apache.kafka.raft"/>
-    <allow pkg="org.apache.kafka.test"/>
-    <allow pkg="org.apache.kafka.metadata" />
-    <allow pkg="org.apache.kafka.metalog" />
-    <allow pkg="org.apache.kafka.server.common" />
-    <allow pkg="org.apache.kafka.server.fault" />
-    <allow class="org.apache.kafka.storage.internals.log.CleanerConfig" />
-    <allow class="org.apache.kafka.network.SocketServerConfigs" />
-  </subpackage>
-
   <subpackage name="tools">
     <allow pkg="org.apache.kafka.clients.admin" />
     <allow pkg="kafka.admin" />
@@ -71,7 +55,7 @@
   </subpackage>
 
   <subpackage name="coordinator">
-    <allow class="kafka.server.MetadataCache" />
+    <allow class="org.apache.kafka.metadata.MetadataCache" />
   </subpackage>
 
   <subpackage name="docker">
@@ -80,10 +64,6 @@
     <allow class="com.fasterxml.jackson.annotation.JsonProperty" />
     <allow class="com.fasterxml.jackson.annotation.JsonPropertyOrder" />
     <allow class="com.fasterxml.jackson.annotation.JsonIgnoreProperties" />
-  </subpackage>
-
-  <subpackage name="examples">
-    <allow pkg="org.apache.kafka.clients" />
   </subpackage>
 
   <subpackage name="log.remote">
@@ -157,6 +137,7 @@
     <allow pkg="org.apache.kafka.common.test"/>
     <allow pkg="org.apache.kafka.common.test.api"/>
     <allow pkg="org.apache.kafka.common.test.api"/>
+    <allow pkg="org.apache.kafka.admin"/>
   </subpackage>
 
   <subpackage name="security">

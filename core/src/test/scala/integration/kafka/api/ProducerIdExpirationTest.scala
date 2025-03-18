@@ -130,7 +130,7 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     producer.beginTransaction()
     val failedFuture = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "1", "1", willBeCommitted = false))
     TestUtils.waitUntilTrue(() => failedFuture.isDone, "Producer future never completed.")
-    org.apache.kafka.test.TestUtils.assertFutureThrows(failedFuture, classOf[InvalidPidMappingException])
+    org.apache.kafka.test.TestUtils.assertFutureThrows(classOf[InvalidPidMappingException], failedFuture)
 
     // Assert that aborting the transaction throws a KafkaException due to the fatal error.
     assertThrows(classOf[KafkaException], () => producer.abortTransaction())

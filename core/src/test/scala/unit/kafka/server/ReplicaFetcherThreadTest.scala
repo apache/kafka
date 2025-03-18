@@ -17,10 +17,11 @@
 package kafka.server
 
 import kafka.cluster.Partition
-import kafka.log.{LogManager, UnifiedLog}
+import kafka.log.LogManager
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UNBOUNDED_QUOTA
 import kafka.server.epoch.util.MockBlockingSender
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.compress.Compression
@@ -35,7 +36,7 @@ import org.apache.kafka.common.requests.{FetchRequest, FetchResponse}
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.network.BrokerEndPoint
-import org.apache.kafka.storage.internals.log.LogAppendInfo
+import org.apache.kafka.storage.internals.log.{LogAppendInfo, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -45,11 +46,13 @@ import org.mockito.ArgumentCaptor
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyLong}
 import org.mockito.Mockito.{mock, times, verify, when}
 
+import java.lang.{Long => JLong}
 import java.nio.charset.StandardCharsets
 import java.util
-import java.util.{Collections, Optional, OptionalInt}
+import java.util.{Collections, Optional}
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.RichOption
 
 class ReplicaFetcherThreadTest {
 
@@ -65,7 +68,7 @@ class ReplicaFetcherThreadTest {
   private val brokerEndPoint = new BrokerEndPoint(0, "localhost", 1000)
   private val failedPartitions = new FailedPartitions
 
-  private val metadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.LATEST_PRODUCTION)
+  private val metadataCache = new KRaftMetadataCache(0, () => KRaftVersion.LATEST_PRODUCTION)
 
   private def initialFetchState(topicId: Option[Uuid], fetchOffset: Long, leaderEpoch: Int = 1): InitialFetchState = {
     InitialFetchState(topicId = topicId, leader = new BrokerEndPoint(0, "localhost", 9092),
@@ -90,7 +93,7 @@ class ReplicaFetcherThreadTest {
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${brokerConfig.brokerId}, leaderId=${leaderEndpointBlockingSend.brokerEndPoint().id}, fetcherId=$fetcherId] ")
     val fetchSessionHandler = new FetchSessionHandler(logContext, leaderEndpointBlockingSend.brokerEndPoint().id)
     val leader = new RemoteLeaderEndPoint(logContext.logPrefix, leaderEndpointBlockingSend, fetchSessionHandler,
-      brokerConfig, replicaMgr, quota, () => MetadataVersion.MINIMUM_KRAFT_VERSION, () => 1)
+      brokerConfig, replicaMgr, quota, () => MetadataVersion.MINIMUM_VERSION, () => 1)
     new ReplicaFetcherThread(name,
       leader,
       brokerConfig,
@@ -197,9 +200,9 @@ class ReplicaFetcherThreadTest {
     //Stubs
     when(partition.localLogOrException).thenReturn(log)
     when(log.highWatermark).thenReturn(0)
-    when(log.latestEpoch).thenReturn(Some(leaderEpoch))
+    when(log.latestEpoch).thenReturn(Optional.of(leaderEpoch))
     when(log.endOffsetForEpoch(leaderEpoch)).thenReturn(
-      Some(new OffsetAndEpoch(0, leaderEpoch)))
+      Optional.of(new OffsetAndEpoch(0, leaderEpoch)))
     when(replicaManager.metadataCache).thenReturn(metadataCache)
     when(replicaManager.logManager).thenReturn(logManager)
     when(replicaManager.replicaAlterLogDirsManager).thenReturn(replicaAlterLogDirsManager)
@@ -258,15 +261,15 @@ class ReplicaFetcherThreadTest {
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
 
     val initialLEO = 200
-    var latestLogEpoch: Option[Int] = Some(5)
+    var latestLogEpoch: Optional[Int] = Optional.of(5)
 
     // Stubs
     when(partition.localLogOrException).thenReturn(log)
     when(log.highWatermark).thenReturn(115)
     when(log.latestEpoch).thenAnswer(_ => latestLogEpoch)
-    when(log.endOffsetForEpoch(4)).thenReturn(Some(new OffsetAndEpoch(149, 4)))
-    when(log.endOffsetForEpoch(3)).thenReturn(Some(new OffsetAndEpoch(129, 2)))
-    when(log.endOffsetForEpoch(2)).thenReturn(Some(new OffsetAndEpoch(119, 1)))
+    when(log.endOffsetForEpoch(4)).thenReturn(Optional.of(new OffsetAndEpoch(149, 4)))
+    when(log.endOffsetForEpoch(3)).thenReturn(Optional.of(new OffsetAndEpoch(129, 2)))
+    when(log.endOffsetForEpoch(2)).thenReturn(Optional.of(new OffsetAndEpoch(119, 1)))
     when(log.logEndOffset).thenReturn(initialLEO)
     when(replicaManager.metadataCache).thenReturn(metadataCache)
     when(replicaManager.localLogOrException(any[TopicPartition])).thenReturn(log)
@@ -280,10 +283,23 @@ class ReplicaFetcherThreadTest {
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
     val fetchSessionHandler = new FetchSessionHandler(logContext, brokerEndPoint.id)
     val leader = new RemoteLeaderEndPoint(logContext.logPrefix, mockNetwork, fetchSessionHandler, config,
-      replicaManager, quota, () => MetadataVersion.MINIMUM_KRAFT_VERSION, () => 1)
-    val thread = new ReplicaFetcherThread("bob", leader, config, failedPartitions,
-      replicaManager, quota, logContext.logPrefix, () => MetadataVersion.MINIMUM_KRAFT_VERSION) {
-      override def processPartitionData(topicPartition: TopicPartition, fetchOffset: Long, partitionData: FetchData): Option[LogAppendInfo] = None
+      replicaManager, quota, () => MetadataVersion.MINIMUM_VERSION, () => 1)
+    val thread = new ReplicaFetcherThread(
+      "bob",
+      leader,
+      config,
+      failedPartitions,
+      replicaManager,
+      quota,
+      logContext.logPrefix,
+      () => MetadataVersion.MINIMUM_VERSION
+    ) {
+      override def processPartitionData(
+        topicPartition: TopicPartition,
+        fetchOffset: Long,
+        partitionLeaderEpoch: Int,
+        partitionData: FetchData
+      ): Option[LogAppendInfo] = None
     }
     thread.addPartitions(Map(t1p0 -> initialFetchState(Some(topicId1), initialLEO), t1p1 -> initialFetchState(Some(topicId1), initialLEO)))
     val partitions = Set(t1p0, t1p1)
@@ -309,7 +325,7 @@ class ReplicaFetcherThreadTest {
       t1p1 -> partitionData(t1p1.partition, new FetchResponseData.EpochEndOffset().setEpoch(4).setEndOffset(141))
     ))
     mockNetwork.setIdsForNextResponse(topicIds)
-    latestLogEpoch = Some(4)
+    latestLogEpoch = Optional.of(4)
     thread.doWork()
     assertEquals(0, mockNetwork.epochFetchCount)
     assertEquals(2, mockNetwork.fetchCount)
@@ -343,7 +359,7 @@ class ReplicaFetcherThreadTest {
       t1p1 -> partitionData(t1p1.partition, new FetchResponseData.EpochEndOffset().setEpoch(2).setEndOffset(121))
     ))
     mockNetwork.setIdsForNextResponse(topicIds)
-    latestLogEpoch = None
+    latestLogEpoch = Optional.empty
     thread.doWork()
     assertEquals(0, mockNetwork.epochFetchCount)
     assertEquals(4, mockNetwork.fetchCount)
@@ -367,8 +383,8 @@ class ReplicaFetcherThreadTest {
     val highWatermark = 130
 
     when(log.highWatermark).thenReturn(highWatermark)
-    when(log.latestEpoch).thenReturn(Some(5))
-    when(log.endOffsetForEpoch(4)).thenReturn(Some(new OffsetAndEpoch(149, 4)))
+    when(log.latestEpoch).thenReturn(Optional.of(5))
+    when(log.endOffsetForEpoch(4)).thenReturn(Optional.of(new OffsetAndEpoch(149, 4)))
     when(log.logEndOffset).thenReturn(logEndOffset)
 
     when(replicaManager.metadataCache).thenReturn(metadataCache)
@@ -379,7 +395,7 @@ class ReplicaFetcherThreadTest {
     when(replicaManager.getPartitionOrException(t1p0)).thenReturn(partition)
 
     when(partition.localLogOrException).thenReturn(log)
-    when(partition.appendRecordsToFollowerOrFutureReplica(any(), any())).thenReturn(None)
+    when(partition.appendRecordsToFollowerOrFutureReplica(any(), any(), any())).thenReturn(None)
 
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
 
@@ -396,7 +412,7 @@ class ReplicaFetcherThreadTest {
       config,
       replicaManager,
       quota,
-      () => MetadataVersion.MINIMUM_KRAFT_VERSION,
+      () => MetadataVersion.MINIMUM_VERSION,
       () => 1
     )
 
@@ -408,7 +424,7 @@ class ReplicaFetcherThreadTest {
       replicaManager,
       quota,
       logContext.logPrefix,
-      () => MetadataVersion.MINIMUM_KRAFT_VERSION
+      () => MetadataVersion.MINIMUM_VERSION
     )
 
     thread.addPartitions(Map(
@@ -448,10 +464,10 @@ class ReplicaFetcherThreadTest {
     val lastFetchedEpoch = 2
 
     when(log.highWatermark).thenReturn(0)
-    when(log.latestEpoch).thenReturn(Some(lastFetchedEpoch))
-    when(log.endOffsetForEpoch(0)).thenReturn(Some(new OffsetAndEpoch(0, 0)))
+    when(log.latestEpoch).thenReturn(Optional.of(lastFetchedEpoch))
+    when(log.endOffsetForEpoch(0)).thenReturn(Optional.of(new OffsetAndEpoch(0, 0)))
     when(log.logEndOffset).thenReturn(0)
-    when(log.maybeUpdateHighWatermark(0)).thenReturn(None)
+    when(log.maybeUpdateHighWatermark(0)).thenReturn(Optional.empty)
 
     when(replicaManager.metadataCache).thenReturn(metadataCache)
     when(replicaManager.logManager).thenReturn(logManager)
@@ -460,10 +476,10 @@ class ReplicaFetcherThreadTest {
     when(replicaManager.brokerTopicStats).thenReturn(mock(classOf[BrokerTopicStats]))
 
     when(partition.localLogOrException).thenReturn(log)
-    when(partition.appendRecordsToFollowerOrFutureReplica(any(), any())).thenReturn(Some(new LogAppendInfo(
+    when(partition.appendRecordsToFollowerOrFutureReplica(any(), any(), any())).thenReturn(Some(new LogAppendInfo(
       -1,
       0,
-      OptionalInt.empty,
+      Optional.empty,
       RecordBatch.NO_TIMESTAMP,
       RecordBatch.NO_TIMESTAMP,
       -1L,
@@ -488,7 +504,7 @@ class ReplicaFetcherThreadTest {
       config,
       replicaManager,
       quota,
-      () => MetadataVersion.MINIMUM_KRAFT_VERSION,
+      () => MetadataVersion.MINIMUM_VERSION,
       () => 1
     )
 
@@ -500,7 +516,7 @@ class ReplicaFetcherThreadTest {
       replicaManager,
       quota,
       logContext.logPrefix,
-      () => MetadataVersion.MINIMUM_KRAFT_VERSION
+      () => MetadataVersion.MINIMUM_VERSION
     )
 
     thread.addPartitions(Map(
@@ -528,7 +544,7 @@ class ReplicaFetcherThreadTest {
 
     // Lag is set to Some(0).
     assertEquals(Some(0), thread.fetchState(t1p0).flatMap(_.lag))
-    assertEquals(Some(lastFetchedEpoch), thread.fetchState(t1p0).flatMap(_.lastFetchedEpoch))
+    assertEquals(Optional.of(lastFetchedEpoch), thread.fetchState(t1p0).toJava.flatMap(_.lastFetchedEpoch))
   }
 
   @Test
@@ -597,7 +613,7 @@ class ReplicaFetcherThreadTest {
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
     val fetchSessionHandler = new FetchSessionHandler(logContext, brokerEndPoint.id)
     val leader = new RemoteLeaderEndPoint(logContext.logPrefix, mockBlockingSend, fetchSessionHandler, config,
-      replicaManager, replicaQuota, () => MetadataVersion.MINIMUM_KRAFT_VERSION, () => 1)
+      replicaManager, replicaQuota, () => MetadataVersion.MINIMUM_VERSION, () => 1)
     val thread = new ReplicaFetcherThread("bob",
       leader,
       config,
@@ -605,14 +621,14 @@ class ReplicaFetcherThreadTest {
       replicaManager,
       replicaQuota,
       logContext.logPrefix,
-      () => MetadataVersion.MINIMUM_KRAFT_VERSION)
+      () => MetadataVersion.MINIMUM_VERSION)
 
     val leaderEpoch = 1
 
     val partitionMap = Map(
-        t1p0 -> PartitionFetchState(Some(topicId1), 150, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = None),
-        t1p1 -> PartitionFetchState(Some(topicId1), 155, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = None),
-        t2p1 -> PartitionFetchState(Some(topicId2), 160, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = None))
+        t1p0 -> PartitionFetchState(Some(topicId1), 150, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = Optional.empty),
+        t1p1 -> PartitionFetchState(Some(topicId1), 155, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = Optional.empty),
+        t2p1 -> PartitionFetchState(Some(topicId2), 160, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = Optional.empty))
 
     val ResultWithPartitions(fetchRequestOpt, _) = thread.leader.buildFetch(partitionMap)
 
@@ -639,8 +655,8 @@ class ReplicaFetcherThreadTest {
     // Remove t1p0, change the ID for t2p1, and keep t1p1 the same
     val newTopicId = Uuid.randomUuid()
     val partitionMap2 = Map(
-      t1p1 -> PartitionFetchState(Some(topicId1), 155, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = None),
-      t2p1 -> PartitionFetchState(Some(newTopicId), 160, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = None))
+      t1p1 -> PartitionFetchState(Some(topicId1), 155, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = Optional.empty),
+      t2p1 -> PartitionFetchState(Some(newTopicId), 160, None, leaderEpoch, None, state = Fetching, lastFetchedEpoch = Optional.empty))
     val ResultWithPartitions(fetchRequestOpt2, _) = thread.leader.buildFetch(partitionMap2)
 
     // Since t1p1 didn't change, we drop that one
@@ -666,10 +682,10 @@ class ReplicaFetcherThreadTest {
     val mockBlockingSend: BlockingSend = mock(classOf[BlockingSend])
     when(mockBlockingSend.brokerEndPoint()).thenReturn(brokerEndPoint)
 
-    val maybeNewHighWatermark = if (highWatermarkUpdated) {
-      Some(highWatermarkReceivedFromLeader)
+    val maybeNewHighWatermark: Optional[JLong] = if (highWatermarkUpdated) {
+      Optional.of(highWatermarkReceivedFromLeader)
     } else {
-      None
+      Optional.empty
     }
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     when(log.maybeUpdateHighWatermark(highWatermarkReceivedFromLeader))
@@ -679,7 +695,7 @@ class ReplicaFetcherThreadTest {
 
     val partition: Partition = mock(classOf[Partition])
     when(partition.localLogOrException).thenReturn(log)
-    when(partition.appendRecordsToFollowerOrFutureReplica(any[MemoryRecords], any[Boolean])).thenReturn(appendInfo)
+    when(partition.appendRecordsToFollowerOrFutureReplica(any[MemoryRecords], any[Boolean], any[Int])).thenReturn(appendInfo)
 
     // Capture the argument at the time of invocation.
     val completeDelayedFetchRequestsArgument = mutable.Buffer.empty[TopicPartition]
@@ -710,8 +726,8 @@ class ReplicaFetcherThreadTest {
       .setRecords(records)
       .setHighWatermark(highWatermarkReceivedFromLeader)
 
-    thread.processPartitionData(tp0, 0, partitionData.setPartitionIndex(0))
-    thread.processPartitionData(tp1, 0, partitionData.setPartitionIndex(1))
+    thread.processPartitionData(tp0, 0, Int.MaxValue, partitionData.setPartitionIndex(0))
+    thread.processPartitionData(tp1, 0, Int.MaxValue, partitionData.setPartitionIndex(1))
     verify(replicaManager, times(0)).completeDelayedFetchRequests(any[Seq[TopicPartition]])
 
     thread.doWork()
@@ -755,13 +771,13 @@ class ReplicaFetcherThreadTest {
     val log: UnifiedLog = mock(classOf[UnifiedLog])
     val records = MemoryRecords.withRecords(Compression.NONE,
       new SimpleRecord(1000, "foo".getBytes(StandardCharsets.UTF_8)))
-    when(log.maybeUpdateHighWatermark(hw = 0)).thenReturn(None)
+    when(log.maybeUpdateHighWatermark(0)).thenReturn(Optional.empty)
 
     val partition: Partition = mock(classOf[Partition])
     when(partition.localLogOrException).thenReturn(log)
     when(partition.isReassigning).thenReturn(isReassigning)
     when(partition.isAddingLocalReplica).thenReturn(isReassigning)
-    when(partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = false)).thenReturn(None)
+    when(partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = false, Int.MaxValue)).thenReturn(None)
 
     val replicaManager: ReplicaManager = mock(classOf[ReplicaManager])
     when(replicaManager.getPartitionOrException(any[TopicPartition])).thenReturn(partition)
@@ -785,7 +801,7 @@ class ReplicaFetcherThreadTest {
       .setLastStableOffset(0)
       .setLogStartOffset(0)
       .setRecords(records)
-    thread.processPartitionData(t1p0, 0, partitionData)
+    thread.processPartitionData(t1p0, 0, Int.MaxValue, partitionData)
 
     if (isReassigning)
       assertEquals(records.sizeInBytes(), brokerTopicStats.allTopicsStats.reassignmentBytesInPerSec.get.count())

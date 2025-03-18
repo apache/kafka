@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.jmh.log;
 
-import kafka.log.UnifiedLog;
-
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.compress.GzipCompression;
 import org.apache.kafka.common.compress.Lz4Compression;
@@ -41,6 +39,7 @@ import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.storage.internals.log.LogOffsetsListener;
 import org.apache.kafka.storage.internals.log.ProducerStateManagerConfig;
+import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.internals.log.VerificationGuard;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
@@ -53,13 +52,13 @@ import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ThreadLocalRandom;
 
 import joptsimple.OptionParser;
 import joptsimple.OptionSet;
 import joptsimple.OptionSpec;
-import scala.Option;
 
 public class TestLinearWriteSpeed {
 
@@ -216,6 +215,9 @@ public class TestLinearWriteSpeed {
         double elapsedSecs = (System.nanoTime() - beginTest) / (1000.0 * 1000.0 * 1000.0);
         System.out.println((bytesToWrite / (1024.0 * 1024.0 * elapsedSecs)) + " MB per sec");
         scheduler.shutdown();
+        for (Writable writable : writables) {
+            writable.close();
+        }
     }
 
     private static void setupCompression(CompressionType compressionType,
@@ -300,7 +302,7 @@ public class TestLinearWriteSpeed {
         public LogWritable(File dir, LogConfig config, Scheduler scheduler, MemoryRecords messages) throws IOException {
             this.messages = messages;
             Utils.delete(dir);
-            this.log = UnifiedLog.apply(
+            this.log = UnifiedLog.create(
                 dir,
                 config,
                 0L,
@@ -313,7 +315,7 @@ public class TestLinearWriteSpeed {
                 TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
                 new LogDirFailureChannel(10),
                 true,
-                Option.empty(),
+                Optional.empty(),
                 new CopyOnWriteMap<>(),
                 false,
                 LogOffsetsListener.NO_OP_OFFSETS_LISTENER

@@ -108,6 +108,8 @@ import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupRe
 import org.apache.kafka.common.message.DeleteGroupsResponseData.DeletableGroupResultCollection;
 import org.apache.kafka.common.message.DeleteRecordsRequestData;
 import org.apache.kafka.common.message.DeleteRecordsResponseData;
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
 import org.apache.kafka.common.message.DeleteTopicsRequestData;
@@ -313,7 +315,7 @@ import static org.apache.kafka.common.protocol.ApiKeys.OFFSET_FETCH;
 import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
 import static org.apache.kafka.common.protocol.ApiKeys.SASL_AUTHENTICATE;
 import static org.apache.kafka.common.protocol.ApiKeys.SYNC_GROUP;
-import static org.apache.kafka.common.protocol.ApiKeys.WRITE_TXN_MARKERS;
+import static org.apache.kafka.common.protocol.ApiKeys.UNREGISTER_BROKER;
 import static org.apache.kafka.common.requests.EndTxnRequest.LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -334,11 +336,13 @@ public class RequestResponseTest {
     public void testSerialization() {
         Map<ApiKeys, List<Short>> toSkip = new HashMap<>();
         // It's not possible to create a MetadataRequest v0 via the builder
-        toSkip.put(METADATA, singletonList((short) 0));
+        toSkip.put(METADATA, List.of((short) 0));
         // DescribeLogDirsResponse v0, v1 and v2 don't have a top level error field
-        toSkip.put(DESCRIBE_LOG_DIRS, Arrays.asList((short) 0, (short) 1, (short) 2));
+        toSkip.put(DESCRIBE_LOG_DIRS, List.of((short) 0, (short) 1, (short) 2));
         // ElectLeaders v0 does not have a top level error field, when accessing it, it defaults to NONE
-        toSkip.put(ELECT_LEADERS, singletonList((short) 0));
+        toSkip.put(ELECT_LEADERS, List.of((short) 0));
+        // UnregisterBroker v0 contains the error message in the response
+        toSkip.put(UNREGISTER_BROKER, List.of((short) 0));
 
         for (ApiKeys apikey : ApiKeys.values()) {
             for (short version : apikey.allVersions()) {
@@ -525,11 +529,6 @@ public class RequestResponseTest {
     public void fetchResponseVersionTest() {
         Uuid id = Uuid.randomUuid();
         MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
-        FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
-                .setPartitionIndex(0)
-                .setHighWatermark(1000000)
-                .setLogStartOffset(-1)
-                .setRecords(records);
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> idResponseData = new LinkedHashMap<>();
         idResponseData.put(new TopicIdPartition(id, new TopicPartition("test", 0)),
                 new FetchResponseData.PartitionData()
@@ -841,6 +840,23 @@ public class RequestResponseTest {
         }
     }
 
+    @Test
+    public void testUnregisterBrokerResponseWithUnknownServerError() {
+        UnregisterBrokerRequest request = new UnregisterBrokerRequest.Builder(
+            new UnregisterBrokerRequestData()
+        ).build((short) 0);
+        String customerErrorMessage = "customer error message";
+        
+        UnregisterBrokerResponse response = request.getErrorResponse(
+            0, 
+            new RuntimeException(customerErrorMessage)
+        );
+
+        assertEquals(0, response.throttleTimeMs());
+        assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), response.data().errorCode());
+        assertEquals(customerErrorMessage, response.data().errorMessage());
+    }
+
     private ApiVersionsResponse defaultApiVersionsResponse() {
         return TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER);
     }
@@ -1042,6 +1058,7 @@ public class RequestResponseTest {
             case STREAMS_GROUP_DESCRIBE: return createStreamsGroupDescribeRequest(version);
             case DESCRIBE_SHARE_GROUP_OFFSETS: return createDescribeShareGroupOffsetsRequest(version);
             case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsRequest(version);
+            case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsRequest(version);
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1100,7 +1117,7 @@ public class RequestResponseTest {
             case BEGIN_QUORUM_EPOCH: return createBeginQuorumEpochResponse();
             case END_QUORUM_EPOCH: return createEndQuorumEpochResponse();
             case DESCRIBE_QUORUM: return createDescribeQuorumResponse();
-            case ALTER_PARTITION: return createAlterPartitionResponse(version);
+            case ALTER_PARTITION: return createAlterPartitionResponse();
             case UPDATE_FEATURES: return createUpdateFeaturesResponse();
             case ENVELOPE: return createEnvelopeResponse();
             case FETCH_SNAPSHOT: return createFetchSnapshotResponse();
@@ -1136,6 +1153,7 @@ public class RequestResponseTest {
             case STREAMS_GROUP_DESCRIBE: return createStreamsGroupDescribeResponse();
             case DESCRIBE_SHARE_GROUP_OFFSETS: return createDescribeShareGroupOffsetsResponse();
             case ALTER_SHARE_GROUP_OFFSETS: return createAlterShareGroupOffsetsResponse();
+            case DELETE_SHARE_GROUP_OFFSETS: return createDeleteShareGroupOffsetsResponse();
             default: throw new IllegalArgumentException("Unknown API key " + apikey);
         }
     }
@@ -1699,41 +1717,31 @@ public class RequestResponseTest {
             .setPartitionIndex(1)
             .setPartitionEpoch(2)
             .setLeaderEpoch(3)
-            .setNewIsrWithEpochs(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(asList(1, 2)));
-
-        if (version >= 1) {
-            // Use the none default value; 1 - RECOVERING
-            partitionData.setLeaderRecoveryState((byte) 1);
-        }
+            .setNewIsrWithEpochs(AlterPartitionRequest.newIsrToSimpleNewIsrWithBrokerEpochs(asList(1, 2)))
+            .setLeaderRecoveryState((byte) 1); // non-default value
 
         AlterPartitionRequestData data = new AlterPartitionRequestData()
             .setBrokerEpoch(123L)
             .setBrokerId(1)
             .setTopics(singletonList(new AlterPartitionRequestData.TopicData()
-                .setTopicName("topic1")
                 .setTopicId(Uuid.randomUuid())
                 .setPartitions(singletonList(partitionData))));
         return new AlterPartitionRequest.Builder(data).build(version);
     }
 
-    private AlterPartitionResponse createAlterPartitionResponse(int version) {
+    private AlterPartitionResponse createAlterPartitionResponse() {
         AlterPartitionResponseData.PartitionData partitionData = new AlterPartitionResponseData.PartitionData()
             .setPartitionEpoch(1)
             .setIsr(asList(0, 1, 2))
             .setErrorCode(Errors.NONE.code())
             .setLeaderEpoch(2)
-            .setLeaderId(3);
-
-        if (version >= 1) {
-            // Use the none default value; 1 - RECOVERING
-            partitionData.setLeaderRecoveryState((byte) 1);
-        }
+            .setLeaderId(3)
+            .setLeaderRecoveryState((byte) 1); // non-default value
 
         AlterPartitionResponseData data = new AlterPartitionResponseData()
                 .setErrorCode(Errors.NONE.code())
                 .setThrottleTimeMs(123)
                 .setTopics(singletonList(new AlterPartitionResponseData.TopicData()
-                    .setTopicName("topic1")
                     .setTopicId(Uuid.randomUuid())
                     .setPartitions(singletonList(partitionData))));
         return new AlterPartitionResponse(data);
@@ -3727,6 +3735,15 @@ public class RequestResponseTest {
         return new AlterShareGroupOffsetsRequest.Builder(data).build(version);
     }
 
+    private DeleteShareGroupOffsetsRequest createDeleteShareGroupOffsetsRequest(short version) {
+        DeleteShareGroupOffsetsRequestData data = new DeleteShareGroupOffsetsRequestData()
+            .setGroupId("group")
+            .setTopics(List.of(new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
+                .setTopicName("topic-1")
+                .setPartitions(List.of(0))));
+        return new DeleteShareGroupOffsetsRequest.Builder(data).build(version);
+    }
+
     private DescribeShareGroupOffsetsResponse createDescribeShareGroupOffsetsResponse() {
         DescribeShareGroupOffsetsResponseData data = new DescribeShareGroupOffsetsResponseData()
             .setGroups(Collections.singletonList(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
@@ -3751,6 +3768,17 @@ public class RequestResponseTest {
                 .setTopicName("topic")
                 .setTopicId(Uuid.randomUuid())));
         return new AlterShareGroupOffsetsResponse(data);
+    }
+
+    private DeleteShareGroupOffsetsResponse createDeleteShareGroupOffsetsResponse() {
+        DeleteShareGroupOffsetsResponseData data = new DeleteShareGroupOffsetsResponseData()
+            .setResponses(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                .setTopicName("topic-1")
+                .setTopicId(Uuid.randomUuid())
+                .setPartitions(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
+                    .setPartitionIndex(0)
+                    .setErrorCode(Errors.NONE.code())))));
+        return new DeleteShareGroupOffsetsResponse(data);
     }
 
     private AbstractRequest createStreamsGroupDescribeRequest(final short version) {

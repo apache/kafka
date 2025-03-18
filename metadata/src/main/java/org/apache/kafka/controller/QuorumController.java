@@ -117,7 +117,6 @@ import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
@@ -128,9 +127,7 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.slf4j.Logger;
 
-import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -217,7 +214,7 @@ public final class QuorumController implements Controller {
         private Optional<CreateTopicPolicy> createTopicPolicy = Optional.empty();
         private Optional<AlterConfigPolicy> alterConfigPolicy = Optional.empty();
         private ConfigurationValidator configurationValidator = ConfigurationValidator.NO_OP;
-        private Map<String, Object> staticConfig = Collections.emptyMap();
+        private Map<String, Object> staticConfig = Map.of();
         private BootstrapMetadata bootstrapMetadata = null;
         private int maxRecordsPerBatch = DEFAULT_MAX_RECORDS_PER_BATCH;
         private long controllerPerformanceSamplePeriodMs = 60000L;
@@ -1158,7 +1155,6 @@ public final class QuorumController implements Controller {
             try {
                 return ActivationRecordsGenerator.generate(
                     log::warn,
-                    logReplayTracker.empty(),
                     offsetControl.transactionStartOffset(),
                     bootstrapMetadata,
                     featureControl.metadataVersion(),
@@ -1215,7 +1211,6 @@ public final class QuorumController implements Controller {
                         recordRedactor.toLoggableString(message), offset);
             }
         }
-        logReplayTracker.replay(message);
         MetadataRecordType type = MetadataRecordType.fromId(message.apiKey());
         switch (type) {
             case REGISTER_BROKER_RECORD:
@@ -1433,12 +1428,6 @@ public final class QuorumController implements Controller {
     private final AclControlManager aclControlManager;
 
     /**
-     * Tracks replaying the log.
-     * This must be accessed only by the event queue thread.
-     */
-    private final LogReplayTracker logReplayTracker;
-
-    /**
      * The interface that we use to mutate the Raft log.
      */
     private final RaftClient<ApiMessageAndVersion> raftClient;
@@ -1539,12 +1528,6 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setQuorumFeatures(quorumFeatures).
             setSnapshotRegistry(snapshotRegistry).
-            // Set the default metadata version to the minimum KRaft version. This only really
-            // matters if we are upgrading from a version that didn't store metadata.version in
-            // the log, such as one of the pre-production 3.0, 3.1, or 3.2 versions. Those versions
-            // are all treated as 3.0IV1. In newer versions the metadata.version will be specified
-            // by the log.
-            setMetadataVersion(MetadataVersion.MINIMUM_KRAFT_VERSION).
             setClusterFeatureSupportDescriber(clusterSupportDescriber).
             build();
         this.clusterControl = new ClusterControlManager.Builder().
@@ -1600,9 +1583,6 @@ public final class QuorumController implements Controller {
             setLogContext(logContext).
             setSnapshotRegistry(snapshotRegistry).
             build();
-        this.logReplayTracker = new LogReplayTracker.Builder().
-            setLogContext(logContext).
-            build();
         this.raftClient = raftClient;
         this.bootstrapMetadata = bootstrapMetadata;
         this.maxRecordsPerBatch = maxRecordsPerBatch;
@@ -1643,20 +1623,13 @@ public final class QuorumController implements Controller {
     /**
      * Register the writeNoOpRecord task.
      *
-     * This task periodically writes a NoOpRecord to the metadata log, if the MetadataVersion
-     * supports it.
+     * This task periodically writes a NoOpRecord to the metadata log.
      *
      * @param maxIdleIntervalNs     The period at which to write the NoOpRecord.
      */
     private void registerWriteNoOpRecord(long maxIdleIntervalNs) {
         periodicControl.registerTask(new PeriodicTask("writeNoOpRecord",
-            () -> {
-                ArrayList<ApiMessageAndVersion> records = new ArrayList<>(1);
-                if (featureControl.metadataVersion().isNoOpRecordSupported()) {
-                    records.add(new ApiMessageAndVersion(new NoOpRecord(), (short) 0));
-                }
-                return ControllerResult.of(records, false);
-            },
+            () -> ControllerResult.of(List.of(new ApiMessageAndVersion(new NoOpRecord(), (short) 0)), false),
             maxIdleIntervalNs,
             EnumSet.noneOf(PeriodicTaskFlag.class)));
     }
@@ -1729,7 +1702,7 @@ public final class QuorumController implements Controller {
         periodicControl.registerTask(new PeriodicTask("generatePeriodicPerformanceMessage",
             () -> {
                 performanceMonitor.generatePeriodicPerformanceMessage();
-                return ControllerResult.of(Collections.emptyList(), false);
+                return ControllerResult.of(List.of(), false);
             },
             performanceMonitor.periodNs(),
             EnumSet.noneOf(PeriodicTaskFlag.class)));
@@ -1770,7 +1743,7 @@ public final class QuorumController implements Controller {
             return CompletableFuture.completedFuture(new AlterUserScramCredentialsResponseData());
         }
         return appendWriteEvent("alterUserScramCredentials", context.deadlineNs(),
-            () -> scramControlManager.alterCredentials(request, featureControl.metadataVersion()));
+            () -> scramControlManager.alterCredentials(request, featureControl.metadataVersionOrThrow()));
     }
 
     @Override
@@ -1779,7 +1752,7 @@ public final class QuorumController implements Controller {
         CreateDelegationTokenRequestData request
     ) {
         return appendWriteEvent("createDelegationToken", context.deadlineNs(),
-            () -> delegationTokenControlManager.createDelegationToken(context, request, featureControl.metadataVersion()));
+            () -> delegationTokenControlManager.createDelegationToken(context, request, featureControl.metadataVersionOrThrow()));
     }
 
     @Override
@@ -1788,7 +1761,7 @@ public final class QuorumController implements Controller {
         RenewDelegationTokenRequestData request
     ) {
         return appendWriteEvent("renewDelegationToken", context.deadlineNs(),
-            () -> delegationTokenControlManager.renewDelegationToken(context, request, featureControl.metadataVersion()));
+            () -> delegationTokenControlManager.renewDelegationToken(context, request, featureControl.metadataVersionOrThrow()));
     }
 
     @Override
@@ -1797,7 +1770,7 @@ public final class QuorumController implements Controller {
         ExpireDelegationTokenRequestData request
     ) {
         return appendWriteEvent("expireDelegationToken", context.deadlineNs(),
-            () -> delegationTokenControlManager.expireDelegationToken(context, request, featureControl.metadataVersion()));
+            () -> delegationTokenControlManager.expireDelegationToken(context, request, featureControl.metadataVersionOrThrow()));
     }
 
     @Override
@@ -1828,7 +1801,7 @@ public final class QuorumController implements Controller {
         Collection<String> names
     ) {
         if (names.isEmpty())
-            return CompletableFuture.completedFuture(Collections.emptyMap());
+            return CompletableFuture.completedFuture(Map.of());
         return appendReadEvent("findTopicIds", context.deadlineNs(),
             () -> replicationControl.findTopicIds(offsetControl.lastStableOffset(), names));
     }
@@ -1847,7 +1820,7 @@ public final class QuorumController implements Controller {
         Collection<Uuid> ids
     ) {
         if (ids.isEmpty())
-            return CompletableFuture.completedFuture(Collections.emptyMap());
+            return CompletableFuture.completedFuture(Map.of());
         return appendReadEvent("findTopicNames", context.deadlineNs(),
             () -> replicationControl.findTopicNames(offsetControl.lastStableOffset(), ids));
     }
@@ -1858,7 +1831,7 @@ public final class QuorumController implements Controller {
         Collection<Uuid> ids
     ) {
         if (ids.isEmpty())
-            return CompletableFuture.completedFuture(Collections.emptyMap());
+            return CompletableFuture.completedFuture(Map.of());
         return appendWriteEvent("deleteTopics", context.deadlineNs(),
             () -> replicationControl.deleteTopics(context, ids));
     }
@@ -1901,7 +1874,7 @@ public final class QuorumController implements Controller {
         boolean validateOnly
     ) {
         if (configChanges.isEmpty()) {
-            return CompletableFuture.completedFuture(Collections.emptyMap());
+            return CompletableFuture.completedFuture(Map.of());
         }
         return appendWriteEvent("incrementalAlterConfigs", context.deadlineNs(), () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
@@ -1946,7 +1919,7 @@ public final class QuorumController implements Controller {
         Map<ConfigResource, Map<String, String>> newConfigs, boolean validateOnly
     ) {
         if (newConfigs.isEmpty()) {
-            return CompletableFuture.completedFuture(Collections.emptyMap());
+            return CompletableFuture.completedFuture(Map.of());
         }
         return appendWriteEvent("legacyAlterConfigs", context.deadlineNs(), () -> {
             ControllerResult<Map<ConfigResource, ApiError>> result =
@@ -2019,14 +1992,17 @@ public final class QuorumController implements Controller {
         ControllerRequestContext context,
         BrokerRegistrationRequestData request
     ) {
-        // populate finalized features map with latest known kraft version for validation
-        Map<String, Short> controllerFeatures = new HashMap<>(featureControl.finalizedFeatures(Long.MAX_VALUE).featureMap());
-        controllerFeatures.put(KRaftVersion.FEATURE_NAME, raftClient.kraftVersion().featureLevel());
         return appendWriteEvent("registerBroker", context.deadlineNs(),
-            () -> clusterControl.
-                registerBroker(request, offsetControl.nextWriteOffset(),
-                    new FinalizedControllerFeatures(controllerFeatures, Long.MAX_VALUE),
-                    context.requestHeader().requestApiVersion() >= 3),
+            () -> {
+                // Read and write data in the controller event handling thread to avoid stale information.
+                Map<String, Short> controllerFeatures = new HashMap<>(featureControl.finalizedFeatures(Long.MAX_VALUE).featureMap());
+                // Populate finalized features map with latest known kraft version for validation.
+                controllerFeatures.put(KRaftVersion.FEATURE_NAME, raftClient.kraftVersion().featureLevel());
+                return clusterControl.
+                    registerBroker(request, offsetControl.nextWriteOffset(),
+                        new FinalizedControllerFeatures(controllerFeatures, Long.MAX_VALUE),
+                        context.requestHeader().requestApiVersion() >= 3);
+            },
             EnumSet.noneOf(ControllerOperationFlag.class));
     }
 
@@ -2037,7 +2013,7 @@ public final class QuorumController implements Controller {
         boolean validateOnly
     ) {
         if (quotaAlterations.isEmpty()) {
-            return CompletableFuture.completedFuture(Collections.emptyMap());
+            return CompletableFuture.completedFuture(Map.of());
         }
         return appendWriteEvent("alterClientQuotas", context.deadlineNs(), () -> {
             ControllerResult<Map<ClientQuotaEntity, ApiError>> result =
@@ -2108,7 +2084,7 @@ public final class QuorumController implements Controller {
         boolean validateOnly
     ) {
         if (topics.isEmpty()) {
-            return CompletableFuture.completedFuture(Collections.emptyList());
+            return CompletableFuture.completedFuture(List.of());
         }
 
         return appendWriteEvent("createPartitions", context.deadlineNs(), () -> {
