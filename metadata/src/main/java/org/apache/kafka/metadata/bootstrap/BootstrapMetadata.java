@@ -24,14 +24,10 @@ import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
-
-import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_BOOTSTRAP_VERSION;
-
 
 /**
  * The bootstrap metadata. On startup, if the metadata log is empty, we will populate the log with
@@ -74,7 +70,7 @@ public class BootstrapMetadata {
     }
 
     public static BootstrapMetadata fromVersion(MetadataVersion metadataVersion, String source) {
-        List<ApiMessageAndVersion> records = Collections.singletonList(
+        List<ApiMessageAndVersion> records = List.of(
             new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
                 setFeatureLevel(metadataVersion.featureLevel()), (short) 0));
@@ -111,11 +107,6 @@ public class BootstrapMetadata {
         String source
     ) {
         this.records = Objects.requireNonNull(records);
-        if (metadataVersion.isLessThan(MINIMUM_BOOTSTRAP_VERSION)) {
-            throw new RuntimeException("Bootstrap metadata.version before " +
-                    MINIMUM_BOOTSTRAP_VERSION + " are not supported. Can't load metadata from " +
-                    source);
-        }
         this.metadataVersion = metadataVersion;
         Objects.requireNonNull(source);
         this.source = source;

@@ -24,7 +24,7 @@ import kafka.utils.Logging
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, CLIENT_METRICS, GROUP, TOPIC}
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
-import org.apache.kafka.server.config.{ConfigType, ZooKeeperInternals}
+import org.apache.kafka.server.config.ConfigType
 import org.apache.kafka.server.fault.FaultHandler
 
 
@@ -78,7 +78,7 @@ class DynamicConfigPublisher(
                     // These are stored in KRaft with an empty name field.
                     info("Updating cluster configuration : " +
                       toLoggableProps(resource, props).mkString(","))
-                    nodeConfigHandler.processConfigChanges(ZooKeeperInternals.DEFAULT_STRING, props)
+                    nodeConfigHandler.processConfigChanges(resource.name(), props)
                   } catch {
                     case t: Throwable => faultHandler.handleFault("Error updating " +
                       s"cluster with new configuration: ${toLoggableProps(resource, props).mkString(",")} " +

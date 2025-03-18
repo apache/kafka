@@ -21,9 +21,9 @@ import org.apache.kafka.common.DirectoryId;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidReplicaDirectoriesException;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData.LeaderAndIsrPartitionState;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
+import org.apache.kafka.common.requests.LeaderAndIsrRequest;
 import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
@@ -165,8 +165,8 @@ public class PartitionRegistration {
     public final int leaderEpoch;
     public final int partitionEpoch;
 
-    public static boolean electionWasClean(int newLeader, int[] isr) {
-        return newLeader == NO_LEADER || Replicas.contains(isr, newLeader);
+    public static boolean electionWasClean(int newLeader, int[] isr, int[] elr) {
+        return newLeader == NO_LEADER || Replicas.contains(isr, newLeader) || Replicas.contains(elr, newLeader);
     }
 
     private static List<Uuid> checkDirectories(PartitionRecord record) {
@@ -347,7 +347,7 @@ public class PartitionRegistration {
     }
 
     public void maybeLogPartitionChange(Logger log, String description, PartitionRegistration prev) {
-        if (!electionWasClean(leader, prev.isr)) {
+        if (!electionWasClean(leader, prev.isr, prev.elr)) {
             log.info("UNCLEAN partition change for {}: {}", description, diff(prev));
         } else if (log.isDebugEnabled()) {
             log.debug("partition change for {}: {}", description, diff(prev));
@@ -387,11 +387,16 @@ public class PartitionRegistration {
             setLeaderRecoveryState(leaderRecoveryState.value()).
             setLeaderEpoch(leaderEpoch).
             setPartitionEpoch(partitionEpoch);
-        if (options.metadataVersion().isElrSupported()) {
+        if (options.isEligibleLeaderReplicasEnabled()) {
             // The following are tagged fields, we should only set them when there are some contents, in order to save
             // spaces.
             if (elr.length > 0) record.setEligibleLeaderReplicas(Replicas.toList(elr));
             if (lastKnownElr.length > 0) record.setLastKnownElr(Replicas.toList(lastKnownElr));
+        }
+
+        if (options.metadataVersion() == null) {
+            options.handleLoss("the metadata version");
+            return new ApiMessageAndVersion(record, (short) 0);
         }
         if (options.metadataVersion().isDirectoryAssignmentSupported()) {
             record.setDirectories(Uuid.toList(directories));
@@ -406,9 +411,9 @@ public class PartitionRegistration {
         return new ApiMessageAndVersion(record, options.metadataVersion().partitionRecordVersion());
     }
 
-    public LeaderAndIsrPartitionState toLeaderAndIsrPartitionState(TopicPartition tp,
-                                                                   boolean isNew) {
-        return new LeaderAndIsrPartitionState().
+    public LeaderAndIsrRequest.PartitionState toLeaderAndIsrPartitionState(TopicPartition tp,
+                                                                           boolean isNew) {
+        return new LeaderAndIsrRequest.PartitionState().
             setTopicName(tp.topic()).
             setPartitionIndex(tp.partition()).
             setControllerEpoch(-1).

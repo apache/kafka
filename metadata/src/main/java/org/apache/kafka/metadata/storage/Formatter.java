@@ -43,7 +43,6 @@ import java.nio.file.Files;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -116,7 +115,7 @@ public class Formatter {
     /**
      * The arguments passed to --add-scram
      */
-    private List<String> scramArguments = Collections.emptyList();
+    private List<String> scramArguments = List.of();
 
     /**
      * The name of the initial controller listener.
@@ -284,10 +283,6 @@ public class Formatter {
     }
 
     MetadataVersion verifyReleaseVersion(MetadataVersion metadataVersion) {
-        if (!metadataVersion.isKRaftSupported()) {
-            throw new FormatterException(MetadataVersion.FEATURE_NAME + " " + metadataVersion +
-                " is too old to be supported.");
-        }
         if (!unstableFeatureVersionsEnabled) {
             if (!metadataVersion.isProduction()) {
                 throw new FormatterException(MetadataVersion.FEATURE_NAME + " " + metadataVersion +
@@ -435,7 +430,7 @@ public class Formatter {
                     directoryTypes.get(writeLogDir).description(), writeLogDir,
                     MetadataVersion.FEATURE_NAME, releaseVersion);
                 Files.createDirectories(Paths.get(writeLogDir));
-                BootstrapDirectory bootstrapDirectory = new BootstrapDirectory(writeLogDir, Optional.empty());
+                BootstrapDirectory bootstrapDirectory = new BootstrapDirectory(writeLogDir);
                 bootstrapDirectory.writeBinaryFile(bootstrapMetadata);
                 if (directoryTypes.get(writeLogDir).isDynamicMetadataDirectory()) {
                     writeDynamicQuorumSnapshot(writeLogDir,
@@ -514,7 +509,7 @@ public class Formatter {
                 Snapshots.BOOTSTRAP_SNAPSHOT_ID)).
             setKraftVersion(KRaftVersion.fromFeatureLevel(kraftVersion)).
             setVoterSet(Optional.of(voterSet));
-        try (RecordsSnapshotWriter writer = builder.build(new MetadataRecordSerde())) {
+        try (RecordsSnapshotWriter<ApiMessageAndVersion> writer = builder.build(new MetadataRecordSerde())) {
             writer.freeze();
         }
     }

@@ -16,15 +16,12 @@
  */
 package org.apache.kafka.common.errors;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 /**
  * The StaleMemberEpochException is used in the context of the new
  * consumer group protocol (KIP-848). This error is returned in the
  * OffsetCommit/Fetch APIs when the member epoch received does not
  * match the current member epoch.
  */
-@InterfaceStability.Evolving
 public class StaleMemberEpochException extends ApiException {
     public StaleMemberEpochException(String message) {
         super(message);

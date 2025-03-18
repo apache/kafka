@@ -17,14 +17,8 @@
 package org.apache.kafka.security.authorizer;
 
 import org.apache.kafka.common.resource.Resource;
-import org.apache.kafka.common.security.auth.KafkaPrincipal;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.network.Session;
-import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
-
-import java.net.InetAddress;
 
 public class AuthorizerUtils {
     public static Authorizer createAuthorizer(String className) throws ClassNotFoundException {
@@ -33,49 +27,5 @@ public class AuthorizerUtils {
 
     public static boolean isClusterResource(String name) {
         return name.equals(Resource.CLUSTER_NAME);
-    }
-
-    public static AuthorizableRequestContext sessionToRequestContext(Session session) {
-        return new AuthorizableRequestContext() {
-            @Override
-            public String clientId() {
-                return "";
-            }
-
-            @Override
-            public int requestType() {
-                return -1;
-            }
-
-            @Override
-            public String listenerName() {
-                return "";
-            }
-
-            @Override
-            public InetAddress clientAddress() {
-                return session.clientAddress;
-            }
-
-            @Override
-            public KafkaPrincipal principal() {
-                return session.principal;
-            }
-
-            @Override
-            public SecurityProtocol securityProtocol() {
-                return null;
-            }
-
-            @Override
-            public int correlationId() {
-                return -1;
-            }
-
-            @Override
-            public int requestVersion() {
-                return -1;
-            }
-        };
     }
 }

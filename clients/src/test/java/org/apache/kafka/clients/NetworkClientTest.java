@@ -385,7 +385,7 @@ public class NetworkClientTest {
     private void awaitReady(NetworkClient client, Node node) {
         if (client.discoverBrokerVersions()) {
             setExpectedApiVersionsResponse(TestUtils.defaultApiVersionsResponse(
-                ApiMessageType.ListenerType.ZK_BROKER));
+                ApiMessageType.ListenerType.BROKER));
         }
         while (!client.ready(node, time.milliseconds()))
             client.poll(1, time.milliseconds());
@@ -1455,7 +1455,7 @@ public class NetworkClientTest {
     }
 
     private ApiVersionsResponse defaultApiVersionsResponse() {
-        return TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.ZK_BROKER);
+        return TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER);
     }
 
     private static class TestCallbackHandler implements RequestCompletionHandler {

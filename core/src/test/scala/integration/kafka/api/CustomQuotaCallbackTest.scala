@@ -26,11 +26,13 @@ import org.apache.kafka.common.config.SaslConfigs
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
+import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.{Cluster, Reconfigurable}
+import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
 import org.apache.kafka.server.quota._
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, Disabled, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
@@ -38,11 +40,8 @@ import java.util.Properties
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.{AtomicBoolean, AtomicInteger}
 import java.{lang, util}
-import scala.collection.Seq
-import scala.collection.mutable.ArrayBuffer
 import scala.jdk.CollectionConverters._
 
-@Disabled("KAFKA-18213")
 class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
   override protected def securityProtocol = SecurityProtocol.SASL_SSL
@@ -56,8 +55,8 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
   private val kafkaClientSaslMechanism = "SCRAM-SHA-256"
   override protected val serverSaslProperties = Some(kafkaServerSaslProperties(kafkaServerSaslMechanisms, kafkaClientSaslMechanism))
   override protected val clientSaslProperties = Some(kafkaClientSaslProperties(kafkaClientSaslMechanism))
-  private val adminClients = new ArrayBuffer[Admin]()
   private var producerWithoutQuota: KafkaProducer[Array[Byte], Array[Byte]] = _
+  private var admin: Admin = _
 
   val defaultRequestQuota = 1000
   val defaultProduceQuota = 2000 * 1000 * 1000
@@ -65,11 +64,13 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Some("SCRAM-SHA-256"), KafkaSasl, JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
+    startSasl(jaasSections(kafkaServerSaslMechanisms, Some("SCRAM-SHA-256"), JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
     this.serverConfig.setProperty(QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, classOf[GroupedUserQuotaCallback].getName)
     this.serverConfig.setProperty(s"${listenerName.configPrefix}${BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG}",
       classOf[GroupedUserPrincipalBuilder].getName)
     this.serverConfig.setProperty(ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, "true")
+    val superuserLoginContext = jaasAdminLoginModule(kafkaClientSaslMechanism)
+    superuserClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, superuserLoginContext)
     super.setUp(testInfo)
 
     producerConfig.put(SaslConfigs.SASL_JAAS_CONFIG,
@@ -79,19 +80,29 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
   @AfterEach
   override def tearDown(): Unit = {
-    adminClients.foreach(_.close())
+    if (admin != null) admin.close()
     GroupedUserQuotaCallback.tearDown()
     super.tearDown()
     closeSasl()
   }
 
-  override def configureSecurityBeforeServersStart(testInfo: TestInfo): Unit = {
-    super.configureSecurityBeforeServersStart(testInfo)
-    createScramCredentials("", JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
+  override def configureSecurityAfterServersStart(): Unit = {
+    super.configureSecurityAfterServersStart()
+    createScramCredentials(createAdminClient(), JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
+  }
+
+  override def addFormatterSettings(formatter: Formatter): Unit = {
+    formatter.setScramArguments(
+      util.List.of(s"SCRAM-SHA-256=[name=${JaasTestUtils.KAFKA_SCRAM_ADMIN},password=${JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]"))
+  }
+
+  override def createPrivilegedAdminClient() = {
+    createAdminClient(bootstrapServers(), securityProtocol, trustStoreFile, clientSaslProperties,
+      kafkaClientSaslMechanism, JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly_ZK_implicit"))
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testCustomQuotaCallback(quorum: String, groupProtocol: String): Unit = {
     // Large quota override, should not throttle
     var brokerId = 0
@@ -141,6 +152,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
     // Remove quota override and test default quota applied with scaling based on partitions
     user = addUser("group1_user2", brokerId)
+    user.removeQuotaOverrides()
     user.waitForQuotaUpdate(defaultProduceQuota / 100, defaultConsumeQuota / 100, defaultRequestQuota)
     user.removeThrottleMetrics() // since group was throttled before
     user.produceConsume(expectProduceThrottle = false, expectConsumeThrottle = false)
@@ -178,22 +190,40 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     user
   }
 
+  override def deleteTopic(
+    topic: String, 
+    listenerName: ListenerName = listenerName
+  ): Unit = {
+    TestUtils.deleteTopicWithAdmin(
+      admin = createAdminClient(),
+      topic = topic,
+      brokers = aliveBrokers,
+      controllers = controllerServers)
+  }
+
   private def createTopic(topic: String, numPartitions: Int, leader: Int): Unit = {
-    // TODO createTopic 
+    val assignment = (0 until numPartitions).map { i => i -> Seq(leader) }.toMap
+    TestUtils.createTopicWithAdmin(
+      createAdminClient(),
+      topic,
+      brokers,
+      controllerServers,
+      numPartitions,
+      replicaAssignment = assignment
+    )
   }
 
   private def createAdminClient(): Admin = {
+    if (admin != null) return admin
     val config = new util.HashMap[String, Object]
-    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG,
-      TestUtils.bootstrapServers(servers, new ListenerName("BROKER")))
+    config.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
     clientSecurityProps("admin-client").asInstanceOf[util.Map[Object, Object]].forEach { (key, value) =>
       config.put(key.toString, value)
     }
     config.put(SaslConfigs.SASL_JAAS_CONFIG,
       JaasModule.scramLoginModule(JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD).toString)
-    val adminClient = Admin.create(config)
-    adminClients += adminClient
-    adminClient
+    admin = Admin.create(config)
+    admin
   }
 
   private def produceWithoutThrottle(topic: String, numRecords: Int): Unit = {
@@ -230,11 +260,11 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
     consumerConfig.put(ConsumerConfig.GROUP_ID_CONFIG, s"$user-group")
     consumerConfig.put(SaslConfigs.SASL_JAAS_CONFIG, JaasModule.scramLoginModule(user, password).toString)
 
-    GroupedUser(user, userGroup, topic, servers(leader), producerClientId, consumerClientId,
+    GroupedUser(user, userGroup, topic, brokerServers(leader), producerClientId, consumerClientId,
       createProducer(), createConsumer(), adminClient)
   }
 
-  case class GroupedUser(user: String, userGroup: String, topic: String, leaderNode: KafkaBroker,
+  case class GroupedUser(user: String, userGroup: String, topic: String, leaderNode: BrokerServer,
                          producerClientId: String, consumerClientId: String,
                          override val producer: KafkaProducer[Array[Byte], Array[Byte]],
                          override val consumer: Consumer[Array[Byte], Array[Byte]],
@@ -315,7 +345,7 @@ object GroupedUserPrincipalBuilder {
   }
 }
 
-class GroupedUserPrincipalBuilder extends KafkaPrincipalBuilder {
+class GroupedUserPrincipalBuilder extends DefaultKafkaPrincipalBuilder(null, null) {
   override def build(context: AuthenticationContext): KafkaPrincipal = {
     val securityProtocol = context.securityProtocol
     if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL) {
@@ -395,7 +425,15 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
   }
 
   override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): util.Map[String, String] = {
-    principal match {
+    val user = principal.getName
+    val userGroup = group(user)
+    val newPrincipal = {
+      if (userGroup.isEmpty)
+        principal
+      else
+        GroupedUserPrincipal(user, userGroup)
+    }
+    newPrincipal match {
       case groupPrincipal: GroupedUserPrincipal =>
         val userGroup = groupPrincipal.userGroup
         val quotaLimit = quotaOrDefault(userGroup, quotaType)
@@ -468,5 +506,3 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
     }
   }
 }
-
-

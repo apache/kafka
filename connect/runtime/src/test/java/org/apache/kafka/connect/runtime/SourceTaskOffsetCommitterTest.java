@@ -22,7 +22,6 @@ import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 
-import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -147,7 +146,7 @@ public class SourceTaskOffsetCommitterTest {
 
         committers.put(taskId, taskFuture);
         try (LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister(SourceTaskOffsetCommitter.class)) {
-            logCaptureAppender.setClassLogger(SourceTaskOffsetCommitter.class, Level.TRACE);
+            logCaptureAppender.setClassLogger(SourceTaskOffsetCommitter.class, org.apache.logging.log4j.Level.TRACE);
             committer.remove(taskId);
             assertTrue(logCaptureAppender.getEvents().stream().anyMatch(e -> e.getLevel().equals("TRACE")));
         }

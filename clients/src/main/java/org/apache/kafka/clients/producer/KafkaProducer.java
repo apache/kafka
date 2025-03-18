@@ -59,6 +59,7 @@ import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.KafkaMetricsContext;
 import org.apache.kafka.common.metrics.MetricConfig;
@@ -149,8 +150,8 @@ import java.util.concurrent.atomic.AtomicReference;
  * <p>
  * The <code>buffer.memory</code> controls the total amount of memory available to the producer for buffering. If records
  * are sent faster than they can be transmitted to the server then this buffer space will be exhausted. When the buffer space is
- * exhausted additional send calls will block. The threshold for time to block is determined by <code>max.block.ms</code> after which it throws
- * a TimeoutException.
+ * exhausted additional send calls will block. The threshold for time to block is determined by <code>max.block.ms</code> after which it returns
+ * a failed future with BufferExhaustedException.
  * <p>
  * The <code>key.serializer</code> and <code>value.serializer</code> instruct how to turn the key and value objects the user provides with
  * their <code>ProducerRecord</code> into bytes. You can use the included {@link org.apache.kafka.common.serialization.ByteArraySerializer} or
@@ -249,7 +250,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     // Visible for testing
     final Metrics metrics;
     private final KafkaProducerMetrics producerMetrics;
-    private final Partitioner partitioner;
+    private final Plugin<Partitioner> partitionerPlugin;
     private final int maxRequestSize;
     private final long totalMemorySize;
     private final ProducerMetadata metadata;
@@ -259,8 +260,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final Compression compression;
     private final Sensor errors;
     private final Time time;
-    private final Serializer<K> keySerializer;
-    private final Serializer<V> valueSerializer;
+    private final Plugin<Serializer<K>> keySerializerPlugin;
+    private final Plugin<Serializer<V>> valueSerializerPlugin;
     private final ProducerConfig producerConfig;
     private final long maxBlockTimeMs;
     private final boolean partitionerIgnoreKeys;
@@ -366,41 +367,44 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     config.originalsWithPrefix(CommonClientConfigs.METRICS_CONTEXT_PREFIX));
             this.metrics = new Metrics(metricConfig, reporters, time, metricsContext);
             this.producerMetrics = new KafkaProducerMetrics(metrics);
-            this.partitioner = config.getConfiguredInstance(
-                    ProducerConfig.PARTITIONER_CLASS_CONFIG,
-                    Partitioner.class,
-                    Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId));
+            this.partitionerPlugin = Plugin.wrapInstance(
+                    config.getConfiguredInstance(
+                        ProducerConfig.PARTITIONER_CLASS_CONFIG,
+                        Partitioner.class,
+                        Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId)),
+                    metrics,
+                    ProducerConfig.PARTITIONER_CLASS_CONFIG);
             this.partitionerIgnoreKeys = config.getBoolean(ProducerConfig.PARTITIONER_IGNORE_KEYS_CONFIG);
             long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
             long retryBackoffMaxMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MAX_MS_CONFIG);
             if (keySerializer == null) {
-                this.keySerializer = config.getConfiguredInstance(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG,
-                                                                                         Serializer.class);
-                this.keySerializer.configure(config.originals(Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId)), true);
+                keySerializer = config.getConfiguredInstance(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, Serializer.class);
+                keySerializer.configure(config.originals(Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId)), true);
             } else {
                 config.ignore(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG);
-                this.keySerializer = keySerializer;
             }
+            this.keySerializerPlugin = Plugin.wrapInstance(keySerializer, metrics, ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG);
+
             if (valueSerializer == null) {
-                this.valueSerializer = config.getConfiguredInstance(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG,
-                                                                                           Serializer.class);
-                this.valueSerializer.configure(config.originals(Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId)), false);
+                valueSerializer = config.getConfiguredInstance(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serializer.class);
+                valueSerializer.configure(config.originals(Collections.singletonMap(ProducerConfig.CLIENT_ID_CONFIG, clientId)), false);
             } else {
                 config.ignore(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
-                this.valueSerializer = valueSerializer;
             }
+            this.valueSerializerPlugin = Plugin.wrapInstance(valueSerializer, metrics, ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
 
-            List<ProducerInterceptor<K, V>> interceptorList = ClientUtils.configuredInterceptors(config,
+
+            List<ProducerInterceptor<K, V>> interceptorList = (List<ProducerInterceptor<K, V>>) ClientUtils.configuredInterceptors(config,
                     ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
                     ProducerInterceptor.class);
             if (interceptors != null)
                 this.interceptors = interceptors;
             else
-                this.interceptors = new ProducerInterceptors<>(interceptorList);
+                this.interceptors = new ProducerInterceptors<>(interceptorList, metrics);
             ClusterResourceListeners clusterResourceListeners = ClientUtils.configureClusterResourceListeners(
                     interceptorList,
                     reporters,
-                    Arrays.asList(this.keySerializer, this.valueSerializer));
+                    Arrays.asList(this.keySerializerPlugin.get(), this.valueSerializerPlugin.get()));
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
             this.compression = configureCompression(config);
@@ -411,7 +415,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.apiVersions = apiVersions;
             this.transactionManager = configureTransactionState(config, logContext);
             // There is no need to do work required for adaptive partitioning, if we use a custom partitioner.
-            boolean enableAdaptivePartitioning = partitioner == null &&
+            boolean enableAdaptivePartitioning = partitionerPlugin.get() == null &&
                 config.getBoolean(ProducerConfig.PARTITIONER_ADPATIVE_PARTITIONING_ENABLE_CONFIG);
             RecordAccumulator.PartitionerConfig partitionerConfig = new RecordAccumulator.PartitionerConfig(
                 enableAdaptivePartitioning,
@@ -485,9 +489,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         this.log = logContext.logger(KafkaProducer.class);
         this.metrics = metrics;
         this.producerMetrics = new KafkaProducerMetrics(metrics);
-        this.partitioner = partitioner;
-        this.keySerializer = keySerializer;
-        this.valueSerializer = valueSerializer;
+        this.partitionerPlugin = Plugin.wrapInstance(partitioner, metrics, ProducerConfig.PARTITIONER_CLASS_CONFIG);
+        this.keySerializerPlugin = Plugin.wrapInstance(keySerializer, metrics, ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG);
+        this.valueSerializerPlugin = Plugin.wrapInstance(valueSerializer, metrics, ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
         this.interceptors = interceptors;
         this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
         this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
@@ -926,14 +930,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @param callback A user-supplied callback to execute when the record has been acknowledged by the server (null
      *        indicates no callback)
      *
-     * @throws AuthenticationException if authentication fails. See the exception for more details
-     * @throws AuthorizationException fatal error indicating that the producer is not allowed to write
      * @throws IllegalStateException if a transactional.id has been configured and no transaction has been started, or
      *                               when send is invoked after producer has been closed.
      * @throws InterruptException If the thread is interrupted while blocked
      * @throws SerializationException If the key or value are not valid objects given the configured serializers
-     * @throws TimeoutException If the record could not be appended to the send buffer due to memory unavailable
-     *                          or missing metadata within {@code max.block.ms}.
      * @throws KafkaException If a Kafka related error occurs that does not belong to the public API exceptions.
      */
     @Override
@@ -976,7 +976,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             Cluster cluster = clusterAndWaitTime.cluster;
             byte[] serializedKey;
             try {
-                serializedKey = keySerializer.serialize(record.topic(), record.headers(), record.key());
+                serializedKey = keySerializerPlugin.get().serialize(record.topic(), record.headers(), record.key());
             } catch (ClassCastException cce) {
                 throw new SerializationException("Can't convert key of class " + record.key().getClass().getName() +
                         " to class " + producerConfig.getClass(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG).getName() +
@@ -984,7 +984,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             }
             byte[] serializedValue;
             try {
-                serializedValue = valueSerializer.serialize(record.topic(), record.headers(), record.value());
+                serializedValue = valueSerializerPlugin.get().serialize(record.topic(), record.headers(), record.value());
             } catch (ClassCastException cce) {
                 throw new SerializationException("Can't convert value of class " + record.value().getClass().getName() +
                         " to class " + producerConfig.getClass(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG).getName() +
@@ -1104,8 +1104,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 metadata.awaitUpdate(version, remainingWaitMs);
             } catch (TimeoutException ex) {
                 // Rethrow with original maxWaitMs to prevent logging exception with remainingWaitMs
-                final String errorMessage = String.format("Topic %s not present in metadata after %d ms.",
-                        topic, maxWaitMs);
+                final String errorMessage = getErrorMessage(partitionsCount, topic, partition, maxWaitMs);
                 if (metadata.getError(topic) != null) {
                     throw new TimeoutException(errorMessage, metadata.getError(topic).exception());
                 }
@@ -1114,11 +1113,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             cluster = metadata.fetch();
             elapsed = time.milliseconds() - nowMs;
             if (elapsed >= maxWaitMs) {
-                final String errorMessage = partitionsCount == null ?
-                        String.format("Topic %s not present in metadata after %d ms.",
-                                topic, maxWaitMs) :
-                        String.format("Partition %d of topic %s with partition count %d is not present in metadata after %d ms.",
-                                partition, topic, partitionsCount, maxWaitMs);
+                final String errorMessage = getErrorMessage(partitionsCount, topic, partition, maxWaitMs);
                 if (metadata.getError(topic) != null && metadata.getError(topic).exception() instanceof RetriableException) {
                     throw new TimeoutException(errorMessage, metadata.getError(topic).exception());
                 }
@@ -1134,6 +1129,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         return new ClusterAndWaitTime(cluster, elapsed);
     }
 
+    private String getErrorMessage(Integer partitionsCount, String topic, Integer partition, long maxWaitMs) {
+        return partitionsCount == null ?
+            String.format("Topic %s not present in metadata after %d ms.",
+                topic, maxWaitMs) :
+            String.format("Partition %d of topic %s with partition count %d is not present in metadata after %d ms.",
+                partition, topic, partitionsCount, maxWaitMs);
+    }
     /**
      * Validate that the record size isn't too large
      */
@@ -1152,7 +1154,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     /**
      * Invoking this method makes all buffered records immediately available to send (even if <code>linger.ms</code> is
      * greater than 0) and blocks on the completion of the requests associated with these records. The post-condition
-     * of <code>flush()</code> is that any previously sent record will have completed (e.g. <code>Future.isDone() == true</code>).
+     * of <code>flush()</code> is that any previously sent record will have completed (e.g. <code>Future.isDone() == true</code>
+     * and callbacks passed to {@link #send(ProducerRecord,Callback)} have been called).
      * A request is considered completed when it is successfully acknowledged
      * according to the <code>acks</code> configuration you have specified or else it results in an error.
      * <p>
@@ -1415,9 +1418,9 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         Utils.closeQuietly(interceptors, "producer interceptors", firstException);
         Utils.closeQuietly(producerMetrics, "producer metrics wrapper", firstException);
         Utils.closeQuietly(metrics, "producer metrics", firstException);
-        Utils.closeQuietly(keySerializer, "producer keySerializer", firstException);
-        Utils.closeQuietly(valueSerializer, "producer valueSerializer", firstException);
-        Utils.closeQuietly(partitioner, "producer partitioner", firstException);
+        Utils.closeQuietly(keySerializerPlugin, "producer keySerializer", firstException);
+        Utils.closeQuietly(valueSerializerPlugin, "producer valueSerializer", firstException);
+        Utils.closeQuietly(partitionerPlugin, "producer partitioner", firstException);
         clientTelemetryReporter.ifPresent(reporter -> Utils.closeQuietly(reporter, "producer telemetry reporter", firstException));
         AppInfoParser.unregisterAppInfo(JMX_PREFIX, clientId, metrics);
         Throwable exception = firstException.get();
@@ -1444,8 +1447,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         if (record.partition() != null)
             return record.partition();
 
-        if (partitioner != null) {
-            int customPartition = partitioner.partition(
+        if (partitionerPlugin.get() != null) {
+            int customPartition = partitionerPlugin.get().partition(
                 record.topic(), record.key(), serializedKey, record.value(), serializedValue, cluster);
             if (customPartition < 0) {
                 throw new IllegalArgumentException(String.format(

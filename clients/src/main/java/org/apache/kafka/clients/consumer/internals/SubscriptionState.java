@@ -490,6 +490,20 @@ public class SubscriptionState {
                 || this.subscriptionType == SubscriptionType.AUTO_TOPICS_SHARE || this.subscriptionType == SubscriptionType.AUTO_PATTERN_RE2J;
     }
 
+    public synchronized boolean isAssignedFromRe2j(String topic) {
+        if (!hasRe2JPatternSubscription()) {
+            return false;
+        }
+
+        for (TopicPartition topicPartition : assignment.partitionSet()) {
+            if (topicPartition.topic().equals(topic)) {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     public synchronized void position(TopicPartition tp, FetchPosition position) {
         assignedState(tp).position(position);
     }

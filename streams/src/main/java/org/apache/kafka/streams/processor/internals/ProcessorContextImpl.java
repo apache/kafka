@@ -174,7 +174,7 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
                 " as the store is not connected to the processor. If you add stores manually via '.addStateStore()' " +
                 "make sure to connect the added store to the processor by providing the processor name to " +
                 "'.addStateStore()' or connect them via '.connectProcessorAndStateStores()'. " +
-                "DSL users need to provide the store name to '.process()', '.transform()', or '.transformValues()' " +
+                "DSL users need to provide the store name to '.process()', '.processValues()', or '.transformValues()' " +
                 "to connect the store to the corresponding operator, or they can provide a StoreBuilder by implementing " +
                 "the stores() method on the Supplier itself. If you do not add stores manually, " +
                 "please file a bug report at https://issues.apache.org/jira/projects/KAFKA.");
@@ -190,7 +190,7 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
         final Record<K, V> toForward = new Record<>(
             key,
             value,
-            timestamp(),
+            recordContext.timestamp(),
             headers()
         );
         forward(toForward);
@@ -204,7 +204,7 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
         final Record<K, V> toForward = new Record<>(
             key,
             value,
-            toInternal.hasTimestamp() ? toInternal.timestamp() : timestamp(),
+            toInternal.hasTimestamp() ? toInternal.timestamp() : recordContext.timestamp(),
             headers()
         );
         forward(toForward, toInternal.child());
@@ -236,8 +236,8 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
         final ProcessorNode<?, ?, ?, ?> previousNode = currentNode();
         if (previousNode == null) {
             throw new StreamsException("Current node is unknown. This can happen if 'forward()' is called " +
-                    "in an illegal scope. The root cause could be that a 'Processor' or 'Transformer' instance" +
-                    " is shared. To avoid this error, make sure that your suppliers return new instances " +
+                    "in an illegal scope. The root cause could be that a 'Processor' instance " +
+                    "is shared. To avoid this error, make sure that your suppliers return new instances " +
                     "each time 'get()' of Supplier is called and do not return the same object reference " +
                     "multiple times.");
         }
@@ -250,11 +250,11 @@ public final class ProcessorContextImpl extends AbstractProcessorContext<Object,
             // old API processors wouldn't see the timestamps or headers of upstream
             // new API processors. But then again, from the perspective of those old-API
             // processors, even consulting the timestamp or headers when the record context
-            // is undefined is itself not well defined. Plus, I don't think we need to worry
+            // is undefined is itself not well-defined. Plus, I don't think we need to worry
             // too much about heterogeneous applications, in which the upstream processor is
             // implementing the new API and the downstream one is implementing the old API.
             // So, this seems like a fine compromise for now.
-            if (recordContext != null && (record.timestamp() != timestamp() || record.headers() != headers())) {
+            if (recordContext != null && (record.timestamp() != recordContext.timestamp() || record.headers() != recordContext.headers())) {
                 recordContext = new ProcessorRecordContext(
                     record.timestamp(),
                     recordContext.offset(),

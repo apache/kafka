@@ -77,7 +77,7 @@ public class AllBrokersStrategyIntegrationTest {
 
         driver.onFailure(time.milliseconds(), spec, new UnknownServerException());
         assertTrue(result.all().isDone());
-        TestUtils.assertFutureThrows(result.all(), UnknownServerException.class);
+        TestUtils.assertFutureThrows(UnknownServerException.class, result.all());
         assertEquals(Collections.emptyList(), driver.poll());
     }
 
@@ -200,7 +200,7 @@ public class AllBrokersStrategyIntegrationTest {
 
         driver.onFailure(time.milliseconds(), requestSpec, new UnknownServerException());
         assertTrue(future.isDone());
-        TestUtils.assertFutureThrows(future, UnknownServerException.class);
+        TestUtils.assertFutureThrows(UnknownServerException.class, future);
         assertEquals(Collections.emptyList(), driver.poll());
     }
 

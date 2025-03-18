@@ -25,11 +25,8 @@ import net.sourceforge.argparse4j.inf.Subparsers;
 import net.sourceforge.argparse4j.internal.HelpScreenException;
 
 import java.io.PrintStream;
-import java.nio.file.Files;
-import java.nio.file.Path;
-import java.nio.file.Paths;
 
-import static org.apache.kafka.message.checker.CheckerUtils.getDataFromGit;
+import static org.apache.kafka.message.checker.CheckerUtils.readFileFromGitRef;
 
 public class MetadataSchemaCheckerTool {
     public static void main(String[] args) throws Exception {
@@ -54,18 +51,18 @@ public class MetadataSchemaCheckerTool {
             required(true).
             help("The path to a schema JSON file.");
         Subparser evolutionVerifierParser = subparsers.addParser("verify-evolution").
-            help("Verify that an evolution of a JSON file is valid.");
-        evolutionVerifierParser.addArgument("--path1", "-1").
+            help("Verify that a schema JSON file is a valid evolution of a parent schema.");
+        evolutionVerifierParser.addArgument("--path", "-1").
             required(true).
-            help("The initial schema JSON path.");
-        evolutionVerifierParser.addArgument("--path2", "-2").
+            help("The path to a schema JSON file.");
+        evolutionVerifierParser.addArgument("--parent_path", "-2").
             required(true).
-            help("The final schema JSON path.");
+            help("The path to the parent schema JSON file.");
         Subparser evolutionGitVerifierParser = subparsers.addParser("verify-evolution-git").
-            help(" Verify that an evolution of a JSON file is valid using git.");
-        evolutionGitVerifierParser.addArgument("--file", "-3").
+            help("Verify that a schema JSON file is a valid evolution of your local git master branch.");
+        evolutionGitVerifierParser.addArgument("--path", "-3").
             required(true).
-            help("The edited JSON file");
+            help("The path to your edited JSON file");
         evolutionGitVerifierParser.addArgument("--ref", "-4")
             .required(false)
             .setDefault("refs/heads/trunk")
@@ -85,31 +82,24 @@ public class MetadataSchemaCheckerTool {
                 break;
             }
             case "verify-evolution": {
-                String path1 = namespace.getString("path1");
-                String path2 = namespace.getString("path2");
+                String child = namespace.getString("path");
+                String parent = namespace.getString("parent_path");
                 EvolutionVerifier verifier = new EvolutionVerifier(
-                    CheckerUtils.readMessageSpecFromFile(path1),
-                    CheckerUtils.readMessageSpecFromFile(path2));
+                    CheckerUtils.readMessageSpecFromFile(parent),
+                    CheckerUtils.readMessageSpecFromFile(child));
                 verifier.verify();
-                writer.println("Successfully verified evolution of path1: " + path1 +
-                        ", and path2: " + path2);
+                writer.println("Successfully verified evolution of path: " + child +
+                        " from parent: " + parent);
                 break;
             }
             case "verify-evolution-git": {
-                String filePath = "/metadata/src/main/resources/common/metadata/" + namespace.getString("file");
-                Path rootKafkaDirectory = Paths.get("").toAbsolutePath();
-                while (!Files.exists(rootKafkaDirectory.resolve(".git"))) {
-                    rootKafkaDirectory = rootKafkaDirectory.getParent();
-                    if (rootKafkaDirectory == null) {
-                        throw new RuntimeException("Invalid directory, need to be within a Git repository");
-                    }
-                }
-                String gitContent = getDataFromGit(filePath, rootKafkaDirectory, namespace.getString("ref"));
+                String path = namespace.getString("path");
+                String gitContent = readFileFromGitRef(path, namespace.getString("ref"));
                 EvolutionVerifier verifier = new EvolutionVerifier(
-                        CheckerUtils.readMessageSpecFromFile(rootKafkaDirectory + filePath),
-                        CheckerUtils.readMessageSpecFromString(gitContent));
+                    CheckerUtils.readMessageSpecFromFile(path),
+                    CheckerUtils.readMessageSpecFromString(gitContent));
                 verifier.verify();
-                writer.println("Successfully verified evolution of file: " + namespace.getString("file"));
+                writer.println("Successfully verified evolution of file: " + namespace.getString("path"));
                 break;
             }
             default:
