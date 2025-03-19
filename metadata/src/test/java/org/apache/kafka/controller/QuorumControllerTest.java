@@ -66,7 +66,6 @@ import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -376,10 +375,12 @@ public class QuorumControllerTest {
         }
     }
 
-    @Flaky("KAFKA-18845")
     @Test
     public void testUncleanShutdownBrokerElrEnabled() throws Throwable {
         List<Integer> allBrokers = List.of(1, 2, 3);
+        Map<Integer, Uuid> brokerLogDirs = allBrokers.stream().collect(
+            Collectors.toMap(identity(), brokerId -> Uuid.randomUuid())
+        );
         short replicationFactor = (short) allBrokers.size();
         long sessionTimeoutMillis = 500;
 
@@ -406,7 +407,7 @@ public class QuorumControllerTest {
                         setClusterId(active.clusterId()).
                         setFeatures(features).
                         setIncarnationId(Uuid.randomUuid()).
-                        setLogDirs(List.of(Uuid.randomUuid())).
+                        setLogDirs(List.of(brokerLogDirs.get(brokerId))).
                         setListeners(listeners));
                 brokerEpochs.put(brokerId, reply.get().epoch());
             }
@@ -474,7 +475,7 @@ public class QuorumControllerTest {
                     setClusterId(active.clusterId()).
                     setFeatures(features).
                     setIncarnationId(Uuid.randomUuid()).
-                    setLogDirs(List.of(Uuid.randomUuid())).
+                    setLogDirs(List.of(brokerLogDirs.get(brokerToUncleanShutdown))).
                     setListeners(listeners));
             brokerEpochs.put(brokerToUncleanShutdown, reply.get().epoch());
             partition = active.replicationControl().getPartition(topicIdFoo, 0);
@@ -482,7 +483,7 @@ public class QuorumControllerTest {
             assertArrayEquals(lastKnownElr, partition.lastKnownElr, partition.toString());
 
             // Unclean shutdown should not remove the last known ELR members.
-            active.registerBroker(
+            CompletableFuture<BrokerRegistrationReply> replyLeader = active.registerBroker(
                 anonymousContextFor(ApiKeys.BROKER_REGISTRATION),
                 new BrokerRegistrationRequestData().
                     setBrokerId(brokerToBeTheLeader).
@@ -490,8 +491,12 @@ public class QuorumControllerTest {
                     setFeatures(features).
                     setIncarnationId(Uuid.randomUuid()).
                     setPreviousBrokerEpoch(brokerEpochs.get(brokerToBeTheLeader)).
-                    setLogDirs(List.of(Uuid.randomUuid())).
+                    setLogDirs(List.of(brokerLogDirs.get(brokerToBeTheLeader))).
                     setListeners(listeners));
+            brokerEpochs.put(brokerToBeTheLeader, replyLeader.get().epoch());
+            partition = active.replicationControl().getPartition(topicIdFoo, 0);
+            assertArrayEquals(new int[]{brokerToBeTheLeader}, partition.elr, partition.toString());
+            assertArrayEquals(lastKnownElr, partition.lastKnownElr, partition.toString());
 
             // Unfence the last one in the ELR, it should be elected.
             sendBrokerHeartbeatToUnfenceBrokers(active, List.of(brokerToBeTheLeader), brokerEpochs);
