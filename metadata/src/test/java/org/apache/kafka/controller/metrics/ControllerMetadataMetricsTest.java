@@ -195,14 +195,14 @@ public class ControllerMetadataMetricsTest {
 
     @SuppressWarnings("LocalVariableName")
     @Test
-    public void testUpdateEligibleLeaderReplicasElection() {
+    public void testUpdateElectionFromEligibleLeaderReplicasCount() {
         MetricsRegistry registry = new MetricsRegistry();
         try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
             Meter ElectionFromEligibleLeaderReplicasPerSec = (Meter) registry
                 .allMetrics()
                 .get(metricName("ControllerStats", "ElectionFromEligibleLeaderReplicasPerSec"));
             assertEquals(0, ElectionFromEligibleLeaderReplicasPerSec.count());
-            metrics.updateEligibleLeaderReplicasElection(2);
+            metrics.updateElectionFromEligibleLeaderReplicasCount(2);
             assertEquals(2, ElectionFromEligibleLeaderReplicasPerSec.count());
         } finally {
             registry.shutdown();

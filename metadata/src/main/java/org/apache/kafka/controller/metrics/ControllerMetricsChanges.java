@@ -169,7 +169,7 @@ class ControllerMetricsChanges {
             uncleanLeaderElection = 0;
         }
         if (electionFromElrCounter > 0) {
-            metrics.updateEligibleLeaderReplicasElection(electionFromElrCounter);
+            metrics.updateElectionFromEligibleLeaderReplicasCount(electionFromElrCounter);
             electionFromElrCounter = 0;
         }
     }

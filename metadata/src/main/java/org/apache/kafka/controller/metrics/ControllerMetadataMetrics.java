@@ -218,7 +218,7 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         this.uncleanLeaderElectionMeter.ifPresent(m -> m.mark(count));
     }
 
-    public void updateEligibleLeaderReplicasElection(int count) {
+    public void updateElectionFromEligibleLeaderReplicasCount(int count) {
         this.electionFromEligibleLeaderReplicasMeter.ifPresent(m -> m.mark(count));
     }
 
