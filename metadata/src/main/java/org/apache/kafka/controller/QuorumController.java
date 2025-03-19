@@ -518,12 +518,12 @@ public final class QuorumController implements Controller {
         public void scheduleDeferred(
             String tag,
             long deadlineNs,
-            Supplier<ControllerResult<Void>> op
+            QuorumController.ControllerWriteOperation<Void> op
         ) {
             EnumSet<ControllerOperationFlag> flags = EnumSet.of(DOES_NOT_UPDATE_QUEUE_TIME);
             queue.scheduleDeferred(tag,
                 new EarliestDeadlineFunction(deadlineNs),
-                new ControllerWriteEvent<>(tag, op::get, flags));
+                new ControllerWriteEvent<>(tag, op, flags));
         }
 
         @Override

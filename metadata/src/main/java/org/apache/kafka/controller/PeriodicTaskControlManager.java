@@ -26,7 +26,6 @@ import org.slf4j.Logger;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
-import java.util.function.Supplier;
 
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
@@ -66,13 +65,13 @@ class PeriodicTaskControlManager {
         void scheduleDeferred(
             String tag,
             long deadlineNs,
-            Supplier<ControllerResult<Void>> op
+            QuorumController.ControllerWriteOperation<Void> op
         );
 
         void cancelDeferred(String tag);
     }
 
-    class PeriodicTaskOperation implements Supplier<ControllerResult<Void>> {
+    class PeriodicTaskOperation implements QuorumController.ControllerWriteOperation<Void> {
         private final PeriodicTask task;
 
         PeriodicTaskOperation(PeriodicTask task) {
@@ -80,7 +79,7 @@ class PeriodicTaskControlManager {
         }
 
         @Override
-        public ControllerResult<Void> get() {
+        public ControllerResult<Void> generateRecordsAndResult() {
             long startNs = 0;
             if (log.isDebugEnabled() || task.flags().contains(PeriodicTaskFlag.VERBOSE)) {
                 startNs = time.nanoseconds();
@@ -114,6 +113,11 @@ class PeriodicTaskControlManager {
             } else {
                 return ControllerResult.of(result.records(), null);
             }
+        }
+
+        @Override
+        public void processBatchEndOffset(long offset) {
+            task.processBatchEndOffsetOp().accept(offset);
         }
     }
 

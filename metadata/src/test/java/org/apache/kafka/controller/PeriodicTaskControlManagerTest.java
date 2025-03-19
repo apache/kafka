@@ -102,14 +102,21 @@ public class PeriodicTaskControlManagerTest {
         public void scheduleDeferred(
             String tag,
             long deadlineNs,
-            Supplier<ControllerResult<Void>> op
+            QuorumController.ControllerWriteOperation<Void> op
         ) {
             if (numCalls <= 0) {
                 throw new RuntimeException("too many deferred calls.");
             }
             numCalls--;
             cancelDeferred(tag);
-            TrackedTask task = new TrackedTask(tag, deadlineNs, op);
+            Supplier<ControllerResult<Void>> taskOp = () -> {
+                try {
+                    return op.generateRecordsAndResult();
+                } catch (Exception e) {
+                    throw new RuntimeException(e);
+                }
+            };
+            TrackedTask task = new TrackedTask(tag, deadlineNs, taskOp);
             tasks.computeIfAbsent(deadlineNs, __ -> new ArrayList<>()).add(task);
         }
 
