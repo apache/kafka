@@ -25,7 +25,6 @@ import tempfile
 import textwrap
 from typing import Dict, Optional, TextIO
 
-
 logger = logging.getLogger()
 logger.setLevel(logging.DEBUG)
 handler = logging.StreamHandler(sys.stderr)
@@ -79,6 +78,29 @@ def parse_trailers(title, body) -> Dict:
     return trailers
 
 
+def split_paragraphs(text: str):
+    """
+    Split the given text into a generator of paragraph lines and a boolean "markdown" flag.
+
+    If any line of a paragraph starts with a markdown character, we will assume the whole paragraph
+    contains markdown.
+    """
+    lines = text.splitlines(keepends=True)
+    paragraph = []
+    markdown = False
+    for line in lines:
+        if line.strip() == "":
+            if len(paragraph) > 0:
+                yield paragraph, markdown
+                paragraph.clear()
+                markdown = False
+        else:
+            if line[0] in ("#", "*", "-", "=") or line[0].isdigit():
+                markdown = True
+            paragraph.append(line)
+    yield paragraph, markdown
+
+
 if __name__ == "__main__":
     """
     This script performs some basic linting of our PR titles and body. The PR number is read from the PR_NUMBER
@@ -130,19 +152,24 @@ if __name__ == "__main__":
     check("Delete this text and replace" not in body, "PR template text not present", "PR template text should be removed")
     check("Committer Checklist" not in body, "PR template text not present", "Old PR template text should be removed")
 
-    paragraphs = body.splitlines()
-    new_lines = []
-    for p in paragraphs:
-        if p.strip() == "":  # Don't omit blank lines
-            new_lines.append("")
+    paragraph_iter = split_paragraphs(body)
+    new_paragraphs = []
+    for p, markdown in paragraph_iter:
+        if markdown:
+            # If a paragraph looks like it has markdown in it, wrap each line separately.
+            new_lines = []
+            for line in p:
+                new_lines.append(textwrap.fill(line, width=72, break_long_words=False, break_on_hyphens=False, replace_whitespace=False))
+            rewrapped_p = "\n".join(new_lines)
         else:
-            rewrapped_p = textwrap.wrap(p, width=72, break_long_words=False, break_on_hyphens=False)
-            new_lines.extend(rewrapped_p)
-    body = "\n".join(new_lines)
+            rewrapped_p = textwrap.fill("".join(p), width=72, break_long_words=False, break_on_hyphens=False, replace_whitespace=True)
+        new_paragraphs.append(rewrapped_p + "\n")
+    body = "\n".join(new_paragraphs)
 
     if get_env("GITHUB_ACTIONS"):
         with tempfile.NamedTemporaryFile() as fp:
-            fp.write(body.encode)
+            fp.write(body.encode())
+            fp.flush()
             cmd = f"gh pr edit {pr_number} --body-file {fp.name}"
             p = subprocess.run(shlex.split(cmd), capture_output=True)
             fp.close()
