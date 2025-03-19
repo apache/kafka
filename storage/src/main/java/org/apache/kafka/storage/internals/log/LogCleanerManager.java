@@ -206,14 +206,14 @@ public class LogCleanerManager {
     /**
      * Package private for unit test. Get the cleaning state of the partition.
      */
-    Optional<LogCleaningState> cleaningState(TopicPartition tp) {
+    public Optional<LogCleaningState> cleaningState(TopicPartition tp) {
         return inLock(lock, () -> Optional.ofNullable(inProgress.get(tp)));
     }
 
     /**
      * Package private for unit test. Set the cleaning state of the partition.
      */
-    void setCleaningState(TopicPartition tp, LogCleaningState state) {
+    public void setCleaningState(TopicPartition tp, LogCleaningState state) {
         inLock(lock, () -> inProgress.put(tp, state));
     }
 
