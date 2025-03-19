@@ -117,6 +117,7 @@ public class SharePartitionTest {
     private static final int MAX_FETCH_RECORDS = Integer.MAX_VALUE;
     private static final byte ACKNOWLEDGE_TYPE_GAP_ID = 0;
     private static Timer mockTimer;
+    private static final String TIMER_NAME_PREFIX = "share-partition-manager";
     private SharePartitionMetrics sharePartitionMetrics;
 
     @BeforeEach
@@ -2912,7 +2913,7 @@ public class SharePartitionTest {
                         sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask() == null &&
                         sharePartition.timer().size() == 0,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
 
         assertEquals(1, sharePartitionMetrics.acquisitionLockTimeoutPerSec().count());
         assertTrue(sharePartitionMetrics.acquisitionLockTimeoutPerSec().meanRate() > 0);
@@ -2938,7 +2939,7 @@ public class SharePartitionTest {
                         && sharePartition.cachedState().get(10L).batchDeliveryCount() == 1
                         && sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask() == null,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
 
         assertEquals(5, sharePartitionMetrics.acquisitionLockTimeoutPerSec().count());
         assertTrue(sharePartitionMetrics.acquisitionLockTimeoutPerSec().meanRate() > 0);
@@ -2973,7 +2974,7 @@ public class SharePartitionTest {
                         sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask() == null &&
                         sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask() == null,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
 
         assertEquals(10, sharePartitionMetrics.acquisitionLockTimeoutPerSec().count());
         assertTrue(sharePartitionMetrics.acquisitionLockTimeoutPerSec().meanRate() > 0);
@@ -2997,7 +2998,7 @@ public class SharePartitionTest {
                         sharePartition.nextFetchOffset() == 10 &&
                         sharePartition.cachedState().get(10L).batchState() == RecordState.AVAILABLE,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
 
         // Acquire the same batch again.
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 10), 5);
@@ -3036,7 +3037,7 @@ public class SharePartitionTest {
                         sharePartition.cachedState().get(0L).batchDeliveryCount() == 1 &&
                         sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask() == null,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
     }
 
     @Test
@@ -3065,7 +3066,7 @@ public class SharePartitionTest {
                         sharePartition.cachedState().get(5L).batchDeliveryCount() == 1 &&
                         sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask() == null,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
     }
 
     @Test
@@ -3115,7 +3116,7 @@ public class SharePartitionTest {
                         sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask() == null &&
                         sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask() == null,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
 
         assertEquals(RecordState.AVAILABLE, sharePartition.cachedState().get(1L).batchState());
         assertEquals(RecordState.ACKNOWLEDGED, sharePartition.cachedState().get(5L).batchState());
@@ -3142,7 +3143,7 @@ public class SharePartitionTest {
                         sharePartition.cachedState().get(10L).batchState() == RecordState.AVAILABLE &&
                         sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask() == null,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
 
         // Acquire subset of records again.
         fetchAcquiredRecords(sharePartition, memoryRecords(3, 12), 3);
@@ -3176,7 +3177,7 @@ public class SharePartitionTest {
                             expectedOffsetStateMap.equals(sharePartition.cachedState().get(10L).offsetState());
                 },
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
         assertNull(sharePartition.cachedState().get(10L).offsetState().get(10L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(10L).offsetState().get(11L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(10L).offsetState().get(12L).acquisitionLockTimeoutTask());
@@ -3264,7 +3265,7 @@ public class SharePartitionTest {
                             expectedOffsetStateMap2.equals(sharePartition.cachedState().get(10L).offsetState());
                 },
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
 
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(5L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(6L).acquisitionLockTimeoutTask());
@@ -3308,7 +3309,7 @@ public class SharePartitionTest {
                         sharePartition.cachedState().get(10L).batchDeliveryCount() == 1 &&
                         sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask() == null,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
 
         fetchAcquiredRecords(sharePartition, memoryRecords(10, 10), 10);
 
@@ -3326,7 +3327,7 @@ public class SharePartitionTest {
                         sharePartition.cachedState().get(10L).batchDeliveryCount() == 2 &&
                         sharePartition.cachedState().get(10L).batchAcquisitionLockTimeoutTask() == null,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
     }
 
     @Test
@@ -3350,7 +3351,7 @@ public class SharePartitionTest {
                         sharePartition.cachedState().get(0L).batchDeliveryCount() == 1 &&
                         sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask() == null,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
 
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 0), 5);
 
@@ -3384,7 +3385,7 @@ public class SharePartitionTest {
                             expectedOffsetStateMap.equals(sharePartition.cachedState().get(0L).offsetState());
                 },
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
 
         assertNull(sharePartition.cachedState().get(0L).offsetState().get(0L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(0L).offsetState().get(1L).acquisitionLockTimeoutTask());
@@ -3422,7 +3423,7 @@ public class SharePartitionTest {
                         sharePartition.cachedState().get(0L).batchState() == RecordState.AVAILABLE &&
                         sharePartition.cachedState().get(0L).batchAcquisitionLockTimeoutTask() == null,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
 
         fetchAcquiredRecords(sharePartition, memoryRecords(10, 0), 10);
 
@@ -3437,7 +3438,7 @@ public class SharePartitionTest {
                         sharePartition.cachedState().isEmpty() &&
                         sharePartition.nextFetchOffset() == 10,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
     }
 
     @Test
@@ -3459,7 +3460,7 @@ public class SharePartitionTest {
                         sharePartition.cachedState().get(5L).batchState() == RecordState.AVAILABLE &&
                         sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask() == null,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
 
         // Acknowledge with ACCEPT type should throw InvalidRecordStateException since they've been released due to acquisition lock timeout.
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(MEMBER_ID,
@@ -3525,7 +3526,7 @@ public class SharePartitionTest {
                             expectedOffsetStateMap.equals(sharePartition.cachedState().get(5L).offsetState());
                 },
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
 
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(5L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(6L).acquisitionLockTimeoutTask());
@@ -3563,7 +3564,7 @@ public class SharePartitionTest {
                         sharePartition.cachedState().get(5L).batchState() == RecordState.AVAILABLE &&
                         sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask() == null,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
     }
 
     @Test
@@ -3609,7 +3610,7 @@ public class SharePartitionTest {
                             expectedOffsetStateMap.equals(sharePartition.cachedState().get(5L).offsetState());
                 },
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
 
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(5L).acquisitionLockTimeoutTask());
         assertNull(sharePartition.cachedState().get(5L).offsetState().get(6L).acquisitionLockTimeoutTask());
@@ -4939,7 +4940,7 @@ public class SharePartitionTest {
                         sharePartition.cachedState().get(35L).offsetState().equals(expectedOffsetStateMap3);
             },
             DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-            () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+            () -> assertionFailedMessage(sharePartition));
 
         assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(10L).batchMemberId());
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(10L).batchState());
@@ -4973,7 +4974,7 @@ public class SharePartitionTest {
                     sharePartition.cachedState().get(10L).batchMemberId().equals(EMPTY_MEMBER_ID) &&
                     sharePartition.cachedState().get(10L).batchState() == RecordState.AVAILABLE,
             DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-            () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+            () -> assertionFailedMessage(sharePartition));
     }
 
     @Test
@@ -5008,7 +5009,7 @@ public class SharePartitionTest {
                         sharePartition.cachedState().get(5L).batchState() == RecordState.ARCHIVED;
             },
             DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-            () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+            () -> assertionFailedMessage(sharePartition));
     }
 
     @Test
@@ -5193,7 +5194,7 @@ public class SharePartitionTest {
                 () -> sharePartition.nextFetchOffset() == 7 && sharePartition.cachedState().isEmpty() &&
                             sharePartition.startOffset() == 7 && sharePartition.endOffset() == 7,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
 
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 10), 5);
 
@@ -5242,7 +5243,7 @@ public class SharePartitionTest {
                 () -> sharePartition.nextFetchOffset() == 3 && sharePartition.cachedState().isEmpty() &&
                         sharePartition.startOffset() == 3 && sharePartition.endOffset() == 3,
                 DEFAULT_MAX_WAIT_ACQUISITION_LOCK_TIMEOUT_MS,
-                () -> ACQUISITION_LOCK_NEVER_GOT_RELEASED);
+                () -> assertionFailedMessage(sharePartition));
 
         fetchAcquiredRecords(sharePartition, memoryRecords(2, 3), 2);
         fetchAcquiredRecords(sharePartition, memoryRecords(3, 5), 3);
@@ -6647,6 +6648,15 @@ public class SharePartitionTest {
                 assertEquals(recordState, offsetState.state());
             });
         });
+    }
+    
+    private String assertionFailedMessage(SharePartition sharePartition) {
+        return ACQUISITION_LOCK_NEVER_GOT_RELEASED + String.format(
+            " timer size: %d, next fetch offset: %d, batch state: %d, acquisition lock timeout task: %b",
+            sharePartition.timer().size(),
+            sharePartition.nextFetchOffset(),
+            sharePartition.cachedState().get(5L).batchState().id(),
+            sharePartition.cachedState().get(5L).batchAcquisitionLockTimeoutTask() == null);
     }
 
     private FetchPartitionData fetchPartitionData(Records records) {
