@@ -396,7 +396,7 @@ class LogCleanerManagerTest extends Logging {
     assertEquals(0, deletableLog2.size, "should have 0 logs ready to be deleted")
 
     // compaction done, should have 1 log eligible for log cleanup
-    cleanerManager.doneDeleting(util.List.of(cleanable2.get.topicPartition))
+    cleanerManager.doneDeleting(Seq(cleanable2.get.topicPartition).asJava)
     val deletableLog3 = cleanerManager.pauseCleaningForNonCompactedPartitions()
     assertEquals(1, deletableLog3.size, "should have 1 logs ready to be deleted")
   }
@@ -501,7 +501,7 @@ class LogCleanerManagerTest extends Logging {
     val pausedPartitions = cleanerManager.pauseCleaningForNonCompactedPartitions()
     // Log truncation happens due to unclean leader election
     cleanerManager.abortAndPauseCleaning(log.topicPartition)
-    cleanerManager.resumeCleaning(util.List.of(log.topicPartition))
+    cleanerManager.resumeCleaning(Seq(log.topicPartition).asJava)
     // log cleanup finishes and pausedPartitions are resumed
     cleanerManager.resumeCleaning(pausedPartitions.asScala.map(_.getKey).toList.asJava)
 
@@ -565,8 +565,8 @@ class LogCleanerManagerTest extends Logging {
   }
 
   /**
-    * Test computation of cleanable range with no minimum compaction lag settings active where bounded by active segment
-    */
+   * Test computation of cleanable range with no minimum compaction lag settings active where bounded by active segment
+   */
   @Test
   def testCleanableOffsetsActiveSegment(): Unit = {
     val logProps = new Properties()
@@ -743,10 +743,10 @@ class LogCleanerManagerTest extends Logging {
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
     val tp = new TopicPartition("log", 0)
 
-    assertThrows(classOf[IllegalStateException], () => cleanerManager.doneDeleting(util.List.of(tp)))
+    assertThrows(classOf[IllegalStateException], () => cleanerManager.doneDeleting(Seq(tp).asJava))
 
     cleanerManager.setCleaningState(tp, new LogCleaningPaused(1))
-    assertThrows(classOf[IllegalStateException], () => cleanerManager.doneDeleting(util.List.of(tp)))
+    assertThrows(classOf[IllegalStateException], () => cleanerManager.doneDeleting(Seq(tp).asJava))
 
     cleanerManager.setCleaningState(tp, LogCleaningInProgress.getInstance())
     cleanerManager.doneDeleting(Seq(tp).asJava)
@@ -803,7 +803,7 @@ class LogCleanerManagerTest extends Logging {
   }
 
   private def createCleanerManagerMock(pool: util.concurrent.ConcurrentMap[TopicPartition, UnifiedLog]): LogCleanerManagerMock = {
-    new LogCleanerManagerMock(util.List.of(logDir), pool, null)
+    new LogCleanerManagerMock(Seq(logDir).asJava, pool, null)
   }
 
   private def createLog(segmentSize: Int,
