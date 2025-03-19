@@ -50,9 +50,9 @@ public record TasksTuple(Map<String, Set<Integer>> activeTasks,
      * An empty task tuple.
      */
     public static final TasksTuple EMPTY = new TasksTuple(
-        Collections.emptyMap(),
-        Collections.emptyMap(),
-        Collections.emptyMap()
+        Map.of(),
+        Map.of(),
+        Map.of()
     );
 
     /**

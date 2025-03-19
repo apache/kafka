@@ -36,7 +36,6 @@ import org.apache.kafka.common.requests.FetchResponse;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.CloseableIterator;
-import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
 
@@ -83,7 +82,7 @@ public class CompletedFetch {
     private boolean isConsumed = false;
     private boolean initialized = false;
 
-    CompletedFetch(LogContext logContext,
+    CompletedFetch(Logger log,
                    SubscriptionState subscriptions,
                    BufferSupplier decompressionBufferSupplier,
                    TopicPartition partition,
@@ -91,7 +90,7 @@ public class CompletedFetch {
                    FetchMetricsAggregator metricAggregator,
                    Long fetchOffset,
                    short requestVersion) {
-        this.log = logContext.logger(CompletedFetch.class);
+        this.log = log;
         this.subscriptions = subscriptions;
         this.decompressionBufferSupplier = decompressionBufferSupplier;
         this.partition = partition;

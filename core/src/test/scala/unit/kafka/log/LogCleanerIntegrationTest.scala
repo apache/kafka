@@ -25,6 +25,7 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.storage.internals.log.UnifiedLog
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -206,7 +207,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
     for (_ <- 0 until numDups; key <- 0 until numKeys) yield {
       val curValue = valCounter
       log.appendAsLeader(TestUtils.singletonRecords(value = curValue.toString.getBytes, codec = codec,
-        key = key.toString.getBytes, timestamp = timestamp), leaderEpoch = 0)
+        key = key.toString.getBytes, timestamp = timestamp), 0)
       // move LSO forward to increase compaction bound
       log.updateHighWatermark(log.logEndOffset)
       valCounter += step

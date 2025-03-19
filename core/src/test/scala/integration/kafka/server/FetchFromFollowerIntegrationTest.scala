@@ -123,7 +123,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     val topicPartition = new TopicPartition(topic, 0)
     TestUtils.waitUntilTrue(() => {
       val endpoints = brokers(leaderBrokerId).metadataCache.getPartitionReplicaEndpoints(topicPartition, listenerName)
-      !endpoints.contains(followerBrokerId)
+      !endpoints.containsKey(followerBrokerId)
     }, "follower is still reachable.")
 
     assertEquals(-1, getPreferredReplica)

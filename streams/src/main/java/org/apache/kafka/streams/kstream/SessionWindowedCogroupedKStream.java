@@ -210,7 +210,7 @@ public interface SessionWindowedCogroupedKStream<K, V> {
      * {@link KafkaStreams#store(StoreQueryParameters)}  KafkaStreams#store(...)}:
      * <pre>{@code
      * KafkaStreams streams = ... // some windowed aggregation on value type double
-     * Sting queryableStoreName = ... // the queryableStoreName should be the name of the store as defined by the Materialized instance
+     * String queryableStoreName = ... // the queryableStoreName should be the name of the store as defined by the Materialized instance
      * StoreQueryParameters<ReadOnlySessionStore<String, Long>> storeQueryParams = StoreQueryParameters.fromNameAndType(queryableStoreName, QueryableStoreTypes.sessionStore());
      * ReadOnlySessionStore<String,Long> localWindowStore = streams.store(storeQueryParams);
      * String key = "some-key";

@@ -49,6 +49,7 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import joptsimple.ArgumentAcceptingOptionSpec;
+import joptsimple.OptionException;
 import joptsimple.OptionSpec;
 import joptsimple.OptionSpecBuilder;
 
@@ -260,7 +261,11 @@ public class ClientMetricsCommand {
                 .ofType(String.class)
                 .withValuesSeparatedBy(',');
 
-            options = parser.parse(args);
+            try {
+                options = parser.parse(args);
+            } catch (OptionException oe) {
+                CommandLineUtils.printUsageAndExit(parser, oe.getMessage());
+            }
 
             checkArgs();
         }
