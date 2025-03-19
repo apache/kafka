@@ -50,7 +50,7 @@ public class ControllerMetadataMetricsTest {
                         "kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount",
                         "kafka.controller:type=KafkaController,name=IgnoredStaticVoters",
                         "kafka.controller:type=ControllerStats,name=UncleanLeaderElectionsPerSec",
-                        "kafka.controller:type=ControllerStats,name=EligibleLeaderReplicasElectionsPerSec"
+                        "kafka.controller:type=ControllerStats,name=ElectionFromEligibleLeaderReplicasPerSec"
                     )));
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "KafkaController",
@@ -198,12 +198,12 @@ public class ControllerMetadataMetricsTest {
     public void testUpdateEligibleLeaderReplicasElection() {
         MetricsRegistry registry = new MetricsRegistry();
         try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
-            Meter EligibleLeaderReplicasElectionsPerSec = (Meter) registry
+            Meter ElectionFromEligibleLeaderReplicasPerSec = (Meter) registry
                 .allMetrics()
-                .get(metricName("ControllerStats", "EligibleLeaderReplicasElectionsPerSec"));
-            assertEquals(0, EligibleLeaderReplicasElectionsPerSec.count());
+                .get(metricName("ControllerStats", "ElectionFromEligibleLeaderReplicasPerSec"));
+            assertEquals(0, ElectionFromEligibleLeaderReplicasPerSec.count());
             metrics.updateEligibleLeaderReplicasElection(2);
-            assertEquals(2, EligibleLeaderReplicasElectionsPerSec.count());
+            assertEquals(2, ElectionFromEligibleLeaderReplicasPerSec.count());
         } finally {
             registry.shutdown();
         }
