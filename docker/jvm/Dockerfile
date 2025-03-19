@@ -87,7 +87,7 @@ COPY server.properties /etc/kafka/docker/server.properties
 COPY --from=build-jsa kafka.jsa /opt/kafka/kafka.jsa
 COPY --from=build-jsa storage.jsa /opt/kafka/storage.jsa
 COPY --chown=appuser:appuser resources/common-scripts /etc/kafka/docker
-COPY --chown=appuser:appuser launch /etc/kafka/docker/launch
+COPY --chown=appuser:appuser --chmod=755 launch k8s_launch /etc/kafka/docker/
 
 USER appuser
 

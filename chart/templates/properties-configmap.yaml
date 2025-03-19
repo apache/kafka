@@ -1,0 +1,45 @@
+{{/*
+Licensed to the Apache Software Foundation (ASF) under one or more
+contributor license agreements.  See the NOTICE file distributed with
+this work for additional information regarding copyright ownership.
+The ASF licenses this file to You under the Apache License, Version 2.0
+(the "License"); you may not use this file except in compliance with
+the License.  You may obtain a copy of the License at
+
+   http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
+*/ -}}
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "kafka.fullname" . }}-config
+  {{- with .Values.namespace }}
+  namespace: {{ . }}
+  {{- end }}
+data:
+{{- /*
+{{- range $path, $bytes := .Files.Glob "config/*.properties" }}
+{{- $file := trimPrefix "config/" $path }}
+{{- $file | nindent 2 }}: |- {{- tpl ($.Files.Get $path) $ | nindent 4 }}
+{{- end }}
+*/ -}}
+
+{{- range $i := until (int .Values.controller.replicas) }}
+{{- printf "controller-%d.properties" $i | nindent 2 }}: |- {{- include "kafka.controller.properties" (dict "root" $ "instance" $i) | nindent 4 }}
+{{- end }}
+
+{{- range $i := until (int .Values.broker.replicas) }}
+{{- printf "broker-%d.properties" $i | nindent 2 }}: |- {{- include "kafka.broker.properties" (dict "root" $ "instance" $i) | nindent 4 }}
+{{- end }}
+
+  log4j2.yaml: |- {{- include "kafka.tools-log4j2.yaml" . | nindent 4 }}
+
+  tools-log4j2.yaml: |- {{- include "kafka.tools-log4j2.yaml" . | nindent 4 }}
+
+  format-controllers.sh: |- {{- include "kafka.controller.bootstrap.script" . | nindent 4 }}

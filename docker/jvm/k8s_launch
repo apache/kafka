@@ -1,0 +1,120 @@
+#!/bin/bash
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# This script is designed to start Kafka in a Kubernetes cluster when
+# deployed using the Kafka Helm chart.
+
+function usage()
+{
+  echo "Usage: $(basename $BASH_SOURCE) -r <server/controller/broker> -i clusterid -b baseId" 1>&2
+  echo 1>&2
+  echo 'For example:' 1>&2
+  echo "./$(basename $BASH_SOURCE) -r controller -i abcdefghijklmnopqrstuv -b 100" 1>&2
+  echo 1>&2
+  exit 1
+}
+
+declare ROLE=${ROLE:-server}
+declare -i BASE_ID=${BASE_ID:-0}
+declare CLUSTER_ID
+declare -rx KAFKA_ROOT=/opt/kafka
+
+while getopts ":b:i:r:h" arg; do
+  case "${arg}" in
+    b) BASE_ID=${OPTARG,,};;
+    i) CLUSTER_ID=${OPTARG};;
+    r) ROLE=${OPTARG,,};;
+    h) usage;;
+    ?) echo "Invalid option: -${OPTARG}"; usage;;
+  esac
+done
+
+if [[ "${ROLE}" != "server" && "${ROLE}" != "controller" && "${ROLE}" != "broker" ]]; then
+  echo "ROLE must be one of server, controller or broker" 1>&2
+  exit 1
+fi
+
+declare POD_ID_FROMHOSTNAME=${HOSTNAME##*-}
+declare -i POD_ID=${POD_ID_FROMHOSTNAME:-0}
+declare -i NODE_ID=$((BASE_ID+POD_ID))
+
+function format_storage() {
+  local clusterId="${1:-}"
+  local perfOpts="${KAFKA_JVM_PERFORMANCE_OPTS:-}"
+
+  set --
+
+  # We will first use CDS for storage to format storage
+  export KAFKA_JVM_PERFORMANCE_OPTS="${perfOpts} -XX:SharedArchiveFile=${KAFKA_ROOT}/storage.jsa"
+
+  if [[ "${ROLE}" == "server" || "${ROLE}" == "controller" ]] && [[ -f /mnt/config/format-controllers.sh ]]; then
+      source /mnt/config/format-controllers.sh
+  else
+    if [[ "${clusterId}" ]]; then
+      # Format Log Directories with the cluster id
+      ${KAFKA_ROOT}/bin/kafka-storage.sh format -t "${clusterId}" \
+        -c ${KAFKA_ROOT}/config/kafka.properties \
+        --ignore-formatted $@
+    else
+      CLUSTER_ID=$(${KAFKA_ROOT}/bin/kafka-storage.sh random-uuid)
+      echo $CLUSTER_ID > /mnt/kafka/cluster_id
+    fi
+  fi
+
+  # Reset the KAFKA_JVM_PERFORMANCE_OPTS without the storage CDS
+  export KAFKA_JVM_PERFORMANCE_OPTS="${perfOpts}"
+}
+
+function create_log_dir() {
+    mkdir -p "/mnt/kafka/${ROLE@L}s/${NODE_ID}"
+}
+
+
+# Copy the config files from the mounted configmap to the local folder.
+function copy_config_files() {
+    if [ -d /mnt/config ]; then
+        # Clear out the default properties files.
+        rm -rf ${KAFKA_ROOT}/config/*
+        # Copy the log4j properties files to the local folder.
+        cp -rL /mnt/config/*log4j* ${KAFKA_ROOT}/config
+        # Copy the role specific properties files to the local folder.
+        echo "Using property file /mnt/config/${ROLE@L}-${POD_ID}.properties"
+        cp -L /mnt/config/${ROLE@L}-${POD_ID}.properties ${KAFKA_ROOT}/config/kafka.properties
+    fi
+}
+
+# Generate a cluster identifier, if needed.
+function get_cluster_id() {
+    # Use the identifier from file, if there is one. It can't be changed once set.
+    if [[ -f "/mnt/kafka/cluster_id" ]]; then
+        CLUSTER_ID=$(cat /mnt/kafka/cluster_id)
+    else
+        # Use the identifier from the environment variable, if there is one.
+        if [[ -n "${CLUSTER_ID:-}" ]]; then
+            echo "${CLUSTER_ID}" > /mnt/kafka/cluster_id
+        fi
+    fi
+    echo "${CLUSTER_ID:-}"
+}
+
+create_log_dir
+copy_config_files
+format_storage "$(get_cluster_id)"
+
+# Start the Kafka Server
+export KAFKA_JVM_PERFORMANCE_OPTS="${KAFKA_JVM_PERFORMANCE_OPTS:-} -XX:SharedArchiveFile=${KAFKA_ROOT}/kafka.jsa"
+
+exec ${KAFKA_ROOT}/bin/kafka-server-start.sh ${KAFKA_ROOT}/config/kafka.properties
