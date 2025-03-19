@@ -69,7 +69,7 @@ import java.nio.file.{Files, Paths}
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.Lock
-import java.util.concurrent.{CompletableFuture, RejectedExecutionException, TimeUnit}
+import java.util.concurrent.{CompletableFuture, Future, RejectedExecutionException, TimeUnit}
 import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.jdk.CollectionConverters._
@@ -1544,14 +1544,13 @@ class ReplicaManager(val config: KafkaConfig,
                                  logReadResults: Seq[(TopicIdPartition, LogReadResult)],
                                  fetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)]): Option[LogReadResult] = {
     val key = new TopicPartitionOperationKey(remoteFetchInfo.topicPartition.topic(), remoteFetchInfo.topicPartition.partition())
-    var remoteFetchFuture: RemoteFetchFuture = null
+    val remoteFetchResult = new CompletableFuture[RemoteLogReadResult]
+    var remoteFetchTask: Future[Void] = null
     try {
-      val remoteFetchResult = new CompletableFuture[RemoteLogReadResult]
-      val remoteFetchTask = remoteLogManager.get.asyncRead(remoteFetchInfo, (result: RemoteLogReadResult) => {
+      remoteFetchTask = remoteLogManager.get.asyncRead(remoteFetchInfo, (result: RemoteLogReadResult) => {
         remoteFetchResult.complete(result)
         delayedRemoteFetchPurgatory.checkAndComplete(key)
       })
-      remoteFetchFuture = new RemoteFetchFuture(remoteFetchTask, remoteFetchResult)
     } catch {
       case e: RejectedExecutionException =>
         // Return the error if any in scheduling the remote fetch task
@@ -1560,7 +1559,7 @@ class ReplicaManager(val config: KafkaConfig,
     }
 
     val remoteFetchMaxWaitMs = config.remoteLogManagerConfig.remoteFetchMaxWaitMs().toLong
-    val remoteFetch = new DelayedRemoteFetch(remoteFetchFuture, remoteFetchInfo, remoteFetchMaxWaitMs,
+    val remoteFetch = new DelayedRemoteFetch(remoteFetchTask, remoteFetchResult, remoteFetchInfo, remoteFetchMaxWaitMs,
       fetchPartitionStatus, params, logReadResults, this, responseCallback)
     delayedRemoteFetchPurgatory.tryCompleteElseWatch(remoteFetch, util.Collections.singletonList(key))
     None

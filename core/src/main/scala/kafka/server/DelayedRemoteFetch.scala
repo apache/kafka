@@ -35,7 +35,8 @@ import scala.collection._
  * A remote fetch operation that can be created by the replica manager and watched
  * in the remote fetch operation purgatory
  */
-class DelayedRemoteFetch(remoteFetchFuture: RemoteFetchFuture,
+class DelayedRemoteFetch(remoteFetchTask: Future[Void],
+                         remoteFetchResult: CompletableFuture[RemoteLogReadResult],
                          remoteFetchInfo: RemoteStorageFetchInfo,
                          remoteFetchMaxWaitMs: Long,
                          fetchPartitionStatus: Seq[(TopicIdPartition, FetchPartitionStatus)],
@@ -79,7 +80,7 @@ class DelayedRemoteFetch(remoteFetchFuture: RemoteFetchFuture,
             return forceComplete()
         }
     }
-    if (remoteFetchFuture.isDone) // Case c
+    if (remoteFetchResult.isDone) // Case c
       forceComplete()
     else
       false
@@ -87,8 +88,8 @@ class DelayedRemoteFetch(remoteFetchFuture: RemoteFetchFuture,
 
   override def onExpiration(): Unit = {
     // cancel the remote storage read task, if it has not been executed yet
-    val cancelled = remoteFetchFuture.cancel()
-    if (!cancelled) debug(s"Remote fetch task for RemoteStorageFetchInfo: $remoteFetchInfo could not be cancelled and its isDone value is ${remoteFetchFuture.isDone}")
+    val cancelled = remoteFetchTask.cancel(false)
+    if (!cancelled) debug(s"Remote fetch task for RemoteStorageFetchInfo: $remoteFetchInfo could not be cancelled and its isDone value is ${remoteFetchTask.isDone}")
 
     DelayedRemoteFetchMetrics.expiredRequestMeter.mark()
   }
@@ -99,13 +100,13 @@ class DelayedRemoteFetch(remoteFetchFuture: RemoteFetchFuture,
   override def onComplete(): Unit = {
     val fetchPartitionData = localReadResults.map { case (tp, result) =>
       if (tp.topicPartition().equals(remoteFetchInfo.topicPartition)
-        && remoteFetchFuture.isDone
+        && remoteFetchResult.isDone
         && result.error == Errors.NONE
         && result.info.delayedRemoteStorageFetch.isPresent) {
-        if (remoteFetchFuture.get.error.isPresent) {
-          tp -> ReplicaManager.createLogReadResult(remoteFetchFuture.get.error.get).toFetchPartitionData(false)
+        if (remoteFetchResult.get.error.isPresent) {
+          tp -> ReplicaManager.createLogReadResult(remoteFetchResult.get.error.get).toFetchPartitionData(false)
         } else {
-          val info = remoteFetchFuture.get.fetchDataInfo.get
+          val info = remoteFetchResult.get.fetchDataInfo.get
           tp -> new FetchPartitionData(
             result.error,
             result.highWatermark,
@@ -124,20 +125,6 @@ class DelayedRemoteFetch(remoteFetchFuture: RemoteFetchFuture,
 
     responseCallback(fetchPartitionData)
   }
-}
-
-class RemoteFetchFuture(taskFuture: Future[Void], resultFuture: CompletableFuture[RemoteLogReadResult]){
-  private val task = taskFuture
-  private val result = resultFuture
-
-  def cancel(): Boolean = {
-    result.cancel(false)
-    task.cancel(false)
-  }
-
-  def isDone(): Boolean = task.isDone && result.isDone
-
-  def get(): RemoteLogReadResult = result.get()
 }
 
 object DelayedRemoteFetchMetrics {
