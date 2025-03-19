@@ -1724,7 +1724,7 @@ class ReplicaManager(val config: KafkaConfig,
 
         if (preferredReadReplica.isDefined) {
           replicaSelectorPlugin.foreach { selector =>
-            debug(s"Replica selector ${selector.getClass.getSimpleName} returned preferred replica " +
+            debug(s"Replica selector plugin ${selector.getClass.getSimpleName} returned preferred replica " +
               s"${preferredReadReplica.get} for ${params.clientMetadata}")
           }
           // If a preferred read-replica is set, skip the read
@@ -1921,7 +1921,7 @@ class ReplicaManager(val config: KafkaConfig,
           replicaInfoSet.add(leaderReplica)
 
           val partitionInfo = new DefaultPartitionView(replicaInfoSet.asJava, leaderReplica)
-          replicaSelector.get().select(partition.topicPartition, clientMetadata, partitionInfo).toScala.collect {
+          replicaSelector.get.select(partition.topicPartition, clientMetadata, partitionInfo).toScala.collect {
             // Even though the replica selector can return the leader, we don't want to send it out with the
             // FetchResponse, so we exclude it here
             case selected if !selected.endpoint.isEmpty && selected != leaderReplica => selected.endpoint.id
@@ -2591,7 +2591,7 @@ class ReplicaManager(val config: KafkaConfig,
     config.replicaSelectorClassName.map { className =>
       val tmpReplicaSelector: ReplicaSelector = Utils.newInstance(className, classOf[ReplicaSelector])
       tmpReplicaSelector.configure(config.originals())
-        Plugin.wrapInstance(tmpReplicaSelector, metrics, className)
+      Plugin.wrapInstance(tmpReplicaSelector, metrics, className)
     }
   }
 
