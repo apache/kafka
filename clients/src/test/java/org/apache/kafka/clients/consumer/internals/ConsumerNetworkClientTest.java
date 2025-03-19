@@ -269,28 +269,60 @@ public class ConsumerNetworkClientTest {
     public void testFutureCompletionOutsidePoll() throws Exception {
         // Tests the scenario in which the request that is being awaited in one thread
         // is received and completed in another thread.
-        final CountDownLatch t1TheardCountDownLatch = new CountDownLatch(1);
+
+        final CountDownLatch t1Started = new CountDownLatch(1);      // indicates t1 has started
+        final CountDownLatch t1BlockedInPoll = new CountDownLatch(1); // indicates t1 is about to block in poll
+        final CountDownLatch responseProcessed = new CountDownLatch(1); // indicates response has been processed
+        final CountDownLatch t2CanStart = new CountDownLatch(1);     // indicates t2 can start execution
 
         final RequestFuture<ClientResponse> future = consumerClient.send(node, heartbeat());
         consumerClient.pollNoWakeup(); // dequeue and send the request
 
         client.enableBlockingUntilWakeup(2);
-        Thread t1 = new Thread(() ->  {
-            t1TheardCountDownLatch.countDown();
-            consumerClient.pollNoWakeup();
+
+        // Thread t1 will attempt to poll and block
+        Thread t1 = new Thread(() -> {
+            t1Started.countDown(); // notify main thread that t1 has started
+            try {
+                // Signal we're about to enter poll
+                t1BlockedInPoll.countDown();
+                consumerClient.pollNoWakeup();
+                responseProcessed.countDown(); // after poll returns, signal response is processed
+            } catch (Exception e) {
+                throw new RuntimeException(e);
+            }
         });
-        
+
+        // Thread t2 will wait until t1 has processed the response before polling
+        Thread t2 = new Thread(() -> {
+            try {
+                t2CanStart.await(); // wait for main thread to signal it can start
+                responseProcessed.await();
+                consumerClient.poll(future); // complete the future
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        });
+
+        // Start thread t1
         t1.start();
+        t1Started.await(); // ensure t1 has started
+        t1BlockedInPoll.await(); // wait for t1 to be about to enter poll
         
-        // Simulate a network response and return from the poll in t1
         client.respond(heartbeatResponse(Errors.NONE));
-        // Wait for t1 to block in poll
-        t1TheardCountDownLatch.await();
+
+        // Wake up t1, allowing it to return from poll
         client.wakeup();
-        
-        t1.join();
-        consumerClient.poll(future);
-        
+
+        // Start thread t2
+        t2.start();
+        t2CanStart.countDown(); // allow t2 to start execution
+
+        // Wait for both threads to complete
+        t1.join(10000);
+        t2.join(10000);
+
+        // Verify both t1 and t2 have completed correctly
         assertTrue(future.succeeded());
     }
 
