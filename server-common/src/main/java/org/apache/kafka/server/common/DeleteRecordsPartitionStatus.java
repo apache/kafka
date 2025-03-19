@@ -47,7 +47,7 @@ public class DeleteRecordsPartitionStatus {
         this.acksPending = false;
     }
 
-    public boolean isAcksPending() {
+    public boolean acksPending() {
         return acksPending;
     }
 
@@ -56,11 +56,11 @@ public class DeleteRecordsPartitionStatus {
     }
 
 
-    public DeleteRecordsResponseData.DeleteRecordsPartitionResult getResponseStatus() {
+    public DeleteRecordsResponseData.DeleteRecordsPartitionResult responseStatus() {
         return responseStatus;
     }
 
-    public long getRequiredOffset() {
+    public long requiredOffset() {
         return requiredOffset;
     }
 
@@ -93,10 +93,10 @@ public class DeleteRecordsPartitionStatus {
             this.responseCallback = responseCallback;
             // first update the acks pending variable according to the error code
             deleteRecordsStatus.forEach((topicPartition, status) -> {
-                if (status.getResponseStatus().errorCode() == Errors.NONE.code()) {
+                if (status.responseStatus().errorCode() == Errors.NONE.code()) {
                     // Timeout error state will be cleared when required acks are received
                     status.setAcksPending(true);
-                    status.getResponseStatus().setErrorCode(Errors.REQUEST_TIMED_OUT.code());
+                    status.responseStatus().setErrorCode(Errors.REQUEST_TIMED_OUT.code());
                 } else {
                     status.setAcksPending(false);
                 }
@@ -112,19 +112,22 @@ public class DeleteRecordsPartitionStatus {
          */
         @Override
         public boolean tryComplete() {
+            //  check for each partition if it still has pending acks
             deleteRecordsStatus.forEach((topicPartition, status) -> {
                 log.trace("Checking delete records satisfaction for {}, current status {}", topicPartition, status);
-                if (status.isAcksPending()) {
+                //  skip those partitions that have already been satisfied
+                if (status.acksPending()) {
                     onAcksPending.accept(topicPartition, status);
                 }
             });
-            return deleteRecordsStatus.values().stream().noneMatch(DeleteRecordsPartitionStatus::isAcksPending) && forceComplete();
+            //  check if every partition has satisfied at least one of case A or B
+            return deleteRecordsStatus.values().stream().noneMatch(DeleteRecordsPartitionStatus::acksPending) && forceComplete();
         }
 
         @Override
         public void onExpiration() {
             deleteRecordsStatus.forEach((topicPartition, status) -> {
-                if (status.isAcksPending()) {
+                if (status.acksPending()) {
                     DelayedDeleteRecordsMetrics.recordExpiration(topicPartition);
                 }
             });
@@ -138,7 +141,7 @@ public class DeleteRecordsPartitionStatus {
             Map<TopicPartition, DeleteRecordsResponseData.DeleteRecordsPartitionResult> responseStatus =
                     new HashMap<>();
             deleteRecordsStatus.forEach((k, status) -> {
-                responseStatus.put(k, status.getResponseStatus());
+                responseStatus.put(k, status.responseStatus());
             });
             responseCallback.accept(responseStatus);
         }

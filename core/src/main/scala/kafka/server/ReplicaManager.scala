@@ -1288,7 +1288,7 @@ class ReplicaManager(val config: KafkaConfig,
             partition.leaderLogIfLocal match {
               case Some(_) =>
                 val leaderLW = partition.lowWatermarkIfLeader
-                (leaderLW >= status.getRequiredOffset, Errors.NONE, leaderLW)
+                (leaderLW >= status.requiredOffset, Errors.NONE, leaderLW)
               case None =>
                 (false, Errors.NOT_LEADER_OR_FOLLOWER, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
             }
@@ -1301,8 +1301,8 @@ class ReplicaManager(val config: KafkaConfig,
         }
         if (error != Errors.NONE || lowWatermarkReached) {
           status.setAcksPending(false)
-          status.getResponseStatus.setErrorCode(error.code)
-          status.getResponseStatus.setLowWatermark(lw)
+          status.responseStatus.setErrorCode(error.code)
+          status.responseStatus.setLowWatermark(lw)
         }
       }
       val responseCallbackJava: java.util.function.Consumer[util.Map[TopicPartition, DeleteRecordsPartitionResult]] =
@@ -1319,7 +1319,7 @@ class ReplicaManager(val config: KafkaConfig,
       delayedDeleteRecordsPurgatory.tryCompleteElseWatch(delayedDeleteRecords, deleteRecordsRequestKeys.asJava)
     } else {
       // we can respond immediately
-      val deleteRecordsResponseStatus = deleteRecordsStatus.map { case (k, status) => k -> status.getResponseStatus }
+      val deleteRecordsResponseStatus = deleteRecordsStatus.map { case (k, status) => k -> status.responseStatus }
       responseCallback(deleteRecordsResponseStatus)
     }
   }
