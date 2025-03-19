@@ -22,6 +22,7 @@ import subprocess
 import shlex
 import sys
 import tempfile
+import textwrap
 from typing import Dict, Optional, TextIO
 
 
@@ -61,6 +62,7 @@ def write_commit(io: TextIO, title: str, body: str):
     io.write(body.encode())
     io.flush()
 
+
 def parse_trailers(title, body) -> Dict:
     trailers = defaultdict(list)
 
@@ -96,10 +98,6 @@ if __name__ == "__main__":
     * Has "Reviewers:" trailer if the PR is approved
     """
 
-    if not get_env("GITHUB_ACTIONS"):
-        print("This script is intended to by run by GitHub Actions.")
-        exit(1)
-
     pr_number = get_env("PR_NUMBER")
     cmd = f"gh pr view {pr_number} --json 'title,body,reviews'"
     p = subprocess.run(shlex.split(cmd), capture_output=True)
@@ -132,6 +130,27 @@ if __name__ == "__main__":
     check("Delete this text and replace" not in body, "PR template text not present", "PR template text should be removed")
     check("Committer Checklist" not in body, "PR template text not present", "Old PR template text should be removed")
 
+    paragraphs = body.splitlines()
+    new_lines = []
+    for p in paragraphs:
+        if p.strip() == "":  # Don't omit blank lines
+            new_lines.append("")
+        else:
+            rewrapped_p = textwrap.wrap(p, width=72, break_long_words=False, break_on_hyphens=False)
+            new_lines.extend(rewrapped_p)
+    body = "\n".join(new_lines)
+
+    if get_env("GITHUB_ACTIONS"):
+        with tempfile.NamedTemporaryFile() as fp:
+            fp.write(body.encode)
+            cmd = f"gh pr edit {pr_number} --body-file {fp.name}"
+            p = subprocess.run(shlex.split(cmd), capture_output=True)
+            fp.close()
+            if p.returncode != 0:
+                logger.error(f"Could not update PR {pr_number}. STDOUT: {p.stdout.decode()}")
+    else:
+        logger.info(f"Not reformatting {pr_number} since this is not running on GitHub Actions.")
+
     # Check for Reviewers
     approved = has_approval(reviews)
     if approved:
@@ -143,12 +162,13 @@ if __name__ == "__main__":
                 logger.debug(reviewer_in_body)
 
     logger.debug("Commit will look like:\n")
-    logger.debug("```")
+    logger.debug("<pre>")
     io = BytesIO()
+    title += f" (#{pr_number})"
     write_commit(io, title, body)
     io.seek(0)
     logger.debug(io.read().decode())
-    logger.debug("```\n")
+    logger.debug("</pre>\n")
 
     exit_code = 0
     logger.debug("Validation results:")
