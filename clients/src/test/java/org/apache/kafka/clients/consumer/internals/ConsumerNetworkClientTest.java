@@ -304,7 +304,6 @@ public class ConsumerNetworkClientTest {
             }
         });
 
-        // Start thread t1
         t1.start();
         t1Started.await(); // ensure t1 has started
         t1BlockedInPoll.await(); // wait for t1 to be about to enter poll
@@ -314,7 +313,6 @@ public class ConsumerNetworkClientTest {
         // Wake up t1, allowing it to return from poll
         client.wakeup();
 
-        // Start thread t2
         t2.start();
         t2CanStart.countDown(); // allow t2 to start execution
 
