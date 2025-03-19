@@ -2797,6 +2797,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           // Clients are not allowed to see topics that are not authorized for Describe.
           if (authorizer.isDefined) {
             val topicsToCheck = response.groups.stream()
+              .filter(group => group.topology != null)
               .flatMap(group => group.topology.subtopologies.stream)
               .flatMap(subtopology => java.util.stream.Stream.concat(
                 java.util.stream.Stream.concat(
@@ -2812,15 +2813,16 @@ class KafkaApis(val requestChannel: RequestChannel,
               topicsToCheck)(identity)
 
               val updatedGroups = response.groups.stream.map { group =>
-                val hasUnauthorizedTopic = group.topology.subtopologies.stream()
-                  .flatMap(subtopology => java.util.stream.Stream.concat(
-                    java.util.stream.Stream.concat(
+                val hasUnauthorizedTopic = if (group.topology == null) false else
+                  group.topology.subtopologies.stream()
+                    .flatMap(subtopology => java.util.stream.Stream.concat(
                       java.util.stream.Stream.concat(
-                        subtopology.sourceTopics.stream,
-                        subtopology.repartitionSinkTopics.stream),
-                      subtopology.repartitionSourceTopics.stream.map(_.name)),
-                    subtopology.stateChangelogTopics.stream.map(_.name)))
-                  .anyMatch(topic => !authorizedTopics.contains(topic))
+                        java.util.stream.Stream.concat(
+                          subtopology.sourceTopics.stream,
+                          subtopology.repartitionSinkTopics.stream),
+                        subtopology.repartitionSourceTopics.stream.map(_.name)),
+                      subtopology.stateChangelogTopics.stream.map(_.name)))
+                    .anyMatch(topic => !authorizedTopics.contains(topic))
 
               if (hasUnauthorizedTopic) {
                 new StreamsGroupDescribeResponseData.DescribedGroup()
