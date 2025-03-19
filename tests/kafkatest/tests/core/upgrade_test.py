@@ -165,23 +165,23 @@ class TestUpgrade(ProduceConsumeValidateTest):
     @cluster(num_nodes=5)
     @matrix(from_kafka_version=[str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(DEV_BRANCH)],
             metadata_quorum=[combined_kraft])
-    def test_combined_mode_upgrade(self, from_kafka_version, metadata_quorum, use_new_coordinator=False):
+    def test_combined_mode_upgrade(self, from_kafka_version, metadata_quorum):
         self.run_upgrade(from_kafka_version)
 
     @cluster(num_nodes=8)
     @matrix(from_kafka_version=[str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(DEV_BRANCH)],
             metadata_quorum=[isolated_kraft])
-    def test_isolated_mode_upgrade(self, from_kafka_version, metadata_quorum, use_new_coordinator=False):
+    def test_isolated_mode_upgrade(self, from_kafka_version, metadata_quorum):
         self.run_upgrade(from_kafka_version)
 
     @cluster(num_nodes=5)
     @matrix(from_kafka_version=[str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(DEV_BRANCH)],
             metadata_quorum=[combined_kraft])
-    def test_combined_mode_upgrade_downgrade(self, from_kafka_version, metadata_quorum, use_new_coordinator=False):
+    def test_combined_mode_upgrade_downgrade(self, from_kafka_version, metadata_quorum):
         self.run_upgrade_downgrade(from_kafka_version)
 
     @cluster(num_nodes=8)
     @matrix(from_kafka_version=[str(LATEST_3_4), str(LATEST_3_5), str(LATEST_3_6), str(LATEST_3_7), str(LATEST_3_8), str(LATEST_3_9), str(DEV_BRANCH)],
             metadata_quorum=[isolated_kraft])
-    def test_isolated_mode_upgrade_downgrade(self, from_kafka_version, metadata_quorum, use_new_coordinator=False):
+    def test_isolated_mode_upgrade_downgrade(self, from_kafka_version, metadata_quorum):
         self.run_upgrade_downgrade(from_kafka_version)
