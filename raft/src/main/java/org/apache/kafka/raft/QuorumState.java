@@ -382,7 +382,7 @@ public class QuorumState {
      */
     public void transitionToUnattached(int epoch, OptionalInt leaderId) {
         int currentEpoch = state.epoch();
-        if (epoch < currentEpoch || (epoch == currentEpoch && !isProspective())) {
+        if (epoch < currentEpoch || (epoch == currentEpoch && (!isProspective() || isResigned()))) {
             throw new IllegalStateException(
                 String.format(
                     "Cannot transition to Unattached with epoch %d from current state %s",
@@ -572,6 +572,14 @@ public class QuorumState {
                     String.format(
                         "Cannot transition to Follower with leader %s and epoch %s from state %s",
                         leaderId,
+                        epoch,
+                        state
+                    )
+                );
+            } else if (isResigned()) {
+                throw new IllegalStateException(
+                    String.format(
+                        "Cannot transition to Follower within same epoch %s from state %s",
                         epoch,
                         state
                     )
