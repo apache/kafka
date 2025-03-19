@@ -210,7 +210,7 @@ public abstract class TopicCommand {
         // If no topic name was mentioned, do not need to throw exception.
         if (requestedTopic.isPresent() && !requestedTopic.get().isEmpty() && requireTopicExists && foundTopics.isEmpty()) {
             // If given topic doesn't exist then throw exception
-            throw new IllegalArgumentException(String.format("Topic '%s' does not exist as expected", requestedTopic));
+            throw new IllegalArgumentException(String.format("Topic '%s' does not exist as expected", requestedTopic.get()));
         }
     }
 
@@ -709,7 +709,7 @@ public abstract class TopicCommand {
         private final ArgumentAcceptingOptionSpec<String> configOpt;
 
         /**
-         * @deprecated since 4.0 and should not be used any longer.
+         * @deprecated Since 4.0 and should not be used any longer.
          */
         @Deprecated
         private final ArgumentAcceptingOptionSpec<String> deleteConfigOpt;

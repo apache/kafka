@@ -35,10 +35,9 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfig;
-import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTemplate;
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.utils.AppInfoParser;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.test.TestUtils;
@@ -46,7 +45,6 @@ import org.apache.kafka.tools.ToolsTestUtils;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -75,7 +73,6 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-@ExtendWith(value = ClusterTestExtensions.class)
 public class DescribeConsumerGroupTest {
     private static final String TOPIC_PREFIX = "test.topic.";
     private static final String GROUP_PREFIX = "test.group.";
@@ -463,7 +460,7 @@ public class DescribeConsumerGroupTest {
                         return false;
 
                     Optional<PartitionAssignmentState> maybePartitionState = assignments.get().stream().filter(isGrp).findFirst();
-                    if (!maybePartitionState.isPresent())
+                    if (maybePartitionState.isEmpty())
                         return false;
 
                     PartitionAssignmentState partitionState = maybePartitionState.get();
@@ -837,7 +834,7 @@ public class DescribeConsumerGroupTest {
                             res.getValue().isPresent() &&
                             res.getValue().get().stream().filter(s -> Objects.equals(s.group, group)).count() == 2 &&
                             res.getValue().get().stream().filter(x -> Objects.equals(x.group, group) && x.partition.isPresent()).count() == 2 &&
-                            res.getValue().get().stream().noneMatch(x -> Objects.equals(x.group, group) && !x.partition.isPresent());
+                            res.getValue().get().stream().noneMatch(x -> Objects.equals(x.group, group) && x.partition.isEmpty());
                 }, "Expected two rows (one row per consumer) in describe group results.");
             }
         }
@@ -1031,7 +1028,7 @@ public class DescribeConsumerGroupTest {
                         return false;
 
                     Optional<PartitionAssignmentState> maybeAssignmentState = groupOffsets.getValue().get().stream().filter(isGrp).findFirst();
-                    if (!maybeAssignmentState.isPresent())
+                    if (maybeAssignmentState.isEmpty())
                         return false;
 
                     PartitionAssignmentState assignmentState = maybeAssignmentState.get();

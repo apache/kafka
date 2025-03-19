@@ -41,7 +41,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.AssertionFailureBuilder.assertionFailure;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -115,12 +114,12 @@ public class Assertions {
                     slice
                         .stream()
                         .sorted(Comparator.comparing(Object::toString))
-                        .collect(Collectors.toList()),
+                        .toList(),
                     actualRecords
                         .subList(j, j + slice.size())
                         .stream()
                         .sorted(Comparator.comparing(Object::toString))
-                        .collect(Collectors.toList())
+                        .toList()
                 );
 
                 j += slice.size();
@@ -140,7 +139,7 @@ public class Assertions {
         CoordinatorRecord actual
     ) {
         try {
-            assertApiMessageAndVersionEquals(expected.key(), actual.key());
+            assertApiMessage(expected.key(), actual.key());
             assertApiMessageAndVersionEquals(expected.value(), actual.value());
         } catch (AssertionFailedError e) {
             assertionFailure()
@@ -188,6 +187,18 @@ public class Assertions {
         normalize.accept(actual);
 
         assertEquals(expected, actual);
+    }
+
+    private static void assertApiMessage(
+        ApiMessage expected,
+        ApiMessage actual
+    ) {
+        if (expected == actual) return;
+        assertNotNull(expected);
+        assertNotNull(actual);
+        BiConsumer<ApiMessage, ApiMessage> asserter = API_MESSAGE_COMPARATORS
+            .getOrDefault(expected.getClass(), API_MESSAGE_DEFAULT_COMPARATOR);
+        asserter.accept(expected, actual);
     }
 
     private static void assertApiMessageAndVersionEquals(

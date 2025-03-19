@@ -267,8 +267,9 @@ public class RemoteIndexCache implements Closeable {
         // Delete any .deleted or .tmp files remained from the earlier run of the broker.
         try (Stream<Path> paths = Files.list(cacheDir.toPath())) {
             paths.forEach(path -> {
-                if (path.endsWith(LogFileUtils.DELETED_FILE_SUFFIX) ||
-                        path.endsWith(TMP_FILE_SUFFIX)) {
+                String filename = path.getFileName().toString();
+                if (filename.endsWith(LogFileUtils.DELETED_FILE_SUFFIX) ||
+                        filename.endsWith(TMP_FILE_SUFFIX)) {
                     try {
                         if (Files.deleteIfExists(path)) {
                             log.debug("Deleted file path {} on cache initialization", path);
@@ -508,6 +509,7 @@ public class RemoteIndexCache implements Closeable {
         public Entry(OffsetIndex offsetIndex, TimeIndex timeIndex, TransactionIndex txnIndex) {
             this.offsetIndex = offsetIndex;
             this.timeIndex = timeIndex;
+            // If txn index does not exist on the source, it's an empty file on the index entry
             this.txnIndex = txnIndex;
             this.entrySizeBytes = estimatedEntrySize();
         }
@@ -544,7 +546,7 @@ public class RemoteIndexCache implements Closeable {
         private long estimatedEntrySize() {
             entryLock.readLock().lock();
             try {
-                return offsetIndex.sizeInBytes() + timeIndex.sizeInBytes() + Files.size(txnIndex.file().toPath());
+                return offsetIndex.sizeInBytes() + timeIndex.sizeInBytes() + Files.size(txnIndex.path());
             } catch (IOException e) {
                 log.warn("Error occurred when estimating remote index cache entry bytes size, just set 0 firstly.", e);
                 return 0L;
@@ -727,10 +729,4 @@ public class RemoteIndexCache implements Closeable {
     public static String remoteTransactionIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         return generateFileNamePrefixForIndex(remoteLogSegmentMetadata) + LogFileUtils.TXN_INDEX_FILE_SUFFIX;
     }
-
-    // Visible for testing
-    public static String remoteDeletedSuffixIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
-        return generateFileNamePrefixForIndex(remoteLogSegmentMetadata) + LogFileUtils.DELETED_FILE_SUFFIX;
-    }
-
 }

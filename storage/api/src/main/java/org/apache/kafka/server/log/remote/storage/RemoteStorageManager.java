@@ -17,7 +17,6 @@
 package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.Configurable;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
 
 import java.io.Closeable;
@@ -41,7 +40,6 @@ import java.util.Optional;
  * All properties prefixed with the config: "remote.log.storage.manager.impl.prefix"
  * (default value is "rsm.config.") are passed when {@link #configure(Map)} is invoked on this instance.
  */
-@InterfaceStability.Evolving
 public interface RemoteStorageManager extends Configurable, Closeable {
 
     /**

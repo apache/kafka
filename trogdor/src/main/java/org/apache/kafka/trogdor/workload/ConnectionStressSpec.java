@@ -24,7 +24,6 @@ import org.apache.kafka.trogdor.task.TaskWorker;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
 
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Map;
@@ -58,7 +57,7 @@ public final class ConnectionStressSpec extends TaskSpec {
             @JsonProperty("action") ConnectionStressAction action) {
         super(startMs, durationMs);
         this.clientNodes = (clientNodes == null) ? Collections.emptyList() :
-            Collections.unmodifiableList(new ArrayList<>(clientNodes));
+            List.copyOf(clientNodes);
         this.bootstrapServers = (bootstrapServers == null) ? "" : bootstrapServers;
         this.commonClientConf = configOrEmptyMap(commonClientConf);
         this.targetConnectionsPerSec = targetConnectionsPerSec;

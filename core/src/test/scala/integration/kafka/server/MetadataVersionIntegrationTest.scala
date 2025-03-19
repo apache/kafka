@@ -17,27 +17,23 @@
 
 package kafka.server
 
-import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterTest, ClusterTests, Type}
-import org.apache.kafka.common.test.api.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.FeatureUpdate.UpgradeType
 import org.apache.kafka.clients.admin.{FeatureUpdate, UpdateFeaturesOptions}
+import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.extension.ExtendWith
 
 import scala.jdk.CollectionConverters._
 
-@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class MetadataVersionIntegrationTest {
   @ClusterTests(value = Array(
-      new ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_3_IV0),
-      new ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_3_IV1),
-      new ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_3_IV2),
       new ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_3_IV3),
       new ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_4_IV0),
-      new ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_4_IV0)
+      new ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_5_IV0),
+      new ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_6_IV0),
+      new ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_6_IV1)
   ))
   def testBasicMetadataVersionUpgrade(clusterInstance: ClusterInstance): Unit = {
     val admin = clusterInstance.admin()
@@ -48,7 +44,7 @@ class MetadataVersionIntegrationTest {
       assertEquals(ff.maxVersionLevel(), clusterInstance.config().metadataVersion().featureLevel())
 
       // Update to new version
-      val updateVersion = MetadataVersion.IBP_3_5_IV1.featureLevel.shortValue
+      val updateVersion = MetadataVersion.IBP_3_7_IV1.featureLevel.shortValue
       val updateResult = admin.updateFeatures(
         Map("metadata.version" -> new FeatureUpdate(updateVersion, UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions())
       updateResult.all().get()
@@ -64,11 +60,11 @@ class MetadataVersionIntegrationTest {
     }
   }
 
-  @ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_3_IV0)
+  @ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_9_IV0)
   def testUpgradeSameVersion(clusterInstance: ClusterInstance): Unit = {
     val admin = clusterInstance.admin()
     try {
-      val updateVersion = MetadataVersion.IBP_3_3_IV0.featureLevel.shortValue
+      val updateVersion = MetadataVersion.IBP_3_9_IV0.featureLevel.shortValue
       val updateResult = admin.updateFeatures(
         Map("metadata.version" -> new FeatureUpdate(updateVersion, UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions())
       updateResult.all().get()

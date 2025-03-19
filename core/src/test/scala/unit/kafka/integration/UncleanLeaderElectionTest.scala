@@ -22,7 +22,7 @@ import java.util.concurrent.ExecutionException
 import scala.util.Random
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
-import kafka.server.{KafkaBroker, KafkaConfig, MetadataCache, QuorumTestHarness}
+import kafka.server.{KafkaBroker, KafkaConfig, QuorumTestHarness}
 import kafka.utils.{CoreUtils, TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils._
 import org.apache.kafka.common.TopicPartition
@@ -32,6 +32,7 @@ import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterConfigsResult, ConfigEntry}
+import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.logging.log4j.{Level, LogManager}
@@ -71,13 +72,11 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
 
-    configProps1 = createBrokerConfig(brokerId1, null)
-    configProps2 = createBrokerConfig(brokerId2, null)
+    configProps1 = createBrokerConfig(brokerId1)
+    configProps2 = createBrokerConfig(brokerId2)
 
     for (configProps <- List(configProps1, configProps2)) {
       configProps.put("controlled.shutdown.enable", enableControlledShutdown.toString)
-      configProps.put("controlled.shutdown.max.retries", "1")
-      configProps.put("controlled.shutdown.retry.backoff.ms", "1000")
     }
 
     // temporarily set loggers to a higher level so that tests run quietly
@@ -284,8 +283,8 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     produceMessage(brokers, topic, "third")
     //make sure follower server joins the ISR
     TestUtils.waitUntilTrue(() => {
-      val partitionInfoOpt = followerServer.metadataCache.getPartitionInfo(topic, partitionId)
-      partitionInfoOpt.isDefined && partitionInfoOpt.get.isr.contains(followerId)
+      val partitionInfoOpt = followerServer.metadataCache.getLeaderAndIsr(topic, partitionId)
+      partitionInfoOpt.isPresent() && partitionInfoOpt.get.isr.contains(followerId)
     }, "Inconsistent metadata after first server startup")
 
     brokers.filter(_.config.brokerId == leaderId).map(shutdownBroker)
@@ -426,9 +425,9 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   }
 
   private def waitForNoLeaderAndIsrHasOldLeaderId(metadataCache: MetadataCache, leaderId: Int): Unit = {
-    waitUntilTrue(() => metadataCache.getPartitionInfo(topic, partitionId).isDefined &&
-      metadataCache.getPartitionInfo(topic, partitionId).get.leader() == LeaderConstants.NO_LEADER &&
-      java.util.Arrays.asList(leaderId).equals(metadataCache.getPartitionInfo(topic, partitionId).get.isr()),
+    waitUntilTrue(() => metadataCache.getLeaderAndIsr(topic, partitionId).isPresent() &&
+      metadataCache.getLeaderAndIsr(topic, partitionId).get.leader() == LeaderConstants.NO_LEADER &&
+      java.util.Arrays.asList(leaderId).equals(metadataCache.getLeaderAndIsr(topic, partitionId).get.isr()),
       "Timed out waiting for broker metadata cache updates the info for topic partition:" + topicPartition)
   }
 }

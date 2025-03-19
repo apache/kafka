@@ -16,7 +16,7 @@
 {
   "apiKey": 66,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["broker"],
   "name": "ListTransactionsRequest",
   // Version 1: adds DurationFilter to list transactions older than specified duration
   "validVersions": "0-1",

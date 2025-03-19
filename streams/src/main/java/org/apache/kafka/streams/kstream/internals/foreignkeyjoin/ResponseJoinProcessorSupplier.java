@@ -14,7 +14,6 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.kstream.internals.foreignkeyjoin;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -43,23 +42,25 @@ import java.util.function.Supplier;
  * of the primary key. This eliminates race-condition results for rapidly-changing foreign-keys for a given primary key.
  * Applies the join and emits nulls according to LEFT/INNER rules.
  *
- * @param <K> Type of primary keys
- * @param <V> Type of primary values
- * @param <VO> Type of foreign values
- * @param <VR> Type of joined result of primary and foreign values
+ * @param <KLeft> Type of primary keys
+ * @param <VLeft> Type of primary values
+ * @param <VRight> Type of foreign values
+ * @param <VOut> Type of joined result of primary and foreign values
  */
-public class ResponseJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSupplier<K, SubscriptionResponseWrapper<VO>, K, VR> {
+public class ResponseJoinProcessorSupplier<KLeft, VLeft, VRight, VOut>
+    implements ProcessorSupplier<KLeft, SubscriptionResponseWrapper<VRight>, KLeft, VOut> {
+
     private static final Logger LOG = LoggerFactory.getLogger(ResponseJoinProcessorSupplier.class);
-    private final KTableValueGetterSupplier<K, V> valueGetterSupplier;
-    private final Serializer<V> constructionTimeValueSerializer;
+    private final KTableValueGetterSupplier<KLeft, VLeft> valueGetterSupplier;
+    private final Serializer<VLeft> constructionTimeValueSerializer;
     private final Supplier<String> valueHashSerdePseudoTopicSupplier;
-    private final ValueJoiner<V, VO, VR> joiner;
+    private final ValueJoiner<? super VLeft, ? super VRight, ? extends VOut> joiner;
     private final boolean leftJoin;
 
-    public ResponseJoinProcessorSupplier(final KTableValueGetterSupplier<K, V> valueGetterSupplier,
-                                         final Serializer<V> valueSerializer,
+    public ResponseJoinProcessorSupplier(final KTableValueGetterSupplier<KLeft, VLeft> valueGetterSupplier,
+                                         final Serializer<VLeft> valueSerializer,
                                          final Supplier<String> valueHashSerdePseudoTopicSupplier,
-                                         final ValueJoiner<V, VO, VR> joiner,
+                                         final ValueJoiner<? super VLeft, ? super VRight, ? extends VOut> joiner,
                                          final boolean leftJoin) {
         this.valueGetterSupplier = valueGetterSupplier;
         constructionTimeValueSerializer = valueSerializer;
@@ -69,24 +70,24 @@ public class ResponseJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSup
     }
 
     @Override
-    public Processor<K, SubscriptionResponseWrapper<VO>, K, VR> get() {
-        return new ContextualProcessor<K, SubscriptionResponseWrapper<VO>, K, VR>() {
+    public Processor<KLeft, SubscriptionResponseWrapper<VRight>, KLeft, VOut> get() {
+        return new ContextualProcessor<>() {
             private String valueHashSerdePseudoTopic;
-            private Serializer<V> runtimeValueSerializer = constructionTimeValueSerializer;
+            private Serializer<VLeft> runtimeValueSerializer = constructionTimeValueSerializer;
 
-            private KTableValueGetter<K, V> valueGetter;
+            private KTableValueGetter<KLeft, VLeft> valueGetter;
             private Sensor droppedRecordsSensor;
 
 
-            @SuppressWarnings("unchecked")
+            @SuppressWarnings({"unchecked", "resource"})
             @Override
-            public void init(final ProcessorContext<K, VR> context) {
+            public void init(final ProcessorContext<KLeft, VOut> context) {
                 super.init(context);
                 valueHashSerdePseudoTopic = valueHashSerdePseudoTopicSupplier.get();
                 valueGetter = valueGetterSupplier.get();
                 valueGetter.init(context);
                 if (runtimeValueSerializer == null) {
-                    runtimeValueSerializer = (Serializer<V>) context.valueSerde().serializer();
+                    runtimeValueSerializer = (Serializer<VLeft>) context.valueSerde().serializer();
                 }
 
                 final InternalProcessorContext<?, ?> internalProcessorContext = (InternalProcessorContext<?, ?>) context;
@@ -98,14 +99,14 @@ public class ResponseJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSup
             }
 
             @Override
-            public void process(final Record<K, SubscriptionResponseWrapper<VO>> record) {
+            public void process(final Record<KLeft, SubscriptionResponseWrapper<VRight>> record) {
                 if (record.value().version() != SubscriptionResponseWrapper.CURRENT_VERSION) {
                     //Guard against modifications to SubscriptionResponseWrapper. Need to ensure that there is
                     //compatibility with previous versions to enable rolling upgrades. Must develop a strategy for
                     //upgrading from older SubscriptionWrapper versions to newer versions.
                     throw new UnsupportedVersionException("SubscriptionResponseWrapper is of an incompatible version.");
                 }
-                final ValueAndTimestamp<V> currentValueWithTimestamp = valueGetter.get(record.key());
+                final ValueAndTimestamp<VLeft> currentValueWithTimestamp = valueGetter.get(record.key());
 
                 final long[] currentHash = currentValueWithTimestamp == null ?
                     null :
@@ -115,7 +116,7 @@ public class ResponseJoinProcessorSupplier<K, V, VO, VR> implements ProcessorSup
 
                 //If this value doesn't match the current value from the original table, it is stale and should be discarded.
                 if (java.util.Arrays.equals(messageHash, currentHash)) {
-                    final VR result;
+                    final VOut result;
 
                     if (record.value().foreignValue() == null && (!leftJoin || currentValueWithTimestamp == null)) {
                         result = null; //Emit tombstone

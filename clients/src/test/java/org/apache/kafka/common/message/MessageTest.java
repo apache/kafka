@@ -410,35 +410,6 @@ public final class MessageTest {
     }
 
     @Test
-    public void testLeaderAndIsrVersions() throws Exception {
-        // Version 3 adds two new fields - AddingReplicas and RemovingReplicas
-        LeaderAndIsrRequestData.LeaderAndIsrTopicState partitionStateNoAddingRemovingReplicas =
-            new LeaderAndIsrRequestData.LeaderAndIsrTopicState()
-                .setTopicName("topic")
-                .setPartitionStates(Collections.singletonList(
-                    new LeaderAndIsrRequestData.LeaderAndIsrPartitionState()
-                        .setPartitionIndex(0)
-                        .setReplicas(Collections.singletonList(0))
-                ));
-        LeaderAndIsrRequestData.LeaderAndIsrTopicState partitionStateWithAddingRemovingReplicas =
-            new LeaderAndIsrRequestData.LeaderAndIsrTopicState()
-                .setTopicName("topic")
-                .setPartitionStates(Collections.singletonList(
-                    new LeaderAndIsrRequestData.LeaderAndIsrPartitionState()
-                        .setPartitionIndex(0)
-                        .setReplicas(Collections.singletonList(0))
-                        .setAddingReplicas(Collections.singletonList(1))
-                        .setRemovingReplicas(Collections.singletonList(1))
-                ));
-        testAllMessageRoundTripsBetweenVersions(
-            (short) 2,
-            (short) 3,
-            new LeaderAndIsrRequestData().setTopicStates(Collections.singletonList(partitionStateWithAddingRemovingReplicas)),
-            new LeaderAndIsrRequestData().setTopicStates(Collections.singletonList(partitionStateNoAddingRemovingReplicas)));
-        testAllMessageRoundTripsFromVersion((short) 3, new LeaderAndIsrRequestData().setTopicStates(Collections.singletonList(partitionStateWithAddingRemovingReplicas)));
-    }
-
-    @Test
     public void testOffsetCommitRequestVersions() throws Exception {
         String groupId = "groupId";
         String topicName = "topic";
@@ -1095,23 +1066,25 @@ public final class MessageTest {
     @Test
     public void testMessageVersions() {
         for (ApiKeys apiKey : ApiKeys.values()) {
-            Message message = null;
-            try {
-                message = ApiMessageType.fromApiKey(apiKey.id).newRequest();
-            } catch (UnsupportedVersionException e) {
-                fail("No request message spec found for API " + apiKey);
+            if (apiKey.hasValidVersion()) {
+                Message message = null;
+                try {
+                    message = ApiMessageType.fromApiKey(apiKey.id).newRequest();
+                } catch (UnsupportedVersionException e) {
+                    fail("No request message spec found for API " + apiKey);
+                }
+                assertTrue(apiKey.latestVersion() <= message.highestSupportedVersion(),
+                        "Request message spec for " + apiKey + " only " + "supports versions up to " +
+                                message.highestSupportedVersion());
+                try {
+                    message = ApiMessageType.fromApiKey(apiKey.id).newResponse();
+                } catch (UnsupportedVersionException e) {
+                    fail("No response message spec found for API " + apiKey);
+                }
+                assertTrue(apiKey.latestVersion() <= message.highestSupportedVersion(),
+                        "Response message spec for " + apiKey + " only " + "supports versions up to " +
+                                message.highestSupportedVersion());
             }
-            assertTrue(apiKey.latestVersion() <= message.highestSupportedVersion(),
-                "Request message spec for " + apiKey + " only " + "supports versions up to " +
-                message.highestSupportedVersion());
-            try {
-                message = ApiMessageType.fromApiKey(apiKey.id).newResponse();
-            } catch (UnsupportedVersionException e) {
-                fail("No response message spec found for API " + apiKey);
-            }
-            assertTrue(apiKey.latestVersion() <= message.highestSupportedVersion(),
-                "Response message spec for " + apiKey + " only " + "supports versions up to " +
-                message.highestSupportedVersion());
         }
     }
 
@@ -1154,6 +1127,8 @@ public final class MessageTest {
         for (short version : ApiKeys.CREATE_TOPICS.allVersions()) {
             verifyWriteRaisesNpe(version, createTopics);
         }
+        MetadataRequestData metadata = new MetadataRequestData().setTopics(null);
+        verifyWriteRaisesNpe((short) 0, metadata);
     }
 
     @Test

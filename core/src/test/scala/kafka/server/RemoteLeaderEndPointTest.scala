@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.log.UnifiedLog
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.epoch.util.MockBlockingSender
 import kafka.utils.TestUtils
@@ -33,12 +32,14 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.storage.internals.log.UnifiedLog
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.mockito.Mockito.{mock, when}
 
 import java.util
+import java.util.Optional
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 
@@ -59,13 +60,13 @@ class RemoteLeaderEndPointTest {
         val time = new MockTime
         val logPrefix = "remote-leader-endpoint"
         val sourceBroker: BrokerEndPoint = new BrokerEndPoint(0, "localhost", 9092)
-        val props = TestUtils.createBrokerConfig(sourceBroker.id, TestUtils.MockZkConnect, port = sourceBroker.port)
+        val props = TestUtils.createBrokerConfig(sourceBroker.id, port = sourceBroker.port)
         val fetchSessionHandler = new FetchSessionHandler(new LogContext(logPrefix), sourceBroker.id)
         val config = KafkaConfig.fromProps(props)
         blockingSend = new MockBlockingSender(offsets = new util.HashMap[TopicPartition, EpochEndOffset](),
             sourceBroker = sourceBroker, time = time)
         endPoint = new RemoteLeaderEndPoint(logPrefix, blockingSend, fetchSessionHandler,
-            config, replicaManager, QuotaFactory.UNBOUNDED_QUOTA, () => MetadataVersion.MINIMUM_KRAFT_VERSION, () => currentBrokerEpoch)
+            config, replicaManager, QuotaFactory.UNBOUNDED_QUOTA, () => MetadataVersion.MINIMUM_VERSION, () => currentBrokerEpoch)
     }
 
     @Test
@@ -131,7 +132,7 @@ class RemoteLeaderEndPointTest {
         val topicId1 = Uuid.randomUuid()
         val log = mock(classOf[UnifiedLog])
         val partitionMap = Map(
-            tp -> PartitionFetchState(Some(topicId1), 150, None, 0, None, state = Fetching, lastFetchedEpoch = None))
+            tp -> PartitionFetchState(Some(topicId1), 150, None, 0, None, state = Fetching, lastFetchedEpoch = Optional.empty))
         when(replicaManager.localLogOrException(tp)).thenReturn(log)
         when(log.logStartOffset).thenReturn(1)
 

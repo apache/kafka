@@ -31,14 +31,11 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
-import org.apache.kafka.common.test.api.ClusterInstance;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile;
 import org.apache.kafka.test.TestUtils;
-
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.IOException;
 import java.time.Duration;
@@ -55,7 +52,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@ExtendWith(value = ClusterTestExtensions.class)
 public class LogManagerIntegrationTest {
     private final ClusterInstance cluster;
 
@@ -71,10 +67,9 @@ public class LogManagerIntegrationTest {
         }
         cluster.waitForTopic("foo", 1);
 
-        Optional<PartitionMetadataFile> partitionMetadataFile = Optional.ofNullable(
-                cluster.brokers().get(0).logManager()
-                        .getLog(new TopicPartition("foo", 0), false).get()
-                        .partitionMetadataFile().getOrElse(null));
+        Optional<PartitionMetadataFile> partitionMetadataFile = cluster.brokers().get(0).logManager()
+                .getLog(new TopicPartition("foo", 0), false).get()
+                .partitionMetadataFile();
         assertTrue(partitionMetadataFile.isPresent());
 
         cluster.brokers().get(0).shutdown();

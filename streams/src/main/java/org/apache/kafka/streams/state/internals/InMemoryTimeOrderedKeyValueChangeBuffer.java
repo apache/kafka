@@ -86,7 +86,7 @@ public final class InMemoryTimeOrderedKeyValueChangeBuffer<K, V, T> implements T
 
     private long memBufferSize = 0L;
     private long minTimestamp = Long.MAX_VALUE;
-    private InternalProcessorContext context;
+    private InternalProcessorContext<?, ?> context;
     private String changelogTopic;
     private Sensor bufferSizeSensor;
     private Sensor bufferCountSensor;

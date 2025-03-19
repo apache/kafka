@@ -2079,7 +2079,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     private void startConnector(String connectorName, Callback<Void> callback) {
         log.info("Starting connector {}", connectorName);
         final Map<String, String> configProps = configState.connectorConfig(connectorName);
-        final CloseableConnectorContext ctx = new HerderConnectorContext(this, connectorName);
+        final CloseableConnectorContext ctx = new HerderConnectorContext(this, connectorName, worker.metrics().connectorPluginMetrics(connectorName));
         final TargetState initialState = configState.targetState(connectorName);
         final Callback<TargetState> onInitialStateChange = (error, newState) -> {
             if (error != null) {
@@ -2193,8 +2193,7 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
     }
 
     boolean isPossibleExpiredKeyException(long initialRequestTime, Throwable error) {
-        if (error instanceof ConnectRestException) {
-            ConnectRestException connectError = (ConnectRestException) error;
+        if (error instanceof ConnectRestException connectError) {
             return connectError.statusCode() == Response.Status.FORBIDDEN.getStatusCode()
                 && initialRequestTime + TimeUnit.MINUTES.toMillis(1) >= time.milliseconds();
         }
@@ -2565,9 +2564,8 @@ public class DistributedHerder extends AbstractHerder implements Runnable {
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (!(o instanceof DistributedHerderRequest))
+            if (!(o instanceof DistributedHerderRequest other))
                 return false;
-            DistributedHerderRequest other = (DistributedHerderRequest) o;
             return compareTo(other) == 0;
         }
 

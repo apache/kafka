@@ -91,7 +91,10 @@ method_matcher = re.compile(r"([a-zA-Z_$][a-zA-Z0-9_$]+).*")
 def clean_test_name(test_name: str) -> str:
     cleaned = test_name.strip("\"").rstrip("()")
     m = method_matcher.match(cleaned)
-    return m.group(1)
+    if m is None:
+        raise ValueError(f"Could not parse test name '{test_name}'. Expected a valid Java method name.")
+    else:
+        return m.group(1)
 
 
 class TestCatalogExporter:
@@ -205,12 +208,12 @@ def split_report_path(base_path: str, report_path: str) -> Tuple[str, str]:
     """
     Parse a report XML and extract the module path. Test report paths look like:
 
-        build/junit-xml/module[/sub-module]/[task]/TEST-class.method.xml
+        build/junit-xml/module[/sub-module]/[test-job]/TEST-class.method.xml
 
-    This method strips off a base path and assumes all path segments leading up to the suite name
+    This method strips off a base path and assumes all path segments leading up to the job name
     are part of the module path.
 
-    Returns a tuple of (module, task)
+    Returns a tuple of (module, job)
     """
     rel_report_path = os.path.relpath(report_path, base_path)
     path_segments = pathlib.Path(rel_report_path).parts
@@ -235,7 +238,7 @@ if __name__ == "__main__":
     parser.add_argument("--export-test-catalog",
                         required=False,
                         default="",
-                        help="Optional path to dump all tests")
+                        help="Optional path to dump all tests.")
 
     if not os.getenv("GITHUB_WORKSPACE"):
         print("This script is intended to by run by GitHub Actions.")
@@ -246,6 +249,7 @@ if __name__ == "__main__":
     glob_path = os.path.join(args.path, "**/*.xml")
     reports = glob(pathname=glob_path, recursive=True)
     logger.info(f"Found {len(reports)} JUnit results")
+
     workspace_path = get_env("GITHUB_WORKSPACE") # e.g., /home/runner/work/apache/kafka
 
     total_file_count = 0
@@ -262,14 +266,15 @@ if __name__ == "__main__":
     flaky_table = []
     skipped_table = []
     quarantined_table = []
+    new_table = []
 
     exporter = TestCatalogExporter()
 
     logger.debug(f"::group::Parsing {len(reports)} JUnit Report Files")
     for report in reports:
         with open(report, "r") as fp:
-            module_path, task = split_report_path(args.path, report)
-            logger.debug(f"Parsing file: {report}, module: {module_path}, task: {task}")
+            module_path, test_job = split_report_path(args.path, report)
+            logger.debug(f"Parsing file: {report}, module: {module_path}, job: {test_job}")
             for suite in parse_report(workspace_path, report, fp):
                 total_skipped += suite.skipped
                 total_errors += suite.errors
@@ -306,14 +311,22 @@ if __name__ == "__main__":
                     logger.debug(f"Found skipped test: {skipped_test}")
                     skipped_table.append((simple_class_name, skipped_test.test_name))
 
-                # Only collect quarantined tests from the "quarantinedTest" task
-                if task == "quarantinedTest":
+                # Only collect quarantined tests from the "flaky" test jobs
+                if re.match(r".*\bflaky\b.*", test_job) is not None:
                     for test in all_suite_passed.values():
                         simple_class_name = test.class_name.split(".")[-1]
                         quarantined_table.append((simple_class_name, test.test_name))
                     for test in all_suite_failed.values():
                         simple_class_name = test.class_name.split(".")[-1]
                         quarantined_table.append((simple_class_name, test.test_name))
+
+                if re.match(r".*\bnew\b.*", test_job) is not None:
+                    for test in all_suite_passed.values():
+                        simple_class_name = test.class_name.split(".")[-1]
+                        new_table.append((simple_class_name, test.test_name))
+                    for test in all_suite_failed.values():
+                        simple_class_name = test.class_name.split(".")[-1]
+                        new_table.append((simple_class_name, test.test_name))
 
                 if args.export_test_catalog:
                     exporter.handle_suite(module_path, suite)
@@ -328,14 +341,36 @@ if __name__ == "__main__":
     duration = pretty_time_duration(total_time)
     logger.info(f"Finished processing {len(reports)} reports")
 
-    # Print summary of the tests.
+    # Determine exit status. If we add anything to failure_messages, we will exit(1)
+    failure_messages = []
+
+    exit_code = get_env("GRADLE_TEST_EXIT_CODE", int)
+    junit_report_url = get_env("JUNIT_REPORT_URL")
+    thread_dump_url = get_env("THREAD_DUMP_URL")
+
+    if exit_code is None:
+        failure_messages.append("Missing required GRADLE_TEST_EXIT_CODE environment variable. Failing this script.")
+    elif exit_code == 124:
+        # Special handling for timeouts. The exit code 124 is emitted by 'timeout' command used in build.yml.
+        # A watchdog script "thread-dump.sh" will use jstack to force a thread dump for any Gradle process
+        # still running after the timeout. We capture the exit codes of the two test tasks and pass them to
+        # this script. If any task fails due to timeout, we want to fail the overall build since it will not
+        # include all the test results
+        failure_messages.append(f"Gradle task had a timeout. Failing this script. These are partial results!")
+    elif exit_code > 0:
+        failure_messages.append(f"Gradle task had a failure exit code. Failing this script.")
+
+    if thread_dump_url:
+        failure_messages.append(f"Thread dump available at {thread_dump_url}. Failing this script.")
+
+    if junit_report_url:
+        report_md = f"Download [JUnit HTML report]({junit_report_url})"
+    else:
+        report_md = "No reports available. Environment variable JUNIT_REPORT_URL was not found."
+
+    # Print summary of the tests
     # The stdout (print) goes to the workflow step console output.
     # The stderr (logger) is redirected to GITHUB_STEP_SUMMARY which becomes part of the HTML job summary.
-    report_url = get_env("JUNIT_REPORT_URL")
-    if report_url:
-        report_md = f"Download [HTML report]({report_url})."
-    else:
-        report_md = "No report available. JUNIT_REPORT_URL was missing."
     summary = (f"{total_run} tests cases run in {duration}.\n\n"
                f"{total_success} {PASSED}, {total_failures} {FAILED}, "
                f"{total_flaky} {FLAKY}, {total_skipped} {SKIPPED}, {len(quarantined_table)} {QUARANTINED}, and {total_errors} errors.")
@@ -399,40 +434,28 @@ if __name__ == "__main__":
         print("\n</details>")
         logger.debug("::endgroup::")
 
+    if len(new_table) > 0:
+        print("<details>")
+        print(f"<summary>New Tests ({len(new_table)})</summary>\n")
+        print(f"| Module | Test |")
+        print(f"| ------ | ---- |")
+        logger.debug(f"::group::Found {len(new_table)} new tests")
+        for row in new_table:
+            row_joined = " | ".join(row)
+            print(f"| {row_joined} |")
+            logger.debug(f"{row[0]} > {row[1]}")
+        print("\n</details>")
+        logger.debug("::endgroup::")
+
     print("<hr/>")
 
-    # Print special message if there was a timeout
-    test_exit_code = get_env("GRADLE_TEST_EXIT_CODE", int)
-    quarantined_test_exit_code = get_env("GRADLE_QUARANTINED_TEST_EXIT_CODE", int)
 
-    if test_exit_code == 124 or quarantined_test_exit_code == 124:
-        # Special handling for timeouts. The exit code 124 is emitted by 'timeout' command used in build.yml.
-        # A watchdog script "thread-dump.sh" will use jstack to force a thread dump for any Gradle process
-        # still running after the timeout. We capture the exit codes of the two test tasks and pass them to
-        # this script. If either "test" or "quarantinedTest" fails due to timeout, we want to fail the overall build.
-        thread_dump_url = get_env("THREAD_DUMP_URL")
-        if test_exit_code == 124:
-            logger.debug(f"Gradle task for 'test' timed out. These are partial results!")
-        else:
-            logger.debug(f"Gradle task for 'quarantinedTest' timed out. These are partial results!")
-        logger.debug(summary)
-        if thread_dump_url:
-            print(f"\nThe JUnit tests were cancelled due to a timeout. Thread dumps were generated before the job was cancelled. "
-                  f"Download [thread dumps]({thread_dump_url}).\n")
-            logger.debug(f"Failing this step because the tests timed out. Thread dumps were taken and archived here: {thread_dump_url}")
-        else:
-            logger.debug(f"Failing this step because the tests timed out. Thread dumps were not archived, check logs in JUnit step.")
+    # Print errors and exit
+    for message in failure_messages:
+        logger.debug(message)
+    logger.debug(summary)
+
+    if len(failure_messages) > 0:
         exit(1)
-    elif test_exit_code in (0, 1):
-        logger.debug(summary)
-        if total_failures > 0:
-            logger.debug(f"Failing this step due to {total_failures} test failures")
-            exit(1)
-        elif total_errors > 0:
-            logger.debug(f"Failing this step due to {total_errors} test errors")
-            exit(1)
-        else:
-            exit(0)
     else:
-        logger.debug(f"Gradle had unexpected exit code {test_exit_code}. Failing this step")
-        exit(1)
+        exit(0)

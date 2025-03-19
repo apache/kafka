@@ -51,7 +51,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
   overridingProps.put(JmxReporter.EXCLUDE_CONFIG, s"$requiredKafkaServerPrefix=ClusterId")
 
   def generateConfigs: Seq[KafkaConfig] =
-    TestUtils.createBrokerConfigs(numNodes, null, enableControlledShutdown = false).
+    TestUtils.createBrokerConfigs(numNodes, enableControlledShutdown = false).
       map(KafkaConfig.fromProps(_, overridingProps))
 
   val nMessages = 2
@@ -232,23 +232,6 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
       assertEquals(1, metrics.keySet.asScala.count(_.getMBeanName.equals(expected)),
         s"Unable to find $expected")
     })
-  }
-
-  /**
-   * Test that the metrics are created with the right name, testZooKeeperStateChangeRateMetrics
-   * and testZooKeeperSessionStateMetric in ZooKeeperClientTest test the metrics behaviour.
-   */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testSessionExpireListenerMetrics(quorum: String): Unit = {
-    val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
-    val expectedNumMetrics = 0
-    assertEquals(expectedNumMetrics, metrics.keySet.asScala.
-      count(_.getMBeanName == "kafka.server:type=SessionExpireListener,name=SessionState"))
-    assertEquals(expectedNumMetrics, metrics.keySet.asScala.
-      count(_.getMBeanName == "kafka.server:type=SessionExpireListener,name=ZooKeeperExpiresPerSec"))
-    assertEquals(expectedNumMetrics, metrics.keySet.asScala.
-      count(_.getMBeanName == "kafka.server:type=SessionExpireListener,name=ZooKeeperDisconnectsPerSec"))
   }
 
   private def topicMetrics(topic: Option[String]): Set[String] = {

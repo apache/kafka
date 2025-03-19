@@ -17,7 +17,7 @@
 package kafka.api
 
 import kafka.api.ConsumerRebootstrapTest._
-import kafka.server.QuorumTestHarness.getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly
+import kafka.server.QuorumTestHarness.getTestQuorumAndGroupProtocolParametersAll
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -32,7 +32,6 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.TimeoutException
 
 class ConsumerRebootstrapTest extends RebootstrapTest {
-  @Disabled("KAFKA-17986")
   @ParameterizedTest(name = RebootstrapTestName)
   @MethodSource(Array("rebootstrapTestParams"))
   def testRebootstrap(quorum: String, groupProtocol: String, useRebootstrapTriggerMs: Boolean): Unit = {
@@ -136,12 +135,12 @@ object ConsumerRebootstrapTest {
 
   final val RebootstrapTestName = s"${TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames}.useRebootstrapTriggerMs={2}"
   def rebootstrapTestParams: stream.Stream[Arguments] = {
-    assertEquals(1, getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly.count())
-    val args = getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly
-      .findFirst().get.get
-    stream.Stream.of(
-      Arguments.of((args :+ true):_*),
-      Arguments.of((args :+ false):_*)
-    )
+    getTestQuorumAndGroupProtocolParametersAll
+      .flatMap { baseArgs =>
+        stream.Stream.of(
+          Arguments.of((baseArgs.get :+ true):_*),
+          Arguments.of((baseArgs.get :+ false):_*)
+        )
+      }
   }
 }

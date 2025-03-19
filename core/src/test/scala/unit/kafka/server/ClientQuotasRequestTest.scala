@@ -20,23 +20,20 @@ package kafka.server
 import java.net.InetAddress
 import java.util
 import java.util.concurrent.{ExecutionException, TimeUnit}
-import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.ClusterTest
-import org.apache.kafka.common.test.api.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{ScramCredentialInfo, ScramMechanism, UserScramCredentialUpsertion}
 import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.KafkaFutureImpl
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.requests.{AlterClientQuotasRequest, AlterClientQuotasResponse, DescribeClientQuotasRequest, DescribeClientQuotasResponse}
-import org.apache.kafka.server.config.{QuotaConfig, ZooKeeperInternals}
+import org.apache.kafka.common.test.ClusterInstance
+import org.apache.kafka.server.config.QuotaConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Disabled
-import org.junit.jupiter.api.extension.ExtendWith
 
 import scala.jdk.CollectionConverters._
 
-@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class ClientQuotasRequestTest(cluster: ClusterInstance) {
   @ClusterTest
   def testAlterClientQuotasRequest(): Unit = {
@@ -518,20 +515,6 @@ class ClientQuotasRequestTest(cluster: ClusterInstance) {
     verifyDescribeEntityQuotas(entity, Map(
       QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0,
     ))
-  }
-
-  @ClusterTest
-  def testClientQuotasWithDefaultName(): Unit = {
-    // An entity using the name associated with the default entity name. The entity's name should be sanitized so
-    // that it does not conflict with the default entity name.
-    val entity = new ClientQuotaEntity(Map(ClientQuotaEntity.CLIENT_ID -> ZooKeeperInternals.DEFAULT_STRING).asJava)
-    alterEntityQuotas(entity, Map(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> Some(20000.0)), validateOnly = false)
-    verifyDescribeEntityQuotas(entity, Map(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG -> 20000.0))
-
-    // This should not match.
-    val result = describeClientQuotas(
-      ClientQuotaFilter.containsOnly(List(ClientQuotaFilterComponent.ofDefaultEntity(ClientQuotaEntity.CLIENT_ID)).asJava))
-    assert(result.isEmpty)
   }
 
   private def verifyDescribeEntityQuotas(entity: ClientQuotaEntity, quotas: Map[String, Double]): Unit = {

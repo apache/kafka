@@ -209,11 +209,15 @@ public class FetcherTest {
     }
 
     private void assignFromUser(Set<TopicPartition> partitions) {
+        assignFromUser(partitions, 1);
+    }
+
+    private void assignFromUser(Set<TopicPartition> partitions, int numNodes) {
         subscriptions.assignFromUser(partitions);
-        client.updateMetadata(initialUpdateResponse);
+        client.updateMetadata(RequestTestUtils.metadataUpdateWithIds(numNodes, singletonMap(topicName, 4), topicIds));
 
         // A dummy metadata update to ensure valid leader epoch.
-        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", 1,
+        metadata.updateWithCurrentRequestVersion(RequestTestUtils.metadataUpdateWithIds("dummy", numNodes,
             Collections.emptyMap(), singletonMap(topicName, 4),
             tp -> validLeaderEpoch, topicIds), false, 0L);
     }
@@ -1152,16 +1156,17 @@ public class FetcherTest {
         Set<TopicPartition> tps = new HashSet<>();
         tps.add(tp0);
         tps.add(tp1);
-        assignFromUser(tps);
+        assignFromUser(tps, 2);                 // Use multiple nodes so partitions have different leaders
         subscriptions.seek(tp0, 1);
         subscriptions.seek(tp1, 6);
 
-        client.prepareResponse(fetchResponse2(tidp0, records, 100L, tidp1, moreRecords, 100L));
+        client.prepareResponse(fullFetchResponse(tidp0, records, Errors.NONE, 100L, 0));
+        client.prepareResponse(fullFetchResponse(tidp1, moreRecords, Errors.NONE, 100L, 0));
         client.prepareResponse(fullFetchResponse(tidp0, emptyRecords, Errors.NONE, 100L, 0));
 
-        // Send fetch request because we do not have pending fetch responses to process.
-        // The first fetch response will return 3 records for tp0 and 3 more for tp1.
-        assertEquals(1, sendFetches());
+        // Send two fetch requests (one to each node) because we do not have pending fetch responses to process.
+        // The fetch responses will return 3 records for tp0 and 3 more for tp1.
+        assertEquals(2, sendFetches());
         // The poll returns 2 records from one of the topic-partitions (non-deterministic).
         // This leaves 1 record pending from that topic-partition, and the remaining 3 from the other.
         pollAndValidateMaxPollRecordsNotExceeded(maxPollRecords);
@@ -1428,7 +1433,7 @@ public class FetcherTest {
 
         Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> fetchedRecords;
 
-        assignFromUser(Set.of(tp0, tp1));
+        assignFromUser(Set.of(tp0, tp1), 2);    // Use multiple nodes so partitions have different leaders
 
         // seek to tp0 and tp1 in two polls to generate 2 complete requests and responses
 
@@ -1460,7 +1465,7 @@ public class FetcherTest {
     public void testFetchOnCompletedFetchesForAllPausedPartitions() {
         buildFetcher();
 
-        assignFromUser(Set.of(tp0, tp1));
+        assignFromUser(Set.of(tp0, tp1), 2);    // Use multiple nodes so partitions have different leaders
 
         // seek to tp0 and tp1 in two polls to generate 2 complete requests and responses
 
@@ -1823,7 +1828,9 @@ public class FetcherTest {
         buildFetcher(AutoOffsetResetStrategy.NONE, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), 2, IsolationLevel.READ_UNCOMMITTED);
 
-        assignFromUser(Set.of(tp0));
+        // Use multiple nodes so partitions have different leaders. tp0 is added here, but tp1 is also assigned
+        // about halfway down.
+        assignFromUser(Set.of(tp0), 2);
         subscriptions.seek(tp0, 1);
         assertEquals(1, sendFetches());
         Map<TopicIdPartition, FetchResponseData.PartitionData> partitions = new HashMap<>();
@@ -1888,7 +1895,7 @@ public class FetcherTest {
                 MetadataRecoveryStrategy.NONE);
 
         ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
-            400, ApiMessageType.ListenerType.ZK_BROKER);
+            400, ApiMessageType.ListenerType.BROKER);
         ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(apiVersionsResponse, ApiKeys.API_VERSIONS.latestVersion(), 0);
 
         selector.delayedReceive(new DelayedReceive(node.idString(), new NetworkReceive(node.idString(), buffer)));
@@ -2518,7 +2525,7 @@ public class FetcherTest {
                 new SimpleRecord(null, "value".getBytes()));
 
         // Remove the last record to simulate compaction
-        MemoryRecords.FilterResult result = records.filterTo(tp0, new MemoryRecords.RecordFilter(0, 0) {
+        MemoryRecords.FilterResult result = records.filterTo(new MemoryRecords.RecordFilter(0, 0) {
             @Override
             protected BatchRetentionResult checkBatchRetention(RecordBatch batch) {
                 return new BatchRetentionResult(BatchRetention.DELETE_EMPTY, false);
@@ -2528,7 +2535,7 @@ public class FetcherTest {
             protected boolean shouldRetainRecord(RecordBatch recordBatch, Record record) {
                 return record.key() != null;
             }
-        }, ByteBuffer.allocate(1024), Integer.MAX_VALUE, BufferSupplier.NO_CACHING);
+        }, ByteBuffer.allocate(1024), BufferSupplier.NO_CACHING);
         result.outputBuffer().flip();
         MemoryRecords compactedRecords = MemoryRecords.readableRecords(result.outputBuffer());
 
@@ -2817,7 +2824,7 @@ public class FetcherTest {
                 isolationLevel,
                 apiVersions);
 
-        Deserializers<byte[], byte[]> deserializers = new Deserializers<>(new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        Deserializers<byte[], byte[]> deserializers = new Deserializers<>(new ByteArrayDeserializer(), new ByteArrayDeserializer(), metrics);
         FetchConfig fetchConfig = new FetchConfig(
                 minBytes,
                 maxBytes,
@@ -2874,11 +2881,11 @@ public class FetcherTest {
                                 field.setAccessible(true);
                                 LinkedHashMap<?, ?> sessionPartitions =
                                         (LinkedHashMap<?, ?>) field.get(handler);
-                                for (Map.Entry<?, ?> entry : sessionPartitions.entrySet()) {
-                                    // If `sessionPartitions` are modified on another thread, Thread.yield will increase the
-                                    // possibility of ConcurrentModificationException if appropriate synchronization is not used.
-                                    Thread.yield();
-                                }
+                                // If `sessionPartitions` are modified on another thread, Thread.yield will increase the
+                                // possibility of ConcurrentModificationException if appropriate synchronization is not used.
+                                sessionPartitions.forEach(
+                                    (key, value) -> Thread.yield()
+                                );
                             } catch (Exception e) {
                                 throw new RuntimeException(e);
                             }
@@ -3757,28 +3764,6 @@ public class FetcherTest {
         return FetchResponse.of(Errors.NONE, throttleTime, INVALID_SESSION_ID, new LinkedHashMap<>(partitions));
     }
 
-    private FetchResponse fetchResponse2(TopicIdPartition tp1, MemoryRecords records1, long hw1,
-                                         TopicIdPartition tp2, MemoryRecords records2, long hw2) {
-        Map<TopicIdPartition, FetchResponseData.PartitionData> partitions = new HashMap<>();
-        partitions.put(tp1,
-                new FetchResponseData.PartitionData()
-                        .setPartitionIndex(tp1.topicPartition().partition())
-                        .setErrorCode(Errors.NONE.code())
-                        .setHighWatermark(hw1)
-                        .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-                        .setLogStartOffset(0)
-                        .setRecords(records1));
-        partitions.put(tp2,
-                new FetchResponseData.PartitionData()
-                        .setPartitionIndex(tp2.topicPartition().partition())
-                        .setErrorCode(Errors.NONE.code())
-                        .setHighWatermark(hw2)
-                        .setLastStableOffset(FetchResponse.INVALID_LAST_STABLE_OFFSET)
-                        .setLogStartOffset(0)
-                        .setRecords(records2));
-        return FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, new LinkedHashMap<>(partitions));
-    }
-
     /**
      * Assert that the {@link Fetcher#collectFetch() latest fetch} does not contain any
      * {@link Fetch#records() user-visible records}, did not
@@ -3873,7 +3858,7 @@ public class FetcherTest {
                 metadata,
                 subscriptionState,
                 fetchConfig,
-                new Deserializers<>(keyDeserializer, valueDeserializer),
+                new Deserializers<>(keyDeserializer, valueDeserializer, metrics),
                 metricsManager,
                 time,
                 apiVersions));
