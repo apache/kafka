@@ -17017,7 +17017,7 @@ public class GroupMetadataManagerTest {
         acls.put(fooTopicName, AuthorizationResult.ALLOWED);
         acls.put(barTopicName, AuthorizationResult.DENIED);
         when(authorizer.authorize(any(), any())).thenAnswer(invocation -> {
-            List<Action> actions = invocation.getArgument(1, List.class);
+            List<Action> actions = invocation.getArgument(1);
             return actions.stream()
                 .map(action -> acls.getOrDefault(action.resourcePattern().name(), AuthorizationResult.DENIED))
                 .collect(Collectors.toList());
