@@ -73,7 +73,7 @@ object Kafka extends Logging {
     try {
       val serverProps = getPropsFromArgs(args)
       val server = buildServer(serverProps)
-
+      System.setProperty("java.awt.headless", "true")
       try {
         if (!OperatingSystem.IS_WINDOWS && !Java.isIbmJdk)
           new LoggingSignalHandler().register()
