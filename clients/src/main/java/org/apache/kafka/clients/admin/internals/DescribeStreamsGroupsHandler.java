@@ -238,6 +238,7 @@ public class DescribeStreamsGroupsHandler extends AdminApiHandler.Batched<Coordi
             Set<CoordinatorKey> groupsToUnmap) {
         switch (error) {
             case GROUP_AUTHORIZATION_FAILED:
+            case TOPIC_AUTHORIZATION_FAILED:
                 log.debug("`DescribeStreamsGroups` request for group id {} failed due to error {}", groupId.idValue, error);
                 failed.put(groupId, error.exception(errorMsg));
                 break;

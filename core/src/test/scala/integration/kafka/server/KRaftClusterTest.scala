@@ -1421,7 +1421,7 @@ class KRaftClusterTest {
         broker0.shutdown()
         TestUtils.retry(60000) {
           val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
-          assertTrue(info.isDefined)
+          assertTrue(info.isPresent())
           assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
         }
 
@@ -1435,7 +1435,7 @@ class KRaftClusterTest {
         broker0.startup()
         TestUtils.retry(60000) {
           val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
-          assertTrue(info.isDefined)
+          assertTrue(info.isPresent)
           assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
         }
       } finally {
@@ -1476,7 +1476,7 @@ class KRaftClusterTest {
         broker0.shutdown()
         TestUtils.retry(60000) {
           val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
-          assertTrue(info.isDefined)
+          assertTrue(info.isPresent())
           assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
         }
 
@@ -1490,7 +1490,7 @@ class KRaftClusterTest {
         broker0.startup()
         TestUtils.retry(60000) {
           val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
-          assertTrue(info.isDefined)
+          assertTrue(info.isPresent())
           assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
           assertTrue(broker0.logManager.getLog(foo0, isFuture = true).isEmpty)
         }
@@ -1541,7 +1541,7 @@ class KRaftClusterTest {
         broker0.shutdown()
         TestUtils.retry(60000) {
           val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
-          assertTrue(info.isDefined)
+          assertTrue(info.isPresent())
           assertEquals(Set(1, 2), info.get.isr().asScala.toSet)
         }
 
@@ -1567,7 +1567,7 @@ class KRaftClusterTest {
         broker0.startup()
         TestUtils.retry(60000) {
           val info = broker1.metadataCache.getLeaderAndIsr("foo", 0)
-          assertTrue(info.isDefined)
+          assertTrue(info.isPresent())
           assertEquals(Set(0, 1, 2), info.get.isr().asScala.toSet)
           assertTrue(broker0.logManager.getLog(foo0, isFuture = true).isEmpty)
           assertFalse(targetDirFile.exists())
