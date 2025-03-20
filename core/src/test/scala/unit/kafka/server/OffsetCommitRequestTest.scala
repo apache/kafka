@@ -31,7 +31,7 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     )
   )
-  def testOffsetCommitWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
+  def testOffsetCommitWithNewConsumerGroupProtocol(): Unit = {
     testOffsetCommit(true)
   }
 
@@ -41,22 +41,12 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     )
   )
-  def testOffsetCommitWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
-    testOffsetCommit(false)
-  }
-
-  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-  ))
-  def testOffsetCommitWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
+  def testOffsetCommitWithOldConsumerGroupProtocol(): Unit = {
     testOffsetCommit(false)
   }
 
   private def testOffsetCommit(useNewProtocol: Boolean): Unit = {
-    if (useNewProtocol && !isNewGroupCoordinatorEnabled) {
+    if (useNewProtocol) {
       fail("Cannot use the new protocol with the old group coordinator.")
     }
 
@@ -97,7 +87,7 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         partition = 0,
         offset = 100L,
         expectedError =
-          if (isNewGroupCoordinatorEnabled && version >= 9) Errors.GROUP_ID_NOT_FOUND
+          if (version >= 9) Errors.GROUP_ID_NOT_FOUND
           else Errors.ILLEGAL_GENERATION,
         version = version.toShort
       )
@@ -111,7 +101,7 @@ class OffsetCommitRequestTest(cluster: ClusterInstance) extends GroupCoordinator
         partition = 0,
         offset = 100L,
         expectedError =
-          if (isNewGroupCoordinatorEnabled && version >= 9) Errors.GROUP_ID_NOT_FOUND
+          if (version >= 9) Errors.GROUP_ID_NOT_FOUND
           else Errors.ILLEGAL_GENERATION,
         version = version.toShort
       )

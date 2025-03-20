@@ -34,7 +34,7 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
       new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000")
     )
   )
-  def testListGroupsWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
+  def testListGroupsWithNewConsumerGroupProtocol(): Unit = {
     testListGroups(true)
   }
 
@@ -43,23 +43,12 @@ class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBa
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
     new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000")
   ))
-  def testListGroupsWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
-    testListGroups(false)
-  }
-
-  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000")
-  ))
-  def testListGroupsWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
+  def testListGroupsWithOldConsumerGroupProtocol(): Unit = {
     testListGroups(false)
   }
 
   private def testListGroups(useNewProtocol: Boolean): Unit = {
-    if (!isNewGroupCoordinatorEnabled && useNewProtocol) {
+    if (useNewProtocol) {
       fail("Cannot use the new protocol with the old group coordinator.")
     }
 

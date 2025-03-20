@@ -36,17 +36,7 @@ class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
   ))
-  def testHeartbeatWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
-    testHeartbeat()
-  }
-
-  @ClusterTest(types = Array(Type.KRAFT, Type.CO_KRAFT), serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-  ))
-  def testHeartbeatWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
+  def testHeartbeatWithOldConsumerGroupProtocol(): Unit = {
     testHeartbeat()
   }
 

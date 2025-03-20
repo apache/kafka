@@ -32,7 +32,7 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     )
   )
-  def testDeleteGroupsWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
+  def testDeleteGroupsWithNewConsumerGroupProtocol(): Unit = {
     testDeleteGroups(true)
   }
 
@@ -42,25 +42,12 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
       new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
     )
   )
-  def testDeleteGroupsWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
-    testDeleteGroups(false)
-  }
-
-  @ClusterTest(
-    types = Array(Type.KRAFT, Type.CO_KRAFT),
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-    )
-  )
-  def testDeleteGroupsWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
+  def testDeleteGroupsWithOldConsumerGroupProtocol(): Unit = {
     testDeleteGroups(false)
   }
 
   private def testDeleteGroups(useNewProtocol: Boolean): Unit = {
-    if (useNewProtocol && !isNewGroupCoordinatorEnabled) {
+    if (useNewProtocol) {
       fail("Cannot use the new protocol with the old group coordinator.")
     }
 

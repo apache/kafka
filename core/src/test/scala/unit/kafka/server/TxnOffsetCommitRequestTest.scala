@@ -40,27 +40,17 @@ import scala.jdk.CollectionConverters.IterableHasAsScala
 class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
   @ClusterTest
-  def testTxnOffsetCommitWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
+  def testTxnOffsetCommitWithNewConsumerGroupProtocol(): Unit = {
     testTxnOffsetCommit(true)
   }
 
   @ClusterTest
-  def testTxnOffsetCommitWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
-    testTxnOffsetCommit(false)
-  }
-
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
-    )
-  )
-  def testTxnOffsetCommitWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
+  def testTxnOffsetCommitWithOldConsumerGroupProtocol(): Unit = {
     testTxnOffsetCommit(false)
   }
 
   private def testTxnOffsetCommit(useNewProtocol: Boolean): Unit = {
-    if (useNewProtocol && !isNewGroupCoordinatorEnabled) {
+    if (useNewProtocol) {
       fail("Cannot use the new protocol with the old group coordinator.")
     }
 
