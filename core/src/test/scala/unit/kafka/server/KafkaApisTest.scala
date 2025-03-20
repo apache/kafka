@@ -6010,49 +6010,6 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testHandleShareFetchNewGroupCoordinatorDisabled(): Unit = {
-    val topicId = Uuid.randomUuid()
-    val memberId: Uuid = Uuid.randomUuid()
-    val groupId = "group"
-
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-
-    val shareFetchRequestData = new ShareFetchRequestData().
-      setGroupId(groupId).
-      setMemberId(memberId.toString).
-      setShareSessionEpoch(1).
-      setTopics(util.List.of(new ShareFetchRequestData.FetchTopic().
-        setTopicId(topicId).
-        setPartitions(util.List.of(
-          new ShareFetchRequestData.FetchPartition()
-            .setPartitionIndex(0)
-            .setAcknowledgementBatches(util.List.of(
-              new AcknowledgementBatch()
-                .setFirstOffset(0)
-                .setLastOffset(9)
-                .setAcknowledgeTypes(util.List.of(1.toByte))
-            ))
-        ))
-      ))
-
-    val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
-    val request = buildRequest(shareFetchRequest)
-
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "false",
-        ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
-    kafkaApis.handleShareFetchRequest(request)
-
-    val response = verifyNoThrottling[ShareFetchResponse](request)
-    val responseData = response.data()
-
-    assertEquals(Errors.UNSUPPORTED_VERSION.code, responseData.errorCode)
-  }
-
-  @Test
   def testHandleShareFetchShareGroupDisabled(): Unit = {
     val topicId = Uuid.randomUuid()
     val memberId: Uuid = Uuid.randomUuid()
@@ -6279,49 +6236,6 @@ class KafkaApisTest extends Logging {
     assertEquals(1, topicResponses.get(0).partitions.size())
     assertEquals(partitionIndex, topicResponses.get(0).partitions.get(0).partitionIndex)
     assertEquals(Errors.NONE.code, topicResponses.get(0).partitions.get(0).errorCode)
-  }
-
-  @Test
-  def testHandleShareAcknowledgeNewGroupCoordinatorDisabled(): Unit = {
-    val topicId = Uuid.randomUuid()
-    val memberId: Uuid = Uuid.randomUuid()
-    val groupId = "group"
-
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-
-    val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData()
-      .setGroupId(groupId)
-      .setMemberId(memberId.toString)
-      .setShareSessionEpoch(1)
-      .setTopics(List(new ShareAcknowledgeRequestData.AcknowledgeTopic()
-        .setTopicId(topicId)
-        .setPartitions(List(
-          new ShareAcknowledgeRequestData.AcknowledgePartition()
-            .setPartitionIndex(0)
-            .setAcknowledgementBatches(List(
-              new ShareAcknowledgeRequestData.AcknowledgementBatch()
-                .setFirstOffset(0)
-                .setLastOffset(9)
-                .setAcknowledgeTypes(Collections.singletonList(1.toByte))
-            ).asJava)
-        ).asJava)
-      ).asJava)
-
-    val shareAcknowledgeRequest = new ShareAcknowledgeRequest.Builder(shareAcknowledgeRequestData).build(ApiKeys.SHARE_ACKNOWLEDGE.latestVersion)
-    val request = buildRequest(shareAcknowledgeRequest)
-
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "false",
-        ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
-    kafkaApis.handleShareAcknowledgeRequest(request)
-
-    val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
-    val responseData = response.data()
-
-    assertEquals(Errors.UNSUPPORTED_VERSION.code, responseData.errorCode)
   }
 
   @Test
