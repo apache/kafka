@@ -23,7 +23,6 @@ import kafka.server.BrokerBlockingSender;
 import kafka.server.FailedPartitions;
 import kafka.server.InitialFetchState;
 import kafka.server.KafkaConfig;
-import kafka.server.MetadataCache;
 import kafka.server.OffsetTruncationState;
 import kafka.server.QuotaFactory;
 import kafka.server.RemoteLeaderEndPoint;
@@ -32,6 +31,7 @@ import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
 import kafka.server.builders.LogManagerBuilder;
 import kafka.server.builders.ReplicaManagerBuilder;
+import kafka.server.metadata.KRaftMetadataCache;
 import kafka.utils.Pool;
 import kafka.utils.TestUtils;
 
@@ -155,7 +155,7 @@ public class ReplicaFetcherThreadBenchmark {
             setLogManager(logManager).
             setQuotaManagers(Mockito.mock(QuotaFactory.QuotaManagers.class)).
             setBrokerTopicStats(brokerTopicStats).
-            setMetadataCache(MetadataCache.kRaftMetadataCache(config.nodeId(), () -> KRAFT_VERSION_1)).
+            setMetadataCache(new KRaftMetadataCache(config.nodeId(), () -> KRAFT_VERSION_1)).
             setLogDirFailureChannel(new LogDirFailureChannel(logDirs.size())).
             setAlterPartitionManager(TestUtils.createAlterIsrManager()).
             build();

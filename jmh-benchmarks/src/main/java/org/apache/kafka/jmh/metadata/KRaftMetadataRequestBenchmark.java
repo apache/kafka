@@ -27,7 +27,6 @@ import kafka.server.FetchManager;
 import kafka.server.ForwardingManager;
 import kafka.server.KafkaApis;
 import kafka.server.KafkaConfig;
-import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 import kafka.server.ReplicationQuotaManager;
@@ -109,7 +108,7 @@ public class KRaftMetadataRequestBenchmark {
     private final Metrics metrics = new Metrics();
     private final int brokerId = 1;
     private final ForwardingManager forwardingManager = Mockito.mock(ForwardingManager.class);
-    private final KRaftMetadataCache metadataCache = MetadataCache.kRaftMetadataCache(brokerId, () -> KRaftVersion.KRAFT_VERSION_1);
+    private final KRaftMetadataCache metadataCache = new KRaftMetadataCache(brokerId, () -> KRaftVersion.KRAFT_VERSION_1);
     private final ClientQuotaManager clientQuotaManager = Mockito.mock(ClientQuotaManager.class);
     private final ClientRequestQuotaManager clientRequestQuotaManager = Mockito.mock(ClientRequestQuotaManager.class);
     private final ControllerMutationQuotaManager controllerMutationQuotaManager = Mockito.mock(ControllerMutationQuotaManager.class);
@@ -237,10 +236,5 @@ public class KRaftMetadataRequestBenchmark {
         Option<com.fasterxml.jackson.databind.JsonNode> option = allTopicMetadataRequest.requestLog();
         Optional<com.fasterxml.jackson.databind.JsonNode> optional = option.isDefined() ? Optional.of(option.get()) : Optional.empty();
         return RequestConvertToJson.requestDesc(allTopicMetadataRequest.header(), optional, allTopicMetadataRequest.isForwarded()).toString();
-    }
-
-    @Benchmark
-    public void testTopicIdInfo() {
-        metadataCache.topicIdInfo();
     }
 }
