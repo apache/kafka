@@ -21,7 +21,8 @@ from kafkatest.services.transactional_message_copier import TransactionalMessage
 from kafkatest.utils import is_int
 from kafkatest.utils.transactions_utils import create_and_start_copiers
 from kafkatest.version import LATEST_3_3, LATEST_3_4, LATEST_3_5, \
-    LATEST_3_6, LATEST_3_7, LATEST_3_8, LATEST_3_9, DEV_BRANCH, KafkaVersion, LATEST_STABLE_METADATA_VERSION, LATEST_STABLE_TRANSACTION_VERSION
+    LATEST_3_6, LATEST_3_7, LATEST_3_8, LATEST_3_9, LATEST_4_0, \
+    DEV_BRANCH, KafkaVersion, LATEST_STABLE_METADATA_VERSION, LATEST_STABLE_TRANSACTION_VERSION
 
 from ducktape.tests.test import Test
 from ducktape.mark import matrix
@@ -208,7 +209,7 @@ class TransactionsUpgradeTest(Test):
 
     @cluster(num_nodes=8)
     @matrix(
-        from_kafka_version=[str(LATEST_3_9), str(LATEST_3_8), str(LATEST_3_7), str(LATEST_3_6), str(LATEST_3_5), str(LATEST_3_4), str(LATEST_3_3)],
+        from_kafka_version=[str(LATEST_4_0), str(LATEST_3_9), str(LATEST_3_8), str(LATEST_3_7), str(LATEST_3_6), str(LATEST_3_5), str(LATEST_3_4), str(LATEST_3_3)],
         metadata_quorum=[isolated_kraft],
         use_new_coordinator=[False],
         group_protocol=[None]
