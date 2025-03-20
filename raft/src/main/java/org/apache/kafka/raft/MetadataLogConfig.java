@@ -27,7 +27,7 @@ import org.apache.kafka.server.config.ServerLogConfigs;
  * @param retentionMillis The time to keep a metadata log file or snapshot before deleting it
  * @param maxBatchSizeInBytes The largest record batch size allowed in the metadata log
  * @param maxFetchSizeInBytes The maximum number of bytes to read when fetching from the metadata log
- * @param deleteDelayMillis The amount of time to wait before deleting a file from the filesystem.
+ * @param deleteDelayMillis The amount of time to wait before deleting a file from the filesystem
  * @param nodeId The node id
  */
 public record MetadataLogConfig(int logSegmentBytes,
