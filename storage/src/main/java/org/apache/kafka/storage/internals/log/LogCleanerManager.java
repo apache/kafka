@@ -122,9 +122,6 @@ public class LogCleanerManager {
                         }
                 ));
 
-        dirtiestLogCleanableRatio = 0.0;
-        timeOfLastRun = Time.SYSTEM.milliseconds();
-
         registerMetrics();
     }
 
@@ -179,9 +176,11 @@ public class LogCleanerManager {
         }
 
         /* a gauge for tracking the cleanable ratio of the dirtiest log */
+        dirtiestLogCleanableRatio = 0.0;
         metricsGroup.newGauge(MAX_DIRTY_PERCENT_METRIC_NAME, () -> (int) (100 * dirtiestLogCleanableRatio));
 
         /* a gauge for tracking the time since the last log cleaner run, in milliseconds */
+        timeOfLastRun = Time.SYSTEM.milliseconds();
         metricsGroup.newGauge(TIME_SINCE_LAST_RUN_MS_METRIC_NAME, () -> Time.SYSTEM.milliseconds() - timeOfLastRun);
     }
 
@@ -193,16 +192,18 @@ public class LogCleanerManager {
      * @return the position processed for all logs.
      */
     public Map<TopicPartition, Long> allCleanerCheckpoints() {
-        return inLock(lock, () -> checkpoints.values().stream().flatMap(checkpoint -> {
-            try {
-                return checkpoint.read().entrySet().stream()
-                        .map(entry -> Map.entry(entry.getKey(), entry.getValue()));
-            } catch (KafkaStorageException e) {
-                LOG.error("Failed to access checkpoint file {} in dir {}",
-                        checkpoint.file().getName(), checkpoint.file().getParentFile().getAbsolutePath(), e);
-                return Stream.empty();
-            }
-        }).collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
+        return inLock(lock, () -> checkpoints.values().stream()
+                .flatMap(checkpoint -> {
+                    try {
+                        return checkpoint.read().entrySet().stream()
+                                .map(entry -> Map.entry(entry.getKey(), entry.getValue()));
+                    } catch (KafkaStorageException e) {
+                        LOG.error("Failed to access checkpoint file {} in dir {}",
+                                checkpoint.file().getName(), checkpoint.file().getParentFile().getAbsolutePath(), e);
+                        return Stream.empty();
+                    }
+                })
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)));
     }
 
     /**
