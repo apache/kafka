@@ -338,14 +338,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#isNewGroupCoordinator()}
-     */
-    @Override
-    public boolean isNewGroupCoordinator() {
-        return true;
-    }
-
-    /**
      * See {@link GroupCoordinator#partitionFor(String)}
      */
     @Override
