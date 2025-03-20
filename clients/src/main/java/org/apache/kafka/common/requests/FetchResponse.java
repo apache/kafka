@@ -89,6 +89,7 @@ public class FetchResponse extends AbstractResponse {
      */
     public FetchResponse(FetchResponseData fetchResponseData) {
         super(ApiKeys.FETCH);
+        // For consistency, we always convert null records to MemoryRecords.EMPTY to prevent NullPointerExceptions
         this.data = convertNullRecordsToEmpty(fetchResponseData);
     }
 
