@@ -14,15 +14,10 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.admin;
+package org.apache.kafka.clients.admin;
 
 import kafka.server.KafkaBroker;
 
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.admin.NewPartitionReassignment;
-import org.apache.kafka.clients.admin.NewPartitions;
-import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.TopicDeletionDisabledException;
@@ -52,8 +47,6 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-
-import scala.jdk.javaapi.OptionConverters;
 
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -322,8 +315,8 @@ public class DeleteTopicTest {
     private Supplier<Optional<Integer>> isLeaderKnown(Map<Integer, KafkaBroker> idToBroker, TopicPartition topicPartition) {
         return () -> idToBroker.values()
             .stream()
-            .filter(broker -> OptionConverters.toJava(broker.replicaManager().onlinePartition(topicPartition))
-                .stream().anyMatch(tp -> tp.leaderIdIfLocal().isDefined()))
+            .filter(broker -> broker.replicaManager().onlinePartition(topicPartition)
+                .exists(tp -> tp.leaderIdIfLocal().isDefined()))
             .map(broker -> broker.config().brokerId())
             .findFirst();
     }
