@@ -21,7 +21,7 @@ import java.nio.ByteBuffer
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.locks.ReentrantLock
 import javax.management.ObjectName
-import kafka.server.{MetadataCache, ReplicaManager}
+import kafka.server.ReplicaManager
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
@@ -32,6 +32,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.common.TransactionVersion.{TV_0, TV_2}
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey
@@ -103,11 +104,16 @@ class TransactionStateManagerTest {
 
   @Test
   def testValidateTransactionTimeout(): Unit = {
-    assertTrue(transactionManager.validateTransactionTimeoutMs(1))
-    assertFalse(transactionManager.validateTransactionTimeoutMs(-1))
-    assertFalse(transactionManager.validateTransactionTimeoutMs(0))
-    assertTrue(transactionManager.validateTransactionTimeoutMs(txnConfig.transactionMaxTimeoutMs))
-    assertFalse(transactionManager.validateTransactionTimeoutMs(txnConfig.transactionMaxTimeoutMs + 1))
+    assertTrue(transactionManager.validateTransactionTimeoutMs(enableTwoPC = false, 1))
+    assertFalse(transactionManager.validateTransactionTimeoutMs(enableTwoPC = false, -1))
+    assertFalse(transactionManager.validateTransactionTimeoutMs(enableTwoPC = false, 0))
+    assertTrue(transactionManager.validateTransactionTimeoutMs(enableTwoPC = false, txnConfig.transactionMaxTimeoutMs))
+    assertFalse(transactionManager.validateTransactionTimeoutMs(enableTwoPC = false, txnConfig.transactionMaxTimeoutMs + 1))
+    // KIP-939 Always return true when two phase commit is enabled on transaction. Two phase commit is enabled in case of
+    // externally coordinated distributed transactions.
+    assertTrue(transactionManager.validateTransactionTimeoutMs(enableTwoPC = true, -1))
+    assertTrue(transactionManager.validateTransactionTimeoutMs(enableTwoPC = true, 10))
+    assertTrue(transactionManager.validateTransactionTimeoutMs(enableTwoPC = true, txnConfig.transactionMaxTimeoutMs + 1))
   }
 
   @Test
