@@ -50,6 +50,7 @@ class TransactionStateManagerConfigTest {
         doReturn(2).when(config).getInt(TransactionStateManagerConfig.TRANSACTIONAL_ID_EXPIRATION_MS_CONFIG);
         doReturn(3).when(config).getInt(TransactionStateManagerConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG);
         doReturn(4).when(config).getInt(TransactionStateManagerConfig.TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_CONFIG);
+        doReturn(true).when(config).getBoolean(TransactionStateManagerConfig.TRANSACTIONS_2PC_ENABLED_CONFIG);
 
         TransactionStateManagerConfig transactionStateManagerConfig = new TransactionStateManagerConfig(config);
 
@@ -57,7 +58,7 @@ class TransactionStateManagerConfigTest {
         assertEquals(2, transactionStateManagerConfig.transactionalIdExpirationMs());
         assertEquals(3, transactionStateManagerConfig.transactionAbortTimedOutTransactionCleanupIntervalMs());
         assertEquals(4, transactionStateManagerConfig.transactionRemoveExpiredTransactionalIdCleanupIntervalMs());
-
+        assertEquals(true, transactionStateManagerConfig.transaction2PCEnabled());
 
         // If the following calls are missing, we won’t be able to distinguish whether the value is set in the constructor or if
         // it fetches the latest value from AbstractConfig with each call.
@@ -65,11 +66,12 @@ class TransactionStateManagerConfigTest {
         transactionStateManagerConfig.transactionalIdExpirationMs();
         transactionStateManagerConfig.transactionAbortTimedOutTransactionCleanupIntervalMs();
         transactionStateManagerConfig.transactionRemoveExpiredTransactionalIdCleanupIntervalMs();
+        transactionStateManagerConfig.transaction2PCEnabled();
 
         verify(config, times(1)).getInt(TransactionStateManagerConfig.TRANSACTIONS_MAX_TIMEOUT_MS_CONFIG);
         verify(config, times(1)).getInt(TransactionStateManagerConfig.TRANSACTIONAL_ID_EXPIRATION_MS_CONFIG);
         verify(config, times(1)).getInt(TransactionStateManagerConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG);
         verify(config, times(1)).getInt(TransactionStateManagerConfig.TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_CONFIG);
+        verify(config, times(1)).getBoolean(TransactionStateManagerConfig.TRANSACTIONS_2PC_ENABLED_CONFIG);
     }
-
 }
