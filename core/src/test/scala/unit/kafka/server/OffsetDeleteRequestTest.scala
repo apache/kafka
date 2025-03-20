@@ -20,7 +20,6 @@ import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, Clu
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
-import org.junit.jupiter.api.Assertions.fail
 
 @ClusterTestDefaults(types = Array(Type.KRAFT))
 class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
@@ -43,10 +42,6 @@ class OffsetDeleteRequestTest(cluster: ClusterInstance) extends GroupCoordinator
   }
 
   private def testOffsetDelete(useNewProtocol: Boolean): Unit = {
-    if (useNewProtocol) {
-      fail("Cannot use the new protocol with the old group coordinator.")
-    }
-
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()

@@ -26,7 +26,7 @@ import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.utils.ProducerIdAndEpoch
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.junit.jupiter.api.Assertions.{assertThrows, assertTrue, fail}
+import org.junit.jupiter.api.Assertions.{assertThrows, assertTrue}
 
 import scala.jdk.CollectionConverters.IterableHasAsScala
 
@@ -50,10 +50,6 @@ class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinat
   }
 
   private def testTxnOffsetCommit(useNewProtocol: Boolean): Unit = {
-    if (useNewProtocol) {
-      fail("Cannot use the new protocol with the old group coordinator.")
-    }
-
     val topic = "topic"
     val partition = 0
     val transactionalId = "txn"
