@@ -121,18 +121,13 @@ public class LogCleanerManager {
                         }
                 ));
 
-        registerUncleanablePartitionsMetrics();
-
-        /* a gauge for tracking the cleanable ratio of the dirtiest log */
         dirtiestLogCleanableRatio = 0.0;
-        metricsGroup.newGauge(MAX_DIRTY_PERCENT_METRIC_NAME, () -> (int) (100 * dirtiestLogCleanableRatio));
-
-        /* a gauge for tracking the time since the last log cleaner run, in milliseconds */
         timeOfLastRun = Time.SYSTEM.milliseconds();
-        metricsGroup.newGauge(TIME_SINCE_LAST_RUN_MS_METRIC_NAME, () -> Time.SYSTEM.milliseconds() - timeOfLastRun);
+
+        registerMetrics();
     }
 
-    private void registerUncleanablePartitionsMetrics() {
+    private void registerMetrics() {
         /* gauges for tracking the number of partitions marked as uncleanable for each log directory */
         for (File dir : logDirs) {
             Map<String, String> metricTag = Map.of("logDirectory", dir.getAbsolutePath());
@@ -181,6 +176,12 @@ public class LogCleanerManager {
                     .computeIfAbsent(UNCLEANABLE_BYTES_METRIC_NAME, k -> new ArrayList<>())
                     .add(metricTag);
         }
+
+        /* a gauge for tracking the cleanable ratio of the dirtiest log */
+        metricsGroup.newGauge(MAX_DIRTY_PERCENT_METRIC_NAME, () -> (int) (100 * dirtiestLogCleanableRatio));
+
+        /* a gauge for tracking the time since the last log cleaner run, in milliseconds */
+        metricsGroup.newGauge(TIME_SINCE_LAST_RUN_MS_METRIC_NAME, () -> Time.SYSTEM.milliseconds() - timeOfLastRun);
     }
 
     public Map<String, List<Map<String, String>>> gaugeMetricNameWithTag() {
