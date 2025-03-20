@@ -911,6 +911,8 @@ project(':server') {
     testImplementation libs.mockitoCore
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
+    testImplementation project(':test-common:test-common-internal-api')
+    testImplementation project(':test-common:test-common-runtime')
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -1972,9 +1974,13 @@ project(':clients:clients-integration-tests') {
     testImplementation libs.slf4jApi
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
+    testImplementation project(':metadata')
+    testImplementation project(':server')
+    testImplementation project(':storage')
+    testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':clients').sourceSets.test.output
     implementation project(':server-common')
     testImplementation project(':metadata')
-    implementation project(':clients').sourceSets.test.output
     implementation project(':group-coordinator')
     implementation project(':transaction-coordinator')
 
