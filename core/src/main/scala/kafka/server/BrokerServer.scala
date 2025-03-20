@@ -194,7 +194,10 @@ class BrokerServer(
       info("Starting broker")
 
       val clientMetricsReceiverPlugin = new ClientMetricsReceiverPlugin()
+
       config.dynamicConfig.initialize(Some(clientMetricsReceiverPlugin))
+      quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-")
+      DynamicBrokerConfig.readDynamicBrokerConfigsFromSnapshot(raftManager, config, quotaManagers)
 
       /* start scheduler */
       kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
@@ -202,8 +205,6 @@ class BrokerServer(
 
       /* register broker metrics */
       brokerTopicStats = new BrokerTopicStats(config.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
-
-      quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-")
 
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
