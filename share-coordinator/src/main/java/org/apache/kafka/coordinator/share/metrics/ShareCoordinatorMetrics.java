@@ -33,9 +33,13 @@ import com.yammer.metrics.core.MetricsRegistry;
 
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
+
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public class ShareCoordinatorMetrics extends CoordinatorMetrics implements AutoCloseable {
     //write (write-rate and write-total) Meter share-coordinator-metric The number of share-group state write calls per second.
@@ -168,9 +172,9 @@ public class ShareCoordinatorMetrics extends CoordinatorMetrics implements AutoC
 
         ShareGroupPruneMetrics(TopicPartition tp) {
             String sensorNameSuffix = tp.toString();
-            Map<String, String> tags = Map.of(
-                "topic", tp.topic(),
-                "partition", Integer.toString(tp.partition())
+            LinkedHashMap<String, String> tags = mkMap(
+                mkEntry("topic", tp.topic()),
+                mkEntry("partition", Integer.toString(tp.partition()))
             );
 
             pruneSensor = metrics.sensor(SHARE_COORDINATOR_STATE_TOPIC_PRUNE_SENSOR_NAME + sensorNameSuffix);

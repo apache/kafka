@@ -49,6 +49,7 @@ import org.mockito.quality.Strictness;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -942,7 +943,7 @@ public class StreamsProducerTest {
     }
 
     private MetricName metricName(final String name) {
-        return new MetricName(name, "", "", Collections.emptyMap());
+        return new MetricName(name, "", "", new LinkedHashMap<>());
     }
 
     private void addMetric(

@@ -52,7 +52,7 @@ public class PluginMetricsImpl implements PluginMetrics, Closeable {
                 throw new IllegalArgumentException("Cannot use " + tagName + " as a tag name");
             }
         }
-        Map<String, String> metricsTags = new LinkedHashMap<>(this.tags);
+        LinkedHashMap<String, String> metricsTags = new LinkedHashMap<>(this.tags);
         metricsTags.putAll(tags);
         return metrics.metricName(name, GROUP, description, metricsTags);
     }

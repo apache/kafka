@@ -30,6 +30,7 @@ import org.rocksdb.RocksDB;
 import org.rocksdb.Statistics;
 
 import java.math.BigInteger;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -255,7 +256,7 @@ public class RocksDBMetricsRecorderGaugesTest {
                                final long expectedValue) {
 
         final Map<MetricName, ? extends Metric> metrics = streamsMetrics.metrics();
-        final Map<String, String> tagMap = mkMap(
+        final LinkedHashMap<String, String> tagMap = mkMap(
             mkEntry(THREAD_ID_TAG, Thread.currentThread().getName()),
             mkEntry(TASK_ID_TAG, TASK_ID.toString()),
             mkEntry(METRICS_SCOPE + "-" + STORE_ID_TAG, STORE_NAME)

@@ -31,7 +31,7 @@ import org.junit.jupiter.api.Test;
 
 import java.time.Instant;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -43,16 +43,19 @@ import io.opentelemetry.proto.metrics.v1.AggregationTemporality;
 import io.opentelemetry.proto.metrics.v1.Metric;
 import io.opentelemetry.proto.metrics.v1.NumberDataPoint;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
 
 public class KafkaMetricsCollectorTest {
 
     private static final String DOMAIN = "test.domain";
 
     private MetricName metricName;
-    private Map<String, String> tags;
+    private LinkedHashMap<String, String> tags;
     private Metrics metrics;
     private MetricNamingStrategy<MetricName> metricNamingStrategy;
     private KafkaMetricsCollector collector;
@@ -63,7 +66,7 @@ public class KafkaMetricsCollectorTest {
     @BeforeEach
     public void setUp() {
         metrics = new Metrics();
-        tags = Collections.singletonMap("tag", "value");
+        tags = mkMap(mkEntry("tag", "value"));
         metricName = metrics.metricName("name1", "group1", tags);
         time = new MockTime(0, 1000L, TimeUnit.MILLISECONDS.toNanos(1000L));
         testEmitter = new TestEmitter();
@@ -575,7 +578,7 @@ public class KafkaMetricsCollectorTest {
             Collections.singleton("tag2")
         );
 
-        tags = new HashMap<>();
+        tags = mkMap();
         tags.put("tag1", "value1");
         tags.put("tag2", "value2");
 

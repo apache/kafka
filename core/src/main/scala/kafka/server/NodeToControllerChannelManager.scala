@@ -27,6 +27,7 @@ import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.common.utils.Utils.{mkMap, mkEntry}
 import org.apache.kafka.common.{Node, Reconfigurable}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
@@ -136,7 +137,7 @@ class NodeToControllerChannelManagerImpl(
         metrics,
         time,
         channelName,
-        Map("BrokerId" -> config.brokerId.toString).asJava,
+        mkMap(mkEntry("BrokerId", config.brokerId.toString)),
         false,
         channelBuilder,
         logContext

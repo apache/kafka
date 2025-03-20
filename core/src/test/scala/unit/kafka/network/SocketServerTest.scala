@@ -34,6 +34,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils._
+import org.apache.kafka.common.utils.Utils.mkMap
 import org.apache.kafka.network.RequestConvertToJson
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.network.EndPoint
@@ -2060,7 +2061,7 @@ class SocketServerTest {
     private var conn: Option[Socket] = None
 
     override protected[network] def createSelector(channelBuilder: ChannelBuilder): Selector = {
-      new TestableSelector(config, channelBuilder, time, metrics, metricTags.asScala)
+      new TestableSelector(config, channelBuilder, time, metrics, metricTags)
     }
 
     override private[network] def processException(errorMessage: String, throwable: Throwable): Unit = {
@@ -2158,9 +2159,9 @@ class SocketServerTest {
     case object CloseSelector extends SelectorOperation
   }
 
-  class TestableSelector(config: KafkaConfig, channelBuilder: ChannelBuilder, time: Time, metrics: Metrics, metricTags: mutable.Map[String, String] = mutable.Map.empty)
+  class TestableSelector(config: KafkaConfig, channelBuilder: ChannelBuilder, time: Time, metrics: Metrics, metricTags: util.LinkedHashMap[String, String] = mkMap())
     extends Selector(config.socketRequestMaxBytes, config.connectionsMaxIdleMs, config.failedAuthenticationDelayMs,
-      metrics, time, "socket-server", metricTags.asJava, false, true, channelBuilder, MemoryPool.NONE, new LogContext()) {
+      metrics, time, "socket-server", metricTags, false, true, channelBuilder, MemoryPool.NONE, new LogContext()) {
 
     val failures = mutable.Map[SelectorOperation, Throwable]()
     val operationCounts = mutable.Map[SelectorOperation, Int]().withDefaultValue(0)

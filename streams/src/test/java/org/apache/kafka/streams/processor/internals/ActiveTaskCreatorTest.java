@@ -43,7 +43,7 @@ import org.mockito.quality.Strictness;
 
 import java.io.File;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -214,7 +214,7 @@ public class ActiveTaskCreatorTest {
     private void shouldConstructStreamsProducerMetric() {
         createTasks();
 
-        final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
+        final MetricName testMetricName = new MetricName("test_metric", "", "", new LinkedHashMap<>());
         final Metric testMetric = new KafkaMetric(
             new Object(),
             testMetricName,
@@ -297,6 +297,6 @@ public class ActiveTaskCreatorTest {
     }
 
     private MetricName metricName(final String name) {
-        return new MetricName(name, "", "", Collections.emptyMap());
+        return new MetricName(name, "", "", new LinkedHashMap<>());
     }
 }

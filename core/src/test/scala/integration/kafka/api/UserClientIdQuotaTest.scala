@@ -14,11 +14,13 @@
 
 package kafka.api
 
+import java.util
 import kafka.server._
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.Sanitizer
+import org.apache.kafka.common.utils.Utils.{mkMap, mkEntry}
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 class UserClientIdQuotaTest extends BaseQuotaTest {
@@ -50,8 +52,8 @@ class UserClientIdQuotaTest extends BaseQuotaTest {
     new QuotaTestClients(topic, leaderNode, producerClientId, consumerClientId, producer, consumer, adminClient) {
       override def userPrincipal: KafkaPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "O=A client,CN=localhost")
 
-      override def quotaMetricTags(clientId: String): Map[String, String] = {
-        Map("user" -> Sanitizer.sanitize(userPrincipal.getName), "client-id" -> clientId)
+      override def quotaMetricTags(clientId: String): util.LinkedHashMap[String, String] = {
+        mkMap(mkEntry("user", Sanitizer.sanitize(userPrincipal.getName)), mkEntry("client-id", clientId))
       }
 
       override def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double): Unit = {

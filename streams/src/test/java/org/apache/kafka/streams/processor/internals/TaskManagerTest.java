@@ -78,6 +78,7 @@ import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -4435,7 +4436,7 @@ public class TaskManagerTest {
 
     @Test
     public void shouldTransmitProducerMetrics() {
-        final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
+        final MetricName testMetricName = new MetricName("test_metric", "", "", new LinkedHashMap<>());
         final Metric testMetric = new KafkaMetric(
             new Object(),
             testMetricName,

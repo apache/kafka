@@ -198,7 +198,7 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     consumer.assign(List(tp).asJava)
     awaitNonEmptyRecords(consumer, tp)
 
-    val tags = new util.HashMap[String, String]()
+    val tags = new util.LinkedHashMap[String, String]()
     tags.put("client-id", "testPerPartitionLeadWithMaxPollRecords")
     tags.put("topic", tp.topic())
     tags.put("partition", String.valueOf(tp.partition()))
@@ -221,7 +221,7 @@ class PlaintextConsumerPollTest extends AbstractConsumerTest {
     consumer.assign(List(tp).asJava)
     val records = awaitNonEmptyRecords(consumer, tp)
 
-    val tags = new util.HashMap[String, String]()
+    val tags = new util.LinkedHashMap[String, String]()
     tags.put("client-id", "testPerPartitionLagWithMaxPollRecords")
     tags.put("topic", tp.topic())
     tags.put("partition", String.valueOf(tp.partition()))

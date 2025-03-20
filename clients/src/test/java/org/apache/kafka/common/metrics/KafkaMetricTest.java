@@ -21,8 +21,7 @@ import org.apache.kafka.common.utils.MockTime;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
-
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -30,7 +29,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KafkaMetricTest {
 
-    private static final MetricName METRIC_NAME = new MetricName("name", "group", "description", Collections.emptyMap());
+    private static final MetricName METRIC_NAME = new MetricName("name", "group", "description", mkMap());
 
     @Test
     public void testIsMeasurable() {

@@ -21,9 +21,11 @@ import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 
 import java.util.ArrayList;
-import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
+
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public class ProducerMetrics {
 
@@ -38,7 +40,7 @@ public class ProducerMetrics {
     }
 
     public static void main(String[] args) {
-        Map<String, String> metricTags = Collections.singletonMap("client-id", "client-id");
+        LinkedHashMap<String, String> metricTags = mkMap(mkEntry("client-id", "client-id"));
         MetricConfig metricConfig = new MetricConfig().tags(metricTags);
         Metrics metrics = new Metrics(metricConfig);
 

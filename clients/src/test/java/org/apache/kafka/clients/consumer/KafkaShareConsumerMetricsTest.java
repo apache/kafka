@@ -51,6 +51,7 @@ import java.time.Duration;
 import java.util.AbstractMap;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
@@ -165,7 +166,7 @@ public class KafkaShareConsumerMetricsTest {
     }
 
     private static boolean consumerMetricPresent(KafkaShareConsumer<String, String> consumer, String name) {
-        MetricName metricName = new MetricName(name, CONSUMER_SHARE_METRIC_GROUP_PREFIX + "-metrics", "", Collections.emptyMap());
+        MetricName metricName = new MetricName(name, CONSUMER_SHARE_METRIC_GROUP_PREFIX + "-metrics", "", new LinkedHashMap<>());
         return consumer.metricsRegistry().metrics().containsKey(metricName);
     }
 
@@ -383,8 +384,8 @@ public class KafkaShareConsumerMetricsTest {
     private Map<MetricName, KafkaMetric> customMetrics() {
         MetricConfig metricConfig = new MetricConfig();
         Object lock = new Object();
-        MetricName metricNameOne = new MetricName("metricOne", "stream-metrics", "description for metric one", new HashMap<>());
-        MetricName metricNameTwo = new MetricName("metricTwo", "stream-metrics", "description for metric two", new HashMap<>());
+        MetricName metricNameOne = new MetricName("metricOne", "stream-metrics", "description for metric one", new LinkedHashMap<>());
+        MetricName metricNameTwo = new MetricName("metricTwo", "stream-metrics", "description for metric two", new LinkedHashMap<>());
 
         KafkaMetric streamClientMetricOne = new KafkaMetric(lock, metricNameOne, (Measurable) (m, now) -> 1.0, metricConfig, Time.SYSTEM);
         KafkaMetric streamClientMetricTwo = new KafkaMetric(lock, metricNameTwo, (Measurable) (m, now) -> 2.0, metricConfig, Time.SYSTEM);

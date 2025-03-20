@@ -21,7 +21,7 @@ import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 
-import java.util.Map;
+import java.util.LinkedHashMap;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RECORD_E2E_LATENCY;
@@ -284,7 +284,7 @@ public class StateStoreMetrics {
                                           final String storeType,
                                           final String storeName,
                                           final StreamsMetricsImpl streamsMetrics) {
-        final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
+        final LinkedHashMap<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
         final Sensor sensor = streamsMetrics.storeLevelSensor(taskId, storeName, PREFIX_SCAN, RecordingLevel.DEBUG);
         addInvocationRateToSensor(
             sensor,
@@ -408,7 +408,7 @@ public class StateStoreMetrics {
                                           final String storeName,
                                           final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor = streamsMetrics.storeLevelSensor(taskId, storeName, RECORD_E2E_LATENCY, RecordingLevel.TRACE);
-        final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
+        final LinkedHashMap<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
         addAvgAndMinAndMaxToSensor(
             sensor,
             STATE_STORE_LEVEL_GROUP,
@@ -426,7 +426,7 @@ public class StateStoreMetrics {
                                                 final String storeName,
                                                 final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor = streamsMetrics.storeLevelSensor(taskId, storeName, ITERATOR_DURATION, RecordingLevel.DEBUG);
-        final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
+        final LinkedHashMap<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
         addAvgAndMaxToSensor(
             sensor,
             STATE_STORE_LEVEL_GROUP,
@@ -482,7 +482,7 @@ public class StateStoreMetrics {
         // use the gauge name (either size or count) as the sensor suffix, and metric name prefix
         final Sensor sensor = streamsMetrics.storeLevelSensor(taskId, storeName, gaugeName, recordingLevel);
         final String group;
-        final Map<String, String> tagMap;
+        final LinkedHashMap<String, String> tagMap;
         group = STATE_STORE_LEVEL_GROUP;
         tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
         addAvgAndMaxToSensor(sensor, group, tagMap, gaugeName, descriptionOfAvg, descriptionOfMax);
@@ -501,7 +501,7 @@ public class StateStoreMetrics {
         // use operation as the sensor suffix and metric name prefix
         final Sensor sensor;
         final String latencyMetricName = operation + LATENCY_SUFFIX;
-        final Map<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
+        final LinkedHashMap<String, String> tagMap = streamsMetrics.storeLevelTagMap(taskId, storeType, storeName);
         sensor = streamsMetrics.storeLevelSensor(taskId, storeName, operation, recordingLevel);
         addInvocationRateToSensor(sensor, STATE_STORE_LEVEL_GROUP, tagMap, operation, descriptionOfRate);
         addAvgAndMaxToSensor(

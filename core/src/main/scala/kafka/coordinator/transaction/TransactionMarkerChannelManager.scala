@@ -36,6 +36,7 @@ import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
+import org.apache.kafka.common.utils.Utils.mkMap
 
 import scala.collection.{concurrent, immutable}
 import scala.jdk.CollectionConverters._
@@ -76,7 +77,7 @@ object TransactionMarkerChannelManager {
       metrics,
       time,
       "txn-marker-channel",
-      Map.empty[String, String].asJava,
+      mkMap(),
       false,
       channelBuilder,
       logContext

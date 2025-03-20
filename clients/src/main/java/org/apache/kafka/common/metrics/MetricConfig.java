@@ -17,7 +17,6 @@
 package org.apache.kafka.common.metrics;
 
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -31,7 +30,7 @@ public class MetricConfig {
     private int samples;
     private long eventWindow;
     private long timeWindowMs;
-    private Map<String, String> tags;
+    private LinkedHashMap<String, String> tags;
     private Sensor.RecordingLevel recordingLevel;
 
     public MetricConfig() {
@@ -70,11 +69,11 @@ public class MetricConfig {
         return this;
     }
 
-    public Map<String, String> tags() {
+    public LinkedHashMap<String, String> tags() {
         return this.tags;
     }
 
-    public MetricConfig tags(Map<String, String> tags) {
+    public MetricConfig tags(LinkedHashMap<String, String> tags) {
         this.tags = tags;
         return this;
     }

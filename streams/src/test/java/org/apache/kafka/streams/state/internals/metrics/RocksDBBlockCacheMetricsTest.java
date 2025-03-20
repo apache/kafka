@@ -38,7 +38,6 @@ import java.io.File;
 import java.io.IOException;
 import java.math.BigInteger;
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Properties;
 import java.util.stream.Stream;
 
@@ -124,22 +123,22 @@ public class RocksDBBlockCacheMetricsTest {
         assertEquals(expected, metric.metricValue(), String.format("Value for metric '%s-%s' was incorrect", group, metricName));
     }
 
-    public Map<String, String> threadLevelTagMap(final String threadId) {
-        final Map<String, String> tagMap = new LinkedHashMap<>();
+    public LinkedHashMap<String, String> threadLevelTagMap(final String threadId) {
+        final LinkedHashMap<String, String> tagMap = new LinkedHashMap<>();
         tagMap.put(THREAD_ID_TAG, threadId);
         return tagMap;
     }
 
-    public Map<String, String> taskLevelTagMap(final String threadId, final String taskId) {
-        final Map<String, String> tagMap = threadLevelTagMap(threadId);
+    public LinkedHashMap<String, String> taskLevelTagMap(final String threadId, final String taskId) {
+        final LinkedHashMap<String, String> tagMap = threadLevelTagMap(threadId);
         tagMap.put(TASK_ID_TAG, taskId);
         return tagMap;
     }
 
-    public Map<String, String> storeLevelTagMap(final String taskName,
+    public LinkedHashMap<String, String> storeLevelTagMap(final String taskName,
                                                 final String storeType,
                                                 final String storeName) {
-        final Map<String, String> tagMap = taskLevelTagMap(Thread.currentThread().getName(), taskName);
+        final LinkedHashMap<String, String> tagMap = taskLevelTagMap(Thread.currentThread().getName(), taskName);
         tagMap.put(storeType + "-" + STORE_ID_TAG, storeName);
         return tagMap;
     }

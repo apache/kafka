@@ -54,8 +54,8 @@ import org.mockito.quality.Strictness;
 
 import java.time.Instant;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -103,7 +103,7 @@ public class MeteredVersionedKeyValueStoreTest {
     private final Time mockTime = new MockTime();
     private final String threadId = Thread.currentThread().getName();
     private final InternalProcessorContext<?, ?> context = mock(InternalProcessorContext.class);
-    private Map<String, String> tags;
+    private LinkedHashMap<String, String> tags;
 
     private MeteredVersionedKeyValueStore<String, String> store;
 

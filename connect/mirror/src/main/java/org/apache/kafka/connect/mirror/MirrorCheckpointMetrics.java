@@ -93,7 +93,7 @@ class MirrorCheckpointMetrics implements AutoCloseable {
         private final Sensor checkpointLatencySensor;
 
         GroupMetrics(TopicPartition topicPartition, String group) {
-            Map<String, String> tags = new LinkedHashMap<>();
+            LinkedHashMap<String, String> tags = new LinkedHashMap<>();
             tags.put("source", source); 
             tags.put("target", target); 
             tags.put("group", group);

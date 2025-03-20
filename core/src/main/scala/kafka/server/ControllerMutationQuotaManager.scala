@@ -16,6 +16,8 @@
  */
 package kafka.server
 
+import java.util
+
 import kafka.network.RequestChannel
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
@@ -29,8 +31,6 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.Session
 import org.apache.kafka.server.quota.{ClientQuotaCallback, QuotaType}
 import org.apache.kafka.server.config.ClientQuotaManagerConfig
-
-import scala.jdk.CollectionConverters._
 
 /**
  * The ControllerMutationQuota trait defines a quota for a given user/clientId pair. Such
@@ -168,19 +168,19 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
                                      private val quotaCallback: Option[ClientQuotaCallback])
     extends ClientQuotaManager(config, metrics, QuotaType.CONTROLLER_MUTATION, time, threadNamePrefix, quotaCallback) {
 
-  override protected def clientQuotaMetricName(quotaMetricTags: Map[String, String]): MetricName = {
+  override protected def clientQuotaMetricName(quotaMetricTags: util.LinkedHashMap[String, String]): MetricName = {
     metrics.metricName("tokens", QuotaType.CONTROLLER_MUTATION.toString,
       "Tracking remaining tokens in the token bucket per user/client-id",
-      quotaMetricTags.asJava)
+      quotaMetricTags)
   }
 
-  private def clientRateMetricName(quotaMetricTags: Map[String, String]): MetricName = {
+  private def clientRateMetricName(quotaMetricTags: util.LinkedHashMap[String, String]): MetricName = {
     metrics.metricName("mutation-rate", QuotaType.CONTROLLER_MUTATION.toString,
       "Tracking mutation-rate per user/client-id",
-      quotaMetricTags.asJava)
+      quotaMetricTags)
   }
 
-  override protected def registerQuotaMetrics(metricTags: Map[String, String])(sensor: Sensor): Unit = {
+  override protected def registerQuotaMetrics(metricTags: util.LinkedHashMap[String, String])(sensor: Sensor): Unit = {
     sensor.add(
       clientRateMetricName(metricTags),
       new Rate

@@ -14,10 +14,12 @@
 
 package kafka.api
 
+import java.util
 import kafka.security.JaasTestUtils
 import kafka.server.KafkaBroker
 import kafka.utils.TestUtils
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.utils.Utils.{mkMap, mkEntry}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 class UserQuotaTest extends BaseQuotaTest with SaslSetup {
@@ -56,8 +58,8 @@ class UserQuotaTest extends BaseQuotaTest with SaslSetup {
     new QuotaTestClients(topic, leaderNode, producerClientId, consumerClientId, producer, consumer, adminClient) {
       override val userPrincipal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, JaasTestUtils.KAFKA_CLIENT_PRINCIPAL_UNQUALIFIED_NAME_2)
 
-      override def quotaMetricTags(clientId: String): Map[String, String] = {
-        Map("user" -> userPrincipal.getName, "client-id" -> "")
+      override def quotaMetricTags(clientId: String): util.LinkedHashMap[String, String] = {
+        mkMap(mkEntry("user", userPrincipal.getName), mkEntry("client-id", ""))
       }
 
       override def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double): Unit = {

@@ -30,6 +30,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -165,7 +166,7 @@ public class FrequenciesTest {
     }
 
     private MetricName metricName(String name) {
-        return new MetricName(name, "group-id", "desc", Collections.emptyMap());
+        return new MetricName(name, "group-id", "desc", new LinkedHashMap<>());
     }
 
     private Frequency freq(String name, double value) {

@@ -28,6 +28,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.common.{Cluster, Reconfigurable}
+import org.apache.kafka.common.utils.Utils.{mkMap, mkEntry}
 import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
 import org.apache.kafka.server.quota._
@@ -273,8 +274,8 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
     override def userPrincipal: KafkaPrincipal = GroupedUserPrincipal(user, userGroup)
 
-    override def quotaMetricTags(clientId: String): Map[String, String] = {
-      Map(GroupedUserQuotaCallback.QuotaGroupTag -> userGroup)
+    override def quotaMetricTags(clientId: String): util.LinkedHashMap[String, String] = {
+      mkMap(mkEntry(GroupedUserQuotaCallback.QuotaGroupTag, userGroup))
     }
 
     override def overrideQuotas(producerQuota: Long, consumerQuota: Long, requestQuota: Double): Unit = {
@@ -322,7 +323,7 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
 
     def removeThrottleMetrics(): Unit = {
       def removeSensors(quotaType: QuotaType, clientId: String): Unit = {
-        val sensorSuffix = quotaMetricTags(clientId).values.mkString(":")
+        val sensorSuffix = String.join(":", quotaMetricTags(clientId).values())
         leaderNode.metrics.removeSensor(s"${quotaType}ThrottleTime-$sensorSuffix")
         leaderNode.metrics.removeSensor(s"$quotaType-$sensorSuffix")
       }
@@ -366,7 +367,7 @@ object GroupedUserQuotaCallback {
   val QuotaGroupTag = "group"
   val DefaultProduceQuotaProp = "default.produce.quota"
   val DefaultFetchQuotaProp = "default.fetch.quota"
-  val UnlimitedQuotaMetricTags = new util.HashMap[String, String]
+  val UnlimitedQuotaMetricTags = new util.LinkedHashMap[String, String]
   val quotaLimitCalls = Map(
     ClientQuotaType.PRODUCE -> new AtomicInteger,
     ClientQuotaType.FETCH -> new AtomicInteger,
@@ -424,7 +425,7 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
     if (value != null) Some(value.toString.toLong) else None
   }
 
-  override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): util.Map[String, String] = {
+  override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): util.LinkedHashMap[String, String] = {
     val user = principal.getName
     val userGroup = group(user)
     val newPrincipal = {
@@ -438,7 +439,7 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
         val userGroup = groupPrincipal.userGroup
         val quotaLimit = quotaOrDefault(userGroup, quotaType)
         if (quotaLimit != null)
-          Map(QuotaGroupTag -> userGroup).asJava
+          mkMap(mkEntry(QuotaGroupTag, userGroup))
         else
           UnlimitedQuotaMetricTags
       case _ =>
@@ -446,7 +447,7 @@ class GroupedUserQuotaCallback extends ClientQuotaCallback with Reconfigurable w
     }
   }
 
-  override def quotaLimit(quotaType: ClientQuotaType, metricTags: util.Map[String, String]): lang.Double = {
+  override def quotaLimit(quotaType: ClientQuotaType, metricTags: util.LinkedHashMap[String, String]): lang.Double = {
     quotaLimitCalls(quotaType).incrementAndGet
     val group = metricTags.get(QuotaGroupTag)
     if (group != null) quotaOrDefault(group, quotaType) else null

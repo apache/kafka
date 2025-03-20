@@ -22,9 +22,10 @@ import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.processor.internals.StreamThreadTotalBlockedTime;
 
-import java.util.Collections;
-import java.util.Map;
+import java.util.LinkedHashMap;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESS_ID_TAG;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_DESCRIPTION;
@@ -153,7 +154,7 @@ public class ThreadMetrics {
                                               final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
             streamsMetrics.threadLevelSensor(threadId, PROCESS + LATENCY_SUFFIX, RecordingLevel.INFO);
-        final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
+        final LinkedHashMap<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
         addAvgAndMaxToSensor(
             sensor,
             THREAD_LEVEL_GROUP,
@@ -169,7 +170,7 @@ public class ThreadMetrics {
                                            final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
             streamsMetrics.threadLevelSensor(threadId, POLL + RECORDS_SUFFIX, RecordingLevel.INFO);
-        final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
+        final LinkedHashMap<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
         addAvgAndMaxToSensor(
             sensor,
             THREAD_LEVEL_GROUP,
@@ -185,7 +186,7 @@ public class ThreadMetrics {
                                               final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
             streamsMetrics.threadLevelSensor(threadId, PROCESS + RECORDS_SUFFIX, RecordingLevel.INFO);
-        final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
+        final LinkedHashMap<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
         addAvgAndMaxToSensor(
             sensor,
             THREAD_LEVEL_GROUP,
@@ -201,7 +202,7 @@ public class ThreadMetrics {
                                            final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
             streamsMetrics.threadLevelSensor(threadId, PROCESS + RATE_SUFFIX, RecordingLevel.INFO);
-        final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
+        final LinkedHashMap<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
         addRateOfSumAndSumMetricsToSensor(
             sensor,
             THREAD_LEVEL_GROUP,
@@ -231,7 +232,7 @@ public class ThreadMetrics {
                                             final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
             streamsMetrics.threadLevelSensor(threadId, PROCESS + RATIO_SUFFIX, Sensor.RecordingLevel.INFO);
-        final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
+        final LinkedHashMap<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
         addValueMetricToSensor(
             sensor,
             THREAD_LEVEL_GROUP,
@@ -246,7 +247,7 @@ public class ThreadMetrics {
                                               final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
             streamsMetrics.threadLevelSensor(threadId, PUNCTUATE + RATIO_SUFFIX, Sensor.RecordingLevel.INFO);
-        final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
+        final LinkedHashMap<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
         addValueMetricToSensor(
             sensor,
             THREAD_LEVEL_GROUP,
@@ -261,7 +262,7 @@ public class ThreadMetrics {
                                          final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
             streamsMetrics.threadLevelSensor(threadId, POLL + RATIO_SUFFIX, Sensor.RecordingLevel.INFO);
-        final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
+        final LinkedHashMap<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
         addValueMetricToSensor(
             sensor,
             THREAD_LEVEL_GROUP,
@@ -276,7 +277,7 @@ public class ThreadMetrics {
                                            final StreamsMetricsImpl streamsMetrics) {
         final Sensor sensor =
             streamsMetrics.threadLevelSensor(threadId, COMMIT + RATIO_SUFFIX, Sensor.RecordingLevel.INFO);
-        final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
+        final LinkedHashMap<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
         addValueMetricToSensor(
             sensor,
             THREAD_LEVEL_GROUP,
@@ -306,7 +307,7 @@ public class ThreadMetrics {
             THREAD_STATE,
             THREAD_STATE_DESCRIPTION,
             threadId,
-            Collections.singletonMap(PROCESS_ID_TAG, processId),
+            mkMap(mkEntry(PROCESS_ID_TAG, processId)),
             threadStateProvider
         );
     }
@@ -364,7 +365,7 @@ public class ThreadMetrics {
                                                                           final StreamsMetricsImpl streamsMetrics) {
         // use operation name as the sensor suffix, and metric names
         final Sensor sensor = streamsMetrics.threadLevelSensor(threadId, operation, recordingLevel);
-        final Map<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
+        final LinkedHashMap<String, String> tagMap = streamsMetrics.threadLevelTagMap(threadId);
         addAvgAndMaxToSensor(
             sensor,
             THREAD_LEVEL_GROUP,

@@ -22,9 +22,10 @@ import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
-import java.util.Collections;
-import java.util.Map;
+import java.util.LinkedHashMap;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_LEVEL_GROUP;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -39,7 +40,7 @@ public class TaskMetricsTest {
 
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
     private final Sensor expectedSensor = mock(Sensor.class);
-    private final Map<String, String> tagMap = Collections.singletonMap("hello", "world");
+    private final LinkedHashMap<String, String> tagMap = mkMap(mkEntry("hello", "world"));
 
     @Test
     public void shouldGetActiveProcessRatioSensor() {

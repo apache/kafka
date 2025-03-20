@@ -28,13 +28,15 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.HashSet;
-import java.util.Map;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_LATENCY_SENSOR_NAME;
 import static org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics.SHARE_COORDINATOR_WRITE_SENSOR_NAME;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
 
 public class ShareCoordinatorMetricsTest {
 
@@ -114,9 +116,9 @@ public class ShareCoordinatorMetricsTest {
             "last-pruned-offset",
             ShareCoordinatorMetrics.METRICS_GROUP,
             "The offset at which the share-group state topic was last pruned.",
-            Map.of(
-                "topic", topic,
-                "partition", Integer.toString(partition)
+            mkMap(
+                mkEntry("topic", topic),
+                mkEntry("partition", Integer.toString(partition))
             )
         );
     }

@@ -17,7 +17,6 @@
 package org.apache.kafka.common;
 
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -92,7 +91,7 @@ public final class MetricName {
         return this.group;
     }
 
-    public Map<String, String> tags() {
+    public LinkedHashMap<String, String> tags() {
         return this.tags;
     }
 

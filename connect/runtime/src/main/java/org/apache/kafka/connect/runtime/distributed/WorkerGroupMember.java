@@ -82,7 +82,7 @@ public class WorkerGroupMember {
             this.clientId = clientId;
             this.log = logContext.logger(WorkerGroupMember.class);
 
-            Map<String, String> metricsTags = new LinkedHashMap<>();
+            LinkedHashMap<String, String> metricsTags = new LinkedHashMap<>();
             metricsTags.put("client-id", clientId);
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(CommonClientConfigs.METRICS_NUM_SAMPLES_CONFIG))
                     .timeWindow(config.getLong(CommonClientConfigs.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)

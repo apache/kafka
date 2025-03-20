@@ -31,7 +31,7 @@ import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
-import java.util.Collections;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public class NetworkUtils {
 
@@ -62,7 +62,7 @@ public class NetworkUtils {
             metrics,
             time,
             metricGroupPrefix,
-            Collections.emptyMap(),
+            mkMap(),
             false,
             channelBuilder,
             logContext

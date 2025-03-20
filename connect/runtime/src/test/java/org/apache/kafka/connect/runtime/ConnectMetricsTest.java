@@ -419,6 +419,6 @@ public class ConnectMetricsTest {
     }
 
     static MetricName metricName(String name) {
-        return new MetricName(name, "test_group", "metrics for testing", Map.of());
+        return new MetricName(name, "test_group", "metrics for testing", new LinkedHashMap<>());
     }
 }

@@ -42,7 +42,6 @@ import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -153,7 +152,7 @@ public class ConnectMetrics {
     }
 
     protected MetricGroupId groupId(String groupName, String... tagKeyValues) {
-        Map<String, String> tags = MetricsUtils.getTags(tagKeyValues);
+        LinkedHashMap<String, String> tags = MetricsUtils.getTags(tagKeyValues);
         return new MetricGroupId(groupName, tags);
     }
 
@@ -245,15 +244,15 @@ public class ConnectMetrics {
 
     public static class MetricGroupId {
         private final String groupName;
-        private final Map<String, String> tags;
+        private final LinkedHashMap<String, String> tags;
         private final int hc;
         private final String str;
 
-        public MetricGroupId(String groupName, Map<String, String> tags) {
+        public MetricGroupId(String groupName, LinkedHashMap<String, String> tags) {
             Objects.requireNonNull(groupName);
             Objects.requireNonNull(tags);
             this.groupName = groupName;
-            this.tags = Collections.unmodifiableMap(new LinkedHashMap<>(tags));
+            this.tags = new LinkedHashMap<>(tags);
             this.hc = Objects.hash(this.groupName, this.tags);
             StringBuilder sb = new StringBuilder(this.groupName);
             for (Map.Entry<String, String> entry : this.tags.entrySet()) {
@@ -276,7 +275,7 @@ public class ConnectMetrics {
          *
          * @return the tags; never null
          */
-        public Map<String, String> tags() {
+        public LinkedHashMap<String, String> tags() {
             return tags;
         }
 

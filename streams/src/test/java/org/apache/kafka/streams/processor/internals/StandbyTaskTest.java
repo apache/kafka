@@ -58,6 +58,7 @@ import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -591,7 +592,7 @@ public class StandbyTaskTest {
     }
 
     private MetricName setupCloseTaskMetric() {
-        final MetricName metricName = new MetricName("name", "group", "description", Collections.emptyMap());
+        final MetricName metricName = new MetricName("name", "group", "description", new LinkedHashMap<>());
         final Sensor sensor = streamsMetrics.threadLevelSensor(threadId, "task-closed", Sensor.RecordingLevel.INFO);
         sensor.add(metricName, new CumulativeSum());
         return metricName;

@@ -47,8 +47,8 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -97,7 +97,7 @@ public class MeteredKeyValueStoreTest {
 
     private MeteredKeyValueStore<String, String> metered;
     private final Metrics metrics = new Metrics();
-    private Map<String, String> tags;
+    private LinkedHashMap<String, String> tags;
     private MockTime mockTime;
 
     public void setUpWithoutContext() {

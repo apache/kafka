@@ -22,9 +22,8 @@ import org.apache.kafka.common.metrics.MetricConfig;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -34,7 +33,7 @@ public class MeterTest {
 
     @Test
     public void testMeter() {
-        Map<String, String> emptyTags = Collections.emptyMap();
+        LinkedHashMap<String, String> emptyTags = new LinkedHashMap<>();
         MetricName rateMetricName = new MetricName("rate", "test", "", emptyTags);
         MetricName totalMetricName = new MetricName("total", "test", "", emptyTags);
         Meter meter = new Meter(rateMetricName, totalMetricName);

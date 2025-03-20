@@ -134,6 +134,8 @@ import static java.util.Collections.singletonMap;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.apache.kafka.test.TestUtils.assertOptional;
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
@@ -1953,7 +1955,7 @@ public class FetchRequestManagerTest {
         subscriptions.seek(tp0, 0);
 
         MetricName maxLagMetric = metrics.metricInstance(metricsRegistry.recordsLagMax);
-        Map<String, String> tags = new HashMap<>();
+        LinkedHashMap<String, String> tags = mkMap();
         tags.put("topic", tp0.topic());
         tags.put("partition", String.valueOf(tp0.partition()));
         MetricName partitionLagMetric = metrics.metricName("records-lag", metricGroup, tags);
@@ -1994,9 +1996,11 @@ public class FetchRequestManagerTest {
         subscriptions.seek(tp0, 0);
 
         MetricName minLeadMetric = metrics.metricInstance(metricsRegistry.recordsLeadMin);
-        Map<String, String> tags = new HashMap<>(2);
-        tags.put("topic", tp0.topic());
-        tags.put("partition", String.valueOf(tp0.partition()));
+        LinkedHashMap<String, String> tags = mkMap(
+            mkEntry("topic", tp0.topic()),
+            mkEntry("partition", String.valueOf(tp0.partition()))
+        );
+
         MetricName partitionLeadMetric = metrics.metricName("records-lead", metricGroup, "", tags);
 
         Map<MetricName, KafkaMetric> allMetrics = metrics.metrics();
@@ -2038,7 +2042,7 @@ public class FetchRequestManagerTest {
 
         MetricName maxLagMetric = metrics.metricInstance(metricsRegistry.recordsLagMax);
 
-        Map<String, String> tags = new HashMap<>();
+        LinkedHashMap<String, String> tags = mkMap();
         tags.put("topic", tp0.topic());
         tags.put("partition", String.valueOf(tp0.partition()));
         MetricName partitionLagMetric = metrics.metricName("records-lag", metricGroup, tags);
@@ -2246,7 +2250,7 @@ public class FetchRequestManagerTest {
 
     @Test
     public void testFetcherMetricsTemplates() {
-        Map<String, String> clientTags = Collections.singletonMap("client-id", "clientA");
+        LinkedHashMap<String, String> clientTags = mkMap(mkEntry("client-id", "clientA"));
         buildFetcher(new MetricConfig().tags(clientTags), AutoOffsetResetStrategy.EARLIEST, new ByteArrayDeserializer(),
                 new ByteArrayDeserializer(), Integer.MAX_VALUE, IsolationLevel.READ_UNCOMMITTED);
 

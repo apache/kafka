@@ -29,9 +29,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -53,13 +52,13 @@ class StreamsClientMetricsDelegatingReporterTest {
         mockAdminClient = new MockAdminClient();
         streamsClientMetricsDelegatingReporter = new StreamsClientMetricsDelegatingReporter(mockAdminClient, "adminClientId");
 
-        final Map<String, String> threadIdTagMap = new HashMap<>();
+        final LinkedHashMap<String, String> threadIdTagMap = new LinkedHashMap<>();
         final String threadId = "abcxyz-StreamThread-1";
         threadIdTagMap.put("thread-id", threadId);
 
-        final MetricName metricNameOne = new MetricName("metricOne", "stream-metrics", "description for metric one", new HashMap<>());
-        final MetricName metricNameTwo = new MetricName("metricTwo", "stream-metrics", "description for metric two", new HashMap<>());
-        final MetricName metricNameThree = new MetricName("metricThree", "stream-metrics", "description for metric three", new HashMap<>());
+        final MetricName metricNameOne = new MetricName("metricOne", "stream-metrics", "description for metric one", new LinkedHashMap<>());
+        final MetricName metricNameTwo = new MetricName("metricTwo", "stream-metrics", "description for metric two", new LinkedHashMap<>());
+        final MetricName metricNameThree = new MetricName("metricThree", "stream-metrics", "description for metric three", new LinkedHashMap<>());
         final MetricName metricNameFour = new MetricName("metricThree", "thread-metrics", "description for metric three", threadIdTagMap);
 
         streamClientMetricOne = new KafkaMetric(lock, metricNameOne, (Measurable) (m, now) -> 1.0, metricConfig, Time.SYSTEM);

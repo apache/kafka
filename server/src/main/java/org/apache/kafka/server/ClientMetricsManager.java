@@ -65,6 +65,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -76,6 +77,9 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 /**
  * Handles client telemetry metrics requests/responses, subscriptions and instance information.
@@ -596,7 +600,7 @@ public class ClientMetricsManager implements AutoCloseable {
             Sensor unknownSubscriptionRequestCountSensor = metrics.sensor(
                 ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST);
             unknownSubscriptionRequestCountSensor.add(createMeter(metrics, new WindowedCount(),
-                ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST, Map.of()));
+                ClientMetricsStats.UNKNOWN_SUBSCRIPTION_REQUEST, mkMap()));
             sensorsName.add(unknownSubscriptionRequestCountSensor.name());
         }
 
@@ -607,7 +611,7 @@ public class ClientMetricsManager implements AutoCloseable {
                 return;
             }
 
-            Map<String, String> tags = Map.of(ClientMetricsConfigs.CLIENT_INSTANCE_ID, clientInstanceId.toString());
+            LinkedHashMap<String, String> tags = mkMap(mkEntry(ClientMetricsConfigs.CLIENT_INSTANCE_ID, clientInstanceId.toString()));
 
             Sensor throttleCount = metrics.sensor(ClientMetricsStats.THROTTLE + "-" + clientInstanceId);
             throttleCount.add(createMeter(metrics, new WindowedCount(), ClientMetricsStats.THROTTLE, tags));
@@ -660,7 +664,7 @@ public class ClientMetricsManager implements AutoCloseable {
             sensorsName.clear();
         }
 
-        private Meter createMeter(Metrics metrics, SampledStat stat, String name, Map<String, String> metricTags) {
+        private Meter createMeter(Metrics metrics, SampledStat stat, String name, LinkedHashMap<String, String> metricTags) {
             MetricName rateMetricName = metrics.metricName(name + "-rate", ClientMetricsStats.GROUP_NAME,
                 String.format("The number of %s per second", name), metricTags);
             MetricName totalMetricName = metrics.metricName(name + "-count", ClientMetricsStats.GROUP_NAME,

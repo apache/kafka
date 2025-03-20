@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor.internals.metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 
-import java.util.Map;
+import java.util.LinkedHashMap;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATIO_SUFFIX;
@@ -133,7 +133,7 @@ public class TaskMetrics {
                                                        final String taskId,
                                                        final StreamsMetricsImpl streamsMetrics) {
         final String name = RESTORE + REMAINING_RECORDS + TOTAL_SUFFIX;
-        final Map<String, String> tags = streamsMetrics.taskLevelTagMap(threadId, taskId);
+        final LinkedHashMap<String, String> tags = streamsMetrics.taskLevelTagMap(threadId, taskId);
         final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, name, Sensor.RecordingLevel.INFO);
         addSumMetricToSensor(sensor, TASK_LEVEL_GROUP, tags, name, false, REMAINING_RECORDS_DESCRIPTION);
         return sensor;
@@ -290,7 +290,7 @@ public class TaskMetrics {
                                                        final StreamsMetricsImpl streamsMetrics,
                                                        final Sensor... parentSensors) {
         final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, operation, recordingLevel, parentSensors);
-        final Map<String, String> tags = streamsMetrics.taskLevelTagMap(threadId, taskId);
+        final LinkedHashMap<String, String> tags = streamsMetrics.taskLevelTagMap(threadId, taskId);
 
         addInvocationRateToSensor(sensor, TASK_LEVEL_GROUP, tags, operation, descriptionOfRate);
         addSumMetricToSensor(sensor, TASK_LEVEL_GROUP, tags, operation, true, descriptionOfTotal);
@@ -307,7 +307,7 @@ public class TaskMetrics {
                                           final Sensor... parentSensors) {
         // use latency name as sensor suffix and metric name prefix
         final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, gaugeName, recordingLevel, parentSensors);
-        final Map<String, String> tagMap = streamsMetrics.taskLevelTagMap(threadId, taskId);
+        final LinkedHashMap<String, String> tagMap = streamsMetrics.taskLevelTagMap(threadId, taskId);
         addAvgAndMaxToSensor(
             sensor,
             TASK_LEVEL_GROUP,
@@ -331,7 +331,7 @@ public class TaskMetrics {
                                                                           final Sensor... parentSensors) {
         // use operation name as sensor suffix and metric name prefix
         final Sensor sensor = streamsMetrics.taskLevelSensor(threadId, taskId, operation, recordingLevel, parentSensors);
-        final Map<String, String> tagMap = streamsMetrics.taskLevelTagMap(threadId, taskId);
+        final LinkedHashMap<String, String> tagMap = streamsMetrics.taskLevelTagMap(threadId, taskId);
         addAvgAndMaxToSensor(
             sensor,
             TASK_LEVEL_GROUP,

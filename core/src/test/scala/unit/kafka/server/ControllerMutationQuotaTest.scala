@@ -29,6 +29,7 @@ import org.apache.kafka.common.metrics.KafkaMetric
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.Errors
+import org.apache.kafka.common.utils.Utils.{mkMap, mkEntry}
 import org.apache.kafka.common.quota.ClientQuotaAlteration
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.requests.AlterClientQuotasRequest
@@ -402,7 +403,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
       "tokens",
       QuotaType.CONTROLLER_MUTATION.toString,
       "Tracking remaining tokens in the token bucket per user/client-id",
-      Map(DefaultTags.User -> user, DefaultTags.ClientId -> "").asJava)
+      mkMap(mkEntry(DefaultTags.User, user), mkEntry(DefaultTags.ClientId, "")))
     Option(metrics.metric(metricName))
   }
 

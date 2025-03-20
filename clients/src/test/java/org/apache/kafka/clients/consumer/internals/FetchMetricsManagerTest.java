@@ -32,11 +32,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.Set;
 
 import static org.apache.kafka.clients.consumer.internals.FetchMetricsManager.topicPartitionTags;
 import static org.apache.kafka.clients.consumer.internals.FetchMetricsManager.topicTags;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -121,9 +123,9 @@ public class FetchMetricsManagerTest {
     public void testBytesFetchedTopic() {
         String topicName1 = TOPIC_NAME;
         String topicName2 = "another.topic";
-        Map<String, String> tags1 = Map.of("topic", topicName1);
-        Map<String, String> tags2 = Map.of("topic", topicName2);
-        Map<String, String> deprecatedTags = topicTags(topicName2);
+        LinkedHashMap<String, String> tags1 = mkMap(mkEntry("topic", topicName1));
+        LinkedHashMap<String, String> tags2 = mkMap(mkEntry("topic", topicName2));
+        LinkedHashMap<String, String> deprecatedTags = topicTags(topicName2);
         int initialMetricsSize = metrics.metrics().size();
 
         metricsManager.recordBytesFetched(topicName1, 2);
@@ -170,9 +172,9 @@ public class FetchMetricsManagerTest {
     public void testRecordsFetchedTopic() {
         String topicName1 = TOPIC_NAME;
         String topicName2 = "another.topic";
-        Map<String, String> tags1 = Map.of("topic", topicName1);
-        Map<String, String> tags2 = Map.of("topic", topicName2);
-        Map<String, String> deprecatedTags = topicTags(topicName2);
+        LinkedHashMap<String, String> tags1 = mkMap(mkEntry("topic", topicName1));
+        LinkedHashMap<String, String> tags2 = mkMap(mkEntry("topic", topicName2));
+        LinkedHashMap<String, String> deprecatedTags = topicTags(topicName2);
         int initialMetricsSize = metrics.metrics().size();
 
         metricsManager.recordRecordsFetched(topicName1, 2);
@@ -208,9 +210,9 @@ public class FetchMetricsManagerTest {
         TopicPartition tp1 = new TopicPartition(TOPIC_NAME, 0);
         TopicPartition tp2 = new TopicPartition("another.topic", 0);
 
-        Map<String, String> tags1 = Map.of("topic", tp1.topic(), "partition", String.valueOf(tp1.partition()));
-        Map<String, String> tags2 = Map.of("topic", tp2.topic(), "partition", String.valueOf(tp2.partition()));
-        Map<String, String> deprecatedTags = topicPartitionTags(tp2);
+        LinkedHashMap<String, String> tags1 = mkMap(mkEntry("topic", tp1.topic()), mkEntry("partition", String.valueOf(tp1.partition())));
+        LinkedHashMap<String, String> tags2 = mkMap(mkEntry("topic", tp2.topic()), mkEntry("partition", String.valueOf(tp2.partition())));
+        LinkedHashMap<String, String> deprecatedTags = topicPartitionTags(tp2);
         int initialMetricsSize = metrics.metrics().size();
 
         metricsManager.recordPartitionLag(tp1, 14);
@@ -255,9 +257,9 @@ public class FetchMetricsManagerTest {
         TopicPartition tp1 = new TopicPartition(TOPIC_NAME, 0);
         TopicPartition tp2 = new TopicPartition("another.topic", 0);
 
-        Map<String, String> tags1 = Map.of("topic", tp1.topic(), "partition", String.valueOf(tp1.partition()));
-        Map<String, String> tags2 = Map.of("topic", tp2.topic(), "partition", String.valueOf(tp2.partition()));
-        Map<String, String> deprecatedTags = topicPartitionTags(tp2);
+        LinkedHashMap<String, String> tags1 = mkMap(mkEntry("topic", tp1.topic()), mkEntry("partition", String.valueOf(tp1.partition())));
+        LinkedHashMap<String, String> tags2 = mkMap(mkEntry("topic", tp2.topic()), mkEntry("partition", String.valueOf(tp2.partition())));
+        LinkedHashMap<String, String> deprecatedTags = topicPartitionTags(tp2);
         int initialMetricsSize = metrics.metrics().size();
 
         metricsManager.recordPartitionLead(tp1, 15);
@@ -318,9 +320,9 @@ public class FetchMetricsManagerTest {
         // Another 2 metrics get registered as deprecated metrics should be reported for tp2.
         assertEquals(3, metrics.metrics().size() - initialMetricsSize);
 
-        Map<String, String> tags1 = Map.of("topic", tp1.topic(), "partition", String.valueOf(tp1.partition()));
-        Map<String, String> tags2 = Map.of("topic", tp2.topic(), "partition", String.valueOf(tp2.partition()));
-        Map<String, String> deprecatedTags = topicPartitionTags(tp2);
+        LinkedHashMap<String, String> tags1 = mkMap(mkEntry("topic", tp1.topic()), mkEntry("partition", String.valueOf(tp1.partition())));
+        LinkedHashMap<String, String> tags2 = mkMap(mkEntry("topic", tp2.topic()), mkEntry("partition", String.valueOf(tp2.partition())));
+        LinkedHashMap<String, String> deprecatedTags = topicPartitionTags(tp2);
         // Validate preferred read replica metrics.
         assertEquals(-1, readReplicaMetricValue(metricsRegistry.partitionPreferredReadReplica, tags1), EPSILON);
         assertEquals(1, readReplicaMetricValue(metricsRegistry.partitionPreferredReadReplica, tags2), EPSILON);
@@ -390,7 +392,7 @@ public class FetchMetricsManagerTest {
         return metricValue(metricName);
     }
 
-    private double metricValue(MetricNameTemplate name, Map<String, String> tags) {
+    private double metricValue(MetricNameTemplate name, LinkedHashMap<String, String> tags) {
         MetricName metricName = metrics.metricInstance(name, tags);
         return metricValue(metricName);
     }
@@ -400,7 +402,7 @@ public class FetchMetricsManagerTest {
         return (Double) metric.metricValue();
     }
 
-    private Integer readReplicaMetricValue(MetricNameTemplate name, Map<String, String> tags) {
+    private Integer readReplicaMetricValue(MetricNameTemplate name, LinkedHashMap<String, String> tags) {
         MetricName metricName = metrics.metricInstance(name, tags);
         KafkaMetric metric = metrics.metric(metricName);
         return (Integer) metric.metricValue();

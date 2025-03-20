@@ -23,15 +23,17 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
-import java.util.Collections;
-import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
+
 
 public class StateStoreMetricsTest {
 
@@ -43,7 +45,7 @@ public class StateStoreMetricsTest {
 
     private final Sensor expectedSensor = mock(Sensor.class);
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
-    private final Map<String, String> storeTagMap = Collections.singletonMap("hello", "world");
+    private final LinkedHashMap<String, String> storeTagMap = mkMap(mkEntry("hello", "world"));
 
     @Test
     public void shouldGetPutSensor() {

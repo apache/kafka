@@ -55,7 +55,6 @@ import org.junit.jupiter.api.Test;
 import java.time.Duration;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
@@ -64,6 +63,8 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.requestContext;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -76,6 +77,7 @@ import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
 
 class ShareCoordinatorServiceTest {
 
@@ -1917,8 +1919,8 @@ class ShareCoordinatorServiceTest {
             "last-pruned-offset",
             ShareCoordinatorMetrics.METRICS_GROUP,
             "The offset at which the share-group state topic was last pruned.",
-            Map.of("topic", topic, "partition", Integer.toString(partition))
-        ));
+            mkMap(mkEntry("topic", topic), mkEntry("partition", Integer.toString(partition))))
+        );
         assertEquals(checkPresence, isPresent);
     }
 }

@@ -148,7 +148,7 @@ class MirrorSourceMetrics implements AutoCloseable {
         PartitionMetrics(TopicPartition topicPartition) {
             String prefix = topicPartition.topic() + "-" + topicPartition.partition() + "-";
 
-            Map<String, String> tags = new LinkedHashMap<>();
+            LinkedHashMap<String, String> tags = new LinkedHashMap<>();
             tags.put("source", source);
             tags.put("target", target); 
             tags.put("topic", topicPartition.topic());

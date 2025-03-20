@@ -26,9 +26,10 @@ import org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.RocksDBMe
 import org.junit.jupiter.api.Test;
 
 import java.math.BigInteger;
-import java.util.Collections;
-import java.util.Map;
+import java.util.LinkedHashMap;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.Mockito.eq;
@@ -49,7 +50,7 @@ public class RocksDBMetricsTest {
     private final Metrics metrics = new Metrics();
     private final Sensor sensor = metrics.sensor("dummy");
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
-    private final Map<String, String> tags = Collections.singletonMap("hello", "world");
+    private final LinkedHashMap<String, String> tags = mkMap(mkEntry("hello", "world"));
 
     private interface SensorCreator {
         Sensor sensor(final StreamsMetricsImpl streamsMetrics, final RocksDBMetricContext metricContext);

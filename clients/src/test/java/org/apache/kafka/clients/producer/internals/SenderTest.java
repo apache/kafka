@@ -117,6 +117,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
 
 import static org.apache.kafka.clients.producer.internals.ProducerTestUtils.runUntil;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -261,7 +263,7 @@ public class SenderTest {
     @Test
     public void testSenderMetricsTemplates() throws Exception {
         metrics.close();
-        Map<String, String> clientTags = Collections.singletonMap("client-id", "clientA");
+        LinkedHashMap<String, String> clientTags = mkMap(mkEntry("client-id", "clientA"));
         metrics = new Metrics(new MetricConfig().tags(clientTags));
         SenderMetricsRegistry metricsRegistry = new SenderMetricsRegistry(metrics);
         Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL,
@@ -3242,7 +3244,7 @@ public class SenderTest {
     @Test
     public void testSenderShouldCloseWhenTransactionManagerInErrorState() {
         metrics.close();
-        Map<String, String> clientTags = Collections.singletonMap("client-id", "clientA");
+        LinkedHashMap<String, String> clientTags = mkMap(mkEntry("client-id", "clientA"));
         metrics = new Metrics(new MetricConfig().tags(clientTags));
         TransactionManager transactionManager = mock(TransactionManager.class);
         SenderMetricsRegistry metricsRegistry = new SenderMetricsRegistry(metrics);
@@ -3654,7 +3656,7 @@ public class SenderTest {
     ) {
         long totalSize = 1024 * 1024;
         String metricGrpName = "producer-metrics";
-        MetricConfig metricConfig = new MetricConfig().tags(Collections.singletonMap("client-id", CLIENT_ID));
+        MetricConfig metricConfig = new MetricConfig().tags(mkMap(mkEntry("client-id", CLIENT_ID)));
         this.metrics = new Metrics(metricConfig, time);
         BufferPool pool = (customPool == null) ? new BufferPool(totalSize, batchSize, metrics, time, metricGrpName) : customPool;
 

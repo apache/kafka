@@ -226,7 +226,7 @@ public class ProcessorNodeTest {
         final String threadId = Thread.currentThread().getName();
         final String[] latencyOperations = {"process", "punctuate", "create", "destroy"};
         final String groupName = "stream-processor-node-metrics";
-        final Map<String, String> metricTags = new LinkedHashMap<>();
+        final LinkedHashMap<String, String> metricTags = new LinkedHashMap<>();
         final String threadIdTagKey = "client-id";
         metricTags.put("processor-node-id", node.name());
         metricTags.put("task-id", context.taskId().toString());

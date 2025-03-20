@@ -29,10 +29,10 @@ import org.apache.kafka.server.quota.ClientQuotaCallback;
 import org.apache.kafka.server.quota.QuotaType;
 import org.apache.kafka.server.quota.QuotaUtils;
 
+import java.util.LinkedHashMap;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 
-import scala.jdk.javaapi.CollectionConverters;
 import scala.jdk.javaapi.OptionConverters;
 
 @SuppressWarnings("this-escape")
@@ -97,8 +97,8 @@ public class ClientRequestQuotaManager extends ClientQuotaManager {
     }
 
     @Override
-    public MetricName clientQuotaMetricName(scala.collection.immutable.Map<String, String> quotaMetricTags) {
-        return metrics.metricName("request-time", QuotaType.REQUEST.toString(), "Tracking request-time per user/client-id", CollectionConverters.asJava(quotaMetricTags));
+    public MetricName clientQuotaMetricName(LinkedHashMap<String, String> quotaMetricTags) {
+        return metrics.metricName("request-time", QuotaType.REQUEST.toString(), "Tracking request-time per user/client-id", quotaMetricTags);
     }
 
     private double nanosToPercentage(long nanos) {

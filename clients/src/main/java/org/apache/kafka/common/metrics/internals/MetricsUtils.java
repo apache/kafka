@@ -19,7 +19,6 @@ package org.apache.kafka.common.metrics.internals;
 import org.apache.kafka.common.metrics.Metrics;
 
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 public class MetricsUtils {
@@ -54,10 +53,10 @@ public class MetricsUtils {
      * @param keyValue the key and value pairs for the tags; must be an even number
      * @return the map of tags that can be supplied to the {@link Metrics} methods; never null
      */
-    public static Map<String, String> getTags(String... keyValue) {
+    public static LinkedHashMap<String, String> getTags(String... keyValue) {
         if ((keyValue.length % 2) != 0)
             throw new IllegalArgumentException("keyValue needs to be specified in pairs");
-        Map<String, String> tags = new LinkedHashMap<>(keyValue.length / 2);
+        LinkedHashMap<String, String> tags = new LinkedHashMap<>(keyValue.length / 2);
 
         for (int i = 0; i < keyValue.length; i += 2)
             tags.put(keyValue[i], keyValue[i + 1]);

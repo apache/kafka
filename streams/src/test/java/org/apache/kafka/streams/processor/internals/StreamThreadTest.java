@@ -117,6 +117,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -428,10 +429,7 @@ public class StreamThreadTest {
     public void shouldCreateMetricsAtStartup(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
         thread = createStreamThread(CLIENT_ID, new MockTime(1), stateUpdaterEnabled, processingThreadsEnabled);
         final String defaultGroupName = "stream-thread-metrics";
-        final Map<String, String> defaultTags = Collections.singletonMap(
-            "thread-id",
-            thread.getName()
-        );
+        final LinkedHashMap<String, String> defaultTags = mkMap(mkEntry("thread-id", thread.getName()));
         final String descriptionIsNotVerified = "";
 
         assertNotNull(metrics.metrics().get(metrics.metricName(
@@ -497,7 +495,7 @@ public class StreamThreadTest {
             "skipped-records-total", defaultGroupName, descriptionIsNotVerified, defaultTags)));
 
         final String taskGroupName = "stream-task-metrics";
-        final Map<String, String> taskTags =
+        final LinkedHashMap<String, String> taskTags =
             mkMap(mkEntry("task-id", "all"), mkEntry("thread-id", thread.getName()));
         assertNull(metrics.metrics().get(metrics.metricName(
             "commit-latency-avg", taskGroupName, descriptionIsNotVerified, taskTags)));
@@ -1189,7 +1187,7 @@ public class StreamThreadTest {
                     "commit-latency-max",
                     "stream-thread-metrics",
                     "",
-                    Collections.singletonMap("thread-id", CLIENT_ID))
+                    mkMap(mkEntry("thread-id", CLIENT_ID)))
                 ).metricValue()
             )
         );
@@ -1199,7 +1197,7 @@ public class StreamThreadTest {
                     "commit-latency-avg",
                     "stream-thread-metrics",
                     "",
-                    Collections.singletonMap("thread-id", CLIENT_ID))
+                    mkMap(mkEntry("thread-id", CLIENT_ID)))
                 ).metricValue()
             )
         );
@@ -1212,7 +1210,7 @@ public class StreamThreadTest {
                     "commit-latency-max",
                     "stream-thread-metrics",
                     "",
-                    Collections.singletonMap("thread-id", CLIENT_ID)
+                    mkMap(mkEntry("thread-id", CLIENT_ID))
                 )
             ).metricValue(),
             equalTo(10.0)
@@ -1223,7 +1221,7 @@ public class StreamThreadTest {
                     "commit-latency-avg",
                     "stream-thread-metrics",
                     "",
-                    Collections.singletonMap("thread-id", CLIENT_ID)
+                    mkMap(mkEntry("thread-id", CLIENT_ID))
                 )
             ).metricValue(),
             equalTo(10.0)
@@ -3092,7 +3090,7 @@ public class StreamThreadTest {
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         final TaskManager taskManager = mock(TaskManager.class);
 
-        final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
+        final MetricName testMetricName = new MetricName("test_metric", "", "", new LinkedHashMap<>());
         final Metric testMetric = new KafkaMetric(
             new Object(),
             testMetricName,
@@ -3152,7 +3150,7 @@ public class StreamThreadTest {
             HANDLER,
             null
         );
-        final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
+        final MetricName testMetricName = new MetricName("test_metric", "", "", new LinkedHashMap<>());
         final Metric testMetric = new KafkaMetric(
             new Object(),
             testMetricName,

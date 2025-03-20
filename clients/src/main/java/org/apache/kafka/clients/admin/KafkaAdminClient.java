@@ -305,6 +305,8 @@ import static org.apache.kafka.common.message.ListPartitionReassignmentsResponse
 import static org.apache.kafka.common.requests.MetadataRequest.convertToMetadataRequestTopic;
 import static org.apache.kafka.common.requests.MetadataRequest.convertTopicIdsToMetadataRequestTopic;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 /**
  * The default implementation of {@link Admin}. An instance of this class is created by invoking one of the
@@ -543,7 +545,7 @@ public class KafkaAdminClient extends AdminClient {
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
             clientTelemetryReporter = CommonClientConfigs.telemetryReporter(clientId, config);
             clientTelemetryReporter.ifPresent(reporters::add);
-            Map<String, String> metricTags = Collections.singletonMap("client-id", clientId);
+            LinkedHashMap<String, String> metricTags = mkMap(mkEntry("client-id", clientId));
             MetricConfig metricConfig = new MetricConfig().samples(config.getInt(AdminClientConfig.METRICS_NUM_SAMPLES_CONFIG))
                 .timeWindow(config.getLong(AdminClientConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)
                 .recordLevel(Sensor.RecordingLevel.forName(config.getString(AdminClientConfig.METRICS_RECORDING_LEVEL_CONFIG)))

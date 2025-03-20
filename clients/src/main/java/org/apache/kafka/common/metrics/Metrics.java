@@ -28,7 +28,6 @@ import org.slf4j.LoggerFactory;
 import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -192,7 +191,7 @@ public final class Metrics implements Closeable {
      * @param tags        additional key/value attributes of the metric
      */
     public MetricName metricName(String name, String group, String description, LinkedHashMap<String, String> tags) {
-        Map<String, String> combinedTag = new LinkedHashMap<>(config.tags());
+        LinkedHashMap<String, String> combinedTag = new LinkedHashMap<>(config.tags());
         combinedTag.putAll(tags);
         return new MetricName(name, group, description, combinedTag);
     }
@@ -206,7 +205,7 @@ public final class Metrics implements Closeable {
      * @param description A human-readable description to include in the metric
      */
     public MetricName metricName(String name, String group, String description) {
-        return metricName(name, group, description, new HashMap<>());
+        return metricName(name, group, description, new LinkedHashMap<>());
     }
 
     /**
@@ -216,7 +215,7 @@ public final class Metrics implements Closeable {
      * @param group       logical group name of the metrics to which this metric belongs
      */
     public MetricName metricName(String name, String group) {
-        return metricName(name, group, "", new HashMap<>());
+        return metricName(name, group, "", new LinkedHashMap<>());
     }
 
     /**
@@ -240,7 +239,7 @@ public final class Metrics implements Closeable {
      * @param group logical group name of the metrics to which this metric belongs
      * @param tags  key/value attributes of the metric
      */
-    public MetricName metricName(String name, String group, Map<String, String> tags) {
+    public MetricName metricName(String name, String group, LinkedHashMap<String, String> tags) {
         return metricName(name, group, "", tags);
     }
 
@@ -259,7 +258,7 @@ public final class Metrics implements Closeable {
     
         try (Metrics metrics = new Metrics()) {
             for (MetricNameTemplate template : allMetrics) {
-                Map<String, String> tags = new LinkedHashMap<>();
+                LinkedHashMap<String, String> tags = new LinkedHashMap<>();
                 for (String s : template.tags()) {
                     tags.put(s, "{" + s + "}");
                 }
@@ -652,7 +651,7 @@ public final class Metrics implements Closeable {
         return metricInstance(template, MetricsUtils.getTags(keyValue));
     }
 
-    public MetricName metricInstance(MetricNameTemplate template, Map<String, String> tags) {
+    public MetricName metricInstance(MetricNameTemplate template, LinkedHashMap<String, String> tags) {
         // check to make sure that the runtime defined tags contain all the template tags.
         Set<String> runtimeTagKeys = new HashSet<>(tags.keySet());
         runtimeTagKeys.addAll(config().tags().keySet());

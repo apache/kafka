@@ -23,9 +23,9 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 
 public class SenderMetricsRegistry {
@@ -161,39 +161,39 @@ public class SenderMetricsRegistry {
     }
 
     /* topic level metrics */
-    public MetricName topicRecordSendRate(Map<String, String> tags) {
+    public MetricName topicRecordSendRate(LinkedHashMap<String, String> tags) {
         return this.metrics.metricInstance(this.topicRecordSendRate, tags);
     }
 
-    public MetricName topicRecordSendTotal(Map<String, String> tags) {
+    public MetricName topicRecordSendTotal(LinkedHashMap<String, String> tags) {
         return this.metrics.metricInstance(this.topicRecordSendTotal, tags);
     }
 
-    public MetricName topicByteRate(Map<String, String> tags) {
+    public MetricName topicByteRate(LinkedHashMap<String, String> tags) {
         return this.metrics.metricInstance(this.topicByteRate, tags);
     }
 
-    public MetricName topicByteTotal(Map<String, String> tags) {
+    public MetricName topicByteTotal(LinkedHashMap<String, String> tags) {
         return this.metrics.metricInstance(this.topicByteTotal, tags);
     }
 
-    public MetricName topicCompressionRate(Map<String, String> tags) {
+    public MetricName topicCompressionRate(LinkedHashMap<String, String> tags) {
         return this.metrics.metricInstance(this.topicCompressionRate, tags);
     }
 
-    public MetricName topicRecordRetryRate(Map<String, String> tags) {
+    public MetricName topicRecordRetryRate(LinkedHashMap<String, String> tags) {
         return this.metrics.metricInstance(this.topicRecordRetryRate, tags);
     }
 
-    public MetricName topicRecordRetryTotal(Map<String, String> tags) {
+    public MetricName topicRecordRetryTotal(LinkedHashMap<String, String> tags) {
         return this.metrics.metricInstance(this.topicRecordRetryTotal, tags);
     }
 
-    public MetricName topicRecordErrorRate(Map<String, String> tags) {
+    public MetricName topicRecordErrorRate(LinkedHashMap<String, String> tags) {
         return this.metrics.metricInstance(this.topicRecordErrorRate, tags);
     }
 
-    public MetricName topicRecordErrorTotal(Map<String, String> tags) {
+    public MetricName topicRecordErrorTotal(LinkedHashMap<String, String> tags) {
         return this.metrics.metricInstance(this.topicRecordErrorTotal, tags);
     }
 

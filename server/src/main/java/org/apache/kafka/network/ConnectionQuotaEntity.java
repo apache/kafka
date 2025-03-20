@@ -17,8 +17,11 @@
 package org.apache.kafka.network;
 
 import java.net.InetAddress;
-import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.concurrent.TimeUnit;
+
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 /**
  * Class for connection quota configuration. Connection quotas can be configured at the
@@ -36,29 +39,29 @@ public class ConnectionQuotaEntity {
         return new ConnectionQuotaEntity(CONNECTION_RATE_SENSOR_NAME + "-" + listenerName,
                 CONNECTION_RATE_METRIC_NAME,
                 Long.MAX_VALUE,
-                Map.of("listener", listenerName));
+                mkMap(mkEntry("listener", listenerName)));
     }
 
     public static ConnectionQuotaEntity brokerQuotaEntity() {
         return new ConnectionQuotaEntity(CONNECTION_RATE_SENSOR_NAME,
                 "broker-" + ConnectionQuotaEntity.CONNECTION_RATE_METRIC_NAME,
                 Long.MAX_VALUE,
-                Map.of());
+                mkMap());
     }
 
     public static ConnectionQuotaEntity ipQuotaEntity(InetAddress ip) {
         return new ConnectionQuotaEntity(CONNECTION_RATE_SENSOR_NAME + "-" + ip.getHostAddress(),
                 CONNECTION_RATE_METRIC_NAME,
                 TimeUnit.HOURS.toSeconds(1),
-                Map.of(IP_METRIC_TAG, ip.getHostAddress()));
+                mkMap(mkEntry(IP_METRIC_TAG, ip.getHostAddress())));
     }
 
     private final String sensorName;
     private final String metricName;
     private final long sensorExpiration;
-    private final Map<String, String> metricTags;
+    private final LinkedHashMap<String, String> metricTags;
 
-    private ConnectionQuotaEntity(String sensorName, String metricName, long sensorExpiration, Map<String, String> metricTags) {
+    private ConnectionQuotaEntity(String sensorName, String metricName, long sensorExpiration, LinkedHashMap<String, String> metricTags) {
         this.sensorName = sensorName;
         this.metricName = metricName;
         this.sensorExpiration = sensorExpiration;
@@ -89,7 +92,7 @@ public class ConnectionQuotaEntity {
     /**
      * Tags associated with this quota entity
      */
-    public Map<String, String> metricTags() {
+    public LinkedHashMap<String, String> metricTags() {
         return metricTags;
     }
 }

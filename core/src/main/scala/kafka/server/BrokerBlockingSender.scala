@@ -23,12 +23,11 @@ import org.apache.kafka.common.network._
 import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.common.utils.Utils.{mkMap, mkEntry}
 import org.apache.kafka.clients.{ApiVersions, ClientResponse, ManualMetadataUpdater, NetworkClient}
 import org.apache.kafka.common.{Node, Reconfigurable}
 import org.apache.kafka.common.requests.AbstractRequest.Builder
 import org.apache.kafka.server.network.BrokerEndPoint
-
-import scala.jdk.CollectionConverters._
 
 trait BlockingSend {
 
@@ -74,7 +73,7 @@ class BrokerBlockingSender(sourceBroker: BrokerEndPoint,
       metrics,
       time,
       "replica-fetcher",
-      Map("broker-id" -> sourceBroker.id.toString, "fetcher-id" -> fetcherId.toString).asJava,
+      mkMap(mkEntry("broker-id", sourceBroker.id.toString), mkEntry("fetcher-id", fetcherId.toString)),
       false,
       channelBuilder,
       logContext

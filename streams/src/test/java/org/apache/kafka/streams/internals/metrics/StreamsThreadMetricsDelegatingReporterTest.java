@@ -30,9 +30,8 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -51,15 +50,15 @@ class StreamsThreadMetricsDelegatingReporterTest {
 
     @BeforeEach
     public void setUp() {
-        final Map<String, String> threadIdTagMap = new HashMap<>();
+        final LinkedHashMap<String, String> threadIdTagMap = new LinkedHashMap<>();
         final String threadId = "abcxyz-StreamThread-1";
         threadIdTagMap.put("thread-id", threadId);
 
-        final Map<String, String> threadIdWithStateUpdaterTagMap = new HashMap<>();
+        final LinkedHashMap<String, String> threadIdWithStateUpdaterTagMap = new LinkedHashMap<>();
         final String stateUpdaterId = "deftuv-StateUpdater-1";
         threadIdWithStateUpdaterTagMap.put("thread-id", stateUpdaterId);
 
-        final Map<String, String> noThreadIdTagMap = new HashMap<>();
+        final LinkedHashMap<String, String> noThreadIdTagMap = new LinkedHashMap<>();
         noThreadIdTagMap.put("client-id", "foo");
 
         mockConsumer = new MockConsumer<>(AutoOffsetResetStrategy.NONE.name());

@@ -56,6 +56,8 @@ import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
 
+import static org.apache.kafka.common.utils.Utils.mkMap;
+
 /**
  * A nioSelector interface for doing non-blocking multi-connection network I/O.
  * <p>
@@ -150,7 +152,7 @@ public class Selector implements Selectable, AutoCloseable {
             Metrics metrics,
             Time time,
             String metricGrpPrefix,
-            Map<String, String> metricTags,
+            LinkedHashMap<String, String> metricTags,
             boolean metricsPerConnection,
             boolean recordTimePerConnection,
             ChannelBuilder channelBuilder,
@@ -190,7 +192,7 @@ public class Selector implements Selectable, AutoCloseable {
                     Metrics metrics,
                     Time time,
                     String metricGrpPrefix,
-                    Map<String, String> metricTags,
+                    LinkedHashMap<String, String> metricTags,
                     boolean metricsPerConnection,
                     boolean recordTimePerConnection,
                     ChannelBuilder channelBuilder,
@@ -206,7 +208,7 @@ public class Selector implements Selectable, AutoCloseable {
                     Metrics metrics,
                     Time time,
                     String metricGrpPrefix,
-                    Map<String, String> metricTags,
+                    LinkedHashMap<String, String> metricTags,
                     boolean metricsPerConnection,
                     ChannelBuilder channelBuilder,
                     LogContext logContext) {
@@ -218,7 +220,7 @@ public class Selector implements Selectable, AutoCloseable {
                     Metrics metrics,
                     Time time,
                     String metricGrpPrefix,
-                    Map<String, String> metricTags,
+                    LinkedHashMap<String, String> metricTags,
                     boolean metricsPerConnection,
                     ChannelBuilder channelBuilder,
                     LogContext logContext) {
@@ -226,11 +228,11 @@ public class Selector implements Selectable, AutoCloseable {
     }
 
     public Selector(long connectionMaxIdleMS, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, LogContext logContext) {
-        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, Collections.emptyMap(), true, channelBuilder, logContext);
+        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, metrics, time, metricGrpPrefix, mkMap(), true, channelBuilder, logContext);
     }
 
     public Selector(long connectionMaxIdleMS, int failedAuthenticationDelayMs, Metrics metrics, Time time, String metricGrpPrefix, ChannelBuilder channelBuilder, LogContext logContext) {
-        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, failedAuthenticationDelayMs, metrics, time, metricGrpPrefix, Collections.emptyMap(), true, channelBuilder, logContext);
+        this(NetworkReceive.UNLIMITED, connectionMaxIdleMS, failedAuthenticationDelayMs, metrics, time, metricGrpPrefix, mkMap(), true, channelBuilder, logContext);
     }
 
     /**
@@ -1147,7 +1149,7 @@ public class Selector implements Selectable, AutoCloseable {
         private final List<MetricName> topLevelMetricNames = new ArrayList<>();
         private final List<Sensor> sensors = new ArrayList<>();
 
-        public SelectorMetrics(Metrics metrics, String metricGrpPrefix, Map<String, String> metricTags, boolean metricsPerConnection) {
+        public SelectorMetrics(Metrics metrics, String metricGrpPrefix, LinkedHashMap<String, String> metricTags, boolean metricsPerConnection) {
             this.metrics = metrics;
             this.metricTags = metricTags;
             this.metricsPerConnection = metricsPerConnection;
@@ -1240,7 +1242,7 @@ public class Selector implements Selectable, AutoCloseable {
 
             this.connectionsByCipher = new IntGaugeSuite<>(log, "sslCiphers", metrics,
                 cipherInformation -> {
-                    Map<String, String> tags = new LinkedHashMap<>();
+                    LinkedHashMap<String, String> tags = new LinkedHashMap<>();
                     tags.put("cipher", cipherInformation.cipher());
                     tags.put("protocol", cipherInformation.protocol());
                     tags.putAll(metricTags);
@@ -1249,7 +1251,7 @@ public class Selector implements Selectable, AutoCloseable {
 
             this.connectionsByClient = new IntGaugeSuite<>(log, "clients", metrics,
                 clientInformation -> {
-                    Map<String, String> tags = new LinkedHashMap<>();
+                    LinkedHashMap<String, String> tags = new LinkedHashMap<>();
                     tags.put("clientSoftwareName", clientInformation.softwareName());
                     tags.put("clientSoftwareVersion", clientInformation.softwareVersion());
                     tags.putAll(metricTags);
@@ -1261,7 +1263,7 @@ public class Selector implements Selectable, AutoCloseable {
             this.metrics.addMetric(metricName, (config, now) -> channels.size());
         }
 
-        private Meter createMeter(Metrics metrics, String groupName, Map<String, String> metricTags,
+        private Meter createMeter(Metrics metrics, String groupName, LinkedHashMap<String, String> metricTags,
                 SampledStat stat, String baseName, String descriptiveName) {
             MetricName rateMetricName = metrics.metricName(baseName + "-rate", groupName,
                             String.format("The number of %s per second", descriptiveName), metricTags);
@@ -1273,12 +1275,12 @@ public class Selector implements Selectable, AutoCloseable {
                 return new Meter(stat, rateMetricName, totalMetricName);
         }
 
-        private Meter createMeter(Metrics metrics, String groupName,  Map<String, String> metricTags,
+        private Meter createMeter(Metrics metrics, String groupName,  LinkedHashMap<String, String> metricTags,
                 String baseName, String descriptiveName) {
             return createMeter(metrics, groupName, metricTags, null, baseName, descriptiveName);
         }
 
-        private Meter createIOThreadRatioMeter(Metrics metrics, String groupName,  Map<String, String> metricTags,
+        private Meter createIOThreadRatioMeter(Metrics metrics, String groupName,  LinkedHashMap<String, String> metricTags,
                                                String baseName, String action) {
             MetricName rateMetricName = metrics.metricName(baseName + "-ratio", groupName,
                 String.format("The fraction of time the I/O thread spent %s", action), metricTags);
@@ -1300,7 +1302,7 @@ public class Selector implements Selectable, AutoCloseable {
                 String nodeRequestName = "node-" + connectionId + ".requests-sent";
                 Sensor nodeRequest = this.metrics.getSensor(nodeRequestName);
                 if (nodeRequest == null) {
-                    Map<String, String> tags = new LinkedHashMap<>(metricTags);
+                    LinkedHashMap<String, String> tags = new LinkedHashMap<>(metricTags);
                     tags.put("node-id", "node-" + connectionId);
 
                     nodeRequest = sensor(nodeRequestName);

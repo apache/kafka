@@ -41,6 +41,9 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.concurrent.ConcurrentHashMap;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
+
 /**
  * These are the metrics which are managed by the {@link org.apache.kafka.coordinator.group.GroupMetadataManager} class.
  * They generally pertain to aspects of group management, such as the number of groups in different states.
@@ -126,126 +129,126 @@ public class GroupCoordinatorMetrics extends CoordinatorMetrics implements AutoC
             GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The total number of groups using the classic rebalance protocol.",
-            Map.of(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.CLASSIC.toString())
+            mkMap(mkEntry(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.CLASSIC.toString()))
         );
 
         consumerGroupCountMetricName = metrics.metricName(
             GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The total number of groups using the consumer rebalance protocol.",
-            Map.of(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.CONSUMER.toString())
+            mkMap(mkEntry(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.CONSUMER.toString()))
         );
 
         consumerGroupCountEmptyMetricName = metrics.metricName(
             CONSUMER_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of consumer groups in empty state.",
-            Map.of(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.EMPTY.toString())
+            mkMap(mkEntry(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.EMPTY.toString()))
         );
 
         consumerGroupCountAssigningMetricName = metrics.metricName(
             CONSUMER_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of consumer groups in assigning state.",
-            Map.of(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.ASSIGNING.toString())
+            mkMap(mkEntry(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.ASSIGNING.toString()))
         );
 
         consumerGroupCountReconcilingMetricName = metrics.metricName(
             CONSUMER_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of consumer groups in reconciling state.",
-            Map.of(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.RECONCILING.toString())
+            mkMap(mkEntry(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.RECONCILING.toString()))
         );
 
         consumerGroupCountStableMetricName = metrics.metricName(
             CONSUMER_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of consumer groups in stable state.",
-            Map.of(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.STABLE.toString())
+            mkMap(mkEntry(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.STABLE.toString()))
         );
 
         consumerGroupCountDeadMetricName = metrics.metricName(
             CONSUMER_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of consumer groups in dead state.",
-            Map.of(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.DEAD.toString())
+            mkMap(mkEntry(CONSUMER_GROUP_COUNT_STATE_TAG, ConsumerGroupState.DEAD.toString()))
         );
 
         shareGroupCountMetricName = metrics.metricName(
             GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The total number of share groups.",
-            Map.of(SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString())
+            mkMap(mkEntry(SHARE_GROUP_PROTOCOL_TAG, Group.GroupType.SHARE.toString()))
         );
 
         shareGroupCountEmptyMetricName = metrics.metricName(
             SHARE_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of share groups in empty state.",
-            Map.of(SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.EMPTY.toString())
+            mkMap(mkEntry(SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.EMPTY.toString()))
         );
 
         shareGroupCountStableMetricName = metrics.metricName(
             SHARE_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of share groups in stable state.",
-            Map.of(SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.STABLE.toString())
+            mkMap(mkEntry(SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.STABLE.toString()))
         );
 
         shareGroupCountDeadMetricName = metrics.metricName(
             SHARE_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of share groups in dead state.",
-            Map.of(SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.DEAD.toString())
+            mkMap(mkEntry(SHARE_GROUP_COUNT_STATE_TAG, ShareGroup.ShareGroupState.DEAD.toString()))
         );
 
         streamsGroupCountMetricName = metrics.metricName(
             GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The total number of groups using the streams rebalance protocol.",
-            Map.of(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.STREAMS.toString())
+            mkMap(mkEntry(GROUP_COUNT_PROTOCOL_TAG, Group.GroupType.STREAMS.toString()))
         );
 
         streamsGroupCountEmptyMetricName = metrics.metricName(
             STREAMS_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of streams groups in empty state.",
-            Map.of(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.EMPTY.toString())
+            mkMap(mkEntry(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.EMPTY.toString()))
         );
 
         streamsGroupCountAssigningMetricName = metrics.metricName(
             STREAMS_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of streams groups in assigning state.",
-            Map.of(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.ASSIGNING.toString())
+            mkMap(mkEntry(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.ASSIGNING.toString()))
         );
 
         streamsGroupCountReconcilingMetricName = metrics.metricName(
             STREAMS_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of streams groups in reconciling state.",
-            Map.of(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.RECONCILING.toString())
+            mkMap(mkEntry(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.RECONCILING.toString()))
         );
 
         streamsGroupCountStableMetricName = metrics.metricName(
             STREAMS_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of streams groups in stable state.",
-            Map.of(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.STABLE.toString())
+            mkMap(mkEntry(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.STABLE.toString()))
         );
 
         streamsGroupCountDeadMetricName = metrics.metricName(
             STREAMS_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of streams groups in dead state.",
-            Map.of(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.DEAD.toString())
+            mkMap(mkEntry(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.DEAD.toString()))
         );
 
         streamsGroupCountNotReadyMetricName = metrics.metricName(
             STREAMS_GROUP_COUNT_METRIC_NAME,
             METRICS_GROUP,
             "The number of streams groups in not ready state.",
-            Map.of(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.NOT_READY.toString())
+            mkMap(mkEntry(STREAMS_GROUP_COUNT_STATE_TAG, StreamsGroupState.NOT_READY.toString()))
         );
 
         registerGauges();

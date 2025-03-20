@@ -53,6 +53,7 @@ import java.util.function.Consumer;
 
 import javax.net.ssl.SSLEngine;
 
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -258,7 +259,7 @@ public abstract class SslSelectorTest extends SelectorTest {
         channelBuilder = new SslChannelBuilder(ConnectionMode.SERVER, null, false, new LogContext());
         channelBuilder.configure(sslServerConfigs);
         selector = new Selector(NetworkReceive.UNLIMITED, 5000, metrics, time, "MetricGroup",
-                new HashMap<>(), true, false, channelBuilder, pool, new LogContext());
+                mkMap(), true, false, channelBuilder, pool, new LogContext());
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
             ss.bind(new InetSocketAddress(0));

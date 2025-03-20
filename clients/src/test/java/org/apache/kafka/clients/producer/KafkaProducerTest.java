@@ -2757,8 +2757,8 @@ public class KafkaProducerTest {
     private Map<MetricName, KafkaMetric> customMetrics() {
         MetricConfig metricConfig = new MetricConfig();
         Object lock = new Object();
-        MetricName metricNameOne = new MetricName("metricOne", "stream-metrics", "description for metric one", new HashMap<>());
-        MetricName metricNameTwo = new MetricName("metricTwo", "stream-metrics", "description for metric two", new HashMap<>());
+        MetricName metricNameOne = new MetricName("metricOne", "stream-metrics", "description for metric one", new LinkedHashMap<>());
+        MetricName metricNameTwo = new MetricName("metricTwo", "stream-metrics", "description for metric two", new LinkedHashMap<>());
 
         KafkaMetric streamClientMetricOne = new KafkaMetric(lock, metricNameOne, (Measurable) (m, now) -> 1.0, metricConfig, Time.SYSTEM);
         KafkaMetric streamClientMetricTwo = new KafkaMetric(lock, metricNameTwo, (Measurable) (m, now) -> 2.0, metricConfig, Time.SYSTEM);
@@ -2821,7 +2821,7 @@ public class KafkaProducerTest {
     }
 
     private MetricName expectedMetricName(String clientId, String config, Class<?> clazz) {
-        Map<String, String> expectedTags = new LinkedHashMap<>();
+        LinkedHashMap<String, String> expectedTags = new LinkedHashMap<>();
         expectedTags.put("client-id", clientId);
         expectedTags.put("config", config);
         expectedTags.put("class", clazz.getSimpleName());

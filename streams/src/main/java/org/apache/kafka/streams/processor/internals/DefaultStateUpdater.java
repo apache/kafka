@@ -1066,7 +1066,7 @@ public class DefaultStateUpdater implements StateUpdater {
         private final Deque<MetricName> allMetricNames = new LinkedList<>();
 
         private StateUpdaterMetrics(final Metrics metrics, final String threadId) {
-            final Map<String, String> threadLevelTags = new LinkedHashMap<>();
+            final LinkedHashMap<String, String> threadLevelTags = new LinkedHashMap<>();
             threadLevelTags.put(THREAD_ID_TAG, threadId);
 
             MetricName metricName = metrics.metricName("active-restoring-tasks",

@@ -23,16 +23,18 @@ import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
-import java.util.Collections;
-import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOPIC_LEVEL_GROUP;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
+
 
 public class TopicMetricsTest {
 
@@ -41,7 +43,7 @@ public class TopicMetricsTest {
     private static final String PROCESSOR_NODE_ID = "test-processor";
     private static final String TOPIC = "topic";
 
-    private final Map<String, String> tagMap = Collections.singletonMap("hello", "world");
+    private final LinkedHashMap<String, String> tagMap = mkMap(mkEntry("hello", "world"));
 
     private final Sensor expectedSensor = mock(Sensor.class);
     private static final MockedStatic<StreamsMetricsImpl> STREAMS_METRICS_STATIC_MOCK = mockStatic(StreamsMetricsImpl.class);

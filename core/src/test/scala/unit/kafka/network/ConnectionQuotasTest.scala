@@ -30,6 +30,7 @@ import org.apache.kafka.common.metrics.internals.MetricsUtils
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricConfig, Metrics}
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.common.utils.Utils.{mkMap, mkEntry}
 import org.apache.kafka.network.{ConnectionThrottledException, SocketServerConfigs, TooManyConnectionsException}
 import org.apache.kafka.server.config.{QuotaConfig, ReplicationConfigs}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
@@ -573,7 +574,7 @@ class ConnectionQuotasTest {
     connectionQuotas.maxConnectionsPerListener(listeners("EXTERNAL").listenerName).configure(listenerConfig)
 
     // remove connection rate limit
-    connectionQuotas.maxConnectionsPerListener(listeners("EXTERNAL").listenerName).reconfigure(Map.empty.asJava)
+    connectionQuotas.maxConnectionsPerListener(listeners("EXTERNAL").listenerName).reconfigure(mkMap())
 
     // create connections as fast as possible, will timeout if connections get throttled with previous rate
     // (50s to create 1000 connections)
@@ -750,7 +751,7 @@ class ConnectionQuotasTest {
   }
 
   private def addListenersAndVerify(config: KafkaConfig, connectionQuotas: ConnectionQuotas) : Unit = {
-    addListenersAndVerify(config, Map.empty.asJava, connectionQuotas)
+    addListenersAndVerify(config, mkMap(), connectionQuotas)
   }
 
   private def addListenersAndVerify(config: KafkaConfig,
@@ -829,7 +830,7 @@ class ConnectionQuotasTest {
     val metricName = metrics.metricName(
       "connection-accept-throttle-time",
       SocketServer.MetricsGroup,
-      Collections.singletonMap(Processor.ListenerMetricTag, listener))
+      mkMap(mkEntry(Processor.ListenerMetricTag, listener)))
     metrics.metric(metricName)
   }
 
@@ -837,7 +838,7 @@ class ConnectionQuotasTest {
     val metricName = metrics.metricName(
       "ip-connection-accept-throttle-time",
       SocketServer.MetricsGroup,
-      Collections.singletonMap(Processor.ListenerMetricTag, listener))
+      mkMap(mkEntry(Processor.ListenerMetricTag, listener)))
     metrics.metric(metricName)
   }
 
@@ -845,7 +846,7 @@ class ConnectionQuotasTest {
     val metricName = metrics.metricName(
       "connection-accept-rate",
       SocketServer.MetricsGroup,
-      Collections.singletonMap(Processor.ListenerMetricTag, listener))
+      mkMap(mkEntry(Processor.ListenerMetricTag, listener)))
     metrics.metric(metricName)
   }
 
@@ -860,7 +861,7 @@ class ConnectionQuotasTest {
     val metricName = metrics.metricName(
       s"connection-accept-rate",
       SocketServer.MetricsGroup,
-      Collections.singletonMap("ip", ip))
+      mkMap(mkEntry("ip", ip)))
     metrics.metric(metricName)
   }
 

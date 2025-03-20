@@ -679,7 +679,7 @@ public class ReplicaVerificationTool {
                 metrics,
                 time,
                 "replica-fetcher",
-                new HashMap<String, String>() {{
+                new LinkedHashMap<>() {{
                         put("broker-id", sourceNode.idString());
                         put("fetcher-id", String.valueOf(fetcherId));
                     }},

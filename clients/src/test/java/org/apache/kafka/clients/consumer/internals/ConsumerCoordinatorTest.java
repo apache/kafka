@@ -99,6 +99,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -3274,7 +3275,7 @@ public abstract class ConsumerCoordinatorTest {
     public void testThreadSafeAssignedPartitionsMetric() throws Exception {
         // Get the assigned-partitions metric
         final Metric metric = metrics.metric(new MetricName("assigned-partitions", consumerId + groupId + "-coordinator-metrics",
-                "", Collections.emptyMap()));
+                "", new LinkedHashMap<>()));
 
         // Start polling the metric in the background
         final AtomicBoolean doStop = new AtomicBoolean();

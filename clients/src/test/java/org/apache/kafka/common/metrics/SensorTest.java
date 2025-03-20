@@ -31,8 +31,8 @@ import org.mockito.Mockito;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
@@ -134,7 +134,7 @@ public class SensorTest {
 
             assertTrue(sensor.add(metrics.metricName("test1", "grp1"), new Avg()));
 
-            Map<String, String> emptyTags = Collections.emptyMap();
+            LinkedHashMap<String, String> emptyTags = new LinkedHashMap<>();
             MetricName rateMetricName = new MetricName("rate", "test", "", emptyTags);
             MetricName totalMetricName = new MetricName("total", "test", "", emptyTags);
             Meter meter = new Meter(rateMetricName, totalMetricName);
@@ -231,14 +231,14 @@ public class SensorTest {
         assertFalse(sensor.hasMetrics());
 
         sensor.add(
-            new MetricName("name1", "group1", "description1", Collections.emptyMap()),
+            new MetricName("name1", "group1", "description1", new LinkedHashMap<>()),
             new WindowedSum()
         );
 
         assertTrue(sensor.hasMetrics());
 
         sensor.add(
-            new MetricName("name2", "group2", "description2", Collections.emptyMap()),
+            new MetricName("name2", "group2", "description2", new LinkedHashMap<>()),
             new CumulativeCount()
         );
 

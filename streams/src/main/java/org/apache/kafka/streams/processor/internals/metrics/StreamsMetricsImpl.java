@@ -48,6 +48,8 @@ import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.common.utils.Utils.mkMap;
+
 public class StreamsMetricsImpl implements StreamsMetrics {
 
     public enum Version {
@@ -232,12 +234,12 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                 final String description,
                                                 final String threadId,
                                                 final Gauge<T> valueProvider) {
-        addThreadLevelMutableMetric(name, description, threadId, Collections.emptyMap(), valueProvider);
+        addThreadLevelMutableMetric(name, description, threadId, mkMap(), valueProvider);
     }
     public <T> void addThreadLevelMutableMetric(final String name,
                                                 final String description,
                                                 final String threadId,
-                                                final Map<String, String> additionalTags,
+                                                final LinkedHashMap<String, String> additionalTags,
                                                 final Gauge<T> valueProvider) {
         final MetricName metricName = metrics.metricName(
             name, THREAD_LEVEL_GROUP, description, threadLevelTagMap(threadId, additionalTags));
@@ -278,19 +280,19 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return SENSOR_INTERNAL_LABEL + SENSOR_PREFIX_DELIMITER + threadId;
     }
 
-    public Map<String, String> clientLevelTagMap() {
-        final Map<String, String> tagMap = new LinkedHashMap<>();
+    public LinkedHashMap<String, String> clientLevelTagMap() {
+        final LinkedHashMap<String, String> tagMap = new LinkedHashMap<>();
         tagMap.put(CLIENT_ID_TAG, clientId);
         tagMap.put(PROCESS_ID_TAG, processId);
         return tagMap;
     }
 
-    public Map<String, String> threadLevelTagMap(final String threadId) {
-        return threadLevelTagMap(threadId, Collections.emptyMap());
+    public LinkedHashMap<String, String> threadLevelTagMap(final String threadId) {
+        return threadLevelTagMap(threadId, mkMap());
     }
 
-    public Map<String, String> threadLevelTagMap(final String threadId, final Map<String, String> additionalTags) {
-        final Map<String, String> tagMap = new LinkedHashMap<>(additionalTags);
+    public LinkedHashMap<String, String> threadLevelTagMap(final String threadId, final LinkedHashMap<String, String> additionalTags) {
+        final LinkedHashMap<String, String> tagMap = new LinkedHashMap<>(additionalTags);
         tagMap.put(THREAD_ID_TAG, threadId);
         return tagMap;
     }
@@ -335,28 +337,28 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         }
     }
 
-    public Map<String, String> taskLevelTagMap(final String threadId, final String taskId) {
-        final Map<String, String> tagMap = new LinkedHashMap<>();
+    public LinkedHashMap<String, String> taskLevelTagMap(final String threadId, final String taskId) {
+        final LinkedHashMap<String, String> tagMap = new LinkedHashMap<>();
         tagMap.put(THREAD_ID_TAG, threadId);
         tagMap.put(TASK_ID_TAG, taskId);
         return tagMap;
     }
 
-    public Map<String, String> nodeLevelTagMap(final String threadId,
+    public LinkedHashMap<String, String> nodeLevelTagMap(final String threadId,
                                                final String taskId,
                                                final String processorNodeName) {
-        final Map<String, String> tagMap = new LinkedHashMap<>();
+        final LinkedHashMap<String, String> tagMap = new LinkedHashMap<>();
         tagMap.put(THREAD_ID_TAG, threadId);
         tagMap.put(TASK_ID_TAG, taskId);
         tagMap.put(PROCESSOR_NODE_ID_TAG, processorNodeName);
         return tagMap;
     }
 
-    public Map<String, String> topicLevelTagMap(final String threadId,
+    public LinkedHashMap<String, String> topicLevelTagMap(final String threadId,
                                                 final String taskId,
                                                 final String processorNodeName,
                                                 final String topicName) {
-        final Map<String, String> tagMap = new LinkedHashMap<>();
+        final LinkedHashMap<String, String> tagMap = new LinkedHashMap<>();
         tagMap.put(THREAD_ID_TAG, threadId);
         tagMap.put(TASK_ID_TAG, taskId);
         tagMap.put(PROCESSOR_NODE_ID_TAG, processorNodeName);
@@ -364,10 +366,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return tagMap;
     }
 
-    public Map<String, String> storeLevelTagMap(final String taskId,
+    public LinkedHashMap<String, String> storeLevelTagMap(final String taskId,
                                                 final String storeType,
                                                 final String storeName) {
-        final Map<String, String> tagMap = new LinkedHashMap<>();
+        final LinkedHashMap<String, String> tagMap = new LinkedHashMap<>();
         tagMap.put(THREAD_ID_TAG, Thread.currentThread().getName());
         tagMap.put(TASK_ID_TAG, taskId);
         tagMap.put(storeType + "-" + STORE_ID_TAG, storeName);
@@ -476,10 +478,10 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         }
     }
 
-    public Map<String, String> cacheLevelTagMap(final String threadId,
+    public LinkedHashMap<String, String> cacheLevelTagMap(final String threadId,
                                                 final String taskId,
                                                 final String storeName) {
-        final Map<String, String> tagMap = new LinkedHashMap<>();
+        final LinkedHashMap<String, String> tagMap = new LinkedHashMap<>();
         tagMap.put(THREAD_ID_TAG, threadId);
         tagMap.put(TASK_ID_TAG, taskId);
         tagMap.put(RECORD_CACHE_ID_TAG, storeName);
@@ -586,11 +588,11 @@ public class StreamsMetricsImpl implements StreamsMetrics {
         return Collections.unmodifiableMap(this.metrics.metrics());
     }
 
-    private Map<String, String> customizedTags(final String threadId,
+    private LinkedHashMap<String, String> customizedTags(final String threadId,
                                                final String scopeName,
                                                final String entityName,
                                                final String... tags) {
-        final Map<String, String> tagMap = threadLevelTagMap(threadId);
+        final LinkedHashMap<String, String> tagMap = threadLevelTagMap(threadId);
         tagMap.put(scopeName + "-id", entityName);
         if (tags != null) {
             if ((tags.length % 2) != 0) {
@@ -607,7 +609,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                                       final String groupName,
                                                       final String entityName,
                                                       final String operationName,
-                                                      final Map<String, String> tags,
+                                                      final LinkedHashMap<String, String> tags,
                                                       final Sensor.RecordingLevel recordingLevel) {
         final Sensor sensor = metrics.sensor(externalChildSensorName(threadId, operationName, entityName), recordingLevel);
         addInvocationRateAndCountToSensor(
@@ -629,7 +631,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                             final String... tags) {
         final String threadId = Thread.currentThread().getName();
         final String group = groupNameFromScope(scopeName);
-        final Map<String, String> tagMap = customizedTags(threadId, scopeName, entityName, tags);
+        final LinkedHashMap<String, String> tagMap = customizedTags(threadId, scopeName, entityName, tags);
         final Sensor sensor =
             customInvocationRateAndCountSensor(threadId, group, entityName, operationName, tagMap, recordingLevel);
         addAvgAndMaxToSensor(
@@ -651,7 +653,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
                                      final Sensor.RecordingLevel recordingLevel,
                                      final String... tags) {
         final String threadId = Thread.currentThread().getName();
-        final Map<String, String> tagMap = customizedTags(threadId, scopeName, entityName, tags);
+        final LinkedHashMap<String, String> tagMap = customizedTags(threadId, scopeName, entityName, tags);
         return customInvocationRateAndCountSensor(
             threadId,
             groupNameFromScope(scopeName),
@@ -670,7 +672,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public static void addAvgAndMaxToSensor(final Sensor sensor,
                                             final String group,
-                                            final Map<String, String> tags,
+                                            final LinkedHashMap<String, String> tags,
                                             final String gaugeName,
                                             final String descriptionOfAvg,
                                             final String descriptionOfMax) {
@@ -694,7 +696,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public static void addMinAndMaxToSensor(final Sensor sensor,
                                             final String group,
-                                            final Map<String, String> tags,
+                                            final LinkedHashMap<String, String> tags,
                                             final String operation,
                                             final String descriptionOfMin,
                                             final String descriptionOfMax) {
@@ -719,7 +721,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public static void addAvgAndMaxLatencyToSensor(final Sensor sensor,
                                                    final String group,
-                                                   final Map<String, String> tags,
+                                                   final LinkedHashMap<String, String> tags,
                                                    final String operation) {
         sensor.add(
             new MetricName(
@@ -741,7 +743,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public static void addAvgAndMinAndMaxToSensor(final Sensor sensor,
                                                   final String group,
-                                                  final Map<String, String> tags,
+                                                  final LinkedHashMap<String, String> tags,
                                                   final String gaugeName,
                                                   final String descriptionOfAvg,
                                                   final String descriptionOfMin,
@@ -759,7 +761,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public static void addInvocationRateAndCountToSensor(final Sensor sensor,
                                                          final String group,
-                                                         final Map<String, String> tags,
+                                                         final LinkedHashMap<String, String> tags,
                                                          final String operation,
                                                          final String descriptionOfRate,
                                                          final String descriptionOfCount) {
@@ -777,7 +779,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public static void addInvocationRateToSensor(final Sensor sensor,
                                                  final String group,
-                                                 final Map<String, String> tags,
+                                                 final LinkedHashMap<String, String> tags,
                                                  final String operation,
                                                  final String descriptionOfRate) {
         sensor.add(
@@ -793,7 +795,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public static void addRateOfSumAndSumMetricsToSensor(final Sensor sensor,
                                                          final String group,
-                                                         final Map<String, String> tags,
+                                                         final LinkedHashMap<String, String> tags,
                                                          final String operation,
                                                          final String descriptionOfRate,
                                                          final String descriptionOfTotal) {
@@ -803,7 +805,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public static void addRateOfSumMetricToSensor(final Sensor sensor,
                                                   final String group,
-                                                  final Map<String, String> tags,
+                                                  final LinkedHashMap<String, String> tags,
                                                   final String operation,
                                                   final String description) {
         sensor.add(new MetricName(operation + RATE_SUFFIX, group, description, tags),
@@ -812,7 +814,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public static void addSumMetricToSensor(final Sensor sensor,
                                             final String group,
-                                            final Map<String, String> tags,
+                                            final LinkedHashMap<String, String> tags,
                                             final String operation,
                                             final String description) {
         addSumMetricToSensor(sensor, group, tags, operation, true, description);
@@ -820,7 +822,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public static void addSumMetricToSensor(final Sensor sensor,
                                             final String group,
-                                            final Map<String, String> tags,
+                                            final LinkedHashMap<String, String> tags,
                                             final String operation,
                                             final boolean withSuffix,
                                             final String description) {
@@ -837,7 +839,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public static void addValueMetricToSensor(final Sensor sensor,
                                               final String group,
-                                              final Map<String, String> tags,
+                                              final LinkedHashMap<String, String> tags,
                                               final String name,
                                               final String description) {
         sensor.add(new MetricName(name, group, description, tags), new Value());
@@ -845,7 +847,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public static void addAvgAndSumMetricsToSensor(final Sensor sensor,
                                                    final String group,
-                                                   final Map<String, String> tags,
+                                                   final LinkedHashMap<String, String> tags,
                                                    final String metricNamePrefix,
                                                    final String descriptionOfAvg,
                                                    final String descriptionOfTotal) {
@@ -858,7 +860,7 @@ public class StreamsMetricsImpl implements StreamsMetrics {
 
     public static void addTotalCountAndSumMetricsToSensor(final Sensor sensor,
                                                           final String group,
-                                                          final Map<String, String> tags,
+                                                          final LinkedHashMap<String, String> tags,
                                                           final String countMetricNamePrefix,
                                                           final String sumMetricNamePrefix,
                                                           final String descriptionOfCount,

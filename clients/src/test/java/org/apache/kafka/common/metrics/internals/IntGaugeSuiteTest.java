@@ -25,7 +25,7 @@ import org.junit.jupiter.api.Test;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -40,7 +40,7 @@ public class IntGaugeSuiteTest {
         return new IntGaugeSuite<>(log,
             "mySuite",
             metrics,
-            name -> new MetricName(name, "group", "myMetric", Collections.emptyMap()),
+            name -> new MetricName(name, "group", "myMetric", new LinkedHashMap<>()),
             3);
     }
 

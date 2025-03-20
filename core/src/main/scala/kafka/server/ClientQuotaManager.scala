@@ -29,6 +29,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.stats.{Avg, CumulativeSum, Rate}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Sanitizer, Time}
+import org.apache.kafka.common.utils.Utils.{mkMap, mkEntry}
 import org.apache.kafka.server.config.ClientQuotaManagerConfig
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaEntity, ClientQuotaType, QuotaType, QuotaUtils, SensorAccess, ThrottleCallback, ThrottledChannel}
 import org.apache.kafka.server.util.ShutdownableThread
@@ -42,7 +43,7 @@ import scala.jdk.CollectionConverters._
  * @param quotaSensor @Sensor that tracks the quota
  * @param throttleTimeSensor @Sensor that tracks the throttle time
  */
-case class ClientSensors(metricTags: Map[String, String], quotaSensor: Sensor, throttleTimeSensor: Sensor)
+case class ClientSensors(metricTags: util.LinkedHashMap[String, String], quotaSensor: Sensor, throttleTimeSensor: Sensor)
 
 object QuotaTypes {
   val NoQuotas = 0
@@ -271,7 +272,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   def getMaxValueInQuotaWindow(session: Session, clientId: String): Double = {
     if (quotasEnabled) {
       val clientSensors = getOrCreateQuotaSensors(session, clientId)
-      Option(quotaCallback.quotaLimit(clientQuotaType, clientSensors.metricTags.asJava))
+      Option(quotaCallback.quotaLimit(clientQuotaType, clientSensors.metricTags))
         .map(_.toDouble * (config.numQuotaSamples - 1) * config.quotaWindowSizeSeconds)
         .getOrElse(Double.MaxValue)
     } else {
@@ -321,7 +322,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     Quota.upperBound(quotaLimit(metricTags))
   }
 
-  private def quotaLimit(metricTags: util.Map[String, String]): Double = {
+  private def quotaLimit(metricTags: util.LinkedHashMap[String, String]): Double = {
     Option(quotaCallback.quotaLimit(clientQuotaType, metricTags)).map(_.toDouble).getOrElse(Long.MaxValue)
   }
 
@@ -341,9 +342,9 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    */
   def getOrCreateQuotaSensors(session: Session, clientId: String): ClientSensors = {
     // Use cached sanitized principal if using default callback
-    val metricTags = quotaCallback match {
+    val metricTags:util.LinkedHashMap[String, String] = quotaCallback match {
       case callback: DefaultQuotaCallback => callback.quotaMetricTags(session.sanitizedUser, clientId)
-      case _ => quotaCallback.quotaMetricTags(clientQuotaType, session.principal, clientId).asScala.toMap
+      case _ => quotaCallback.quotaMetricTags(clientQuotaType, session.principal, clientId)
     }
     // Names of the sensors to access
     val sensors = ClientSensors(
@@ -364,7 +365,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     sensors
   }
 
-  protected def registerQuotaMetrics(metricTags: Map[String, String])(sensor: Sensor): Unit = {
+  protected def registerQuotaMetrics(metricTags: util.LinkedHashMap[String, String])(sensor: Sensor): Unit = {
     sensor.add(
       clientQuotaMetricName(metricTags),
       new Rate,
@@ -372,17 +373,17 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
     )
   }
 
-  private def metricTagsToSensorSuffix(metricTags: Map[String, String]): String =
-    metricTags.values.mkString(":")
+  private def metricTagsToSensorSuffix(metricTags: util.LinkedHashMap[String, String]): String =
+    String.join(":", metricTags.values())
 
-  private def getThrottleTimeSensorName(metricTags: Map[String, String]): String =
+  private def getThrottleTimeSensorName(metricTags: util.LinkedHashMap[String, String]): String =
     s"${quotaType}ThrottleTime-${metricTagsToSensorSuffix(metricTags)}"
 
-  private def getQuotaSensorName(metricTags: Map[String, String]): String =
+  private def getQuotaSensorName(metricTags: util.LinkedHashMap[String, String]): String =
     s"$quotaType-${metricTagsToSensorSuffix(metricTags)}"
 
-  protected def getQuotaMetricConfig(metricTags: Map[String, String]): MetricConfig = {
-    getQuotaMetricConfig(quotaLimit(metricTags.asJava))
+  protected def getQuotaMetricConfig(metricTags: util.LinkedHashMap[String, String]): MetricConfig = {
+    getQuotaMetricConfig(quotaLimit(metricTags))
   }
 
   private def getQuotaMetricConfig(quotaLimit: Double): MetricConfig = {
@@ -470,19 +471,19 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
       val quotaEntity = updatedQuotaEntity.getOrElse(throw new IllegalStateException("Quota entity not specified"))
       val user = quotaEntity.sanitizedUser
       val clientId = quotaEntity.clientId
-      val metricTags = Map(DefaultTags.User -> user, DefaultTags.ClientId -> clientId)
+      val metricTags = mkMap(mkEntry(DefaultTags.User, user), mkEntry(DefaultTags.ClientId, clientId))
 
       val quotaMetricName = clientQuotaMetricName(metricTags)
       // Change the underlying metric config if the sensor has been created
       val metric = allMetrics.get(quotaMetricName)
       if (metric != null) {
-        Option(quotaLimit(metricTags.asJava)).foreach { newQuota =>
+        Option(quotaLimit(metricTags)).foreach { newQuota =>
           info(s"Sensor for $quotaEntity already exists. Changing quota to $newQuota in MetricConfig")
           metric.config(getQuotaMetricConfig(newQuota))
         }
       }
     } else {
-      val quotaMetricName = clientQuotaMetricName(Map.empty)
+      val quotaMetricName = clientQuotaMetricName(mkMap())
       allMetrics.forEach { (metricName, metric) =>
         if (metricName.name == quotaMetricName.name && metricName.group == quotaMetricName.group) {
           val metricTags = metricName.tags
@@ -501,17 +502,17 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
    * Returns the MetricName of the metric used for the quota. The name is used to create the
    * metric but also to find the metric when the quota is changed.
    */
-  protected def clientQuotaMetricName(quotaMetricTags: Map[String, String]): MetricName = {
+  protected def clientQuotaMetricName(quotaMetricTags: java.util.LinkedHashMap[String, String]): MetricName = {
     metrics.metricName("byte-rate", quotaType.toString,
       "Tracking byte-rate per user/client-id",
-      quotaMetricTags.asJava)
+      quotaMetricTags)
   }
 
-  private def throttleMetricName(quotaMetricTags: Map[String, String]): MetricName = {
+  private def throttleMetricName(quotaMetricTags: java.util.LinkedHashMap[String, String]): MetricName = {
     metrics.metricName("throttle-time",
       quotaType.toString,
       "Tracking average throttle-time per user/client-id",
-      quotaMetricTags.asJava)
+      quotaMetricTags)
   }
 
   def initiateShutdown(): Unit = {
@@ -533,11 +534,11 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
 
     override def configure(configs: util.Map[String, _]): Unit = {}
 
-    override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): util.Map[String, String] = {
-      quotaMetricTags(Sanitizer.sanitize(principal.getName), clientId).asJava
+    override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): util.LinkedHashMap[String, String] = {
+      quotaMetricTags(Sanitizer.sanitize(principal.getName), clientId)
     }
 
-    override def quotaLimit(quotaType: ClientQuotaType, metricTags: util.Map[String, String]): lang.Double = {
+    override def quotaLimit(quotaType: ClientQuotaType, metricTags: util.LinkedHashMap[String, String]): lang.Double = {
       val sanitizedUser = metricTags.get(DefaultTags.User)
       val clientId = metricTags.get(DefaultTags.ClientId)
       var quota: Quota = null
@@ -598,7 +599,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
 
     override def quotaResetRequired(quotaType: ClientQuotaType): Boolean = false
 
-    def quotaMetricTags(sanitizedUser: String, clientId: String) : Map[String, String] = {
+    def quotaMetricTags(sanitizedUser: String, clientId: String) : util.LinkedHashMap[String, String] = {
       val (userTag, clientIdTag) = quotaTypesEnabled match {
         case QuotaTypes.NoQuotas | QuotaTypes.ClientIdQuotaEnabled =>
           ("", clientId)
@@ -639,7 +640,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
           }
           metricTags
       }
-      Map(DefaultTags.User -> userTag, DefaultTags.ClientId -> clientIdTag)
+      mkMap(mkEntry(DefaultTags.User, userTag), mkEntry(DefaultTags.ClientId, clientIdTag))
     }
 
     override def close(): Unit = {}

@@ -23,7 +23,7 @@ import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
-import java.util.Map;
+import java.util.LinkedHashMap;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -44,7 +44,7 @@ public class NamedCacheMetricsTest {
 
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
     private final Sensor expectedSensor = mock(Sensor.class);
-    private final Map<String, String> tagMap = mkMap(mkEntry("key", "value"));
+    private final LinkedHashMap<String, String> tagMap = mkMap(mkEntry("key", "value"));
 
     @Test
     public void shouldGetHitRatioSensorWithBuiltInMetricsVersionCurrent() {

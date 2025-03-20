@@ -31,6 +31,7 @@ import org.mockito.quality.Strictness;
 
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 
@@ -90,7 +91,7 @@ public class StreamThreadTotalBlockedTimeTest {
         private final HashMap<MetricName, Metric> metrics = new HashMap<>();
 
         private MetricsBuilder addMetric(final String name, final double value) {
-            final MetricName metricName = new MetricName(name, "", "", Collections.emptyMap());
+            final MetricName metricName = new MetricName(name, "", "", new LinkedHashMap<>());
             metrics.put(
                 metricName,
                 new Metric() {

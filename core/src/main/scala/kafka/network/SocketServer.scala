@@ -44,6 +44,7 @@ import org.apache.kafka.common.requests.{ApiVersionsRequest, RequestContext, Req
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{KafkaThread, LogContext, Time, Utils}
 import org.apache.kafka.common.{Endpoint, KafkaException, MetricName, Reconfigurable}
+import org.apache.kafka.common.utils.Utils.{mkMap, mkEntry}
 import org.apache.kafka.network.{ConnectionQuotaEntity, ConnectionThrottledException, SocketServerConfigs, TooManyConnectionsException}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.ServerSocketFactory
@@ -852,10 +853,10 @@ private[kafka] class Processor(
   private val inflightResponses = mutable.Map[String, RequestChannel.Response]()
   private val responseQueue = new LinkedBlockingDeque[RequestChannel.Response]()
 
-  private[kafka] val metricTags = mutable.LinkedHashMap(
-    ListenerMetricTag -> listenerName.value,
-    NetworkProcessorMetricTag -> id.toString
-  ).asJava
+  private[kafka] val metricTags = mkMap(
+    mkEntry(ListenerMetricTag, listenerName.value),
+    mkEntry(NetworkProcessorMetricTag, id.toString)
+  )
 
   metricsGroup.newGauge(IdlePercentMetricName, () => {
     Option(metrics.metric(metrics.metricName("io-wait-ratio", MetricsGroup, metricTags))).fold(0.0)(m =>
@@ -1702,7 +1703,7 @@ class ConnectionQuotas(config: KafkaConfig, time: Time, metrics: Metrics) extend
       val metricName = metrics.metricName(s"${throttlePrefix}connection-accept-throttle-time",
         MetricsGroup,
         "Tracking average throttle-time, out of non-zero throttle times, per listener",
-        Map(ListenerMetricTag -> listener.value).asJava)
+        mkMap(mkEntry(ListenerMetricTag, listener.value)))
       sensor.add(metricName, new Avg)
       sensor
     }

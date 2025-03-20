@@ -50,6 +50,7 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -104,7 +105,7 @@ public class MeteredTimestampedKeyValueStoreTest {
         VALUE_AND_TIMESTAMP_BYTES
     );
     private final Metrics metrics = new Metrics();
-    private Map<String, String> tags;
+    private LinkedHashMap<String, String> tags;
 
     private void setUpWithoutContext() {
         mockTime = new MockTime();

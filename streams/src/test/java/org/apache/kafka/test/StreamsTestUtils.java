@@ -40,6 +40,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -248,7 +249,7 @@ public final class StreamsTestUtils {
     public static boolean containsMetric(final Metrics metrics,
                                          final String name,
                                          final String group,
-                                         final Map<String, String> tags) {
+                                         final LinkedHashMap<String, String> tags) {
         final MetricName metricName = metrics.metricName(name, group, tags);
         return metrics.metric(metricName) != null;
     }

@@ -22,7 +22,7 @@ import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.CumulativeSum;
 
-import java.util.Map;
+import java.util.LinkedHashMap;
 
 public class KafkaProducerMetrics implements AutoCloseable {
 
@@ -36,7 +36,7 @@ public class KafkaProducerMetrics implements AutoCloseable {
     private static final String TOTAL_TIME_SUFFIX = "-time-ns-total";
     private static final String METADATA_WAIT = "metadata-wait";
 
-    private final Map<String, String> tags;
+    private final LinkedHashMap<String, String> tags;
     private final Metrics metrics;
     private final Sensor initTimeSensor;
     private final Sensor beginTxnTimeSensor;

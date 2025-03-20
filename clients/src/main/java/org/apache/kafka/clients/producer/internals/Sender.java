@@ -63,6 +63,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -72,6 +73,8 @@ import java.util.function.Function;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 /**
  * The background thread that handles the sending of produce requests to the Kafka cluster. This thread makes metadata
@@ -980,7 +983,7 @@ public class Sender implements Runnable {
             String topicRecordsCountName = "topic." + topic + ".records-per-batch";
             Sensor topicRecordCount = this.metrics.getSensor(topicRecordsCountName);
             if (topicRecordCount == null) {
-                Map<String, String> metricTags = Collections.singletonMap("topic", topic);
+                LinkedHashMap<String, String> metricTags = mkMap(mkEntry("topic", topic));
 
                 topicRecordCount = this.metrics.sensor(topicRecordsCountName);
                 MetricName rateMetricName = this.metrics.topicRecordSendRate(metricTags);

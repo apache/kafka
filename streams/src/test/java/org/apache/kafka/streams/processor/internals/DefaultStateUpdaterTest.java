@@ -1613,7 +1613,7 @@ class DefaultStateUpdaterTest {
         verifyPausedTasks(activeTask2, standbyTask4);
         assertThat(metrics.metrics().size(), is(11));
 
-        final Map<String, String> tagMap = new LinkedHashMap<>();
+        final LinkedHashMap<String, String> tagMap = new LinkedHashMap<>();
         tagMap.put("thread-id", "test-state-updater");
 
         MetricName metricName = new MetricName("active-restoring-tasks",

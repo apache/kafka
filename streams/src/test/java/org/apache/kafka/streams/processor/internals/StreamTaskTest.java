@@ -94,6 +94,7 @@ import java.io.IOException;
 import java.time.Duration;
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -3442,7 +3443,7 @@ public class StreamTaskTest {
     }
 
     private MetricName setupCloseTaskMetric() {
-        final MetricName metricName = new MetricName("name", "group", "description", Collections.emptyMap());
+        final MetricName metricName = new MetricName("name", "group", "description", new LinkedHashMap<>());
         final Sensor sensor = streamsMetrics.threadLevelSensor(threadId, "task-closed", Sensor.RecordingLevel.INFO);
         sensor.add(metricName, new CumulativeSum());
         return metricName;

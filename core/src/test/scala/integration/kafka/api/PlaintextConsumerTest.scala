@@ -29,6 +29,7 @@ import org.apache.kafka.common.record.{CompressionType, TimestampType}
 import org.apache.kafka.common.serialization._
 import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.common.{MetricName, TopicPartition}
+import org.apache.kafka.common.utils.Utils.{mkEntry, mkMap}
 import org.apache.kafka.server.quota.QuotaType
 import org.apache.kafka.test.{MockConsumerInterceptor, MockProducerInterceptor}
 import org.junit.jupiter.api.Assertions._
@@ -428,15 +429,17 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val records = awaitNonEmptyRecords(consumer, tp)
     assertEquals(1, listener.callsToAssigned, "should be assigned once")
     // Verify the metric exist.
-    val tags1 = new util.HashMap[String, String]()
-    tags1.put("client-id", "testPerPartitionLeadMetricsCleanUpWithSubscribe")
-    tags1.put("topic", tp.topic())
-    tags1.put("partition", String.valueOf(tp.partition()))
+    val tags1 = mkMap(
+      mkEntry("client-id", "testPerPartitionLeadMetricsCleanUpWithSubscribe"),
+      mkEntry("topic", tp.topic()),
+      mkEntry("partition", String.valueOf(tp.partition()))
+    )
 
-    val tags2 = new util.HashMap[String, String]()
-    tags2.put("client-id", "testPerPartitionLeadMetricsCleanUpWithSubscribe")
-    tags2.put("topic", tp2.topic())
-    tags2.put("partition", String.valueOf(tp2.partition()))
+    val tags2 = mkMap(
+      mkEntry("client-id", "testPerPartitionLeadMetricsCleanUpWithSubscribe"),
+      mkEntry("topic", tp2.topic()),
+      mkEntry("partition", String.valueOf(tp2.partition())),
+    )
     val fetchLead0 = consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags1))
     assertNotNull(fetchLead0)
     assertEquals(records.count.toDouble, fetchLead0.metricValue(), s"The lead should be ${records.count}")
@@ -468,15 +471,18 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val records = awaitNonEmptyRecords(consumer, tp)
     assertEquals(1, listener.callsToAssigned, "should be assigned once")
     // Verify the metric exist.
-    val tags1 = new util.HashMap[String, String]()
-    tags1.put("client-id", "testPerPartitionLagMetricsCleanUpWithSubscribe")
-    tags1.put("topic", tp.topic())
-    tags1.put("partition", String.valueOf(tp.partition()))
+    val tags1 = mkMap(
+      mkEntry("client-id", "testPerPartitionLagMetricsCleanUpWithSubscribe"),
+      mkEntry("topic", tp.topic()),
+      mkEntry("partition", String.valueOf(tp.partition()))
+    )
 
-    val tags2 = new util.HashMap[String, String]()
-    tags2.put("client-id", "testPerPartitionLagMetricsCleanUpWithSubscribe")
-    tags2.put("topic", tp2.topic())
-    tags2.put("partition", String.valueOf(tp2.partition()))
+    val tags2 = mkMap(
+      mkEntry("client-id", "testPerPartitionLagMetricsCleanUpWithSubscribe"),
+      mkEntry("topic", tp2.topic()),
+      mkEntry("partition", String.valueOf(tp2.partition()))
+    )
+
     val fetchLag0 = consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags1))
     assertNotNull(fetchLag0)
     val expectedLag = numMessages - records.count
@@ -506,10 +512,11 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.assign(List(tp).asJava)
     val records = awaitNonEmptyRecords(consumer, tp)
     // Verify the metric exist.
-    val tags = new util.HashMap[String, String]()
-    tags.put("client-id", "testPerPartitionLeadMetricsCleanUpWithAssign")
-    tags.put("topic", tp.topic())
-    tags.put("partition", String.valueOf(tp.partition()))
+    val tags = mkMap(
+      mkEntry("client-id", "testPerPartitionLeadMetricsCleanUpWithAssign"),
+      mkEntry("topic", tp.topic()),
+      mkEntry("partition", String.valueOf(tp.partition()))
+    )
     val fetchLead = consumer.metrics.get(new MetricName("records-lead", "consumer-fetch-manager-metrics", "", tags))
     assertNotNull(fetchLead)
 
@@ -536,10 +543,11 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.assign(List(tp).asJava)
     val records = awaitNonEmptyRecords(consumer, tp)
     // Verify the metric exist.
-    val tags = new util.HashMap[String, String]()
-    tags.put("client-id", "testPerPartitionLagMetricsCleanUpWithAssign")
-    tags.put("topic", tp.topic())
-    tags.put("partition", String.valueOf(tp.partition()))
+    val tags = mkMap(
+      mkEntry("client-id", "testPerPartitionLagMetricsCleanUpWithAssign"),
+      mkEntry("topic", tp.topic()),
+      mkEntry("partition", String.valueOf(tp.partition()))
+    )
     val fetchLag = consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags))
     assertNotNull(fetchLag)
 
@@ -568,10 +576,11 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     consumer.assign(List(tp).asJava)
     awaitNonEmptyRecords(consumer, tp)
     // Verify the metric exist.
-    val tags = new util.HashMap[String, String]()
-    tags.put("client-id", "testPerPartitionLagMetricsCleanUpWithAssign")
-    tags.put("topic", tp.topic())
-    tags.put("partition", String.valueOf(tp.partition()))
+    val tags = mkMap(
+      mkEntry("client-id", "testPerPartitionLagMetricsCleanUpWithAssign"),
+      mkEntry("topic", tp.topic()),
+      mkEntry("partition", String.valueOf(tp.partition()))
+    )
     val fetchLag = consumer.metrics.get(new MetricName("records-lag", "consumer-fetch-manager-metrics", "", tags))
     assertNotNull(fetchLag)
   }

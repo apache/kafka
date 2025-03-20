@@ -44,7 +44,6 @@ import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.UnknownHostException;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -52,6 +51,8 @@ import java.util.Map;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -63,6 +64,7 @@ import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+
 
 public class PushHttpMetricsReporterTest {
 
@@ -186,35 +188,35 @@ public class PushHttpMetricsReporterTest {
         verifyConfigure();
         KafkaMetric metric1 = new KafkaMetric(
                 new Object(),
-                new MetricName("name1", "group1", "desc1", Collections.singletonMap("key1", "value1")),
+                new MetricName("name1", "group1", "desc1", mkMap(mkEntry("key1", "value1"))),
                 new ImmutableValue<>(1.0),
                 null,
                 time
         );
         KafkaMetric newMetric1 = new KafkaMetric(
                 new Object(),
-                new MetricName("name1", "group1", "desc1", Collections.singletonMap("key1", "value1")),
+                new MetricName("name1", "group1", "desc1", mkMap(mkEntry("key1", "value1"))),
                 new ImmutableValue<>(-1.0),
                 null,
                 time
         );
         KafkaMetric metric2 = new KafkaMetric(
                 new Object(),
-                new MetricName("name2", "group2", "desc2", Collections.singletonMap("key2", "value2")),
+                new MetricName("name2", "group2", "desc2", mkMap(mkEntry("key2", "value2"))),
                 new ImmutableValue<>(2.0),
                 null,
                 time
         );
         KafkaMetric metric3 = new KafkaMetric(
                 new Object(),
-                new MetricName("name3", "group3", "desc3", Collections.singletonMap("key3", "value3")),
+                new MetricName("name3", "group3", "desc3", mkMap(mkEntry("key3", "value3"))),
                 new ImmutableValue<>(3.0),
                 null,
                 time
         );
         KafkaMetric metric4 = new KafkaMetric(
             new Object(),
-            new MetricName("name4", "group4", "desc4", Collections.singletonMap("key4", "value4")),
+            new MetricName("name4", "group4", "desc4", mkMap(mkEntry("key4", "value4"))),
             new ImmutableValue<>("value4"),
             null,
             time

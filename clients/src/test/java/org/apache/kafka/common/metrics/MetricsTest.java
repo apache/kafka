@@ -45,6 +45,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.Deque;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -58,6 +59,8 @@ import java.util.function.Function;
 
 import static java.util.Collections.emptyList;
 import static java.util.Collections.singletonList;
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -92,7 +95,7 @@ public class MetricsTest {
     @Test
     public void testMetricName() {
         MetricName n1 = metrics.metricName("name", "group", "description", "key1", "value1", "key2", "value2");
-        Map<String, String> tags = new HashMap<>();
+        LinkedHashMap<String, String> tags = mkMap();
         tags.put("key1", "value1");
         tags.put("key2", "value2");
         MetricName n2 = metrics.metricName("name", "group", "description", tags);
@@ -674,7 +677,7 @@ public class MetricsTest {
     @Test
     public void testMetricInstances() {
         MetricName n1 = metrics.metricInstance(SampleMetrics.METRIC1, "key1", "value1", "key2", "value2");
-        Map<String, String> tags = new HashMap<>();
+        LinkedHashMap<String, String> tags = mkMap();
         tags.put("key1", "value1");
         tags.put("key2", "value2");
         MetricName n2 = metrics.metricInstance(SampleMetrics.METRIC2, tags);
@@ -687,10 +690,10 @@ public class MetricsTest {
             // this is expected
         }
         
-        Map<String, String> parentTagsWithValues = new HashMap<>();
+        LinkedHashMap<String, String> parentTagsWithValues = mkMap();
         parentTagsWithValues.put("parent-tag", "parent-tag-value");
 
-        Map<String, String> childTagsWithValues = new HashMap<>();
+        LinkedHashMap<String, String> childTagsWithValues = mkMap();
         childTagsWithValues.put("child-tag", "child-tag-value");
 
         try (Metrics inherited = new Metrics(new MetricConfig().tags(parentTagsWithValues), singletonList(new JmxReporter()), time, true)) {
@@ -709,7 +712,7 @@ public class MetricsTest {
 
             try {
 
-                Map<String, String> runtimeTags = new HashMap<>();
+                LinkedHashMap<String, String> runtimeTags = mkMap();
                 runtimeTags.put("child-tag", "child-tag-value");
                 runtimeTags.put("tag-not-in-template", "unexpected-value");
 
@@ -882,7 +885,7 @@ public class MetricsTest {
 
         private Sensor createSensor(StatType statType, int index) {
             Sensor sensor = metrics.sensor("kafka.requests." + index);
-            Map<String, String> tags = Collections.singletonMap("tag", "tag" + index);
+            LinkedHashMap<String, String> tags = mkMap(mkEntry("tag", "tag" + index));
             switch (statType) {
                 case AVG:
                     sensor.add(metrics.metricName("test.metric.avg", "avg", tags), new Avg());

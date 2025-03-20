@@ -31,10 +31,13 @@ import org.apache.kafka.server.config.QuotaConfig;
 
 import org.junit.jupiter.api.extension.ExtendWith;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
+
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 @ClusterTestDefaults(controllers = 3, 
     types = {Type.KRAFT},
@@ -84,12 +87,12 @@ public class CustomQuotaCallbackTest {
         private String nodeId;
 
         @Override
-        public Map<String, String> quotaMetricTags(ClientQuotaType quotaType, KafkaPrincipal principal, String clientId) {
-            return Map.of();
+        public LinkedHashMap<String, String> quotaMetricTags(ClientQuotaType quotaType, KafkaPrincipal principal, String clientId) {
+            return mkMap();
         }
 
         @Override
-        public Double quotaLimit(ClientQuotaType quotaType, Map<String, String> metricTags) {
+        public Double quotaLimit(ClientQuotaType quotaType, LinkedHashMap<String, String> metricTags) {
             return Double.MAX_VALUE;
         }
 

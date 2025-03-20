@@ -42,8 +42,8 @@ import org.junit.jupiter.api.Test;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -69,7 +69,7 @@ public class RocksDBVersionedStoreTest {
     private static final String TASK_LEVEL_GROUP = "stream-task-metrics";
 
     private InternalMockProcessorContext<String, String> context;
-    private Map<String, String> expectedMetricsTags;
+    private LinkedHashMap<String, String> expectedMetricsTags;
 
     private RocksDBVersionedStore store;
 

@@ -30,11 +30,13 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
-import java.util.Map;
+import java.util.LinkedHashMap;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+
 
 public class AdminFetchMetricsManagerTest {
     private static final double EPSILON = 0.0001;
@@ -148,8 +150,8 @@ public class AdminFetchMetricsManagerTest {
         assertTrue(Double.isNaN(metricValue(nodeLatencyMax1)));
     }
 
-    private Map<String, String> genericTag(String connectionId) {
-        return Collections.singletonMap("node-id", "node-" + connectionId);
+    private LinkedHashMap<String, String> genericTag(String connectionId) {
+        return mkMap(mkEntry("node-id", "node-" + connectionId));
     }
 
     private void mockSleepTimeWindow() {

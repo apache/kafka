@@ -45,6 +45,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -53,6 +54,9 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
+
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public final class ConsumerUtils {
 
@@ -142,7 +146,7 @@ public final class ConsumerUtils {
 
     public static Metrics createMetrics(ConsumerConfig config, Time time, List<MetricsReporter> reporters) {
         String clientId = config.getString(ConsumerConfig.CLIENT_ID_CONFIG);
-        Map<String, String> metricsTags = Collections.singletonMap(CONSUMER_CLIENT_ID_METRIC_TAG, clientId);
+        LinkedHashMap<String, String> metricsTags = mkMap(mkEntry(CONSUMER_CLIENT_ID_METRIC_TAG, clientId));
         MetricConfig metricConfig = new MetricConfig()
                 .samples(config.getInt(ConsumerConfig.METRICS_NUM_SAMPLES_CONFIG))
                 .timeWindow(config.getLong(ConsumerConfig.METRICS_SAMPLE_WINDOW_MS_CONFIG), TimeUnit.MILLISECONDS)

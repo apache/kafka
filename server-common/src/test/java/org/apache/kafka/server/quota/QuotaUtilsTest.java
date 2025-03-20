@@ -28,9 +28,9 @@ import org.apache.kafka.common.utils.Time;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -40,7 +40,7 @@ public class QuotaUtilsTest {
     private final Time time = new MockTime();
     private final int numSamples = 10;
     private final int maxThrottleTimeMs = 500;
-    private final MetricName metricName = new MetricName("test-metric", "groupA", "testA", Map.of());
+    private final MetricName metricName = new MetricName("test-metric", "groupA", "testA", mkMap());
 
     @Test
     public void testThrottleTimeObservedRateEqualsQuota() {

@@ -19,7 +19,7 @@ package org.apache.kafka.streams.processor.internals.metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 
-import java.util.Map;
+import java.util.LinkedHashMap;
 
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.AVG_LATENCY_DESCRIPTION;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_DESCRIPTION_SUFFIX;
@@ -136,7 +136,7 @@ public class ProcessorNodeMetrics {
                                           final StreamsMetricsImpl streamsMetrics) {
         final String sensorSuffix = processorNodeId + "-" + RECORD_E2E_LATENCY;
         final Sensor sensor = streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, sensorSuffix, RecordingLevel.INFO);
-        final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
+        final LinkedHashMap<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
         addAvgAndMinAndMaxToSensor(
             sensor,
             PROCESSOR_NODE_LEVEL_GROUP,
@@ -155,7 +155,7 @@ public class ProcessorNodeMetrics {
                                                 final StreamsMetricsImpl streamsMetrics) {
         final String sensorSuffix = processorNodeId + "-" + EMIT_FINAL_LATENCY;
         final Sensor sensor = streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, sensorSuffix, RecordingLevel.DEBUG);
-        final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
+        final LinkedHashMap<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
         addAvgAndMaxToSensor(
             sensor,
             PROCESSOR_NODE_LEVEL_GROUP,
@@ -173,7 +173,7 @@ public class ProcessorNodeMetrics {
                                               final StreamsMetricsImpl streamsMetrics) {
         final String sensorSuffix = processorNodeId + "-" + EMITTED_RECORDS;
         final Sensor sensor = streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, sensorSuffix, RecordingLevel.DEBUG);
-        final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
+        final LinkedHashMap<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
         addRateOfSumAndSumMetricsToSensor(
             sensor,
             PROCESSOR_NODE_LEVEL_GROUP,
@@ -197,7 +197,7 @@ public class ProcessorNodeMetrics {
         // use operation name as sensor suffix and metric name prefix
         final Sensor sensor =
             streamsMetrics.nodeLevelSensor(threadId, taskId, processorNodeId, operationName, recordingLevel, parentSensors);
-        final Map<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
+        final LinkedHashMap<String, String> tagMap = streamsMetrics.nodeLevelTagMap(threadId, taskId, processorNodeId);
         addInvocationRateAndCountToSensor(
             sensor,
             PROCESSOR_NODE_LEVEL_GROUP,

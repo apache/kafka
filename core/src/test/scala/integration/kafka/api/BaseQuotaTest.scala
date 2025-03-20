@@ -215,7 +215,7 @@ abstract class QuotaTestClients(topic: String,
   def removeQuotaOverrides(): Unit
 
   protected def userPrincipal: KafkaPrincipal
-  protected def quotaMetricTags(clientId: String): Map[String, String]
+  protected def quotaMetricTags(clientId: String): util.LinkedHashMap[String, String]
 
   def produceUntilThrottled(maxRecords: Int, waitForRequestCompletion: Boolean = true): Int = {
     var numProduced = 0
@@ -299,7 +299,7 @@ abstract class QuotaTestClients(topic: String,
   private def throttleMetricName(quotaType: QuotaType, clientId: String): MetricName = {
     leaderNode.metrics.metricName("throttle-time",
       quotaType.toString,
-      quotaMetricTags(clientId).asJava)
+      quotaMetricTags(clientId))
   }
 
   def throttleMetric(quotaType: QuotaType, clientId: String): KafkaMetric = {
@@ -328,7 +328,7 @@ abstract class QuotaTestClients(topic: String,
   }
 
   private def verifyProducerClientThrottleTimeMetric(expectThrottle: Boolean): Unit = {
-    val tags = new util.HashMap[String, String]
+    val tags = new util.LinkedHashMap[String, String]
     tags.put("client-id", producerClientId)
     val avgMetric = producer.metrics.get(new MetricName("produce-throttle-time-avg", "producer-metrics", "", tags))
     val maxMetric = producer.metrics.get(new MetricName("produce-throttle-time-max", "producer-metrics", "", tags))
@@ -341,7 +341,7 @@ abstract class QuotaTestClients(topic: String,
   }
 
   def verifyConsumerClientThrottleTimeMetric(expectThrottle: Boolean, maxThrottleTime: Option[Double] = None): Unit = {
-    val tags = new util.HashMap[String, String]
+    val tags = new util.LinkedHashMap[String, String]
     tags.put("client-id", consumerClientId)
     val avgMetric = consumer.metrics.get(new MetricName("fetch-throttle-time-avg", "consumer-fetch-manager-metrics", "", tags))
     val maxMetric = consumer.metrics.get(new MetricName("fetch-throttle-time-max", "consumer-fetch-manager-metrics", "", tags))

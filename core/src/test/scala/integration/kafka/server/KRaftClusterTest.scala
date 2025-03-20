@@ -36,6 +36,7 @@ import org.apache.kafka.common.requests.{ApiError, DescribeClusterRequest, Descr
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.test.{KafkaClusterTestKit, TestKitNodes}
 import org.apache.kafka.common.{Cluster, Endpoint, Reconfigurable, TopicPartition, TopicPartitionInfo}
+import org.apache.kafka.common.utils.Utils.mkMap
 import org.apache.kafka.controller.{QuorumController, QuorumControllerIntegrationTestUtils}
 import org.apache.kafka.image.ClusterImage
 import org.apache.kafka.metadata.BrokerState
@@ -1675,9 +1676,9 @@ object DummyClientQuotaCallback {
 
 class DummyClientQuotaCallback extends ClientQuotaCallback with Reconfigurable {
   var value = 0
-  override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): util.Map[String, String] = Collections.emptyMap()
+  override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): util.LinkedHashMap[String, String] = mkMap()
 
-  override def quotaLimit(quotaType: ClientQuotaType, metricTags: util.Map[String, String]): lang.Double = 1.0
+  override def quotaLimit(quotaType: ClientQuotaType, metricTags: util.LinkedHashMap[String, String]): lang.Double = 1.0
 
   override def updateQuota(quotaType: ClientQuotaType, quotaEntity: quota.ClientQuotaEntity, newValue: Double): Unit = {}
 

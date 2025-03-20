@@ -38,7 +38,7 @@ import org.mockito.MockedStatic;
 import org.mockito.Mockito;
 
 import java.nio.charset.StandardCharsets;
-import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -105,7 +105,7 @@ public class SourceNodeTest {
 
         final String threadId = Thread.currentThread().getName();
         final String groupName = "stream-processor-node-metrics";
-        final Map<String, String> metricTags = mkMap(
+        final LinkedHashMap<String, String> metricTags = mkMap(
             mkEntry("thread-id", threadId),
             mkEntry("task-id", context.taskId().toString()),
             mkEntry("processor-node-id", node.name())

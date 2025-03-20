@@ -51,8 +51,8 @@ import org.mockito.junit.jupiter.MockitoSettings;
 import org.mockito.quality.Strictness;
 
 import java.time.temporal.ChronoUnit;
+import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -107,7 +107,7 @@ public class MeteredWindowStoreTest {
         new SerdeThatDoesntHandleNull()
     );
     private final Metrics metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.DEBUG));
-    private Map<String, String> tags;
+    private LinkedHashMap<String, String> tags;
 
     {
         when(innerStoreMock.name()).thenReturn(STORE_NAME);

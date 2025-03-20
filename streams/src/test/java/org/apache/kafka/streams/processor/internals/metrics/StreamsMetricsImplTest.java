@@ -41,6 +41,7 @@ import org.mockito.quality.Strictness;
 import java.time.Duration;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -110,7 +111,7 @@ public class StreamsMetricsImplTest {
     private static final String STORE_ID_TAG = "-state-id";
     private static final String STORE_NAME1 = "store1";
     private static final String STORE_NAME2 = "store2";
-    private static final Map<String, String> STORE_LEVEL_TAG_MAP = mkMap(
+    private static final LinkedHashMap<String, String> STORE_LEVEL_TAG_MAP = mkMap(
         mkEntry(THREAD_ID_TAG, Thread.currentThread().getName()),
         mkEntry(TASK_ID_TAG, TASK_ID1),
         mkEntry(SCOPE_NAME + STORE_ID_TAG, STORE_NAME1)
@@ -132,8 +133,8 @@ public class StreamsMetricsImplTest {
     private final Sensor sensor = metrics.sensor("dummy");
     private final String metricNamePrefix = "metric";
     private final String group = "group";
-    private final Map<String, String> tags = mkMap(mkEntry("tag", "value"));
-    private final Map<String, String> clientLevelTags = mkMap(mkEntry(CLIENT_ID_TAG, CLIENT_ID), mkEntry(PROCESS_ID_TAG, PROCESS_ID));
+    private final LinkedHashMap<String, String> tags = mkMap(mkEntry("tag", "value"));
+    private final LinkedHashMap<String, String> clientLevelTags = mkMap(mkEntry(CLIENT_ID_TAG, CLIENT_ID), mkEntry(PROCESS_ID_TAG, PROCESS_ID));
     private final MetricName metricName1 =
         new MetricName(METRIC_NAME1, CLIENT_LEVEL_GROUP, DESCRIPTION1, clientLevelTags);
     private final MetricName metricName2 =
@@ -761,13 +762,13 @@ public class StreamsMetricsImplTest {
 
         final String taskName = "taskName";
         final String operation = "operation";
-        final Map<String, String> taskTags = mkMap(mkEntry("tkey", "value"));
+        final LinkedHashMap<String, String> taskTags = mkMap(mkEntry("tkey", "value"));
 
         final String processorNodeName = "processorNodeName";
-        final Map<String, String> nodeTags = mkMap(mkEntry("nkey", "value"));
+        final LinkedHashMap<String, String> nodeTags = mkMap(mkEntry("nkey", "value"));
 
         final String topicName = "topicName";
-        final Map<String, String> topicTags = mkMap(mkEntry("tkey", "value"));
+        final LinkedHashMap<String, String> topicTags = mkMap(mkEntry("tkey", "value"));
 
         final Sensor parent1 = metrics.taskLevelSensor(THREAD_ID1, taskName, operation, RecordingLevel.DEBUG);
         addAvgAndMaxLatencyToSensor(parent1, PROCESSOR_NODE_LEVEL_GROUP, taskTags, operation);
@@ -929,7 +930,7 @@ public class StreamsMetricsImplTest {
             CUSTOM_TAG_KEY2,
             CUSTOM_TAG_VALUE2
         );
-        final Map<String, String> tags = customTags(streamsMetrics);
+        final LinkedHashMap<String, String> tags = customTags(streamsMetrics);
         shouldAddCustomSensorWithTags(
             sensor,
             Arrays.asList(
@@ -954,7 +955,7 @@ public class StreamsMetricsImplTest {
             CUSTOM_TAG_KEY2,
             CUSTOM_TAG_VALUE2
         );
-        final Map<String, String> tags = customTags(streamsMetrics);
+        final LinkedHashMap<String, String> tags = customTags(streamsMetrics);
         shouldAddCustomSensorWithTags(
             sensor,
             Arrays.asList(
@@ -968,13 +969,13 @@ public class StreamsMetricsImplTest {
     private void shouldAddCustomSensor(final Sensor sensor,
                                        final StreamsMetricsImpl streamsMetrics,
                                        final List<String> metricsNames) {
-        final Map<String, String> tags = tags(streamsMetrics);
+        final LinkedHashMap<String, String> tags = tags(streamsMetrics);
         shouldAddCustomSensorWithTags(sensor, metricsNames, tags);
     }
 
     private void shouldAddCustomSensorWithTags(final Sensor sensor,
                                                final List<String> metricsNames,
-                                               final Map<String, String> tags) {
+                                               final LinkedHashMap<String, String> tags) {
         final String group = "stream-" + SCOPE_NAME + "-metrics";
         assertTrue(sensor.hasMetrics());
         assertThat(
@@ -986,7 +987,7 @@ public class StreamsMetricsImplTest {
         }
     }
 
-    private Map<String, String> tags(final StreamsMetricsImpl streamsMetrics) {
+    private LinkedHashMap<String, String> tags(final StreamsMetricsImpl streamsMetrics) {
         return mkMap(
             mkEntry(
                 streamsMetrics.version() == Version.LATEST ? THREAD_ID_TAG : CLIENT_ID_TAG,
@@ -996,8 +997,8 @@ public class StreamsMetricsImplTest {
         );
     }
 
-    private Map<String, String> customTags(final StreamsMetricsImpl streamsMetrics) {
-        final Map<String, String> tags = tags(streamsMetrics);
+    private LinkedHashMap<String, String> customTags(final StreamsMetricsImpl streamsMetrics) {
+        final LinkedHashMap<String, String> tags = tags(streamsMetrics);
         tags.put(CUSTOM_TAG_KEY1, CUSTOM_TAG_VALUE1);
         tags.put(CUSTOM_TAG_KEY2, CUSTOM_TAG_VALUE2);
         return tags;
@@ -1299,7 +1300,7 @@ public class StreamsMetricsImplTest {
             "foobar",
             "test metric",
             "t1",
-            Collections.singletonMap("additional-tag", "additional-value"),
+            mkMap(mkEntry("additional-tag", "additional-value")),
             (c, t) -> measuredValue
         );
 
@@ -1332,7 +1333,7 @@ public class StreamsMetricsImplTest {
         final MetricName name = metrics.metricName(
             "foobar",
             THREAD_LEVEL_GROUP,
-            Collections.singletonMap("thread-id", "t1")
+            mkMap(mkEntry("thread-id", "t1"))
         );
         assertThat(metrics.metric(name), nullValue());
     }
@@ -1378,7 +1379,7 @@ public class StreamsMetricsImplTest {
         final MetricName name = metrics.metricName(
             "foobar",
             THREAD_LEVEL_GROUP,
-            Collections.singletonMap("thread-id", "t1")
+            mkMap(mkEntry("thread-id", "t1"))
         );
         assertThat(metrics.metric(name), nullValue());
     }

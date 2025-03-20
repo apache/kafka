@@ -27,10 +27,10 @@ import org.apache.kafka.common.metrics.stats.Min;
 import org.apache.kafka.common.metrics.stats.SampledStat;
 import org.apache.kafka.common.metrics.stats.Value;
 
-import java.util.Collections;
 import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.function.Supplier;
+
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 /**
  * {@code SensorBuilder} takes a bit of the boilerplate out of creating {@link Sensor sensors} for recording
@@ -44,7 +44,7 @@ public class SensorBuilder {
 
     private final boolean preexisting;
 
-    private final Map<String, String> tags;
+    private final LinkedHashMap<String, String> tags;
 
     public SensorBuilder(Metrics metrics, String name) {
         this(metrics, name, LinkedHashMap::new);
@@ -56,7 +56,7 @@ public class SensorBuilder {
 
         if (s != null) {
             sensor = s;
-            tags = Collections.emptyMap();
+            tags = mkMap();
             preexisting = true;
         } else {
             sensor = metrics.sensor(name);

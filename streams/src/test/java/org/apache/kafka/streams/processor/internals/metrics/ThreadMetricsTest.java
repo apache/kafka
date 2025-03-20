@@ -26,9 +26,10 @@ import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
 import org.mockito.MockedStatic;
 
-import java.util.Collections;
-import java.util.Map;
+import java.util.LinkedHashMap;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.LATENCY_SUFFIX;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.RATE_SUFFIX;
 import static org.hamcrest.CoreMatchers.is;
@@ -47,7 +48,7 @@ public class ThreadMetricsTest {
 
     private final Sensor expectedSensor = mock(Sensor.class);
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
-    private final Map<String, String> tagMap = Collections.singletonMap("hello", "world");
+    private final LinkedHashMap<String, String> tagMap = mkMap(mkEntry("hello", "world"));
 
 
     @Test
@@ -428,7 +429,7 @@ public class ThreadMetricsTest {
                 "thread-state",
                 "The current state of the thread",
                 THREAD_ID,
-                Collections.singletonMap("process-id", PROCESS_ID),
+                mkMap(mkEntry("process-id", PROCESS_ID)),
                 threadStateProvider
         );
     }

@@ -20,7 +20,7 @@ import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
-import java.util.Map;
+import java.util.LinkedHashMap;
 
 /**
  * Quota callback interface for brokers and controllers that enables customization of client quota computation.
@@ -37,7 +37,7 @@ public interface ClientQuotaCallback extends Configurable {
      * @param clientId  The client id associated with the request
      * @return quota metric tags that indicate which other clients share this quota
      */
-    Map<String, String> quotaMetricTags(ClientQuotaType quotaType, KafkaPrincipal principal, String clientId);
+    LinkedHashMap<String, String> quotaMetricTags(ClientQuotaType quotaType, KafkaPrincipal principal, String clientId);
 
     /**
      * Returns the quota limit associated with the provided metric tags. These tags were returned from
@@ -51,7 +51,7 @@ public interface ClientQuotaCallback extends Configurable {
      * @param metricTags Metric tags for a quota metric of type `quotaType`
      * @return the quota limit for the provided metric tags or null if the metric tags are no longer in use
      */
-    Double quotaLimit(ClientQuotaType quotaType, Map<String, String> metricTags);
+    Double quotaLimit(ClientQuotaType quotaType, LinkedHashMap<String, String> metricTags);
 
     /**
      * Quota configuration update callback that is invoked when quota configuration for an entity is

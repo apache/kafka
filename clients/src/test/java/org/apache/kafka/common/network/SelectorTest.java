@@ -48,6 +48,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -58,6 +59,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -685,7 +687,7 @@ public class SelectorTest {
         selector.close();
         MemoryPool pool = new SimpleMemoryPool(900, 900, false, null);
         selector = new Selector(NetworkReceive.UNLIMITED, CONNECTION_MAX_IDLE_MS, metrics, time, "MetricGroup",
-            new HashMap<>(), true, false, channelBuilder, pool, new LogContext());
+            mkMap(), true, false, channelBuilder, pool, new LogContext());
 
         try (ServerSocketChannel ss = ServerSocketChannel.open()) {
             ss.bind(new InetSocketAddress(0));
@@ -1119,7 +1121,7 @@ public class SelectorTest {
     }
 
     private KafkaMetric findUntaggedMetricByName(String name) {
-        MetricName metricName = new MetricName(name, METRIC_GROUP + "-metrics", "", new HashMap<>());
+        MetricName metricName = new MetricName(name, METRIC_GROUP + "-metrics", "", new LinkedHashMap<>());
         KafkaMetric metric = metrics.metrics().get(metricName);
         assertNotNull(metric);
         return metric;

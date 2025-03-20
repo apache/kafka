@@ -22,10 +22,11 @@ import org.apache.kafka.common.metrics.Sensor.RecordingLevel;
 import org.junit.jupiter.api.Test;
 import org.mockito.MockedStatic;
 
-import java.util.Collections;
-import java.util.Map;
+import java.util.LinkedHashMap;
 import java.util.function.Supplier;
 
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.PROCESSOR_NODE_LEVEL_GROUP;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TASK_LEVEL_GROUP;
 import static org.hamcrest.CoreMatchers.is;
@@ -34,14 +35,15 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.when;
 
+
 public class ProcessorNodeMetricsTest {
 
     private static final String THREAD_ID = "test-thread";
     private static final String TASK_ID = "test-task";
     private static final String PROCESSOR_NODE_ID = "test-processor";
 
-    private final Map<String, String> tagMap = Collections.singletonMap("hello", "world");
-    private final Map<String, String> parentTagMap = Collections.singletonMap("hi", "universe");
+    private final LinkedHashMap<String, String> tagMap = mkMap(mkEntry("hello", "world"));
+    private final LinkedHashMap<String, String> parentTagMap = mkMap(mkEntry("hi", "universe"));
 
     private final Sensor expectedSensor = mock(Sensor.class);
     private final StreamsMetricsImpl streamsMetrics = mock(StreamsMetricsImpl.class);
