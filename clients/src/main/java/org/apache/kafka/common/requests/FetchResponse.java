@@ -89,7 +89,9 @@ public class FetchResponse extends AbstractResponse {
      */
     public FetchResponse(FetchResponseData fetchResponseData) {
         super(ApiKeys.FETCH);
-        // For consistency, we always convert null records to MemoryRecords.EMPTY to prevent NullPointerExceptions
+        // To protect the clients from failing due to null records,
+        // we always convert null records to MemoryRecords.EMPTY
+        // We will propose a KIP to change the schema definitions in the future
         this.data = convertNullRecordsToEmpty(fetchResponseData);
     }
 
