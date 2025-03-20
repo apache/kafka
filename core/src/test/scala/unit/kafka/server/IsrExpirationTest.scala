@@ -21,6 +21,7 @@ import java.util.Properties
 import kafka.cluster.Partition
 import kafka.log.LogManager
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.TestUtils.MockAlterPartitionManager
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
@@ -73,7 +74,7 @@ class IsrExpirationTest {
       scheduler = null,
       logManager = logManager,
       quotaManagers = quotaManager,
-      metadataCache = MetadataCache.kRaftMetadataCache(configs.head.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
+      metadataCache = new KRaftMetadataCache(configs.head.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
       logDirFailureChannel = new LogDirFailureChannel(configs.head.logDirs.size),
       alterPartitionManager = alterIsrManager)
   }
