@@ -397,20 +397,11 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     if (!protocols.contains(GroupType.CLASSIC)) {
       throw new ConfigException(s"Disabling the '${GroupType.CLASSIC}' protocol is not supported.")
     }
-    if (protocols.contains(GroupType.CONSUMER) && !isNewGroupCoordinatorEnabled) {
-      warn(s"The new '${GroupType.CONSUMER}' rebalance protocol is only supported with the new group coordinator.")
-    }
     if (protocols.contains(GroupType.SHARE)) {
-      if (!isNewGroupCoordinatorEnabled) {
-        warn(s"The new '${GroupType.SHARE}' rebalance protocol is only supported with the new group coordinator.")
-      }
       warn(s"Share groups and the new '${GroupType.SHARE}' rebalance protocol are enabled. " +
         "This is part of the early access of KIP-932 and MUST NOT be used in production.")
     }
     if (protocols.contains(GroupType.STREAMS)) {
-      if (!isNewGroupCoordinatorEnabled) {
-        warn(s"The new '${GroupType.STREAMS}' rebalance protocol is only supported with the new group coordinator.")
-      }
       warn(s"Streams groups and the new '${GroupType.STREAMS}' rebalance protocol are enabled. " +
         "This is part of the early access of KIP-1071 and MUST NOT be used in production.")
     }
