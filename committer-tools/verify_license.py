@@ -52,7 +52,7 @@ def get_tarball_path(project_dir):
         if pattern.match(f)
     ]
     if not candidates:
-        print("Error: No tarball matching 'kafka_2.13-*.tgz' found in:", distributions_dir)
+        print("Error: No tarball matching 'kafka-*.tgz' found in:", distributions_dir)
         sys.exit(1)
     
     tarball_path = max(candidates, key=os.path.getmtime)
