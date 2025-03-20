@@ -66,6 +66,7 @@ import org.apache.kafka.common.requests.AlterPartitionRequest;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -375,6 +376,7 @@ public class QuorumControllerTest {
         }
     }
 
+    @Flaky("KAFKA-18845")
     @Test
     public void testUncleanShutdownBrokerElrEnabled() throws Throwable {
         List<Integer> allBrokers = List.of(1, 2, 3);
@@ -495,8 +497,11 @@ public class QuorumControllerTest {
                     setListeners(listeners));
             brokerEpochs.put(brokerToBeTheLeader, replyLeader.get().epoch());
             partition = active.replicationControl().getPartition(topicIdFoo, 0);
-            assertArrayEquals(new int[]{brokerToBeTheLeader}, partition.elr, partition.toString());
-            assertArrayEquals(lastKnownElr, partition.lastKnownElr, partition.toString());
+            int[] expectedIsr = {brokerToBeTheLeader};
+            assertArrayEquals(expectedIsr, partition.elr, "The ELR for topic partition foo-0 was " + Arrays.toString(partition.elr) +
+                ". It is expected to be " + Arrays.toString(expectedIsr));
+            assertArrayEquals(lastKnownElr, partition.lastKnownElr, "The last known ELR for topic partition foo-0 was " + Arrays.toString(partition.lastKnownElr) +
+                ". It is expected to be " + Arrays.toString(lastKnownElr));
 
             // Unfence the last one in the ELR, it should be elected.
             sendBrokerHeartbeatToUnfenceBrokers(active, List.of(brokerToBeTheLeader), brokerEpochs);
