@@ -178,11 +178,15 @@ public class MetadataSnapshot {
         for (Map.Entry<TopicPartition, PartitionMetadata> entry : metadataByPartition.entrySet()) {
             if (shouldRetainTopic.test(entry.getKey().topic())) {
                 newMetadataByPartition.put(entry.getKey(), entry.getValue());
-                if (this.topicIds.containsKey(entry.getKey().topic()))
-                    newTopicIds.putIfAbsent(entry.getKey().topic(), this.topicIds.get(entry.getKey().topic()));
+                Uuid topicUuid = this.topicIds.getOrDefault(entry.getKey().topic(), Uuid.ZERO_UUID);
+                if (!topicUuid.equals(Uuid.ZERO_UUID))
+                    newTopicIds.putIfAbsent(entry.getKey().topic(), topicUuid);
             }
         }
 
+        // We want the most recent topic ID. We start with the previous ID stored for retained topics and then
+        // update with the newest information from the MetadataResponse. We always take the latest state, removing existing
+        // topic IDs if the latest state contains the topic name but not a topic ID.
         for (PartitionMetadata partition : addPartitions) {
             newMetadataByPartition.put(partition.topicPartition, partition);
             Uuid id = addTopicIds.get(partition.topic());

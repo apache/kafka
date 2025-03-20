@@ -425,8 +425,9 @@ public class Metadata implements Closeable {
             lastSeenLeaderEpochs.put(partition, newLeader.epoch.get());
 
             final String updatedTopic = updatedMetadata.topic();
-            if (this.metadataSnapshot.topicIds().containsKey(updatedTopic))
-                topicIdsForUpdatedTopics.put(updatedTopic, this.metadataSnapshot.topicIds().get(updatedTopic));
+            Uuid topicUuid = this.metadataSnapshot.topicIds().getOrDefault(updatedTopic, Uuid.ZERO_UUID);
+            if (!topicUuid.equals(Uuid.ZERO_UUID))
+                topicIdsForUpdatedTopics.put(updatedTopic, topicUuid);
         }
 
         if (updatePartitionMetadata.isEmpty()) {
