@@ -1449,19 +1449,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#onTransactionCompleted(long, Iterable, TransactionResult)}.
-     */
-    @Override
-    public CompletableFuture<Void> onTransactionCompleted(
-        long producerId,
-        Iterable<TopicPartition> partitions,
-        TransactionResult transactionResult
-    ) {
-        throwIfNotActive();
-        throw new IllegalStateException("onTransactionCompleted is not supported.");
-    }
-
-    /**
      * See {@link GroupCoordinator#onPartitionsDeleted(List, BufferSupplier)}.
      */
     @Override

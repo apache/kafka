@@ -7470,7 +7470,7 @@ class KafkaApisTest extends Logging {
     val expectedJoinGroupResponse = new JoinGroupResponseData()
       .setErrorCode(Errors.INCONSISTENT_GROUP_PROTOCOL.code)
       .setMemberId("member")
-      .setProtocolName(if (version >= 7) null else kafka.coordinator.group.GroupCoordinator.NoProtocol)
+      .setProtocolName(if (version >= 7) null else "")
 
     future.complete(joinGroupResponse)
     val response = verifyNoThrottling[JoinGroupResponse](requestChannelRequest)
