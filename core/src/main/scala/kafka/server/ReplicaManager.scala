@@ -1724,7 +1724,7 @@ class ReplicaManager(val config: KafkaConfig,
 
         if (preferredReadReplica.isDefined) {
           replicaSelectorPlugin.foreach { selector =>
-            debug(s"Replica selector plugin ${selector.getClass.getSimpleName} returned preferred replica " +
+            debug(s"Replica selector ${selector.get.getClass.getSimpleName} returned preferred replica " +
               s"${preferredReadReplica.get} for ${params.clientMetadata}")
           }
           // If a preferred read-replica is set, skip the read
