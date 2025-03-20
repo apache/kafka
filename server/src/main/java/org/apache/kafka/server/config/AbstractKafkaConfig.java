@@ -83,4 +83,6 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     public int backgroundThreads() {
         return getInt(ServerConfigs.BACKGROUND_THREADS_CONFIG);
     }
+
+    public abstract TransactionLogConfig transactionLogConfig();
 }
