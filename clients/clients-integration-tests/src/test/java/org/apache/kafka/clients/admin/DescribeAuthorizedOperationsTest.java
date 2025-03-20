@@ -15,17 +15,9 @@
  * limitations under the License.
  */
 
-package kafka.admin;
+package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.ConsumerGroupDescription;
-import org.apache.kafka.clients.admin.DescribeClusterOptions;
-import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
-import org.apache.kafka.clients.admin.DescribeConsumerGroupsResult;
-import org.apache.kafka.clients.admin.DescribeTopicsOptions;
-import org.apache.kafka.clients.admin.NewTopic;
-import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.acl.AccessControlEntry;
