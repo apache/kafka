@@ -177,7 +177,7 @@ public class MetadataSnapshot {
 
         for (Map.Entry<TopicPartition, PartitionMetadata> entry : metadataByPartition.entrySet()) {
             if (shouldRetainTopic.test(entry.getKey().topic())) {
-                newMetadataByPartition.put(entry.getKey(), entry.getValue());
+                newMetadataByPartition.putIfAbsent(entry.getKey(), entry.getValue());
                 Uuid topicUuid = this.topicIds.getOrDefault(entry.getKey().topic(), Uuid.ZERO_UUID);
                 if (!topicUuid.equals(Uuid.ZERO_UUID))
                     newTopicIds.putIfAbsent(entry.getKey().topic(), topicUuid);
