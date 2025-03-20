@@ -92,6 +92,7 @@ class ControllerServer(
   var controller: Controller = _
   var quotaManagers: QuotaManagers = _
   var clientQuotaMetadataManager: ClientQuotaMetadataManager = _
+  var tokenManager: DelegationTokenManager = _
   var controllerApis: ControllerApis = _
   var controllerApisHandlerPool: KafkaRequestHandlerPool = _
   def kafkaYammerMetrics: KafkaYammerMetrics = KafkaYammerMetrics.INSTANCE
@@ -268,6 +269,7 @@ class ControllerServer(
         time,
         s"controller-${config.nodeId}-")
       clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
+      tokenManager = new DelegationTokenManager(config, tokenCache, time)
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizer,
         quotaManagers,
@@ -277,6 +279,7 @@ class ControllerServer(
         config,
         clusterId,
         registrationsPublisher,
+        tokenManager,
         apiVersionManager,
         metadataCache)
       controllerApisHandlerPool = new KafkaRequestHandlerPool(config.nodeId,

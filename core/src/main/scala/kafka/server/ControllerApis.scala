@@ -31,7 +31,7 @@ import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.Logging
 import org.apache.kafka.clients.admin.{AlterConfigOp, EndpointType}
 import org.apache.kafka.common.Uuid.ZERO_UUID
-import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, CREATE_TOKENS, DELETE, DESCRIBE, DESCRIBE_CONFIGS}
+import org.apache.kafka.common.acl.AclOperation.{ALTER, ALTER_CONFIGS, CLUSTER_ACTION, CREATE, CREATE_TOKENS, DELETE, DESCRIBE, DESCRIBE_CONFIGS, DESCRIBE_TOKENS}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.{ApiException, ClusterAuthorizationException, InvalidRequestException, TopicDeletionDisabledException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.FatalExitError
@@ -47,7 +47,7 @@ import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
-import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC, USER}
+import org.apache.kafka.common.resource.ResourceType.{CLUSTER, DELEGATION_TOKEN, GROUP, TOPIC, USER}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.controller.ControllerRequestContext.requestTimeoutMsToDeadlineNs
@@ -56,6 +56,7 @@ import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.metadata.{BrokerHeartbeatReply, BrokerRegistrationReply}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, RequestLocal}
 
@@ -75,6 +76,7 @@ class ControllerApis(
   val config: KafkaConfig,
   val clusterId: String,
   val registrationsPublisher: ControllerRegistrationsPublisher,
+  val tokenManager: DelegationTokenManager,
   val apiVersionManager: ApiVersionManager,
   val metadataCache: KRaftMetadataCache
 ) extends ApiRequestHandler with Logging {
@@ -115,6 +117,7 @@ class ControllerApis(
         case ApiKeys.CREATE_DELEGATION_TOKEN => handleCreateDelegationTokenRequest(request)
         case ApiKeys.RENEW_DELEGATION_TOKEN => handleRenewDelegationTokenRequest(request)
         case ApiKeys.EXPIRE_DELEGATION_TOKEN => handleExpireDelegationTokenRequest(request)
+        case ApiKeys.DESCRIBE_DELEGATION_TOKEN => handleDescribeDelegationTokenRequest(request)
         case ApiKeys.ENVELOPE => handleEnvelopeRequest(request, requestLocal)
         case ApiKeys.SASL_HANDSHAKE => handleSaslHandshakeRequest(request)
         case ApiKeys.SASL_AUTHENTICATE => handleSaslAuthenticateRequest(request)
@@ -1006,6 +1009,40 @@ class ControllerApis(
         .thenApply[Unit] { response =>
           requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
             new ExpireDelegationTokenResponse(response.setThrottleTimeMs(requestThrottleMs)))
+      }
+    }
+  }
+
+  private def handleDescribeDelegationTokenRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val describeTokenRequest = request.body[DescribeDelegationTokenRequest]
+
+    // the callback for sending a describe token response
+    def sendResponseCallback(error: Errors, tokenDetails: util.List[DelegationToken]): CompletableFuture[Unit] = {
+      requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        new DescribeDelegationTokenResponse(request.context.requestVersion(), requestThrottleMs, error, tokenDetails))
+      trace("Sending describe token response for correlation id %d to client %s."
+        .format(request.header.correlationId, request.header.clientId))
+      CompletableFuture.completedFuture[Unit](())
+    }
+
+    if (!allowTokenRequests(request))
+      sendResponseCallback(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, Collections.emptyList)
+    else if (!config.tokenAuthEnabled)
+      sendResponseCallback(Errors.DELEGATION_TOKEN_AUTH_DISABLED, Collections.emptyList)
+    else {
+      val requestPrincipal = request.context.principal
+
+      if (describeTokenRequest.ownersListEmpty()) {
+        sendResponseCallback(Errors.NONE, Collections.emptyList)
+      }
+      else {
+        val owners = Option(describeTokenRequest.data.owners)
+          .map(_.asScala.map(p => new KafkaPrincipal(p.principalType, p.principalName)).toList)
+        def authorizeToken(tokenId: String) = authHelper.authorize(request.context, DESCRIBE, DELEGATION_TOKEN, tokenId)
+        def authorizeRequester(owner: KafkaPrincipal) = authHelper.authorize(request.context, DESCRIBE_TOKENS, USER, owner.toString)
+        def eligible(token: TokenInformation) = DelegationTokenManager.filterToken(requestPrincipal, owners, token, authorizeToken, authorizeRequester)
+        val tokens =  tokenManager.getTokens(eligible)
+        sendResponseCallback(Errors.NONE, tokens)
       }
     }
   }

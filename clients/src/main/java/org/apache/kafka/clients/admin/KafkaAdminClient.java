@@ -3429,7 +3429,7 @@ public class KafkaAdminClient extends AdminClient {
         final KafkaFutureImpl<List<DelegationToken>>  tokensFuture = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         runnable.call(new Call("describeDelegationToken", calcDeadlineMs(now, options.timeoutMs()),
-            new LeastLoadedNodeProvider()) {
+            new LeastLoadedBrokerOrActiveKController()) {
 
             @Override
             DescribeDelegationTokenRequest.Builder createRequest(int timeoutMs) {
