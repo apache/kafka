@@ -9883,7 +9883,7 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testStreamsGroupHeartbeatRequestAuthorizationFailed(): Unit = {
+  def testStreamsGroupHeartbeatRequestGroupAuthorizationFailed(): Unit = {
     metadataCache = mock(classOf[KRaftMetadataCache])
 
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group")
@@ -9901,6 +9901,58 @@ class KafkaApisTest extends Logging {
 
     val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
     assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, response.data.errorCode)
+  }
+
+  @Test
+  def testStreamsGroupHeartbeatRequestTopicAuthorizationFailed(): Unit = {
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    val groupId = "group"
+    val fooTopicName = "foo"
+    val barTopicName = "bar"
+    val zarTopicName = "zar"
+    val tarTopicName = "tar"
+
+    val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId(groupId).setTopology(
+      new StreamsGroupHeartbeatRequestData.Topology()
+        .setEpoch(3)
+        .setSubtopologies(
+          util.List.of(new StreamsGroupHeartbeatRequestData.Subtopology().setSubtopologyId("subtopology")
+            .setSourceTopics(Collections.singletonList(fooTopicName))
+            .setRepartitionSinkTopics(Collections.singletonList(barTopicName))
+            .setRepartitionSourceTopics(Collections.singletonList(new StreamsGroupHeartbeatRequestData.TopicInfo().setName(zarTopicName)))
+            .setStateChangelogTopics(Collections.singletonList(new StreamsGroupHeartbeatRequestData.TopicInfo().setName(tarTopicName)))
+          )
+        )
+    )
+
+    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val acls = Map(
+      groupId -> AuthorizationResult.ALLOWED,
+      fooTopicName -> AuthorizationResult.ALLOWED,
+      barTopicName -> AuthorizationResult.DENIED,
+      zarTopicName -> AuthorizationResult.ALLOWED,
+      tarTopicName -> AuthorizationResult.ALLOWED
+    )
+    when(authorizer.authorize(
+      any[RequestContext],
+      any[util.List[Action]]
+    )).thenAnswer { invocation =>
+      val actions = invocation.getArgument(1, classOf[util.List[Action]])
+      actions.asScala.map { action =>
+        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
+      }.asJava
+    }
+
+    kafkaApis = createKafkaApis(
+      authorizer = Some(authorizer),
+      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
+    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, response.data.errorCode)
   }
 
   @Test
@@ -10230,6 +10282,8 @@ class KafkaApisTest extends Logging {
   @ValueSource(booleans = Array(true, false))
   def testStreamsGroupDescribe(includeAuthorizedOperations: Boolean): Unit = {
     metadataCache = mock(classOf[KRaftMetadataCache])
+    val fooTopicName = "foo"
+    val barTopicName = "bar"
 
     val groupIds = List("group-id-0", "group-id-1", "group-id-2").asJava
     val streamsGroupDescribeRequestData = new StreamsGroupDescribeRequestData()
@@ -10247,10 +10301,32 @@ class KafkaApisTest extends Logging {
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
+    val subtopology0 = new StreamsGroupDescribeResponseData.Subtopology()
+      .setSubtopologyId("subtopology0")
+      .setSourceTopics(Collections.singletonList(fooTopicName))
+
+    val subtopology1 = new StreamsGroupDescribeResponseData.Subtopology()
+      .setSubtopologyId("subtopology1")
+      .setRepartitionSinkTopics(Collections.singletonList(barTopicName))
+
+    val subtopology2 = new StreamsGroupDescribeResponseData.Subtopology()
+      .setSubtopologyId("subtopology2")
+      .setSourceTopics(Collections.singletonList(fooTopicName))
+      .setRepartitionSinkTopics(Collections.singletonList(barTopicName))
+
     future.complete(List(
-      new StreamsGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(0)),
-      new StreamsGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(1)),
-      new StreamsGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(2))
+      new StreamsGroupDescribeResponseData.DescribedGroup()
+        .setGroupId(groupIds.get(0))
+        .setTopology(new StreamsGroupDescribeResponseData.Topology()
+          .setSubtopologies(Collections.singletonList(subtopology0))),
+      new StreamsGroupDescribeResponseData.DescribedGroup()
+        .setGroupId(groupIds.get(1))
+        .setTopology(new StreamsGroupDescribeResponseData.Topology()
+          .setSubtopologies(Collections.singletonList(subtopology1))),
+      new StreamsGroupDescribeResponseData.DescribedGroup()
+        .setGroupId(groupIds.get(2))
+        .setTopology(new StreamsGroupDescribeResponseData.Topology()
+          .setSubtopologies(Collections.singletonList(subtopology2)))
     ).asJava)
 
     var authorizedOperationsInt = Int.MinValue;
@@ -10262,9 +10338,18 @@ class KafkaApisTest extends Logging {
 
     // Can't reuse the above list here because we would not test the implementation in KafkaApis then
     val describedGroups = List(
-      new StreamsGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(0)),
-      new StreamsGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(1)),
-      new StreamsGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(2))
+      new StreamsGroupDescribeResponseData.DescribedGroup()
+        .setGroupId(groupIds.get(0))
+        .setTopology(new StreamsGroupDescribeResponseData.Topology()
+          .setSubtopologies(Collections.singletonList(subtopology0))),
+      new StreamsGroupDescribeResponseData.DescribedGroup()
+        .setGroupId(groupIds.get(1))
+        .setTopology(new StreamsGroupDescribeResponseData.Topology()
+          .setSubtopologies(Collections.singletonList(subtopology1))),
+      new StreamsGroupDescribeResponseData.DescribedGroup()
+        .setGroupId(groupIds.get(2))
+        .setTopology(new StreamsGroupDescribeResponseData.Topology()
+          .setSubtopologies(Collections.singletonList(subtopology2)))
     ).map(group => group.setAuthorizedOperations(authorizedOperationsInt))
     val expectedStreamsGroupDescribeResponseData = new StreamsGroupDescribeResponseData()
       .setGroups(describedGroups.asJava)
@@ -10351,6 +10436,88 @@ class KafkaApisTest extends Logging {
     future.completeExceptionally(Errors.FENCED_MEMBER_EPOCH.exception)
     val response = verifyNoThrottling[StreamsGroupDescribeResponse](requestChannelRequest)
     assertEquals(Errors.FENCED_MEMBER_EPOCH.code, response.data.groups.get(0).errorCode)
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(true, false))
+  def testStreamsGroupDescribeFilterUnauthorizedTopics(includeAuthorizedOperations: Boolean): Unit = {
+    val fooTopicName = "foo"
+    val barTopicName = "bar"
+    val errorMessage = "The described group uses topics that the client is not authorized to describe."
+
+    metadataCache = mock(classOf[KRaftMetadataCache])
+
+    val groupIds = List("group-id-0", "group-id-1", "group-id-2").asJava
+    val streamsGroupDescribeRequestData = new StreamsGroupDescribeRequestData()
+      .setIncludeAuthorizedOperations(includeAuthorizedOperations)
+    streamsGroupDescribeRequestData.groupIds.addAll(groupIds)
+    val requestChannelRequest = buildRequest(new StreamsGroupDescribeRequest.Builder(streamsGroupDescribeRequestData, true).build())
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    val acls = Map(
+      groupIds.get(0) -> AuthorizationResult.ALLOWED,
+      groupIds.get(1) -> AuthorizationResult.ALLOWED,
+      groupIds.get(2) -> AuthorizationResult.ALLOWED,
+      fooTopicName    -> AuthorizationResult.ALLOWED,
+      barTopicName    -> AuthorizationResult.DENIED,
+    )
+    when(authorizer.authorize(
+      any[RequestContext],
+      any[util.List[Action]]
+    )).thenAnswer { invocation =>
+      val actions = invocation.getArgument(1, classOf[util.List[Action]])
+      actions.asScala.map { action =>
+        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
+      }.asJava
+    }
+
+    val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
+    when(groupCoordinator.streamsGroupDescribe(
+      any[RequestContext],
+      any[util.List[String]]
+    )).thenReturn(future)
+    kafkaApis = createKafkaApis(
+      authorizer = Some(authorizer),
+      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val subtopology0 = new StreamsGroupDescribeResponseData.Subtopology()
+      .setSubtopologyId("subtopology0")
+      .setSourceTopics(Collections.singletonList(fooTopicName))
+
+    val subtopology1 = new StreamsGroupDescribeResponseData.Subtopology()
+      .setSubtopologyId("subtopology1")
+      .setRepartitionSinkTopics(Collections.singletonList(barTopicName))
+
+    val subtopology2 = new StreamsGroupDescribeResponseData.Subtopology()
+      .setSubtopologyId("subtopology2")
+      .setSourceTopics(Collections.singletonList(fooTopicName))
+      .setRepartitionSinkTopics(Collections.singletonList(barTopicName))
+
+    future.complete(List(
+      new StreamsGroupDescribeResponseData.DescribedGroup()
+        .setGroupId(groupIds.get(0))
+        .setTopology(new StreamsGroupDescribeResponseData.Topology()
+          .setSubtopologies(Collections.singletonList(subtopology0))),
+      new StreamsGroupDescribeResponseData.DescribedGroup()
+        .setGroupId(groupIds.get(1))
+        .setTopology(new StreamsGroupDescribeResponseData.Topology()
+          .setSubtopologies(Collections.singletonList(subtopology1))),
+      new StreamsGroupDescribeResponseData.DescribedGroup()
+        .setGroupId(groupIds.get(2))
+        .setTopology(new StreamsGroupDescribeResponseData.Topology()
+          .setSubtopologies(Collections.singletonList(subtopology2)))
+    ).asJava)
+
+    val response = verifyNoThrottling[StreamsGroupDescribeResponse](requestChannelRequest)
+    assertNotNull(response.data)
+    assertEquals(3, response.data.groups.size)
+    assertEquals(Errors.NONE.code(), response.data.groups.get(0).errorCode())
+    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), response.data.groups.get(1).errorCode())
+    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), response.data.groups.get(2).errorCode())
+    assertEquals(errorMessage, response.data.groups.get(1).errorMessage())
+    assertEquals(errorMessage, response.data.groups.get(2).errorMessage())
   }
 
   @Test
