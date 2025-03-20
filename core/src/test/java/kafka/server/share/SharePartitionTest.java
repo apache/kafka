@@ -117,7 +117,6 @@ public class SharePartitionTest {
     private static final int MAX_FETCH_RECORDS = Integer.MAX_VALUE;
     private static final byte ACKNOWLEDGE_TYPE_GAP_ID = 0;
     private static Timer mockTimer;
-    private static final String TIMER_NAME_PREFIX = "share-partition-manager";
     private SharePartitionMetrics sharePartitionMetrics;
 
     @BeforeEach
