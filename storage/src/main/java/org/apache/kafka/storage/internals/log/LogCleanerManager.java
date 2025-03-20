@@ -102,6 +102,7 @@ public class LogCleanerManager {
     private volatile double dirtiestLogCleanableRatio;
     private volatile long timeOfLastRun;
 
+    @SuppressWarnings({"this-escape"})
     public LogCleanerManager(
             List<File> logDirs,
             ConcurrentMap<TopicPartition, UnifiedLog> logs,
