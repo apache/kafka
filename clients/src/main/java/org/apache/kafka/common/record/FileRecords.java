@@ -292,6 +292,11 @@ public class FileRecords extends AbstractRecords implements Closeable {
     /**
      * Search forward for the file position of the message batch whose last offset that is greater
      * than or equal to the target offset. If no such batch is found, return null.
+     * <p>
+     * The following logic is intentionally designed to minimize memory usage
+     * by avoiding unnecessary calls to {@link FileChannelRecordBatch#lastOffset()} for every batch.
+     * Instead, we use {@link FileChannelRecordBatch#baseOffset()} comparisons when possible, and only 
+     * check {@link FileChannelRecordBatch#lastOffset()} when absolutely necessary.
      *
      * @param targetOffset The offset to search for.
      * @param startingPosition The starting position in the file to begin searching from.
