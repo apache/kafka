@@ -26,6 +26,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.internals.SecurityManagerCompatibility;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -169,8 +170,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     private final Metrics metrics;
 
     private final RemoteStorageManager remoteLogStorageManager;
+    private Plugin<RemoteStorageManager> remoteLogStorageManagerPlugin;
 
     private final RemoteLogMetadataManager remoteLogMetadataManager;
+    private Plugin<RemoteLogMetadataManager> remoteLogMetadataManagerPlugin;
 
     private final ReentrantLock copyQuotaManagerLock = new ReentrantLock(true);
     private final Condition copyQuotaManagerLockCondition = copyQuotaManagerLock.newCondition();
@@ -415,6 +418,9 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         // in connecting to the brokers or remote storages.
         configureRSM();
         configureRLMM();
+        // the withPluginMetrics() method will be called when the plugin is instantiated (after configure() if the plugin also implements Configurable)
+        remoteLogStorageManagerPlugin = Plugin.wrapInstance(remoteLogStorageManager, metrics, rlmConfig.remoteStorageManagerClassName());
+        remoteLogMetadataManagerPlugin = Plugin.wrapInstance(remoteLogMetadataManager, metrics, rlmConfig.remoteLogMetadataManagerClassName());
         remoteLogManagerConfigured = true;
     }
 
@@ -2045,8 +2051,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 leaderCopyRLMTasks.values().forEach(RLMTaskWithFuture::cancel);
                 leaderExpirationRLMTasks.values().forEach(RLMTaskWithFuture::cancel);
                 followerRLMTasks.values().forEach(RLMTaskWithFuture::cancel);
-                Utils.closeQuietly(remoteLogStorageManager, "RemoteLogStorageManager");
-                Utils.closeQuietly(remoteLogMetadataManager, "RemoteLogMetadataManager");
+                Utils.closeQuietly(remoteLogStorageManagerPlugin, "remoteLogStorageManagerPlugin");
+                Utils.closeQuietly(remoteLogMetadataManagerPlugin, "remoteLogMetadataManagerPlugin");
                 Utils.closeQuietly(indexCache, "RemoteIndexCache");
 
                 rlmCopyThreadPool.close();
