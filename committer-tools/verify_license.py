@@ -45,7 +45,7 @@ def get_tarball_path(project_dir):
         print("Error: Distributions directory not found:", distributions_dir)
         sys.exit(1)
     
-    pattern = re.compile(r'^kafka_2\.13-(?!.*docs).+\.tgz$', re.IGNORECASE)
+    pattern = re.compile(r'^kafka-(?!.*docs).+\.tgz$', re.IGNORECASE)
     candidates = [
         os.path.join(distributions_dir, f)
         for f in os.listdir(distributions_dir)
