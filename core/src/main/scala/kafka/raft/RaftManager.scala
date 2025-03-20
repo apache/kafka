@@ -45,6 +45,7 @@ import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, FileQuorumStateSt
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.Feature
 import org.apache.kafka.server.common.serialization.RecordSerde
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.util.{FileLock, KafkaScheduler}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.util.timer.SystemTimer
@@ -237,6 +238,7 @@ class KafkaRaftManager[T](
         config.metadataRetentionMillis,
         KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
         KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
+        ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
         config.metadataNodeIDConfig)
     )
   }

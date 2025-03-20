@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.raft;
 
-import org.apache.kafka.server.config.ServerLogConfigs;
-
 /**
  * Configuration for the metadata log
  * @param logSegmentBytes The maximum size of a single metadata log file
@@ -39,23 +37,4 @@ public record MetadataLogConfig(int logSegmentBytes,
                                 int maxFetchSizeInBytes,
                                 long deleteDelayMillis,
                                 int nodeId) {
-
-    public MetadataLogConfig(int logSegmentBytes,
-                             int logSegmentMinBytes,
-                             long logSegmentMillis,
-                             long retentionMaxBytes,
-                             long retentionMillis,
-                             int maxBatchSizeInBytes,
-                             int maxFetchSizeInBytes,
-                             int nodeId) {
-        this(logSegmentBytes,
-             logSegmentMinBytes,
-             logSegmentMillis,
-             retentionMaxBytes,
-             retentionMillis,
-             maxBatchSizeInBytes,
-             maxFetchSizeInBytes,
-             ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
-             nodeId);
-    }
 }

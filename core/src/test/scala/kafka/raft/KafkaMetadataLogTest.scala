@@ -88,6 +88,7 @@ final class KafkaMetadataLogTest {
         kafkaConfig.metadataRetentionMillis,
         KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
         KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
+        ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
         kafkaConfig.metadataNodeIDConfig)
       buildMetadataLog(tempDir, mockTime, metadataConfig)
     })
@@ -102,6 +103,7 @@ final class KafkaMetadataLogTest {
       kafkaConfig.metadataRetentionMillis,
       KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
       KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
+      ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
       kafkaConfig.metadataNodeIDConfig)
     buildMetadataLog(tempDir, mockTime, metadataConfig)
   }
@@ -1005,6 +1007,7 @@ final class KafkaMetadataLogTest {
       60 * 1000,
       100,
       DefaultMetadataLogConfig.maxFetchSizeInBytes,
+      DefaultMetadataLogConfig.deleteDelayMillis,
       DefaultMetadataLogConfig.nodeId
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
