@@ -48,6 +48,7 @@ class ControllerMetricsChanges {
     private int offlinePartitionsChange = 0;
     private int partitionsWithoutPreferredLeaderChange = 0;
     private int uncleanLeaderElection = 0;
+    private int electionFromElrCounter = 0;
 
     public int fencedBrokersChange() {
         return fencedBrokersChange;
@@ -128,8 +129,12 @@ class ControllerMetricsChanges {
             isWithoutPreferredLeader = !next.hasPreferredLeader();
             // take current all replicas as ISR if prev is null (new created partition), so we won't treat it as unclean election.
             int[] prevIsr = prev != null ? prev.isr : next.replicas;
-            if (!PartitionRegistration.electionWasClean(next.leader, prevIsr)) {
+            int[] prevElr = prev != null ? prev.elr : new int[]{};
+            if (!PartitionRegistration.electionWasClean(next.leader, prevIsr, prevElr)) {
                 uncleanLeaderElection++;
+            }
+            if (PartitionRegistration.electionFromElr(next.leader, prevElr)) {
+                electionFromElrCounter++;
             }
         }
         globalPartitionsChange += delta(wasPresent, isPresent);
@@ -162,6 +167,10 @@ class ControllerMetricsChanges {
         if (uncleanLeaderElection > 0) {
             metrics.updateUncleanLeaderElection(uncleanLeaderElection);
             uncleanLeaderElection = 0;
+        }
+        if (electionFromElrCounter > 0) {
+            metrics.updateElectionFromEligibleLeaderReplicasCount(electionFromElrCounter);
+            electionFromElrCounter = 0;
         }
     }
 }

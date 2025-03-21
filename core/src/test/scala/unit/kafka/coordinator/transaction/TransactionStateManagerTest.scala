@@ -21,8 +21,7 @@ import java.nio.ByteBuffer
 import java.util.concurrent.CountDownLatch
 import java.util.concurrent.locks.ReentrantLock
 import javax.management.ObjectName
-import kafka.log.UnifiedLog
-import kafka.server.{MetadataCache, ReplicaManager}
+import kafka.server.ReplicaManager
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
@@ -33,12 +32,13 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.MockTime
+import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.common.TransactionVersion.{TV_0, TV_2}
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.MockScheduler
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LogConfig, LogOffsetMetadata}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LogConfig, LogOffsetMetadata, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
@@ -104,11 +104,16 @@ class TransactionStateManagerTest {
 
   @Test
   def testValidateTransactionTimeout(): Unit = {
-    assertTrue(transactionManager.validateTransactionTimeoutMs(1))
-    assertFalse(transactionManager.validateTransactionTimeoutMs(-1))
-    assertFalse(transactionManager.validateTransactionTimeoutMs(0))
-    assertTrue(transactionManager.validateTransactionTimeoutMs(txnConfig.transactionMaxTimeoutMs))
-    assertFalse(transactionManager.validateTransactionTimeoutMs(txnConfig.transactionMaxTimeoutMs + 1))
+    assertTrue(transactionManager.validateTransactionTimeoutMs(enableTwoPC = false, 1))
+    assertFalse(transactionManager.validateTransactionTimeoutMs(enableTwoPC = false, -1))
+    assertFalse(transactionManager.validateTransactionTimeoutMs(enableTwoPC = false, 0))
+    assertTrue(transactionManager.validateTransactionTimeoutMs(enableTwoPC = false, txnConfig.transactionMaxTimeoutMs))
+    assertFalse(transactionManager.validateTransactionTimeoutMs(enableTwoPC = false, txnConfig.transactionMaxTimeoutMs + 1))
+    // KIP-939 Always return true when two phase commit is enabled on transaction. Two phase commit is enabled in case of
+    // externally coordinated distributed transactions.
+    assertTrue(transactionManager.validateTransactionTimeoutMs(enableTwoPC = true, -1))
+    assertTrue(transactionManager.validateTransactionTimeoutMs(enableTwoPC = true, 10))
+    assertTrue(transactionManager.validateTransactionTimeoutMs(enableTwoPC = true, txnConfig.transactionMaxTimeoutMs + 1))
   }
 
   @Test
@@ -165,9 +170,9 @@ class TransactionStateManagerTest {
     when(replicaManager.getLog(topicPartition)).thenReturn(Some(logMock))
     when(logMock.logStartOffset).thenReturn(startOffset)
     when(logMock.read(ArgumentMatchers.eq(startOffset),
-      maxLength = anyInt(),
-      isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
-      minOneMessage = ArgumentMatchers.eq(true))
+      anyInt(),
+      ArgumentMatchers.eq(FetchIsolation.LOG_END),
+      ArgumentMatchers.eq(true))
     ).thenReturn(new FetchDataInfo(new LogOffsetMetadata(startOffset), fileRecordsMock))
     when(replicaManager.getLogEndOffset(topicPartition)).thenReturn(Some(endOffset))
 
@@ -224,9 +229,9 @@ class TransactionStateManagerTest {
     when(replicaManager.getLog(topicPartition)).thenReturn(Some(logMock))
     when(logMock.logStartOffset).thenReturn(startOffset)
     when(logMock.read(ArgumentMatchers.eq(startOffset),
-      maxLength = anyInt(),
-      isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
-      minOneMessage = ArgumentMatchers.eq(true))
+      anyInt(),
+      ArgumentMatchers.eq(FetchIsolation.LOG_END),
+      ArgumentMatchers.eq(true))
     ).thenReturn(new FetchDataInfo(new LogOffsetMetadata(startOffset), fileRecordsMock))
     when(replicaManager.getLogEndOffset(topicPartition)).thenReturn(Some(endOffset))
 
@@ -889,10 +894,13 @@ class TransactionStateManagerTest {
     appendedRecords.values.foreach { batches =>
       batches.foreach { records =>
         records.records.forEach { record =>
-          val transactionalId = TransactionLog.readTxnRecordKey(record.key).transactionalId
-          assertNull(record.value)
-          expiredTransactionalIds += transactionalId
-          assertEquals(Right(None), transactionManager.getTransactionState(transactionalId))
+          TransactionLog.readTxnRecordKey(record.key) match {
+            case Right(transactionalId) =>
+              assertNull(record.value)
+              expiredTransactionalIds += transactionalId
+              assertEquals(Right(None), transactionManager.getTransactionState(transactionalId))
+            case Left(value) => fail(s"Failed to read transactional id from tombstone: $value")
+          }
         }
       }
     }
@@ -969,9 +977,9 @@ class TransactionStateManagerTest {
     when(replicaManager.getLog(topicPartition)).thenReturn(Some(logMock))
     when(logMock.logStartOffset).thenReturn(startOffset)
     when(logMock.read(ArgumentMatchers.eq(startOffset),
-      maxLength = anyInt(),
-      isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
-      minOneMessage = ArgumentMatchers.eq(true))
+      anyInt(),
+      ArgumentMatchers.eq(FetchIsolation.LOG_END),
+      ArgumentMatchers.eq(true))
     ).thenReturn(new FetchDataInfo(new LogOffsetMetadata(startOffset), MemoryRecords.EMPTY))
     when(replicaManager.getLogEndOffset(topicPartition)).thenReturn(Some(endOffset))
 
@@ -983,9 +991,9 @@ class TransactionStateManagerTest {
     verify(replicaManager).getLog(topicPartition)
     verify(logMock).logStartOffset
     verify(logMock).read(ArgumentMatchers.eq(startOffset),
-      maxLength = anyInt(),
-      isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
-      minOneMessage = ArgumentMatchers.eq(true))
+      anyInt(),
+      ArgumentMatchers.eq(FetchIsolation.LOG_END),
+      ArgumentMatchers.eq(true))
     verify(replicaManager, times(2)).getLogEndOffset(topicPartition)
     assertEquals(0, transactionManager.loadingPartitions.size)
   }
@@ -1033,14 +1041,14 @@ class TransactionStateManagerTest {
 
     when(logMock.logStartOffset).thenReturn(0L)
     when(logMock.read(ArgumentMatchers.eq(0L),
-      maxLength = anyInt(),
-      isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
-      minOneMessage = ArgumentMatchers.eq(true)))
+      anyInt(),
+      ArgumentMatchers.eq(FetchIsolation.LOG_END),
+      ArgumentMatchers.eq(true)))
       .thenReturn(new FetchDataInfo(new LogOffsetMetadata(0L), firstSegmentRecords))
     when(logMock.read(ArgumentMatchers.eq(2L),
-      maxLength = anyInt(),
-      isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
-      minOneMessage = ArgumentMatchers.eq(true)))
+      anyInt(),
+      ArgumentMatchers.eq(FetchIsolation.LOG_END),
+      ArgumentMatchers.eq(true)))
       .thenReturn(new FetchDataInfo(new LogOffsetMetadata(2L), secondSegmentRecords))
 
     // Load transactions should not stuck.
@@ -1215,9 +1223,9 @@ class TransactionStateManagerTest {
 
     when(logMock.logStartOffset).thenReturn(startOffset)
     when(logMock.read(ArgumentMatchers.eq(startOffset),
-      maxLength = anyInt(),
-      isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
-      minOneMessage = ArgumentMatchers.eq(true)))
+      anyInt(),
+      ArgumentMatchers.eq(FetchIsolation.LOG_END),
+      ArgumentMatchers.eq(true)))
       .thenReturn(new FetchDataInfo(new LogOffsetMetadata(startOffset), fileRecordsMock))
 
     when(fileRecordsMock.sizeInBytes()).thenReturn(records.sizeInBytes)

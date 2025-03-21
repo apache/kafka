@@ -103,12 +103,7 @@ class CoordinatorLoaderImpl[T](
           var numRecords = 0L
           var numBytes = 0L
           while (currentOffset < logEndOffset && readAtLeastOneRecord && isRunning.get) {
-            val fetchDataInfo = log.read(
-              startOffset = currentOffset,
-              maxLength = loadBufferSize,
-              isolation = FetchIsolation.LOG_END,
-              minOneMessage = true
-            )
+            val fetchDataInfo = log.read(currentOffset, loadBufferSize, FetchIsolation.LOG_END, true)
 
             readAtLeastOneRecord = fetchDataInfo.records.sizeInBytes > 0
 

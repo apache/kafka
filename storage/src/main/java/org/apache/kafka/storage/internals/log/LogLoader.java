@@ -169,6 +169,7 @@ public class LogLoader {
                     long offset = LogFileUtils.offsetFromFile(file);
                     if (offset >= minSwapFileOffset && offset < maxSwapFileOffset) {
                         logger.info("Deleting segment files {} that is compacted but has not been deleted yet.", file.getName());
+                        @SuppressWarnings("UnusedLocalVariable")
                         boolean ignore = file.delete();
                     }
                 }
@@ -186,6 +187,7 @@ public class LogLoader {
             }
             if (file.getName().endsWith(LogFileUtils.SWAP_FILE_SUFFIX)) {
                 logger.info("Recovering file {} by renaming from {} files.", file.getName(), LogFileUtils.SWAP_FILE_SUFFIX);
+                @SuppressWarnings("UnusedLocalVariable")
                 boolean ignore = file.renameTo(new File(Utils.replaceSuffix(file.getPath(), LogFileUtils.SWAP_FILE_SUFFIX, "")));
             }
         }

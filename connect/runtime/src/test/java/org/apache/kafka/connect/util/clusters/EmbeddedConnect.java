@@ -495,7 +495,7 @@ abstract class EmbeddedConnect {
         Response response = requestPost(restartEndpoint, "", Collections.emptyMap());
         try {
             if (response.getStatus() < Response.Status.BAD_REQUEST.getStatusCode()) {
-                //only the 202 stauts returns a body
+                //only the 202 status returns a body
                 if (response.getStatus() == Response.Status.ACCEPTED.getStatusCode()) {
                     return mapper.readerFor(ConnectorStateInfo.class)
                             .readValue(responseToString(response));

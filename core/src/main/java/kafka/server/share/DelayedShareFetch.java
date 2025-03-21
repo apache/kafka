@@ -181,7 +181,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 return;
             } else {
                 // Update metric to record acquired to requested partitions.
-                double requestTopicToAcquired = (double) topicPartitionData.size() / shareFetch.partitionMaxBytes().size();
+                double requestTopicToAcquired = (double) topicPartitionData.size() / shareFetch.topicIdPartitions().size();
                 shareGroupMetrics.recordTopicPartitionsFetchRatio(shareFetch.groupId(), (int) (requestTopicToAcquired * 100));
             }
             log.trace("Fetchable share partitions data: {} with groupId: {} fetch params: {}",
@@ -277,9 +277,9 @@ public class DelayedShareFetch extends DelayedOperation {
             return false;
         } catch (Exception e) {
             log.error("Error processing delayed share fetch request", e);
+            releasePartitionLocks(topicPartitionData.keySet());
             partitionsAcquired.clear();
             partitionsAlreadyFetched.clear();
-            releasePartitionLocks(topicPartitionData.keySet());
             return forceComplete();
         }
     }

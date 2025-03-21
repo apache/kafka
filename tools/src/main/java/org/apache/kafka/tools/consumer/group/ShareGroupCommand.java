@@ -431,16 +431,18 @@ public class ShareGroupCommand {
                     }
 
                     if (verbose) {
-                        String fmt = "\n%" + -groupLen + "s %" + -maxConsumerIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %-13s %s";
-                        System.out.printf(fmt, "GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "MEMBER-EPOCH", "ASSIGNMENT");
+                        String fmt = "\n%" + -groupLen + "s %" + -maxConsumerIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %-12s %-13s %s";
+                        System.out.printf(fmt, "GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "#PARTITIONS", "MEMBER-EPOCH", "ASSIGNMENT");
                         for (ShareMemberDescription member : members) {
-                            System.out.printf(fmt, groupId, member.consumerId(), member.host(), member.clientId(), member.memberEpoch(), getAssignmentString(member.assignment()));
+                            System.out.printf(fmt, groupId, member.consumerId(), member.host(), member.clientId(),
+                                member.assignment().topicPartitions().size(), member.memberEpoch(), getAssignmentString(member.assignment()));
                         }
                     } else {
-                        String fmt = "\n%" + -groupLen + "s %" + -maxConsumerIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %s";
-                        System.out.printf(fmt, "GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "ASSIGNMENT");
+                        String fmt = "\n%" + -groupLen + "s %" + -maxConsumerIdLen + "s %" + -maxHostLen + "s %" + -maxClientIdLen + "s %-12s %s";
+                        System.out.printf(fmt, "GROUP", "CONSUMER-ID", "HOST", "CLIENT-ID", "#PARTITIONS", "ASSIGNMENT");
                         for (ShareMemberDescription member : members) {
-                            System.out.printf(fmt, groupId, member.consumerId(), member.host(), member.clientId(), getAssignmentString(member.assignment()));
+                            System.out.printf(fmt, groupId, member.consumerId(), member.host(), member.clientId(),
+                                member.assignment().topicPartitions().size(), getAssignmentString(member.assignment()));
                         }
                     }
                     System.out.println();
@@ -461,8 +463,8 @@ public class ShareGroupCommand {
                 return topicPartitions
                     .stream()
                     .map(TopicPartition::partition)
-                    .map(Object::toString)
                     .sorted()
+                    .map(Object::toString)
                     .collect(Collectors.joining(",", topicName + ":", ""));
             }).sorted().collect(Collectors.joining(";"));
         }

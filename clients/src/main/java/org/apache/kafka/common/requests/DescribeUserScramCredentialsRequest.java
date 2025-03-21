@@ -68,11 +68,12 @@ public class DescribeUserScramCredentialsRequest extends AbstractRequest {
                 .setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(apiError.error().code())
                 .setErrorMessage(apiError.message());
-        for (DescribeUserScramCredentialsRequestData.UserName user : data.users()) {
+
+        data.users().forEach(__ ->
             response.results().add(new DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult()
-                    .setErrorCode(apiError.error().code())
-                    .setErrorMessage(apiError.message()));
-        }
+                .setErrorCode(apiError.error().code())
+                .setErrorMessage(apiError.message()))
+        );
         return new DescribeUserScramCredentialsResponse(response);
     }
 }
