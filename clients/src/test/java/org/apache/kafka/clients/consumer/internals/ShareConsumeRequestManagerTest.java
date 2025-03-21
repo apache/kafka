@@ -846,8 +846,7 @@ public class ShareConsumeRequestManagerTest {
         // We expire the commitSync request as it had a timer of 1000ms.
         time.sleep(2000L);
 
-        List<AcknowledgeType> acknowledgeTypeList = List.of(AcknowledgeType.ACCEPT, AcknowledgeType.REJECT, AcknowledgeType.RELEASE, AcknowledgeType.ACCEPT);
-        Acknowledgements acknowledgements1 = getAcknowledgements(3, acknowledgeTypeList.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements1 = getAcknowledgements(3, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT, AcknowledgeType.RELEASE, AcknowledgeType.ACCEPT);
 
         // commitSync() for the next 4 acknowledgements.
         shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements1)), calculateDeadlineMs(time, 1000L));
@@ -1248,9 +1247,8 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        List<AcknowledgeType> acknowledgeTypeList = List.of(AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT,
-            AcknowledgeType.ACCEPT, AcknowledgeType.RELEASE, AcknowledgeType.ACCEPT);
-        Acknowledgements acknowledgements = getAcknowledgements(1, acknowledgeTypeList.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT,
+                AcknowledgeType.ACCEPT, AcknowledgeType.RELEASE, AcknowledgeType.ACCEPT);
 
         shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)),
             calculateDeadlineMs(time.timer(60000L)));
@@ -1289,7 +1287,7 @@ public class ShareConsumeRequestManagerTest {
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         Acknowledgements acknowledgements = getAcknowledgements(1,
-                List.of(AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT).toArray(new AcknowledgeType[0]));
+                AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT);
 
         shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)),
                 calculateDeadlineMs(time.timer(defaultApiTimeoutMs)));
