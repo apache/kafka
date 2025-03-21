@@ -1646,40 +1646,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace(s"End transaction marker append for producer id $producerId completed with status: $currentErrors")
       updateErrors(producerId, currentErrors)
 
-      def maybeSendResponse(): Unit = {
-        if (numAppends.decrementAndGet() == 0) {
-          requestHelper.sendResponseExemptThrottle(request, new WriteTxnMarkersResponse(errors))
-        }
-      }
-
-      // The new group coordinator uses GroupCoordinator#completeTransaction so we do
-      // not need to call GroupCoordinator#onTransactionCompleted here.
-      if (config.isNewGroupCoordinatorEnabled) {
-        maybeSendResponse()
-        return
-      }
-
-      val successfulOffsetsPartitions = currentErrors.asScala.filter { case (topicPartition, error) =>
-        topicPartition.topic == GROUP_METADATA_TOPIC_NAME && error == Errors.NONE
-      }.keys
-
-      // If no end transaction marker has been written to a __consumer_offsets partition, we do not
-      // need to call GroupCoordinator#onTransactionCompleted.
-      if (successfulOffsetsPartitions.isEmpty) {
-        maybeSendResponse()
-        return
-      }
-
-      // Otherwise, we call GroupCoordinator#onTransactionCompleted to materialize the offsets
-      // into the cache and we wait until the meterialization is completed.
-      groupCoordinator.onTransactionCompleted(producerId, successfulOffsetsPartitions.asJava, result).whenComplete { (_, exception) =>
-        if (exception != null) {
-          error(s"Received an exception while trying to update the offsets cache on transaction marker append", exception)
-          val updatedErrors = new ConcurrentHashMap[TopicPartition, Errors]()
-          successfulOffsetsPartitions.foreach(updatedErrors.put(_, Errors.UNKNOWN_SERVER_ERROR))
-          updateErrors(producerId, updatedErrors)
-        }
-        maybeSendResponse()
+      if (numAppends.decrementAndGet() == 0) {
+        requestHelper.sendResponseExemptThrottle(request, new WriteTxnMarkersResponse(errors))
       }
     }
 
@@ -1727,9 +1695,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         val controlRecords = mutable.Map.empty[TopicPartition, MemoryRecords]
         partitionsWithCompatibleMessageFormat.foreach { partition =>
-          if (groupCoordinator.isNewGroupCoordinator && partition.topic == GROUP_METADATA_TOPIC_NAME) {
-            // When the new group coordinator is used, writing the end marker is fully delegated
-            // to the group coordinator.
+          if (partition.topic == GROUP_METADATA_TOPIC_NAME) {
             groupCoordinator.completeTransaction(
               partition,
               marker.producerId,
@@ -2525,7 +2491,6 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def isConsumerGroupProtocolEnabled(): Boolean = {
-    groupCoordinator.isNewGroupCoordinator &&
       config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.CONSUMER) &&
       groupVersion().isConsumerRebalanceProtocolSupported
   }
@@ -2658,7 +2623,6 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def isStreamsGroupProtocolEnabled(): Boolean = {
-    groupCoordinator.isNewGroupCoordinator &&
       config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.STREAMS)
   }
 
@@ -3843,7 +3807,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def isShareGroupProtocolEnabled: Boolean = {
-    groupCoordinator.isNewGroupCoordinator && config.shareGroupConfig.isShareGroupEnabled
+    config.shareGroupConfig.isShareGroupEnabled
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,

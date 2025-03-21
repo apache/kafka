@@ -46,7 +46,7 @@ public class StreamsUpgradeTest {
 
         final Properties streamsProperties = Utils.loadProps(propFileName);
 
-        System.out.println("StreamsTest instance started (StreamsUpgradeTest v3.7)");
+        System.out.println("StreamsTest instance started (StreamsUpgradeTest v3.9)");
         System.out.println("props=" + streamsProperties);
 
         final StreamsBuilder builder = new StreamsBuilder();
