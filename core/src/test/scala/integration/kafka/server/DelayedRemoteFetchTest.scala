@@ -18,7 +18,7 @@ package kafka.server
 
 import kafka.cluster.Partition
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchRequest
 import org.apache.kafka.common.{TopicIdPartition, Uuid}
@@ -61,7 +61,7 @@ class DelayedRemoteFetchTest {
 
     val future: CompletableFuture[RemoteLogReadResult] = new CompletableFuture[RemoteLogReadResult]()
     future.complete(null)
-    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition.topicPartition(), null, null, false)
+    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition.topicPartition(), null, null)
     val highWatermark = 100
     val leaderLogStartOffset = 10
     val logReadInfo = buildReadResult(Errors.NONE, highWatermark, leaderLogStartOffset)
@@ -97,7 +97,7 @@ class DelayedRemoteFetchTest {
 
     val future: CompletableFuture[RemoteLogReadResult] = new CompletableFuture[RemoteLogReadResult]()
     future.complete(null)
-    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition.topicPartition(), null, null, false)
+    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition.topicPartition(), null, null)
     val highWatermark = 100
     val leaderLogStartOffset = 10
     val logReadInfo = buildReadResult(Errors.NONE, highWatermark, leaderLogStartOffset)
@@ -122,7 +122,7 @@ class DelayedRemoteFetchTest {
       .thenThrow(new NotLeaderOrFollowerException(s"Replica for $topicIdPartition not available"))
 
     val future: CompletableFuture[RemoteLogReadResult] = new CompletableFuture[RemoteLogReadResult]()
-    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition.topicPartition(), null, null, false)
+    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition.topicPartition(), null, null)
 
     val logReadInfo = buildReadResult(Errors.NONE)
 
@@ -152,7 +152,7 @@ class DelayedRemoteFetchTest {
 
     val future: CompletableFuture[RemoteLogReadResult] = new CompletableFuture[RemoteLogReadResult]()
     future.complete(null)
-    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition.topicPartition(), null, null, false)
+    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition.topicPartition(), null, null)
 
     // build a read result with error
     val logReadInfo = buildReadResult(Errors.FENCED_LEADER_EPOCH)
@@ -183,7 +183,7 @@ class DelayedRemoteFetchTest {
 
     val remoteFetchTask = mock(classOf[Future[Void]])
     val future: CompletableFuture[RemoteLogReadResult] = new CompletableFuture[RemoteLogReadResult]()
-    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition.topicPartition(), null, null, false)
+    val fetchInfo: RemoteStorageFetchInfo = new RemoteStorageFetchInfo(0, false, topicIdPartition.topicPartition(), null, null)
     val logReadInfo = buildReadResult(Errors.NONE, highWatermark, leaderLogStartOffset)
 
     val delayedRemoteFetch = new DelayedRemoteFetch(remoteFetchTask, future, fetchInfo, remoteFetchMaxWaitMs,
@@ -200,7 +200,7 @@ class DelayedRemoteFetchTest {
     delayedRemoteFetch.run()
 
     // Check that the task was cancelled and force-completed
-    verify(remoteFetchTask).cancel(true)
+    verify(remoteFetchTask).cancel(false)
     assertTrue(delayedRemoteFetch.isCompleted)
 
     // Check that the ExpiresPerSec metric was incremented
@@ -220,7 +220,6 @@ class DelayedRemoteFetchTest {
   private def buildFetchParams(replicaId: Int,
                                maxWaitMs: Int): FetchParams = {
     new FetchParams(
-      ApiKeys.FETCH.latestVersion,
       replicaId,
       1,
       maxWaitMs,

@@ -29,7 +29,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -94,7 +93,7 @@ public class FeaturesImageTest {
         DELTA2 = new FeaturesDelta(IMAGE2);
         RecordTestUtils.replayAll(DELTA2, DELTA2_RECORDS);
 
-        Map<String, Short> map3 = Collections.singletonMap("bar", (short) 1);
+        Map<String, Short> map3 = Map.of("bar", (short) 1);
         IMAGE3 = new FeaturesImage(map3, MetadataVersion.latestTesting());
     }
 
@@ -105,7 +104,7 @@ public class FeaturesImageTest {
         RecordListWriter writer = new RecordListWriter();
         image.write(writer, new ImageWriterOptions.Builder(metadataVersion).build());
         // A metadata version is required for writing, so the expected image is not actually empty
-        var expectedImage = new FeaturesImage(Collections.emptyMap(), metadataVersion);
+        var expectedImage = new FeaturesImage(Map.of(), metadataVersion);
         testToImage(expectedImage, writer.records());
     }
 
@@ -167,7 +166,7 @@ public class FeaturesImageTest {
     @Test
     public void testEmpty() {
         assertTrue(FeaturesImage.EMPTY.isEmpty());
-        assertFalse(new FeaturesImage(Collections.singletonMap("foo", (short) 1),
+        assertFalse(new FeaturesImage(Map.of("foo", (short) 1),
             MetadataVersion.MINIMUM_VERSION).isEmpty());
         assertFalse(new FeaturesImage(FeaturesImage.EMPTY.finalizedVersions(),
             MetadataVersion.MINIMUM_VERSION).isEmpty());

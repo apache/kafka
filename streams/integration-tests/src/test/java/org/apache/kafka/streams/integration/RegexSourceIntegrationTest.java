@@ -212,7 +212,7 @@ public class RegexSourceIntegrationTest {
 
             final StreamsBuilder builder = new StreamsBuilder();
             final KStream<String, String> pattern1Stream = builder.stream(Pattern.compile("TEST-TOPIC-\\d"));
-            final KStream<String, String> otherStream = builder.stream(Pattern.compile("not-a-match"));
+            builder.stream(Pattern.compile("not-a-match"));
 
             pattern1Stream
                 .selectKey((k, v) -> k)

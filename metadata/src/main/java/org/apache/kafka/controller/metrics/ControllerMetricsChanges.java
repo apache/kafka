@@ -48,6 +48,7 @@ class ControllerMetricsChanges {
     private int offlinePartitionsChange = 0;
     private int partitionsWithoutPreferredLeaderChange = 0;
     private int uncleanLeaderElection = 0;
+    private int electionFromElrCounter = 0;
 
     public int fencedBrokersChange() {
         return fencedBrokersChange;
@@ -132,6 +133,9 @@ class ControllerMetricsChanges {
             if (!PartitionRegistration.electionWasClean(next.leader, prevIsr, prevElr)) {
                 uncleanLeaderElection++;
             }
+            if (PartitionRegistration.electionFromElr(next.leader, prevElr)) {
+                electionFromElrCounter++;
+            }
         }
         globalPartitionsChange += delta(wasPresent, isPresent);
         offlinePartitionsChange += delta(wasOffline, isOffline);
@@ -163,6 +167,10 @@ class ControllerMetricsChanges {
         if (uncleanLeaderElection > 0) {
             metrics.updateUncleanLeaderElection(uncleanLeaderElection);
             uncleanLeaderElection = 0;
+        }
+        if (electionFromElrCounter > 0) {
+            metrics.updateElectionFromEligibleLeaderReplicasCount(electionFromElrCounter);
+            electionFromElrCounter = 0;
         }
     }
 }
