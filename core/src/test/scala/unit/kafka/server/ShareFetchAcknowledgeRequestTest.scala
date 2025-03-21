@@ -37,8 +37,7 @@ import scala.jdk.CollectionConverters._
 ))
 @Tag("integration")
 class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster){
-  
-  private final val MAX_PARTITION_BYTES = 10000
+
   private final val MAX_WAIT_MS = 5000
 
   @AfterEach
@@ -1282,79 +1281,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     fetchPartitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
     compareFetchResponsePartitions(expectedFetchPartitionData, fetchPartitionData)
-  }
-
-  @ClusterTests(
-    Array(
-      new ClusterTest(
-        serverProperties = Array(
-          new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
-          new ClusterConfigProperty(key = "group.share.enable", value = "true"),
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-        )
-      ),
-      new ClusterTest(
-        serverProperties = Array(
-          new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
-          new ClusterConfigProperty(key = "group.share.enable", value = "true"),
-          new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")
-        )
-      ),
-    )
-  )
-  def testShareFetchBrokerDoesNotRespectPartitionsSizeLimit(): Unit = {
-    val groupId: String = "group"
-    val memberId = Uuid.randomUuid()
-
-    val topic = "topic"
-    val partition = 0
-
-    createTopicAndReturnLeaders(topic, numPartitions = 3)
-    val topicIds = getTopicIds.asJava
-    val topicId = topicIds.get(topic)
-    val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(topic, partition))
-
-    val send: Seq[TopicIdPartition] = Seq(topicIdPartition)
-
-    // Send the first share fetch request to initialize the share partition
-    sendFirstShareFetchRequest(memberId, groupId, send)
-
-    initProducer()
-    // Producing 3 large messages to the topic created above
-    produceData(topicIdPartition, 10)
-    produceData(topicIdPartition, "large message 1", new String(new Array[Byte](MAX_PARTITION_BYTES/3)))
-    produceData(topicIdPartition, "large message 2", new String(new Array[Byte](MAX_PARTITION_BYTES/3)))
-    produceData(topicIdPartition, "large message 3", new String(new Array[Byte](MAX_PARTITION_BYTES/3)))
-
-    // Send the second share fetch request to fetch the records produced above
-    val metadata = new ShareRequestMetadata(memberId, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH))
-    val acknowledgementsMap: Map[TopicIdPartition, util.List[ShareFetchRequestData.AcknowledgementBatch]] = Map.empty
-    val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMap)
-    val shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
-
-    val shareFetchResponseData = shareFetchResponse.data()
-    assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
-
-    val expectedPartitionData = new ShareFetchResponseData.PartitionData()
-      .setPartitionIndex(partition)
-      .setErrorCode(Errors.NONE.code())
-      .setAcknowledgeErrorCode(Errors.NONE.code())
-      .setAcquiredRecords(expectedAcquiredRecords(Collections.singletonList(0), Collections.singletonList(12), Collections.singletonList(1)))
-    // The first 10 records will be consumed as it is. For the last 3 records, each of size MAX_PARTITION_BYTES/3,
-    // all 3 of then will be consumed (offsets 10, 11 and 12) because even though the inclusion of the third last record will exceed
-    // the max partition bytes limit. We should only consider the request level maxBytes as the hard limit.
-
-    val partitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
-    compareFetchResponsePartitions(expectedPartitionData, partitionData)
   }
 
   @ClusterTests(

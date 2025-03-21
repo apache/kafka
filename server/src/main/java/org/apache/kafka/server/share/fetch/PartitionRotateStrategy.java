@@ -81,7 +81,10 @@ public interface PartitionRotateStrategy {
             return topicIdPartitions;
         }
 
+        // Avoid modifying the original list, create copy.
         List<TopicIdPartition> rotatedPartitions = new ArrayList<>(topicIdPartitions);
+        // Elements from the list should move left by the distance provided i.e. if the original list is [1,2,3],
+        // and rotation is by 1, then output should be [2,3,1] and not [3,1,2]. Hence, negate the distance here.
         Collections.rotate(rotatedPartitions, -1 * rotateAt);
         return rotatedPartitions;
     }

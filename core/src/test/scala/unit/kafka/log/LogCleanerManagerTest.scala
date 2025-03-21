@@ -28,7 +28,7 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LocalLog, LogConfig, LogDirFailureChannel, LogLoader, LogSegment, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog => JUnifiedLog}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LocalLog, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -109,7 +109,7 @@ class LogCleanerManagerTest extends Logging {
     val maxTransactionTimeoutMs = 5 * 60 * 1000
     val producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT
     val segments = new LogSegments(tp)
-    val leaderEpochCache = JUnifiedLog.createLeaderEpochCache(
+    val leaderEpochCache = UnifiedLog.createLeaderEpochCache(
       tpDir, topicPartition, logDirFailureChannel, Optional.empty, time.scheduler)
     val producerStateManager = new ProducerStateManager(topicPartition, tpDir, maxTransactionTimeoutMs, producerStateManagerConfig, time)
     val offsets = new LogLoader(
@@ -132,8 +132,8 @@ class LogCleanerManagerTest extends Logging {
       offsets.nextOffsetMetadata, time.scheduler, time, tp, logDirFailureChannel)
     // the exception should be caught and the partition that caused it marked as uncleanable
     class LogMock extends UnifiedLog(offsets.logStartOffset, localLog, new BrokerTopicStats,
-        producerIdExpirationCheckIntervalMs, leaderEpochCache,
-        producerStateManager, _topicId = None) {
+      producerIdExpirationCheckIntervalMs, leaderEpochCache,
+      producerStateManager, Optional.empty, false, LogOffsetsListener.NO_OP_OFFSETS_LISTENER) {
       // Throw an error in getFirstBatchTimestampForSegments since it is called in grabFilthiestLog()
       override def getFirstBatchTimestampForSegments(segments: util.Collection[LogSegment]): util.Collection[java.lang.Long] =
         throw new IllegalStateException("Error!")
@@ -356,9 +356,9 @@ class LogCleanerManagerTest extends Logging {
     val log: UnifiedLog = createLog(records.sizeInBytes * 5, TopicConfig.CLEANUP_POLICY_DELETE)
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
-    log.appendAsLeader(records, leaderEpoch = 0)
+    log.appendAsLeader(records, 0)
     log.roll()
-    log.appendAsLeader(TestUtils.singletonRecords("test2".getBytes, key="test2".getBytes), leaderEpoch = 0)
+    log.appendAsLeader(TestUtils.singletonRecords("test2".getBytes, key="test2".getBytes), 0)
     log.updateHighWatermark(2L)
 
     // simulate cleanup thread working on the log partition
@@ -550,7 +550,7 @@ class LogCleanerManagerTest extends Logging {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     while (log.numberOfSegments < 8)
-      log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, time.milliseconds()), leaderEpoch = 0)
+      log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, time.milliseconds()), 0)
 
     log.updateHighWatermark(50)
 
@@ -572,7 +572,7 @@ class LogCleanerManagerTest extends Logging {
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
     while (log.numberOfSegments < 8)
-      log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, time.milliseconds()), leaderEpoch = 0)
+      log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, time.milliseconds()), 0)
 
     log.updateHighWatermark(log.logEndOffset)
 
@@ -596,7 +596,7 @@ class LogCleanerManagerTest extends Logging {
 
     val t0 = time.milliseconds
     while (log.numberOfSegments < 4)
-      log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, t0), leaderEpoch = 0)
+      log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, t0), 0)
 
     val activeSegAtT0 = log.activeSegment
 
@@ -604,7 +604,7 @@ class LogCleanerManagerTest extends Logging {
     val t1 = time.milliseconds
 
     while (log.numberOfSegments < 8)
-      log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, t1), leaderEpoch = 0)
+      log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, t1), 0)
 
     log.updateHighWatermark(log.logEndOffset)
 
@@ -629,7 +629,7 @@ class LogCleanerManagerTest extends Logging {
 
     val t0 = time.milliseconds
     while (log.numberOfSegments < 8)
-      log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, t0), leaderEpoch = 0)
+      log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, t0), 0)
 
     log.updateHighWatermark(log.logEndOffset)
 
@@ -674,9 +674,9 @@ class LogCleanerManagerTest extends Logging {
     val sequence = 0
     log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.NONE, producerId, producerEpoch, sequence,
       new SimpleRecord(time.milliseconds(), "1".getBytes, "a".getBytes),
-      new SimpleRecord(time.milliseconds(), "2".getBytes, "b".getBytes)), leaderEpoch = 0)
+      new SimpleRecord(time.milliseconds(), "2".getBytes, "b".getBytes)), 0)
     log.appendAsLeader(MemoryRecords.withTransactionalRecords(Compression.NONE, producerId, producerEpoch, sequence + 2,
-      new SimpleRecord(time.milliseconds(), "3".getBytes, "c".getBytes)), leaderEpoch = 0)
+      new SimpleRecord(time.milliseconds(), "3".getBytes, "c".getBytes)), 0)
     log.roll()
     log.updateHighWatermark(3L)
 
@@ -687,8 +687,8 @@ class LogCleanerManagerTest extends Logging {
     assertEquals(0L, cleanableOffsets.firstUncleanableDirtyOffset)
 
     log.appendAsLeader(MemoryRecords.withEndTransactionMarker(time.milliseconds(), producerId, producerEpoch,
-      new EndTransactionMarker(ControlRecordType.ABORT, 15)), leaderEpoch = 0,
-      origin = AppendOrigin.COORDINATOR)
+      new EndTransactionMarker(ControlRecordType.ABORT, 15)), 0,
+      AppendOrigin.COORDINATOR)
     log.roll()
     log.updateHighWatermark(4L)
 
@@ -711,7 +711,7 @@ class LogCleanerManagerTest extends Logging {
     logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
     while (log.numberOfSegments < 8)
-      log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, time.milliseconds()), leaderEpoch = 0)
+      log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, time.milliseconds()), 0)
 
     val cleanerManager: LogCleanerManager = createCleanerManager(log)
 
@@ -807,21 +807,22 @@ class LogCleanerManagerTest extends Logging {
                         cleanupPolicy: String,
                         topicPartition: TopicPartition = new TopicPartition("log", 0)): UnifiedLog = {
     val config = createLowRetentionLogConfig(segmentSize, cleanupPolicy)
-    val partitionDir = new File(logDir, JUnifiedLog.logDirName(topicPartition))
+    val partitionDir = new File(logDir, UnifiedLog.logDirName(topicPartition))
 
-    UnifiedLog(
-      dir = partitionDir,
-      config = config,
-      logStartOffset = 0L,
-      recoveryPoint = 0L,
-      scheduler = time.scheduler,
-      time = time,
-      brokerTopicStats = new BrokerTopicStats,
-      maxTransactionTimeoutMs = 5 * 60 * 1000,
-      producerStateManagerConfig = producerStateManagerConfig,
-      producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
-      logDirFailureChannel = new LogDirFailureChannel(10),
-      topicId = None)
+    UnifiedLog.create(
+      partitionDir,
+      config,
+      0L,
+      0L,
+      time.scheduler,
+      new BrokerTopicStats,
+      time,
+      5 * 60 * 1000,
+      producerStateManagerConfig,
+      TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+      new LogDirFailureChannel(10),
+      true,
+      Optional.empty)
   }
 
   private def createLowRetentionLogConfig(segmentSize: Int, cleanupPolicy: String): LogConfig = {
@@ -857,24 +858,25 @@ class LogCleanerManagerTest extends Logging {
       new SimpleRecord(currentTimestamp, s"key-$offset".getBytes, s"value-$offset".getBytes)
     }
 
-    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), leaderEpoch = 1)
+    log.appendAsLeader(MemoryRecords.withRecords(Compression.NONE, records:_*), 1)
     log.maybeIncrementHighWatermark(log.logEndOffsetMetadata)
   }
 
   private def makeLog(dir: File = logDir, config: LogConfig) = {
-    UnifiedLog(
-      dir = dir,
-      config = config,
-      logStartOffset = 0L,
-      recoveryPoint = 0L,
-      scheduler = time.scheduler,
-      time = time,
-      brokerTopicStats = new BrokerTopicStats,
-      maxTransactionTimeoutMs = 5 * 60 * 1000,
-      producerStateManagerConfig = producerStateManagerConfig,
-      producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
-      logDirFailureChannel = new LogDirFailureChannel(10),
-      topicId = None
+    UnifiedLog.create(
+      dir,
+      config,
+      0L,
+      0L,
+      time.scheduler,
+      new BrokerTopicStats,
+      time,
+      5 * 60 * 1000,
+      producerStateManagerConfig,
+      TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+      new LogDirFailureChannel(10),
+      true,
+      Optional.empty
     )
   }
 

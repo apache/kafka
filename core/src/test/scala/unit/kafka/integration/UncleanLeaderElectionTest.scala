@@ -22,7 +22,7 @@ import java.util.concurrent.ExecutionException
 import scala.util.Random
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
-import kafka.server.{KafkaBroker, KafkaConfig, MetadataCache, QuorumTestHarness}
+import kafka.server.{KafkaBroker, KafkaConfig, QuorumTestHarness}
 import kafka.utils.{CoreUtils, TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils._
 import org.apache.kafka.common.TopicPartition
@@ -32,6 +32,7 @@ import org.apache.kafka.common.serialization.StringDeserializer
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, AlterConfigOp, AlterConfigsResult, ConfigEntry}
+import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.logging.log4j.{Level, LogManager}
@@ -283,7 +284,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
     //make sure follower server joins the ISR
     TestUtils.waitUntilTrue(() => {
       val partitionInfoOpt = followerServer.metadataCache.getLeaderAndIsr(topic, partitionId)
-      partitionInfoOpt.isDefined && partitionInfoOpt.get.isr.contains(followerId)
+      partitionInfoOpt.isPresent() && partitionInfoOpt.get.isr.contains(followerId)
     }, "Inconsistent metadata after first server startup")
 
     brokers.filter(_.config.brokerId == leaderId).map(shutdownBroker)
@@ -424,7 +425,7 @@ class UncleanLeaderElectionTest extends QuorumTestHarness {
   }
 
   private def waitForNoLeaderAndIsrHasOldLeaderId(metadataCache: MetadataCache, leaderId: Int): Unit = {
-    waitUntilTrue(() => metadataCache.getLeaderAndIsr(topic, partitionId).isDefined &&
+    waitUntilTrue(() => metadataCache.getLeaderAndIsr(topic, partitionId).isPresent() &&
       metadataCache.getLeaderAndIsr(topic, partitionId).get.leader() == LeaderConstants.NO_LEADER &&
       java.util.Arrays.asList(leaderId).equals(metadataCache.getLeaderAndIsr(topic, partitionId).get.isr()),
       "Timed out waiting for broker metadata cache updates the info for topic partition:" + topicPartition)

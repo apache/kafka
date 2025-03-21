@@ -298,7 +298,7 @@ class BrokerMetadataPublisher(
       // Start log manager, which will perform (potentially lengthy)
       // recovery-from-unclean-shutdown if required.
       logManager.startup(
-        metadataCache.getAllTopics(),
+        metadataCache.getAllTopics().asScala,
         isStray = log => LogManager.isStrayKraftReplica(brokerId, newImage.topics(), log)
       )
 
@@ -326,14 +326,14 @@ class BrokerMetadataPublisher(
     try {
       // Start the group coordinator.
       groupCoordinator.startup(() => metadataCache.numPartitions(Topic.GROUP_METADATA_TOPIC_NAME)
-        .getOrElse(config.groupCoordinatorConfig.offsetsTopicPartitions))
+        .orElse(config.groupCoordinatorConfig.offsetsTopicPartitions))
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting GroupCoordinator", t)
     }
     try {
       // Start the transaction coordinator.
       txnCoordinator.startup(() => metadataCache.numPartitions(
-        Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionLogConfig.transactionTopicPartitions))
+        Topic.TRANSACTION_STATE_TOPIC_NAME).orElse(config.transactionLogConfig.transactionTopicPartitions))
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting TransactionCoordinator", t)
     }
@@ -341,7 +341,7 @@ class BrokerMetadataPublisher(
       try {
         // Start the share coordinator.
         shareCoordinator.get.startup(() => metadataCache.numPartitions(
-          Topic.SHARE_GROUP_STATE_TOPIC_NAME).getOrElse(config.shareCoordinatorConfig.shareCoordinatorStateTopicNumPartitions()))
+          Topic.SHARE_GROUP_STATE_TOPIC_NAME).orElse(config.shareCoordinatorConfig.shareCoordinatorStateTopicNumPartitions()))
       } catch {
         case t: Throwable => fatalFaultHandler.handleFault("Error starting Share coordinator", t)
       }
