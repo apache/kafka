@@ -352,7 +352,7 @@ public class Formatter {
                         "Cannot set kraft.version to " +
                         configuredKRaftVersionLevel.get() +
                         " if one of the flags --standalone, --initial-controllers, or --no-initial-controllers is used. " +
-                        "Try removing the --feature flag for kraft.version."
+                        "For dynamic controllers support, try removing the --feature flag for kraft.version."
                     );
                 }
             } else {
@@ -361,8 +361,8 @@ public class Formatter {
                         "Cannot set kraft.version to " +
                         configuredKRaftVersionLevel.get() +
                         " unless one of the flags --standalone, --initial-controllers, or --no-initial-controllers is used. " +
-                        "Try using one of --standalone, --initial-controllers, or --no-initial-controllers for dynamic " +
-                        "controllers support."
+                        "For dynamic controllers support, try using one of --standalone, --initial-controllers, or " +
+                        "--no-initial-controllers ."
                     );
                 }
             }
