@@ -24,7 +24,6 @@ import org.apache.kafka.timeline.TimelineHashSet;
 
 import java.util.Comparator;
 import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -32,12 +31,12 @@ import java.util.stream.Collectors;
  * A simple Coordinator implementation that stores the records into a set.
  */
 public class MockCoordinatorShard implements CoordinatorShard<String> {
-    static class RecordAndMetadata {
-        public final long offset;
-        public final long producerId;
-        public final short producerEpoch;
-        public final String record;
-
+    static record RecordAndMetadata(
+        long offset,
+        long producerId,
+        short producerEpoch,
+        String record
+    ) {
         public RecordAndMetadata(
             long offset,
             String record
@@ -48,50 +47,6 @@ public class MockCoordinatorShard implements CoordinatorShard<String> {
                 RecordBatch.NO_PRODUCER_EPOCH,
                 record
             );
-        }
-
-        public RecordAndMetadata(
-            long offset,
-            long producerId,
-            short producerEpoch,
-            String record
-        ) {
-            this.offset = offset;
-            this.producerId = producerId;
-            this.producerEpoch = producerEpoch;
-            this.record = record;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-
-            RecordAndMetadata that = (RecordAndMetadata) o;
-
-            if (offset != that.offset) return false;
-            if (producerId != that.producerId) return false;
-            if (producerEpoch != that.producerEpoch) return false;
-            return Objects.equals(record, that.record);
-        }
-
-        @Override
-        public int hashCode() {
-            int result = (int) (offset ^ (offset >>> 32));
-            result = 31 * result + (int) (producerId ^ (producerId >>> 32));
-            result = 31 * result + (int) producerEpoch;
-            result = 31 * result + (record != null ? record.hashCode() : 0);
-            return result;
-        }
-
-        @Override
-        public String toString() {
-            return "RecordAndMetadata(" +
-                "offset=" + offset +
-                ", producerId=" + producerId +
-                ", producerEpoch=" + producerEpoch +
-                ", record='" + record.substring(0, Math.min(10, record.length())) + '\'' +
-                ')';
         }
     }
 
