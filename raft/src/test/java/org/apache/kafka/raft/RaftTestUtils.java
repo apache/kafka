@@ -58,4 +58,8 @@ public class RaftTestUtils {
             writer.freeze();
         }
     }
+
+    static int majoritySize(int numberOfVoters) {
+        return (numberOfVoters / 2) + 1;
+    }
 }
