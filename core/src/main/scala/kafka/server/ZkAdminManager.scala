@@ -503,8 +503,6 @@ class ZkAdminManager(val config: KafkaConfig,
   def incrementalAlterConfigs(configs: Map[ConfigResource, Seq[AlterConfigOp]], validateOnly: Boolean): Map[ConfigResource, ApiError] = {
     configs.map { case (resource, alterConfigOps) =>
       try {
-        val configEntriesMap = alterConfigOps.map(entry => (entry.configEntry.name, entry.configEntry.value)).toMap
-
         resource.`type` match {
           case ConfigResource.Type.TOPIC =>
             if (resource.name.isEmpty) {
@@ -512,6 +510,8 @@ class ZkAdminManager(val config: KafkaConfig,
             }
             val configProps = adminZkClient.fetchEntityConfig(ConfigType.TOPIC, resource.name)
             prepareIncrementalConfigs(alterConfigOps, configProps, LogConfig.configKeys.asScala)
+            val configEntriesMap = alterConfigOps.map(entry =>
+                (entry.configEntry.name, configProps.getProperty(entry.configEntry.name))).filter(x => x._2 != null).toMap
             alterTopicConfigs(resource, validateOnly, configProps, configEntriesMap)
 
           case ConfigResource.Type.BROKER =>
@@ -523,6 +523,8 @@ class ZkAdminManager(val config: KafkaConfig,
 
             val configProps = this.config.dynamicConfig.fromPersistentProps(persistentProps, perBrokerConfig)
             prepareIncrementalConfigs(alterConfigOps, configProps, KafkaConfig.configKeys)
+            val configEntriesMap = alterConfigOps.map(entry =>
+              (entry.configEntry.name, configProps.getProperty(entry.configEntry.name))).toMap
             alterBrokerConfigs(resource, validateOnly, configProps, configEntriesMap)
 
           case resourceType =>
