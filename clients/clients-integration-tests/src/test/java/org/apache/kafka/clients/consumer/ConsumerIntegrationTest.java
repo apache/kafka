@@ -47,15 +47,10 @@ public class ConsumerIntegrationTest {
         @ClusterTest(serverProperties = {
             @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
             @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-            @ClusterConfigProperty(key = "group.coordinator.new.enable", value = "false")
-        }),
-        @ClusterTest(serverProperties = {
-            @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
             @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic")
         })
     })
-    public void testAsyncConsumerWithOldGroupCoordinator(ClusterInstance clusterInstance) throws Exception {
+    public void testAsyncConsumerWithConsumerProtocolDisabled(ClusterInstance clusterInstance) throws Exception {
         String topic = "test-topic";
         clusterInstance.createTopic(topic, 1, (short) 1);
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(Map.of(
