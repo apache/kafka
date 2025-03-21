@@ -15,11 +15,10 @@
  * limitations under the License.
  */
 
-package kafka.admin;
+package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.admin.NewTopic;
+import kafka.admin.ConfigCommand;
+
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -71,7 +70,7 @@ public class ClientTelemetryTest {
             types = Type.KRAFT, 
             brokers = 3,
             serverProperties = {
-                @ClusterConfigProperty(key = METRIC_REPORTER_CLASSES_CONFIG, value = "kafka.admin.ClientTelemetryTest$GetIdClientTelemetry"),
+                @ClusterConfigProperty(key = METRIC_REPORTER_CLASSES_CONFIG, value = "org.apache.kafka.clients.admin.ClientTelemetryTest$GetIdClientTelemetry"),
             })
     public void testClientInstanceId(ClusterInstance clusterInstance) throws InterruptedException, ExecutionException {
         Map<String, Object> configs = new HashMap<>();
@@ -159,7 +158,7 @@ public class ClientTelemetryTest {
 
     /**
      * We should add a ClientTelemetry into plugins to test the clientInstanceId method Otherwise the
-     * {@link  org.apache.kafka.common.protocol.ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS } command will not be supported
+     * {@link org.apache.kafka.common.protocol.ApiKeys#GET_TELEMETRY_SUBSCRIPTIONS} command will not be supported
      * by the server
      **/
     public static class GetIdClientTelemetry implements ClientTelemetry, MetricsReporter {
