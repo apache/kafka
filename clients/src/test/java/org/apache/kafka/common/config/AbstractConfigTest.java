@@ -733,8 +733,9 @@ public class AbstractConfigTest {
 
         @Override
         protected Map<String, Object> preProcessParsedConfig(Map<String, Object> parsedValues) {
-            parsedValues.put("preprocess", "success");
-            return parsedValues;
+            Map<String, Object> ret = new HashMap<>();
+            ret.put("preprocess", "success");
+            return ret;
         }
     }
 
