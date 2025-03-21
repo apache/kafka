@@ -27,10 +27,12 @@ Configuration:
 
   Loggers:
     Root:
-      level: INFO
+      level: OFF
       AppenderRef:
         - ref: STDOUT
-        - name: org.apache.kafka
     Logger:
+      - name: kafka
+        level: WARN
+
       - name: org.apache.kafka
-        level: INFO
+        level: WARN
