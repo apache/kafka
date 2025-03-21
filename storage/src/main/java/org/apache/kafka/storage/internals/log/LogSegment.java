@@ -381,7 +381,7 @@ public class LogSegment implements Closeable {
      */
     LogOffsetPosition translateOffset(long offset, int startingFilePosition) throws IOException {
         OffsetPosition mapping = offsetIndex().lookup(offset);
-        return log.searchForOffsetWithSize(offset, Math.max(mapping.position, startingFilePosition));
+        return log.searchForOffsetFromPosition(offset, Math.max(mapping.position, startingFilePosition));
     }
 
     /**
