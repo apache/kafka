@@ -113,7 +113,7 @@ class BrokerServer(
 
   var tokenManager: DelegationTokenManager = _
 
-  var dynamicConfigHandlers: Map[String, ConfigHandler] = _
+  var dynamicConfigHandlers: Map[ConfigType, ConfigHandler] = _
 
   @volatile private[this] var _replicaManager: ReplicaManager = _
 
@@ -385,11 +385,11 @@ class BrokerServer(
         config, clientToControllerChannelManager, groupCoordinator,
         transactionCoordinator, shareCoordinator)
 
-      dynamicConfigHandlers = Map[String, ConfigHandler](
-        ConfigType.TOPIC.value -> new TopicConfigHandler(replicaManager, config, quotaManagers),
-        ConfigType.BROKER.value -> new BrokerConfigHandler(config, quotaManagers),
-        ConfigType.CLIENT_METRICS.value -> new ClientMetricsConfigHandler(clientMetricsManager),
-        ConfigType.GROUP.value -> new GroupConfigHandler(groupCoordinator))
+      dynamicConfigHandlers = Map[ConfigType, ConfigHandler](
+        ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers),
+        ConfigType.BROKER -> new BrokerConfigHandler(config, quotaManagers),
+        ConfigType.CLIENT_METRICS -> new ClientMetricsConfigHandler(clientMetricsManager),
+        ConfigType.GROUP -> new GroupConfigHandler(groupCoordinator))
 
       val featuresRemapped = BrokerFeatures.createDefaultFeatureMap(brokerFeatures)
 
