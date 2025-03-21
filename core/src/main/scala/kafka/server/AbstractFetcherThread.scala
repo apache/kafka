@@ -307,7 +307,8 @@ abstract class AbstractFetcherThread(name: String,
     }
   }
 
-  private def processFetchRequest(sessionPartitions: util.Map[TopicPartition, FetchRequest.PartitionData],
+  // visible for testing
+  private[server] def processFetchRequest(sessionPartitions: util.Map[TopicPartition, FetchRequest.PartitionData],
                                   fetchRequest: FetchRequest.Builder): Unit = {
     val partitionsWithError = mutable.Set[TopicPartition]()
     val divergingEndOffsets = mutable.Map.empty[TopicPartition, EpochEndOffset]
@@ -365,7 +366,7 @@ abstract class AbstractFetcherThread(name: String,
                       val logAppendInfoOpt = processPartitionData(
                         topicPartition,
                         currentFetchState.fetchOffset,
-                        fetchPartitionData.currentLeaderEpoch.orElse(currentFetchState.currentLeaderEpoch),
+                        currentFetchState.currentLeaderEpoch,
                         partitionData
                       )
 
