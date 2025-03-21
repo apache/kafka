@@ -27,6 +27,6 @@ Configuration:
 
   Loggers:
     Root:
-      level: ALL
+      level: INFO
       AppenderRef:
         - ref: STDOUT
