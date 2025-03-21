@@ -934,10 +934,8 @@ public class OffsetMetadataManager {
      * @param topic     The topic name.
      * @param partition The partition.
      * @param records   The list of records to append the tombstone.
-     *
-     * @return The topic partition of the corresponding tombstone.
      */
-    private TopicPartition appendOffsetCommitTombstone(
+    private void appendOffsetCommitTombstone(
         String groupId,
         String topic,
         int partition, 
@@ -946,7 +944,6 @@ public class OffsetMetadataManager {
         records.add(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
         TopicPartition tp = new TopicPartition(topic, partition);
         log.trace("[GroupId {}] Removing expired offset and metadata for {}", groupId, tp);
-        return tp;
     }
 
     /**
