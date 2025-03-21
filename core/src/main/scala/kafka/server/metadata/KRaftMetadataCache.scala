@@ -30,7 +30,6 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.MetadataResponse
 import org.apache.kafka.image.MetadataImage
 import org.apache.kafka.metadata.{BrokerRegistration, LeaderAndIsr, MetadataCache, PartitionRegistration, Replicas}
-import org.apache.kafka.metadata.placement.UsableBroker
 import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion}
 
 import java.util
@@ -341,13 +340,6 @@ class KRaftMetadataCache(
     Option(_currentImage.cluster.broker(brokerId)).count(_.inControlledShutdown) == 1
   }
 
-  private def getAliveBrokers(image: MetadataImage): util.List[UsableBroker] = {
-    image.cluster().brokers().values().stream()
-      .filter(Predicate.not(_.fenced))
-      .map(broker => new UsableBroker(broker.id, broker.rack, false))
-      .collect(Collectors.toList())
-  }
-
   override def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): util.Optional[Node] = {
     util.Optional.ofNullable(_currentImage.cluster().broker(brokerId))
       .filter(Predicate.not(_.fenced))
@@ -422,11 +414,13 @@ class KRaftMetadataCache(
   }
 
   private def getRandomAliveBroker(image: MetadataImage): util.Optional[Integer] = {
-    val aliveBrokers = getAliveBrokers(image)
+    val aliveBrokers = image.cluster().brokers().values().stream()
+      .filter(Predicate.not(_.fenced))
+      .map(_.id()).toList
     if (aliveBrokers.isEmpty) {
       util.Optional.empty()
     } else {
-      util.Optional.of(aliveBrokers.get(ThreadLocalRandom.current().nextInt(aliveBrokers.size)).id)
+      util.Optional.of(aliveBrokers.get(ThreadLocalRandom.current().nextInt(aliveBrokers.size)))
     }
   }
 
