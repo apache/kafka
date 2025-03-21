@@ -41,10 +41,11 @@ import org.apache.kafka.common.requests.RequestHeader
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time, Utils}
-import org.apache.kafka.raft.{ExternalKRaftMetrics, Endpoints, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, QuorumConfig, RaftClient, ReplicatedLog, TimingWheelExpirationService}
+import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, FileQuorumStateStore, KafkaNetworkChannel, KafkaRaftClient, KafkaRaftClientDriver, LeaderAndEpoch, MetadataLogConfig, QuorumConfig, RaftClient, ReplicatedLog, TimingWheelExpirationService}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.Feature
 import org.apache.kafka.server.common.serialization.RecordSerde
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.util.{FileLock, KafkaScheduler}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.util.timer.SystemTimer
@@ -230,7 +231,15 @@ class KafkaRaftManager[T](
       dataDir,
       time,
       scheduler,
-      config = MetadataLogConfig(config, KafkaRaftClient.MAX_BATCH_SIZE_BYTES, KafkaRaftClient.MAX_FETCH_SIZE_BYTES)
+      config = new MetadataLogConfig(config.metadataLogSegmentBytes,
+        config.metadataLogSegmentMinBytes,
+        config.metadataLogSegmentMillis,
+        config.metadataRetentionBytes,
+        config.metadataRetentionMillis,
+        KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+        KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
+        ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
+        config.metadataNodeIDConfig)
     )
   }
 
