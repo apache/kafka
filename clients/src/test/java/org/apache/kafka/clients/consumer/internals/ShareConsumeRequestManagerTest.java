@@ -144,7 +144,6 @@ public class ShareConsumeRequestManagerTest {
             put(topicName2, 1);
         }
     };
-    private final List<AcknowledgeType> acknowledgeTypes = List.of(AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
     private final TopicPartition tp0 = new TopicPartition(topicName, 0);
     private final TopicIdPartition tip0 = new TopicIdPartition(topicId, tp0);
     private final TopicPartition tp1 = new TopicPartition(topicName, 1);
@@ -328,7 +327,7 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        Acknowledgements acknowledgements = getAcknowledgements(1, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
         shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)),
                 calculateDeadlineMs(time.timer(2000)));
@@ -358,7 +357,7 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        Acknowledgements acknowledgements = getAcknowledgements(1, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
         shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)),
                 calculateDeadlineMs(time.timer(defaultApiTimeoutMs)));
@@ -391,7 +390,7 @@ public class ShareConsumeRequestManagerTest {
         fetchRecords();
 
         Acknowledgements acknowledgements = getAcknowledgements(1,
-                List.of(AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT).toArray(new AcknowledgeType[0]));
+                AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT);
 
         shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)),
                 calculateDeadlineMs(time.timer(defaultApiTimeoutMs)));
@@ -454,7 +453,7 @@ public class ShareConsumeRequestManagerTest {
         shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
 
         // Remaining acknowledgements sent with close().
-        Acknowledgements acknowledgements2 = getAcknowledgements(2, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements2 = getAcknowledgements(2, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
         shareConsumeRequestManager.acknowledgeOnClose(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements2)),
                 calculateDeadlineMs(time.timer(100)));
@@ -488,7 +487,7 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        Acknowledgements acknowledgements = getAcknowledgements(1, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
         shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)),
                 calculateDeadlineMs(time.timer(defaultApiTimeoutMs)));
@@ -523,7 +522,7 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        Acknowledgements acknowledgements = getAcknowledgements(1, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
         shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)),
                 calculateDeadlineMs(time.timer(100)));
@@ -548,7 +547,7 @@ public class ShareConsumeRequestManagerTest {
         // Enabling the config so that background event is sent when the acknowledgement response is received.
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
-        Acknowledgements acknowledgements = getAcknowledgements(1, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
         ShareConsumeRequestManager.ResultHandler resultHandler = shareConsumeRequestManager.buildResultHandler(null, Optional.empty());
 
@@ -572,7 +571,7 @@ public class ShareConsumeRequestManagerTest {
         // Enabling the config so that background event is sent when the acknowledgement response is received.
         shareConsumeRequestManager.setAcknowledgementCommitCallbackRegistered(true);
 
-        Acknowledgements acknowledgements = getAcknowledgements(1, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
         final CompletableFuture<Map<TopicIdPartition, Acknowledgements>> future = new CompletableFuture<>();
 
@@ -634,12 +633,12 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        Acknowledgements acknowledgements = getAcknowledgements(1, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
         shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)),
                 calculateDeadlineMs(time.timer(defaultApiTimeoutMs)));
 
-        Acknowledgements acknowledgements2 = getAcknowledgements(4, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements2 = getAcknowledgements(4, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
         shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements2)),
                 calculateDeadlineMs(time.timer(defaultApiTimeoutMs)));
@@ -673,12 +672,12 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        Acknowledgements acknowledgements = getAcknowledgements(1, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
         shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)),
                 calculateDeadlineMs(time.timer(defaultApiTimeoutMs)));
 
-        Acknowledgements acknowledgements2 = getAcknowledgements(4, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements2 = getAcknowledgements(4, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
         shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements2)),
                 calculateDeadlineMs(time.timer(60000L)));
@@ -724,9 +723,8 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        List<AcknowledgeType> acknowledgeTypeList = List.of(AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT,
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT,
                 AcknowledgeType.ACCEPT, AcknowledgeType.RELEASE, AcknowledgeType.ACCEPT);
-        Acknowledgements acknowledgements = getAcknowledgements(1, acknowledgeTypeList.toArray(new AcknowledgeType[0]));
 
         shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)), 60000L);
         assertNull(shareConsumeRequestManager.requestStates(0).getAsyncRequest());
@@ -770,7 +768,7 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        Acknowledgements acknowledgements = getAcknowledgements(1, List.of(AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT).toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT);
 
         // commitAsync() acknowledges the first 2 records.
         shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)), calculateDeadlineMs(time, 1000L));
@@ -784,13 +782,13 @@ public class ShareConsumeRequestManagerTest {
         client.prepareResponse(fullAcknowledgeResponse(tip0, Errors.REQUEST_TIMED_OUT));
         networkClientDelegate.poll(time.timer(0));
 
-        Acknowledgements acknowledgements1 = getAcknowledgements(3, List.of(AcknowledgeType.ACCEPT, AcknowledgeType.REJECT).toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements1 = getAcknowledgements(3, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
         // 2nd commitAsync() acknowledges the next 2 records.
         shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements1)), calculateDeadlineMs(time, 1000L));
         assertEquals(2, shareConsumeRequestManager.requestStates(0).getAsyncRequest().getIncompleteAcknowledgementsCount(tip0));
 
-        Acknowledgements acknowledgements2 = getAcknowledgements(5, List.of(AcknowledgeType.RELEASE, AcknowledgeType.ACCEPT).toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements2 = getAcknowledgements(5, AcknowledgeType.RELEASE, AcknowledgeType.ACCEPT);
 
         // 3rd commitAsync() acknowledges the next 2 records.
         shareConsumeRequestManager.commitAsync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements2)), calculateDeadlineMs(time, 1000L));
@@ -833,7 +831,7 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        Acknowledgements acknowledgements = getAcknowledgements(1, List.of(AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT).toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT);
 
         // commitSync() for the first 2 acknowledgements.
         shareConsumeRequestManager.commitSync(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)), calculateDeadlineMs(time, 1000L));
@@ -884,7 +882,7 @@ public class ShareConsumeRequestManagerTest {
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
         Acknowledgements acknowledgements = getAcknowledgements(1,
-                List.of(AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT).toArray(new AcknowledgeType[0]));
+                AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT);
 
         // Reading records from the share fetch buffer.
         fetchRecords();
@@ -928,7 +926,7 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        Acknowledgements acknowledgements = getAcknowledgements(1, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
         subscriptions.subscribeToShareGroup(Collections.singleton(topicName2));
         subscriptions.assignFromSubscribed(Collections.singleton(t2p0));
@@ -970,7 +968,7 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        Acknowledgements acknowledgements = getAcknowledgements(1, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
         subscriptions.subscribeToShareGroup(Collections.singleton(topicName2));
         subscriptions.assignFromSubscribed(Collections.singleton(t2p0));
@@ -1012,7 +1010,7 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        Acknowledgements acknowledgements = getAcknowledgements(1, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
         subscriptions.subscribeToShareGroup(Collections.singleton(topicName2));
         subscriptions.assignFromSubscribed(Collections.singleton(t2p0));
@@ -1049,7 +1047,7 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        Acknowledgements acknowledgements = getAcknowledgements(1, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
         // Send acknowledgements via ShareFetch
         shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
@@ -1093,7 +1091,7 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        Acknowledgements acknowledgements = getAcknowledgements(0, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements = getAcknowledgements(0, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
         // Send acknowledgements via ShareFetch
         shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
@@ -1205,8 +1203,8 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        Acknowledgements acknowledgements = getAcknowledgements(1, acknowledgeTypes.toArray(new AcknowledgeType[0]));
-        Acknowledgements acknowledgements1 = getAcknowledgements(1, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
+        Acknowledgements acknowledgements1 = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
         Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap = new HashMap<>();
         acknowledgementsMap.put(tip0, new NodeAcknowledgements(0, acknowledgements));
@@ -1347,9 +1345,9 @@ public class ShareConsumeRequestManagerTest {
         networkClientDelegate.poll(time.timer(0));
         assertTrue(shareConsumeRequestManager.hasCompletedFetches());
 
-        Acknowledgements acknowledgements = getAcknowledgements(1, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
-        Acknowledgements acknowledgements2 = getAcknowledgements(1, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements2 = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
         Map<TopicIdPartition, NodeAcknowledgements> acks = new HashMap<>();
         acks.put(tip0, new NodeAcknowledgements(0, acknowledgements));
@@ -1500,7 +1498,7 @@ public class ShareConsumeRequestManagerTest {
 
         // Send remaining acknowledgements through piggybacking on the next fetch.
         Acknowledgements acknowledgements1 = getAcknowledgements(2,
-                List.of(AcknowledgeType.ACCEPT, AcknowledgeType.REJECT).toArray(new AcknowledgeType[0]));
+                AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
         shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements1)));
 
@@ -1550,7 +1548,7 @@ public class ShareConsumeRequestManagerTest {
 
         assignFromSubscribed(singleton(tp0));
 
-        Acknowledgements acknowledgements = getAcknowledgements(1, acknowledgeTypes.toArray(new AcknowledgeType[0]));
+        Acknowledgements acknowledgements = getAcknowledgements(1, AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT, AcknowledgeType.REJECT);
 
         shareConsumeRequestManager.fetch(Map.of(tip0, new NodeAcknowledgements(0, acknowledgements)));
 
@@ -2201,7 +2199,7 @@ public class ShareConsumeRequestManagerTest {
         acknowledgementsTp0.add(1L, AcknowledgeType.ACCEPT);
 
         Acknowledgements acknowledgementsTp1 = getAcknowledgements(1,
-                        List.of(AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT).toArray(new AcknowledgeType[0]));
+                        AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT);
 
         Map<TopicIdPartition, NodeAcknowledgements> commitAcks = new HashMap<>();
         commitAcks.put(tip0, new NodeAcknowledgements(0, acknowledgementsTp0));
@@ -2287,7 +2285,7 @@ public class ShareConsumeRequestManagerTest {
         acknowledgementsTp0.add(1L, AcknowledgeType.ACCEPT);
 
         Acknowledgements acknowledgementsTp1 = getAcknowledgements(1,
-                List.of(AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT).toArray(new AcknowledgeType[0]));
+                AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT);
 
         Map<TopicIdPartition, NodeAcknowledgements> commitAcks = new HashMap<>();
         commitAcks.put(tip0, new NodeAcknowledgements(0, acknowledgementsTp0));
@@ -2377,7 +2375,7 @@ public class ShareConsumeRequestManagerTest {
         acknowledgementsTp0.add(1L, AcknowledgeType.ACCEPT);
 
         Acknowledgements acknowledgementsTp1 = getAcknowledgements(1,
-                List.of(AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT).toArray(new AcknowledgeType[0]));
+                AcknowledgeType.ACCEPT, AcknowledgeType.ACCEPT);
 
         shareConsumeRequestManager.fetch(Map.of(tip1, new NodeAcknowledgements(1, acknowledgementsTp1)));
 
