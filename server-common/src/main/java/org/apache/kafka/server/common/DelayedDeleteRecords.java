@@ -17,7 +17,7 @@
 package org.apache.kafka.server.common;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.message.DeleteRecordsResponseData;
+import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.purgatory.DelayedOperation;
@@ -49,14 +49,13 @@ public class DelayedDeleteRecords extends DelayedOperation {
     
     private final Map<TopicPartition, DeleteRecordsPartitionStatus> deleteRecordsStatus;
     private final BiConsumer<TopicPartition, DeleteRecordsPartitionStatus> onAcksPending;
-    private final Consumer<Map<TopicPartition, DeleteRecordsResponseData.DeleteRecordsPartitionResult>> responseCallback;
+    private final Consumer<Map<TopicPartition, DeleteRecordsPartitionResult>> responseCallback;
 
     public DelayedDeleteRecords(long delayMs,
                                 Map<TopicPartition, DeleteRecordsPartitionStatus> deleteRecordsStatus,
                                 //  To maintain compatibility with dependency packages, the logic has been moved to the caller.
                                 BiConsumer<TopicPartition, DeleteRecordsPartitionStatus> onAcksPending,
-                                Consumer<Map<TopicPartition,
-                                        DeleteRecordsResponseData.DeleteRecordsPartitionResult>> responseCallback) {
+                                Consumer<Map<TopicPartition, DeleteRecordsPartitionResult>> responseCallback) {
         super(delayMs);
         this.onAcksPending = onAcksPending;
         this.deleteRecordsStatus = new ConcurrentHashMap<>(deleteRecordsStatus);
