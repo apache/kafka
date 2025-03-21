@@ -842,4 +842,9 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     public KRaftVersion kraftVersion() {
         return lastKRaftVersion;
     }
+
+    @Override
+    public void upgradeKraftVersion(int epoch, KRaftVersion version) {
+        // TODO: Anything to do here?
+    }
 }

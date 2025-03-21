@@ -22,6 +22,7 @@ import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.common.KRaftVersion;
 
 import java.net.InetSocketAddress;
 import java.util.Collections;
@@ -252,6 +253,23 @@ public final class VoterSet {
     }
 
     /**
+     * TODO: document this
+     *
+     * @param voter the updated voter
+     * @return a new voter set if the voter was updated, otherwise {@code Optional.empty()}
+     */
+    public Optional<VoterSet> unsafeUpdateVoter(VoterNode voter) {
+        if (voters.containsKey(voter.voterKey().id())) {
+            HashMap<Integer, VoterNode> newVoters = new HashMap<>(voters);
+            newVoters.put(voter.voterKey().id(), voter);
+
+            return Optional.of(new VoterSet(newVoters));
+        }
+
+        return Optional.empty();
+    }
+
+    /**
      * Converts a voter set to a voters record for a given version.
      *
      * @param version the version of the voters record
@@ -302,6 +320,19 @@ public final class VoterSet {
 
         if (Utils.diff(HashSet::new, thisReplicaKeys, thatReplicaKeys).size() > 1) return false;
         return Utils.diff(HashSet::new, thatReplicaKeys, thisReplicaKeys).size() <= 1;
+    }
+
+    /**
+     * Determines if the voter set supports a given kraft version.
+     *
+     * @param version the kraft version to check
+     * @return true if all of the voter support the given kraft version, false otherwise
+     */
+    public boolean supportsVersion(KRaftVersion version) {
+        return voters
+            .values()
+            .stream()
+            .allMatch(voter -> voter.supportsVersion(version));
     }
 
     @Override
@@ -374,13 +405,18 @@ public final class VoterSet {
             return listeners;
         }
 
-        SupportedVersionRange supportedKRaftVersion() {
+        private SupportedVersionRange supportedKRaftVersion() {
             return supportedKRaftVersion;
         }
 
 
-        Optional<InetSocketAddress> address(ListenerName listener) {
+        private Optional<InetSocketAddress> address(ListenerName listener) {
             return listeners.address(listener);
+        }
+
+        private boolean supportsVersion(KRaftVersion version) {
+            return version.featureLevel() >= supportedKRaftVersion.min() &&
+                   version.featureLevel() <= supportedKRaftVersion.max();
         }
 
         @Override

@@ -21,7 +21,6 @@ import org.apache.kafka.common.message.UpdateRaftVoterRequestData;
 import org.apache.kafka.common.message.UpdateRaftVoterResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.Endpoints;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.LeaderState;
@@ -45,31 +44,26 @@ import java.util.concurrent.CompletableFuture;
  * 4. Check that the updated voter still supports the currently finalized kraft.version, otherwise
  *    return the INVALID_REQUEST error.
  * 5. Check that the updated voter is still listening on the default listener.
- * 6. Append the updated VotersRecord to the log. The KRaft internal listener will read this
- *    uncommitted record from the log and update the voter in the set of voters.
+ * 6. Update voter set with new voter configuration.
+ *    a. If reconfiguration is supported, append the updated VotersRecord to the log. The KRaft internal listener will read this
+ *       uncommitted record from the log and update the voter in the set of voters.
+ *    b. If reconfiguration is not supported, update the in-memory information for the voter. This will get
+ *       appended to the log when the cluster is upgraded to a kraft version that supports reconfiguration.
  * 7. Send the UpdateVoter successful response to the voter.
- *
- * KAFKA-16538 is going to add support for handling this RPC when the kraft.version is 0.
  */
 public final class UpdateVoterHandler {
     private final OptionalInt localId;
     private final KRaftControlRecordStateMachine partitionState;
     private final ListenerName defaultListenerName;
-    private final Time time;
-    private final long requestTimeoutMs;
 
     public UpdateVoterHandler(
         OptionalInt localId,
         KRaftControlRecordStateMachine partitionState,
-        ListenerName defaultListenerName,
-        Time time,
-        long requestTimeoutMs
+        ListenerName defaultListenerName
     ) {
         this.localId = localId;
         this.partitionState = partitionState;
         this.defaultListenerName = defaultListenerName;
-        this.time = time;
-        this.requestTimeoutMs = requestTimeoutMs;
     }
 
     public CompletableFuture<UpdateRaftVoterResponseData> handleUpdateVoterRequest(
@@ -111,26 +105,10 @@ public final class UpdateVoterHandler {
             );
         }
 
-        // KAFKA-16538 will implement the case when the kraft.version is 0
-        // Check that the cluster supports kraft.version >= 1
+        // Read the in-memory volatile voters set if one exists
         KRaftVersion kraftVersion = partitionState.lastKraftVersion();
-        if (!kraftVersion.isReconfigSupported()) {
-            return CompletableFuture.completedFuture(
-                RaftUtil.updateVoterResponse(
-                    Errors.UNSUPPORTED_VERSION,
-                    requestListenerName,
-                    new LeaderAndEpoch(
-                        localId,
-                        leaderState.epoch()
-                    ),
-                    leaderState.leaderEndpoints()
-                )
-            );
-        }
-
-        // Check that there are no uncommitted VotersRecord
-        Optional<LogHistory.Entry<VoterSet>> votersEntry = partitionState.lastVoterSetEntry();
-        if (votersEntry.isEmpty() || votersEntry.get().offset() >= highWatermark.get()) {
+        Optional<VoterSet> voters = currentVoters(leaderState, highWatermark.get(), kraftVersion);
+        if (voters.isEmpty()) {
             return CompletableFuture.completedFuture(
                 RaftUtil.updateVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
@@ -143,7 +121,6 @@ public final class UpdateVoterHandler {
                 )
             );
         }
-
         // Check that the supported version range is valid
         if (!validVersionRange(kraftVersion, supportedKraftVersions)) {
             return CompletableFuture.completedFuture(
@@ -175,19 +152,18 @@ public final class UpdateVoterHandler {
         }
 
         // Update the voter
-        Optional<VoterSet> updatedVoters = votersEntry
-            .get()
-            .value()
-            .updateVoter(
-                VoterSet.VoterNode.of(
-                    voterKey,
-                    voterEndpoints,
-                    new SupportedVersionRange(
-                        supportedKraftVersions.minSupportedVersion(),
-                        supportedKraftVersions.maxSupportedVersion()
-                    )
+        Optional<VoterSet> updatedVoters = updateVoters(
+            voters.get(),
+            kraftVersion,
+            VoterSet.VoterNode.of(
+                voterKey,
+                voterEndpoints,
+                new SupportedVersionRange(
+                    supportedKraftVersions.minSupportedVersion(),
+                    supportedKraftVersions.maxSupportedVersion()
                 )
-            );
+            )
+        );
         if (updatedVoters.isEmpty()) {
             return CompletableFuture.completedFuture(
                 RaftUtil.updateVoterResponse(
@@ -202,7 +178,7 @@ public final class UpdateVoterHandler {
             );
         }
 
-        leaderState.appendVotersRecord(updatedVoters.get(), currentTimeMs);
+        storeUpdatedVoters(leaderState, voters.get(), kraftVersion, currentTimeMs);
 
         // Reply immediately and don't wait for the change to commit
         return CompletableFuture.completedFuture(
@@ -224,5 +200,48 @@ public final class UpdateVoterHandler {
     ) {
         return supportedKraftVersions.minSupportedVersion() <= finalizedVersion.featureLevel() &&
             supportedKraftVersions.maxSupportedVersion() >= finalizedVersion.featureLevel();
+    }
+
+    private Optional<VoterSet> currentVoters(
+        LeaderState<?> leaderState,
+        long highWatermark,
+        KRaftVersion kraftVersion
+    ) {
+        if (kraftVersion.isReconfigSupported()) {
+            // Check that there are no uncommitted VotersRecord
+            Optional<LogHistory.Entry<VoterSet>> votersEntry = partitionState.lastVoterSetEntry();
+            if (votersEntry.isEmpty() || votersEntry.get().offset() >= highWatermark) {
+                return Optional.empty();
+            }
+
+            return votersEntry.map(LogHistory.Entry::value);
+        } else {
+            return Optional.of(leaderState.volatileVoters().orElseGet(partitionState::lastVoterSet));
+        }
+    }
+
+    private Optional<VoterSet> updateVoters(
+        VoterSet voters,
+        KRaftVersion kraftVersion,
+        VoterSet.VoterNode updatedVoter
+    ) {
+        return kraftVersion.isReconfigSupported() ?
+            voters.updateVoter(updatedVoter) :
+            voters.unsafeUpdateVoter(updatedVoter);
+    }
+
+    private void storeUpdatedVoters(
+        LeaderState<?> leaderState,
+        VoterSet voters,
+        KRaftVersion kraftVersion,
+        long currentTimeMs
+    ) {
+        if (kraftVersion.isReconfigSupported()) {
+            // Since the partition support reconfig then just write the update voter set directly to the log
+            leaderState.appendVotersRecord(voters, currentTimeMs);
+        } else {
+            // Store the new voters set in the leader state since it cannot be written to the log
+            leaderState.updateVolatileVoters(voters);
+        }
     }
 }

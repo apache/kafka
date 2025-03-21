@@ -27,6 +27,7 @@ import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
+import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.internals.AddVoterHandlerState;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
@@ -45,6 +46,7 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -72,6 +74,10 @@ public class LeaderState<T> implements EpochState {
     private Map<Integer, ReplicaState> voterStates = new HashMap<>();
     private Optional<AddVoterHandlerState> addVoterHandlerState = Optional.empty();
     private Optional<RemoveVoterHandlerState> removeVoterHandlerState = Optional.empty();
+    /* When the kraft version is 0 the latest updated voter set cannot be written to disk. Hold it in memory
+     * until the cluster is upgraded to a version that supports reconfig (greater than 1).
+     */
+    private Optional<VoterSet> updatedVolatileVoters = Optional.empty();
 
     private final Map<ReplicaKey, ReplicaState> observerStates = new HashMap<>();
     private final Logger log;
@@ -86,6 +92,8 @@ public class LeaderState<T> implements EpochState {
 
     // This is volatile because resignation can be requested from an external thread.
     private volatile boolean resignRequested = false;
+    // Atomic because kraft version upgrade is requested by an external thread.
+    private final AtomicReference<Optional<KRaftVersion>> requestedVersionUpgrade = new AtomicReference<>(Optional.empty());
 
     protected LeaderState(
         Time time,
@@ -395,6 +403,14 @@ public class LeaderState<T> implements EpochState {
         );
     }
 
+    public void updateVolatileVoters(VoterSet voters) {
+        updatedVolatileVoters = Optional.of(voters);
+    }
+
+    public Optional<VoterSet> volatileVoters() {
+        return updatedVolatileVoters;
+    }
+
     public boolean isResignRequested() {
         return resignRequested;
     }
@@ -414,6 +430,29 @@ public class LeaderState<T> implements EpochState {
 
     public void requestResign() {
         this.resignRequested = true;
+    }
+
+    public void upgradeKraftVersion(int epoch, KRaftVersion version) {
+        if (epoch < epoch()) {
+            throw new NotLeaderException(
+                String.format(
+                    "Upgrade kraft version failed because the given epoch %s is stale. Current leader epoch is %s",
+                    epoch,
+                    this.epoch
+                )
+            );
+        } else if (epoch > epoch()) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Attempt to append from epoch %s which is larger than the current epoch of %s",
+                    epoch,
+                    this.epoch
+                )
+            );
+        } else {
+            // Check kraft version is greater than kraft version and all of the voters support the kraft version
+            // TODO: implement this
+        }
     }
 
     @Override

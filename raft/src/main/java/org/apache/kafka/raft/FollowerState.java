@@ -30,6 +30,8 @@ import java.util.OptionalLong;
 import java.util.Set;
 
 public class FollowerState implements EpochState {
+    private final Logger log;
+
     private final int fetchTimeoutMs;
     private final int epoch;
     private final int leaderId;
@@ -38,19 +40,20 @@ public class FollowerState implements EpochState {
     private final Set<Integer> voters;
     // Used for tracking the expiration of both the Fetch and FetchSnapshot requests
     private final Timer fetchTimer;
+    // Used to throttle update voter request and allow for Fetch/FetchSnapshot requests
+    private final Timer updateVoterPeriodTimer;
+
     /* Used to track if the replica has fetched successfully from the leader at least once since the transition to
      * follower in this epoch. If the replica has not yet fetched successfully, it may be able to grant PreVotes.
      */
-    private boolean hasFetchedFromLeader;
+    private boolean hasFetchedFromLeader = false;
     private Optional<LogOffsetMetadata> highWatermark;
+    // For kraft.version 0, track if the leader has recieved updated voter information
+    private boolean hasUpdatedLeader = false;
     /* Used to track the currently fetching snapshot. When fetching snapshot regular
      * Fetch request are paused
      */
     private Optional<RawSnapshotWriter> fetchingSnapshot = Optional.empty();
-    // Used to throttle update voter request and allow for Fetch/FetchSnapshot requests
-    private final Timer updateVoterPeriodTimer;
-
-    private final Logger log;
 
     public FollowerState(
         Time time,
@@ -73,7 +76,6 @@ public class FollowerState implements EpochState {
         this.updateVoterPeriodTimer = time.timer(updateVoterPeriodMs());
         this.highWatermark = highWatermark;
         this.log = logContext.logger(FollowerState.class);
-        this.hasFetchedFromLeader = false;
     }
 
     @Override
@@ -156,6 +158,14 @@ public class FollowerState implements EpochState {
     public void resetUpdateVoterPeriod(long currentTimeMs) {
         updateVoterPeriodTimer.update(currentTimeMs);
         updateVoterPeriodTimer.reset(updateVoterPeriodMs());
+    }
+
+    public boolean hasUpdatedLeader() {
+        return hasUpdatedLeader;
+    }
+
+    public void setHasUpdatedLeader() {
+        this.hasUpdatedLeader = true;
     }
 
     public boolean updateHighWatermark(OptionalLong newHighWatermark) {

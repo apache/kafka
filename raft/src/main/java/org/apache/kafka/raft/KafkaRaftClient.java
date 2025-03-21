@@ -164,7 +164,7 @@ import static org.apache.kafka.snapshot.Snapshots.BOOTSTRAP_SNAPSHOT_ID;
  *    as FileRecords, but we use {@link UnalignedRecords} in FetchSnapshotResponse because the records
  *    are not necessarily offset-aligned.
  */
-@SuppressWarnings({ "ClassDataAbstractionCoupling", "ClassFanOutComplexity", "ParameterNumber", "NPathComplexity" })
+@SuppressWarnings({ "ClassDataAbstractionCoupling", "ClassFanOutComplexity", "ParameterNumber", "NPathComplexity", "JavaNCSS" })
 public final class KafkaRaftClient<T> implements RaftClient<T> {
     private static final int RETRY_BACKOFF_BASE_MS = 100;
     private static final int MAX_NUMBER_OF_BATCHES = 10;
@@ -593,9 +593,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         this.updateVoterHandler = new UpdateVoterHandler(
             nodeId,
             partitionState,
-            channel.listenerName(),
-            time,
-            quorumConfig.requestTimeoutMs()
+            channel.listenerName()
         );
     }
 
@@ -2104,8 +2102,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
 
         FollowerState state = quorum.followerStateOrThrow();
-
-        if (Errors.forCode(partitionSnapshot.errorCode()) == Errors.SNAPSHOT_NOT_FOUND ||
+        if (error == Errors.SNAPSHOT_NOT_FOUND ||
             partitionSnapshot.snapshotId().endOffset() < 0 ||
             partitionSnapshot.snapshotId().epoch() < 0) {
 
@@ -2121,6 +2118,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             state.setFetchingSnapshot(Optional.empty());
             state.resetFetchTimeoutForSuccessfulFetch(currentTimeMs);
             return true;
+        } else if (error != Errors.NONE) {
+            return handleUnexpectedError(error, responseMetadata);
         }
 
         OffsetAndEpoch snapshotId = new OffsetAndEpoch(
@@ -2128,15 +2127,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             partitionSnapshot.snapshotId().epoch()
         );
 
-        RawSnapshotWriter snapshot;
-        if (state.fetchingSnapshot().isPresent()) {
-            snapshot = state.fetchingSnapshot().get();
-        } else {
-            throw new IllegalStateException(
+        RawSnapshotWriter snapshot = state.fetchingSnapshot().orElseThrow(
+            () -> new IllegalStateException(
                 String.format("Received unexpected fetch snapshot response: %s", partitionSnapshot)
-            );
-        }
-
+            )
+        );
         if (!snapshot.snapshotId().equals(snapshotId)) {
             throw new IllegalStateException(
                 String.format(
@@ -2145,8 +2140,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                     snapshotId
                 )
             );
-        }
-        if (snapshot.sizeInBytes() != partitionSnapshot.position()) {
+        } else if (snapshot.sizeInBytes() != partitionSnapshot.position()) {
             throw new IllegalStateException(
                 String.format(
                     "Received fetch snapshot response with an invalid position. Expected %d; Received %d",
@@ -2438,8 +2432,16 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             responseMetadata.source(),
             currentTimeMs
         );
+        if (handled.isPresent()) {
+            return handled.get();
+        } else if (error != Errors.NONE) {
+            return handleUnexpectedError(error, responseMetadata);
+        }
 
-        return handled.orElse(true);
+        FollowerState follower = quorum.followerStateOrThrow();
+        follower.setHasUpdatedLeader();
+
+        return true;
     }
 
     private boolean hasConsistentLeader(int epoch, OptionalInt leaderId) {
@@ -3200,10 +3202,21 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             backoffMs = 0;
         } else if (state.hasUpdateVoterPeriodExpired(currentTimeMs)) {
             if (partitionState.lastKraftVersion().isReconfigSupported() &&
-                partitionState.lastVoterSet().voterNodeNeedsUpdate(quorum.localVoterNodeOrThrow())) {
+                partitionState.lastVoterSet().voterNodeNeedsUpdate(quorum.localVoterNodeOrThrow())
+            ) {
+                // When the cluster supports reconfiguration, send an updatevd voter configuration
+                // if the one in the log doesn't match the local configuration.
+                backoffMs = maybeSendUpdateVoterRequest(state, currentTimeMs);
+            } else if (!partitionState.lastKraftVersion().isReconfigSupported() &&
+                !state.hasUpdatedLeader()
+            ) {
+                // When the cluster doesn't support reconfiguration, the voter needs to send its
+                // voter information to every new leader. This is because leaders don't persist voter
+                // information when reconfiguration has not been enabled. The updated voter information
+                // is required to be able to upgrade the cluster from kraft.version 0.
                 backoffMs = maybeSendUpdateVoterRequest(state, currentTimeMs);
             } else {
-                backoffMs = maybeSendFetchOrFetchSnapshot(state, currentTimeMs);
+                backoffMs = maybeSendFetchToBestNode(state, currentTimeMs);
             }
             state.resetUpdateVoterPeriod(currentTimeMs);
         } else {
@@ -3575,7 +3588,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 return;
             }
 
-            LeaderState<Object> leaderState = leaderStateOpt.get();
+            LeaderState<?> leaderState = leaderStateOpt.get();
             if (leaderState.epoch() != epoch) {
                 logger.debug("Ignoring call to resign from epoch {} since it is smaller than the " +
                     "current epoch {}", epoch, leaderState.epoch());
@@ -3628,7 +3641,25 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     @Override
     public KRaftVersion kraftVersion() {
+        if (!isInitialized()) {
+            throw new IllegalStateException("Cannot read the kraft version before the replica has been initialized");
+        }
+
+        // TODO: this should be the max of the kraft version partition state and the kraft version in leader state
         return partitionState.lastKraftVersion();
+    }
+
+    @Override
+    public void upgradeKraftVersion(int epoch, KRaftVersion version) {
+        if (!isInitialized()) {
+            throw new IllegalStateException("Cannot update the kraft version before the replica has been initialized");
+        }
+
+        LeaderState<?> leaderState = quorum.maybeLeaderState().orElseThrow(
+            () -> new NotLeaderException("Upgrade kraft version failed because the replica is not the current leader")
+        );
+
+        leaderState.upgradeKraftVersion(epoch, version);
     }
 
     @Override

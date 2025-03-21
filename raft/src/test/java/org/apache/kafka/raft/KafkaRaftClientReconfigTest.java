@@ -1885,6 +1885,8 @@ public class KafkaRaftClientReconfigTest {
             OptionalInt.of(local.id()),
             epoch
         );
+        
+        // TODO: when to send update voter and when to stop sending update voter with kraft version 0
     }
 
     @Test
