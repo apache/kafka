@@ -956,7 +956,7 @@ public class RaftEventSimulationTest {
                 .collect(Collectors.toSet());
         }
 
-        Optional<VoterSet> initialVoterSetFromIds() {
+        Optional<VoterSet> initialVoterSet() {
             return Optional.of(VoterSet.fromMap(initialVoters
                 .values()
                 .stream()
@@ -1036,11 +1036,8 @@ public class RaftEventSimulationTest {
             if (leader.isEmpty()) {
                 return false;
             } else {
-                Optional<VoterSet> lastCommittedVoterSet = leader.get().client.partitionState().voterSetAtOffset(leader.get().highWatermark() - 1);
-                if (lastCommittedVoterSet.isEmpty()) {
-                    return false;
-                }
-                return lastCommittedVoterSet.get().voterIds().equals(voterIds);
+                VoterSet lastCommittedVoterSet = leader.get().log.lastCommittedVoterSet();
+                return lastCommittedVoterSet.voterIds().equals(voterIds);
             }
         }
 
@@ -1233,10 +1230,12 @@ public class RaftEventSimulationTest {
                 .values()
                 .stream()
                 .collect(Collectors.toMap(Node::id, Cluster::nodeAddress));
+            Optional<VoterSet> initialVoterSet = initialVoterSet();
+            persistentState.log.setInitialVoterSet(initialVoterSet.get());
             if (withKip853 && persistentState.log.endOffset().offset() == 0) {
                 RaftTestUtils.writeBootstrapSnapshot(
                     persistentState.log,
-                    initialVoterSetFromIds(),
+                    initialVoterSet,
                     KRaftVersion.KRAFT_VERSION_1,
                     serde
                 );
@@ -1489,22 +1488,17 @@ public class RaftEventSimulationTest {
             * */
             cluster.leaderWithMaxEpoch().ifPresent(leaderNode -> {
                 leaderNode.client.highWatermark().ifPresent(highWatermark -> {
-                    VoterSet voterSet = leaderNode.client.partitionState().lastVoterSet();
+                    VoterSet voterSet = leaderNode.log.lastVoterSet();
                     long numReachedHighWatermark = numReachedHighWatermark(highWatermark, voterSet.voterIds());
                     if (numReachedHighWatermark < cluster.majoritySize(voterSet.size())) {
-                        leaderNode.client.partitionState().voterSetAtOffset(highWatermark - 1).ifPresent(otherVoterSet -> {
-                            long nodesReachedHighWatermark = numReachedHighWatermark(highWatermark, otherVoterSet.voterIds());
-                            assertTrue(
-                                nodesReachedHighWatermark >= cluster.majoritySize(otherVoterSet.size()),
-                                "Insufficient nodes have reached current high watermark. Expected at least " +
-                                    cluster.majoritySize(otherVoterSet.size()) + " but got " + nodesReachedHighWatermark);
-                        });
-                        return;
+                        VoterSet otherVoterSet = leaderNode.log.lastCommittedVoterSet();
+                        long nodesReachedHighWatermark = numReachedHighWatermark(highWatermark, otherVoterSet.voterIds());
+                        assertTrue(
+                            nodesReachedHighWatermark >= cluster.majoritySize(otherVoterSet.size()),
+                            "Insufficient nodes have reached current high watermark. Expected at least " +
+                                cluster.majoritySize(otherVoterSet.size()) + " but got " + nodesReachedHighWatermark
+                        );
                     }
-                    assertTrue(
-                        numReachedHighWatermark >= cluster.majoritySize(voterSet.size()),
-                        "Insufficient nodes have reached current high watermark. Expected at least " +
-                            cluster.majoritySize(voterSet.size()) + " but got " + numReachedHighWatermark);
                 });
             });
         }

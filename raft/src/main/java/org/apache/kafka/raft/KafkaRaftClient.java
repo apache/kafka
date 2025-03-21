@@ -3637,11 +3637,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         return quorum;
     }
 
-    // Visible only for test
-    KRaftControlRecordStateMachine partitionState() {
-        return partitionState;
-    }
-
     private boolean isInitialized() {
         return partitionState != null && quorum != null && requestManager != null && kafkaRaftMetrics != null;
     }
