@@ -18,6 +18,7 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.TopicPartition;
 
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -28,7 +29,6 @@ public final class LogToClean implements Comparable<LogToClean> {
     private final TopicPartition topicPartition;
     private final UnifiedLog log;
     private final long firstDirtyOffset;
-    private final long uncleanableOffset;
     private final boolean needCompactionNow;
     private final long cleanBytes;
     private final long firstUncleanableOffset;
@@ -46,14 +46,13 @@ public final class LogToClean implements Comparable<LogToClean> {
         this.topicPartition = Objects.requireNonNull(topicPartition, "topicPartition must not be null");
         this.log = Objects.requireNonNull(log, "log must not be null");
         this.firstDirtyOffset = firstDirtyOffset;
-        this.uncleanableOffset = uncleanableOffset;
         this.needCompactionNow = needCompactionNow;
 
         this.cleanBytes = log.logSegments(-1, firstDirtyOffset).stream()
                 .mapToLong(LogSegment::size)
                 .sum();
 
-        var cleanableBytesResult = LogCleanerManager.calculateCleanableBytes(log, firstDirtyOffset, uncleanableOffset);
+        Map.Entry<Long, Long> cleanableBytesResult = LogCleanerManager.calculateCleanableBytes(log, firstDirtyOffset, uncleanableOffset);
         this.firstUncleanableOffset = cleanableBytesResult.getKey();
         this.cleanableBytes = cleanableBytesResult.getValue();
 
@@ -108,7 +107,6 @@ public final class LogToClean implements Comparable<LogToClean> {
         if (o == null || getClass() != o.getClass()) return false;
         LogToClean that = (LogToClean) o;
         return firstDirtyOffset == that.firstDirtyOffset &&
-                uncleanableOffset == that.uncleanableOffset &&
                 needCompactionNow == that.needCompactionNow &&
                 cleanBytes == that.cleanBytes &&
                 firstUncleanableOffset == that.firstUncleanableOffset &&
@@ -122,8 +120,8 @@ public final class LogToClean implements Comparable<LogToClean> {
     @Override
     public int hashCode() {
         return Objects.hash(
-                topicPartition, log, firstDirtyOffset, uncleanableOffset, needCompactionNow,
-                cleanBytes, firstUncleanableOffset, cleanableBytes, totalBytes, cleanableRatio
+                topicPartition, log, firstDirtyOffset, needCompactionNow, cleanBytes,
+                firstUncleanableOffset, cleanableBytes, totalBytes, cleanableRatio
         );
     }
 
@@ -133,7 +131,6 @@ public final class LogToClean implements Comparable<LogToClean> {
                 "topicPartition=" + topicPartition +
                 ", log=" + log +
                 ", firstDirtyOffset=" + firstDirtyOffset +
-                ", uncleanableOffset=" + uncleanableOffset +
                 ", needCompactionNow=" + needCompactionNow +
                 ", cleanBytes=" + cleanBytes +
                 ", firstUncleanableOffset=" + firstUncleanableOffset +

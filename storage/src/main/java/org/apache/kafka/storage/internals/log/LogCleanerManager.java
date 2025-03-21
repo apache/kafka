@@ -242,7 +242,8 @@ public class LogCleanerManager {
 
             List<LogToClean> dirtyLogs = logs.entrySet().stream()
                     .filter(entry -> entry.getValue().config().compact &&
-                            !(inProgress.containsKey(entry.getKey()) || isUncleanablePartition(entry.getValue(), entry.getKey()))
+                            !inProgress.containsKey(entry.getKey()) &&
+                            !isUncleanablePartition(entry.getValue(), entry.getKey())
                     )
                     .map(entry -> {
                                 // create a LogToClean instance for each
