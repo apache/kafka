@@ -30,3 +30,7 @@ Configuration:
       level: INFO
       AppenderRef:
         - ref: STDOUT
+        - name: org.apache.kafka
+    Logger:
+      - name: org.apache.kafka
+        level: INFO
