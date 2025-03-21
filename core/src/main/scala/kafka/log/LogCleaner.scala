@@ -94,7 +94,7 @@ import scala.util.control.ControlThrowable
  *
  * @param initialConfig Initial configuration parameters for the cleaner. Actual config may be dynamically updated.
  * @param logDirs The directories where offset checkpoints reside
- * @param logs The pool of logs
+ * @param logs The map of logs
  * @param logDirFailureChannel The channel used to add offline log dirs that may be encountered when cleaning the log
  * @param time A way to control the passage of time
  */

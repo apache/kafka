@@ -41,9 +41,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Condition;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
+
+import static org.apache.kafka.server.util.LockUtils.inLock;
 
 /**
  * This class manages the state of each partition being cleaned.
@@ -77,26 +78,35 @@ public class LogCleanerManager {
     // For compatibility, metrics are defined to be under `kafka.log.LogCleanerManager` class
     private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.log", "LogCleanerManager");
 
-    /* the set of logs currently being cleaned */
+    /**
+     * The set of logs currently being cleaned.
+     */
     private final Map<TopicPartition, LogCleaningState> inProgress = new HashMap<>();
 
-    /* the set of uncleanable partitions (partitions that have raised an unexpected error during cleaning)
-     *   for each log directory */
+    /**
+     * The set of uncleanable partitions (partitions that have raised an unexpected error during cleaning)
+     * for each log directory.
+     */
     private final Map<String, Set<TopicPartition>> uncleanablePartitions = new HashMap<>();
 
-    /* a global lock used to control all access to the in-progress set and the offset checkpoints */
+    /**
+     * A global lock used to control all access to the in-progress set and the offset checkpoints.
+     */
     private final Lock lock = new ReentrantLock();
 
-    /* for coordinating the pausing and the cleaning of a partition */
+    /**
+     * For coordinating the pausing and the cleaning of a partition.
+     */
     private final Condition pausedCleaningCond = lock.newCondition();
 
-    // Visible for testing
     private final Map<String, List<Map<String, String>>> gaugeMetricNameWithTag = new HashMap<>();
 
     private final List<File> logDirs;
     private final ConcurrentMap<TopicPartition, UnifiedLog> logs;
 
-    /* the offset checkpoints holding the last cleaned point for each log */
+    /**
+     * The offset checkpoints holding the last cleaned point for each log.
+     */
     private volatile Map<File, OffsetCheckpointFile> checkpoints;
 
     private volatile double dirtiestLogCleanableRatio;
@@ -110,7 +120,7 @@ public class LogCleanerManager {
     ) {
         this.logDirs = logDirs;
         this.logs = logs;
-        this.checkpoints = logDirs.stream()
+        checkpoints = logDirs.stream()
                 .collect(Collectors.toMap(
                         dir -> dir,
                         dir -> {
@@ -126,7 +136,7 @@ public class LogCleanerManager {
     }
 
     private void registerMetrics() {
-        /* gauges for tracking the number of partitions marked as uncleanable for each log directory */
+        // gauges for tracking the number of partitions marked as uncleanable for each log directory
         for (File dir : logDirs) {
             Map<String, String> metricTag = Map.of("logDirectory", dir.getAbsolutePath());
             metricsGroup.newGauge(
@@ -140,7 +150,7 @@ public class LogCleanerManager {
                     .add(metricTag);
         }
 
-        /* gauges for tracking the number of uncleanable bytes from uncleanable partitions for each log directory */
+        // gauges for tracking the number of uncleanable bytes from uncleanable partitions for each log directory
         for (File dir : logDirs) {
             Map<String, String> metricTag = Map.of("logDirectory", dir.getAbsolutePath());
             metricsGroup.newGauge(
@@ -175,11 +185,11 @@ public class LogCleanerManager {
                     .add(metricTag);
         }
 
-        /* a gauge for tracking the cleanable ratio of the dirtiest log */
+        // a gauge for tracking the cleanable ratio of the dirtiest log
         dirtiestLogCleanableRatio = 0.0;
         metricsGroup.newGauge(MAX_DIRTY_PERCENT_METRIC_NAME, () -> (int) (100 * dirtiestLogCleanableRatio));
 
-        /* a gauge for tracking the time since the last log cleaner run, in milliseconds */
+        // a gauge for tracking the time since the last log cleaner run, in milliseconds
         timeOfLastRun = Time.SYSTEM.milliseconds();
         metricsGroup.newGauge(TIME_SINCE_LAST_RUN_MS_METRIC_NAME, () -> Time.SYSTEM.milliseconds() - timeOfLastRun);
     }
@@ -195,8 +205,7 @@ public class LogCleanerManager {
         return inLock(lock, () -> checkpoints.values().stream()
                 .flatMap(checkpoint -> {
                     try {
-                        return checkpoint.read().entrySet().stream()
-                                .map(entry -> Map.entry(entry.getKey(), entry.getValue()));
+                        return checkpoint.read().entrySet().stream();
                     } catch (KafkaStorageException e) {
                         LOG.error("Failed to access checkpoint file {} in dir {}",
                                 checkpoint.file().getName(), checkpoint.file().getParentFile().getAbsolutePath(), e);
@@ -207,14 +216,14 @@ public class LogCleanerManager {
     }
 
     /**
-     * Package private for unit test. Get the cleaning state of the partition.
+     * Public for unit test. Get the cleaning state of the partition.
      */
     public Optional<LogCleaningState> cleaningState(TopicPartition tp) {
         return inLock(lock, () -> Optional.ofNullable(inProgress.get(tp)));
     }
 
     /**
-     * Package private for unit test. Set the cleaning state of the partition.
+     * Public for unit test. Set the cleaning state of the partition.
      */
     public void setCleaningState(TopicPartition tp, LogCleaningState state) {
         inLock(lock, () -> inProgress.put(tp, state));
@@ -228,12 +237,13 @@ public class LogCleanerManager {
     public Optional<LogToClean> grabFilthiestCompactedLog(Time time, PreCleanStats preCleanStats) {
         return inLock(lock, () -> {
             long now = time.milliseconds();
-            this.timeOfLastRun = now;
+            timeOfLastRun = now;
             Map<TopicPartition, Long> lastClean = allCleanerCheckpoints();
 
             List<LogToClean> dirtyLogs = logs.entrySet().stream()
-                    .filter(entry -> entry.getValue().config().compact)
-                    .filter(entry -> !(inProgress.containsKey(entry.getKey()) || isUncleanablePartition(entry.getValue(), entry.getKey())))
+                    .filter(entry -> entry.getValue().config().compact &&
+                            !(inProgress.containsKey(entry.getKey()) || isUncleanablePartition(entry.getValue(), entry.getKey()))
+                    )
                     .map(entry -> {
                                 // create a LogToClean instance for each
                                 TopicPartition topicPartition = entry.getKey();
@@ -254,15 +264,16 @@ public class LogCleanerManager {
                                     throw new LogCleaningException(log, "Failed to calculate log cleaning stats for partition " + topicPartition, e);
                                 }
                             }
-                    ).filter(ltc -> ltc.totalBytes() > 0) // skip any empty logs
+                    )
+                    .filter(ltc -> ltc.totalBytes() > 0) // skip any empty logs
                     .toList();
 
-            this.dirtiestLogCleanableRatio = dirtyLogs.isEmpty()
+            dirtiestLogCleanableRatio = dirtyLogs.isEmpty()
                     ? 0
                     : dirtyLogs.stream()
-                    .max(Comparator.comparingDouble(LogToClean::cleanableRatio))
-                    .map(LogToClean::cleanableRatio)
-                    .orElse(0.0);
+                        .mapToDouble(LogToClean::cleanableRatio)
+                        .max()
+                        .orElse(0.0);
             // and must meet the minimum threshold for dirty byte ratio or have some bytes required to be compacted
             List<LogToClean> cleanableLogs = dirtyLogs.stream()
                     .filter(ltc -> (ltc.needCompactionNow() && ltc.cleanableBytes() > 0) || ltc.cleanableRatio() > ltc.log().config().minCleanableRatio)
@@ -446,7 +457,7 @@ public class LogCleanerManager {
      * Update checkpoint file, adding or removing partitions if necessary.
      *
      * @param dataDir                The File object to be updated
-     * @param partitionToUpdateOrAdd The [TopicPartition, Long] map data to be updated. pass "none" if doing remove, not add
+     * @param partitionToUpdateOrAdd The [TopicPartition, Long] map entry to be updated. pass "Optional.empty" if doing remove, not add
      * @param partitionToRemove      The TopicPartition to be removed
      */
     public void updateCheckpoints(
@@ -462,21 +473,15 @@ public class LogCleanerManager {
                             .filter(entry -> logs.containsKey(entry.getKey()))
                             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
-                    // remove the partition offset if any
-                    Map<TopicPartition, Long> updatedCheckpoint = partitionToRemove.map(topicPartition -> {
-                        Map<TopicPartition, Long> newCheckpoint = new HashMap<>(currentCheckpoint);
-                        newCheckpoint.remove(topicPartition);
-                        return newCheckpoint;
-                    }).orElse(currentCheckpoint);
+                    Map<TopicPartition, Long> updatedCheckpoint = new HashMap<>(currentCheckpoint);
 
-                    // update or add the partition offset if any
-                    Map<TopicPartition, Long> tempUpdatedCheckpoint = updatedCheckpoint;
-                    updatedCheckpoint = partitionToUpdateOrAdd.map(entry -> {
-                        Map<TopicPartition, Long> newCheckpoint = new HashMap<>(tempUpdatedCheckpoint);
-                        newCheckpoint.put(entry.getKey(), entry.getValue());
-                        return newCheckpoint;
-                    }).orElse(updatedCheckpoint);
+                    // Remove the partition offset if present
+                    partitionToRemove.ifPresent(updatedCheckpoint::remove);
 
+                    // Update or add the partition offset if present
+                    partitionToUpdateOrAdd.ifPresent(entry -> updatedCheckpoint.put(entry.getKey(), entry.getValue()));
+
+                    // Write back the updated checkpoint
                     checkpoint.write(updatedCheckpoint);
                 } catch (KafkaStorageException e) {
                     LOG.error("Failed to access checkpoint file {} in dir {}",
@@ -489,7 +494,7 @@ public class LogCleanerManager {
     }
 
     /**
-     * alter the checkpoint directory for the topicPartition, to remove the data in sourceLogDir, and add the data in destLogDir
+     * Alter the checkpoint directory for the topicPartition, to remove the data in sourceLogDir, and add the data in destLogDir.
      */
     public void alterCheckpointDir(TopicPartition topicPartition, File sourceLogDir, File destLogDir) {
         inLock(lock, () -> {
@@ -521,7 +526,7 @@ public class LogCleanerManager {
     }
 
     /**
-     * Stop cleaning logs in the provided directory
+     * Stop cleaning logs in the provided directory.
      *
      * @param dir the absolute path of the log dir
      */
@@ -537,7 +542,7 @@ public class LogCleanerManager {
     }
 
     /**
-     * Truncate the checkpointed offset for the given partition if its checkpointed offset is larger than the given offset
+     * Truncate the checkpointed offset for the given partition if its checkpointed offset is larger than the given offset.
      */
     public void maybeTruncateCheckpoint(File dataDir, TopicPartition topicPartition, long offset) {
         inLock(lock, () -> {
@@ -601,11 +606,14 @@ public class LogCleanerManager {
     }
 
     /**
-     * Returns an immutable set of the uncleanable partitions for a given log directory
-     * Only used for testing
+     * Returns an immutable set of the uncleanable partitions for a given log directory.
+     * Only used for testing.
      */
     public Set<TopicPartition> uncleanablePartitions(String logDir) {
-        return inLock(lock, () -> uncleanablePartitions.getOrDefault(logDir, Set.of()));
+        return inLock(lock, () -> {
+            Set<TopicPartition> partitions = uncleanablePartitions.get(logDir);
+            return partitions != null ? Set.copyOf(partitions) : Set.of();
+        });
     }
 
     public void markPartitionUncleanable(String logDir, TopicPartition partition) {
@@ -652,21 +660,12 @@ public class LogCleanerManager {
         gaugeMetricNameWithTag.clear();
     }
 
-    private <T> T inLock(Lock lock, Supplier<T> supplier) {
-        lock.lock();
-        try {
-            return supplier.get();
-        } finally {
-            lock.unlock();
-        }
-    }
-
     private static boolean isCompactAndDelete(UnifiedLog log) {
         return log.config().compact && log.config().delete;
     }
 
     /**
-     * get max delay between the time when log is required to be compacted as determined
+     * Get max delay between the time when log is required to be compacted as determined
      * by maxCompactionLagMs and the current time.
      */
     private static long maxCompactionDelay(UnifiedLog log, long firstDirtyOffset, long now) {
@@ -750,7 +749,7 @@ public class LogCleanerManager {
     }
 
     /**
-     * Given the first dirty offset and an uncleanable offset, calculates the total cleanable bytes for this log
+     * Given the first dirty offset and an uncleanable offset, calculates the total cleanable bytes for this log.
      *
      * @return the biggest uncleanable offset and the total amount of cleanable bytes
      */
@@ -786,7 +785,7 @@ public class LogCleanerManager {
 
     /**
      * Helper class for the range of cleanable dirty offsets of a log and whether to update the checkpoint associated with
-     * the log
+     * the log.
      *
      * @param firstDirtyOffset            the lower (inclusive) offset to begin cleaning from
      * @param firstUncleanableDirtyOffset the upper(exclusive) offset to clean to

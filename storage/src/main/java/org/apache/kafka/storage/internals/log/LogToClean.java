@@ -73,10 +73,6 @@ public final class LogToClean implements Comparable<LogToClean> {
         return firstDirtyOffset;
     }
 
-    public long uncleanableOffset() {
-        return uncleanableOffset;
-    }
-
     public boolean needCompactionNow() {
         return needCompactionNow;
     }
