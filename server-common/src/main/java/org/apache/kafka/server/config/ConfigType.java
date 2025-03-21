@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.server.config;
 
-import java.util.Arrays;
-import java.util.List;
-
 /**
  * Represents all the entities that can be configured.
  */
@@ -40,6 +37,4 @@ public enum ConfigType {
     public String value() {
         return value;
     }
-
-    public static final List<String> ALL = Arrays.stream(ConfigType.values()).map(ConfigType::value).toList();
 }
