@@ -42,7 +42,7 @@ class FinalizedFeaturesTest {
     public void testSetFinalizedLevel() {
         FinalizedFeatures finalizedFeatures = new FinalizedFeatures(
             MINIMUM_VERSION,
-            Collections.singletonMap("foo", (short) 2),
+            Map.of("foo", (short) 2),
             123
         );
 
