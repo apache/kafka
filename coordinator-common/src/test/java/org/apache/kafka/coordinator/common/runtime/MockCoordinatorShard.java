@@ -172,7 +172,7 @@ public class MockCoordinatorShard implements CoordinatorShard<String> {
         return records
             .stream()
             .sorted(Comparator.comparingLong(record -> record.offset))
-            .collect(Collectors.toList());
+            .toList();
     }
 
     CoordinatorTimer<Void, String> timer() {
