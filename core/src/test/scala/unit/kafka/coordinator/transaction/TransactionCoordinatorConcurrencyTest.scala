@@ -523,10 +523,18 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
   class InitProducerIdOperation(val producerIdAndEpoch: Option[ProducerIdAndEpoch] = None) extends TxnOperation[InitProducerIdResult] {
     override def run(txn: Transaction): Unit = {
-      transactionCoordinator.handleInitProducerId(txn.transactionalId, 60000, producerIdAndEpoch, resultCallback,
-        RequestLocal.withThreadConfinedCaching)
+      transactionCoordinator.handleInitProducerId(
+        txn.transactionalId,
+        60000,
+        enableTwoPCFlag = false,
+        keepPreparedTxn = false,
+        producerIdAndEpoch,
+        resultCallback,
+        RequestLocal.withThreadConfinedCaching
+      )
       replicaManager.tryCompleteActions()
     }
+
     override def awaitAndVerify(txn: Transaction): Unit = {
       val initPidResult = result.getOrElse(throw new IllegalStateException("InitProducerId has not completed"))
       assertEquals(Errors.NONE, initPidResult.error)

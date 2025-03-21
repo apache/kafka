@@ -236,7 +236,7 @@ class VerifiableShareConsumer(KafkaPathResolverMixin, VerifiableClientMixin, Bac
         if self.max_messages > 0:
             cmd += " --max-messages %s" % str(self.max_messages)
 
-        cmd += " --consumer.config %s" % VerifiableShareConsumer.CONFIG_FILE
+        cmd += " --command-config %s" % VerifiableShareConsumer.CONFIG_FILE
         cmd += " 2>> %s | tee -a %s &" % (VerifiableShareConsumer.STDOUT_CAPTURE, VerifiableShareConsumer.STDOUT_CAPTURE)
         return cmd
 
