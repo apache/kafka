@@ -184,7 +184,6 @@ class KafkaApisTest extends Logging {
       true,
       () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0))
 
-    when(groupCoordinator.isNewGroupCoordinator).thenReturn(config.isNewGroupCoordinatorEnabled)
     setupFeatures(featureVersions)
 
     new KafkaApis(
@@ -2394,8 +2393,6 @@ class KafkaApisTest extends Logging {
 
     when(replicaManager.onlinePartition(any()))
       .thenReturn(Some(mock(classOf[Partition])))
-    when(groupCoordinator.isNewGroupCoordinator)
-      .thenReturn(true)
     when(groupCoordinator.completeTransaction(
       ArgumentMatchers.eq(topicPartition),
       any(),
@@ -2504,132 +2501,7 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testHandleWriteTxnMarkersRequestWithOldGroupCoordinator(): Unit = {
-    val offset0 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
-    val offset1 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 1)
-    val foo0 = new TopicPartition("foo", 0)
-    val foo1 = new TopicPartition("foo", 1)
-
-    val allPartitions = List(
-      offset0,
-      offset1,
-      foo0,
-      foo1
-    )
-
-    val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
-      List(
-        new TxnMarkerEntry(
-          1L,
-          1.toShort,
-          0,
-          TransactionResult.COMMIT,
-          List(offset0, foo0).asJava
-        ),
-        new TxnMarkerEntry(
-          2L,
-          1.toShort,
-          0,
-          TransactionResult.ABORT,
-          List(offset1, foo1).asJava
-        )
-      ).asJava
-    ).build()
-
-    val requestChannelRequest = buildRequest(writeTxnMarkersRequest)
-
-    allPartitions.foreach { tp =>
-      when(replicaManager.onlinePartition(tp))
-        .thenReturn(Some(mock(classOf[Partition])))
-    }
-
-    when(groupCoordinator.onTransactionCompleted(
-      ArgumentMatchers.eq(1L),
-      ArgumentMatchers.any(),
-      ArgumentMatchers.eq(TransactionResult.COMMIT)
-    )).thenReturn(CompletableFuture.completedFuture[Void](null))
-
-    when(groupCoordinator.onTransactionCompleted(
-      ArgumentMatchers.eq(2L),
-      ArgumentMatchers.any(),
-      ArgumentMatchers.eq(TransactionResult.ABORT)
-    )).thenReturn(FutureUtils.failedFuture[Void](Errors.NOT_CONTROLLER.exception))
-
-    val entriesPerPartition: ArgumentCaptor[Map[TopicPartition, MemoryRecords]] =
-      ArgumentCaptor.forClass(classOf[Map[TopicPartition, MemoryRecords]])
-    val responseCallback: ArgumentCaptor[Map[TopicPartition, PartitionResponse] => Unit] =
-      ArgumentCaptor.forClass(classOf[Map[TopicPartition, PartitionResponse] => Unit])
-
-    when(replicaManager.appendRecords(
-      ArgumentMatchers.eq(ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT.toLong),
-      ArgumentMatchers.eq(-1),
-      ArgumentMatchers.eq(true),
-      ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
-      entriesPerPartition.capture(),
-      responseCallback.capture(),
-      any(),
-      any(),
-      ArgumentMatchers.eq(RequestLocal.noCaching()),
-      any(),
-      any()
-    )).thenAnswer { _ =>
-      responseCallback.getValue.apply(
-        entriesPerPartition.getValue.keySet.map { tp =>
-          tp -> new PartitionResponse(Errors.NONE)
-        }.toMap
-      )
-    }
-    kafkaApis = createKafkaApis(overrideProperties = Map(
-      GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "false"
-    ))
-    kafkaApis.handleWriteTxnMarkersRequest(requestChannelRequest, RequestLocal.noCaching())
-
-    val expectedResponse = new WriteTxnMarkersResponseData()
-      .setMarkers(List(
-        new WriteTxnMarkersResponseData.WritableTxnMarkerResult()
-          .setProducerId(1L)
-          .setTopics(List(
-            new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult()
-              .setName(Topic.GROUP_METADATA_TOPIC_NAME)
-              .setPartitions(List(
-                new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult()
-                  .setPartitionIndex(0)
-                  .setErrorCode(Errors.NONE.code)
-              ).asJava),
-            new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult()
-              .setName("foo")
-              .setPartitions(List(
-                new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult()
-                  .setPartitionIndex(0)
-                  .setErrorCode(Errors.NONE.code)
-              ).asJava)
-          ).asJava),
-        new WriteTxnMarkersResponseData.WritableTxnMarkerResult()
-          .setProducerId(2L)
-          .setTopics(List(
-            new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult()
-              .setName(Topic.GROUP_METADATA_TOPIC_NAME)
-              .setPartitions(List(
-                new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult()
-                  .setPartitionIndex(1)
-                  .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code)
-              ).asJava),
-            new WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult()
-              .setName("foo")
-              .setPartitions(List(
-                new WriteTxnMarkersResponseData.WritableTxnMarkerPartitionResult()
-                  .setPartitionIndex(1)
-                  .setErrorCode(Errors.NONE.code)
-              ).asJava)
-          ).asJava)
-      ).asJava)
-
-    val response = verifyNoThrottling[WriteTxnMarkersResponse](requestChannelRequest)
-    assertEquals(normalize(expectedResponse), normalize(response.data))
-  }
-
-  @Test
-  def testHandleWriteTxnMarkersRequestWithNewGroupCoordinator(): Unit = {
+  def testHandleWriteTxnMarkersRequest(): Unit = {
     val offset0 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
     val offset1 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 1)
     val foo0 = new TopicPartition("foo", 0)
@@ -2764,7 +2636,7 @@ class KafkaApisTest extends Logging {
     "NOT_COORDINATOR",
     "REQUEST_TIMED_OUT"
   ))
-  def testHandleWriteTxnMarkersRequestWithNewGroupCoordinatorErrorTranslation(error: Errors): Unit = {
+  def testHandleWriteTxnMarkersRequestErrorTranslation(error: Errors): Unit = {
     val offset0 = new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)
 
     val writeTxnMarkersRequest = new WriteTxnMarkersRequest.Builder(
@@ -6014,49 +5886,6 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testHandleShareFetchNewGroupCoordinatorDisabled(): Unit = {
-    val topicId = Uuid.randomUuid()
-    val memberId: Uuid = Uuid.randomUuid()
-    val groupId = "group"
-
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-
-    val shareFetchRequestData = new ShareFetchRequestData().
-      setGroupId(groupId).
-      setMemberId(memberId.toString).
-      setShareSessionEpoch(1).
-      setTopics(util.List.of(new ShareFetchRequestData.FetchTopic().
-        setTopicId(topicId).
-        setPartitions(util.List.of(
-          new ShareFetchRequestData.FetchPartition()
-            .setPartitionIndex(0)
-            .setAcknowledgementBatches(util.List.of(
-              new AcknowledgementBatch()
-                .setFirstOffset(0)
-                .setLastOffset(9)
-                .setAcknowledgeTypes(util.List.of(1.toByte))
-            ))
-        ))
-      ))
-
-    val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
-    val request = buildRequest(shareFetchRequest)
-
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "false",
-        ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
-    kafkaApis.handleShareFetchRequest(request)
-
-    val response = verifyNoThrottling[ShareFetchResponse](request)
-    val responseData = response.data()
-
-    assertEquals(Errors.UNSUPPORTED_VERSION.code, responseData.errorCode)
-  }
-
-  @Test
   def testHandleShareFetchShareGroupDisabled(): Unit = {
     val topicId = Uuid.randomUuid()
     val memberId: Uuid = Uuid.randomUuid()
@@ -6283,49 +6112,6 @@ class KafkaApisTest extends Logging {
     assertEquals(1, topicResponses.get(0).partitions.size())
     assertEquals(partitionIndex, topicResponses.get(0).partitions.get(0).partitionIndex)
     assertEquals(Errors.NONE.code, topicResponses.get(0).partitions.get(0).errorCode)
-  }
-
-  @Test
-  def testHandleShareAcknowledgeNewGroupCoordinatorDisabled(): Unit = {
-    val topicId = Uuid.randomUuid()
-    val memberId: Uuid = Uuid.randomUuid()
-    val groupId = "group"
-
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-
-    val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData()
-      .setGroupId(groupId)
-      .setMemberId(memberId.toString)
-      .setShareSessionEpoch(1)
-      .setTopics(List(new ShareAcknowledgeRequestData.AcknowledgeTopic()
-        .setTopicId(topicId)
-        .setPartitions(List(
-          new ShareAcknowledgeRequestData.AcknowledgePartition()
-            .setPartitionIndex(0)
-            .setAcknowledgementBatches(List(
-              new ShareAcknowledgeRequestData.AcknowledgementBatch()
-                .setFirstOffset(0)
-                .setLastOffset(9)
-                .setAcknowledgeTypes(Collections.singletonList(1.toByte))
-            ).asJava)
-        ).asJava)
-      ).asJava)
-
-    val shareAcknowledgeRequest = new ShareAcknowledgeRequest.Builder(shareAcknowledgeRequestData).build(ApiKeys.SHARE_ACKNOWLEDGE.latestVersion)
-    val request = buildRequest(shareAcknowledgeRequest)
-
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG -> "false",
-        ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG -> "true",
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
-    kafkaApis.handleShareAcknowledgeRequest(request)
-
-    val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
-    val responseData = response.data()
-
-    assertEquals(Errors.UNSUPPORTED_VERSION.code, responseData.errorCode)
   }
 
   @Test
