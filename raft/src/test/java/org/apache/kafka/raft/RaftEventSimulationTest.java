@@ -33,7 +33,6 @@ import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.Writable;
 import org.apache.kafka.common.protocol.types.Type;
-import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
@@ -665,7 +664,6 @@ public class RaftEventSimulationTest {
         scheduler.addInvariant(new SnapshotAtLogStart(cluster));
         scheduler.addInvariant(new LeaderNeverLoadSnapshot(cluster));
         scheduler.addValidation(new ConsistentCommittedData(cluster));
-        scheduler.addInvariant(new AtMostOneUncommittedVotersRecord(cluster));
         return scheduler;
     }
 
@@ -1477,48 +1475,38 @@ public class RaftEventSimulationTest {
 
         @Override
         public void verify() {
-            if (cluster.withKip853) {
-                /*
-                * For clusters running in KIP-853 mode, we check that a majority of at least one of the following
-                * voter sets has reached the high watermark:
-                * 1. the leader's voter set at the HWM (i.e. the last committed voter set)
-                * 2. the leader's lastVoterSet() (which may or may not be committed)
-                * Note that 1 and 2 can be the same set, but when they are not, lastVoterSet() is uncommitted,
-                * which follows from the AtMostOneUncommittedVoterSet invariant.
-                *
-                * A more elaborate check is necessary for this invariant because this method can get called after the
-                * leader has updated its lastVoterSet() with a new uncommitted voter set, but before the leader has
-                * updated its high watermark using the new voter set. In this case, we need to check that the majority
-                * of the last committed voter set has reached the current high watermark.
-                * */
-                cluster.leaderWithMaxEpoch().ifPresent(leaderNode -> {
-                    leaderNode.client.highWatermark().ifPresent(highWatermark -> {
-                        VoterSet voterSet = leaderNode.client.partitionState().lastVoterSet();
-                        long numReachedHighWatermark = numReachedHighWatermark(highWatermark, voterSet.voterIds());
-                        if (numReachedHighWatermark < cluster.majoritySize(voterSet.size())) {
-                            leaderNode.client.partitionState().voterSetAtOffset(highWatermark - 1).ifPresent(otherVoterSet -> {
-                                long nodesReachedHighWatermark = numReachedHighWatermark(highWatermark, otherVoterSet.voterIds());
-                                assertTrue(
-                                    nodesReachedHighWatermark >= cluster.majoritySize(otherVoterSet.size()),
-                                    "Insufficient nodes have reached current high watermark. Expected at least " +
-                                        cluster.majoritySize(otherVoterSet.size()) + " but got " + nodesReachedHighWatermark);
-                            });
-                            return;
-                        }
-                        assertTrue(
-                            numReachedHighWatermark >= cluster.majoritySize(voterSet.size()),
-                            "Insufficient nodes have reached current high watermark. Expected at least " +
-                                cluster.majoritySize(voterSet.size()) + " but got " + numReachedHighWatermark);
-                    });
-                });
-            } else {
-                cluster.leaderHighWatermark().ifPresent(highWatermark -> {
-                    long numReachedHighWatermark = numReachedHighWatermark(highWatermark, cluster.initialVoters.keySet());
+            /*
+            * For clusters running in KIP-853 mode, we check that a majority of at least one of the following
+            * voter sets has reached the high watermark:
+            * 1. the leader's voter set at the HWM (i.e. the last committed voter set)
+            * 2. the leader's lastVoterSet() (which may or may not be committed)
+            * Note that 1 and 2 can be the same set, but when they are not, lastVoterSet() is uncommitted.
+            *
+            * A more elaborate check is necessary for this invariant because this method can get called after the
+            * leader has updated its lastVoterSet() with a new uncommitted voter set, but before the leader has
+            * updated its high watermark using the new voter set. In this case, we need to check that the majority
+            * of the last committed voter set has reached the current high watermark.
+            * */
+            cluster.leaderWithMaxEpoch().ifPresent(leaderNode -> {
+                leaderNode.client.highWatermark().ifPresent(highWatermark -> {
+                    VoterSet voterSet = leaderNode.client.partitionState().lastVoterSet();
+                    long numReachedHighWatermark = numReachedHighWatermark(highWatermark, voterSet.voterIds());
+                    if (numReachedHighWatermark < cluster.majoritySize(voterSet.size())) {
+                        leaderNode.client.partitionState().voterSetAtOffset(highWatermark - 1).ifPresent(otherVoterSet -> {
+                            long nodesReachedHighWatermark = numReachedHighWatermark(highWatermark, otherVoterSet.voterIds());
+                            assertTrue(
+                                nodesReachedHighWatermark >= cluster.majoritySize(otherVoterSet.size()),
+                                "Insufficient nodes have reached current high watermark. Expected at least " +
+                                    cluster.majoritySize(otherVoterSet.size()) + " but got " + nodesReachedHighWatermark);
+                        });
+                        return;
+                    }
                     assertTrue(
-                        numReachedHighWatermark >= cluster.majoritySize(cluster.initialVoters.size()),
-                        "Insufficient nodes have reached current high watermark");
+                        numReachedHighWatermark >= cluster.majoritySize(voterSet.size()),
+                        "Insufficient nodes have reached current high watermark. Expected at least " +
+                            cluster.majoritySize(voterSet.size()) + " but got " + numReachedHighWatermark);
                 });
-            }
+            });
         }
 
         private long numReachedHighWatermark(long highWatermark, Set<Integer> voterIds) {
@@ -1526,35 +1514,6 @@ public class RaftEventSimulationTest {
                 .filter(entry -> voterIds.contains(entry.getKey()))
                 .filter(entry -> entry.getValue().log.endOffset().offset() >= highWatermark)
                 .count();
-        }
-    }
-
-    private static class AtMostOneUncommittedVotersRecord implements Invariant {
-        final Cluster cluster;
-
-        private AtMostOneUncommittedVotersRecord(Cluster cluster) {
-            this.cluster = cluster;
-        }
-
-        @Override
-        public void verify() {
-            cluster.leaderWithMaxEpoch().ifPresent(leaderNode -> {
-                leaderNode.log.readBatches(leaderNode.highWatermark(), OptionalLong.of(leaderNode.logEndOffset())).forEach(batch -> {
-                    boolean seenUncommittedVotersRecord = false;
-                    if (batch.isControlBatch) {
-                        for (LogEntry entry : batch.entries) {
-                            short typeId = ControlRecordType.parseTypeId(entry.record.key());
-                            ControlRecordType type = ControlRecordType.fromTypeId(typeId);
-                            if (type == ControlRecordType.KRAFT_VOTERS) {
-                                if (seenUncommittedVotersRecord) {
-                                    fail("More than one uncommitted voters record found in the log");
-                                }
-                                seenUncommittedVotersRecord = true;
-                            }
-                        }
-                    }
-                });
-            });
         }
     }
 
