@@ -942,8 +942,6 @@ public class OffsetMetadataManager {
         List<CoordinatorRecord> records
     ) {
         records.add(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
-        TopicPartition tp = new TopicPartition(topic, partition);
-        log.trace("[GroupId {}] Removing expired offset and metadata for {}", groupId, tp);
     }
 
     /**
