@@ -55,6 +55,8 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         "KafkaController", "MetadataErrorCount");
     private static final MetricName UNCLEAN_LEADER_ELECTIONS_PER_SEC = getMetricName(
         "ControllerStats", "UncleanLeaderElectionsPerSec");
+    private static final MetricName ELECTION_FROM_ELIGIBLE_LEADER_REPLICAS_PER_SEC = getMetricName(
+        "ControllerStats", "ElectionFromEligibleLeaderReplicasPerSec");
     private static final MetricName IGNORED_STATIC_VOTERS = getMetricName(
         "KafkaController", "IgnoredStaticVoters");
 
@@ -67,6 +69,7 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     private final AtomicInteger preferredReplicaImbalanceCount = new AtomicInteger(0);
     private final AtomicInteger metadataErrorCount = new AtomicInteger(0);
     private Optional<Meter> uncleanLeaderElectionMeter = Optional.empty();
+    private Optional<Meter> electionFromEligibleLeaderReplicasMeter = Optional.empty();
     private final AtomicBoolean ignoredStaticVoters = new AtomicBoolean(false);
 
     /**
@@ -120,6 +123,8 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         }));
         registry.ifPresent(r -> uncleanLeaderElectionMeter =
                 Optional.of(registry.get().newMeter(UNCLEAN_LEADER_ELECTIONS_PER_SEC, "elections", TimeUnit.SECONDS)));
+        registry.ifPresent(r -> electionFromEligibleLeaderReplicasMeter =
+                Optional.of(registry.get().newMeter(ELECTION_FROM_ELIGIBLE_LEADER_REPLICAS_PER_SEC, "elections", TimeUnit.SECONDS)));
 
         registry.ifPresent(r -> r.newGauge(IGNORED_STATIC_VOTERS, new Gauge<Integer>() {
             @Override
@@ -213,6 +218,10 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         this.uncleanLeaderElectionMeter.ifPresent(m -> m.mark(count));
     }
 
+    public void updateElectionFromEligibleLeaderReplicasCount(int count) {
+        this.electionFromEligibleLeaderReplicasMeter.ifPresent(m -> m.mark(count));
+    }
+
     public void setIgnoredStaticVoters(boolean ignored) {
         ignoredStaticVoters.set(ignored);
     }
@@ -232,6 +241,7 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
             PREFERRED_REPLICA_IMBALANCE_COUNT,
             METADATA_ERROR_COUNT,
             UNCLEAN_LEADER_ELECTIONS_PER_SEC,
+            ELECTION_FROM_ELIGIBLE_LEADER_REPLICAS_PER_SEC,
             IGNORED_STATIC_VOTERS
         ).forEach(r::removeMetric));
     }
