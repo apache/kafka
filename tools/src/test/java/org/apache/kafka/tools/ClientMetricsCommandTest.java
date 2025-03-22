@@ -124,7 +124,7 @@ public class ClientMetricsCommandTest {
         Exception exception = assertThrows(IllegalArgumentException.class, () -> new ClientMetricsCommand.ClientMetricsCommandOptions(
             new String[]{"--bootstrap-server", bootstrapServer, "--alter", "--name", clientMetricsName,
                 "--interval", "abc"}));
-        assertEquals("Invalid interval value. Must be a valid integer or empty to delete the setting.", exception.getMessage());
+        assertEquals("Invalid interval value. Enter an integer, or leave empty to reset.", exception.getMessage());
     }
 
     @Test
