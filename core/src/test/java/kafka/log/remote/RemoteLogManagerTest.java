@@ -26,7 +26,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
-import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.FileRecords;
@@ -246,11 +245,11 @@ public class RemoteLogManagerTest {
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
                 brokerTopicStats, metrics) {
-            public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin(Metrics metrics) {
-                return Plugin.wrapInstance(remoteStorageManager, metrics, "mockRemoteStorageManager");
+            public RemoteStorageManager createRemoteStorageManager() {
+                return remoteStorageManager;
             }
-            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin(Metrics metrics) {
-                return Plugin.wrapInstance(remoteLogMetadataManager, metrics, "mockRemoteStorageManager");
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
             }
             public RLMQuotaManager createRLMCopyQuotaManager() {
                 return rlmCopyQuotaManager;
@@ -1753,8 +1752,8 @@ public class RemoteLogManagerTest {
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
                 brokerTopicStats, metrics) {
             @Override
-            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin(Metrics metrics) {
-                return Plugin.wrapInstance(remoteLogMetadataManager, metrics, "mockRemoteLogMetadataManager");
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
             }
             @Override
             Optional<FileRecords.TimestampAndOffset> lookupTimestamp(RemoteLogSegmentMetadata rlsMetadata, long timestamp, long startingOffset) {
