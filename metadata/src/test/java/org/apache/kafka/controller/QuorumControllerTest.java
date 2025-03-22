@@ -611,6 +611,7 @@ public class QuorumControllerTest {
         }
     }
 
+    @Flaky("KAFKA-18981")
     @Test
     public void testMinIsrUpdateWithElr() throws Throwable {
         List<Integer> allBrokers = List.of(1, 2, 3);
