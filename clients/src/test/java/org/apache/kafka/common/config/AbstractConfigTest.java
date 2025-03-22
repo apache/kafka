@@ -117,8 +117,6 @@ public class AbstractConfigTest {
     @Test
     public void testPreprocessConfig() {
         Properties props = new Properties();
-        props.put("foo.bar", "abc");
-        props.put("setting", "def");
         TestConfig config = new TestConfig(props);
         assertEquals("success", config.get("preprocess"));
     }
@@ -733,7 +731,7 @@ public class AbstractConfigTest {
 
         @Override
         protected Map<String, Object> preProcessParsedConfig(Map<String, Object> parsedValues) {
-            Map<String, Object> ret = new HashMap<>();
+            Map<String, Object> ret = new HashMap<>(parsedValues);
             ret.put("preprocess", "success");
             return ret;
         }
