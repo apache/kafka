@@ -338,14 +338,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#isNewGroupCoordinator()}
-     */
-    @Override
-    public boolean isNewGroupCoordinator() {
-        return true;
-    }
-
-    /**
      * See {@link GroupCoordinator#partitionFor(String)}
      */
     @Override
@@ -1454,19 +1446,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
             result,
             timeout
         );
-    }
-
-    /**
-     * See {@link GroupCoordinator#onTransactionCompleted(long, Iterable, TransactionResult)}.
-     */
-    @Override
-    public CompletableFuture<Void> onTransactionCompleted(
-        long producerId,
-        Iterable<TopicPartition> partitions,
-        TransactionResult transactionResult
-    ) {
-        throwIfNotActive();
-        throw new IllegalStateException("onTransactionCompleted is not supported.");
     }
 
     /**
