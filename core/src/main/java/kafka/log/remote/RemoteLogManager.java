@@ -2053,6 +2053,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 followerRLMTasks.values().forEach(RLMTaskWithFuture::cancel);
                 Utils.closeQuietly(remoteLogStorageManagerPlugin, "remoteLogStorageManagerPlugin");
                 Utils.closeQuietly(remoteLogMetadataManagerPlugin, "remoteLogMetadataManagerPlugin");
+                Utils.closeQuietly(remoteLogStorageManager, "remoteLogStorageManager");
+                Utils.closeQuietly(remoteLogMetadataManager, "remoteLogMetadataManager");
                 Utils.closeQuietly(indexCache, "RemoteIndexCache");
 
                 rlmCopyThreadPool.close();
