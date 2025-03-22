@@ -1052,7 +1052,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         kafka_metadata_script = self.path.script("kafka-metadata-quorum.sh", node)
         return "{} {}".format(kafka_metadata_script, bootstrap)
 
-    def kafka_topics_cmd_with_optional_security_settings(self, node, force_use_zk_connection=False, kafka_security_protocol=None, offline_nodes=[]):
+    def kafka_topics_cmd_with_optional_security_settings(self, node, force_use_zk_connection, kafka_security_protocol=None, offline_nodes=[]):
         if self.quorum_info.using_kraft and not self.quorum_info.has_brokers:
             raise Exception("Must invoke kafka-topics against a broker, not a KRaft controller")
         if force_use_zk_connection:
@@ -1090,8 +1090,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             optional_command_config_suffix = " --command-config <(echo '%s')" % (self.security_config.client_config(use_inter_broker_mechanism_for_client = use_inter_broker_mechanism_for_client))
         kafka_topic_script = self.path.script("kafka-topics.sh", node)
         return "%s%s %s%s" % \
-            (optional_jass_krb_system_props_prefix, kafka_topic_script,
-             bootstrap_server_or_zookeeper, optional_command_config_suffix)
+                (optional_jass_krb_system_props_prefix, kafka_topic_script,
+                 bootstrap_server_or_zookeeper, optional_command_config_suffix)
 
     def kafka_configs_cmd_with_optional_security_settings(self, node, force_use_zk_connection, kafka_security_protocol = None):
         if self.quorum_info.using_kraft and not self.quorum_info.has_brokers:
@@ -1132,8 +1132,22 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
             optional_command_config_suffix = " --command-config <(echo '%s')" % (self.security_config.client_config(use_inter_broker_mechanism_for_client = use_inter_broker_mechanism_for_client))
         kafka_config_script = self.path.script("kafka-configs.sh", node)
         return "%s%s %s%s" % \
-            (optional_jass_krb_system_props_prefix, kafka_config_script,
-             bootstrap_server_or_zookeeper, optional_command_config_suffix)
+                (optional_jass_krb_system_props_prefix, kafka_config_script,
+                 bootstrap_server_or_zookeeper, optional_command_config_suffix)
+
+    def maybe_setup_broker_scram_credentials(self, node):
+        security_config = self.security_config
+        # we only need to create broker credentials when the broker mechanism is SASL/SCRAM
+        if security_config.is_sasl(self.interbroker_security_protocol) and security_config.is_sasl_scram(self.interbroker_sasl_mechanism):
+            force_use_zk_connection = True # we are bootstrapping these credentials before Kafka is started
+            cmd = fix_opts_for_new_jvm(node)
+            cmd += "%(kafka_configs_cmd)s --entity-name %(user)s --entity-type users --alter --add-config %(mechanism)s=[password=%(password)s]" % {
+                'kafka_configs_cmd': self.kafka_configs_cmd_with_optional_security_settings(node, force_use_zk_connection),
+                'user': SecurityConfig.SCRAM_BROKER_USER,
+                'mechanism': self.interbroker_sasl_mechanism,
+                'password': SecurityConfig.SCRAM_BROKER_PASSWORD
+            }
+            node.account.ssh(cmd)
 
     def maybe_setup_client_scram_credentials(self, node):
         security_config = self.security_config
@@ -1200,6 +1214,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         """Run the admin tool create topic command.
         Specifying node is optional, and may be done if for different kafka nodes have different versions,
         and we care where command gets run.
+
         If the node is not specified, run the command from self.nodes[0]
         """
         if node is None:
@@ -1212,7 +1227,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         cmd = fix_opts_for_new_jvm(node)
         cmd += "%(kafka_topics_cmd)s --create --topic %(topic)s " % {
-            'kafka_topics_cmd': self.kafka_topics_cmd_with_optional_security_settings(node, force_use_zk_connection=force_use_zk_connection),
+            'kafka_topics_cmd': self.kafka_topics_cmd_with_optional_security_settings(node, force_use_zk_connection),
             'topic': topic_cfg.get("topic"),
         }
         if 'replica-assignment' in topic_cfg:
@@ -1224,13 +1239,17 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 'partitions': topic_cfg.get('partitions', 1),
                 'replication-factor': topic_cfg.get('replication-factor', 1)
             }
+
         if topic_cfg.get('if-not-exists', False):
             cmd += ' --if-not-exists'
+
         if "configs" in topic_cfg.keys() and topic_cfg["configs"] is not None:
             for config_name, config_value in topic_cfg["configs"].items():
                 cmd += " --config %s=%s" % (config_name, str(config_value))
+
         self.logger.info("Running topic creation command...\n%s" % cmd)
         node.account.ssh(cmd)
+
     def delete_topic(self, topic, node=None):
         """
         Delete a topic with the topics command
@@ -1246,7 +1265,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         cmd = fix_opts_for_new_jvm(node)
         cmd += "%s --topic %s --delete" % \
-               (self.kafka_topics_cmd_with_optional_security_settings(node, force_use_zk_connection=force_use_zk_connection), topic)
+               (self.kafka_topics_cmd_with_optional_security_settings(node, force_use_zk_connection), topic)
         self.logger.info("Running topic delete command...\n%s" % cmd)
         node.account.ssh(cmd)
 
@@ -1277,10 +1296,11 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         """
 
         node = self.nodes[0]
+        force_use_zk_connection = not node.version.topic_command_supports_bootstrap_server()
 
         cmd = fix_opts_for_new_jvm(node)
         cmd += "%s --describe --under-replicated-partitions" % \
-            self.kafka_topics_cmd_with_optional_security_settings(node)
+               self.kafka_topics_cmd_with_optional_security_settings(node, force_use_zk_connection)
 
         self.logger.debug("Running topic command to describe under-replicated partitions\n%s" % cmd)
         output = ""
@@ -1307,6 +1327,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         for line in node.account.ssh_capture(cmd):
             output += line
         return output
+
     def list_topics(self, node=None):
         if node is None:
             node = self.nodes[0]
@@ -1318,6 +1339,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         for line in node.account.ssh_capture(cmd):
             if not line.startswith("SLF4J"):
                 yield line.rstrip()
+
     def alter_message_format(self, topic, msg_format_version, node=None):
         if node is None:
             node = self.nodes[0]
