@@ -1170,9 +1170,8 @@ class AbstractFetcherThreadTest {
     val batch = mkBatch(baseOffset = 0L, leaderEpoch = 0, new SimpleRecord("a".getBytes))
     val leaderState = PartitionState(Seq(batch), leaderEpoch = initEpoch, highWatermark = 1L)
     fetcher.mockLeader.setLeaderState(partition, leaderState)
-    fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
 
-    val partitionData = Map(partition -> new FetchRequest.PartitionData(Uuid.randomUuid(), 0, 0, 1048576, Optional.of(0), Optional.of(0))).asJava
+    val partitionData = Map(partition -> new FetchRequest.PartitionData(Uuid.randomUuid(), 0, 0, 1048576, Optional.of(initEpoch), Optional.of(0))).asJava
     val fetchRequestOpt = FetchRequest.Builder.forReplica(0, 0, 0L, 0, Int.MaxValue, partitionData)
 
     fetcher.processFetchRequest(partitionData, fetchRequestOpt)
