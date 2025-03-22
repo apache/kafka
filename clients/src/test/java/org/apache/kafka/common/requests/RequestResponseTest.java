@@ -911,9 +911,9 @@ public class RequestResponseTest {
             new UnregisterBrokerRequestData()
         ).build((short) 0);
         String customerErrorMessage = "customer error message";
-
+        
         UnregisterBrokerResponse response = request.getErrorResponse(
-            0,
+            0, 
             new RuntimeException(customerErrorMessage)
         );
 
