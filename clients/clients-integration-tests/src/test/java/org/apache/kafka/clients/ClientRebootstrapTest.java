@@ -112,7 +112,7 @@ public class ClientRebootstrapTest {
         var broker1 = 1;
         var partitions = List.of(new TopicPartition(TOPIC, part));
 
-        try (var producer = clusterInstance.producer(Map.of(ProducerConfig.ACKS_CONFIG, "1"))) {
+        try (var producer = clusterInstance.producer(Map.of(ProducerConfig.ACKS_CONFIG, "-1"))) {
             var recordMetadata = producer.send(new ProducerRecord<>(TOPIC, "value 0".getBytes())).get();
             assertEquals(0, recordMetadata.offset());
         }
@@ -123,20 +123,20 @@ public class ClientRebootstrapTest {
             // Only the server 1 is available for the consumer during the bootstrap.
             consumer.assign(partitions);
             consumer.seekToBeginning(partitions);
-            TestUtils.waitForCondition(() -> consumer.poll(Duration.ofSeconds(1)).count() == 1, 10 * 1000, "Failed to poll data.");
+            TestUtils.waitForCondition(() -> consumer.poll(Duration.ofMillis(100)).count() == 1, 10 * 1000, "Failed to poll data.");
 
             // Bring back the server 0 and shut down 1.
             clusterInstance.shutdownBroker(broker1);
             clusterInstance.startBroker(broker0);
 
-            try (var producer = clusterInstance.producer(Map.of(ProducerConfig.ACKS_CONFIG, "1"))) {
+            try (var producer = clusterInstance.producer(Map.of(ProducerConfig.ACKS_CONFIG, "-1"))) {
                 var recordMetadata = producer.send(new ProducerRecord<>(TOPIC, "value 1".getBytes())).get();
                 assertEquals(1, recordMetadata.offset());
             }
 
             // The server 1 originally cached during the bootstrap, is offline.
             // However, the server 0 from the bootstrap list is online.
-            TestUtils.waitForCondition(() -> consumer.poll(Duration.ofSeconds(1)).count() == 1, 10 * 1000, "Failed to poll data.");
+            TestUtils.waitForCondition(() -> consumer.poll(Duration.ofMillis(100)).count() == 1, 10 * 1000, "Failed to poll data.");
         }
     }
 
@@ -170,7 +170,7 @@ public class ClientRebootstrapTest {
         var broker1 = 1;
         var tp = new TopicPartition(TOPIC, part);
 
-        try (var producer = clusterInstance.producer(Map.of(ProducerConfig.ACKS_CONFIG, "1"))) {
+        try (var producer = clusterInstance.producer(Map.of(ProducerConfig.ACKS_CONFIG, "-1"))) {
             var recordMetadata = producer.send(new ProducerRecord<>(TOPIC, "value 0".getBytes())).get();
             assertEquals(0, recordMetadata.offset());
         }
@@ -184,20 +184,20 @@ public class ClientRebootstrapTest {
             // Only the server 1 is available for the consumer during the bootstrap.
             consumer.assign(List.of(tp));
             consumer.seekToBeginning(List.of(tp));
-            TestUtils.waitForCondition(() -> consumer.poll(Duration.ofSeconds(1)).count() == 1, 10 * 1000, "Failed to poll data.");
+            TestUtils.waitForCondition(() -> consumer.poll(Duration.ofMillis(100)).count() == 1, 10 * 1000, "Failed to poll data.");
 
             // Bring back the server 0 and shut down 1.
             clusterInstance.shutdownBroker(broker1);
             clusterInstance.startBroker(broker0);
 
-            try (var producer = clusterInstance.producer(Map.of(ProducerConfig.ACKS_CONFIG, "1"))) {
+            try (var producer = clusterInstance.producer(Map.of(ProducerConfig.ACKS_CONFIG, "-1"))) {
                 var recordMetadata = producer.send(new ProducerRecord<>(TOPIC, "value 1".getBytes())).get();
                 assertEquals(1, recordMetadata.offset());
             }
 
             // The server 1 originally cached during the bootstrap, is offline.
             // However, the server 0 from the bootstrap list is online.
-            assertEquals(0, consumer.poll(Duration.ofSeconds(1)).count());
+            assertEquals(0, consumer.poll(Duration.ofMillis(100)).count());
         }
     }
 
