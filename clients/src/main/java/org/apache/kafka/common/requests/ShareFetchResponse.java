@@ -59,7 +59,10 @@ public class ShareFetchResponse extends AbstractResponse {
 
     public ShareFetchResponse(ShareFetchResponseData data) {
         super(ApiKeys.SHARE_FETCH);
-        this.data = data;
+        // To protect the clients from failing due to null records,
+        // we always convert null records to MemoryRecords.EMPTY
+        // We will propose a KIP to change the schema definitions in the future
+        this.data = convertNullRecordsToEmpty(data);
     }
 
     public Errors error() {
@@ -172,6 +175,8 @@ public class ShareFetchResponse extends AbstractResponse {
             ShareFetchResponseData.PartitionData partitionData = entry.getValue();
             // Since PartitionData alone doesn't know the partition ID, we set it here
             partitionData.setPartitionIndex(entry.getKey().topicPartition().partition());
+            if (partitionData.records() == null)
+                partitionData.setRecords(MemoryRecords.EMPTY);
             // Checking if the topic is already present in the map
             if (topicResponseList.containsKey(entry.getKey().topicId())) {
                 topicResponseList.get(entry.getKey().topicId()).partitions().add(partitionData);
@@ -203,6 +208,15 @@ public class ShareFetchResponse extends AbstractResponse {
     public static ShareFetchResponseData.PartitionData partitionResponse(int partition, Errors error) {
         return new ShareFetchResponseData.PartitionData()
                 .setPartitionIndex(partition)
-                .setErrorCode(error.code());
+                .setErrorCode(error.code())
+                .setRecords(MemoryRecords.EMPTY);
+    }
+
+    private static ShareFetchResponseData convertNullRecordsToEmpty(ShareFetchResponseData shareFetchResponseData) {
+        shareFetchResponseData.responses().stream()
+            .flatMap(response -> response.partitions().stream())
+            .filter(partition -> partition.records() == null)
+            .forEach(partition -> partition.setRecords(MemoryRecords.EMPTY));
+        return shareFetchResponseData;
     }
 }
