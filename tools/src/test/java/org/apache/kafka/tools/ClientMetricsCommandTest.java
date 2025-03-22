@@ -38,6 +38,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -189,13 +190,11 @@ public class ClientMetricsCommandTest {
             }
         });
         Map<ConfigResource, Collection<AlterConfigOp>> alteredConfigOps = configCaptor.getValue();
-        assertTrue(alteredConfigOps != null, "alteredConfigOps should not be null");
+        assertNotNull(alteredConfigOps, "alteredConfigOps should not be null");
         assertEquals(1, alteredConfigOps.size(), "Should have exactly one ConfigResource");
-        
-        Collection<AlterConfigOp> operations = alteredConfigOps.values().iterator().next();
-        assertEquals(3, operations.size(), "Should have exactly 3 operations");
-        for (Collection<AlterConfigOp> ops : alteredConfigOps.values()) {
-            for (AlterConfigOp op : ops) {
+        assertEquals(3, alteredConfigOps.values().iterator().next().size(), "Should have exactly 3 operations");
+        for (Collection<AlterConfigOp> operations : alteredConfigOps.values()) {
+            for (AlterConfigOp op : operations) {
                 assertEquals(AlterConfigOp.OpType.DELETE, op.opType(),
                         "Expected DELETE operation for config: " + op.configEntry().name());
             }
