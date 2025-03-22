@@ -69,11 +69,6 @@ import java.util.function.IntSupplier;
 public interface GroupCoordinator {
 
     /**
-     * @return True if the new coordinator; False otherwise.
-     */
-    boolean isNewGroupCoordinator();
-
-    /**
      * Heartbeat to a Consumer Group.
      *
      * @param context           The request context.
@@ -381,26 +376,6 @@ public interface GroupCoordinator {
      * @return The partition index.
      */
     int partitionFor(String groupId);
-
-    /**
-     * Commit or abort the pending transactional offsets for the given partitions.
-     *
-     * This method is only used by the old group coordinator. Internally, the old
-     * group coordinator completes the transaction asynchronously in order to
-     * avoid deadlocks. Hence, this method returns a future that the caller
-     * can wait on.
-     *
-     * @param producerId        The producer id.
-     * @param partitions        The partitions.
-     * @param transactionResult The result of the transaction.
-     *
-     * @return A future yielding the result.
-     */
-    CompletableFuture<Void> onTransactionCompleted(
-        long producerId,
-        Iterable<TopicPartition> partitions,
-        TransactionResult transactionResult
-    );
 
     /**
      * Remove the provided deleted partitions offsets.
