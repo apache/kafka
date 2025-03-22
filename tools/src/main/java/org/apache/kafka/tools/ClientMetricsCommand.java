@@ -374,9 +374,11 @@ public class ClientMetricsCommand {
                         try {
                             Integer.parseInt(intervalStr);
                         } catch (NumberFormatException e) {
-                            throw new IllegalArgumentException("Invalid interval value. Must be a valid integer or empty to delete the setting.");
+                            throw new IllegalArgumentException(
+                                    "Invalid interval value. Enter an integer, or leave empty to reset.");
                         }
                     }
+
                 });
             }
 
