@@ -258,7 +258,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
         random.nextInt(100),
         1,
         1024 * 1024,
-        FetchIsolation.of(replicaId, IsolationLevel.READ_UNCOMMITTED),
+        FetchIsolation.of(replicaId, IsolationLevel.READ_UNCOMMITTED, false),
         Optional.of(clientMetadata)
       )
 

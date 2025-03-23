@@ -17,6 +17,7 @@
 
 package org.apache.kafka.coordinator.group;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Type;
@@ -30,6 +31,7 @@ import java.util.Set;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
+import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 
@@ -65,6 +67,13 @@ public final class GroupConfig extends AbstractConfig {
 
     public static final String STREAMS_NUM_STANDBY_REPLICAS_CONFIG = "group.streams.num.standby.replicas";
 
+    public static final String SHARE_ISOLATION_LEVEL_CONFIG = "share.isolation.level";
+    public static final int SHARE_ISOLATION_LEVEL_DEFAULT = IsolationLevel.READ_UNCOMMITTED.id();
+    public static final String SHARE_ISOLATION_LEVEL_DOC = "Controls how to read records written transactionally. " +
+        "If set to \"read_committed\", the share group will only deliver transactional records which have been committed. " +
+        "If set to \"read_uncommitted\", the share group will return all messages, even transactional messages which have been aborted. " +
+        "Non-transactional records will be returned unconditionally in either mode.";
+
     public final int consumerSessionTimeoutMs;
 
     public final int consumerHeartbeatIntervalMs;
@@ -82,6 +91,8 @@ public final class GroupConfig extends AbstractConfig {
     public final int streamsHeartbeatIntervalMs;
 
     public final int streamsNumStandbyReplicas;
+
+    public final int shareIsolationLevel;
 
     private static final ConfigDef CONFIG = new ConfigDef()
         .define(CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
@@ -137,7 +148,13 @@ public final class GroupConfig extends AbstractConfig {
             GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT,
             atLeast(0),
             MEDIUM,
-            GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DOC);
+            GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DOC)
+        .define(SHARE_ISOLATION_LEVEL_CONFIG,
+            INT,
+            SHARE_ISOLATION_LEVEL_DEFAULT,
+            between(0, 1),
+            MEDIUM,
+            SHARE_ISOLATION_LEVEL_DOC);
 
     public GroupConfig(Map<?, ?> props) {
         super(CONFIG, props, false);
@@ -150,6 +167,7 @@ public final class GroupConfig extends AbstractConfig {
         this.streamsSessionTimeoutMs = getInt(STREAMS_SESSION_TIMEOUT_MS_CONFIG);
         this.streamsHeartbeatIntervalMs = getInt(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.streamsNumStandbyReplicas = getInt(STREAMS_NUM_STANDBY_REPLICAS_CONFIG);
+        this.shareIsolationLevel = getInt(SHARE_ISOLATION_LEVEL_CONFIG);
     }
 
     public static ConfigDef configDef() {
@@ -290,6 +308,10 @@ public final class GroupConfig extends AbstractConfig {
         return ShareGroupAutoOffsetResetStrategy.fromString(SHARE_AUTO_OFFSET_RESET_DEFAULT);
     }
 
+    public static IsolationLevel defaultShareIsolationLevel() {
+        return IsolationLevel.forId((byte) SHARE_ISOLATION_LEVEL_DEFAULT);
+    }
+
     /**
      * The consumer group session timeout in milliseconds.
      */
@@ -351,5 +373,9 @@ public final class GroupConfig extends AbstractConfig {
      */
     public int streamsNumStandbyReplicas() {
         return streamsNumStandbyReplicas;
+    }
+
+    public int shareIsolationLevel() {
+        return shareIsolationLevel;
     }
 }
