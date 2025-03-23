@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.metadata;
 
-import org.apache.kafka.admin.BrokerMetadata;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -370,13 +369,6 @@ public class KRaftMetadataCache implements MetadataCache {
         return Optional.ofNullable(currentImage.cluster().broker(brokerId)).filter(BrokerRegistration::inControlledShutdown).isPresent();
     }
 
-    private List<BrokerMetadata> getAliveBrokers(MetadataImage image) {
-        return image.cluster().brokers().values().stream()
-            .filter(Predicate.not(BrokerRegistration::fenced))
-            .map(broker -> new BrokerMetadata(broker.id(), broker.rack()))
-            .collect(Collectors.toList());
-    }
-
     @Override
     public Optional<Node> getAliveBrokerNode(int brokerId, ListenerName listenerName) {
         return Optional.ofNullable(currentImage.cluster().broker(brokerId))
@@ -456,11 +448,13 @@ public class KRaftMetadataCache implements MetadataCache {
     }
 
     private Optional<Integer> getRandomAliveBroker(MetadataImage image) {
-        List<BrokerMetadata> aliveBrokers = getAliveBrokers(image);
+        List<Integer> aliveBrokers = image.cluster().brokers().values().stream()
+            .filter(Predicate.not(BrokerRegistration::fenced))
+            .map(BrokerRegistration::id).toList();
         if (aliveBrokers.isEmpty()) {
             return Optional.empty();
         } else {
-            return Optional.of(aliveBrokers.get(ThreadLocalRandom.current().nextInt(aliveBrokers.size())).id);
+            return Optional.of(aliveBrokers.get(ThreadLocalRandom.current().nextInt(aliveBrokers.size())));
         }
     }
 
