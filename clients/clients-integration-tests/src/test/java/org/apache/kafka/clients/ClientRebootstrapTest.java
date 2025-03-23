@@ -107,10 +107,9 @@ public class ClientRebootstrapTest {
     public void consumerRebootstrap(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws InterruptedException, ExecutionException {
         clusterInstance.createTopic(TOPIC, 1, (short) REPLICAS);
 
-        var part = 0;
         var broker0 = 0;
         var broker1 = 1;
-        var partitions = List.of(new TopicPartition(TOPIC, part));
+        var partitions = List.of(new TopicPartition(TOPIC, 0));
 
         try (var producer = clusterInstance.producer(Map.of(ProducerConfig.ACKS_CONFIG, "-1"))) {
             var recordMetadata = producer.send(new ProducerRecord<>(TOPIC, "value 0".getBytes())).get();
@@ -165,10 +164,9 @@ public class ClientRebootstrapTest {
     public void consumerRebootstrapDisabled(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws InterruptedException, ExecutionException {
         clusterInstance.createTopic(TOPIC, 1, (short) REPLICAS);
 
-        var part = 0;
         var broker0 = 0;
         var broker1 = 1;
-        var tp = new TopicPartition(TOPIC, part);
+        var tp = new TopicPartition(TOPIC, 0);
 
         try (var producer = clusterInstance.producer(Map.of(ProducerConfig.ACKS_CONFIG, "-1"))) {
             var recordMetadata = producer.send(new ProducerRecord<>(TOPIC, "value 0".getBytes())).get();
