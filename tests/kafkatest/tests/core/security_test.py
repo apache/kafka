@@ -62,29 +62,15 @@ class SecurityTest(EndToEndTest):
         security_protocol=['PLAINTEXT'],
         interbroker_security_protocol=['SSL'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        security_protocol=['PLAINTEXT'],
-        interbroker_security_protocol=['SSL'],
-        metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
     @matrix(
         security_protocol=['SSL'],
         interbroker_security_protocol=['PLAINTEXT'],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        security_protocol=['SSL'],
-        interbroker_security_protocol=['PLAINTEXT'],
-        metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_client_ssl_endpoint_validation_failure(self, security_protocol, interbroker_security_protocol, metadata_quorum, use_new_coordinator=False, group_protocol=None):
+    def test_client_ssl_endpoint_validation_failure(self, security_protocol, interbroker_security_protocol, metadata_quorum, group_protocol=None):
         """
         Test that invalid hostname in certificate results in connection failures.
         When security_protocol=SSL, client SSL handshakes are expected to fail due to hostname verification failure.
@@ -154,14 +140,9 @@ class SecurityTest(EndToEndTest):
     @cluster(num_nodes=2)
     @matrix(
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
-    def test_quorum_ssl_endpoint_validation_failure(self, metadata_quorum, use_new_coordinator=False, group_protocol=None):
+    def test_quorum_ssl_endpoint_validation_failure(self, metadata_quorum, group_protocol=None):
         """
         Test that invalid hostname in ZooKeeper or KRaft Controller results in broker inability to start.
         """
