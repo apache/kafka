@@ -27,8 +27,8 @@ import com.yammer.metrics.core.Meter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.Collections;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
@@ -40,7 +40,7 @@ import java.util.stream.Collectors;
  */
 public class DelayedDeleteRecords extends DelayedOperation {
     
-    private static final Logger log = LoggerFactory.getLogger(DelayedDeleteRecords.class);
+    private static final Logger LOG = LoggerFactory.getLogger(DelayedDeleteRecords.class);
     
     //  migration from kafka.server.DelayedDeleteRecordsMetrics
     private static final KafkaMetricsGroup METRICS_GROUP = new KafkaMetricsGroup("kafka.server", "DelayedDeleteRecordsMetrics");
@@ -58,7 +58,7 @@ public class DelayedDeleteRecords extends DelayedOperation {
                                 Consumer<Map<TopicPartition, DeleteRecordsPartitionResult>> responseCallback) {
         super(delayMs);
         this.onAcksPending = onAcksPending;
-        this.deleteRecordsStatus = new ConcurrentHashMap<>(deleteRecordsStatus);
+        this.deleteRecordsStatus = Collections.unmodifiableMap(deleteRecordsStatus);
         this.responseCallback = responseCallback;
         // first update the acks pending variable according to the error code
         deleteRecordsStatus.forEach((topicPartition, status) -> {
@@ -83,7 +83,7 @@ public class DelayedDeleteRecords extends DelayedOperation {
     public boolean tryComplete() {
         //  check for each partition if it still has pending acks
         deleteRecordsStatus.forEach((topicPartition, status) -> {
-            log.trace("Checking delete records satisfaction for {}, current status {}", topicPartition, status);
+            LOG.trace("Checking delete records satisfaction for {}, current status {}", topicPartition, status);
             //  skip those partitions that have already been satisfied
             if (status.acksPending()) {
                 onAcksPending.accept(topicPartition, status);
