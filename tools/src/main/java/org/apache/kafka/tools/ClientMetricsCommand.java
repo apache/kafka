@@ -120,7 +120,7 @@ public class ClientMetricsCommand {
             String entityName = opts.hasGenerateNameOption() ? Uuid.randomUuid().toString() : opts.name().get();
 
             Map<String, String> configsToBeSet = new HashMap<>();
-            opts.interval().map(intervalVal -> configsToBeSet.put("interval.ms", intervalVal.toString()));
+            opts.interval().map(intervalVal -> configsToBeSet.put("interval.ms", intervalVal));
             opts.metrics().map(metricslist -> configsToBeSet.put("metrics", String.join(",", metricslist)));
             opts.match().map(matchlist -> configsToBeSet.put("match", String.join(",", matchlist)));
 
