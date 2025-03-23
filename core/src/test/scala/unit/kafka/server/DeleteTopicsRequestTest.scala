@@ -49,9 +49,9 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
 
     // Ensure one topic partition is offline.
     TestUtils.waitUntilTrue(() => {
-      aliveBrokers.head.metadataCache.getLeaderAndIsr(onlineTopic, 0).exists(_.leader() == 1) &&
-        aliveBrokers.head.metadataCache.getLeaderAndIsr(offlineTopic, 0).exists(_.leader() ==
-          MetadataResponse.NO_LEADER_ID)
+      aliveBrokers.head.metadataCache.getLeaderAndIsr(onlineTopic, 0).filter(_.leader() == 1).isPresent() &&
+        aliveBrokers.head.metadataCache.getLeaderAndIsr(offlineTopic, 0).filter(_.leader() ==
+          MetadataResponse.NO_LEADER_ID).isPresent()
     }, "Topic partition is not offline")
 
     // Delete the newly created topic and topic with offline partition. See the deletion is

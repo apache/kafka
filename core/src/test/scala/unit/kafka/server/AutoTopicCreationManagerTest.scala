@@ -19,6 +19,7 @@ package kafka.server
 
 import java.net.InetAddress
 import java.nio.ByteBuffer
+import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.{Collections, Optional, Properties}
 import kafka.coordinator.transaction.TransactionCoordinator
@@ -36,6 +37,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerd
 import org.apache.kafka.common.utils.{SecurityUtils, Utils}
 import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorConfig}
+import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
@@ -75,7 +77,7 @@ class AutoTopicCreationManagerTest {
     props.setProperty(ShareCoordinatorConfig.STATE_TOPIC_NUM_PARTITIONS_CONFIG, internalTopicReplicationFactor.toString)
 
     config = KafkaConfig.fromProps(props)
-    val aliveBrokers = Seq(new Node(0, "host0", 0), new Node(1, "host1", 1))
+    val aliveBrokers = util.List.of(new Node(0, "host0", 0), new Node(1, "host1", 1))
 
     Mockito.when(metadataCache.getAliveBrokerNodes(any(classOf[ListenerName]))).thenReturn(aliveBrokers)
   }

@@ -34,7 +34,7 @@ import java.util.Map.Entry;
  * This class is thread-safe.
  */
 public final class AclsImage {
-    public static final AclsImage EMPTY = new AclsImage(Collections.emptyMap());
+    public static final AclsImage EMPTY = new AclsImage(Map.of());
 
     private final Map<Uuid, StandardAcl> acls;
 
