@@ -97,15 +97,6 @@ final class Assignment {
     }
 
     @Override
-    public boolean equals(Object o) {
-        if (o == null || (!(o instanceof Assignment other))) return false;
-        return topicIdPartition.equals(other.topicIdPartition) &&
-            directoryId.equals(other.directoryId) &&
-            submissionTimeNs == other.submissionTimeNs &&
-            successCallback.equals(other.successCallback);
-    }
-
-    @Override
     public int hashCode() {
         return Objects.hash(topicIdPartition,
             directoryId,
