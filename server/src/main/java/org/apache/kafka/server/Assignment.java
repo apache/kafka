@@ -24,8 +24,6 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.TopicIdPartition;
 
-import java.util.Objects;
-
 final class Assignment {
     /**
      * The topic ID and partition index of the replica.
@@ -94,14 +92,6 @@ final class Assignment {
         }
         // Check if this broker is still a replica.
         return Replicas.contains(partition.replicas, nodeId);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(topicIdPartition,
-            directoryId,
-            submissionTimeNs,
-            successCallback);
     }
 
     @Override
