@@ -68,5 +68,6 @@ if __name__ == '__main__':
     os.makedirs(new_dir)
     copy_tree(os.path.join(current_dir, args.image_type), os.path.join(new_dir, args.image_type))
     copy_tree(os.path.join(current_dir, 'resources'), os.path.join(new_dir, args.image_type, 'resources'))
+    shutil.copy(os.path.join(current_dir, 'server.properties'),os.path.join(new_dir, args.image_type))
     remove_args_and_hardcode_values(
         os.path.join(new_dir, args.image_type, 'Dockerfile'), args.kafka_version, kafka_url)
