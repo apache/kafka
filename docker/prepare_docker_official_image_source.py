@@ -66,7 +66,7 @@ if __name__ == '__main__':
     if os.path.exists(new_dir):
         shutil.rmtree(new_dir)
     os.makedirs(new_dir)
-    copy_tree(os.path.join(current_dir, args.image_type), os.path.join(new_dir, args.kafka_version, args.image_type))
-    copy_tree(os.path.join(current_dir, 'resources'), os.path.join(new_dir, args.kafka_version, args.image_type, 'resources'))
+    copy_tree(os.path.join(current_dir, args.image_type), os.path.join(new_dir, args.image_type))
+    copy_tree(os.path.join(current_dir, 'resources'), os.path.join(new_dir, args.image_type, 'resources'))
     remove_args_and_hardcode_values(
-        os.path.join(new_dir, args.kafka_version, args.image_type, 'Dockerfile'), args.kafka_version, kafka_url)
+        os.path.join(new_dir, args.image_type, 'Dockerfile'), args.kafka_version, kafka_url)
