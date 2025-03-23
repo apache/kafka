@@ -70,6 +70,7 @@ public class StreamsProducer {
     private Producer<byte[], byte[]> producer;
     private boolean transactionInFlight = false;
     private boolean transactionInitialized = false;
+    private boolean allowReset = true;
     private double oldProducerTotalBlockedTime = 0;
     // we have a single `StreamsProducer` per thread, and thus a single `sendException` instance,
     // which we share across all tasks, ie, all `RecordCollectorImpl`
@@ -303,6 +304,10 @@ public class StreamsProducer {
         }
     }
 
+    boolean allowReset() {
+        return allowReset;
+    }
+
     /**
      * Cf {@link KafkaProducer#partitionsFor(String)}
      */
@@ -322,6 +327,22 @@ public class StreamsProducer {
         producer.close();
         transactionInFlight = false;
         transactionInitialized = false;
+    }
+
+    /**
+     * Disables producer reset to prevent producer recreation during shutdown.
+     * <p>
+     * When disabled, subsequent calls to reInitializeProducer() will not recreate
+     * the producer instance, avoiding resource leak.
+     * <p>
+     * <strong>
+     *     This method should only be invoked when the {@link org.apache.kafka.streams.processor.internals.ActiveTaskCreator}
+     *     thread is shutting down.
+     * </strong>
+     * </p>
+     */
+    void disableReset() {
+        allowReset = false;
     }
 
     // for testing only

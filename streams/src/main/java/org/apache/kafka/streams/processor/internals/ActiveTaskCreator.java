@@ -119,7 +119,8 @@ class ActiveTaskCreator {
     }
 
     public void reInitializeProducer() {
-        streamsProducer.resetProducer(producer());
+        if (streamsProducer.allowReset())
+            streamsProducer.resetProducer(producer());
     }
 
     StreamsProducer streamsProducer() {
@@ -256,6 +257,7 @@ class ActiveTaskCreator {
     void close() {
         try {
             streamsProducer.close();
+            streamsProducer.disableReset();
         } catch (final RuntimeException e) {
             throw new StreamsException("Thread producer encounter error trying to close.", e);
         }

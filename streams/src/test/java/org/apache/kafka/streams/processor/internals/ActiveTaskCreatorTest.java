@@ -190,7 +190,24 @@ public class ActiveTaskCreatorTest {
 
         activeTaskCreator.close();
 
+        assertThat(activeTaskCreator.streamsProducer().allowReset(), is(false));
         assertThat(mockClientSupplier.producers.get(0).closed(), is(true));
+    }
+
+    @Test
+    public void shouldNotReInitializeProducerOnClose() {
+        properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        mockClientSupplier.setApplicationIdForProducer("appId");
+        createTasks();
+        assertThat(mockClientSupplier.producers.size(), is(1));
+
+        activeTaskCreator.streamsProducer().disableReset();
+        activeTaskCreator.reInitializeProducer();
+        // Verifies that disableReset() prevents reInitializeProducer() from creating a new producer instance
+        // Without disabling reset, the producers collection would contain more than one producer
+        assertThat("Producer should not be recreated after disabling reset",
+            mockClientSupplier.producers.size(),
+            is(1));
     }
 
     // error handling
