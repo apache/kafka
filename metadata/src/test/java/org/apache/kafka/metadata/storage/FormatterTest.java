@@ -423,7 +423,8 @@ public class FormatterTest {
             assertTrue(formatter1.formatter.hasDynamicQuorum());
             assertEquals(
                 "Cannot set kraft.version to 0 if one of the flags --standalone, --initial-controllers, or " +
-                "--no-initial-controllers is used. Try removing the --feature flag for kraft.version.",
+                "--no-initial-controllers is used. For dynamic controllers support, try removing the " +
+                "--feature flag for kraft.version.",
                 assertThrows(FormatterException.class, () -> formatter1.formatter.run()).getMessage()
             );
         }
@@ -438,8 +439,8 @@ public class FormatterTest {
             assertFalse(formatter1.formatter.hasDynamicQuorum());
             assertEquals(
                 "Cannot set kraft.version to 1 unless one of the flags --standalone, --initial-controllers, or " +
-                "--no-initial-controllers is used. Try using one of --standalone, --initial-controllers, or " +
-                "--no-initial-controllers for dynamic controllers support.",
+                "--no-initial-controllers is used. For dynamic controllers support, try using one of " +
+                "--standalone, --initial-controllers, or --no-initial-controllers.",
                 assertThrows(FormatterException.class, () -> formatter1.formatter.run()).getMessage()
             );
         }
@@ -533,8 +534,8 @@ public class FormatterTest {
             assertFalse(formatter1.formatter.hasDynamicQuorum());
             assertEquals(
                 "Cannot set kraft.version to 1 unless one of the flags --standalone, --initial-controllers, or " +
-                "--no-initial-controllers is used. Try using one of --standalone, --initial-controllers, or " +
-                "--no-initial-controllers for dynamic controllers support.",
+                "--no-initial-controllers is used. For dynamic controllers support, try using one of " +
+                "--standalone, --initial-controllers, or --no-initial-controllers.",
                 assertThrows(FormatterException.class, formatter1.formatter::run).getMessage()
             );
         }
@@ -550,7 +551,8 @@ public class FormatterTest {
             assertTrue(formatter1.formatter.hasDynamicQuorum());
             assertEquals(
                 "Cannot set kraft.version to 0 if one of the flags --standalone, --initial-controllers, or " +
-                "--no-initial-controllers is used. Try removing the --feature flag for kraft.version.",
+                "--no-initial-controllers is used. For dynamic controllers support, try removing the " +
+                "--feature flag for kraft.version.",
                 assertThrows(FormatterException.class, formatter1.formatter::run).getMessage()
             );
         }

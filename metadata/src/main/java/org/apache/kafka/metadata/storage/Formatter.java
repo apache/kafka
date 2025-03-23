@@ -362,7 +362,7 @@ public class Formatter {
                         configuredKRaftVersionLevel.get() +
                         " unless one of the flags --standalone, --initial-controllers, or --no-initial-controllers is used. " +
                         "For dynamic controllers support, try using one of --standalone, --initial-controllers, or " +
-                        "--no-initial-controllers ."
+                        "--no-initial-controllers."
                     );
                 }
             }
