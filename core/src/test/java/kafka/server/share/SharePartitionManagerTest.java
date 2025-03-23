@@ -1749,8 +1749,8 @@ public class SharePartitionManagerTest {
         when(sp1.canAcquireRecords()).thenReturn(false);
         when(sp2.maybeAcquireFetchLock()).thenReturn(true);
         when(sp2.canAcquireRecords()).thenReturn(false);
-        when(sp1.acquire(anyString(), anyInt(), anyInt(), anyLong(), any())).thenReturn(ShareAcquiredRecords.empty());
-        when(sp2.acquire(anyString(), anyInt(), anyInt(), anyLong(), any())).thenReturn(ShareAcquiredRecords.empty());
+        when(sp1.acquire(anyString(), anyInt(), anyInt(), anyLong(), any(), any())).thenReturn(ShareAcquiredRecords.empty());
+        when(sp2.acquire(anyString(), anyInt(), anyInt(), anyLong(), any(), any())).thenReturn(ShareAcquiredRecords.empty());
 
         List<DelayedOperationKey> delayedShareFetchWatchKeys = new ArrayList<>();
         topicIdPartitions.forEach(topicIdPartition -> delayedShareFetchWatchKeys.add(new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition())));
@@ -1995,7 +1995,7 @@ public class SharePartitionManagerTest {
         when(sharePartitionManager.cachedTopicIdPartitionsInShareSession(groupId, Uuid.fromString(memberId))).thenReturn(Arrays.asList(tp1, tp3));
 
         doAnswer(invocation -> buildLogReadResult(List.of(tp1))).when(mockReplicaManager).readFromLog(any(), any(), any(ReplicaQuota.class), anyBoolean());
-        when(sp1.acquire(anyString(), anyInt(), anyInt(), anyLong(), any())).thenReturn(new ShareAcquiredRecords(List.of(), 0));
+        when(sp1.acquire(anyString(), anyInt(), anyInt(), anyLong(), any(), any())).thenReturn(new ShareAcquiredRecords(List.of(), 0));
         // Release acquired records on session close request for tp1 and tp3.
         sharePartitionManager.releaseSession(groupId, memberId);
 
@@ -2565,7 +2565,7 @@ public class SharePartitionManagerTest {
         when(sp1.maybeAcquireFetchLock()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(true);
         when(sp1.maybeInitialize()).thenReturn(CompletableFuture.completedFuture(null));
-        when(sp1.acquire(anyString(), anyInt(), anyInt(), anyLong(), any())).thenReturn(new ShareAcquiredRecords(List.of(), 0));
+        when(sp1.acquire(anyString(), anyInt(), anyInt(), anyLong(), any(), any())).thenReturn(new ShareAcquiredRecords(List.of(), 0));
 
         // Fail initialization for tp2.
         SharePartition sp2 = mock(SharePartition.class);
