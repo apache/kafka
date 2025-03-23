@@ -112,7 +112,6 @@ public class ClientRebootstrapTest {
             admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) REPLICAS)));
         }
 
-        var part = 0;
         var broker0 = 0;
         var broker1 = 1;
 
@@ -121,7 +120,7 @@ public class ClientRebootstrapTest {
 
         try (var producer = clusterInstance.producer()) {
             // Only the broker 1 is available for the producer during the bootstrap.
-            var recordMetadata0 = producer.send(new ProducerRecord<>(TOPIC, part, "key 0".getBytes(), "value 0".getBytes())).get();
+            var recordMetadata0 = producer.send(new ProducerRecord<>(TOPIC, "value 0".getBytes())).get();
             assertEquals(0, recordMetadata0.offset());
 
             clusterInstance.shutdownBroker(broker1);
@@ -130,7 +129,7 @@ public class ClientRebootstrapTest {
             // Current broker 1 is offline.
             // However, the broker 0 from the bootstrap list is online.
             // Should be able to produce records.
-            var recordMetadata1 = producer.send(new ProducerRecord<>(TOPIC, part, "key 1".getBytes(), "value 1".getBytes())).get();
+            var recordMetadata1 = producer.send(new ProducerRecord<>(TOPIC, "value 1".getBytes())).get();
             assertEquals(0, recordMetadata1.offset());
         }
     }
@@ -148,7 +147,6 @@ public class ClientRebootstrapTest {
             admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) REPLICAS)));
         }
 
-        var part = 0;
         var broker0 = 0;
         var broker1 = 1;
 
@@ -158,7 +156,7 @@ public class ClientRebootstrapTest {
         var producer = clusterInstance.producer(Map.of(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "none"));
 
         // Only the broker 1 is available for the producer during the bootstrap.
-        var recordMetadata0 = producer.send(new ProducerRecord<>(TOPIC, part, "key 0".getBytes(), "value 0".getBytes())).get();
+        var recordMetadata0 = producer.send(new ProducerRecord<>(TOPIC, "value 0".getBytes())).get();
         assertEquals(0, recordMetadata0.offset());
 
         clusterInstance.shutdownBroker(broker1);
@@ -166,7 +164,7 @@ public class ClientRebootstrapTest {
 
         // The broker 1, originally cached during the bootstrap, is offline.
         // As a result, the producer will throw a TimeoutException when trying to send a message.
-        assertThrows(TimeoutException.class, () -> producer.send(new ProducerRecord<>(TOPIC, part, "key 1".getBytes(), "value 1".getBytes())).get(5, TimeUnit.SECONDS));
+        assertThrows(TimeoutException.class, () -> producer.send(new ProducerRecord<>(TOPIC, "value 1".getBytes())).get(5, TimeUnit.SECONDS));
         // Since the brokers cached during the bootstrap are offline, the producer needs to wait the default timeout for other threads.
         producer.close(Duration.ZERO);
     }
