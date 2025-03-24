@@ -2681,12 +2681,10 @@ public class SharePartition {
         lock.writeLock().lock();
         try {
             PriorityQueue<FetchResponseData.AbortedTransaction> abortedTransactionsHeap = abortedTransactionsHeap(abortedTransactions.get());
-            Iterator<? extends RecordBatch> batchesIterator = batches.iterator();
             Set<Long> abortedProducerIds = new HashSet<>();
             List<RecordBatch> recordsToArchive = new ArrayList<>();
 
-            while (!batchesIterator.hasNext()) {
-                RecordBatch currentBatch = batchesIterator.next();
+            for (RecordBatch currentBatch : batches) {
                 if (currentBatch.hasProducerId()) {
                     // remove from the aborted transactions queue, all aborted transactions which have begun
                     // before the current batch's last offset and add the associated producerIds to the
