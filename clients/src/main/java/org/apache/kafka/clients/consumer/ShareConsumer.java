@@ -32,6 +32,8 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
+ * A client that consumes records from a Kafka cluster using a share group.
+ *
  * @see KafkaShareConsumer
  * @see MockShareConsumer
  */

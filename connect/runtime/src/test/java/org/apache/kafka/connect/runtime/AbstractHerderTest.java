@@ -18,11 +18,16 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.producer.ProducerConfig;
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigValue;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.provider.DirectoryConfigProvider;
+import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.Monitorable;
+import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBearerUnsecuredLoginCallbackHandler;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.connect.connector.Connector;
@@ -781,6 +786,51 @@ public class AbstractHerderTest {
         verifyValidationIsolation();
     }
 
+    static final class TestClientConfigOverridePolicy extends AllConnectorClientConfigOverridePolicy implements Monitorable {
+
+        private static MetricName metricName = null;
+        private int count = 0;
+
+        @Override
+        protected boolean isAllowed(ConfigValue configValue) {
+            count++;
+            return super.isAllowed(configValue);
+        }
+
+        @Override
+        public void withPluginMetrics(PluginMetrics metrics) {
+            metricName = metrics.metricName("name", "description", Map.of());
+            metrics.addMetric(metricName, (Measurable) (config, now) -> count);
+        }
+    }
+
+    @Test
+    public void testClientConfigOverridePolicyWithMetrics() {
+        final Class<? extends Connector> connectorClass = SampleSourceConnector.class;
+        AbstractHerder herder = createConfigValidationHerder(connectorClass, new TestClientConfigOverridePolicy());
+
+        Map<String, String> config = new HashMap<>();
+        config.put(ConnectorConfig.CONNECTOR_CLASS_CONFIG, connectorClass.getName());
+        config.put(ConnectorConfig.NAME_CONFIG, "connector-name");
+        config.put("required", "value");
+
+        Map<String, String> overrides = Map.of(
+            producerOverrideKey(ProducerConfig.MAX_REQUEST_SIZE_CONFIG), "420",
+            producerOverrideKey(ProducerConfig.MAX_BLOCK_MS_CONFIG), "28980",
+            producerOverrideKey(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG), "true");
+        config.putAll(overrides);
+
+        herder.validateConnectorConfig(config, s -> null, false);
+
+        Map<MetricName, KafkaMetric> metrics = herder.worker.metrics().metrics().metrics();
+        assertTrue(metrics.containsKey(TestClientConfigOverridePolicy.metricName));
+        assertEquals((double) overrides.size(), metrics.get(TestClientConfigOverridePolicy.metricName).metricValue());
+
+        herder.stopServices();
+        metrics = herder.worker.metrics().metrics().metrics();
+        assertFalse(metrics.containsKey(TestClientConfigOverridePolicy.metricName));
+    }
+
     @Test
     public void testReverseTransformConfigs() {
         // Construct a task config with constant values for TEST_KEY and TEST_KEY2
@@ -1280,6 +1330,8 @@ public class AbstractHerderTest {
     }
 
     private AbstractHerder testHerder(ConnectorClientConfigOverridePolicy connectorClientConfigOverridePolicy) {
+        ConnectMetrics connectMetrics = new MockConnectMetrics();
+        when(worker.metrics()).thenReturn(connectMetrics);
         return mock(AbstractHerder.class, withSettings()
                 .useConstructor(worker, workerId, kafkaClusterId, statusStore, configStore, connectorClientConfigOverridePolicy, Time.SYSTEM)
                 .defaultAnswer(CALLS_REAL_METHODS));

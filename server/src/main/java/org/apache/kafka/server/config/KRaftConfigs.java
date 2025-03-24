@@ -51,7 +51,6 @@ public class KRaftConfigs {
 
 
     public static final String NODE_ID_CONFIG = "node.id";
-    public static final int EMPTY_NODE_ID = -1;
     public static final String NODE_ID_DOC = "The node ID associated with the roles this process is playing when <code>process.roles</code> is non-empty. " +
             "This is required configuration when running in KRaft mode.";
 

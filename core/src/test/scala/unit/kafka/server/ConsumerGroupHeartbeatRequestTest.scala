@@ -16,24 +16,23 @@
  */
 package kafka.server
 
-import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, ClusterInstance, ClusterTest, ClusterTestDefaults, ClusterTestExtensions, Type}
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, ClusterTest, ClusterTestDefaults, Type}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
 import org.apache.kafka.clients.admin.{AlterConfigOp, ConfigEntry}
-import org.apache.kafka.common.Uuid
+import org.apache.kafka.common.{TopicCollection, Uuid}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.message.{ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse}
+import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.server.common.Feature
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull}
-import org.junit.jupiter.api.extension.ExtendWith
 
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 
-@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 @ClusterTestDefaults(
   types = Array(Type.KRAFT),
   serverProperties = Array(
@@ -175,7 +174,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       )
 
       // Heartbeat request to join the group. Note that the member subscribes
-      // to an nonexistent topic.
+      // to a nonexistent topic.
       var consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
         new ConsumerGroupHeartbeatRequestData()
           .setGroupId("grp")
@@ -215,7 +214,7 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       ).build()
 
       // This is the expected assignment.
-      val expectedAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
+      var expectedAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
         .setTopicPartitions(List(new ConsumerGroupHeartbeatResponseData.TopicPartitions()
           .setTopicId(topicId)
           .setPartitions(List[Integer](0, 1, 2).asJava)).asJava)
@@ -227,6 +226,32 @@ class ConsumerGroupHeartbeatRequestTest(cluster: ClusterInstance) {
         consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
           consumerGroupHeartbeatResponse.data.assignment == expectedAssignment
       }, msg = s"Could not get partitions assigned. Last response $consumerGroupHeartbeatResponse.")
+
+      // Verify the response.
+      assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)
+      assertEquals(expectedAssignment, consumerGroupHeartbeatResponse.data.assignment)
+
+      // Delete the topic.
+      admin.deleteTopics(TopicCollection.ofTopicIds(List(topicId).asJava)).all.get
+
+      // Prepare the next heartbeat.
+      consumerGroupHeartbeatRequest = new ConsumerGroupHeartbeatRequest.Builder(
+        new ConsumerGroupHeartbeatRequestData()
+          .setGroupId("grp")
+          .setMemberId(consumerGroupHeartbeatResponse.data.memberId)
+          .setMemberEpoch(consumerGroupHeartbeatResponse.data.memberEpoch)
+      ).build()
+
+      // This is the expected assignment.
+      expectedAssignment = new ConsumerGroupHeartbeatResponseData.Assignment()
+
+      // Heartbeats until the partitions are revoked.
+      consumerGroupHeartbeatResponse = null
+      TestUtils.waitUntilTrue(() => {
+        consumerGroupHeartbeatResponse = connectAndReceive(consumerGroupHeartbeatRequest)
+        consumerGroupHeartbeatResponse.data.errorCode == Errors.NONE.code &&
+          consumerGroupHeartbeatResponse.data.assignment == expectedAssignment
+      }, msg = s"Could not get partitions revoked. Last response $consumerGroupHeartbeatResponse.")
 
       // Verify the response.
       assertEquals(2, consumerGroupHeartbeatResponse.data.memberEpoch)

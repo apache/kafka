@@ -20,6 +20,7 @@ import org.apache.kafka.common.feature.SupportedVersionRange
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.ApiVersionsResponse
+import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.server.{BrokerFeatures, ClientMetricsManager}
 import org.apache.kafka.server.common.FinalizedFeatures
@@ -94,7 +95,7 @@ class SimpleApiVersionManager(
     )
   }
 
-  private val apiVersions = ApiVersionsResponse.collectApis(enabledApis.asJava, enableUnstableLastVersion)
+  private val apiVersions = ApiVersionsResponse.collectApis(listenerType, enabledApis.asJava, enableUnstableLastVersion)
 
   override def apiVersionResponse(
     throttleTimeMs: Int,

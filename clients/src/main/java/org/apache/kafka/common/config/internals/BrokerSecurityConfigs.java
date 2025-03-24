@@ -79,7 +79,9 @@ public class BrokerSecurityConfigs {
             "name from the client certificate if one is provided; otherwise, if client authentication is not required, " +
             "the principal name will be ANONYMOUS. For SASL authentication, the principal will be derived using the " +
             "rules defined by <code>" + SASL_KERBEROS_PRINCIPAL_TO_LOCAL_RULES_CONFIG + "</code> if GSSAPI is in use, " +
-            "and the SASL authentication ID for other mechanisms. For PLAINTEXT, the principal will be ANONYMOUS.";
+            "and the SASL authentication ID for other mechanisms. For PLAINTEXT, the principal will be ANONYMOUS. " +
+            "Note that custom implementations of <code>KafkaPrincipalBuilder</code> is required to implement <code>KafkaPrincipalSerde</code> " +
+            "interface, otherwise brokers will not be able to forward requests to the controller.";
 
     public static final String SSL_CLIENT_AUTH_CONFIG = "ssl.client.auth";
     public static final String SSL_CLIENT_AUTH_DEFAULT = SslClientAuth.NONE.toString();
@@ -130,6 +132,10 @@ public class BrokerSecurityConfigs {
 
     public static final String SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG = "sasl.mechanism.inter.broker.protocol";
     public static final String SASL_MECHANISM_INTER_BROKER_PROTOCOL_DOC = "SASL mechanism used for inter-broker communication. Default is GSSAPI.";
+
+    // The allowlist of the SASL OAUTHBEARER endpoints
+    public static final String ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG = "org.apache.kafka.sasl.oauthbearer.allowed.urls";
+    public static final String ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT = "";
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
             // General Security Configuration
             .define(BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG, LONG, BrokerSecurityConfigs.DEFAULT_CONNECTIONS_MAX_REAUTH_MS, MEDIUM, BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_DOC)

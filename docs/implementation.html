@@ -64,7 +64,7 @@ records: [Record]</code></pre>
     epoch field is not included in the CRC computation to avoid the need to recompute the CRC when this field is assigned for every batch that is received by
     the broker. The CRC-32C (Castagnoli) polynomial is used for the computation.</p>
 
-    <p>On compaction: unlike the older message formats, magic v2 and above preserves the first and last offset/sequence numbers from the original batch when the log is cleaned. This is required in order to be able to restore the
+    <p>On compaction, we preserve the first and last offset/sequence numbers from the original batch when the log is cleaned. This is required in order to be able to restore the
     producer's state when the log is reloaded. If we did not retain the last sequence number, for example, then after a partition leader failure, the producer might see an OutOfSequence error. The base sequence number must
     be preserved for duplicate checking (the broker checks incoming Produce requests for duplicates by verifying that the first and last sequence numbers of the incoming batch match the last from that producer). As a result,
     it is possible to have empty batches in the log when all the records in the batch are cleaned but batch is still retained in order to preserve a producer's last sequence number. One oddity here is that the baseTimestamp
@@ -81,7 +81,7 @@ type: int16 (0 indicates an abort marker, 1 indicates a commit)</code></pre>
     <p>The schema for the value of a control record is dependent on the type. The value is opaque to clients.</p>
 
     <h4 class="anchor-heading"><a id="record" class="anchor-link"></a><a href="#record">5.3.2 Record</a></h4>
-	<p>Record level headers were introduced in Kafka 0.11.0. The on-disk format of a record with Headers is delineated below. </p>
+	<p>The on-disk format of each record is delineated below. </p>
 	<pre><code class="language-text">length: varint
 attributes: int8
     bit 0~7: unused
@@ -103,67 +103,8 @@ Value: byte[]</code></pre>
 
     <h4 class="anchor-heading"><a id="messageset" class="anchor-link"></a><a href="#messageset">5.3.3 Old Message Format</a></h4>
     <p>
-        Prior to Kafka 0.11, messages were transferred and stored in <i>message sets</i>. In a message set, each message has its own metadata. Note that although message sets are represented as an array,
-        they are not preceded by an int32 array size like other array elements in the protocol.
+        Prior to Kafka 0.11, messages were transferred and stored in <i>message sets</i>. See <a href="https://kafka.apache.org/39/documentation/#messageset">Old Message Format</a> for more details.
     </p>
-
-    <b>Message Set:</b><br>
-    <pre><code class="language-text">MessageSet (Version: 0) => [offset message_size message]
-offset => INT64
-message_size => INT32
-message => crc magic_byte attributes key value
-    crc => INT32
-    magic_byte => INT8
-    attributes => INT8
-        bit 0~2:
-            0: no compression
-            1: gzip
-            2: snappy
-        bit 3~7: unused
-    key => BYTES
-    value => BYTES</code></pre>
-    <pre><code class="language-text">MessageSet (Version: 1) => [offset message_size message]
-offset => INT64
-message_size => INT32
-message => crc magic_byte attributes timestamp key value
-    crc => INT32
-    magic_byte => INT8
-    attributes => INT8
-        bit 0~2:
-            0: no compression
-            1: gzip
-            2: snappy
-            3: lz4
-        bit 3: timestampType
-            0: create time
-            1: log append time
-        bit 4~7: unused
-    timestamp => INT64
-    key => BYTES
-    value => BYTES</code></pre>
-    <p>
-        In versions prior to Kafka 0.10, the only supported message format version (which is indicated in the magic value) was 0. Message format version 1 was introduced with timestamp support in version 0.10.
-    </p>
-    <ul>
-        <li>Similarly to version 2 above, the lowest bits of attributes represent the compression type.</li>
-        <li>In version 1, the producer should always set the timestamp type bit to 0. If the topic is configured to use log append time,
-            (through either broker level config log.message.timestamp.type = LogAppendTime or topic level config message.timestamp.type = LogAppendTime),
-	    the broker will overwrite the timestamp type and the timestamp in the message set.</li>
-        <li>The highest bits of attributes must be set to 0.</li>
-    </ul>
-    <p>In message format versions 0 and 1 Kafka supports recursive messages to enable compression. In this case the message's attributes must be set
-      to indicate one of the compression types and the value field will contain a message set compressed with that type. We often refer
-      to the nested messages as "inner messages" and the wrapping message as the "outer message." Note that the key should be null
-      for the outer message and its offset will be the offset of the last inner message.
-    </p>
-    <p>When receiving recursive version 0 messages, the broker decompresses them and each inner message is assigned an offset individually.
-      In version 1, to avoid server side re-compression, only the wrapper message will be assigned an offset. The inner messages
-      will have relative offsets. The absolute offset can be computed using the offset from the outer message, which corresponds
-      to the offset assigned to the last inner message.
-    </p>
-
-    <p>The crc field contains the CRC32 (and not CRC-32C) of the subsequent message bytes (i.e. from magic byte to the value).</p>
-
     <h3 class="anchor-heading"><a id="log" class="anchor-link"></a><a href="#log">5.4 Log</a></h3>
     <p>
     A log for a topic named "my-topic" with two partitions consists of two directories (namely <code>my-topic-0</code> and <code>my-topic-1</code>) populated with data files containing the messages for that topic. The format of the log files is a sequence of "log entries"; each log entry is a 4 byte integer <i>N</i> storing the message length which is followed by the <i>N</i> message bytes. Each message is uniquely identified by a 64-bit integer <i>offset</i> giving the byte position of the start of this message in the stream of all messages ever sent to that topic on that partition. The on-disk format of each message is given below. Each log file is named with the offset of the first message it contains. So the first file created will be 00000000000000000000.log, and each additional file will have an integer name roughly <i>S</i> bytes from the previous file where <i>S</i> is the max log file size given in the configuration.

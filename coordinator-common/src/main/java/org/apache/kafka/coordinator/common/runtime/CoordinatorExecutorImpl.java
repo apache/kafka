@@ -31,18 +31,7 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.RejectedExecutionException;
 
 public class CoordinatorExecutorImpl<S extends CoordinatorShard<U>, U> implements CoordinatorExecutor<U> {
-    private static class TaskResult<R> {
-        final R result;
-        final Throwable exception;
-
-        TaskResult(
-            R result,
-            Throwable exception
-        ) {
-            this.result = result;
-            this.exception = exception;
-        }
-    }
+    private record TaskResult<R>(R result, Throwable exception) { }
 
     private final Logger log;
     private final TopicPartition shard;

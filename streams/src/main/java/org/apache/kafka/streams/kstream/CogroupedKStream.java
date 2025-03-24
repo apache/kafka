@@ -18,27 +18,30 @@ package org.apache.kafka.streams.kstream;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
 /**
- * {@code CogroupedKStream} is an abstraction of multiple <i>grouped</i> record streams of {@link KeyValue} pairs.
- * <p>
- * It is an intermediate representation after a grouping of {@link KStream}s, before the
- * aggregations are applied to the new partitions resulting in a {@link KTable}.
- * <p>
- * A {@code CogroupedKStream} must be obtained from a {@link KGroupedStream} via
- * {@link KGroupedStream#cogroup(Aggregator) cogroup(...)}.
+ * {@code CogroupedKStream} is an abstraction of one or more {@link KGroupedStream grouped record streams} of
+ * {@link Record key-value} pairs.
  *
- * @param <K> Type of keys
- * @param <VAgg> Type of values after agg
+ * <p>A {@code CogroupedKStream} can be either windowed by applying {@code windowedBy(...)} operation,
+ * or can be {@link #aggregate(Initializer) aggregated} into a {@link KTable}.
+ *
+ * <p>A {@code CogroupedKStream} is initialized from a single
+ * {@link KGroupedStream#cogroup(Aggregator) grouped record stream}, and can be combined with one or more other
+ * {@link CogroupedKStream#cogroup(KGroupedStream, Aggregator) grouped record streams},
+ * before windowing or aggregation is applied.
+ *
+ * @param <K> the key type of this co-grouped stream
+ * @param <VOut> the result value type of the applied aggregation
  */
-public interface CogroupedKStream<K, VAgg> {
+public interface CogroupedKStream<K, VOut> {
 
     /**
      * Add an already {@link KGroupedStream grouped KStream} to this {@code CogroupedKStream}.
@@ -63,8 +66,8 @@ public interface CogroupedKStream<K, VAgg> {
      *
      * @return a {@code CogroupedKStream}
      */
-    <V> CogroupedKStream<K, VAgg> cogroup(final KGroupedStream<K, V> groupedStream,
-                                          final Aggregator<? super K, ? super V, VAgg> aggregator);
+    <V> CogroupedKStream<K, VOut> cogroup(final KGroupedStream<K, V> groupedStream,
+                                          final Aggregator<? super K, ? super V, VOut> aggregator);
 
     /**
      * Aggregate the values of records in these streams by the grouped key.
@@ -116,7 +119,7 @@ public interface CogroupedKStream<K, VAgg> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
      * represent the latest (rolling) aggregate for each key
      */
-    KTable<K, VAgg> aggregate(final Initializer<VAgg> initializer);
+    KTable<K, VOut> aggregate(final Initializer<VOut> initializer);
 
     /**
      * Aggregate the values of records in these streams by the grouped key.
@@ -170,7 +173,7 @@ public interface CogroupedKStream<K, VAgg> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
      * represent the latest (rolling) aggregate for each key
      */
-    KTable<K, VAgg> aggregate(final Initializer<VAgg> initializer,
+    KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
                               final Named named);
 
     /**
@@ -224,8 +227,8 @@ public interface CogroupedKStream<K, VAgg> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
      * represent the latest (rolling) aggregate for each key
      */
-    KTable<K, VAgg> aggregate(final Initializer<VAgg> initializer,
-                              final Materialized<K, VAgg, KeyValueStore<Bytes, byte[]>> materialized);
+    KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
+                              final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Aggregate the values of records in these streams by the grouped key.
@@ -281,9 +284,9 @@ public interface CogroupedKStream<K, VAgg> {
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that
      * represent the latest (rolling) aggregate for each key
      */
-    KTable<K, VAgg> aggregate(final Initializer<VAgg> initializer,
+    KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
                               final Named named,
-                              final Materialized<K, VAgg, KeyValueStore<Bytes, byte[]>> materialized);
+                              final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Create a new {@link TimeWindowedCogroupedKStream} instance that can be used to perform windowed
@@ -296,7 +299,7 @@ public interface CogroupedKStream<K, VAgg> {
      *
      * @return an instance of {@link TimeWindowedCogroupedKStream}
      */
-    <W extends Window> TimeWindowedCogroupedKStream<K, VAgg> windowedBy(final Windows<W> windows);
+    <W extends Window> TimeWindowedCogroupedKStream<K, VOut> windowedBy(final Windows<W> windows);
 
     /**
      * Create a new {@link TimeWindowedCogroupedKStream} instance that can be used to perform sliding
@@ -307,7 +310,7 @@ public interface CogroupedKStream<K, VAgg> {
      *
      * @return an instance of {@link TimeWindowedCogroupedKStream}
      */
-    TimeWindowedCogroupedKStream<K, VAgg> windowedBy(final SlidingWindows windows);
+    TimeWindowedCogroupedKStream<K, VOut> windowedBy(final SlidingWindows windows);
 
     /**
      * Create a new {@link SessionWindowedCogroupedKStream} instance that can be used to perform session
@@ -318,6 +321,6 @@ public interface CogroupedKStream<K, VAgg> {
      *
      * @return an instance of {@link SessionWindowedCogroupedKStream}
      */
-    SessionWindowedCogroupedKStream<K, VAgg> windowedBy(final SessionWindows windows);
+    SessionWindowedCogroupedKStream<K, VOut> windowedBy(final SessionWindows windows);
 
 }

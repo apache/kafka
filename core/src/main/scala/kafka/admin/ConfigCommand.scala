@@ -36,6 +36,7 @@ import org.apache.kafka.server.config.{ConfigType, QuotaConfig}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.LogConfig
 
+import java.net.{InetAddress, UnknownHostException}
 import scala.jdk.CollectionConverters._
 import scala.collection._
 
@@ -535,7 +536,6 @@ object ConfigCommand extends Logging {
       .withRequiredArg
       .ofType(classOf[String])
       .withValuesSeparatedBy(',')
-    val forceOpt: OptionSpecBuilder = parser.accepts("force", "Suppress console prompts")
     val topic: OptionSpec[String] = parser.accepts("topic", "The topic's name.")
       .withRequiredArg
       .ofType(classOf[String])
@@ -649,7 +649,7 @@ object ConfigCommand extends Logging {
 
       if (hasEntityName && entityTypeVals.contains(ConfigType.IP)) {
         Seq(entityName, ip).filter(options.has(_)).map(options.valueOf(_)).foreach { ipEntity =>
-          if (!DynamicConfig.Ip.isValidIpEntity(ipEntity))
+          if (!isValidIpEntity(ipEntity))
             throw new IllegalArgumentException(s"The entity name for ${entityTypeVals.head} must be a valid IP or resolvable host, but it is: $ipEntity")
         }
       }
@@ -687,5 +687,14 @@ object ConfigCommand extends Logging {
           throw new IllegalArgumentException("At least one of --add-config, --add-config-file, or --delete-config must be specified with --alter")
       }
     }
+  }
+
+  def isValidIpEntity(ip: String): Boolean = {
+    try {
+      InetAddress.getByName(ip)
+    } catch {
+      case _: UnknownHostException => return false
+    }
+    true
   }
 }

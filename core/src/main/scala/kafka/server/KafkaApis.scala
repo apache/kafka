@@ -21,10 +21,8 @@ import kafka.coordinator.transaction.{InitProducerIdResult, TransactionCoordinat
 import kafka.network.RequestChannel
 import kafka.server.QuotaFactory.{QuotaManagers, UNBOUNDED_QUOTA}
 import kafka.server.handlers.DescribeTopicPartitionsRequestHandler
-import kafka.server.metadata.{ConfigRepository, KRaftMetadataCache}
 import kafka.server.share.SharePartitionManager
 import kafka.utils.Logging
-import org.apache.kafka.admin.AdminUtils
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.EndpointType
 import org.apache.kafka.common.acl.AclOperation
@@ -59,6 +57,7 @@ import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
 import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.{Group, GroupCoordinator}
 import org.apache.kafka.coordinator.share.ShareCoordinator
+import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.{GroupVersion, RequestLocal, TransactionVersion}
@@ -73,11 +72,13 @@ import java.time.Duration
 import java.util
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
+import java.util.stream.Collectors
 import java.util.{Collections, Optional}
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
+import scala.jdk.javaapi.OptionConverters
 
 /**
  * Logic to handle the various Kafka requests
@@ -113,11 +114,8 @@ class KafkaApis(val requestChannel: RequestChannel,
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   val aclApis = new AclApis(authHelper, authorizer, requestHelper, "broker", config)
   val configManager = new ConfigAdminManager(brokerId, config, configRepository)
-  val describeTopicPartitionsRequestHandler : Option[DescribeTopicPartitionsRequestHandler] = metadataCache match {
-    case kRaftMetadataCache: KRaftMetadataCache =>
-      Some(new DescribeTopicPartitionsRequestHandler(kRaftMetadataCache, authHelper, config))
-    case _ => None
-  }
+  val describeTopicPartitionsRequestHandler = new DescribeTopicPartitionsRequestHandler(
+    metadataCache, authHelper, config)
 
   def close(): Unit = {
     aclApis.close()
@@ -238,6 +236,10 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DELETE_SHARE_GROUP_STATE => handleDeleteShareGroupStateRequest(request)
         case ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY => handleReadShareGroupStateSummaryRequest(request)
         case ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS => handleDescribeShareGroupOffsetsRequest(request)
+        case ApiKeys.ALTER_SHARE_GROUP_OFFSETS => handleAlterShareGroupOffsetsRequest(request)
+        case ApiKeys.DELETE_SHARE_GROUP_OFFSETS => handleDeleteShareGroupOffsetsRequest(request)
+        case ApiKeys.STREAMS_GROUP_DESCRIBE => handleStreamsGroupDescribe(request).exceptionally(handleError)
+        case ApiKeys.STREAMS_GROUP_HEARTBEAT => handleStreamsGroupHeartbeat(request).exceptionally(handleError)
         case _ => throw new IllegalStateException(s"No handler for request api key ${request.header.apiKey}")
       }
     } catch {
@@ -298,7 +300,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           val topicWithValidPartitions = new OffsetCommitRequestData.OffsetCommitRequestTopic().setName(topic.name)
 
           topic.partitions.forEach { partition =>
-            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).nonEmpty) {
+            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).isPresent()) {
               topicWithValidPartitions.partitions.add(partition)
             } else {
               responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
@@ -364,12 +366,12 @@ class KafkaApis(val requestChannel: RequestChannel,
         (x.leaderReplicaIdOpt.getOrElse(-1), x.getLeaderEpoch)
       case Left(x) =>
         debug(s"Unable to retrieve local leaderId and Epoch with error $x, falling back to metadata cache")
-        metadataCache.getLeaderAndIsr(tp.topic, tp.partition) match {
+        OptionConverters.toScala(metadataCache.getLeaderAndIsr(tp.topic, tp.partition)) match {
           case Some(pinfo) => (pinfo.leader(), pinfo.leaderEpoch())
           case None => (-1, -1)
         }
     }
-    LeaderNode(leaderId, leaderEpoch, metadataCache.getAliveBrokerNode(leaderId, ln))
+    LeaderNode(leaderId, leaderEpoch, OptionConverters.toScala(metadataCache.getAliveBrokerNode(leaderId, ln)))
   }
 
   /**
@@ -503,7 +505,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     if (authorizedRequestInfo.isEmpty)
       sendResponseCallback(Map.empty)
     else {
-      val internalTopicsAllowed = request.header.clientId == AdminUtils.ADMIN_CLIENT_ID
+      val internalTopicsAllowed = request.header.clientId == "__admin_client"
       val transactionSupportedOperation = AddPartitionsToTxnManager.produceRequestVersionToTransactionSupportedOperation(request.header.apiVersion())
       // call the replica manager to append messages to the replicas
       replicaManager.handleProduceAppend(
@@ -630,7 +632,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
         }
 
-        data.divergingEpoch.ifPresent(partitionData.setDivergingEpoch(_))
+        data.divergingEpoch.ifPresent(epoch => partitionData.setDivergingEpoch(epoch))
         partitions.put(tp, partitionData)
       }
       erroneous.foreach { case (tp, data) => partitions.put(tp, data) }
@@ -722,7 +724,6 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
 
       val params = new FetchParams(
-        versionId,
         fetchRequest.replicaId,
         fetchRequest.replicaEpoch,
         fetchRequest.maxWait,
@@ -808,13 +809,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     errorUnavailableEndpoints: Boolean,
     errorUnavailableListeners: Boolean
   ): Seq[MetadataResponseTopic] = {
-    val topicResponses = metadataCache.getTopicMetadata(topics, listenerName,
+    val topicResponses = metadataCache.getTopicMetadata(topics.asJava, listenerName,
       errorUnavailableEndpoints, errorUnavailableListeners)
 
     if (topics.isEmpty || topicResponses.size == topics.size || fetchAllTopics) {
-      topicResponses
+      topicResponses.asScala
     } else {
-      val nonExistingTopics = topics.diff(topicResponses.map(_.name).toSet)
+      val nonExistingTopics = topics.diff(topicResponses.asScala.map(_.name).toSet)
       val nonExistingTopicResponses = if (allowAutoTopicCreation) {
         val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request)
         autoTopicCreationManager.createTopics(nonExistingTopics, controllerMutationQuota, Some(request.context))
@@ -838,7 +839,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
 
-      topicResponses ++ nonExistingTopicResponses
+      topicResponses.asScala ++ nonExistingTopicResponses
     }
   }
 
@@ -863,13 +864,13 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // Only get topicIds and topicNames when supporting topicId
     val unknownTopicIds = topicIds.filter(metadataCache.getTopicName(_).isEmpty)
-    val knownTopicNames = topicIds.flatMap(metadataCache.getTopicName)
+    val knownTopicNames = topicIds.flatMap(id => OptionConverters.toScala(metadataCache.getTopicName(id)))
 
     val unknownTopicIdsTopicMetadata = unknownTopicIds.map(topicId =>
         metadataResponseTopic(Errors.UNKNOWN_TOPIC_ID, null, topicId, isInternal = false, util.Collections.emptyList())).toSeq
 
     val topics = if (metadataRequest.isAllTopics)
-      metadataCache.getAllTopics()
+      metadataCache.getAllTopics.asScala
     else if (useTopicId)
       knownTopicNames
     else
@@ -951,37 +952,30 @@ class KafkaApis(val requestChannel: RequestChannel,
     val brokers = metadataCache.getAliveBrokerNodes(request.context.listenerName)
 
     trace("Sending topic metadata %s and brokers %s for correlation id %d to client %s".format(completeTopicMetadata.mkString(","),
-      brokers.mkString(","), request.header.correlationId, request.header.clientId))
-    val controllerId = metadataCache.getRandomAliveBrokerId
+      brokers.asScala.mkString(","), request.header.correlationId, request.header.clientId))
+    val controllerId = metadataCache.getRandomAliveBrokerId.orElse(MetadataResponse.NO_CONTROLLER_ID)
 
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
        MetadataResponse.prepareResponse(
          requestVersion,
          requestThrottleMs,
-         brokers.toList.asJava,
+         brokers,
          clusterId,
-         controllerId.getOrElse(MetadataResponse.NO_CONTROLLER_ID),
+         controllerId,
          completeTopicMetadata.asJava,
          clusterAuthorizedOperations
       ))
   }
 
   def handleDescribeTopicPartitionsRequest(request: RequestChannel.Request): Unit = {
-    describeTopicPartitionsRequestHandler match {
-      case Some(handler) => {
-        val response = handler.handleDescribeTopicPartitionsRequest(request)
-        trace("Sending topic partitions metadata %s for correlation id %d to client %s".format(response.topics().asScala.mkString(","),
-          request.header.correlationId, request.header.clientId))
+    val response = describeTopicPartitionsRequestHandler.handleDescribeTopicPartitionsRequest(request)
+    trace("Sending topic partitions metadata %s for correlation id %d to client %s".format(response.topics().asScala.mkString(","),
+      request.header.correlationId, request.header.clientId))
 
-        requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
-          response.setThrottleTimeMs(requestThrottleMs)
-          new DescribeTopicPartitionsResponse(response)
-        })
-      }
-      case None => {
-        requestHelper.sendMaybeThrottle(request, request.body[DescribeTopicPartitionsRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-      }
-    }
+    requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs => {
+      response.setThrottleTimeMs(requestThrottleMs)
+      new DescribeTopicPartitionsResponse(response)
+    })
   }
 
   /**
@@ -1189,7 +1183,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           (shareCoordinator.foreach(coordinator => coordinator.partitionFor(SharePartitionKey.getInstance(key))), SHARE_GROUP_STATE_TOPIC_NAME)
       }
 
-      val topicMetadata = metadataCache.getTopicMetadata(Set(internalTopicName), request.context.listenerName)
+      val topicMetadata = metadataCache.getTopicMetadata(Set(internalTopicName).asJava, request.context.listenerName, false, false).asScala
 
       if (topicMetadata.headOption.isEmpty) {
         val controllerMutationQuota = quotas.controllerMutation.newPermissiveQuotaFor(request)
@@ -1199,17 +1193,16 @@ class KafkaApis(val requestChannel: RequestChannel,
         if (topicMetadata.head.errorCode != Errors.NONE.code) {
           (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
         } else {
-          val coordinatorEndpoint = topicMetadata.head.partitions.asScala
-            .find(_.partitionIndex == partition)
+          val coordinatorEndpoint = topicMetadata.head.partitions.stream()
+            .filter(_.partitionIndex() == partition)
             .filter(_.leaderId != MetadataResponse.NO_LEADER_ID)
-            .flatMap(metadata => metadataCache.
-                getAliveBrokerNode(metadata.leaderId, request.context.listenerName))
+            .flatMap(metadata => metadataCache.getAliveBrokerNode(metadata.leaderId, request.context.listenerName).stream())
+            .findFirst()
 
-          coordinatorEndpoint match {
-            case Some(endpoint) =>
-              (Errors.NONE, endpoint)
-            case _ =>
-              (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
+          if (coordinatorEndpoint.isPresent) {
+            (Errors.NONE, coordinatorEndpoint.get)
+          } else {
+            (Errors.COORDINATOR_NOT_AVAILABLE, Node.noNode)
           }
         }
       }
@@ -1561,8 +1554,19 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     producerIdAndEpoch match {
-      case Right(producerIdAndEpoch) => txnCoordinator.handleInitProducerId(transactionalId, initProducerIdRequest.data.transactionTimeoutMs,
-        producerIdAndEpoch, sendResponseCallback, requestLocal)
+      case Right(producerIdAndEpoch) =>
+        val enableTwoPC = initProducerIdRequest.enable2Pc()
+        val keepPreparedTxn = initProducerIdRequest.keepPreparedTxn()
+
+        txnCoordinator.handleInitProducerId(
+            transactionalId,
+            initProducerIdRequest.data.transactionTimeoutMs,
+            enableTwoPC,
+            keepPreparedTxn,
+            producerIdAndEpoch,
+            sendResponseCallback,
+            requestLocal
+        )
       case Left(error) => requestHelper.sendErrorResponseMaybeThrottle(request, error.exception)
     }
   }
@@ -1642,40 +1646,8 @@ class KafkaApis(val requestChannel: RequestChannel,
       trace(s"End transaction marker append for producer id $producerId completed with status: $currentErrors")
       updateErrors(producerId, currentErrors)
 
-      def maybeSendResponse(): Unit = {
-        if (numAppends.decrementAndGet() == 0) {
-          requestHelper.sendResponseExemptThrottle(request, new WriteTxnMarkersResponse(errors))
-        }
-      }
-
-      // The new group coordinator uses GroupCoordinator#completeTransaction so we do
-      // not need to call GroupCoordinator#onTransactionCompleted here.
-      if (config.isNewGroupCoordinatorEnabled) {
-        maybeSendResponse()
-        return
-      }
-
-      val successfulOffsetsPartitions = currentErrors.asScala.filter { case (topicPartition, error) =>
-        topicPartition.topic == GROUP_METADATA_TOPIC_NAME && error == Errors.NONE
-      }.keys
-
-      // If no end transaction marker has been written to a __consumer_offsets partition, we do not
-      // need to call GroupCoordinator#onTransactionCompleted.
-      if (successfulOffsetsPartitions.isEmpty) {
-        maybeSendResponse()
-        return
-      }
-
-      // Otherwise, we call GroupCoordinator#onTransactionCompleted to materialize the offsets
-      // into the cache and we wait until the meterialization is completed.
-      groupCoordinator.onTransactionCompleted(producerId, successfulOffsetsPartitions.asJava, result).whenComplete { (_, exception) =>
-        if (exception != null) {
-          error(s"Received an exception while trying to update the offsets cache on transaction marker append", exception)
-          val updatedErrors = new ConcurrentHashMap[TopicPartition, Errors]()
-          successfulOffsetsPartitions.foreach(updatedErrors.put(_, Errors.UNKNOWN_SERVER_ERROR))
-          updateErrors(producerId, updatedErrors)
-        }
-        maybeSendResponse()
+      if (numAppends.decrementAndGet() == 0) {
+        requestHelper.sendResponseExemptThrottle(request, new WriteTxnMarkersResponse(errors))
       }
     }
 
@@ -1723,9 +1695,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         val controlRecords = mutable.Map.empty[TopicPartition, MemoryRecords]
         partitionsWithCompatibleMessageFormat.foreach { partition =>
-          if (groupCoordinator.isNewGroupCoordinator && partition.topic == GROUP_METADATA_TOPIC_NAME) {
-            // When the new group coordinator is used, writing the end marker is fully delegated
-            // to the group coordinator.
+          if (partition.topic == GROUP_METADATA_TOPIC_NAME) {
             groupCoordinator.completeTransaction(
               partition,
               marker.producerId,
@@ -2004,7 +1974,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           val topicWithValidPartitions = new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic().setName(topic.name)
 
           topic.partitions.forEach { partition =>
-            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).nonEmpty) {
+            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).isPresent()) {
               topicWithValidPartitions.partitions.add(partition)
             } else {
               responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
@@ -2325,7 +2295,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           val topicWithValidPartitions = new OffsetDeleteRequestData.OffsetDeleteRequestTopic().setName(topic.name)
 
           topic.partitions.forEach { partition =>
-            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).nonEmpty) {
+            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).isPresent) {
               topicWithValidPartitions.partitions.add(partition)
             } else {
               responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
@@ -2392,7 +2362,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       () => {
         val brokers = new DescribeClusterResponseData.DescribeClusterBrokerCollection()
         val describeClusterRequest = request.body[DescribeClusterRequest]
-        metadataCache.getBrokerNodes(request.context.listenerName).foreach { node =>
+        metadataCache.getBrokerNodes(request.context.listenerName).forEach { node =>
           if (!node.isFenced || describeClusterRequest.data().includeFencedBrokers()) {
           brokers.add(new DescribeClusterResponseData.DescribeClusterBroker().
             setBrokerId(node.id).
@@ -2405,7 +2375,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         brokers
       },
       () => {
-        metadataCache.getRandomAliveBrokerId.getOrElse(-1)
+        metadataCache.getRandomAliveBrokerId.orElse(-1)
       }
     )
     requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -2521,7 +2491,6 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def isConsumerGroupProtocolEnabled(): Boolean = {
-    groupCoordinator.isNewGroupCoordinator &&
       config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.CONSUMER) &&
       groupVersion().isConsumerRebalanceProtocolSupported
   }
@@ -2538,9 +2507,24 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, consumerGroupHeartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
+      if (consumerGroupHeartbeatRequest.data.subscribedTopicNames != null &&
+        !consumerGroupHeartbeatRequest.data.subscribedTopicNames.isEmpty) {
+        // Check the authorization if the subscribed topic names are provided.
+        // Clients are not allowed to see topics that are not authorized for Describe.
+        val subscribedTopicSet = consumerGroupHeartbeatRequest.data.subscribedTopicNames.asScala.toSet
+        val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
+          subscribedTopicSet)(identity)
+        if (authorizedTopics.size < subscribedTopicSet.size) {
+          val responseData = new ConsumerGroupHeartbeatResponseData()
+            .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+          requestHelper.sendMaybeThrottle(request, new ConsumerGroupHeartbeatResponse(responseData))
+          return CompletableFuture.completedFuture[Unit](())
+        }
+      }
+
       groupCoordinator.consumerGroupHeartbeat(
         request.context,
-        consumerGroupHeartbeatRequest.data,
+        consumerGroupHeartbeatRequest.data
       ).handle[Unit] { (response, exception) =>
         if (exception != null) {
           requestHelper.sendMaybeThrottle(request, consumerGroupHeartbeatRequest.getErrorResponse(exception))
@@ -2601,7 +2585,234 @@ class KafkaApis(val requestChannel: RequestChannel,
             response.groups.addAll(results)
           }
 
+          // Clients are not allowed to see topics that are not authorized for Describe.
+          if (authorizer.isDefined) {
+            val topicsToCheck = response.groups.stream()
+              .flatMap(group => group.members.stream)
+              .flatMap(member => util.stream.Stream.of(member.assignment, member.targetAssignment))
+              .flatMap(assignment => assignment.topicPartitions.stream)
+              .map(topicPartition => topicPartition.topicName)
+              .collect(Collectors.toSet[String])
+              .asScala
+            val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
+              topicsToCheck)(identity)
+            val updatedGroups = response.groups.stream().map { group =>
+              val hasUnauthorizedTopic = group.members.stream()
+                .flatMap(member => util.stream.Stream.of(member.assignment, member.targetAssignment))
+                .flatMap(assignment => assignment.topicPartitions.stream())
+                .anyMatch(tp => !authorizedTopics.contains(tp.topicName))
+
+              if (hasUnauthorizedTopic) {
+                new ConsumerGroupDescribeResponseData.DescribedGroup()
+                  .setGroupId(group.groupId)
+                  .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+                  .setErrorMessage("The group has described topic(s) that the client is not authorized to describe.")
+                  .setMembers(List.empty.asJava)
+              } else {
+                group
+              }
+            }.collect(Collectors.toList[ConsumerGroupDescribeResponseData.DescribedGroup])
+            response.setGroups(updatedGroups)
+          }
+
           requestHelper.sendMaybeThrottle(request, new ConsumerGroupDescribeResponse(response))
+        }
+      }
+    }
+
+  }
+
+  private def isStreamsGroupProtocolEnabled(): Boolean = {
+      config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.STREAMS)
+  }
+
+  def handleStreamsGroupHeartbeat(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val streamsGroupHeartbeatRequest = request.body[StreamsGroupHeartbeatRequest]
+
+    if (!isStreamsGroupProtocolEnabled()) {
+      // The API is not supported by the "old" group coordinator (the default). If the
+      // new one is not enabled, we fail directly here.
+      requestHelper.sendMaybeThrottle(request, streamsGroupHeartbeatRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else if (!authHelper.authorize(request.context, READ, GROUP, streamsGroupHeartbeatRequest.data.groupId)) {
+      requestHelper.sendMaybeThrottle(request, streamsGroupHeartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else {
+      val requestContext = request.context
+
+      if (streamsGroupHeartbeatRequest.data().topology() != null) {
+        val requiredTopics: Seq[String] =
+          streamsGroupHeartbeatRequest.data().topology().subtopologies().iterator().asScala.flatMap(subtopology =>
+            (subtopology.sourceTopics().iterator().asScala:Iterator[String])
+              ++ (subtopology.repartitionSinkTopics().iterator().asScala:Iterator[String])
+              ++ (subtopology.repartitionSourceTopics().iterator().asScala.map(_.name()):Iterator[String])
+              ++ (subtopology.stateChangelogTopics().iterator().asScala.map(_.name()):Iterator[String])
+          ).toSeq
+
+        // While correctness of the heartbeat request is checked inside the group coordinator,
+        // we are checking early that topics in the topology have valid names and are not internal
+        // kafka topics, since we need to pass it to the authorization helper before passing the
+        // request to the group coordinator.
+
+        val prohibitedTopics = requiredTopics.filter(Topic.isInternal)
+        if (prohibitedTopics.nonEmpty) {
+          val errorResponse = new StreamsGroupHeartbeatResponseData()
+          errorResponse.setErrorCode(Errors.STREAMS_INVALID_TOPOLOGY.code)
+          errorResponse.setErrorMessage(f"Use of Kafka internal topics ${prohibitedTopics.mkString(",")} in a Kafka Streams topology is prohibited.")
+          requestHelper.sendMaybeThrottle(request, new StreamsGroupHeartbeatResponse(errorResponse))
+          return CompletableFuture.completedFuture[Unit](())
+        }
+
+        val invalidTopics = requiredTopics.filterNot(Topic.isValid)
+        if (invalidTopics.nonEmpty) {
+          val errorResponse = new StreamsGroupHeartbeatResponseData()
+          errorResponse.setErrorCode(Errors.STREAMS_INVALID_TOPOLOGY.code)
+          errorResponse.setErrorMessage(f"Topic names ${invalidTopics.mkString(",")} are not valid topic names.")
+          requestHelper.sendMaybeThrottle(request, new StreamsGroupHeartbeatResponse(errorResponse))
+          return CompletableFuture.completedFuture[Unit](())
+        }
+
+        if (requiredTopics.nonEmpty) {
+          val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC, requiredTopics)(identity)
+          if (authorizedTopics.size < requiredTopics.size) {
+            val responseData = new StreamsGroupHeartbeatResponseData().setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+            requestHelper.sendMaybeThrottle(request, new StreamsGroupHeartbeatResponse(responseData))
+            return CompletableFuture.completedFuture[Unit](())
+          }
+        }
+      }
+
+      groupCoordinator.streamsGroupHeartbeat(
+        request.context,
+        streamsGroupHeartbeatRequest.data
+      ).handle[Unit] { (response, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, streamsGroupHeartbeatRequest.getErrorResponse(exception))
+        } else {
+          val responseData = response.data()
+          val topicsToCreate = response.creatableTopics().asScala
+          if (topicsToCreate.nonEmpty) {
+
+            val createTopicUnauthorized =
+              if(!authHelper.authorize(request.context, CREATE, CLUSTER, CLUSTER_NAME, logIfDenied = false))
+                authHelper.partitionSeqByAuthorized(request.context, CREATE, TOPIC, topicsToCreate.keys.toSeq)(identity[String])._2
+              else Set.empty
+
+            if (createTopicUnauthorized.nonEmpty) {
+              if (responseData.status() == null) {
+                responseData.setStatus(new util.ArrayList());
+              }
+              responseData.status().add(
+                new StreamsGroupHeartbeatResponseData.Status()
+                  .setStatusCode(StreamsGroupHeartbeatResponse.Status.MISSING_INTERNAL_TOPICS.code())
+                  .setStatusDetail("Unauthorized to CREATE on topics " + createTopicUnauthorized.mkString(",") + ".")
+              )
+            } else {
+              autoTopicCreationManager.createStreamsInternalTopics(topicsToCreate, requestContext);
+            }
+          }
+
+          requestHelper.sendMaybeThrottle(request, new StreamsGroupHeartbeatResponse(responseData))
+        }
+      }
+    }
+  }
+
+  def handleStreamsGroupDescribe(request: RequestChannel.Request): CompletableFuture[Unit] = {
+    val streamsGroupDescribeRequest = request.body[StreamsGroupDescribeRequest]
+    val includeAuthorizedOperations = streamsGroupDescribeRequest.data.includeAuthorizedOperations
+
+    if (!isStreamsGroupProtocolEnabled()) {
+      // The API is not supported by the "old" group coordinator (the default). If the
+      // new one is not enabled, we fail directly here.
+      requestHelper.sendMaybeThrottle(request, request.body[StreamsGroupDescribeRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+      CompletableFuture.completedFuture[Unit](())
+    } else {
+      val response = new StreamsGroupDescribeResponseData()
+
+      val authorizedGroups = new ArrayBuffer[String]()
+      streamsGroupDescribeRequest.data.groupIds.forEach { groupId =>
+        if (!authHelper.authorize(request.context, DESCRIBE, GROUP, groupId)) {
+          response.groups.add(new StreamsGroupDescribeResponseData.DescribedGroup()
+            .setGroupId(groupId)
+            .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code)
+          )
+        } else {
+          authorizedGroups += groupId
+        }
+      }
+
+      groupCoordinator.streamsGroupDescribe(
+        request.context,
+        authorizedGroups.asJava
+      ).handle[Unit] { (results, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, streamsGroupDescribeRequest.getErrorResponse(exception))
+        } else {
+          if (includeAuthorizedOperations) {
+            results.forEach { groupResult =>
+              if (groupResult.errorCode == Errors.NONE.code) {
+                groupResult.setAuthorizedOperations(authHelper.authorizedOperations(
+                  request,
+                  new Resource(ResourceType.GROUP, groupResult.groupId)
+                ))
+              }
+            }
+          }
+
+          if (response.groups.isEmpty) {
+            // If the response is empty, we can directly reuse the results.
+            response.setGroups(results)
+          } else {
+            // Otherwise, we have to copy the results into the existing ones.
+            response.groups.addAll(results)
+          }
+
+          // Clients are not allowed to see topics that are not authorized for Describe.
+          if (authorizer.isDefined) {
+            val topicsToCheck = response.groups.stream()
+              .filter(group => group.topology != null)
+              .flatMap(group => group.topology.subtopologies.stream)
+              .flatMap(subtopology => java.util.stream.Stream.concat(
+                java.util.stream.Stream.concat(
+                  java.util.stream.Stream.concat(
+                    subtopology.sourceTopics.stream,
+                    subtopology.repartitionSinkTopics.stream),
+                  subtopology.repartitionSourceTopics.stream.map(_.name)),
+                subtopology.stateChangelogTopics.stream.map(_.name)))
+              .collect(Collectors.toSet[String])
+              .asScala
+
+            val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
+              topicsToCheck)(identity)
+
+              val updatedGroups = response.groups.stream.map { group =>
+                val hasUnauthorizedTopic = if (group.topology == null) false else
+                  group.topology.subtopologies.stream()
+                    .flatMap(subtopology => java.util.stream.Stream.concat(
+                      java.util.stream.Stream.concat(
+                        java.util.stream.Stream.concat(
+                          subtopology.sourceTopics.stream,
+                          subtopology.repartitionSinkTopics.stream),
+                        subtopology.repartitionSourceTopics.stream.map(_.name)),
+                      subtopology.stateChangelogTopics.stream.map(_.name)))
+                    .anyMatch(topic => !authorizedTopics.contains(topic))
+
+              if (hasUnauthorizedTopic) {
+                new StreamsGroupDescribeResponseData.DescribedGroup()
+                  .setGroupId(group.groupId)
+                  .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+                  .setErrorMessage("The described group uses topics that the client is not authorized to describe.")
+                  .setMembers(List.empty.asJava)
+                  .setTopology(null)
+              } else {
+                group
+              }
+            }.collect(Collectors.toList[StreamsGroupDescribeResponseData.DescribedGroup])
+            response.setGroups(updatedGroups)
+          }
+
+          requestHelper.sendMaybeThrottle(request, new StreamsGroupDescribeResponse(response))
         }
       }
     }
@@ -2636,7 +2847,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     } else {
       val data = new ListClientMetricsResourcesResponseData().setClientMetricsResources(
         clientMetricsManager.listClientMetricsResources.stream.map(
-          name => new ClientMetricsResource().setName(name)).toList)
+          name => new ClientMetricsResource().setName(name)).collect(Collectors.toList()))
       requestHelper.sendMaybeThrottle(request, new ListClientMetricsResourcesResponse(data))
     }
   }
@@ -2651,9 +2862,24 @@ class KafkaApis(val requestChannel: RequestChannel,
       requestHelper.sendMaybeThrottle(request, shareGroupHeartbeatRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
+      if (shareGroupHeartbeatRequest.data.subscribedTopicNames != null &&
+        !shareGroupHeartbeatRequest.data.subscribedTopicNames.isEmpty) {
+        // Check the authorization if the subscribed topic names are provided.
+        // Clients are not allowed to see topics that are not authorized for Describe.
+        val subscribedTopicSet = shareGroupHeartbeatRequest.data.subscribedTopicNames.asScala.toSet
+        val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
+          subscribedTopicSet)(identity)
+        if (authorizedTopics.size < subscribedTopicSet.size) {
+          val responseData = new ShareGroupHeartbeatResponseData()
+            .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+          requestHelper.sendMaybeThrottle(request, new ShareGroupHeartbeatResponse(responseData))
+          return CompletableFuture.completedFuture[Unit](())
+        }
+      }
+
       groupCoordinator.shareGroupHeartbeat(
         request.context,
-        shareGroupHeartbeatRequest.data,
+        shareGroupHeartbeatRequest.data
       ).handle[Unit] { (response, exception) =>
 
         if (exception != null) {
@@ -2713,6 +2939,34 @@ class KafkaApis(val requestChannel: RequestChannel,
             response.groups.addAll(results)
           }
 
+          // Clients are not allowed to see topics that are not authorized for Describe.
+          if (authorizer.isDefined) {
+            val topicsToCheck = response.groups.stream()
+              .flatMap(group => group.members.stream)
+              .flatMap(member => member.assignment.topicPartitions.stream)
+              .map(topicPartition => topicPartition.topicName)
+              .collect(Collectors.toSet[String])
+              .asScala
+            val authorizedTopics = authHelper.filterByAuthorized(request.context, DESCRIBE, TOPIC,
+              topicsToCheck)(identity)
+            val updatedGroups = response.groups.stream().map { group =>
+              val hasUnauthorizedTopic = group.members.stream()
+                .flatMap(member => member.assignment.topicPartitions.stream)
+                .anyMatch(tp => !authorizedTopics.contains(tp.topicName))
+
+              if (hasUnauthorizedTopic) {
+                new ShareGroupDescribeResponseData.DescribedGroup()
+                  .setGroupId(group.groupId)
+                  .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+                  .setErrorMessage("The group has described topic(s) that the client is not authorized to describe.")
+                  .setMembers(List.empty.asJava)
+              } else {
+                group
+              }
+            }.collect(Collectors.toList[ShareGroupDescribeResponseData.DescribedGroup])
+            response.setGroups(updatedGroups)
+          }
+
           requestHelper.sendMaybeThrottle(request, new ShareGroupDescribeResponse(response))
         }
       }
@@ -2770,12 +3024,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     erroneousAndValidPartitionData.erroneous.forEach {
       case(tp, _) => if (!topicIdPartitionSeq.contains(tp)) topicIdPartitionSeq += tp
     }
-    erroneousAndValidPartitionData.validTopicIdPartitions.forEach {
-      case(tp, _) => if (!topicIdPartitionSeq.contains(tp)) topicIdPartitionSeq += tp
-    }
-    shareFetchData.forEach {
-      case(tp, _) => if (!topicIdPartitionSeq.contains(tp)) topicIdPartitionSeq += tp
-    }
+    erroneousAndValidPartitionData.validTopicIdPartitions.forEach(tp => if (!topicIdPartitionSeq.contains(tp)) topicIdPartitionSeq += tp)
+    shareFetchData.forEach { tp => if (!topicIdPartitionSeq.contains(tp)) topicIdPartitionSeq += tp}
 
     // Kafka share consumers need READ permission on each topic they are fetching.
     val authorizedTopics = authHelper.filterByAuthorized(
@@ -2806,9 +3056,9 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     // Handling the Fetch from the ShareFetchRequest.
     // Variable to store the topic partition wise result of fetching.
-    val fetchResult: CompletableFuture[Map[TopicIdPartition, ShareFetchResponseData.PartitionData]] =
-      handleFetchFromShareFetchRequest(
+    val fetchResult: CompletableFuture[Map[TopicIdPartition, ShareFetchResponseData.PartitionData]] = handleFetchFromShareFetchRequest(
       request,
+      shareSessionEpoch,
       erroneousAndValidPartitionData,
       sharePartitionManager,
       authorizedTopics
@@ -2903,6 +3153,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   // Visible for Testing
   def handleFetchFromShareFetchRequest(request: RequestChannel.Request,
+                                       shareSessionEpoch: Int,
                                        erroneousAndValidPartitionData: ErroneousAndValidPartitionData,
                                        sharePartitionManagerInstance: SharePartitionManager,
                                        authorizedTopics: Set[String]
@@ -2911,24 +3162,23 @@ class KafkaApis(val requestChannel: RequestChannel,
     val erroneous = mutable.Map.empty[TopicIdPartition, ShareFetchResponseData.PartitionData]
     erroneousAndValidPartitionData.erroneous.forEach { (topicIdPartition, partitionData) => erroneous.put(topicIdPartition, partitionData) }
 
-    val interestedWithMaxBytes = new util.LinkedHashMap[TopicIdPartition, Integer]
+    val interestedTopicPartitions = new util.ArrayList[TopicIdPartition]
 
-    erroneousAndValidPartitionData.validTopicIdPartitions.forEach { case (topicIdPartition, sharePartitionData) =>
+    erroneousAndValidPartitionData.validTopicIdPartitions.forEach { case topicIdPartition =>
       if (!authorizedTopics.contains(topicIdPartition.topicPartition.topic))
         erroneous += topicIdPartition -> ShareFetchResponse.partitionResponse(topicIdPartition, Errors.TOPIC_AUTHORIZATION_FAILED)
       else if (!metadataCache.contains(topicIdPartition.topicPartition))
         erroneous += topicIdPartition -> ShareFetchResponse.partitionResponse(topicIdPartition, Errors.UNKNOWN_TOPIC_OR_PARTITION)
       else
-        interestedWithMaxBytes.put(topicIdPartition, sharePartitionData.maxBytes)
+        interestedTopicPartitions.add(topicIdPartition)
     }
 
     val shareFetchRequest = request.body[ShareFetchRequest]
 
     val clientId = request.header.clientId
-    val versionId = request.header.apiVersion
     val groupId = shareFetchRequest.data.groupId
 
-    if (interestedWithMaxBytes.isEmpty) {
+    if (interestedTopicPartitions.isEmpty) {
       CompletableFuture.completedFuture(erroneous)
     } else {
       // for share fetch from consumer, cap fetchMaxBytes to the maximum bytes that could be fetched without being
@@ -2948,7 +3198,6 @@ class KafkaApis(val requestChannel: RequestChannel,
           request.context.listenerName.value))
 
       val params = new FetchParams(
-        versionId,
         FetchRequest.CONSUMER_REPLICA_ID,
         -1,
         shareFetchRequest.maxWait,
@@ -2964,8 +3213,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         groupId,
         shareFetchRequest.data.memberId,
         params,
+        shareSessionEpoch,
         shareFetchRequest.data.batchSize,
-        interestedWithMaxBytes
+        interestedTopicPartitions
       ).thenApply{ result =>
         val combinedResult = mutable.Map.empty[TopicIdPartition, ShareFetchResponseData.PartitionData]
         result.asScala.foreach { case (tp, data) =>
@@ -3107,17 +3357,46 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
   }
 
-  def handleInitializeShareGroupStateRequest(request: RequestChannel.Request): Unit = {
+  def handleInitializeShareGroupStateRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val initializeShareGroupStateRequest = request.body[InitializeShareGroupStateRequest]
-    // TODO: Implement the InitializeShareGroupStateRequest handling
-    requestHelper.sendMaybeThrottle(request, initializeShareGroupStateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+
+    if (!authorizeClusterOperation(request, CLUSTER_ACTION)) {
+      requestHelper.sendMaybeThrottle(request, new InitializeShareGroupStateResponse(
+        InitializeShareGroupStateResponse.toGlobalErrorResponse(
+          initializeShareGroupStateRequest.data(),
+          Errors.CLUSTER_AUTHORIZATION_FAILED
+        )))
+      return CompletableFuture.completedFuture[Unit](())
+    }
+
+    shareCoordinator match {
+      case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        initializeShareGroupStateRequest.getErrorResponse(requestThrottleMs,
+          new ApiException("Share coordinator is not enabled.")))
+        CompletableFuture.completedFuture[Unit](())
+
+      case Some(coordinator) => coordinator.initializeState(request.context, initializeShareGroupStateRequest.data)
+        .handle[Unit] { (response, exception) =>
+          if (exception != null) {
+            requestHelper.sendMaybeThrottle(request, initializeShareGroupStateRequest.getErrorResponse(exception))
+          } else {
+            requestHelper.sendMaybeThrottle(request, new InitializeShareGroupStateResponse(response))
+          }
+        }
+    }
   }
 
   def handleReadShareGroupStateRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val readShareGroupStateRequest = request.body[ReadShareGroupStateRequest]
 
-    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+    if (!authorizeClusterOperation(request, CLUSTER_ACTION)) {
+      requestHelper.sendMaybeThrottle(request, new ReadShareGroupStateResponse(
+        ReadShareGroupStateResponse.toGlobalErrorResponse(
+          readShareGroupStateRequest.data(),
+          Errors.CLUSTER_AUTHORIZATION_FAILED
+        )))
+      return CompletableFuture.completedFuture[Unit](())
+    }
 
     shareCoordinator match {
       case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -3136,19 +3415,26 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   def handleWriteShareGroupStateRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
-    val writeShareRequest = request.body[WriteShareGroupStateRequest]
+    val writeShareGroupStateRequest = request.body[WriteShareGroupStateRequest]
 
-    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+    if (!authorizeClusterOperation(request, CLUSTER_ACTION)) {
+      requestHelper.sendMaybeThrottle(request, new WriteShareGroupStateResponse(
+        WriteShareGroupStateResponse.toGlobalErrorResponse(
+          writeShareGroupStateRequest.data(),
+          Errors.CLUSTER_AUTHORIZATION_FAILED
+        )))
+      return CompletableFuture.completedFuture[Unit](())
+    }
 
     shareCoordinator match {
       case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        writeShareRequest.getErrorResponse(requestThrottleMs,
+        writeShareGroupStateRequest.getErrorResponse(requestThrottleMs,
           new ApiException("Share coordinator is not enabled.")))
         CompletableFuture.completedFuture[Unit](())
-      case Some(coordinator) => coordinator.writeState(request.context, writeShareRequest.data)
+      case Some(coordinator) => coordinator.writeState(request.context, writeShareGroupStateRequest.data)
         .handle[Unit] { (response, exception) =>
           if (exception != null) {
-            requestHelper.sendMaybeThrottle(request, writeShareRequest.getErrorResponse(exception))
+            requestHelper.sendMaybeThrottle(request, writeShareGroupStateRequest.getErrorResponse(exception))
           } else {
             requestHelper.sendMaybeThrottle(request, new WriteShareGroupStateResponse(response))
           }
@@ -3156,16 +3442,46 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleDeleteShareGroupStateRequest(request: RequestChannel.Request): Unit = {
+  def handleDeleteShareGroupStateRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val deleteShareGroupStateRequest = request.body[DeleteShareGroupStateRequest]
-    // TODO: Implement the DeleteShareGroupStateRequest handling
-    requestHelper.sendMaybeThrottle(request, deleteShareGroupStateRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+
+    if (!authorizeClusterOperation(request, CLUSTER_ACTION)) {
+      requestHelper.sendMaybeThrottle(request, new DeleteShareGroupStateResponse(
+        DeleteShareGroupStateResponse.toGlobalErrorResponse(
+          deleteShareGroupStateRequest.data(),
+          Errors.CLUSTER_AUTHORIZATION_FAILED
+        )))
+      return CompletableFuture.completedFuture[Unit](())
+    }
+
+    shareCoordinator match {
+      case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
+        deleteShareGroupStateRequest.getErrorResponse(requestThrottleMs,
+          new ApiException("Share coordinator is not enabled.")))
+        CompletableFuture.completedFuture[Unit](())
+
+      case Some(coordinator) => coordinator.deleteState(request.context, deleteShareGroupStateRequest.data)
+        .handle[Unit] { (response, exception) =>
+          if (exception != null) {
+            requestHelper.sendMaybeThrottle(request, deleteShareGroupStateRequest.getErrorResponse(exception))
+          } else {
+            requestHelper.sendMaybeThrottle(request, new DeleteShareGroupStateResponse(response))
+          }
+        }
+    }
   }
 
-  def handleReadShareGroupStateSummaryRequest(request: RequestChannel.Request): Unit = {
+  def handleReadShareGroupStateSummaryRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val readShareGroupStateSummaryRequest = request.body[ReadShareGroupStateSummaryRequest]
-    authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
+
+    if (!authorizeClusterOperation(request, CLUSTER_ACTION)) {
+      requestHelper.sendMaybeThrottle(request, new ReadShareGroupStateSummaryResponse(
+        ReadShareGroupStateSummaryResponse.toGlobalErrorResponse(
+          readShareGroupStateSummaryRequest.data(),
+          Errors.CLUSTER_AUTHORIZATION_FAILED
+        )))
+      return CompletableFuture.completedFuture[Unit](())
+    }
 
     shareCoordinator match {
       case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
@@ -3185,8 +3501,63 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleDescribeShareGroupOffsetsRequest(request: RequestChannel.Request): Unit = {
     val describeShareGroupOffsetsRequest = request.body[DescribeShareGroupOffsetsRequest]
-    // TODO: Implement the DescribeShareGroupOffsetsRequest handling
-    requestHelper.sendMaybeThrottle(request, describeShareGroupOffsetsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    val groups = describeShareGroupOffsetsRequest.groups()
+
+    val futures = new mutable.ArrayBuffer[CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]](groups.size)
+    groups.forEach { groupDescribeOffsets =>
+      if (!isShareGroupProtocolEnabled) {
+        futures += CompletableFuture.completedFuture(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+          .setGroupId(groupDescribeOffsets.groupId)
+          .setErrorCode(Errors.UNSUPPORTED_VERSION.code))
+      } else if (!authHelper.authorize(request.context, DESCRIBE, GROUP, groupDescribeOffsets.groupId)) {
+        futures += CompletableFuture.completedFuture(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+          .setGroupId(groupDescribeOffsets.groupId)
+          .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code))
+      } else if (groupDescribeOffsets.topics.isEmpty) {
+        futures += CompletableFuture.completedFuture(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+          .setGroupId(groupDescribeOffsets.groupId))
+      } else {
+        futures += describeShareGroupOffsetsForGroup(
+          request.context,
+          groupDescribeOffsets
+        )
+      }
+    }
+
+    CompletableFuture.allOf(futures.toArray: _*).handle[Unit] { (_, _) =>
+      val groupResponses = new ArrayBuffer[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup](futures.size)
+      val responseData = new DescribeShareGroupOffsetsResponseData().setGroups(groupResponses.asJava)
+      futures.foreach(future => groupResponses += future.join)
+      requestHelper.sendMaybeThrottle(request, new DescribeShareGroupOffsetsResponse(responseData))
+    }
+  }
+
+  private def describeShareGroupOffsetsForGroup(requestContext: RequestContext,
+    groupDescribeOffsetsRequest: DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup
+  ): CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup] = {
+    groupCoordinator.describeShareGroupOffsets(
+      requestContext,
+      groupDescribeOffsetsRequest
+    ).handle[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup] { (groupDescribeOffsetsResponse, exception) =>
+      if (exception != null) {
+        new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+          .setGroupId(groupDescribeOffsetsRequest.groupId)
+          .setErrorCode(Errors.forException(exception).code)
+      } else {
+        groupDescribeOffsetsResponse
+      }
+    }
+  }
+
+  def handleAlterShareGroupOffsetsRequest(request: RequestChannel.Request): Unit = {
+    val alterShareGroupOffsetsRequest = request.body[AlterShareGroupOffsetsRequest]
+    requestHelper.sendMaybeThrottle(request, alterShareGroupOffsetsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
+    CompletableFuture.completedFuture[Unit](())
+  }
+
+  def handleDeleteShareGroupOffsetsRequest(request: RequestChannel.Request): Unit = {
+    val deleteShareGroupOffsetsRequest = request.body[DeleteShareGroupOffsetsRequest]
+    requestHelper.sendMaybeThrottle(request, deleteShareGroupOffsetsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
     CompletableFuture.completedFuture[Unit](())
   }
 
@@ -3436,7 +3807,7 @@ class KafkaApis(val requestChannel: RequestChannel,
   }
 
   private def isShareGroupProtocolEnabled: Boolean = {
-    groupCoordinator.isNewGroupCoordinator && config.shareGroupConfig.isShareGroupEnabled
+    config.shareGroupConfig.isShareGroupEnabled
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,
@@ -3457,6 +3828,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       request.messageConversionsTimeNanos = conversionStats.conversionTimeNanos
     }
     request.temporaryMemoryBytes = conversionStats.temporaryMemoryBytes
+  }
+
+  def authorizeClusterOperation(request: RequestChannel.Request, operation: AclOperation): Boolean = {
+    authHelper.authorize(request.context, operation, CLUSTER, CLUSTER_NAME)
   }
 }
 
