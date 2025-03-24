@@ -17,7 +17,6 @@
 
 package org.apache.kafka.storage.internals.log;
 
-import kafka.utils.TestUtils;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.record.CompressionType;
@@ -30,7 +29,9 @@ import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
-import org.junit.jupiter.api.*;
+import org.apache.kafka.test.TestUtils;
+
+import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -39,17 +40,16 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Properties;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class BrokerCompressionTest {
-    private final File tmpDir = TestUtils.tempDir();
+    private final File tmpDir = TestUtils.tempDirectory();
     private final File logDir = TestUtils.randomPartitionLogDir(tmpDir);
     private final MockTime time = new MockTime(0, 0);
-    private final LogConfig logConfig = new LogConfig(new Properties());
 
     @AfterEach
     public void tearDown() throws IOException {

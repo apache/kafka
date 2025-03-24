@@ -40,7 +40,6 @@ class BrokerCompressionTest {
   val tmpDir = TestUtils.tempDir()
   val logDir = TestUtils.randomPartitionLogDir(tmpDir)
   val time = new MockTime(0, 0)
-  val logConfig = new LogConfig(new Properties)
 
   @AfterEach
   def tearDown(): Unit = {
