@@ -17,22 +17,15 @@
 package org.apache.kafka.tools.consumer;
 
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde;
 import org.apache.kafka.coordinator.group.generated.CoordinatorRecordJsonConverters;
 import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
-import java.nio.ByteBuffer;
-
 public class GroupMetadataMessageFormatter extends CoordinatorRecordMessageFormatter {
-    private CoordinatorRecordSerde serde = new GroupCoordinatorRecordSerde();
-
-    @Override
-    protected CoordinatorRecord deserialize(ByteBuffer key, ByteBuffer value) {
-        return serde.deserialize(key, value);
+    public GroupMetadataMessageFormatter() {
+        super(new GroupCoordinatorRecordSerde());
     }
 
     @Override

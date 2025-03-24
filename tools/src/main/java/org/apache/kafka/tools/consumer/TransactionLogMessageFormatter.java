@@ -27,11 +27,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import java.nio.ByteBuffer;
 
 public class TransactionLogMessageFormatter extends CoordinatorRecordMessageFormatter {
-    private CoordinatorRecordSerde serde = new TransactionCoordinatorRecordSerde();
-
-    @Override
-    protected CoordinatorRecord deserialize(ByteBuffer key, ByteBuffer value) {
-        return serde.deserialize(key, value);
+    public TransactionLogMessageFormatter() {
+        super(new TransactionCoordinatorRecordSerde());
     }
 
     @Override

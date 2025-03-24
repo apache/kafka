@@ -31,11 +31,8 @@ import java.nio.ByteBuffer;
  * Formatter for use with tools such as console consumer: Consumer should also set exclude.internal.topics to false.
  */
 public class OffsetsMessageFormatter extends CoordinatorRecordMessageFormatter {
-    private CoordinatorRecordSerde serde = new GroupCoordinatorRecordSerde();
-
-    @Override
-    protected CoordinatorRecord deserialize(ByteBuffer key, ByteBuffer value) {
-        return serde.deserialize(key, value);
+    public OffsetsMessageFormatter() {
+        super(new GroupCoordinatorRecordSerde());
     }
 
     @Override

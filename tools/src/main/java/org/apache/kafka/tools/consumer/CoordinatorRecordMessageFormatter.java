@@ -26,6 +26,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
 
 import java.io.IOException;
 import java.io.PrintStream;
@@ -35,12 +36,17 @@ import java.util.Objects;
 import static java.nio.charset.StandardCharsets.UTF_8;
 
 public abstract class CoordinatorRecordMessageFormatter implements MessageFormatter {
-
     private static final String TYPE = "type";
     private static final String VERSION = "version";
     private static final String DATA = "data";
     private static final String KEY = "key";
     private static final String VALUE = "value";
+
+    private final CoordinatorRecordSerde serde;
+
+    public CoordinatorRecordMessageFormatter(CoordinatorRecordSerde serde) {
+        this.serde = serde;
+    }
 
     @Override
     public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {
@@ -48,10 +54,11 @@ public abstract class CoordinatorRecordMessageFormatter implements MessageFormat
 
         ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
         try {
-            CoordinatorRecord record = deserialize(
-                consumerRecord.key() != null ? ByteBuffer.wrap(consumerRecord.key()) : null,
+            CoordinatorRecord record = serde.deserialize(
+                ByteBuffer.wrap(consumerRecord.key()),
                 consumerRecord.value() != null ? ByteBuffer.wrap(consumerRecord.value()) : null
             );
+
             if (!shouldPrint(record.key().apiKey())) return;
 
             json
@@ -81,7 +88,6 @@ public abstract class CoordinatorRecordMessageFormatter implements MessageFormat
         }
     }
 
-    protected abstract CoordinatorRecord deserialize(ByteBuffer key, ByteBuffer value);
     protected abstract boolean shouldPrint(short recordType);
     protected abstract JsonNode keyAsJson(ApiMessage message);
     protected abstract JsonNode valueAsJson(ApiMessage message, short version);
