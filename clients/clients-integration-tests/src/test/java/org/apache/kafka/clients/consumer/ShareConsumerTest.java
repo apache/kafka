@@ -2236,7 +2236,7 @@ public class ShareConsumerTest {
                 produceAbortedTransaction(transactionalProducer, "Message 4");
 
                 records = shareConsumer.poll(Duration.ofMillis(5000));
-                // Message 3 would be returned by this poll. Message 4 would be archived by the broker.
+                // Message 3 would be returned by this poll.
                 assertEquals(1, records.count());
                 record = records.iterator().next();
                 assertEquals("Message 3", new String(record.value()));
