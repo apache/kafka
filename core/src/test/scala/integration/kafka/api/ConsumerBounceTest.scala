@@ -98,9 +98,9 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testConsumptionWithBrokerFailures(quorum: String, groupProtocol: String): Unit = consumeWithBrokerFailures(10)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testConsumptionWithBrokerFailures(groupProtocol: String): Unit = consumeWithBrokerFailures(10)
 
   /*
    * 1. Produce a bunch of messages
@@ -143,9 +143,9 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testSeekAndCommitWithBrokerFailures(quorum: String, groupProtocol: String): Unit = seekAndCommitWithBrokerFailures(5)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testSeekAndCommitWithBrokerFailures(groupProtocol: String): Unit = seekAndCommitWithBrokerFailures(5)
 
   def seekAndCommitWithBrokerFailures(numIters: Int): Unit = {
     val numRecords = 1000
@@ -187,9 +187,9 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testSubscribeWhenTopicUnavailable(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testSubscribeWhenTopicUnavailable(groupProtocol: String): Unit = {
     val numRecords = 1000
     val newtopic = "newtopic"
 
@@ -239,9 +239,9 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     receiveExactRecords(poller, numRecords, 10000L)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testClose(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testClose(groupProtocol: String): Unit = {
     val numRecords = 10
     val producer = createProducer()
     producerSend(producer, numRecords)
@@ -327,10 +327,10 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     * the group should be forced to rebalance when it becomes hosted on a Coordinator with the new config.
     * Then, 1 consumer should be left out of the group.
     */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
   @Disabled // TODO: To be re-enabled once we can make it less flaky (KAFKA-13421)
-  def testRollingBrokerRestartsWithSmallerMaxGroupSizeConfigDisruptsBigGroup(quorum: String, groupProtocol: String): Unit = {
+  def testRollingBrokerRestartsWithSmallerMaxGroupSizeConfigDisruptsBigGroup(groupProtocol: String): Unit = {
     val group = "group-max-size-test"
     val topic = "group-max-size-test"
     val maxGroupSize = 2
@@ -371,9 +371,9 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
   /**
     * When we have the consumer group max size configured to X, the X+1th consumer trying to join should receive a fatal exception
     */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testConsumerReceivesFatalExceptionWhenGroupPassesMaxSize(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testConsumerReceivesFatalExceptionWhenGroupPassesMaxSize(groupProtocol: String): Unit = {
     val group = "fatal-exception-test"
     val topic = "fatal-exception-test"
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")
@@ -412,9 +412,9 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
    * immediately if rebalance is in progress. If brokers are not available,
    * close should terminate immediately without sending leave group.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testCloseDuringRebalance(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testCloseDuringRebalance(groupProtocol: String): Unit = {
     val topic = "closetest"
     createTopic(topic, 10, brokerCount)
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "60000")

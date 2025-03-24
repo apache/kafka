@@ -17,7 +17,7 @@
 package kafka.api
 
 import kafka.api.ConsumerRebootstrapTest._
-import kafka.server.QuorumTestHarness.getTestQuorumAndGroupProtocolParametersAll
+import kafka.server.QuorumTestHarness.getTestGroupProtocolParametersAll
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -34,7 +34,7 @@ import java.util.concurrent.TimeoutException
 class ConsumerRebootstrapTest extends RebootstrapTest {
   @ParameterizedTest(name = RebootstrapTestName)
   @MethodSource(Array("rebootstrapTestParams"))
-  def testRebootstrap(quorum: String, groupProtocol: String, useRebootstrapTriggerMs: Boolean): Unit = {
+  def testRebootstrap(groupProtocol: String, useRebootstrapTriggerMs: Boolean): Unit = {
     sendRecords(10, 0)
 
     TestUtils.waitUntilTrue(
@@ -88,7 +88,7 @@ class ConsumerRebootstrapTest extends RebootstrapTest {
   @Disabled
   @ParameterizedTest(name = RebootstrapTestName)
   @MethodSource(Array("rebootstrapTestParams"))
-  def testRebootstrapDisabled(quorum: String, groupProtocol: String, useRebootstrapTriggerMs: Boolean): Unit = {
+  def testRebootstrapDisabled(groupProtocol: String, useRebootstrapTriggerMs: Boolean): Unit = {
     server1.shutdown()
     server1.awaitShutdown()
 
@@ -133,9 +133,9 @@ class ConsumerRebootstrapTest extends RebootstrapTest {
 
 object ConsumerRebootstrapTest {
 
-  final val RebootstrapTestName = s"${TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames}.useRebootstrapTriggerMs={2}"
+  final val RebootstrapTestName = s"${TestInfoUtils.TestWithParameterizedGroupProtocolNames}.useRebootstrapTriggerMs={1}"
   def rebootstrapTestParams: stream.Stream[Arguments] = {
-    getTestQuorumAndGroupProtocolParametersAll
+    getTestGroupProtocolParametersAll
       .flatMap { baseArgs =>
         stream.Stream.of(
           Arguments.of((baseArgs.get :+ true):_*),
