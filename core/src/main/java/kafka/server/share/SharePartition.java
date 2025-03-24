@@ -862,15 +862,8 @@ public class SharePartition {
                 acquiredCount += shareAcquiredRecords.count();
             }
             if (!result.isEmpty()) {
-                if (isolationType == FetchIsolation.TXN_COMMITTED) {
-                    // When FetchIsolation.TXN_COMMITTED is used as isolation type by the share group, we need to filter any
-                    // transactions that were aborted/did not commit due to timeout.
-                    result = filterAbortedTransactionalRecords(fetchPartitionData.records.batches(), result, fetchPartitionData.abortedTransactions);
-                    acquiredCount = 0;
-                    for (AcquiredRecords records : result)
-                        acquiredCount += (int) (records.lastOffset() - records.firstOffset() + 1);
-                }
                 maybeUpdateReadGapFetchOffset(result.get(result.size() - 1).lastOffset() + 1);
+                return filterAbortedTransactionalAcquiredRecords(fetchPartitionData, isolationType, new ShareAcquiredRecords(result, acquiredCount));
             }
             return new ShareAcquiredRecords(result, acquiredCount);
         } finally {
