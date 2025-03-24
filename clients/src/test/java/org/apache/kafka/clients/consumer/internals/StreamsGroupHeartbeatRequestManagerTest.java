@@ -35,6 +35,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -62,6 +63,7 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.UUID;
+import java.util.logging.Level;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
@@ -1164,7 +1166,8 @@ class StreamsGroupHeartbeatRequestManagerTest {
                     when(mock.canSendRequest(time.milliseconds())).thenReturn(true);
                 });
             final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
-                StreamsGroupHeartbeatRequestManager.HeartbeatState.class)
+                StreamsGroupHeartbeatRequestManager.HeartbeatState.class);
+            final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(StreamsGroupHeartbeatRequestManager.class)
         ) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState = heartbeatStateMockedConstruction.constructed().get(0);
@@ -1177,6 +1180,9 @@ class StreamsGroupHeartbeatRequestManagerTest {
             final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
             final ClientResponse response = buildClientErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED, "message");
             networkRequest.handler().onComplete(response);
+            assertTrue(logAppender.getMessages("ERROR").stream()
+                .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed due to group authorization failure: " +
+                    "Not authorized to access group: " + GROUP_ID)));
             verify(heartbeatState).reset();
             ArgumentCaptor<ErrorEvent> errorEvent = ArgumentCaptor.forClass(ErrorEvent.class);
             verify(backgroundEventHandler).add(errorEvent.capture());
@@ -1199,18 +1205,26 @@ class StreamsGroupHeartbeatRequestManagerTest {
                     when(mock.canSendRequest(time.milliseconds())).thenReturn(true);
                 });
             final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
-                StreamsGroupHeartbeatRequestManager.HeartbeatState.class)
+                StreamsGroupHeartbeatRequestManager.HeartbeatState.class);
+            final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(StreamsGroupHeartbeatRequestManager.class)
         ) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState = heartbeatStateMockedConstruction.constructed().get(0);
             when(coordinatorRequestManager.coordinator()).thenReturn(Optional.of(coordinatorNode));
+            when(membershipManager.state()).thenReturn(MemberState.STABLE);
+            when(membershipManager.memberId()).thenReturn(MEMBER_ID);
 
             final NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
 
             assertEquals(1, result.unsentRequests.size());
             final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
-            final ClientResponse response = buildClientErrorResponse(Errors.TOPIC_AUTHORIZATION_FAILED, "message");
+            final String errorMessage = "message";
+            final ClientResponse response = buildClientErrorResponse(Errors.TOPIC_AUTHORIZATION_FAILED, errorMessage);
             networkRequest.handler().onComplete(response);
+            assertTrue(logAppender.getMessages("ERROR").stream()
+                .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed for member " + MEMBER_ID +
+                    " with state " + MemberState.STABLE + " due to " + Errors.TOPIC_AUTHORIZATION_FAILED + ": " +
+                    errorMessage)));
             verify(heartbeatState).reset();
             ArgumentCaptor<ErrorEvent> errorEvent = ArgumentCaptor.forClass(ErrorEvent.class);
             verify(backgroundEventHandler).add(errorEvent.capture());
@@ -1232,7 +1246,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             "STREAMS_TOPOLOGY_FENCED"
         }
     )
-    public void testInvalidRequestAndGroupMaxSizedReachedAndUnsupportedErrorResponse(final Errors error) {
+    public void testKnownFatalErrorResponse(final Errors error) {
         try (
             final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
                 HeartbeatRequestState.class,
@@ -1240,7 +1254,8 @@ class StreamsGroupHeartbeatRequestManagerTest {
                     when(mock.canSendRequest(time.milliseconds())).thenReturn(true);
                 });
             final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
-                StreamsGroupHeartbeatRequestManager.HeartbeatState.class)
+                StreamsGroupHeartbeatRequestManager.HeartbeatState.class);
+            final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(StreamsGroupHeartbeatRequestManager.class)
         ) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState = heartbeatStateMockedConstruction.constructed().get(0);
@@ -1250,22 +1265,26 @@ class StreamsGroupHeartbeatRequestManagerTest {
 
             assertEquals(1, result.unsentRequests.size());
             final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
-            final String errorMessage = "message";
-            final ClientResponse response = buildClientErrorResponse(error, errorMessage);
+            final String errorMessageInResponse = "message";
+            final ClientResponse response = buildClientErrorResponse(error, errorMessageInResponse);
             networkRequest.handler().onComplete(response);
             verify(heartbeatState).reset();
             ArgumentCaptor<ErrorEvent> errorEvent = ArgumentCaptor.forClass(ErrorEvent.class);
             verify(backgroundEventHandler).add(errorEvent.capture());
             if (error == Errors.UNSUPPORTED_VERSION) {
-                assertEquals(
-                    "The cluster does not support the STREAMS group " +
-                        "protocol or does not support the versions of the STREAMS group protocol used by this client " +
-                        "(used versions: " + StreamsGroupHeartbeatRequestData.LOWEST_SUPPORTED_VERSION + " to " +
-                        StreamsGroupHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION + ").",
-                    errorEvent.getValue().error().getMessage()
-                );
-            } else {
+                final String errorMessage = "The cluster does not support the STREAMS group " +
+                    "protocol or does not support the versions of the STREAMS group protocol used by this client " +
+                    "(used versions: " + StreamsGroupHeartbeatRequestData.LOWEST_SUPPORTED_VERSION + " to " +
+                    StreamsGroupHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION + ").";
+                assertTrue(logAppender.getMessages("ERROR").stream()
+                    .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed due to " +
+                        error + ": " + errorMessage)));
                 assertEquals(errorMessage, errorEvent.getValue().error().getMessage());
+            } else {
+                assertTrue(logAppender.getMessages("ERROR").stream()
+                    .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed due to " +
+                        error + ": " + errorMessageInResponse)));
+                assertEquals(errorMessageInResponse, errorEvent.getValue().error().getMessage());
             }
             assertInstanceOf(error.exception().getClass(), errorEvent.getValue().error());
             verify(membershipManager).transitionToFatal();
@@ -1317,7 +1336,8 @@ class StreamsGroupHeartbeatRequestManagerTest {
                     when(mock.canSendRequest(time.milliseconds())).thenReturn(true);
                 });
             final MockedConstruction<StreamsGroupHeartbeatRequestManager.HeartbeatState> heartbeatStateMockedConstruction = mockConstruction(
-                StreamsGroupHeartbeatRequestManager.HeartbeatState.class)
+                StreamsGroupHeartbeatRequestManager.HeartbeatState.class);
+            final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister(StreamsGroupHeartbeatRequestManager.class)
         ) {
             final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
             final StreamsGroupHeartbeatRequestManager.HeartbeatState heartbeatState = heartbeatStateMockedConstruction.constructed().get(0);
@@ -1330,6 +1350,8 @@ class StreamsGroupHeartbeatRequestManagerTest {
             final String errorMessage = "message";
             final ClientResponse response = buildClientErrorResponse(error, errorMessage);
             networkRequest.handler().onComplete(response);
+            assertTrue(logAppender.getMessages("ERROR").stream()
+                .anyMatch(m -> m.contains("StreamsGroupHeartbeatRequest failed due to unexpected error")));
             verify(heartbeatState).reset();
             ArgumentCaptor<ErrorEvent> errorEvent = ArgumentCaptor.forClass(ErrorEvent.class);
             verify(backgroundEventHandler).add(errorEvent.capture());
@@ -1352,7 +1374,10 @@ class StreamsGroupHeartbeatRequestManagerTest {
             Errors.GROUP_MAX_SIZE_REACHED,
             Errors.FENCED_MEMBER_EPOCH,
             Errors.UNKNOWN_MEMBER_ID,
-            Errors.UNSUPPORTED_VERSION);
+            Errors.UNSUPPORTED_VERSION,
+            Errors.STREAMS_INVALID_TOPOLOGY,
+            Errors.STREAMS_INVALID_TOPOLOGY_EPOCH,
+            Errors.STREAMS_TOPOLOGY_FENCED);
         return Arrays.stream(Errors.values())
             .filter(error -> !consideredErrors.contains(error))
             .map(Arguments::of);
