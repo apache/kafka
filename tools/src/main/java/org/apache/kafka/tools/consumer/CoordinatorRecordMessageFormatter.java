@@ -20,12 +20,12 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
 import com.fasterxml.jackson.databind.node.NullNode;
 import com.fasterxml.jackson.databind.node.ObjectNode;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
 
 import java.io.IOException;
 import java.io.PrintStream;
