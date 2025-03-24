@@ -213,10 +213,13 @@ public class ShareFetchResponse extends AbstractResponse {
     }
 
     private static ShareFetchResponseData convertNullRecordsToEmpty(ShareFetchResponseData shareFetchResponseData) {
-        shareFetchResponseData.responses().stream()
-            .flatMap(response -> response.partitions().stream())
-            .filter(partition -> partition.records() == null)
-            .forEach(partition -> partition.setRecords(MemoryRecords.EMPTY));
+        for (ShareFetchResponseData.ShareFetchableTopicResponse response : shareFetchResponseData.responses()) {
+            for (ShareFetchResponseData.PartitionData partition : response.partitions()) {
+                if (partition.records() == null) {
+                    partition.setRecords(MemoryRecords.EMPTY);
+                }
+            }
+        }
         return shareFetchResponseData;
     }
 }
