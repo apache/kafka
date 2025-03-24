@@ -747,9 +747,9 @@ public class SharePartition {
             if (subMap.isEmpty()) {
                 log.trace("No cached data exists for the share partition for requested fetch batch: {}-{}",
                     groupId, topicIdPartition);
-                return acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
-                    firstBatch.baseOffset(), lastBatch.lastOffset(), batchSize, maxFetchRecords,
-                    fetchPartitionData.abortedTransactions, isolationType);
+                ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
+                    firstBatch.baseOffset(), lastBatch.lastOffset(), batchSize, maxFetchRecords);
+                return filterAbortedTransactionalAcquiredRecords(fetchPartitionData, isolationType, shareAcquiredRecords);
             }
 
             log.trace("Overlap exists with in-flight records. Acquire the records if available for"
@@ -778,8 +778,7 @@ public class SharePartition {
                     // Thus, a new batch needs to be acquired for the gap.
                     if (maybeGapStartOffset < entry.getKey()) {
                         ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
-                            maybeGapStartOffset, entry.getKey() - 1, batchSize, maxFetchRecords,
-                            fetchPartitionData.abortedTransactions, isolationType);
+                            maybeGapStartOffset, entry.getKey() - 1, batchSize, maxFetchRecords);
                         result.addAll(shareAcquiredRecords.acquiredRecords());
                         acquiredCount += shareAcquiredRecords.count();
                     }
@@ -818,7 +817,7 @@ public class SharePartition {
                     // Do not send max fetch records to acquireSubsetBatchRecords as we want to acquire
                     // all the records from the batch as the batch will anyway be part of the file-records
                     // response batch.
-                    int acquiredSubsetCount = acquireSubsetBatchRecords(memberId, firstBatch.baseOffset(), lastBatch.lastOffset(), inFlightBatch, result, fetchPartitionData.records.batches(), fetchPartitionData.abortedTransactions, isolationType);
+                    int acquiredSubsetCount = acquireSubsetBatchRecords(memberId, firstBatch.baseOffset(), lastBatch.lastOffset(), inFlightBatch, result);
                     acquiredCount += acquiredSubsetCount;
                     continue;
                 }
@@ -841,16 +840,11 @@ public class SharePartition {
                 // Set the acquisition lock timeout task for the batch.
                 inFlightBatch.updateAcquisitionLockTimeout(acquisitionLockTimeoutTask);
 
-                int resultSize = result.size();
                 result.add(new AcquiredRecords()
                     .setFirstOffset(inFlightBatch.firstOffset())
                     .setLastOffset(inFlightBatch.lastOffset())
                     .setDeliveryCount((short) inFlightBatch.batchDeliveryCount()));
-
-                if (isolationType == FetchIsolation.TXN_COMMITTED)
-                    result = filterAbortedTransactionalRecords(fetchPartitionData.records.batches(), result, fetchPartitionData.abortedTransactions);
-                if (result.size() > resultSize)
-                    acquiredCount += (int) (inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1);
+                acquiredCount += (int) (inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1);
             }
 
             // Some of the request offsets are not found in the fetched batches. Acquire the
@@ -859,12 +853,19 @@ public class SharePartition {
                 log.trace("There exists another batch which needs to be acquired as well");
                 ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
                     subMap.lastEntry().getValue().lastOffset() + 1,
-                    lastBatch.lastOffset(), batchSize, maxFetchRecords - acquiredCount,
-                    fetchPartitionData.abortedTransactions, isolationType);
+                    lastBatch.lastOffset(), batchSize, maxFetchRecords - acquiredCount);
                 result.addAll(shareAcquiredRecords.acquiredRecords());
                 acquiredCount += shareAcquiredRecords.count();
             }
             if (!result.isEmpty()) {
+                if (isolationType == FetchIsolation.TXN_COMMITTED) {
+                    // When FetchIsolation.TXN_COMMITTED is used as isolation type by the share group, we need to filter any
+                    // transactions that were aborted/did not commit due to timeout.
+                    result = filterAbortedTransactionalRecords(fetchPartitionData.records.batches(), result, fetchPartitionData.abortedTransactions);
+                    acquiredCount = 0;
+                    for (AcquiredRecords records : result)
+                        acquiredCount += (int) (records.lastOffset() - records.firstOffset() + 1);
+                }
                 maybeUpdateReadGapFetchOffset(result.get(result.size() - 1).lastOffset() + 1);
             }
             return new ShareAcquiredRecords(result, acquiredCount);
@@ -1484,9 +1485,7 @@ public class SharePartition {
         long firstOffset,
         long lastOffset,
         int batchSize,
-        int maxFetchRecords,
-        Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions,
-        FetchIsolation isolationType
+        int maxFetchRecords
     ) {
         lock.writeLock().lock();
         try {
@@ -1510,8 +1509,7 @@ public class SharePartition {
             }
 
             // Create batches of acquired records.
-            List<AcquiredRecords> acquiredRecords = createBatches(memberId, batches, firstAcquiredOffset,
-                lastAcquiredOffset, batchSize, abortedTransactions, isolationType);
+            List<AcquiredRecords> acquiredRecords = createBatches(memberId, batches, firstAcquiredOffset, lastAcquiredOffset, batchSize);
             // if the cachedState was empty before acquiring the new batches then startOffset needs to be updated
             if (cachedState.firstKey() == firstAcquiredOffset)  {
                 startOffset = firstAcquiredOffset;
@@ -1525,11 +1523,7 @@ public class SharePartition {
                 endOffset = lastAcquiredOffset;
             }
             maybeUpdateReadGapFetchOffset(lastAcquiredOffset + 1);
-            long totalAcquiredOffsetsCount = 0;
-            for (AcquiredRecords acquiredRecord : acquiredRecords) {
-                totalAcquiredOffsetsCount += (acquiredRecord.lastOffset() - acquiredRecord.firstOffset() + 1);
-            }
-            return new ShareAcquiredRecords(acquiredRecords, (int) totalAcquiredOffsetsCount);
+            return new ShareAcquiredRecords(acquiredRecords, (int) (lastAcquiredOffset - firstAcquiredOffset + 1));
         } finally {
             lock.writeLock().unlock();
         }
@@ -1540,9 +1534,7 @@ public class SharePartition {
         Iterable<? extends RecordBatch> batches,
         long firstAcquiredOffset,
         long lastAcquiredOffset,
-        int batchSize,
-        Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions,
-        FetchIsolation isolationType
+        int batchSize
     ) {
         lock.writeLock().lock();
         try {
@@ -1593,13 +1585,7 @@ public class SharePartition {
                 // Update the in-flight batch message count metrics for the share partition.
                 sharePartitionMetrics.recordInFlightBatchMessageCount(acquiredRecords.lastOffset() - acquiredRecords.firstOffset() + 1);
             });
-
-            if (isolationType != FetchIsolation.TXN_COMMITTED)
-                return result;
-            // When FetchIsolation.TXN_COMMITTED is used as isolation type by the share group, we need to filter any
-            // transactions that were aborted because they were open and did not complete. Hence, those transactions
-            // did not get committed.
-            return filterAbortedTransactionalRecords(batches, result, abortedTransactions);
+            return result;
         } finally {
             lock.writeLock().unlock();
         }
@@ -1610,16 +1596,11 @@ public class SharePartition {
         long requestFirstOffset,
         long requestLastOffset,
         InFlightBatch inFlightBatch,
-        List<AcquiredRecords> result,
-        Iterable<? extends RecordBatch> batches,
-        Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions,
-        FetchIsolation isolationType
+        List<AcquiredRecords> result
     ) {
         lock.writeLock().lock();
         int acquiredCount = 0;
         try {
-            int resultSize = result.size();
-            List<AcquiredRecords> tempResult = new ArrayList<>();
             for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState.entrySet()) {
                 // For the first batch which might have offsets prior to the request base
                 // offset i.e. cached batch of 10-14 offsets and request batch of 12-13.
@@ -1652,18 +1633,12 @@ public class SharePartition {
                 offsetState.getValue().updateAcquisitionLockTimeoutTask(acquisitionLockTimeoutTask);
 
                 // TODO: Maybe we can club the continuous offsets here.
-                tempResult.add(new AcquiredRecords()
+                result.add(new AcquiredRecords()
                     .setFirstOffset(offsetState.getKey())
                     .setLastOffset(offsetState.getKey())
                     .setDeliveryCount((short) offsetState.getValue().deliveryCount));
                 acquiredCount++;
             }
-
-            if (isolationType == FetchIsolation.TXN_COMMITTED) {
-                tempResult = filterAbortedTransactionalRecords(batches, tempResult, abortedTransactions);
-            }
-            result.addAll(tempResult);
-            acquiredCount = result.size() - resultSize;
         } finally {
             lock.writeLock().unlock();
         }
@@ -2527,6 +2502,19 @@ public class SharePartition {
             // offsetResetStrategy type is BY_DURATION
             return offsetForTimestamp(topicIdPartition, replicaManager, offsetResetStrategy.timestamp(), leaderEpoch);
         }
+    }
+
+    private ShareAcquiredRecords filterAbortedTransactionalAcquiredRecords(FetchPartitionData fetchPartitionData, FetchIsolation isolationLevel, ShareAcquiredRecords shareAcquiredRecords) {
+        if (isolationLevel != FetchIsolation.TXN_COMMITTED)
+            return shareAcquiredRecords;
+        // When FetchIsolation.TXN_COMMITTED is used as isolation type by the share group, we need to filter any
+        // transactions that were aborted/did not commit due to timeout.
+        List<AcquiredRecords> result = filterAbortedTransactionalRecords(fetchPartitionData.records.batches(), shareAcquiredRecords.acquiredRecords(), fetchPartitionData.abortedTransactions);
+        int acquiredCount = 0;
+        for (AcquiredRecords records : result) {
+            acquiredCount += (int) (records.lastOffset() - records.firstOffset() + 1);
+        }
+        return new ShareAcquiredRecords(result, acquiredCount);
     }
 
     private List<AcquiredRecords> filterAbortedTransactionalRecords(
