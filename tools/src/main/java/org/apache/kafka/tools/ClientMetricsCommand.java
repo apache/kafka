@@ -251,12 +251,12 @@ public class ClientMetricsCommand {
                 "client_software_version", "client_source_address", "client_source_port"
             };
             String matchSelectorNames = Arrays.stream(matchSelectors).map(config -> "\t" + config).collect(Collectors.joining(nl));
-            matchOpt = parser.accepts("match",  "Matching selector 'k1=v1,k2=v2'. The following is a list of valid selector names: " + nl + matchSelectorNames + nl + "Leave empty to reset the match selector.")
+            matchOpt = parser.accepts("match", "Matching selector 'k1=v1,k2=v2'. The following is a list of valid selector names: " + nl + matchSelectorNames)
                 .withRequiredArg()
                 .describedAs("k1=v1,k2=v2")
                 .ofType(String.class)
                 .withValuesSeparatedBy(',');
-            metricsOpt = parser.accepts("metrics",  "Telemetry metric name prefixes 'm1,m2'." + nl + "Leave empty to reset the metrics prefixes.")
+            metricsOpt = parser.accepts("metrics", "Telemetry metric name prefixes 'm1,m2'.")
                 .withRequiredArg()
                 .describedAs("m1,m2")
                 .ofType(String.class)
