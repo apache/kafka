@@ -4840,6 +4840,24 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
+    public TerminateTransactionResult forceTerminateTransaction(String transactionalId, TerminateTransactionOptions options) {
+        // Simply leverage the existing fenceProducers implementation with a single transactional ID
+        FenceProducersOptions fenceOptions = new FenceProducersOptions();
+        if (options.timeoutMs() != null) {
+            fenceOptions.timeoutMs(options.timeoutMs());
+        }
+
+        FenceProducersResult fenceResult = fenceProducers(
+            Collections.singleton(transactionalId),
+            fenceOptions
+        );
+
+        // Convert the result to a TerminateTransactionResult
+        KafkaFuture<Void> future = fenceResult.fencedProducers().get(transactionalId);
+        return new TerminateTransactionResult(future);
+    }
+
+    @Override
     public ListTransactionsResult listTransactions(ListTransactionsOptions options) {
         AllBrokersStrategy.AllBrokersFuture<Collection<TransactionListing>> future =
             ListTransactionsHandler.newFuture();

@@ -24,12 +24,12 @@ import org.apache.kafka.clients.admin.DescribeProducersResult;
 import org.apache.kafka.clients.admin.DescribeProducersResult.PartitionProducerState;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.DescribeTransactionsResult;
-import org.apache.kafka.clients.admin.FenceProducersResult;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
 import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.ListTransactionsOptions;
 import org.apache.kafka.clients.admin.ListTransactionsResult;
 import org.apache.kafka.clients.admin.ProducerState;
+import org.apache.kafka.clients.admin.TerminateTransactionResult;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.TransactionDescription;
 import org.apache.kafka.clients.admin.TransactionListing;
@@ -251,9 +251,10 @@ public class TransactionsCommandTest {
             transactionalId
         };
 
-        FenceProducersResult fenceProducersResult = Mockito.mock(FenceProducersResult.class);
-        Mockito.when(fenceProducersResult.all()).thenReturn(KafkaFuture.completedFuture(null));
-        Mockito.when(admin.fenceProducers(singletonList(transactionalId))).thenReturn(fenceProducersResult);
+        TerminateTransactionResult terminateTransactionResult = Mockito.mock(TerminateTransactionResult.class);
+        KafkaFuture<Void> future = KafkaFuture.completedFuture(null);
+        Mockito.when(terminateTransactionResult.result()).thenReturn(future);
+        Mockito.when(admin.forceTerminateTransaction(transactionalId)).thenReturn(terminateTransactionResult);
 
         execute(args);
         assertNormalExit();
@@ -1095,5 +1096,4 @@ public class TransactionsCommandTest {
         assertTrue(exitProcedure.hasExited());
         assertEquals(1, exitProcedure.statusCode());
     }
-
 }

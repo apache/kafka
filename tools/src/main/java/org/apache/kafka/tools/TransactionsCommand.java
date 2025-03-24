@@ -283,7 +283,7 @@ public abstract class TransactionsCommand {
             String transactionalId = ns.getString("transactionalId");
 
             try {
-                admin.fenceProducers(Collections.singletonList(transactionalId)).all().get();
+                admin.forceTerminateTransaction(transactionalId).result().get();
             } catch (ExecutionException e) {
                 printErrorAndExit("Failed to force terminate transactionalId `" + transactionalId + "`", e.getCause());
             }
