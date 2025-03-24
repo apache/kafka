@@ -2193,12 +2193,92 @@ public class ShareConsumerTest {
                 assertEquals("Message 5", new String(record.value()));
                 record = recordIterator.next();
                 assertEquals("Message 8", new String(record.value()));
+                records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.ACCEPT));
+                shareConsumer.commitSync();
             } finally {
                 transactionalProducer.close();
             }
         }
     }
 
+    @ClusterTest
+    public void testAlterReadCommittedToReadUncommittedIsolationLevel() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        alterShareIsolationLevel("group1", String.valueOf(IsolationLevel.READ_COMMITTED.id()));
+        try (Producer<byte[], byte[]> transactionalProducer = createProducer("T1");
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
+            shareConsumer.subscribe(Set.of(tp.topic()));
+            transactionalProducer.initTransactions();
+
+            try {
+                // First transaction is committed.
+                produceCommittedTransaction(transactionalProducer, "Message 1");
+
+                ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+                assertEquals(1, records.count());
+                ConsumerRecord<byte[], byte[]> record = records.iterator().next();
+                assertEquals("Message 1", new String(record.value()));
+                assertEquals(tp.topic(), record.topic());
+                assertEquals(tp.partition(), record.partition());
+                records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.ACCEPT));
+                shareConsumer.commitSync();
+
+                // Second transaction is aborted.
+                produceAbortedTransaction(transactionalProducer, "Message 2");
+
+                // We will not receive any records since the transaction was aborted.
+                records = shareConsumer.poll(Duration.ofMillis(5000));
+                assertEquals(0, records.count());
+
+                // Third transaction is committed.
+                produceCommittedTransaction(transactionalProducer, "Message 3");
+                // Fourth transaction is aborted.
+                produceAbortedTransaction(transactionalProducer, "Message 4");
+
+                records = shareConsumer.poll(Duration.ofMillis(5000));
+                // Message 3 would be returned by this poll. Message 4 would be archived by the broker.
+                assertEquals(1, records.count());
+                record = records.iterator().next();
+                assertEquals("Message 3", new String(record.value()));
+                // We will make Message 3 available for re-consumption.
+                records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.RELEASE));
+                shareConsumer.commitSync();
+
+                // We are altering IsolationLevel to READ_UNCOMMITTED now. We will read both committed/aborted transactions now.
+                alterShareIsolationLevel("group1", String.valueOf(IsolationLevel.READ_UNCOMMITTED.id()));
+
+                // Fifth transaction is committed.
+                produceCommittedTransaction(transactionalProducer, "Message 5");
+                // Sixth transaction is aborted.
+                produceAbortedTransaction(transactionalProducer, "Message 6");
+                // Seventh transaction is aborted.
+                produceAbortedTransaction(transactionalProducer, "Message 7");
+                // Eighth transaction is committed.
+                produceCommittedTransaction(transactionalProducer, "Message 8");
+
+                // Since isolation level is READ_UNCOMMITTED, we can consume Message 3 (committed transaction that was released), Message 4, Message 5, Message 6, Message 7 and Message 8.
+                records = shareConsumer.poll(Duration.ofMillis(5000));
+                assertEquals(6, records.count());
+                Iterator<ConsumerRecord<byte[], byte[]>> recordIterator = records.iterator();
+                record = recordIterator.next();
+                assertEquals("Message 3", new String(record.value()));
+                record = recordIterator.next();
+                assertEquals("Message 4", new String(record.value()));
+                record = recordIterator.next();
+                assertEquals("Message 5", new String(record.value()));
+                record = recordIterator.next();
+                assertEquals("Message 6", new String(record.value()));
+                record = recordIterator.next();
+                assertEquals("Message 7", new String(record.value()));
+                record = recordIterator.next();
+                assertEquals("Message 8", new String(record.value()));
+                records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.ACCEPT));
+                shareConsumer.commitSync();
+            } finally {
+                transactionalProducer.close();
+            }
+        }
+    }
 
     /**
      * Util class to encapsulate state for a consumer/producer
