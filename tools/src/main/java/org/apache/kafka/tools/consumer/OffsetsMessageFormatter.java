@@ -26,19 +26,24 @@ import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.nio.ByteBuffer;
+import java.util.Set;
 
 /**
  * Formatter for use with tools such as console consumer: Consumer should also set exclude.internal.topics to false.
  */
 public class OffsetsMessageFormatter extends CoordinatorRecordMessageFormatter {
+    private static final Set<Short> ALLOWED_RECORDS = Set.of(
+        CoordinatorRecordType.LEGACY_OFFSET_COMMIT.id(),
+        CoordinatorRecordType.OFFSET_COMMIT.id()
+    );
+
     public OffsetsMessageFormatter() {
         super(new GroupCoordinatorRecordSerde());
     }
 
     @Override
-    protected boolean shouldPrint(short recordType) {
-        return CoordinatorRecordType.OFFSET_COMMIT.id() == recordType ||
-            CoordinatorRecordType.LEGACY_OFFSET_COMMIT.id() == recordType;
+    protected boolean isRecordTypeAllowed(short recordType) {
+        return ALLOWED_RECORDS.contains(recordType);
     }
 
     @Override

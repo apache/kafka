@@ -23,14 +23,20 @@ import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
+import java.util.Set;
+
 public class GroupMetadataMessageFormatter extends CoordinatorRecordMessageFormatter {
+    private static final Set<Short> ALLOWED_RECORDS = Set.of(
+        CoordinatorRecordType.GROUP_METADATA.id()
+    );
+
     public GroupMetadataMessageFormatter() {
         super(new GroupCoordinatorRecordSerde());
     }
 
     @Override
-    protected boolean shouldPrint(short recordType) {
-        return CoordinatorRecordType.GROUP_METADATA.id() == recordType;
+    protected boolean isRecordTypeAllowed(short recordType) {
+        return ALLOWED_RECORDS.contains(recordType);
     }
 
     @Override

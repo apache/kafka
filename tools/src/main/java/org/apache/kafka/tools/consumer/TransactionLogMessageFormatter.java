@@ -32,7 +32,7 @@ public class TransactionLogMessageFormatter extends CoordinatorRecordMessageForm
     }
 
     @Override
-    protected boolean shouldPrint(short recordType) {
+    protected boolean isRecordTypeAllowed(short recordType) {
         return true;
     }
 

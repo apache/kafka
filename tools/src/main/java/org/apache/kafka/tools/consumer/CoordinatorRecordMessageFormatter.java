@@ -19,7 +19,6 @@ package org.apache.kafka.tools.consumer;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MessageFormatter;
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 
 import com.fasterxml.jackson.databind.JsonNode;
@@ -59,7 +58,7 @@ public abstract class CoordinatorRecordMessageFormatter implements MessageFormat
                 consumerRecord.value() != null ? ByteBuffer.wrap(consumerRecord.value()) : null
             );
 
-            if (!shouldPrint(record.key().apiKey())) return;
+            if (!isRecordTypeAllowed(record.key().apiKey())) return;
 
             json
                 .putObject(KEY)
@@ -74,7 +73,7 @@ public abstract class CoordinatorRecordMessageFormatter implements MessageFormat
             } else {
                 json.set(VALUE, NullNode.getInstance());
             }
-        } catch (CoordinatorLoader.UnknownRecordTypeException ex) {
+        } catch (CoordinatorRecordSerde.UnknownRecordTypeException ex) {
             return;
         } catch (RuntimeException ex) {
             throw new RuntimeException("Could not read record at offset " + consumerRecord.offset() +
@@ -88,7 +87,7 @@ public abstract class CoordinatorRecordMessageFormatter implements MessageFormat
         }
     }
 
-    protected abstract boolean shouldPrint(short recordType);
+    protected abstract boolean isRecordTypeAllowed(short recordType);
     protected abstract JsonNode keyAsJson(ApiMessage message);
     protected abstract JsonNode valueAsJson(ApiMessage message, short version);
 }  
