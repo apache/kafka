@@ -94,7 +94,7 @@ public class BrokerCompressionTest {
         if (brokerCompressionType != BrokerCompressionType.PRODUCER) {
             RecordBatch batch = readBatch(log, 0);
             Compression targetCompression = BrokerCompressionType.targetCompression(log.config().compression, null);
-            assertEquals(targetCompression, batch.compressionType(), "Compression at offset 0 should produce " + brokerCompressionType);
+            assertEquals(targetCompression.type(), batch.compressionType(), "Compression at offset 0 should produce " + brokerCompressionType);
         } else {
             assertEquals(messageCompressionType, readBatch(log, 0).compressionType(), "Compression at offset 0 should produce " + messageCompressionType);
         }
