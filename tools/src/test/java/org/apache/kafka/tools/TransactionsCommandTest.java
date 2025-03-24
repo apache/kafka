@@ -16,23 +16,8 @@
  */
 package org.apache.kafka.tools;
 
-import org.apache.kafka.clients.admin.AbortTransactionResult;
-import org.apache.kafka.clients.admin.AbortTransactionSpec;
-import org.apache.kafka.clients.admin.Admin;
-import org.apache.kafka.clients.admin.DescribeProducersOptions;
-import org.apache.kafka.clients.admin.DescribeProducersResult;
+import org.apache.kafka.clients.admin.*;
 import org.apache.kafka.clients.admin.DescribeProducersResult.PartitionProducerState;
-import org.apache.kafka.clients.admin.DescribeTopicsResult;
-import org.apache.kafka.clients.admin.DescribeTransactionsResult;
-import org.apache.kafka.clients.admin.ListTopicsOptions;
-import org.apache.kafka.clients.admin.ListTopicsResult;
-import org.apache.kafka.clients.admin.ListTransactionsOptions;
-import org.apache.kafka.clients.admin.ListTransactionsResult;
-import org.apache.kafka.clients.admin.ProducerState;
-import org.apache.kafka.clients.admin.TopicDescription;
-import org.apache.kafka.clients.admin.TransactionDescription;
-import org.apache.kafka.clients.admin.TransactionListing;
-import org.apache.kafka.clients.admin.TransactionState;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
@@ -237,6 +222,34 @@ public class TransactionsCommandTest {
             asList("baz", "1", "13579", "CompleteCommit")
         );
         assertEquals(expectedRows, new HashSet<>(table.subList(1, table.size())));
+    }
+
+    @Test
+    public void testForceTerminateTransaction() throws Exception {
+        String transactionalId = "foo";
+        String[] args = new String[] {
+            "--bootstrap-server",
+            "localhost:9092",
+            "forceTerminateTransaction",
+            "--transactionalId",
+            transactionalId
+        };
+
+        FenceProducersResult fenceProducersResult = Mockito.mock(FenceProducersResult.class);
+        Mockito.when(fenceProducersResult.all()).thenReturn(KafkaFuture.completedFuture(null));
+        Mockito.when(admin.fenceProducers(singletonList(transactionalId))).thenReturn(fenceProducersResult);
+
+        execute(args);
+        assertNormalExit();
+    }
+
+    @Test
+    public void testForceTerminateTransactionTransactionalIdRequired() throws Exception {
+        assertCommandFailure(new String[]{
+            "--bootstrap-server",
+            "localhost:9092",
+            "force-terminate"
+        });
     }
 
     @Test
