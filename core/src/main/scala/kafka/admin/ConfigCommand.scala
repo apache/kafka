@@ -64,7 +64,7 @@ object ConfigCommand extends Logging {
 
   private val BrokerDefaultEntityName = ""
   val BrokerLoggerConfigType = "broker-loggers"
-  private val BrokerSupportedConfigTypes = ConfigType.values :+ BrokerLoggerConfigType
+  private val BrokerSupportedConfigTypes = ConfigType.values.map(_.value) :+ BrokerLoggerConfigType
   private val DefaultScramIterations = 4096
   private val TopicType = ConfigType.TOPIC.value
   private val ClientMetricsType = ConfigType.CLIENT_METRICS.value
