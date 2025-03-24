@@ -376,10 +376,10 @@ public class ProcessorNodeTest {
 
     @Test
     void shouldFailWithDeadLetterQueueRecords() {
-        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
-        List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
+        final ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
+        final List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
 
-        Response response = Response.fail(records);
+        final Response response = Response.fail(records);
 
         assertEquals(Result.FAIL, response.result());
         assertEquals(1, response.deadLetterQueueRecords().size());
@@ -388,7 +388,7 @@ public class ProcessorNodeTest {
 
     @Test
     void shouldFailWithoutDeadLetterQueueRecords() {
-        Response response = Response.fail();
+        final Response response = Response.fail();
 
         assertEquals(Result.FAIL, response.result());
         assertTrue(response.deadLetterQueueRecords().isEmpty());
@@ -396,10 +396,10 @@ public class ProcessorNodeTest {
 
     @Test
     void shouldResumeWithDeadLetterQueueRecords() {
-        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
-        List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
+        final ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
+        final List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
 
-        Response response = Response.resume(records);
+        final Response response = Response.resume(records);
 
         assertEquals(Result.RESUME, response.result());
         assertEquals(1, response.deadLetterQueueRecords().size());
@@ -408,7 +408,7 @@ public class ProcessorNodeTest {
 
     @Test
     void shouldResumeWithoutDeadLetterQueueRecords() {
-        Response response = Response.resume();
+        final Response response = Response.resume();
 
         assertEquals(Result.RESUME, response.result());
         assertTrue(response.deadLetterQueueRecords().isEmpty());
@@ -417,17 +417,17 @@ public class ProcessorNodeTest {
 
     @Test
     void shouldNotBeModifiable() {
-        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
-        List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
+        final ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
+        final List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
 
-        Response response = Response.fail(records);
+        final Response response = Response.fail(records);
 
         assertThrows(UnsupportedOperationException.class, () -> response.deadLetterQueueRecords().add(record));
     }
 
     @Test
     void shouldReturnsEmptyList() {
-        Response response = Response.fail();
+        final Response response = Response.fail();
 
         assertTrue(response.deadLetterQueueRecords().isEmpty());
     }

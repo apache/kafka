@@ -41,6 +41,7 @@ public class DefaultProductionExceptionHandler implements ProductionExceptionHan
             Response.fail(maybeBuildDeadLetterQueueRecords(deadLetterQueueTopic, null, null, context, exception));
     }
 
+    @SuppressWarnings("rawtypes")
     @Override
     public Response handleSerializationError(final ErrorHandlerContext context,
                                              final ProducerRecord record,

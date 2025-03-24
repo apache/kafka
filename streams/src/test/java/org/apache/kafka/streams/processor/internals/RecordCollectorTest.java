@@ -89,12 +89,12 @@ import static java.util.Collections.emptySet;
 import static java.util.Collections.singletonMap;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
+import static org.apache.kafka.streams.errors.ProductionExceptionHandler.Response;
+import static org.apache.kafka.streams.errors.ProductionExceptionHandler.Result;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.AT_LEAST_ONCE;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.producerRecordSizeInBytes;
 import static org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl.TOPIC_LEVEL_GROUP;
-import static org.apache.kafka.streams.errors.ProductionExceptionHandler.Response;
-import static org.apache.kafka.streams.errors.ProductionExceptionHandler.Result;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.core.IsEqual.equalTo;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
@@ -1848,7 +1848,7 @@ public class RecordCollectorTest {
             collector.initialize();
 
             assertThat(mockProducer.history().isEmpty(), equalTo(true));
-            final StreamsException error = assertThrows(
+            assertThrows(
                 StreamsException.class,
                 () ->
                     collector.send(topic, "hello", "world", null, 0, null, errorSerializer, stringSerializer, sinkNodeName, context)
@@ -2055,10 +2055,10 @@ public class RecordCollectorTest {
 
     @Test
     void shouldFailWithDeadLetterQueueRecords() {
-        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
-        List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
+        final ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
+        final List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
 
-        ProductionExceptionHandler.Response response = ProductionExceptionHandler.Response.fail(records);
+        final ProductionExceptionHandler.Response response = ProductionExceptionHandler.Response.fail(records);
 
         assertEquals(Result.FAIL, response.result());
         assertEquals(1, response.deadLetterQueueRecords().size());
@@ -2067,7 +2067,7 @@ public class RecordCollectorTest {
 
     @Test
     void shouldFailWithoutDeadLetterQueueRecords() {
-        ProductionExceptionHandler.Response response = ProductionExceptionHandler.Response.fail();
+        final ProductionExceptionHandler.Response response = ProductionExceptionHandler.Response.fail();
 
         assertEquals(Result.FAIL, response.result());
         assertTrue(response.deadLetterQueueRecords().isEmpty());
@@ -2075,10 +2075,10 @@ public class RecordCollectorTest {
 
     @Test
     void shouldResumeWithDeadLetterQueueRecords() {
-        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
-        List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
+        final ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
+        final List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
 
-        Response response = Response.resume(records);
+        final Response response = Response.resume(records);
 
         assertEquals(Result.RESUME, response.result());
         assertEquals(1, response.deadLetterQueueRecords().size());
@@ -2087,7 +2087,7 @@ public class RecordCollectorTest {
 
     @Test
     void shouldResumeWithoutDeadLetterQueueRecords() {
-        Response response = Response.resume();
+        final Response response = Response.resume();
 
         assertEquals(Result.RESUME, response.result());
         assertTrue(response.deadLetterQueueRecords().isEmpty());
@@ -2095,7 +2095,7 @@ public class RecordCollectorTest {
 
     @Test
     void shouldRetryWithoutDeadLetterQueueRecords() {
-        Response response = Response.retry();
+        final Response response = Response.retry();
 
         assertEquals(Result.RETRY, response.result());
         assertTrue(response.deadLetterQueueRecords().isEmpty());
@@ -2103,17 +2103,17 @@ public class RecordCollectorTest {
 
     @Test
     void shouldNotBeModifiable() {
-        ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
-        List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
+        final ProducerRecord<byte[], byte[]> record = new ProducerRecord<>("topic", new byte[]{}, new byte[]{});
+        final List<ProducerRecord<byte[], byte[]>> records = Collections.singletonList(record);
 
-        Response response = Response.fail(records);
+        final Response response = Response.fail(records);
 
         assertThrows(UnsupportedOperationException.class, () -> response.deadLetterQueueRecords().add(record));
     }
 
     @Test
     void shouldReturnsEmptyList() {
-        Response response = Response.fail();
+        final Response response = Response.fail();
 
         assertTrue(response.deadLetterQueueRecords().isEmpty());
     }
