@@ -195,7 +195,7 @@ public class ActiveTaskCreatorTest {
     }
 
     @Test
-    public void shouldNotReInitializeProducerOnClose() {
+    public void shouldNotResetProducerAfterDisableRest() {
         properties.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
         mockClientSupplier.setApplicationIdForProducer("appId");
         createTasks();
