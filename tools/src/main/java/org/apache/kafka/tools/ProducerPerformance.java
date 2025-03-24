@@ -101,19 +101,11 @@ public class ProducerPerformance {
                 record = new ProducerRecord<>(config.topicName, payload);
 
                 long sendStartMs = System.currentTimeMillis();
-                if (config.warmupRecords > 0) {
-                    if (i < config.warmupRecords) {
-                        cb = new PerfCallback(sendStartMs, payload.length, stats);
-                    } else {
-                        if (i == config.warmupRecords) {
-                            steadyStateStats = new Stats(config.numRecords - config.warmupRecords, DEFAULT_REPORTING_INTERVAL_MS, config.warmupRecords > 0);
-                            stats.steadyStateActive = true;
-                        }
-                        cb = new PerfCallback(sendStartMs, payload.length, stats, steadyStateStats);
-                    }
-                } else {
-                    cb = new PerfCallback(sendStartMs, payload.length, stats);
+                if ( config.warmupRecords > 0 && i == config.warmupRecords ) {
+                    steadyStateStats = new Stats(config.numRecords - config.warmupRecords, DEFAULT_REPORTING_INTERVAL_MS, config.warmupRecords > 0);
+                    stats.steadyStateActive = true;
                 }
+                cb = new PerfCallback(sendStartMs, payload.length, stats, steadyStateStats);
                 producer.send(record, cb);
 
                 currentTransactionSize++;
@@ -173,7 +165,6 @@ public class ProducerPerformance {
     }
 
     Callback cb;
-
     Stats stats;
     Stats steadyStateStats;
 
@@ -509,13 +500,6 @@ public class ProducerPerformance {
         private final int bytes;
         private final Stats stats;
         private final Stats steadyStateStats;
-
-        public PerfCallback(long start, int bytes, Stats stats) {
-            this.start = start;
-            this.stats = stats;
-            this.steadyStateStats = null;
-            this.bytes = bytes;
-        }
 
         public PerfCallback(long start, int bytes, Stats stats, Stats steadyStateStats) {
             this.start = start;
