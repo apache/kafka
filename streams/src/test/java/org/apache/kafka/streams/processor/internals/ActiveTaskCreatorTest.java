@@ -263,7 +263,6 @@ public class ActiveTaskCreatorTest {
             0,
             uuid,
             new LogContext().logger(ActiveTaskCreator.class),
-            false,
             false);
 
         assertThat(

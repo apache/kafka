@@ -180,7 +180,6 @@ public class ProcessorStateManager implements StateManager {
 
     private final File baseDir;
     private final OffsetCheckpoint checkpointFile;
-    private final boolean stateUpdaterEnabled;
 
     private TaskType taskType;
     private Logger log;
@@ -204,8 +203,7 @@ public class ProcessorStateManager implements StateManager {
                                  final StateDirectory stateDirectory,
                                  final ChangelogRegister changelogReader,
                                  final Map<String, String> storeToChangelogTopic,
-                                 final Collection<TopicPartition> sourcePartitions,
-                                 final boolean stateUpdaterEnabled) throws ProcessorStateException {
+                                 final Collection<TopicPartition> sourcePartitions) throws ProcessorStateException {
         this.storeToChangelogTopic = storeToChangelogTopic;
         this.log = logContext.logger(ProcessorStateManager.class);
         this.logPrefix = logContext.logPrefix();
@@ -214,7 +212,6 @@ public class ProcessorStateManager implements StateManager {
         this.eosEnabled = eosEnabled;
         this.changelogReader = changelogReader;
         this.sourcePartitions = sourcePartitions;
-        this.stateUpdaterEnabled = stateUpdaterEnabled;
 
         this.baseDir = stateDirectory.getOrCreateDirectoryForTask(taskId);
         this.checkpointFile = new OffsetCheckpoint(stateDirectory.checkpointFileFor(taskId));
@@ -232,9 +229,8 @@ public class ProcessorStateManager implements StateManager {
                                                                final LogContext logContext,
                                                                final StateDirectory stateDirectory,
                                                                final Map<String, String> storeToChangelogTopic,
-                                                               final Set<TopicPartition> sourcePartitions,
-                                                               final boolean stateUpdaterEnabled) {
-        return new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, logContext, stateDirectory, null, storeToChangelogTopic, sourcePartitions, stateUpdaterEnabled);
+                                                               final Set<TopicPartition> sourcePartitions) {
+        return new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, logContext, stateDirectory, null, storeToChangelogTopic, sourcePartitions);
     }
 
     /**
@@ -258,11 +254,7 @@ public class ProcessorStateManager implements StateManager {
     void registerStateStores(final List<StateStore> allStores, final InternalProcessorContext<?, ?> processorContext) {
         processorContext.uninitialize();
         for (final StateStore store : allStores) {
-            if (stores.containsKey(store.name())) {
-                if (!stateUpdaterEnabled) {
-                    maybeRegisterStoreWithChangelogReader(store.name());
-                }
-            } else {
+            if (!stores.containsKey(store.name())) {
                 store.init(processorContext, store);
             }
             log.trace("Registered state store {}", store.name());
@@ -346,12 +338,6 @@ public class ProcessorStateManager implements StateManager {
         }
     }
 
-    private void maybeRegisterStoreWithChangelogReader(final String storeName) {
-        if (isLoggingEnabled(storeName) && changelogReader != null) {
-            changelogReader.register(getStorePartition(storeName), this);
-        }
-    }
-
     private List<TopicPartition> getAllChangelogTopicPartitions() {
         final List<TopicPartition> allChangelogPartitions = new ArrayList<>();
         for (final StateStoreMetadata storeMetadata : stores.values()) {
@@ -403,10 +389,6 @@ public class ProcessorStateManager implements StateManager {
         // register the store first, so that if later an exception is thrown then eventually while we call `close`
         // on the state manager this state store would be closed as well
         stores.put(storeName, storeMetadata);
-
-        if (!stateUpdaterEnabled) {
-            maybeRegisterStoreWithChangelogReader(storeName);
-        }
 
         log.debug("Registered state store {} to its state manager", storeName);
     }
@@ -616,7 +598,7 @@ public class ProcessorStateManager implements StateManager {
     public void close() throws ProcessorStateException {
         log.debug("Closing its state manager and all the registered state stores: {}", stores);
 
-        if (!stateUpdaterEnabled && changelogReader != null) {
+        if (changelogReader != null) {
             changelogReader.unregister(getAllChangelogTopicPartitions());
         }
 
@@ -664,7 +646,7 @@ public class ProcessorStateManager implements StateManager {
     void recycle() {
         log.debug("Recycling state for {} task {}.", taskType, taskId);
 
-        if (!stateUpdaterEnabled && changelogReader != null) {
+        if (changelogReader != null) {
             final List<TopicPartition> allChangelogs = getAllChangelogTopicPartitions();
             changelogReader.unregister(allChangelogs);
         }

@@ -62,7 +62,6 @@ class ActiveTaskCreator {
     private final Logger log;
     private final Sensor createTaskSensor;
     private final StreamsProducer streamsProducer;
-    private final boolean stateUpdaterEnabled;
     private final boolean processingThreadsEnabled;
 
     ActiveTaskCreator(final TopologyMetadata topologyMetadata,
@@ -77,7 +76,6 @@ class ActiveTaskCreator {
                       final int threadIdx,
                       final UUID processId,
                       final Logger log,
-                      final boolean stateUpdaterEnabled,
                       final boolean processingThreadsEnabled) {
         this.topologyMetadata = topologyMetadata;
         this.applicationConfig = applicationConfig;
@@ -91,7 +89,6 @@ class ActiveTaskCreator {
         this.threadIdx = threadIdx;
         this.processId = processId;
         this.log = log;
-        this.stateUpdaterEnabled = stateUpdaterEnabled;
         this.processingThreadsEnabled = processingThreadsEnabled;
 
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
@@ -145,8 +142,7 @@ class ActiveTaskCreator {
                 stateDirectory,
                 storeChangelogReader,
                 topology.storeToChangelogTopic(),
-                partitions,
-                stateUpdaterEnabled);
+                partitions);
 
             final InternalProcessorContext<Object, Object> context = new ProcessorContextImpl(
                 taskId,

@@ -208,8 +208,7 @@ public class ProcessorStateManagerTest {
                 mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
                 mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
             ),
-            Set.of(persistentStorePartition, nonPersistentStorePartition),
-            false);
+            Set.of(persistentStorePartition, nonPersistentStorePartition));
 
         assertTrue(stateMgr.changelogAsSource(persistentStorePartition));
         assertTrue(stateMgr.changelogAsSource(nonPersistentStorePartition));
@@ -228,8 +227,7 @@ public class ProcessorStateManagerTest {
                 mkEntry(persistentStoreName, persistentStoreTopicName),
                 mkEntry(persistentStoreTwoName, persistentStoreTopicName)
             ),
-            Collections.emptySet(),
-            false);
+            Collections.emptySet());
 
         stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
         stateMgr.registerStore(persistentStoreTwo, persistentStore.stateRestoreCallback, null);
@@ -402,8 +400,7 @@ public class ProcessorStateManagerTest {
             stateDirectory,
             changelogReader,
             emptyMap(),
-            emptySet(),
-            false);
+            emptySet());
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
@@ -675,8 +672,7 @@ public class ProcessorStateManagerTest {
             stateDirectory,
             changelogReader,
             emptyMap(),
-            emptySet(),
-            false);
+            emptySet());
 
         try {
             stateMgr.registerStore(persistentStore, persistentStore.stateRestoreCallback, null);
@@ -1236,8 +1232,7 @@ public class ProcessorStateManagerTest {
                 mkEntry(persistentStoreTwoName, persistentStoreTwoTopicName),
                 mkEntry(nonPersistentStoreName, nonPersistentStoreTopicName)
             ),
-            emptySet(),
-            false);
+            emptySet());
     }
 
     private ProcessorStateManager getStateManager(final Task.TaskType taskType) {

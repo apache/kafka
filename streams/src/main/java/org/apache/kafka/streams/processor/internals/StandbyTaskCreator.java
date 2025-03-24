@@ -44,7 +44,6 @@ class StandbyTaskCreator {
     private final ThreadCache dummyCache;
     private final Logger log;
     private final Sensor createTaskSensor;
-    private final boolean stateUpdaterEnabled;
 
     StandbyTaskCreator(final TopologyMetadata topologyMetadata,
                        final StreamsConfig applicationConfig,
@@ -52,15 +51,13 @@ class StandbyTaskCreator {
                        final StateDirectory stateDirectory,
                        final ChangelogReader storeChangelogReader,
                        final String threadId,
-                       final Logger log,
-                       final boolean stateUpdaterEnabled) {
+                       final Logger log) {
         this.topologyMetadata = topologyMetadata;
         this.applicationConfig = applicationConfig;
         this.streamsMetrics = streamsMetrics;
         this.stateDirectory = stateDirectory;
         this.storeChangelogReader = storeChangelogReader;
         this.log = log;
-        this.stateUpdaterEnabled = stateUpdaterEnabled;
 
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
 
@@ -89,8 +86,7 @@ class StandbyTaskCreator {
                     stateDirectory,
                     storeChangelogReader,
                     topology.storeToChangelogTopic(),
-                    partitions,
-                    stateUpdaterEnabled);
+                    partitions);
 
                 final InternalProcessorContext<?, ?> context = new ProcessorContextImpl(
                     taskId,
