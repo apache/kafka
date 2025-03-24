@@ -254,7 +254,7 @@ public class StreamThreadTest {
     private final TaskId task2 = new TaskId(0, 2);
     private final TaskId task3 = new TaskId(1, 1);
 
-    private Properties configProps(final boolean enableEoS, final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    private Properties configProps(final boolean enableEoS, final boolean processingThreadsEnabled) {
         return mkProperties(mkMap(
             mkEntry(StreamsConfig.APPLICATION_ID_CONFIG, APPLICATION_ID),
             mkEntry(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:2171"),
@@ -264,7 +264,6 @@ public class StreamThreadTest {
             mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, enableEoS ? StreamsConfig.EXACTLY_ONCE_V2 : StreamsConfig.AT_LEAST_ONCE),
             mkEntry(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName()),
             mkEntry(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArraySerde.class.getName()),
-            mkEntry(InternalConfig.STATE_UPDATER_ENABLED, Boolean.toString(stateUpdaterEnabled)),
             mkEntry(InternalConfig.PROCESSING_THREADS_ENABLED, Boolean.toString(processingThreadsEnabled)),
             mkEntry(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, "1")
         ));
@@ -282,13 +281,13 @@ public class StreamThreadTest {
         );
     }
 
-    private StreamThread createStreamThread(@SuppressWarnings("SameParameterValue") final String clientId, final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        return createStreamThread(clientId, mockTime, stateUpdaterEnabled, processingThreadsEnabled);
+    private StreamThread createStreamThread(@SuppressWarnings("SameParameterValue") final String clientId, final boolean processingThreadsEnabled) {
+        return createStreamThread(clientId, mockTime, processingThreadsEnabled);
     }
 
     private StreamThread createStreamThread(@SuppressWarnings("SameParameterValue") final String clientId,
-                                            final Time time, final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+                                            final Time time, final boolean processingThreadsEnabled) {
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         return createStreamThread(clientId, config, time);
     }
 
@@ -364,8 +363,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldChangeStateInRebalanceListener(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        thread = createStreamThread(CLIENT_ID, stateUpdaterEnabled, processingThreadsEnabled);
+    public void shouldChangeStateInRebalanceListener(final boolean processingThreadsEnabled) {
+        thread = createStreamThread(CLIENT_ID, processingThreadsEnabled);
 
         final StateListenerStub stateListener = new StateListenerStub();
         thread.setStateListener(stateListener);
@@ -401,8 +400,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")    
-    public void shouldChangeStateAtStartClose(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
-        thread = createStreamThread(CLIENT_ID, new MockTime(1), stateUpdaterEnabled, processingThreadsEnabled);
+    public void shouldChangeStateAtStartClose(final boolean processingThreadsEnabled) throws Exception {
+        thread = createStreamThread(CLIENT_ID, new MockTime(1), processingThreadsEnabled);
 
         final StateListenerStub stateListener = new StateListenerStub();
         thread.setStateListener(stateListener);
@@ -425,8 +424,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldCreateMetricsAtStartup(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        thread = createStreamThread(CLIENT_ID, new MockTime(1), stateUpdaterEnabled, processingThreadsEnabled);
+    public void shouldCreateMetricsAtStartup(final boolean processingThreadsEnabled) {
+        thread = createStreamThread(CLIENT_ID, new MockTime(1), processingThreadsEnabled);
         final String defaultGroupName = "stream-thread-metrics";
         final Map<String, String> defaultTags = Collections.singletonMap(
             "thread-id",
@@ -525,9 +524,9 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldNotCommitBeforeTheCommitInterval(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldNotCommitBeforeTheCommitInterval(final boolean processingThreadsEnabled) {
         final long commitInterval = 1000L;
-        final Properties props = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        final Properties props = configProps(false, processingThreadsEnabled);
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
         props.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(commitInterval));
 
@@ -552,10 +551,10 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldNotPurgeBeforeThePurgeInterval(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldNotPurgeBeforeThePurgeInterval(final boolean processingThreadsEnabled) {
         final long commitInterval = 1000L;
         final long purgeInterval = 2000L;
-        final Properties props = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        final Properties props = configProps(false, processingThreadsEnabled);
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
         props.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(commitInterval));
         props.setProperty(StreamsConfig.REPARTITION_PURGE_INTERVAL_MS_CONFIG, Long.toString(purgeInterval));
@@ -580,9 +579,9 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldAlsoPurgeWhenNothingGetsCommitted(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldAlsoPurgeWhenNothingGetsCommitted(final boolean processingThreadsEnabled) {
         final long purgeInterval = 1000L;
-        final Properties props = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        final Properties props = configProps(false, processingThreadsEnabled);
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
         props.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(purgeInterval));
         props.setProperty(StreamsConfig.REPARTITION_PURGE_INTERVAL_MS_CONFIG, Long.toString(purgeInterval));
@@ -612,10 +611,10 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldNotProcessWhenPartitionRevoked(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldNotProcessWhenPartitionRevoked(final boolean processingThreadsEnabled) {
         assumeFalse(processingThreadsEnabled);
 
-        final Properties props = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        final Properties props = configProps(false, processingThreadsEnabled);
 
         final StreamsConfig config = new StreamsConfig(props);
         when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());
@@ -636,9 +635,9 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldProcessWhenRunning(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldProcessWhenRunning(final boolean processingThreadsEnabled) {
         assumeFalse(processingThreadsEnabled);
-        final Properties props = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        final Properties props = configProps(false, processingThreadsEnabled);
 
         final StreamsConfig config = new StreamsConfig(props);
         when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());
@@ -661,10 +660,9 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldProcessWhenPartitionAssigned(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        assumeTrue(stateUpdaterEnabled);
+    public void shouldProcessWhenPartitionAssigned( final boolean processingThreadsEnabled) {
         assumeFalse(processingThreadsEnabled);
-        final Properties props = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        final Properties props = configProps(false, processingThreadsEnabled);
 
         final StreamsConfig config = new StreamsConfig(props);
         when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());
@@ -686,10 +684,9 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldProcessWhenStarting(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        assumeTrue(stateUpdaterEnabled);
+    public void shouldProcessWhenStarting(final boolean processingThreadsEnabled) {
         assumeFalse(processingThreadsEnabled);
-        final Properties props = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        final Properties props = configProps(false, processingThreadsEnabled);
         props.setProperty(InternalConfig.STATE_UPDATER_ENABLED, Boolean.toString(true));
 
         final StreamsConfig config = new StreamsConfig(props);
@@ -711,9 +708,9 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldEnforceRebalanceWhenScheduledAndNotCurrentlyRebalancing(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws InterruptedException {
+    public void shouldEnforceRebalanceWhenScheduledAndNotCurrentlyRebalancing(final boolean processingThreadsEnabled) throws InterruptedException {
         final Time mockTime = new MockTime(1);
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
             APPLICATION_ID,
@@ -776,9 +773,9 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldNotEnforceRebalanceWhenCurrentlyRebalancing(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws InterruptedException {
+    public void shouldNotEnforceRebalanceWhenCurrentlyRebalancing(final boolean processingThreadsEnabled) throws InterruptedException {
         final Time mockTime = new MockTime(1);
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
             metrics,
             APPLICATION_ID,
@@ -872,7 +869,7 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldRespectNumIterationsInMainLoopWithoutProcessingThreads(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldRespectNumIterationsInMainLoopWithoutProcessingThreads(final boolean processingThreadsEnabled) {
         // With processing threads, there is no guarantee how many iterations will be performed
         assumeFalse(processingThreadsEnabled);
 
@@ -894,7 +891,6 @@ public class StreamThreadTest {
         );
 
         final Properties properties = new Properties();
-        properties.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
         properties.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
         properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 100L);
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig(APPLICATION_ID,
@@ -1000,9 +996,9 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldNotCauseExceptionIfNothingCommitted(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldNotCauseExceptionIfNothingCommitted(final boolean processingThreadsEnabled) {
         final long commitInterval = 1000L;
-        final Properties props = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        final Properties props = configProps(false, processingThreadsEnabled);
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
         props.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(commitInterval));
 
@@ -1029,11 +1025,11 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldCommitAfterCommitInterval(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldCommitAfterCommitInterval(final boolean processingThreadsEnabled) {
         final long commitInterval = 100L;
         final long commitLatency = 10L;
 
-        final Properties props = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        final Properties props = configProps(false, processingThreadsEnabled);
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
         props.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(commitInterval));
 
@@ -1090,11 +1086,11 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldPurgeAfterPurgeInterval(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldPurgeAfterPurgeInterval(final boolean processingThreadsEnabled) {
         final long commitInterval = 100L;
         final long purgeInterval = 200L;
 
-        final Properties props = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        final Properties props = configProps(false, processingThreadsEnabled);
         props.setProperty(StreamsConfig.STATE_DIR_CONFIG, stateDir);
         props.setProperty(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, Long.toString(commitInterval));
         props.setProperty(StreamsConfig.REPARTITION_PURGE_INTERVAL_MS_CONFIG, Long.toString(purgeInterval));
@@ -1123,7 +1119,7 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldRecordCommitLatency(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldRecordCommitLatency(final boolean processingThreadsEnabled) {
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
@@ -1145,7 +1141,7 @@ public class StreamThreadTest {
             schedulingTaskManager = null;
         }
 
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime);
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
@@ -1232,11 +1228,11 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldInjectSharedProducerForAllTasksUsingClientSupplierOnCreateIfEosDisabled(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldInjectSharedProducerForAllTasksUsingClientSupplierOnCreateIfEosDisabled(final boolean processingThreadsEnabled) {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
         internalStreamsBuilder.buildAndOptimizeTopology();
 
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         thread = createStreamThread(CLIENT_ID, config);
 
         thread.setState(StreamThread.State.STARTING);
@@ -1272,10 +1268,10 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldInjectProducerPerThreadUsingClientSupplierOnCreateIfEosV2Enabled(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldInjectProducerPerThreadUsingClientSupplierOnCreateIfEosV2Enabled(final boolean processingThreadsEnabled) {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 
-        final Properties props = configProps(true, stateUpdaterEnabled, processingThreadsEnabled);
+        final Properties props = configProps(true, processingThreadsEnabled);
         thread = createStreamThread(CLIENT_ID, new StreamsConfig(props));
 
         thread.setState(StreamThread.State.STARTING);
@@ -1309,17 +1305,16 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldOnlyCompleteShutdownAfterRebalanceNotInProgress(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws InterruptedException {
+    public void shouldOnlyCompleteShutdownAfterRebalanceNotInProgress(final boolean processingThreadsEnabled) throws InterruptedException {
         // The state updater is disabled for this test because this test relies on the fact the mainConsumer.resume()
         // is not called. This is not true when the state updater is enabled which leads to
         // java.lang.IllegalStateException: No current assignment for partition topic1-2.
         // Since this tests verifies an aspect that is independent from the state updater, it is OK to disable
         // the state updater and leave the rewriting of the test to later, when the code path for disabled state updater
         // is removed.
-        assumeFalse(stateUpdaterEnabled);
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 
-        final Properties props = configProps(true, stateUpdaterEnabled, processingThreadsEnabled);
+        final Properties props = configProps(true, processingThreadsEnabled);
         thread =
             createStreamThread(CLIENT_ID, new StreamsConfig(props), new MockTime(1));
 
@@ -1363,13 +1358,13 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldShutdownTaskManagerOnClose(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldShutdownTaskManagerOnClose(final boolean processingThreadsEnabled) {
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         final TaskManager taskManager = mock(TaskManager.class);
 
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         thread = buildStreamThread(consumer, taskManager, config, topologyMetadata)
@@ -1387,7 +1382,7 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldNotReturnDataAfterTaskMigrated(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldNotReturnDataAfterTaskMigrated(final boolean processingThreadsEnabled) {
         final TaskManager taskManager = mock(TaskManager.class);
         final InternalTopologyBuilder internalTopologyBuilder = mock(InternalTopologyBuilder.class);
         when(internalTopologyBuilder.fullSourceTopicNames()).thenReturn(Collections.singletonList(topic1));
@@ -1403,29 +1398,18 @@ public class StreamThreadTest {
         final TaskMigratedException taskMigratedException = new TaskMigratedException(
             "Changelog restore found task migrated", new RuntimeException("restore task migrated"));
         ChangelogReader changelogReader = this.changelogReader;
-        if (stateUpdaterEnabled) {
-            when(taskManager.checkStateUpdater(anyLong(), any())).thenAnswer(answer -> {
-                consumer.addRecord(new ConsumerRecord<>(topic1, 1, 11, new byte[0], new byte[0]));
-                consumer.addRecord(new ConsumerRecord<>(topic1, 1, 12, new byte[1], new byte[0]));
 
-                throw taskMigratedException;
-            });
-        } else {
-            changelogReader = new MockChangelogReader() {
-                @Override
-                public long restore(final Map<TaskId, Task> tasks) {
-                    consumer.addRecord(new ConsumerRecord<>(topic1, 1, 11, new byte[0], new byte[0]));
-                    consumer.addRecord(new ConsumerRecord<>(topic1, 1, 12, new byte[1], new byte[0]));
+        when(taskManager.checkStateUpdater(anyLong(), any())).thenAnswer(answer -> {
+            consumer.addRecord(new ConsumerRecord<>(topic1, 1, 11, new byte[0], new byte[0]));
+            consumer.addRecord(new ConsumerRecord<>(topic1, 1, 12, new byte[1], new byte[0]));
 
-                    throw taskMigratedException;
-                }
-            };
-        }
+            throw taskMigratedException;
+        });
 
         final StreamsMetricsImpl streamsMetrics =
             new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime);
 
-        final Properties props = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        final Properties props = configProps(false, processingThreadsEnabled);
         final StreamsConfig config = new StreamsConfig(props);
         thread = new StreamThread(
             new MockTime(1),
@@ -1462,13 +1446,13 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldShutdownTaskManagerOnCloseWithoutStart(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldShutdownTaskManagerOnCloseWithoutStart(final boolean processingThreadsEnabled) {
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         final TaskManager taskManager = mock(TaskManager.class);
 
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         thread = buildStreamThread(consumer, taskManager, config, topologyMetadata)
@@ -1480,13 +1464,13 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldOnlyShutdownOnce(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldOnlyShutdownOnce(final boolean processingThreadsEnabled) {
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
         final TaskManager taskManager = mock(TaskManager.class);
 
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final TopologyMetadata topologyMetadata = new TopologyMetadata(internalTopologyBuilder, config);
         topologyMetadata.buildAndRewriteTopology();
         thread = buildStreamThread(consumer, taskManager, config, topologyMetadata)
@@ -1500,11 +1484,11 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldNotThrowWhenStandbyTasksAssignedAndNoStateStoresForTopology(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldNotThrowWhenStandbyTasksAssignedAndNoStateStoresForTopology(final boolean processingThreadsEnabled) {
         internalTopologyBuilder.addSource(null, "name", null, null, null, "topic");
         internalTopologyBuilder.addSink("out", "output", null, null, null, "name");
 
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         thread = createStreamThread(CLIENT_ID, config);
 
         thread.setState(StreamThread.State.STARTING);
@@ -1522,11 +1506,11 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldNotCloseTaskAndRemoveFromTaskManagerIfProducerWasFencedWhileProcessing(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
+    public void shouldNotCloseTaskAndRemoveFromTaskManagerIfProducerWasFencedWhileProcessing(final boolean processingThreadsEnabled) throws Exception {
         internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
         internalTopologyBuilder.addSink("sink", "dummyTopic", null, null, null, "source");
 
-        final StreamsConfig config = new StreamsConfig(configProps(true, stateUpdaterEnabled, processingThreadsEnabled));
+        final StreamsConfig config = new StreamsConfig(configProps(true, processingThreadsEnabled));
         thread = createStreamThread(CLIENT_ID, config);
 
         final MockConsumer<byte[], byte[]> consumer = clientSupplier.consumer;
@@ -1591,8 +1575,8 @@ public class StreamThreadTest {
         assertThat(producer.commitCount(), equalTo(1L));
     }
 
-    private void testThrowingDurringCommitTransactionException(final RuntimeException e, final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws InterruptedException {
-        final StreamsConfig config = new StreamsConfig(configProps(true, stateUpdaterEnabled, processingThreadsEnabled));
+    private void testThrowingDurringCommitTransactionException(final RuntimeException e, final boolean processingThreadsEnabled) throws InterruptedException {
+        final StreamsConfig config = new StreamsConfig(configProps(true, processingThreadsEnabled));
         thread = createStreamThread(CLIENT_ID, config);
 
         internalTopologyBuilder.addSource(null, "name", null, null, null, topic1);
@@ -1636,19 +1620,19 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldNotCloseTaskAndRemoveFromTaskManagerIfProducerGotFencedInCommitTransactionWhenSuspendingTasks(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
-        testThrowingDurringCommitTransactionException(new ProducerFencedException("Producer is fenced"), stateUpdaterEnabled, processingThreadsEnabled);
+    public void shouldNotCloseTaskAndRemoveFromTaskManagerIfProducerGotFencedInCommitTransactionWhenSuspendingTasks(final boolean processingThreadsEnabled) throws Exception {
+        testThrowingDurringCommitTransactionException(new ProducerFencedException("Producer is fenced"), processingThreadsEnabled);
     }
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldNotCloseTaskAndRemoveFromTaskManagerIfInvalidPidMappingOccurredInCommitTransactionWhenSuspendingTasks(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
-        testThrowingDurringCommitTransactionException(new InvalidPidMappingException("PidMapping is invalid"), stateUpdaterEnabled, processingThreadsEnabled);
+    public void shouldNotCloseTaskAndRemoveFromTaskManagerIfInvalidPidMappingOccurredInCommitTransactionWhenSuspendingTasks(final boolean processingThreadsEnabled) throws Exception {
+        testThrowingDurringCommitTransactionException(new InvalidPidMappingException("PidMapping is invalid"), processingThreadsEnabled);
     }
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldReinitializeRevivedTasksInAnyState(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+    public void shouldReinitializeRevivedTasksInAnyState(final boolean processingThreadsEnabled) throws Exception {
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         thread = createStreamThread(CLIENT_ID, config, new MockTime(1));
 
         final String storeName = "store";
@@ -1716,15 +1700,14 @@ public class StreamThreadTest {
         runOnce(processingThreadsEnabled);
 
         // the third actually polls, processes the record, and throws the corruption exception
-        if (stateUpdaterEnabled) {
-            TestUtils.waitForCondition(
+        TestUtils.waitForCondition(
                 () -> thread.taskManager().checkStateUpdater(
-                    mockTime.milliseconds(),
-                    topicPartitions -> mockConsumer.seekToBeginning(singleton(t1p1))
+                        mockTime.milliseconds(),
+                        topicPartitions -> mockConsumer.seekToBeginning(singleton(t1p1))
                 ),
                 10 * 1000,
                 "State updater never returned tasks.");
-        }
+
         addRecord(mockConsumer, 0L);
         shouldThrow.set(true);
         final TaskCorruptedException taskCorruptedException;
@@ -1736,15 +1719,13 @@ public class StreamThreadTest {
 
         // Now, we can handle the corruption
         thread.taskManager().handleCorruption(taskCorruptedException.corruptedTasks());
-        if (stateUpdaterEnabled) {
-            TestUtils.waitForCondition(
+        TestUtils.waitForCondition(
                 () -> thread.taskManager().checkStateUpdater(
-                    mockTime.milliseconds(),
-                    topicPartitions -> mockConsumer.seekToBeginning(singleton(t1p1))
+                        mockTime.milliseconds(),
+                        topicPartitions -> mockConsumer.seekToBeginning(singleton(t1p1))
                 ),
                 10 * 1000,
                 "State updater never returned tasks.");
-        }
 
         // again, complete the restoration
         runOnce(processingThreadsEnabled);
@@ -1763,11 +1744,11 @@ public class StreamThreadTest {
         }
     }
 
-    private void testNotCloseTaskAndRemoveFromTaskManagerInCommitTransactionWhenCommitting(final RuntimeException e, final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    private void testNotCloseTaskAndRemoveFromTaskManagerInCommitTransactionWhenCommitting(final RuntimeException e, final boolean processingThreadsEnabled) {
         // only have source but no sink so that we would not get fenced in producer.send
         internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
 
-        final StreamsConfig config = new StreamsConfig(configProps(true, stateUpdaterEnabled, processingThreadsEnabled));
+        final StreamsConfig config = new StreamsConfig(configProps(true, processingThreadsEnabled));
         thread = createStreamThread(CLIENT_ID, config);
 
         final MockConsumer<byte[], byte[]> consumer = clientSupplier.consumer;
@@ -1819,20 +1800,20 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldNotCloseTaskAndRemoveFromTaskManagerIfProducerGotFencedInCommitTransactionWhenCommitting(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        testNotCloseTaskAndRemoveFromTaskManagerInCommitTransactionWhenCommitting(new ProducerFencedException("Producer is fenced"), stateUpdaterEnabled, processingThreadsEnabled);
+    public void shouldNotCloseTaskAndRemoveFromTaskManagerIfProducerGotFencedInCommitTransactionWhenCommitting(final boolean processingThreadsEnabled) {
+        testNotCloseTaskAndRemoveFromTaskManagerInCommitTransactionWhenCommitting(new ProducerFencedException("Producer is fenced"), processingThreadsEnabled);
     }
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldNotCloseTaskAndRemoveFromTaskManagerIfPidMappingIsInvalidInCommitTransactionWhenCommitting(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        testNotCloseTaskAndRemoveFromTaskManagerInCommitTransactionWhenCommitting(new InvalidPidMappingException("PID Mapping is invalid"), stateUpdaterEnabled, processingThreadsEnabled);
+    public void shouldNotCloseTaskAndRemoveFromTaskManagerIfPidMappingIsInvalidInCommitTransactionWhenCommitting(final boolean processingThreadsEnabled) {
+        testNotCloseTaskAndRemoveFromTaskManagerInCommitTransactionWhenCommitting(new InvalidPidMappingException("PID Mapping is invalid"), processingThreadsEnabled);
     }
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldNotCloseTaskProducerWhenSuspending(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
-        final StreamsConfig config = new StreamsConfig(configProps(true, stateUpdaterEnabled, processingThreadsEnabled));
+    public void shouldNotCloseTaskProducerWhenSuspending(final boolean processingThreadsEnabled) throws Exception {
+        final StreamsConfig config = new StreamsConfig(configProps(true, processingThreadsEnabled));
         thread = createStreamThread(CLIENT_ID, config);
 
         internalTopologyBuilder.addSource(null, "name", null, null, null, topic1);
@@ -1878,8 +1859,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldReturnActiveTaskMetadataWhileRunningState(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+    public void shouldReturnActiveTaskMetadataWhileRunningState(final boolean processingThreadsEnabled) {
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         internalTopologyBuilder.addSource(null, "source", null, null, null, topic1);
 
         clientSupplier.setCluster(createCluster());
@@ -1955,8 +1936,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldReturnStandbyTaskMetadataWhileRunningState(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+    public void shouldReturnStandbyTaskMetadataWhileRunningState(final boolean processingThreadsEnabled) {
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed)
                               .groupByKey().count(Materialized.as("count-one"));
 
@@ -2002,15 +1983,13 @@ public class StreamThreadTest {
     @SuppressWarnings("unchecked")
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldUpdateStandbyTask(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
-        // Updating standby tasks on the stream thread only happens when the state updater is disabled
-        assumeFalse(stateUpdaterEnabled);
+    public void shouldUpdateStandbyTask(final boolean processingThreadsEnabled) throws Exception {
 
         final String storeName1 = "count-one";
         final String storeName2 = "table-two";
         final String changelogName1 = APPLICATION_ID + "-" + storeName1 + "-changelog";
         final String changelogName2 = APPLICATION_ID + "-" + storeName2 + "-changelog";
-        final Properties props = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        final Properties props = configProps(false, processingThreadsEnabled);
         final StreamsConfig config = new StreamsConfig(props);
         thread = createStreamThread(CLIENT_ID, config);
         final MockConsumer<byte[], byte[]> restoreConsumer = clientSupplier.restoreConsumer;
@@ -2126,11 +2105,9 @@ public class StreamThreadTest {
     @SuppressWarnings("unchecked")
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldNotUpdateStandbyTaskWhenPaused(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
-        // Updating standby tasks on the stream thread only happens when the state updater is disabled
-        assumeFalse(stateUpdaterEnabled);
+    public void shouldNotUpdateStandbyTaskWhenPaused(final boolean processingThreadsEnabled) throws Exception {
 
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final String storeName1 = "count-one";
         final String storeName2 = "table-two";
         final String changelogName1 = APPLICATION_ID + "-" + storeName1 + "-changelog";
@@ -2186,8 +2163,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldCreateStandbyTask(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+    public void shouldCreateStandbyTask(final boolean processingThreadsEnabled) {
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         setupInternalTopologyWithoutState(config);
         internalTopologyBuilder.addStateStore(new MockKeyValueStoreBuilder("myStore", true), "processor1");
 
@@ -2196,8 +2173,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldNotCreateStandbyTaskWithoutStateStores(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+    public void shouldNotCreateStandbyTaskWithoutStateStores(final boolean processingThreadsEnabled) {
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         setupInternalTopologyWithoutState(config);
 
         assertThat(createStandbyTask(config), empty());
@@ -2205,8 +2182,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldNotCreateStandbyTaskIfStateStoresHaveLoggingDisabled(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+    public void shouldNotCreateStandbyTaskIfStateStoresHaveLoggingDisabled(final boolean processingThreadsEnabled) {
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         setupInternalTopologyWithoutState(config);
         final StoreBuilder<KeyValueStore<Object, Object>> storeBuilder =
             new MockKeyValueStoreBuilder("myStore", true);
@@ -2219,7 +2196,7 @@ public class StreamThreadTest {
     @ParameterizedTest
     @MethodSource("data")        
     @SuppressWarnings("deprecation")
-    public void shouldPunctuateActiveTask(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldPunctuateActiveTask(final boolean processingThreadsEnabled) {
         assumeFalse(processingThreadsEnabled);
 
         final List<Long> punctuatedStreamTime = new ArrayList<>();
@@ -2239,7 +2216,7 @@ public class StreamThreadTest {
         internalStreamsBuilder.stream(Collections.singleton(topic1), consumed).process(punctuateProcessor);
         internalStreamsBuilder.buildAndOptimizeTopology();
 
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         thread = createStreamThread(CLIENT_ID, config);
 
         thread.setState(StreamThread.State.STARTING);
@@ -2293,7 +2270,7 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldPunctuateWithTimestampPreservedInProcessorContext(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldPunctuateWithTimestampPreservedInProcessorContext(final boolean processingThreadsEnabled) {
         assumeFalse(processingThreadsEnabled);
 
         final ProcessorSupplier<Object, Object, Object, Object> punctuateProcessor = () -> new Processor<>() {
@@ -2319,7 +2296,7 @@ public class StreamThreadTest {
         internalStreamsBuilder.buildAndOptimizeTopology();
 
         final long currTime = mockTime.milliseconds();
-        thread = createStreamThread(CLIENT_ID, stateUpdaterEnabled, processingThreadsEnabled);
+        thread = createStreamThread(CLIENT_ID, processingThreadsEnabled);
 
         thread.setState(StreamThread.State.STARTING);
         thread.rebalanceListener().onPartitionsRevoked(Collections.emptySet());
@@ -2367,8 +2344,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldAlwaysUpdateTasksMetadataAfterChangingState(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+    public void shouldAlwaysUpdateTasksMetadataAfterChangingState(final boolean processingThreadsEnabled) {
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         thread = createStreamThread(CLIENT_ID, config);
         ThreadMetadata metadata = thread.threadMetadata();
         assertEquals(StreamThread.State.CREATED.name(), metadata.threadState());
@@ -2383,13 +2360,13 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldRecoverFromInvalidOffsetExceptionOnRestoreAndFinishRestore(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
+    public void shouldRecoverFromInvalidOffsetExceptionOnRestoreAndFinishRestore(final boolean processingThreadsEnabled) throws Exception {
         internalStreamsBuilder.stream(Collections.singleton("topic"), consumed)
             .groupByKey()
             .count(Materialized.as("count"));
         internalStreamsBuilder.buildAndOptimizeTopology();
 
-        thread = createStreamThread("clientId", new MockTime(1), stateUpdaterEnabled, processingThreadsEnabled);
+        thread = createStreamThread("clientId", new MockTime(1), processingThreadsEnabled);
         final MockConsumer<byte[], byte[]> mockConsumer = (MockConsumer<byte[], byte[]>) thread.mainConsumer();
         final MockConsumer<byte[], byte[]> mockRestoreConsumer = (MockConsumer<byte[], byte[]>) thread.restoreConsumer();
         final MockAdminClient mockAdminClient = (MockAdminClient) thread.adminClient();
@@ -2491,26 +2468,17 @@ public class StreamThreadTest {
             "K2".getBytes(),
             "V2".getBytes()));
 
-        if (stateUpdaterEnabled) {
-            TestUtils.waitForCondition(
+        TestUtils.waitForCondition(
                 () -> mockRestoreConsumer.assignment().size() == 0,
                 "Never get the assignment");
-        } else {
-            TestUtils.waitForCondition(
-                () -> {
-                    mockRestoreConsumer.assign(changelogPartitionSet);
-                    return mockRestoreConsumer.position(changelogPartition) == 2L;
-                },
-                "Never finished restore");
-        }
     }
 
     @ParameterizedTest
     @MethodSource("data")
-    public void shouldLogAndRecordSkippedMetricForDeserializationException(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldLogAndRecordSkippedMetricForDeserializationException(final boolean processingThreadsEnabled) {
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 
-        final Properties properties = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        final Properties properties = configProps(false, processingThreadsEnabled);
         properties.setProperty(
             StreamsConfig.DESERIALIZATION_EXCEPTION_HANDLER_CLASS_CONFIG,
             LogAndContinueExceptionHandler.class.getName()
@@ -2572,8 +2540,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldThrowTaskMigratedExceptionHandlingTaskLost(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+    public void shouldThrowTaskMigratedExceptionHandlingTaskLost(final boolean processingThreadsEnabled) {
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
 
         final TaskManager taskManager = mock(TaskManager.class);
@@ -2600,8 +2568,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldThrowTaskMigratedExceptionHandlingRevocation(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+    public void shouldThrowTaskMigratedExceptionHandlingRevocation(final boolean processingThreadsEnabled) {
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final Set<TopicPartition> assignedPartitions = Collections.singleton(t1p1);
 
         final TaskManager taskManager = mock(TaskManager.class);
@@ -2629,8 +2597,8 @@ public class StreamThreadTest {
     @ParameterizedTest
     @MethodSource("data")        
     @SuppressWarnings("unchecked")
-    public void shouldCatchHandleCorruptionOnTaskCorruptedExceptionPath(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+    public void shouldCatchHandleCorruptionOnTaskCorruptedExceptionPath(final boolean processingThreadsEnabled) {
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final TaskManager taskManager = mock(TaskManager.class);
         final Consumer<byte[], byte[]> consumer = mock(Consumer.class);
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
@@ -2688,8 +2656,8 @@ public class StreamThreadTest {
     @ParameterizedTest
     @MethodSource("data")        
     @SuppressWarnings("unchecked")
-    public void shouldCatchTimeoutExceptionFromHandleCorruptionAndInvokeExceptionHandler(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+    public void shouldCatchTimeoutExceptionFromHandleCorruptionAndInvokeExceptionHandler(final boolean processingThreadsEnabled) {
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final TaskManager taskManager = mock(TaskManager.class);
         final Consumer<byte[], byte[]> consumer = mock(Consumer.class);
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
@@ -2753,8 +2721,8 @@ public class StreamThreadTest {
     @ParameterizedTest
     @MethodSource("data")        
     @SuppressWarnings("unchecked")
-    public void shouldCatchTaskMigratedExceptionOnOnTaskCorruptedExceptionPath(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+    public void shouldCatchTaskMigratedExceptionOnOnTaskCorruptedExceptionPath(final boolean processingThreadsEnabled) {
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final TaskManager taskManager = mock(TaskManager.class);
         final Consumer<byte[], byte[]> consumer = mock(Consumer.class);
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
@@ -2817,8 +2785,8 @@ public class StreamThreadTest {
     @ParameterizedTest
     @MethodSource("data")        
     @SuppressWarnings("unchecked")
-    public void shouldEnforceRebalanceWhenTaskCorruptedExceptionIsThrownForAnActiveTask(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final StreamsConfig config = new StreamsConfig(configProps(true, stateUpdaterEnabled, processingThreadsEnabled));
+    public void shouldEnforceRebalanceWhenTaskCorruptedExceptionIsThrownForAnActiveTask(final boolean processingThreadsEnabled) {
+        final StreamsConfig config = new StreamsConfig(configProps(true, processingThreadsEnabled));
         final TaskManager taskManager = mock(TaskManager.class);
         final Consumer<byte[], byte[]> consumer = mock(Consumer.class);
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
@@ -2880,8 +2848,8 @@ public class StreamThreadTest {
     @ParameterizedTest
     @MethodSource("data")        
     @SuppressWarnings("unchecked")
-    public void shouldNotEnforceRebalanceWhenTaskCorruptedExceptionIsThrownForAnInactiveTask(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final StreamsConfig config = new StreamsConfig(configProps(true, stateUpdaterEnabled, processingThreadsEnabled));
+    public void shouldNotEnforceRebalanceWhenTaskCorruptedExceptionIsThrownForAnInactiveTask(final boolean processingThreadsEnabled) {
+        final StreamsConfig config = new StreamsConfig(configProps(true, processingThreadsEnabled));
         final TaskManager taskManager = mock(TaskManager.class);
         final Consumer<byte[], byte[]> consumer = mock(Consumer.class);
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
@@ -2940,8 +2908,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldNotCommitNonRunningNonRestoringTasks(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+    public void shouldNotCommitNonRunningNonRestoringTasks(final boolean processingThreadsEnabled) {
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final TaskManager taskManager = mock(TaskManager.class);
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
@@ -2980,13 +2948,12 @@ public class StreamThreadTest {
     @ParameterizedTest
     @MethodSource("data")        
     public void shouldLogAndRecordSkippedRecordsForInvalidTimestamps(
-        final boolean stateUpdaterEnabled,
         final boolean processingThreadsEnabled
     ) throws Exception {
 
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
 
-        final Properties properties = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        final Properties properties = configProps(false, processingThreadsEnabled);
         properties.setProperty(
             StreamsConfig.DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_CONFIG,
             LogAndSkipOnInvalidTimestamp.class.getName()
@@ -3085,8 +3052,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldTransmitTaskManagerMetrics(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+    public void shouldTransmitTaskManagerMetrics(final boolean processingThreadsEnabled) {
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
@@ -3112,8 +3079,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldConstructAdminMetrics(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+    public void shouldConstructAdminMetrics(final boolean processingThreadsEnabled) {
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final Node broker1 = new Node(0, "dummyHost-1", 1234);
         final Node broker2 = new Node(1, "dummyHost-2", 1234);
         final List<Node> cluster = Arrays.asList(broker1, broker2);
@@ -3167,18 +3134,18 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldNotRecordFailedStreamThread(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        runAndVerifyFailedStreamThreadRecording(false, stateUpdaterEnabled, processingThreadsEnabled);
+    public void shouldNotRecordFailedStreamThread(final boolean processingThreadsEnabled) {
+        runAndVerifyFailedStreamThreadRecording(false, processingThreadsEnabled);
     }
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldRecordFailedStreamThread(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        runAndVerifyFailedStreamThreadRecording(true, stateUpdaterEnabled, processingThreadsEnabled);
+    public void shouldRecordFailedStreamThread(final boolean processingThreadsEnabled) {
+        runAndVerifyFailedStreamThreadRecording(true, processingThreadsEnabled);
     }
 
-    public void runAndVerifyFailedStreamThreadRecording(final boolean shouldFail, final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final StreamsConfig config = new StreamsConfig(configProps(false, stateUpdaterEnabled, processingThreadsEnabled));
+    public void runAndVerifyFailedStreamThreadRecording(final boolean shouldFail, final boolean processingThreadsEnabled) {
+        final StreamsConfig config = new StreamsConfig(configProps(false, processingThreadsEnabled));
         final ConsumerGroupMetadata consumerGroupMetadata = mock(ConsumerGroupMetadata.class);
         when(consumer.groupMetadata()).thenReturn(consumerGroupMetadata);
         when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
@@ -3234,9 +3201,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldCheckStateUpdater(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        assumeTrue(stateUpdaterEnabled);
-        final Properties streamsConfigProps = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+    public void shouldCheckStateUpdater(final boolean processingThreadsEnabled) {
+        final Properties streamsConfigProps = configProps(false, processingThreadsEnabled);
         thread = setUpThread(streamsConfigProps);
         final TaskManager taskManager = thread.taskManager();
         thread.setState(State.STARTING);
@@ -3252,11 +3218,10 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldCheckStateUpdaterInBetweenProcessCalls(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        assumeTrue(stateUpdaterEnabled);
+    public void shouldCheckStateUpdaterInBetweenProcessCalls(final boolean processingThreadsEnabled) {
         assumeFalse(processingThreadsEnabled);
 
-        final Properties streamsConfigProps = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+        final Properties streamsConfigProps = configProps(false, processingThreadsEnabled);
         thread = setUpThread(streamsConfigProps);
         final TaskManager taskManager = thread.taskManager();
         thread.setState(State.STARTING);
@@ -3270,8 +3235,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldUpdateLagsAfterPolling(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final Properties streamsConfigProps = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+    public void shouldUpdateLagsAfterPolling(final boolean processingThreadsEnabled) {
+        final Properties streamsConfigProps = configProps(false, processingThreadsEnabled);
         thread = setUpThread(streamsConfigProps);
         thread.setState(State.STARTING);
         thread.setState(State.PARTITIONS_ASSIGNED);
@@ -3288,8 +3253,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldResumePollingForPartitionsWithAvailableSpaceBeforePolling(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        final Properties streamsConfigProps = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+    public void shouldResumePollingForPartitionsWithAvailableSpaceBeforePolling(final boolean processingThreadsEnabled) {
+        final Properties streamsConfigProps = configProps(false, processingThreadsEnabled);
         thread = setUpThread(streamsConfigProps);
         thread.setState(State.STARTING);
         thread.setState(State.PARTITIONS_ASSIGNED);
@@ -3303,9 +3268,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldRespectPollTimeInPartitionsAssignedStateWithStateUpdater(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        assumeTrue(stateUpdaterEnabled);
-        final Properties streamsConfigProps = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+    public void shouldRespectPollTimeInPartitionsAssignedStateWithStateUpdater(final boolean processingThreadsEnabled) {
+        final Properties streamsConfigProps = configProps(false, processingThreadsEnabled);
         final StreamsConfig config = new StreamsConfig(streamsConfigProps);
         final Duration pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
         thread = setUpThread(streamsConfigProps);
@@ -3319,9 +3283,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldNotBlockWhenPollingInPartitionsAssignedStateWithoutStateUpdater(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        assumeFalse(stateUpdaterEnabled);
-        final Properties streamsConfigProps = configProps(false, stateUpdaterEnabled, processingThreadsEnabled);
+    public void shouldNotBlockWhenPollingInPartitionsAssignedStateWithoutStateUpdater(final boolean processingThreadsEnabled) {
+        final Properties streamsConfigProps = configProps(false, processingThreadsEnabled);
         thread = setUpThread(streamsConfigProps);
         thread.setState(State.STARTING);
         thread.setState(State.PARTITIONS_ASSIGNED);
@@ -3333,17 +3296,17 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldGetMainAndRestoreConsumerInstanceId(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
-        getClientInstanceId(false, stateUpdaterEnabled, processingThreadsEnabled);
+    public void shouldGetMainAndRestoreConsumerInstanceId(final boolean processingThreadsEnabled) throws Exception {
+        getClientInstanceId(false, processingThreadsEnabled);
     }
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldGetMainAndRestoreConsumerInstanceIdWithInternalTimeout(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
-        getClientInstanceId(true, stateUpdaterEnabled, processingThreadsEnabled);
+    public void shouldGetMainAndRestoreConsumerInstanceIdWithInternalTimeout(final boolean processingThreadsEnabled) throws Exception {
+        getClientInstanceId(true, processingThreadsEnabled);
     }
 
-    private void getClientInstanceId(final boolean injectTimeException, final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
+    private void getClientInstanceId(final boolean injectTimeException, final boolean processingThreadsEnabled) throws Exception {
         final Uuid consumerInstanceId = Uuid.randomUuid();
         clientSupplier.consumer.setClientInstanceId(consumerInstanceId);
         if (injectTimeException) {
@@ -3362,7 +3325,7 @@ public class StreamThreadTest {
         }
         clientSupplier.prepareProducer(producer);
 
-        thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
+        thread = createStreamThread("clientId", processingThreadsEnabled);
         thread.setState(State.STARTING);
 
         final Map<String, KafkaFuture<Uuid>> clientInstanceIdFutures = thread.clientInstanceIds(Duration.ZERO);
@@ -3385,8 +3348,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldReturnErrorIfMainConsumerInstanceIdNotInitialized(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
+    public void shouldReturnErrorIfMainConsumerInstanceIdNotInitialized(final boolean processingThreadsEnabled) {
+        thread = createStreamThread("clientId", processingThreadsEnabled);
         thread.setState(State.STARTING);
 
         final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.clientInstanceIds(Duration.ZERO);
@@ -3401,8 +3364,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldReturnErrorIfRestoreConsumerInstanceIdNotInitialized(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
+    public void shouldReturnErrorIfRestoreConsumerInstanceIdNotInitialized(final boolean processingThreadsEnabled) {
+        thread = createStreamThread("clientId", processingThreadsEnabled);
         thread.setState(State.STARTING);
 
         final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.clientInstanceIds(Duration.ZERO);
@@ -3417,8 +3380,8 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldReturnErrorIfProducerInstanceIdNotInitialized(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
-        thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
+    public void shouldReturnErrorIfProducerInstanceIdNotInitialized(final boolean processingThreadsEnabled) throws Exception {
+        thread = createStreamThread("clientId", processingThreadsEnabled);
         thread.setState(State.STARTING);
 
         final Map<String, KafkaFuture<Uuid>> producerFutures = thread.clientInstanceIds(Duration.ZERO);
@@ -3433,9 +3396,9 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldReturnNullIfMainConsumerTelemetryDisabled(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
+    public void shouldReturnNullIfMainConsumerTelemetryDisabled(final boolean processingThreadsEnabled) throws Exception {
         clientSupplier.consumer.disableTelemetry();
-        thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
+        thread = createStreamThread("clientId", processingThreadsEnabled);
         thread.setState(State.STARTING);
 
         final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.clientInstanceIds(Duration.ZERO);
@@ -3449,10 +3412,10 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldReturnNullIfRestoreConsumerTelemetryDisabled(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
+    public void shouldReturnNullIfRestoreConsumerTelemetryDisabled(final boolean processingThreadsEnabled) throws Exception {
         clientSupplier.restoreConsumer.disableTelemetry();
 
-        thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
+        thread = createStreamThread("clientId", processingThreadsEnabled);
         thread.setState(State.STARTING);
 
         final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.clientInstanceIds(Duration.ZERO);
@@ -3466,12 +3429,12 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldReturnNullIfProducerTelemetryDisabled(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
+    public void shouldReturnNullIfProducerTelemetryDisabled(final boolean processingThreadsEnabled) throws Exception {
         final MockProducer<byte[], byte[]> producer = new MockProducer<>();
         producer.disableTelemetry();
         clientSupplier.prepareProducer(producer);
 
-        thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
+        thread = createStreamThread("clientId", processingThreadsEnabled);
         thread.setState(State.STARTING);
 
         final Map<String, KafkaFuture<Uuid>> producerFutures = thread.clientInstanceIds(Duration.ZERO);
@@ -3485,10 +3448,10 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldTimeOutOnMainConsumerInstanceId(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldTimeOutOnMainConsumerInstanceId(final boolean processingThreadsEnabled) {
         clientSupplier.consumer.setClientInstanceId(Uuid.randomUuid());
         clientSupplier.consumer.injectTimeoutException(-1);
-        thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
+        thread = createStreamThread("clientId", processingThreadsEnabled);
         thread.setState(State.STARTING);
 
         final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.clientInstanceIds(Duration.ZERO);
@@ -3509,10 +3472,10 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldTimeOutOnRestoreConsumerInstanceId(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
+    public void shouldTimeOutOnRestoreConsumerInstanceId(final boolean processingThreadsEnabled) {
         clientSupplier.restoreConsumer.setClientInstanceId(Uuid.randomUuid());
         clientSupplier.restoreConsumer.injectTimeoutException(-1);
-        thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
+        thread = createStreamThread("clientId", processingThreadsEnabled);
         thread.setState(State.STARTING);
 
         final Map<String, KafkaFuture<Uuid>> consumerFutures = thread.clientInstanceIds(Duration.ZERO);
@@ -3533,13 +3496,13 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldTimeOutOnProducerInstanceId(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
+    public void shouldTimeOutOnProducerInstanceId(final boolean processingThreadsEnabled) throws Exception {
         final MockProducer<byte[], byte[]> producer = new MockProducer<>();
         producer.setClientInstanceId(Uuid.randomUuid());
         producer.injectTimeoutException(-1);
         clientSupplier.prepareProducer(producer);
 
-        thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
+        thread = createStreamThread("clientId", processingThreadsEnabled);
         thread.setState(State.STARTING);
 
         final Map<String, KafkaFuture<Uuid>> producerFutures = thread.clientInstanceIds(Duration.ZERO);
