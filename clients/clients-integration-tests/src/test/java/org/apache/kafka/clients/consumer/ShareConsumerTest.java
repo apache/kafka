@@ -29,6 +29,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -81,6 +82,7 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
@@ -2076,6 +2078,128 @@ public class ShareConsumerTest {
         verifyShareGroupStateTopicRecordsProduced();
     }
 
+    @ClusterTest
+    public void testReadCommittedIsolationLevel() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        alterShareIsolationLevel("group1", String.valueOf(IsolationLevel.READ_COMMITTED.id()));
+        try (Producer<byte[], byte[]> transactionalProducer = createProducer("T1");
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
+            produceCommittedAndAbortedTransactionsInInterval(transactionalProducer, 10, 5);
+            shareConsumer.subscribe(Set.of(tp.topic()));
+            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            // 5th and 10th message transaction was aborted, hence they won't be included in the fetched records.
+            assertEquals(8, records.count());
+            int messageCounter = 1;
+            for (ConsumerRecord<byte[], byte[]> record : records) {
+                assertEquals(tp.topic(), record.topic());
+                assertEquals(tp.partition(), record.partition());
+                if (messageCounter % 5 == 0)
+                    messageCounter++;
+                assertEquals("Message " + messageCounter, new String(record.value()));
+                messageCounter++;
+            }
+        }
+    }
+
+    @ClusterTest
+    public void testReadUncommittedIsolationLevel() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        alterShareIsolationLevel("group1", String.valueOf(IsolationLevel.READ_UNCOMMITTED.id()));
+        try (Producer<byte[], byte[]> transactionalProducer = createProducer("T1");
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
+            produceCommittedAndAbortedTransactionsInInterval(transactionalProducer, 10, 5);
+            shareConsumer.subscribe(Set.of(tp.topic()));
+            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            // Even though 5th and 10th message transaction was aborted, they will be included in the fetched records since IsolationLevel is READ_UNCOMMITTED.
+            assertEquals(10, records.count());
+            int messageCounter = 1;
+            for (ConsumerRecord<byte[], byte[]> record : records) {
+                assertEquals(tp.topic(), record.topic());
+                assertEquals(tp.partition(), record.partition());
+                assertEquals("Message " + messageCounter, new String(record.value()));
+                messageCounter++;
+            }
+        }
+    }
+
+    @ClusterTest
+    public void testAlterReadUncommittedToReadCommittedIsolationLevel() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        alterShareIsolationLevel("group1", String.valueOf(IsolationLevel.READ_UNCOMMITTED.id()));
+        try (Producer<byte[], byte[]> transactionalProducer = createProducer("T1");
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
+            shareConsumer.subscribe(Set.of(tp.topic()));
+            transactionalProducer.initTransactions();
+            try {
+                // First transaction is committed.
+                produceCommittedTransaction(transactionalProducer, "Message 1");
+
+                ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+                assertEquals(1, records.count());
+                ConsumerRecord<byte[], byte[]> record = records.iterator().next();
+                assertEquals("Message 1", new String(record.value()));
+                assertEquals(tp.topic(), record.topic());
+                assertEquals(tp.partition(), record.partition());
+                records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.ACCEPT));
+                shareConsumer.commitSync();
+
+                // Second transaction is aborted.
+                produceAbortedTransaction(transactionalProducer, "Message 2");
+
+                records = shareConsumer.poll(Duration.ofMillis(5000));
+                assertEquals(1, records.count());
+                record = records.iterator().next();
+                assertEquals("Message 2", new String(record.value()));
+                records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.ACCEPT));
+                shareConsumer.commitSync();
+
+                // Third transaction is committed.
+                produceCommittedTransaction(transactionalProducer, "Message 3");
+                // Fourth transaction is aborted.
+                produceAbortedTransaction(transactionalProducer, "Message 4");
+
+                records = shareConsumer.poll(Duration.ofMillis(5000));
+                // Message 3 and Message 4 would be returned by this poll.
+                assertEquals(2, records.count());
+                Iterator<ConsumerRecord<byte[], byte[]>> recordIterator = records.iterator();
+                record = recordIterator.next();
+                assertEquals("Message 3", new String(record.value()));
+                record = recordIterator.next();
+                assertEquals("Message 4", new String(record.value()));
+                // We will make Message 3 and Message 4 available for re-consumption.
+                records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.RELEASE));
+                shareConsumer.commitSync();
+
+                // We are altering IsolationLevel to READ_COMMITTED now. We will only read committed transactions now.
+                alterShareIsolationLevel("group1", String.valueOf(IsolationLevel.READ_COMMITTED.id()));
+
+                // Fifth transaction is committed.
+                produceCommittedTransaction(transactionalProducer, "Message 5");
+                // Sixth transaction is aborted.
+                produceAbortedTransaction(transactionalProducer, "Message 6");
+                // Seventh transaction is aborted.
+                produceAbortedTransaction(transactionalProducer, "Message 7");
+                // Eighth transaction is committed.
+                produceCommittedTransaction(transactionalProducer, "Message 8");
+
+                // Since isolation level is READ_COMMITTED, we can consume Message 3 (committed transaction that was released), Message 5 and Message 8.
+                // We cannot consume Message 4 (aborted transaction that was released), Message 6 and Message 7 since they were aborted.
+                records = shareConsumer.poll(Duration.ofMillis(5000));
+                assertEquals(3, records.count());
+                recordIterator = records.iterator();
+                record = recordIterator.next();
+                assertEquals("Message 3", new String(record.value()));
+                record = recordIterator.next();
+                assertEquals("Message 5", new String(record.value()));
+                record = recordIterator.next();
+                assertEquals("Message 8", new String(record.value()));
+            } finally {
+                transactionalProducer.close();
+            }
+        }
+    }
+
+
     /**
      * Util class to encapsulate state for a consumer/producer
      * being executed by an {@link ExecutorService}.
@@ -2110,6 +2234,59 @@ public class ShareConsumerTest {
                 producer.send(record);
             }
             producer.flush();
+        }
+    }
+
+    private void produceCommittedTransaction(Producer<byte[], byte[]> transactionalProducer, String message) {
+        try {
+            transactionalProducer.beginTransaction();
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, message.getBytes(), message.getBytes());
+            Future<RecordMetadata> future = transactionalProducer.send(record);
+            transactionalProducer.flush();
+            future.get(); // Ensure producer send is complete before committing
+            transactionalProducer.commitTransaction();
+        } catch (Exception e) {
+            transactionalProducer.abortTransaction();
+        }
+    }
+
+    private void produceAbortedTransaction(Producer<byte[], byte[]> transactionalProducer, String message) {
+        try {
+            transactionalProducer.beginTransaction();
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, message.getBytes(), message.getBytes());
+            transactionalProducer.send(record);
+            transactionalProducer.flush();
+            transactionalProducer.abortTransaction();
+        } catch (Exception e) {
+            transactionalProducer.abortTransaction();
+        }
+    }
+
+    private void produceCommittedAndAbortedTransactionsInInterval(Producer<byte[], byte[]> transactionalProducer, int messageCount, int intervalAbortedTransactions) {
+        transactionalProducer.initTransactions();
+        int transactionCount = 0;
+        try {
+            for (int i = 0; i < messageCount; i++) {
+                transactionalProducer.beginTransaction();
+                String recordMessage = "Message " + (i + 1);
+                ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, recordMessage.getBytes(), recordMessage.getBytes());
+                Future<RecordMetadata> future = transactionalProducer.send(record);
+                transactionalProducer.flush();
+                // Increment transaction count
+                transactionCount++;
+                if (transactionCount % intervalAbortedTransactions == 0) {
+                    // Aborts every intervalAbortedTransactions transaction
+                    transactionalProducer.abortTransaction();
+                } else {
+                    // Commits other transactions
+                    future.get(); // Ensure producer send is complete before committing
+                    transactionalProducer.commitTransaction();
+                }
+            }
+        } catch (Exception e) {
+            transactionalProducer.abortTransaction();
+        } finally {
+            transactionalProducer.close();
         }
     }
 
@@ -2304,6 +2481,19 @@ public class ShareConsumerTest {
         Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
         alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
             GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, newValue), AlterConfigOp.OpType.SET)));
+        AlterConfigsOptions alterOptions = new AlterConfigsOptions();
+        try (Admin adminClient = createAdminClient()) {
+            assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
+                .all()
+                .get(60, TimeUnit.SECONDS), "Failed to alter configs");
+        }
+    }
+
+    private void alterShareIsolationLevel(String groupId, String newValue) {
+        ConfigResource configResource = new ConfigResource(ConfigResource.Type.GROUP, groupId);
+        Map<ConfigResource, Collection<AlterConfigOp>> alterEntries = new HashMap<>();
+        alterEntries.put(configResource, List.of(new AlterConfigOp(new ConfigEntry(
+            GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, newValue), AlterConfigOp.OpType.SET)));
         AlterConfigsOptions alterOptions = new AlterConfigsOptions();
         try (Admin adminClient = createAdminClient()) {
             assertDoesNotThrow(() -> adminClient.incrementalAlterConfigs(alterEntries, alterOptions)
