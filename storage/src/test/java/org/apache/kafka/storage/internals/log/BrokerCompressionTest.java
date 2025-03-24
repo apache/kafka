@@ -100,7 +100,7 @@ public class BrokerCompressionTest {
         }
     }
 
-    private RecordBatch readBatch(UnifiedLog log, int offset) throws IOException {
+    private static RecordBatch readBatch(UnifiedLog log, int offset) throws IOException {
         FetchDataInfo fetchInfo = log.read(offset, 4096, FetchIsolation.LOG_END, true);
         return fetchInfo.records.batches().iterator().next();
     }
