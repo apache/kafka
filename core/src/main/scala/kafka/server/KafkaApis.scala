@@ -1169,7 +1169,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         } catch {
           case e: IllegalArgumentException =>
             error(s"Share coordinator key is invalid", e)
-            (Errors.INVALID_REQUEST, Node.noNode())
+            return (Errors.INVALID_REQUEST, Node.noNode)
         }
       }
       val (partition, internalTopicName) = CoordinatorType.forId(keyType) match {

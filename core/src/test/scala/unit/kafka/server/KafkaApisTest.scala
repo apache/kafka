@@ -766,6 +766,32 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def testFindCoordinatorWithInvalidSharePartitionKey(): Unit = {
+    setupBrokerMetadata(true, 3)
+
+    val request = new FindCoordinatorRequestData()
+      .setKeyType(CoordinatorType.SHARE.id)
+      .setCoordinatorKeys(asList(""))
+
+    val requestChannelRequest = buildRequest(new FindCoordinatorRequest.Builder(request).build())
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val expectedResponse = new FindCoordinatorResponseData()
+      .setCoordinators(asList(
+        new FindCoordinatorResponseData.Coordinator()
+          .setKey("")
+          .setErrorCode(Errors.INVALID_REQUEST.code)
+          .setNodeId(-1)
+          .setHost("")
+          .setPort(-1)))
+
+    val response = verifyNoThrottling[FindCoordinatorResponse](requestChannelRequest)
+    assertEquals(expectedResponse, response.data)
+  }
+
+  @Test
   def testMetadataAutoTopicCreationForOffsetTopic(): Unit = {
     testMetadataAutoTopicCreation(Topic.GROUP_METADATA_TOPIC_NAME, enableAutoTopicCreation = true,
       expectedError = Errors.UNKNOWN_TOPIC_OR_PARTITION)
