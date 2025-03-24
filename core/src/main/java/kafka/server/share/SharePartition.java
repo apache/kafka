@@ -822,7 +822,7 @@ public class SharePartition {
                     // Do not send max fetch records to acquireSubsetBatchRecords as we want to acquire
                     // all the records from the batch as the batch will anyway be part of the file-records
                     // response batch.
-                    int acquiredSubsetCount = acquireSubsetBatchRecords(memberId, firstBatch.baseOffset(), lastBatch.lastOffset(), inFlightBatch, result);
+                    int acquiredSubsetCount = acquireSubsetBatchRecords(memberId, firstBatch.baseOffset(), lastBatch.lastOffset(), inFlightBatch, result, fetchPartitionData.records.batches(), fetchPartitionData.abortedTransactions, isolationType);
                     acquiredCount += acquiredSubsetCount;
                     continue;
                 }
@@ -845,11 +845,16 @@ public class SharePartition {
                 // Set the acquisition lock timeout task for the batch.
                 inFlightBatch.updateAcquisitionLockTimeout(acquisitionLockTimeoutTask);
 
+                int resultSize = result.size();
                 result.add(new AcquiredRecords()
                     .setFirstOffset(inFlightBatch.firstOffset())
                     .setLastOffset(inFlightBatch.lastOffset())
                     .setDeliveryCount((short) inFlightBatch.batchDeliveryCount()));
-                acquiredCount += (int) (inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1);
+
+                if (isolationType == FetchIsolation.TXN_COMMITTED)
+                    result = filterAbortedTransactionalRecords(fetchPartitionData.records.batches(), result, fetchPartitionData.abortedTransactions);
+                if (result.size() > resultSize)
+                    acquiredCount += (int) (inFlightBatch.lastOffset() - inFlightBatch.firstOffset() + 1);
             }
 
             // Some of the request offsets are not found in the fetched batches. Acquire the
@@ -1609,11 +1614,16 @@ public class SharePartition {
         long requestFirstOffset,
         long requestLastOffset,
         InFlightBatch inFlightBatch,
-        List<AcquiredRecords> result
+        List<AcquiredRecords> result,
+        Iterable<? extends RecordBatch> batches,
+        Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions,
+        FetchIsolation isolationType
     ) {
         lock.writeLock().lock();
         int acquiredCount = 0;
         try {
+            int resultSize = result.size();
+            List<AcquiredRecords> tempResult = new ArrayList<>();
             for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState.entrySet()) {
                 // For the first batch which might have offsets prior to the request base
                 // offset i.e. cached batch of 10-14 offsets and request batch of 12-13.
@@ -1646,12 +1656,18 @@ public class SharePartition {
                 offsetState.getValue().updateAcquisitionLockTimeoutTask(acquisitionLockTimeoutTask);
 
                 // TODO: Maybe we can club the continuous offsets here.
-                result.add(new AcquiredRecords()
+                tempResult.add(new AcquiredRecords()
                     .setFirstOffset(offsetState.getKey())
                     .setLastOffset(offsetState.getKey())
                     .setDeliveryCount((short) offsetState.getValue().deliveryCount));
                 acquiredCount++;
             }
+
+            if (isolationType == FetchIsolation.TXN_COMMITTED) {
+                tempResult = filterAbortedTransactionalRecords(batches, tempResult, abortedTransactions);
+            }
+            result.addAll(tempResult);
+            acquiredCount = result.size() - resultSize;
         } finally {
             lock.writeLock().unlock();
         }
