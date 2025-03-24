@@ -62,9 +62,10 @@ import java.util.stream.IntStream;
  */
 public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
-    private static final String UNSUPPORTED_VERSION_ERROR_MESSAGE = "The cluster does not support the new STREAMS group protocol. Set " +
-        "group.protocol=classic on the consumer configs to revert to the CLASSIC protocol " +
-        "until the cluster is upgraded.";
+    private static final String UNSUPPORTED_VERSION_ERROR_MESSAGE = "The cluster does not support the STREAMS group " +
+        "protocol or does not support the versions of the STREAMS group protocol used by this client " +
+        "(used versions: " + StreamsGroupHeartbeatRequestData.LOWEST_SUPPORTED_VERSION + " to " +
+        StreamsGroupHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION + ").";
 
     static class HeartbeatState {
 
@@ -521,6 +522,9 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
 
             case INVALID_REQUEST:
             case GROUP_MAX_SIZE_REACHED:
+            case STREAMS_INVALID_TOPOLOGY:
+            case STREAMS_INVALID_TOPOLOGY_EPOCH:
+            case STREAMS_TOPOLOGY_FENCED:
                 logger.error("StreamsGroupHeartbeatRequest failed due to {}: {}", error, errorMessage);
                 handleFatalFailure(error.exception(errorMessage));
                 break;

@@ -1044,8 +1044,10 @@ class StreamsGroupHeartbeatRequestManagerTest {
             ArgumentCaptor<ErrorEvent> errorEvent = ArgumentCaptor.forClass(ErrorEvent.class);
             verify(backgroundEventHandler).add(errorEvent.capture());
             assertEquals(
-                "The cluster does not support the new STREAMS group protocol. Set group.protocol=classic on " +
-                    "the consumer configs to revert to the CLASSIC protocol until the cluster is upgraded.",
+                "The cluster does not support the STREAMS group " +
+                    "protocol or does not support the versions of the STREAMS group protocol used by this client " +
+                    "(used versions: " + StreamsGroupHeartbeatRequestData.LOWEST_SUPPORTED_VERSION + " to " +
+                    StreamsGroupHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION + ").",
                 errorEvent.getValue().error().getMessage()
             );
             assertInstanceOf(UnsupportedVersionException.class, errorEvent.getValue().error());
@@ -1221,7 +1223,14 @@ class StreamsGroupHeartbeatRequestManagerTest {
     @ParameterizedTest
     @EnumSource(
         value = Errors.class,
-        names = {"INVALID_REQUEST", "GROUP_MAX_SIZE_REACHED", "UNSUPPORTED_VERSION"}
+        names = {
+            "INVALID_REQUEST",
+            "GROUP_MAX_SIZE_REACHED",
+            "UNSUPPORTED_VERSION",
+            "STREAMS_INVALID_TOPOLOGY",
+            "STREAMS_INVALID_TOPOLOGY_EPOCH",
+            "STREAMS_TOPOLOGY_FENCED"
+        }
     )
     public void testInvalidRequestAndGroupMaxSizedReachedAndUnsupportedErrorResponse(final Errors error) {
         try (
@@ -1249,9 +1258,10 @@ class StreamsGroupHeartbeatRequestManagerTest {
             verify(backgroundEventHandler).add(errorEvent.capture());
             if (error == Errors.UNSUPPORTED_VERSION) {
                 assertEquals(
-                    "The cluster does not support the new STREAMS group protocol. Set " +
-                    "group.protocol=classic on the consumer configs to revert to the CLASSIC protocol " +
-                    "until the cluster is upgraded.",
+                    "The cluster does not support the STREAMS group " +
+                        "protocol or does not support the versions of the STREAMS group protocol used by this client " +
+                        "(used versions: " + StreamsGroupHeartbeatRequestData.LOWEST_SUPPORTED_VERSION + " to " +
+                        StreamsGroupHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION + ").",
                     errorEvent.getValue().error().getMessage()
                 );
             } else {
