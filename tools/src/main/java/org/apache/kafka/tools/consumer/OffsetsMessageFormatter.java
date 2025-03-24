@@ -17,15 +17,12 @@
 package org.apache.kafka.tools.consumer;
 
 import org.apache.kafka.common.protocol.ApiMessage;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde;
 import org.apache.kafka.coordinator.group.generated.CoordinatorRecordJsonConverters;
 import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
-import java.nio.ByteBuffer;
 import java.util.Set;
 
 /**
