@@ -43,6 +43,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ClientRebootstrapTest {
     private static final String TOPIC = "topic";
+    private static final int PARTITIONS = 1;
     private static final int REPLICAS = 2;
 
     @ClusterTest(
@@ -60,7 +61,7 @@ public class ClientRebootstrapTest {
         clusterInstance.shutdownBroker(broker0);
 
         try (var admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) REPLICAS)));
+            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS)));
 
             // Only the broker 1 is available for the admin client during the bootstrap.
             assertDoesNotThrow(() -> admin.listTopics().names().get(timeout, TimeUnit.SECONDS).contains(TOPIC));
@@ -89,7 +90,7 @@ public class ClientRebootstrapTest {
         clusterInstance.shutdownBroker(broker0);
 
         var admin = clusterInstance.admin(Map.of(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG, "none"));
-        admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) REPLICAS)));
+        admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS)));
 
         // Only the broker 1 is available for the admin client during the bootstrap.
         assertDoesNotThrow(() -> admin.listTopics().names().get(60, TimeUnit.SECONDS).contains(TOPIC));
@@ -114,7 +115,7 @@ public class ClientRebootstrapTest {
     )
     public void testProducerRebootstrap(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         try (var admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) REPLICAS)));
+            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS)));
         }
 
         var broker0 = 0;
@@ -149,7 +150,7 @@ public class ClientRebootstrapTest {
     )
     public void testProducerRebootstrapDisabled(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
         try (var admin = clusterInstance.admin()) {
-            admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) REPLICAS)));
+            admin.createTopics(List.of(new NewTopic(TOPIC, PARTITIONS, (short) REPLICAS)));
         }
 
         var broker0 = 0;
@@ -175,7 +176,7 @@ public class ClientRebootstrapTest {
     }
 
     public void consumerRebootstrap(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws InterruptedException, ExecutionException {
-        clusterInstance.createTopic(TOPIC, 1, (short) REPLICAS);
+        clusterInstance.createTopic(TOPIC, PARTITIONS, (short) REPLICAS);
 
         var broker0 = 0;
         var broker1 = 1;
@@ -232,7 +233,7 @@ public class ClientRebootstrapTest {
     }
 
     public void consumerRebootstrapDisabled(ClusterInstance clusterInstance, GroupProtocol groupProtocol) throws InterruptedException, ExecutionException {
-        clusterInstance.createTopic(TOPIC, 1, (short) REPLICAS);
+        clusterInstance.createTopic(TOPIC, PARTITIONS, (short) REPLICAS);
 
         var broker0 = 0;
         var broker1 = 1;
