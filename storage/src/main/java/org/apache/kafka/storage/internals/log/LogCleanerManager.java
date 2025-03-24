@@ -47,20 +47,21 @@ import java.util.stream.Stream;
 import static org.apache.kafka.server.util.LockUtils.inLock;
 
 /**
- * This class manages the state of each partition being cleaned.
- * LogCleaningState defines the cleaning states that a TopicPartition can be in.
- * 1. None                    : No cleaning state in a TopicPartition. In this state, it can become LogCleaningInProgress
- *                              or LogCleaningPaused(1). Valid previous state are LogCleaningInProgress and LogCleaningPaused(1)
- * 2. LogCleaningInProgress   : The cleaning is currently in progress. In this state, it can become None when log cleaning is finished
- *                              or become LogCleaningAborted. Valid previous state is None.
- * 3. LogCleaningAborted      : The cleaning abort is requested. In this state, it can become LogCleaningPaused(1).
- *                              Valid previous state is LogCleaningInProgress.
- * 4-a. LogCleaningPaused(1)  : The cleaning is paused once. No log cleaning can be done in this state.
- *                              In this state, it can become None or LogCleaningPaused(2).
- *                              Valid previous state is None, LogCleaningAborted or LogCleaningPaused(2).
- * 4-b. LogCleaningPaused(i)  : The cleaning is paused i times where i>= 2. No log cleaning can be done in this state.
- *                              In this state, it can become LogCleaningPaused(i-1) or LogCleaningPaused(i+1).
- *                              Valid previous state is LogCleaningPaused(i-1) or LogCleaningPaused(i+1).
+ * This class manages the state (see {@link LogCleaningState}) of each partition being cleaned.
+ * <ul>
+ * <li>1. None                    : No cleaning state in a TopicPartition. In this state, it can become LogCleaningInProgress
+ *                                or LogCleaningPaused(1). Valid previous state are LogCleaningInProgress and LogCleaningPaused(1)</li>
+ * <li>2. LogCleaningInProgress   : The cleaning is currently in progress. In this state, it can become None when log cleaning is finished
+ *                                or become LogCleaningAborted. Valid previous state is None.</li>
+ * <li>3. LogCleaningAborted      : The cleaning abort is requested. In this state, it can become LogCleaningPaused(1).
+ *                                Valid previous state is LogCleaningInProgress.</li>
+ * <li>4-a. LogCleaningPaused(1)  : The cleaning is paused once. No log cleaning can be done in this state.
+ *                                In this state, it can become None or LogCleaningPaused(2).
+ *                                Valid previous state is None, LogCleaningAborted or LogCleaningPaused(2).</li>
+ * <li>4-b. LogCleaningPaused(i)  : The cleaning is paused i times where i>= 2. No log cleaning can be done in this state.
+ *                                In this state, it can become LogCleaningPaused(i-1) or LogCleaningPaused(i+1).
+ *                                Valid previous state is LogCleaningPaused(i-1) or LogCleaningPaused(i+1).</li>
+ * </ul>
  */
 public class LogCleanerManager {
     public static final String OFFSET_CHECKPOINT_FILE = "cleaner-offset-checkpoint";
@@ -349,14 +350,16 @@ public class LogCleanerManager {
     /**
      * Abort the cleaning of a particular partition if it's in progress, and pause any future cleaning of this partition.
      * This call blocks until the cleaning of the partition is aborted and paused.
-     * 1. If the partition is not in progress, mark it as paused.
-     * 2. Otherwise, first mark the state of the partition as aborted.
-     * 3. The cleaner thread checks the state periodically and if it sees the state of the partition is aborted, it
-     *    throws a LogCleaningAbortedException to stop the cleaning task.
-     * 4. When the cleaning task is stopped, doneCleaning() is called, which sets the state of the partition as paused.
-     * 5. abortAndPauseCleaning() waits until the state of the partition is changed to paused.
-     * 6. If the partition is already paused, a new call to this function
-     *    will increase the paused count by one.
+     * <ol>
+     * <li>If the partition is not in progress, mark it as paused.</li>
+     * <li>Otherwise, first mark the state of the partition as aborted.</li>
+     * <li>The cleaner thread checks the state periodically and if it sees the state of the partition is aborted, it
+     *    throws a LogCleaningAbortedException to stop the cleaning task.</li>
+     * <li>When the cleaning task is stopped, doneCleaning() is called, which sets the state of the partition as paused.</li>
+     * <li>abortAndPauseCleaning() waits until the state of the partition is changed to paused.</li>
+     * <li>If the partition is already paused, a new call to this function
+     *    will increase the paused count by one.</li>
+     * </ol>
      */
     public void abortAndPauseCleaning(TopicPartition topicPartition) {
         inLock(lock, () -> {
@@ -617,15 +620,8 @@ public class LogCleanerManager {
 
     public void markPartitionUncleanable(String logDir, TopicPartition partition) {
         inLock(lock, () -> {
-            Set<TopicPartition> partitions = uncleanablePartitions.get(logDir);
-
-            if (partitions == null) {
-                Set<TopicPartition> newPartitions = new HashSet<>();
-                newPartitions.add(partition);
-                uncleanablePartitions.put(logDir, newPartitions);
-            } else {
-                partitions.add(partition);
-            }
+            Set<TopicPartition> partitions = uncleanablePartitions.computeIfAbsent(logDir, dir -> new HashSet<>());
+            partitions.add(partition);
 
             return null;
         });
@@ -677,7 +673,7 @@ public class LogCleanerManager {
         long maxCompactionLagMs = Math.max(log.config().maxCompactionLagMs, 0L);
         long cleanUntilTime = now - maxCompactionLagMs;
 
-        return (earliestDirtySegmentTimestamp < cleanUntilTime) ? cleanUntilTime - earliestDirtySegmentTimestamp : 0L;
+        return earliestDirtySegmentTimestamp < cleanUntilTime ? cleanUntilTime - earliestDirtySegmentTimestamp : 0L;
     }
 
     /**
@@ -774,7 +770,7 @@ public class LogCleanerManager {
                                 log.name(), segment.baseOffset(), segment.largestTimestamp(), now - minCompactionLagMs, isUncleanable);
                         return isUncleanable;
                     } catch (IOException e) {
-                        throw new RuntimeException(e);
+                        throw new LogCleaningException(log, e.getMessage(), e);
                     }
                 })
                 .map(LogSegment::baseOffset)

@@ -38,7 +38,7 @@ public final class LogToClean implements Comparable<LogToClean> {
 
     public LogToClean(UnifiedLog log, long firstDirtyOffset, long uncleanableOffset, boolean needCompactionNow) {
         this.log = Objects.requireNonNull(log, "log must not be null");
-        this.topicPartition = Objects.requireNonNull(log.topicPartition(), "topicPartition must not be null");
+        this.topicPartition = log.topicPartition();
         this.firstDirtyOffset = firstDirtyOffset;
         this.needCompactionNow = needCompactionNow;
 
@@ -66,7 +66,7 @@ public final class LogToClean implements Comparable<LogToClean> {
         return firstDirtyOffset;
     }
 
-    public boolean needCompactionNow() {
+    boolean needCompactionNow() {
         return needCompactionNow;
     }
 

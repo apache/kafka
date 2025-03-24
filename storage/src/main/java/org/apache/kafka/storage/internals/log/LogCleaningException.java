@@ -18,6 +18,11 @@ package org.apache.kafka.storage.internals.log;
 
 import org.apache.kafka.common.KafkaException;
 
+/**
+ * An exception indicating a failure during log cleaning operations.
+ * This exception typically wraps the root cause of the cleaning failure and provides
+ * additional context about the partition and log being cleaned.
+ */
 public class LogCleaningException extends KafkaException {
     public final UnifiedLog log;
 

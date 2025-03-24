@@ -16,6 +16,11 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import java.util.Objects;
+
+/**
+ * LogCleaningState defines the cleaning states that a TopicPartition can be in.
+ */
 public sealed interface LogCleaningState {
     LogCleaningInProgress LOG_CLEANING_IN_PROGRESS = new LogCleaningInProgress();
 
@@ -33,6 +38,35 @@ public sealed interface LogCleaningState {
         private LogCleaningAborted() {}
     }
 
-    record LogCleaningPaused(int pausedCount) implements LogCleaningState {
+    final class LogCleaningPaused implements LogCleaningState {
+        private final int pausedCount;
+
+        private LogCleaningPaused(int pausedCount) {
+            this.pausedCount = pausedCount;
+        }
+
+        public int pausedCount() {
+            return pausedCount;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            LogCleaningPaused that = (LogCleaningPaused) o;
+            return pausedCount == that.pausedCount;
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hashCode(pausedCount);
+        }
+
+        @Override
+        public String toString() {
+            return "LogCleaningPaused{" +
+                    "pausedCount=" + pausedCount +
+                    '}';
+        }
     }
 }
