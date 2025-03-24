@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools.reassign;
 
-import org.apache.kafka.admin.BrokerMetadata;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.PartitionReassignment;
@@ -29,6 +28,7 @@ import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
 import org.apache.kafka.server.config.QuotaConfig;
@@ -317,19 +317,19 @@ public class ReassignPartitionsUnitTest {
             build()) {
 
             assertEquals(asList(
-                new BrokerMetadata(0, Optional.of("rack0")),
-                new BrokerMetadata(1, Optional.of("rack1"))
+                new UsableBroker(0, Optional.of("rack0"), false),
+                new UsableBroker(1, Optional.of("rack1"), false)
             ), getBrokerMetadata(adminClient, asList(0, 1), true));
             assertEquals(asList(
-                new BrokerMetadata(0, Optional.empty()),
-                new BrokerMetadata(1, Optional.empty())
+                new UsableBroker(0, Optional.empty(), false),
+                new UsableBroker(1, Optional.empty(), false)
             ), getBrokerMetadata(adminClient, asList(0, 1), false));
             assertStartsWith("Not all brokers have rack information",
                 assertThrows(AdminOperationException.class,
                     () -> getBrokerMetadata(adminClient, asList(1, 2), true)).getMessage());
             assertEquals(asList(
-                new BrokerMetadata(1, Optional.empty()),
-                new BrokerMetadata(2, Optional.empty())
+                new UsableBroker(1, Optional.empty(), false),
+                new UsableBroker(2, Optional.empty(), false)
             ), getBrokerMetadata(adminClient, asList(1, 2), false));
         }
     }
