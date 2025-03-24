@@ -425,8 +425,7 @@ class LogCleaner(initialConfig: CleanerConfig,
             case e: Exception => throw new LogCleaningException(cleanable.log, e.getMessage, e)
           }
       }
-      val deletable: Iterable[(TopicPartition, UnifiedLog)] = cleanerManager.deletableLogs().asScala
-        .map(entry => (entry.getKey, entry.getValue))
+      val deletable = cleanerManager.deletableLogs().asScala
       try {
         deletable.foreach { case (_, log) =>
           try {
@@ -437,7 +436,7 @@ class LogCleaner(initialConfig: CleanerConfig,
           }
         }
       } finally  {
-        cleanerManager.doneDeleting(deletable.map(_._1).toList.asJava)
+        cleanerManager.doneDeleting(deletable.keys.toList.asJava)
       }
 
       cleaned

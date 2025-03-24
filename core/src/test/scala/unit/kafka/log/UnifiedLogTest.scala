@@ -1100,7 +1100,7 @@ class UnifiedLogTest {
 
     // Clean segments, this should delete everything except the active segment since there only
     // exists the key "a".
-    cleaner.clean(new LogToClean(log.topicPartition, log, 0, log.logEndOffset, false))
+    cleaner.clean(new LogToClean(log, 0, log.logEndOffset, false))
     log.deleteOldSegments()
     // Sleep to breach the file delete delay and run scheduled file deletion tasks
     mockTime.sleep(1)

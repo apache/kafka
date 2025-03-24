@@ -28,8 +28,8 @@ import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.LogCleaningState.{LogCleaningAborted, LogCleaningInProgress, LogCleaningPaused}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LocalLog, LogCleanerManager, LogCleaningException, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogToClean, PreCleanStats, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog}
+import org.apache.kafka.storage.internals.log.LogCleaningState.{LOG_CLEANING_ABORTED, LOG_CLEANING_IN_PROGRESS}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LocalLog, LogCleanerManager, LogCleaningException, LogCleaningState, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogToClean, PreCleanStats, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
@@ -207,7 +207,7 @@ class LogCleanerManagerTest extends Logging {
     val cleanerManager = createCleanerManagerMock(logs)
     partitions.foreach(partition => cleanerCheckpoints.put(partition, 20))
 
-    cleanerManager.setCleaningState(tp2, LogCleaningInProgress.getInstance())
+    cleanerManager.setCleaningState(tp2, LOG_CLEANING_IN_PROGRESS)
 
     val filthiestLog: LogToClean = cleanerManager.grabFilthiestCompactedLog(time, new PreCleanStats()).get
     assertEquals(tp1, filthiestLog.topicPartition)
@@ -226,7 +226,7 @@ class LogCleanerManagerTest extends Logging {
     val cleanerManager = createCleanerManagerMock(logs)
     partitions.foreach(partition => cleanerCheckpoints.put(partition, 20))
 
-    cleanerManager.setCleaningState(tp2, LogCleaningInProgress.getInstance())
+    cleanerManager.setCleaningState(tp2, LOG_CLEANING_IN_PROGRESS)
     cleanerManager.markPartitionUncleanable(logs.get(tp1).dir.getParent, tp1)
 
     val filthiestLog: Optional[LogToClean] = cleanerManager.grabFilthiestCompactedLog(time, new PreCleanStats())
@@ -720,19 +720,19 @@ class LogCleanerManagerTest extends Logging {
 
     assertThrows(classOf[IllegalStateException], () => cleanerManager.doneCleaning(topicPartition, log.dir, 1))
 
-    cleanerManager.setCleaningState(topicPartition, new LogCleaningPaused(1))
+    cleanerManager.setCleaningState(topicPartition, LogCleaningState.logCleaningPaused(1))
     assertThrows(classOf[IllegalStateException], () => cleanerManager.doneCleaning(topicPartition, log.dir, 1))
 
-    cleanerManager.setCleaningState(topicPartition, LogCleaningInProgress.getInstance())
+    cleanerManager.setCleaningState(topicPartition, LOG_CLEANING_IN_PROGRESS)
     val endOffset = 1L
     cleanerManager.doneCleaning(topicPartition, log.dir, endOffset)
     assertTrue(cleanerManager.cleaningState(topicPartition).isEmpty)
     assertTrue(cleanerManager.allCleanerCheckpoints.containsKey(topicPartition))
     assertEquals(Some(endOffset), Option(cleanerManager.allCleanerCheckpoints.get(topicPartition)))
 
-    cleanerManager.setCleaningState(topicPartition, LogCleaningAborted.getInstance())
+    cleanerManager.setCleaningState(topicPartition, LOG_CLEANING_ABORTED)
     cleanerManager.doneCleaning(topicPartition, log.dir, endOffset)
-    assertEquals(new LogCleaningPaused(1), cleanerManager.cleaningState(topicPartition).get)
+    assertEquals(LogCleaningState.logCleaningPaused(1), cleanerManager.cleaningState(topicPartition).get)
     assertTrue(cleanerManager.allCleanerCheckpoints.containsKey(topicPartition))
   }
 
@@ -745,16 +745,16 @@ class LogCleanerManagerTest extends Logging {
 
     assertThrows(classOf[IllegalStateException], () => cleanerManager.doneDeleting(Seq(tp).asJava))
 
-    cleanerManager.setCleaningState(tp, new LogCleaningPaused(1))
+    cleanerManager.setCleaningState(tp, LogCleaningState.logCleaningPaused(1))
     assertThrows(classOf[IllegalStateException], () => cleanerManager.doneDeleting(Seq(tp).asJava))
 
-    cleanerManager.setCleaningState(tp, LogCleaningInProgress.getInstance())
+    cleanerManager.setCleaningState(tp, LOG_CLEANING_IN_PROGRESS)
     cleanerManager.doneDeleting(Seq(tp).asJava)
     assertTrue(cleanerManager.cleaningState(tp).isEmpty)
 
-    cleanerManager.setCleaningState(tp, LogCleaningAborted.getInstance())
+    cleanerManager.setCleaningState(tp, LOG_CLEANING_ABORTED)
     cleanerManager.doneDeleting(Seq(tp).asJava)
-    assertEquals(new LogCleaningPaused(1), cleanerManager.cleaningState(tp).get)
+    assertEquals(LogCleaningState.logCleaningPaused(1), cleanerManager.cleaningState(tp).get)
   }
 
   /**

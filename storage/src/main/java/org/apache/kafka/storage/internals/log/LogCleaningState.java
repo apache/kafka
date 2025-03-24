@@ -16,59 +16,23 @@
  */
 package org.apache.kafka.storage.internals.log;
 
-public abstract class LogCleaningState {
-    private LogCleaningState() {
+public sealed interface LogCleaningState {
+    LogCleaningInProgress LOG_CLEANING_IN_PROGRESS = new LogCleaningInProgress();
+
+    LogCleaningAborted LOG_CLEANING_ABORTED = new LogCleaningAborted();
+
+    static LogCleaningPaused logCleaningPaused(int pausedCount) {
+        return new LogCleaningPaused(pausedCount);
     }
 
-    public static final class LogCleaningInProgress extends LogCleaningState {
-        private static final LogCleaningInProgress INSTANCE = new LogCleaningInProgress();
-
-        private LogCleaningInProgress() {
-        }
-
-        public static LogCleaningInProgress getInstance() {
-            return INSTANCE;
-        }
+    final class LogCleaningInProgress implements LogCleaningState {
+        private LogCleaningInProgress() {}
     }
 
-    public static final class LogCleaningAborted extends LogCleaningState {
-        private static final LogCleaningAborted INSTANCE = new LogCleaningAborted();
-
-        private LogCleaningAborted() {
-        }
-
-        public static LogCleaningAborted getInstance() {
-            return INSTANCE;
-        }
+    final class LogCleaningAborted implements LogCleaningState {
+        private LogCleaningAborted() {}
     }
 
-    public static final class LogCleaningPaused extends LogCleaningState {
-        private final int pausedCount;
-
-        public LogCleaningPaused(int pausedCount) {
-            this.pausedCount = pausedCount;
-        }
-
-        public int getPausedCount() {
-            return pausedCount;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            if (this == o) return true;
-            if (o == null || getClass() != o.getClass()) return false;
-            LogCleaningPaused that = (LogCleaningPaused) o;
-            return pausedCount == that.pausedCount;
-        }
-
-        @Override
-        public int hashCode() {
-            return Integer.hashCode(pausedCount);
-        }
-
-        @Override
-        public String toString() {
-            return "LogCleaningPaused{pausedCount=" + pausedCount + "}";
-        }
+    record LogCleaningPaused(int pausedCount) implements LogCleaningState {
     }
 }

@@ -101,7 +101,6 @@ public class LogCleanerManager {
 
     private final Map<String, List<Map<String, String>>> gaugeMetricNameWithTag = new HashMap<>();
 
-    private final List<File> logDirs;
     private final ConcurrentMap<TopicPartition, UnifiedLog> logs;
 
     /**
@@ -118,7 +117,6 @@ public class LogCleanerManager {
             ConcurrentMap<TopicPartition, UnifiedLog> logs,
             LogDirFailureChannel logDirFailureChannel
     ) {
-        this.logDirs = logDirs;
         this.logs = logs;
         checkpoints = logDirs.stream()
                 .collect(Collectors.toMap(
@@ -132,10 +130,10 @@ public class LogCleanerManager {
                         }
                 ));
 
-        registerMetrics();
+        registerMetrics(logDirs);
     }
 
-    private void registerMetrics() {
+    private void registerMetrics(List<File> logDirs) {
         // gauges for tracking the number of partitions marked as uncleanable for each log directory
         for (File dir : logDirs) {
             Map<String, String> metricTag = Map.of("logDirectory", dir.getAbsolutePath());
@@ -259,7 +257,7 @@ public class LogCleanerManager {
                                     long compactionDelayMs = maxCompactionDelay(log, offsetsToClean.firstDirtyOffset, now);
                                     preCleanStats.updateMaxCompactionDelay(compactionDelayMs);
 
-                                    return new LogToClean(topicPartition, log, offsetsToClean.firstDirtyOffset,
+                                    return new LogToClean(log, offsetsToClean.firstDirtyOffset,
                                             offsetsToClean.firstUncleanableDirtyOffset, compactionDelayMs > 0);
                                 } catch (Throwable e) {
                                     throw new LogCleaningException(log, "Failed to calculate log cleaning stats for partition " + topicPartition, e);
@@ -288,7 +286,7 @@ public class LogCleanerManager {
                         .max(Comparator.comparingDouble(LogToClean::cleanableRatio))
                         .orElseThrow(() -> new IllegalStateException("No filthiest log found"));
 
-                inProgress.put(filthiest.topicPartition(), LogCleaningState.LogCleaningInProgress.getInstance());
+                inProgress.put(filthiest.topicPartition(), LogCleaningState.LOG_CLEANING_IN_PROGRESS);
                 return Optional.of(filthiest);
             }
         });
@@ -309,7 +307,7 @@ public class LogCleanerManager {
                     .filter(entry -> !inProgress.containsKey(entry.getKey())) // skip any logs already in-progress
                     .collect(Collectors.toList());
 
-            deletableLogs.forEach(entry -> inProgress.put(entry.getKey(), new LogCleaningState.LogCleaningPaused(1)));
+            deletableLogs.forEach(entry -> inProgress.put(entry.getKey(), LogCleaningState.logCleaningPaused(1)));
 
             return deletableLogs;
         });
@@ -320,17 +318,17 @@ public class LogCleanerManager {
      * Include logs without delete enabled, as they may have segments
      * that precede the start offset.
      */
-    public List<Map.Entry<TopicPartition, UnifiedLog>> deletableLogs() {
+    public Map<TopicPartition, UnifiedLog> deletableLogs() {
         return inLock(lock, () -> {
-            List<Map.Entry<TopicPartition, UnifiedLog>> toClean = logs.entrySet().stream()
+            Map<TopicPartition, UnifiedLog> toClean = logs.entrySet().stream()
                     .filter(entry -> {
                         TopicPartition topicPartition = entry.getKey();
                         UnifiedLog log = entry.getValue();
                         return !inProgress.containsKey(topicPartition) && log.config().compact &&
                                 !isUncleanablePartition(log, topicPartition);
                     })
-                    .collect(Collectors.toList());
-            toClean.forEach(entry -> inProgress.put(entry.getKey(), LogCleaningState.LogCleaningInProgress.getInstance()));
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+            toClean.forEach((partition, log) -> inProgress.put(partition, LogCleaningState.LOG_CLEANING_IN_PROGRESS));
             return toClean;
         });
     }
@@ -365,11 +363,11 @@ public class LogCleanerManager {
             LogCleaningState state = inProgress.get(topicPartition);
 
             if (state == null) {
-                inProgress.put(topicPartition, new LogCleaningState.LogCleaningPaused(1));
-            } else if (state instanceof LogCleaningState.LogCleaningInProgress) {
-                inProgress.put(topicPartition, LogCleaningState.LogCleaningAborted.getInstance());
+                inProgress.put(topicPartition, LogCleaningState.logCleaningPaused(1));
+            } else if (state == LogCleaningState.LOG_CLEANING_IN_PROGRESS) {
+                inProgress.put(topicPartition, LogCleaningState.LOG_CLEANING_ABORTED);
             } else if (state instanceof LogCleaningState.LogCleaningPaused logCleaningPaused) {
-                inProgress.put(topicPartition, new LogCleaningState.LogCleaningPaused(logCleaningPaused.getPausedCount() + 1));
+                inProgress.put(topicPartition, LogCleaningState.logCleaningPaused(logCleaningPaused.pausedCount() + 1));
             } else {
                 throw new IllegalStateException("Compaction for partition " + topicPartition +
                         " cannot be aborted and paused since it is in " + state + " state.");
@@ -401,10 +399,10 @@ public class LogCleanerManager {
                 }
 
                 if (state instanceof LogCleaningState.LogCleaningPaused logCleaningPaused) {
-                    if (logCleaningPaused.getPausedCount() == 1) {
+                    if (logCleaningPaused.pausedCount() == 1) {
                         inProgress.remove(topicPartition);
-                    } else if (logCleaningPaused.getPausedCount() > 1) {
-                        inProgress.put(topicPartition, new LogCleaningState.LogCleaningPaused(logCleaningPaused.getPausedCount() - 1));
+                    } else if (logCleaningPaused.pausedCount() > 1) {
+                        inProgress.put(topicPartition, LogCleaningState.logCleaningPaused(logCleaningPaused.pausedCount() - 1));
                     }
                 } else {
                     throw new IllegalStateException("Compaction for partition " + topicPartition +
@@ -447,7 +445,7 @@ public class LogCleanerManager {
      */
     public void checkCleaningAborted(TopicPartition topicPartition) {
         inLock(lock, () -> {
-            if (isCleaningInState(topicPartition, LogCleaningState.LogCleaningAborted.getInstance())) {
+            if (isCleaningInState(topicPartition, LogCleaningState.LOG_CLEANING_ABORTED)) {
                 throw new LogCleaningAbortedException();
             }
             return null;
@@ -571,11 +569,11 @@ public class LogCleanerManager {
 
             if (state == null) {
                 throw new IllegalStateException("State for partition " + topicPartition + " should exist.");
-            } else if (state instanceof LogCleaningState.LogCleaningInProgress) {
+            } else if (state == LogCleaningState.LOG_CLEANING_IN_PROGRESS) {
                 updateCheckpoints(dataDir, Optional.of(Map.entry(topicPartition, endOffset)), Optional.empty());
                 inProgress.remove(topicPartition);
-            } else if (state instanceof LogCleaningState.LogCleaningAborted) {
-                inProgress.put(topicPartition, new LogCleaningState.LogCleaningPaused(1));
+            } else if (state == LogCleaningState.LOG_CLEANING_ABORTED) {
+                inProgress.put(topicPartition, LogCleaningState.logCleaningPaused(1));
                 pausedCleaningCond.signalAll();
             } else {
                 throw new IllegalStateException("In-progress partition " + topicPartition + " cannot be in " + state + " state.");
@@ -592,10 +590,10 @@ public class LogCleanerManager {
 
                 if (logCleaningState == null) {
                     throw new IllegalStateException("State for partition " + topicPartition + " should exist.");
-                } else if (logCleaningState == LogCleaningState.LogCleaningInProgress.getInstance()) {
+                } else if (logCleaningState == LogCleaningState.LOG_CLEANING_IN_PROGRESS) {
                     inProgress.remove(topicPartition);
-                } else if (logCleaningState == LogCleaningState.LogCleaningAborted.getInstance()) {
-                    inProgress.put(topicPartition, new LogCleaningState.LogCleaningPaused(1));
+                } else if (logCleaningState == LogCleaningState.LOG_CLEANING_ABORTED) {
+                    inProgress.put(topicPartition, LogCleaningState.logCleaningPaused(1));
                     pausedCleaningCond.signalAll();
                 } else {
                     throw new IllegalStateException("In-progress partition " + topicPartition + " cannot be in " + logCleaningState + " state.");
@@ -769,16 +767,15 @@ public class LogCleanerManager {
         List<LogSegment> dirtyNonActiveSegments = log.nonActiveLogSegmentsFrom(firstDirtyOffset);
         return dirtyNonActiveSegments.stream()
                 .filter(segment -> {
-                    boolean isUncleanable;
                     try {
-                        isUncleanable = segment.largestTimestamp() > now - minCompactionLagMs;
+                        boolean isUncleanable = segment.largestTimestamp() > now - minCompactionLagMs;
                         LOG.debug("Checking if log segment may be cleaned: log='{}' segment.baseOffset={} " +
                                         "segment.largestTimestamp={}; now - compactionLag={}; is uncleanable={}",
                                 log.name(), segment.baseOffset(), segment.largestTimestamp(), now - minCompactionLagMs, isUncleanable);
+                        return isUncleanable;
                     } catch (IOException e) {
                         throw new RuntimeException(e);
                     }
-                    return isUncleanable;
                 })
                 .map(LogSegment::baseOffset)
                 .findFirst();
