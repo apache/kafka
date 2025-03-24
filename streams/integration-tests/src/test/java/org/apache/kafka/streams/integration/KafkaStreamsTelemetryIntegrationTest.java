@@ -24,7 +24,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Uuid;
@@ -42,7 +41,6 @@ import org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.MetricsData;
 import org.apache.kafka.streams.ClientInstanceIds;
 import org.apache.kafka.streams.KafkaClientSupplier;
 import org.apache.kafka.streams.KafkaStreams;
-import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
@@ -167,10 +165,6 @@ public class KafkaStreamsTelemetryIntegrationTest {
     public void shouldPushGlobalThreadMetricsToBroker(final String recordingLevel) throws Exception {
         streamsApplicationProperties = props(true);
         streamsApplicationProperties.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel);
-        IntegrationTestUtils.produceKeyValuesSynchronously(globalStoreTopic,
-                List.of(KeyValue.pair("1", "one"), KeyValue.pair("2", "two"), KeyValue.pair("3", "three")),
-                producerProperties(),
-                cluster.time);
         final Topology topology = simpleTopology(true);
         subscribeForStreamsMetrics();
         try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
@@ -449,14 +443,6 @@ public class KafkaStreamsTelemetryIntegrationTest {
                 Arguments.of(false));
     }
 
-    private Properties producerProperties() {
-        final Properties properties = new Properties();
-        properties.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
-        properties.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, Serdes.String().serializer().getClass());
-        properties.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, Serdes.String().serializer().getClass());
-        return properties;
-    }
-
     private Properties props(final boolean stateUpdaterEnabled) {
         return props(mkObjectProperties(mkMap(mkEntry(StreamsConfig.InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled))));
     }
@@ -486,7 +472,8 @@ public class KafkaStreamsTelemetryIntegrationTest {
     }
 
     private void addGlobalStore(final StreamsBuilder builder) {
-        builder.addGlobalStore(Stores.keyValueStoreBuilder(
+        builder.addGlobalStore(
+            Stores.keyValueStoreBuilder(
                 Stores.inMemoryKeyValueStore("iq-test-store"),
                 Serdes.String(),
                 Serdes.String()
@@ -496,16 +483,20 @@ public class KafkaStreamsTelemetryIntegrationTest {
                 () -> new Processor<>() {
                     private KeyValueStore<String, String> store;
 
+                    // The store iterator is intentionally not closed here as it needs
+                    // to be open during the test, so the Streams app will emit the
+                    // org.apache.kafka.stream.state.oldest.iterator.open.since.ms metric
+                    // that is expected. So the globalStoreIterator is a global variable
+                    // (pun not intended), so it can be closed in the tearDown method.
                     @Override
                     public void init(final ProcessorContext<Void, Void> context) {
                         store = context.getStateStore("iq-test-store");
+                        globalStoreIterator = store.all();
                     }
 
                     @Override
                     public void process(final Record<String, String> record) {
                         store.put(record.key(), record.value());
-                        globalStoreIterator = store.all();
-                        globalStoreIterator.forEachRemaining(kv -> System.out.printf("key %s value %s%n", kv.key, kv.value));
                     }
                 });
     }
