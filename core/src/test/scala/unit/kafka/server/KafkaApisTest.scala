@@ -767,8 +767,6 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testFindCoordinatorWithInvalidSharePartitionKey(): Unit = {
-    setupBrokerMetadata(true, 3)
-
     val request = new FindCoordinatorRequestData()
       .setKeyType(CoordinatorType.SHARE.id)
       .setCoordinatorKeys(asList(""))
