@@ -215,9 +215,8 @@ public class ShareFetchResponse extends AbstractResponse {
     private static ShareFetchResponseData convertNullRecordsToEmpty(ShareFetchResponseData shareFetchResponseData) {
         for (ShareFetchResponseData.ShareFetchableTopicResponse response : shareFetchResponseData.responses()) {
             for (ShareFetchResponseData.PartitionData partition : response.partitions()) {
-                if (partition.records() == null) {
+                if (partition.records() == null)
                     partition.setRecords(MemoryRecords.EMPTY);
-                }
             }
         }
         return shareFetchResponseData;
