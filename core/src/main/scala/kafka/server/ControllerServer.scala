@@ -315,7 +315,7 @@ class ControllerServer(
       metadataPublishers.add(new DynamicConfigPublisher(
         config,
         sharedServer.metadataPublishingFaultHandler,
-        immutable.Map[String, ConfigHandler](
+        immutable.Map[ConfigType, ConfigHandler](
           // controllers don't host topics, so no need to do anything with dynamic topic config changes here
           ConfigType.BROKER -> new BrokerConfigHandler(config, quotaManagers)
         ),
