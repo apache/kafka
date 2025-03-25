@@ -37,7 +37,7 @@ public final class LogToClean implements Comparable<LogToClean> {
     private final double cleanableRatio;
 
     public LogToClean(UnifiedLog log, long firstDirtyOffset, long uncleanableOffset, boolean needCompactionNow) {
-        this.log = Objects.requireNonNull(log, "log must not be null");
+        this.log = log;
         this.topicPartition = log.topicPartition();
         this.firstDirtyOffset = firstDirtyOffset;
         this.needCompactionNow = needCompactionNow;
