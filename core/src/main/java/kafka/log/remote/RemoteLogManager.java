@@ -393,6 +393,11 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         });
     }
 
+
+    RemoteLogMetadataManager remoteLogMetadataManager() {
+        return remoteLogMetadataManager;
+    }
+
     public void onEndPointCreated(Endpoint endpoint) {
         this.endpoint = Optional.of(endpoint);
     }
@@ -2053,8 +2058,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 followerRLMTasks.values().forEach(RLMTaskWithFuture::cancel);
                 Utils.closeQuietly(remoteLogStorageManagerPlugin, "remoteLogStorageManagerPlugin");
                 Utils.closeQuietly(remoteLogMetadataManagerPlugin, "remoteLogMetadataManagerPlugin");
-                Utils.closeQuietly(remoteLogStorageManager, "remoteLogStorageManager");
-                Utils.closeQuietly(remoteLogMetadataManager, "remoteLogMetadataManager");
+                Utils.closeQuietly(remoteLogStorageManager, "RemoteLogStorageManager");
+                Utils.closeQuietly(remoteLogMetadataManager, "RemoteLogMetadataManager");
                 Utils.closeQuietly(indexCache, "RemoteIndexCache");
 
                 rlmCopyThreadPool.close();
