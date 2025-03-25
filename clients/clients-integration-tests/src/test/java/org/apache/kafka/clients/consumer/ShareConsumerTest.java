@@ -2184,17 +2184,23 @@ public class ShareConsumerTest {
 
                 // Since isolation level is READ_COMMITTED, we can consume Message 3 (committed transaction that was released), Message 5 and Message 8.
                 // We cannot consume Message 4 (aborted transaction that was released), Message 6 and Message 7 since they were aborted.
-                records = shareConsumer.poll(Duration.ofMillis(5000));
-                assertEquals(3, records.count());
-                recordIterator = records.iterator();
-                record = recordIterator.next();
-                assertEquals("Message 3", new String(record.value()));
-                record = recordIterator.next();
-                assertEquals("Message 5", new String(record.value()));
-                record = recordIterator.next();
-                assertEquals("Message 8", new String(record.value()));
-                records.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.ACCEPT));
-                shareConsumer.commitSync();
+                List<String> messages = new ArrayList<>();
+                TestUtils.waitForCondition(() -> {
+                    ConsumerRecords<byte[], byte[]> pollRecords = shareConsumer.poll(Duration.ofMillis(5000));
+                    if (pollRecords.count() > 0) {
+                        for (ConsumerRecord<byte[], byte[]> pollRecord : pollRecords)
+                            messages.add(new String(pollRecord.value()));
+                        pollRecords.forEach(consumedRecord -> shareConsumer.acknowledge(consumedRecord, AcknowledgeType.ACCEPT));
+                        shareConsumer.commitSync();
+                    }
+                    return messages.size() == 3;
+                }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume all records post altering share isolation level");
+
+                assertEquals("Message 3", messages.get(0));
+                assertEquals("Message 5", messages.get(1));
+                assertEquals("Message 8", messages.get(2));
+            } catch (InterruptedException e) {
+                throw new RuntimeException(e);
             } finally {
                 transactionalProducer.close();
             }
