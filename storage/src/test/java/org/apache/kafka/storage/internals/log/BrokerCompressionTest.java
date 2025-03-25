@@ -38,10 +38,9 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.io.File;
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.List;
+import java.util.Arrays;
+import java.util.Map;
 import java.util.Optional;
-import java.util.Properties;
 import java.util.stream.Stream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -60,16 +59,14 @@ public class BrokerCompressionTest {
      * Test broker-side compression configuration
      */
     @ParameterizedTest
-    @MethodSource("parameters")
+    @MethodSource("allCompressionParameters")
     public void testBrokerSideCompression(CompressionType messageCompressionType, BrokerCompressionType brokerCompressionType) throws IOException {
         Compression messageCompression = Compression.of(messageCompressionType).build();
-        Properties logProps = new Properties();
-        logProps.put(TopicConfig.COMPRESSION_TYPE_CONFIG, brokerCompressionType.name);
 
         /* Configure broker-side compression */
         UnifiedLog log = UnifiedLog.create(
             logDir,
-            new LogConfig(logProps),
+            new LogConfig(Map.of(TopicConfig.COMPRESSION_TYPE_CONFIG, brokerCompressionType.name)),
             0L,
             0L,
             time.scheduler,
@@ -105,13 +102,9 @@ public class BrokerCompressionTest {
         return fetchInfo.records.batches().iterator().next();
     }
 
-    private static Stream<Arguments> parameters() {
-        List<Arguments> args = new ArrayList<>();
-        for (BrokerCompressionType brokerCompression : BrokerCompressionType.values()) {
-            for (CompressionType messageCompression : CompressionType.values()) {
-                args.add(Arguments.of(messageCompression, brokerCompression));
-            }
-        }
-        return args.stream();
+    private static Stream<Arguments> allCompressionParameters() {
+        return Arrays.stream(BrokerCompressionType.values())
+                .flatMap(brokerCompression -> Arrays.stream(CompressionType.values())
+                .map(messageCompression -> Arguments.of(messageCompression, brokerCompression)));
     }
 }
