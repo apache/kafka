@@ -167,9 +167,13 @@ public class LogCleanerManager {
                                         UnifiedLog log = logs.get(tp);
                                         if (log != null) {
                                             Optional<Long> lastCleanOffset = Optional.of(lastClean.get(tp));
-                                            OffsetsToClean offsetsToClean = cleanableOffsets(log, lastCleanOffset, now);
-                                            return calculateCleanableBytes(log, offsetsToClean.firstDirtyOffset(),
-                                                    offsetsToClean.firstUncleanableDirtyOffset()).getValue();
+                                            try {
+                                                OffsetsToClean offsetsToClean = cleanableOffsets(log, lastCleanOffset, now);
+                                                return calculateCleanableBytes(log, offsetsToClean.firstDirtyOffset(),
+                                                        offsetsToClean.firstUncleanableDirtyOffset()).getValue();
+                                            } catch (IOException e) {
+                                                throw new RuntimeException(e);
+                                            }
                                         } else {
                                             return 0L;
                                         }
@@ -683,8 +687,9 @@ public class LogCleanerManager {
      * @param lastCleanOffset the last checkpointed offset
      * @param now             the current time in milliseconds of the cleaning operation
      * @return OffsetsToClean containing offsets for cleanable portion of log and whether the log checkpoint needs updating
+     * @throws IOException    if an I/O error occurs
      */
-    public static OffsetsToClean cleanableOffsets(UnifiedLog log, Optional<Long> lastCleanOffset, long now) {
+    public static OffsetsToClean cleanableOffsets(UnifiedLog log, Optional<Long> lastCleanOffset, long now) throws IOException {
         // If the log segments are abnormally truncated and hence the checkpointed offset is no longer valid;
         // reset to the log starting offset and log the error
 
@@ -759,22 +764,22 @@ public class LogCleanerManager {
         return Map.entry(firstUncleanableOffset, cleanableBytes);
     }
 
-    private static Optional<Long> findFirstUncleanableSegment(UnifiedLog log, long firstDirtyOffset, long now, long minCompactionLagMs) {
+    private static Optional<Long> findFirstUncleanableSegment(UnifiedLog log, long firstDirtyOffset, long now, long minCompactionLagMs) throws IOException {
         List<LogSegment> dirtyNonActiveSegments = log.nonActiveLogSegmentsFrom(firstDirtyOffset);
-        return dirtyNonActiveSegments.stream()
-                .filter(segment -> {
-                    try {
-                        boolean isUncleanable = segment.largestTimestamp() > now - minCompactionLagMs;
-                        LOG.debug("Checking if log segment may be cleaned: log='{}' segment.baseOffset={} " +
-                                        "segment.largestTimestamp={}; now - compactionLag={}; is uncleanable={}",
-                                log.name(), segment.baseOffset(), segment.largestTimestamp(), now - minCompactionLagMs, isUncleanable);
-                        return isUncleanable;
-                    } catch (IOException e) {
-                        throw new LogCleaningException(log, e.getMessage(), e);
-                    }
-                })
-                .map(LogSegment::baseOffset)
-                .findFirst();
+
+        for (LogSegment segment : dirtyNonActiveSegments) {
+            boolean isUncleanable = segment.largestTimestamp() > now - minCompactionLagMs;
+
+            LOG.debug("Checking if log segment may be cleaned: log='{}' segment.baseOffset={} " +
+                            "segment.largestTimestamp={}; now - compactionLag={}; is uncleanable={}",
+                    log.name(), segment.baseOffset(), segment.largestTimestamp(), now - minCompactionLagMs, isUncleanable);
+
+            if (isUncleanable) {
+                return Optional.of(segment.baseOffset());
+            }
+        }
+
+        return Optional.empty();
     }
 
     /**
