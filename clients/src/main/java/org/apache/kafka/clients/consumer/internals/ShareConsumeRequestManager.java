@@ -373,7 +373,9 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                                       AtomicBoolean isAsyncSent) {
         boolean asyncSent = true;
         try {
-            if (acknowledgeRequestState == null || (!acknowledgeRequestState.isCloseRequest() && acknowledgeRequestState.isEmpty())) {
+            if (acknowledgeRequestState == null ||
+                    (!acknowledgeRequestState.isCloseRequest() && acknowledgeRequestState.isEmpty()) ||
+                    (acknowledgeRequestState.isCloseRequest() && acknowledgeRequestState.isProcessed)) {
                 return Optional.empty();
             }
 
@@ -1272,9 +1274,6 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             resultHandler.completeIfEmpty();
             isProcessed = true;
             maybeResetTimerAndRequestState();
-            if (requestType == AcknowledgeRequestType.CLOSE) {
-                acknowledgeRequestStates.get(nodeId).setCloseRequest(null);
-            }
         }
 
         /**
