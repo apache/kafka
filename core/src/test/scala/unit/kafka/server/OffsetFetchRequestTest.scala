@@ -23,64 +23,46 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Tag
 
 import scala.jdk.CollectionConverters._
 
-@ClusterTestDefaults(types = Array(Type.KRAFT))
+@ClusterTestDefaults(
+  types = Array(Type.KRAFT),
+  serverProperties = Array(
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
+  )
+)
+@Tag("integration")
 class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-    )
-  )
+  @ClusterTest
   def testSingleGroupOffsetFetchWithNewConsumerGroupProtocol(): Unit = {
     testSingleGroupOffsetFetch(useNewProtocol = true, requireStable = true)
   }
 
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-    )
-  )
+  @ClusterTest
   def testSingleGroupOffsetFetchWithOldConsumerGroupProtocol(): Unit = {
     testSingleGroupOffsetFetch(useNewProtocol = false, requireStable = false)
   }
 
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-    )
-  )
+  @ClusterTest
   def testSingleGroupAllOffsetFetchWithNewConsumerGroupProtocol(): Unit = {
     testSingleGroupAllOffsetFetch(useNewProtocol = true, requireStable = true)
   }
 
-  @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-  ))
+  @ClusterTest
   def testSingleGroupAllOffsetFetchWithOldConsumerGroupProtocol(): Unit = {
     testSingleGroupAllOffsetFetch(useNewProtocol = false, requireStable = false)
   }
 
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-    )
-  )
+  @ClusterTest
   def testMultiGroupsOffsetFetchWithNewConsumerGroupProtocol(): Unit = {
     testMultipleGroupsOffsetFetch(useNewProtocol = true, requireStable = true)
   }
 
-  @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
-  ))
+  @ClusterTest
   def testMultiGroupsOffsetFetchWithOldConsumerGroupProtocol(): Unit = {
     testMultipleGroupsOffsetFetch(useNewProtocol = false, requireStable = false)
   }

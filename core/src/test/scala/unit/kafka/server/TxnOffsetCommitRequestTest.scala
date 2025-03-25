@@ -27,16 +27,20 @@ import org.apache.kafka.common.utils.ProducerIdAndEpoch
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.junit.jupiter.api.Assertions.{assertThrows, assertTrue}
+import org.junit.jupiter.api.Tag
 
 import scala.jdk.CollectionConverters.IterableHasAsScala
 
-@ClusterTestDefaults(types = Array(Type.KRAFT), serverProperties = Array(
+@ClusterTestDefaults(
+  types = Array(Type.KRAFT),
+  serverProperties = Array(
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
     new ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, value = "1"),
     new ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
   )
 )
+@Tag("integration")
 class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
   @ClusterTest
