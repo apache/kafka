@@ -1167,12 +1167,12 @@ class AbstractFetcherThreadTest {
     val initFetchState = initialFetchState(topicIds.get(partition.topic), 0L, leaderEpoch = newEpoch)
     fetcher.addPartitions(Map(partition -> initFetchState))
 
-    val batch = mkBatch(baseOffset = 0L, leaderEpoch = 0, new SimpleRecord("a".getBytes))
+    val batch = mkBatch(baseOffset = 0L, leaderEpoch = initEpoch, new SimpleRecord("a".getBytes))
     val leaderState = PartitionState(Seq(batch), leaderEpoch = initEpoch, highWatermark = 1L)
     fetcher.mockLeader.setLeaderState(partition, leaderState)
 
-    val partitionData = Map(partition -> new FetchRequest.PartitionData(Uuid.randomUuid(), 0, 0, 1048576, Optional.of(initEpoch), Optional.of(0))).asJava
-    val fetchRequestOpt = FetchRequest.Builder.forReplica(0, 0, 0L, 0, Int.MaxValue, partitionData)
+    val partitionData = Map(partition -> new FetchRequest.PartitionData(Uuid.randomUuid(), 0, 0, 1048576, Optional.of(initEpoch), Optional.of(initEpoch))).asJava
+    val fetchRequestOpt = FetchRequest.Builder.forReplica(0, 0, initEpoch, 0, Int.MaxValue, partitionData)
 
     fetcher.processFetchRequest(partitionData, fetchRequestOpt)
     assertEquals(0, replicaState.logEndOffset, "FetchResponse should be ignored when leader epoch does not match")
