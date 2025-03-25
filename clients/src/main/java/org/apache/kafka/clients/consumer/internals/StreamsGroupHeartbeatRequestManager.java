@@ -22,6 +22,9 @@ import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler
 import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.HeartbeatMetricsManager;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
+import org.apache.kafka.common.errors.RetriableException;
+import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.Metrics;
@@ -58,6 +61,11 @@ import java.util.stream.IntStream;
  * leaving the group).
  */
 public class StreamsGroupHeartbeatRequestManager implements RequestManager {
+
+    private static final String UNSUPPORTED_VERSION_ERROR_MESSAGE = "The cluster does not support the STREAMS group " +
+        "protocol or does not support the versions of the STREAMS group protocol used by this client " +
+        "(used versions: " + StreamsGroupHeartbeatRequestData.LOWEST_SUPPORTED_VERSION + " to " +
+        StreamsGroupHeartbeatRequestData.HIGHEST_SUPPORTED_VERSION + ").";
 
     static class HeartbeatState {
 
@@ -409,6 +417,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             if (response != null) {
                 metricsManager.recordRequestLatency(response.requestLatencyMs());
                 onResponse((StreamsGroupHeartbeatResponse) response.responseBody(), completionTimeMs);
+            } else {
+                onFailure(exception, completionTimeMs);
             }
         });
     }
@@ -428,6 +438,8 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     private void onResponse(final StreamsGroupHeartbeatResponse response, long currentTimeMs) {
         if (Errors.forCode(response.data().errorCode()) == Errors.NONE) {
             onSuccessResponse(response, currentTimeMs);
+        } else {
+            onErrorResponse(response, currentTimeMs);
         }
     }
 
@@ -449,6 +461,146 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         }
 
         membershipManager.onHeartbeatSuccess(response);
+    }
+
+    private void onErrorResponse(final StreamsGroupHeartbeatResponse response, final long currentTimeMs) {
+        final Errors error = Errors.forCode(response.data().errorCode());
+        final String errorMessage = response.data().errorMessage();
+
+        heartbeatState.reset();
+        this.heartbeatRequestState.onFailedAttempt(currentTimeMs);
+
+        switch (error) {
+            case NOT_COORDINATOR:
+                logInfo(
+                    String.format("StreamsGroupHeartbeatRequest failed because the group coordinator %s is incorrect. " +
+                        "Will attempt to find the coordinator again and retry", coordinatorRequestManager.coordinator()),
+                    response,
+                    currentTimeMs
+                );
+                coordinatorRequestManager.markCoordinatorUnknown(errorMessage, currentTimeMs);
+                // Skip backoff so that the next HB is sent as soon as the new coordinator is discovered
+                heartbeatRequestState.reset();
+                break;
+
+            case COORDINATOR_NOT_AVAILABLE:
+                logInfo(
+                    String.format("StreamsGroupHeartbeatRequest failed because the group coordinator %s is not available. " +
+                        "Will attempt to find the coordinator again and retry", coordinatorRequestManager.coordinator()),
+                    response,
+                    currentTimeMs
+                );
+                coordinatorRequestManager.markCoordinatorUnknown(errorMessage, currentTimeMs);
+                // Skip backoff so that the next HB is sent as soon as the new coordinator is discovered
+                heartbeatRequestState.reset();
+                break;
+
+            case COORDINATOR_LOAD_IN_PROGRESS:
+                logInfo(
+                    String.format("StreamsGroupHeartbeatRequest failed because the group coordinator %s is still loading. " +
+                    "Will retry", coordinatorRequestManager.coordinator()),
+                    response,
+                    currentTimeMs
+                );
+                break;
+
+            case GROUP_AUTHORIZATION_FAILED:
+                GroupAuthorizationException exception =
+                    GroupAuthorizationException.forGroupId(membershipManager.groupId());
+                logger.error("StreamsGroupHeartbeatRequest failed due to group authorization failure: {}",
+                    exception.getMessage());
+                handleFatalFailure(error.exception(exception.getMessage()));
+                break;
+
+            case TOPIC_AUTHORIZATION_FAILED:
+                logger.error("StreamsGroupHeartbeatRequest failed for member {} with state {} due to {}: {}",
+                    membershipManager.memberId(), membershipManager.state(), error, errorMessage);
+                // Propagate auth error received in HB so that it's returned on poll.
+                // Member should stay in its current state so it can recover if ever the missing ACLs are added.
+                backgroundEventHandler.add(new ErrorEvent(error.exception()));
+                break;
+
+            case INVALID_REQUEST:
+            case GROUP_MAX_SIZE_REACHED:
+            case STREAMS_INVALID_TOPOLOGY:
+            case STREAMS_INVALID_TOPOLOGY_EPOCH:
+            case STREAMS_TOPOLOGY_FENCED:
+                logger.error("StreamsGroupHeartbeatRequest failed due to {}: {}", error, errorMessage);
+                handleFatalFailure(error.exception(errorMessage));
+                break;
+
+            case FENCED_MEMBER_EPOCH:
+                logInfo(
+                    String.format("StreamsGroupHeartbeatRequest failed for member %s because epoch %s is fenced.",
+                        membershipManager.memberId(), membershipManager.memberEpoch()),
+                    response,
+                    currentTimeMs
+                );
+                membershipManager.onFenced();
+                // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases its assignment
+                heartbeatRequestState.reset();
+                break;
+
+            case UNKNOWN_MEMBER_ID:
+                logInfo(
+                    String.format("StreamsGroupHeartbeatRequest failed because member %s is unknown.",
+                        membershipManager.memberId()),
+                    response,
+                    currentTimeMs
+                );
+                membershipManager.onFenced();
+                // Skip backoff so that a next HB to rejoin is sent as soon as the fenced member releases its assignment
+                heartbeatRequestState.reset();
+                break;
+
+            case UNSUPPORTED_VERSION:
+                logger.error("StreamsGroupHeartbeatRequest failed due to {}: {}", error, UNSUPPORTED_VERSION_ERROR_MESSAGE);
+                handleFatalFailure(error.exception(UNSUPPORTED_VERSION_ERROR_MESSAGE));
+                break;
+
+            default:
+                logger.error("StreamsGroupHeartbeatRequest failed due to unexpected error {}: {}", error, errorMessage);
+                handleFatalFailure(error.exception(errorMessage));
+        }
+        membershipManager.onFatalHeartbeatFailure();
+    }
+
+    private void logInfo(final String message,
+                         final StreamsGroupHeartbeatResponse response,
+                         final long currentTimeMs) {
+        logger.info("{} in {}ms: {}",
+            message,
+            heartbeatRequestState.remainingBackoffMs(currentTimeMs),
+            response.data().errorMessage());
+    }
+
+    private void onFailure(final Throwable exception, final long responseTimeMs) {
+        heartbeatRequestState.onFailedAttempt(responseTimeMs);
+        heartbeatState.reset();
+        if (exception instanceof RetriableException) {
+            coordinatorRequestManager.handleCoordinatorDisconnect(exception, responseTimeMs);
+            String message = String.format("StreamsGroupHeartbeatRequest failed because of a retriable exception. Will retry in %s ms: %s",
+                heartbeatRequestState.remainingBackoffMs(responseTimeMs),
+                exception.getMessage());
+            logger.debug(message);
+            membershipManager.onRetriableHeartbeatFailure();
+        } else {
+            if (exception instanceof UnsupportedVersionException) {
+                logger.error("StreamsGroupHeartbeatRequest failed because of an unsupported version exception: {}",
+                    exception.getMessage());
+                handleFatalFailure(new UnsupportedVersionException(UNSUPPORTED_VERSION_ERROR_MESSAGE));
+            } else {
+                logger.error("StreamsGroupHeartbeatRequest failed because of a fatal exception while sending request: {}",
+                    exception.getMessage());
+                handleFatalFailure(exception);
+            }
+            membershipManager.onFatalHeartbeatFailure();
+        }
+    }
+
+    private void handleFatalFailure(Throwable error) {
+        backgroundEventHandler.add(new ErrorEvent(error));
+        membershipManager.transitionToFatal();
     }
 
     private static Map<StreamsRebalanceData.HostInfo, List<TopicPartition>> convertHostInfoMap(final StreamsGroupHeartbeatResponseData data) {
