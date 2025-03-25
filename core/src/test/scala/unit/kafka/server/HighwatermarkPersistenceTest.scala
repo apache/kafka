@@ -24,12 +24,15 @@ import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions._
 import kafka.utils.TestUtils
 import kafka.cluster.Partition
+import kafka.server.metadata.KRaftMetadataCache
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.metadata.MockConfigRepository
 import org.apache.kafka.server.common.KRaftVersion
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogDirFailureChannel}
+
+import java.util.Optional
 
 class HighwatermarkPersistenceTest {
 
@@ -70,7 +73,7 @@ class HighwatermarkPersistenceTest {
       scheduler = scheduler,
       logManager = logManagers.head,
       quotaManagers = quotaManager,
-      metadataCache = MetadataCache.kRaftMetadataCache(configs.head.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
+      metadataCache = new KRaftMetadataCache(configs.head.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
       logDirFailureChannel = logDirFailureChannels.head,
       alterPartitionManager = alterIsrManager)
     replicaManager.startup()
@@ -81,7 +84,7 @@ class HighwatermarkPersistenceTest {
       val tp0 = new TopicPartition(topic, 0)
       val partition0 = replicaManager.createPartition(tp0)
       // create leader and follower replicas
-      val log0 = logManagers.head.getOrCreateLog(new TopicPartition(topic, 0), topicId = None)
+      val log0 = logManagers.head.getOrCreateLog(new TopicPartition(topic, 0), topicId = Optional.empty)
       partition0.setLog(log0, isFutureLog = false)
 
       partition0.updateAssignmentAndIsr(
@@ -128,7 +131,7 @@ class HighwatermarkPersistenceTest {
       scheduler = scheduler,
       logManager = logManagers.head,
       quotaManagers = quotaManager,
-      metadataCache = MetadataCache.kRaftMetadataCache(configs.head.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
+      metadataCache = new KRaftMetadataCache(configs.head.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
       logDirFailureChannel = logDirFailureChannels.head,
       alterPartitionManager = alterIsrManager)
     replicaManager.startup()
@@ -139,7 +142,7 @@ class HighwatermarkPersistenceTest {
       val t1p0 = new TopicPartition(topic1, 0)
       val topic1Partition0 = replicaManager.createPartition(t1p0)
       // create leader log
-      val topic1Log0 = logManagers.head.getOrCreateLog(t1p0, topicId = None)
+      val topic1Log0 = logManagers.head.getOrCreateLog(t1p0, topicId = Optional.empty)
       // create a local replica for topic1
       topic1Partition0.setLog(topic1Log0, isFutureLog = false)
       replicaManager.checkpointHighWatermarks()
@@ -156,7 +159,7 @@ class HighwatermarkPersistenceTest {
       val t2p0 = new TopicPartition(topic2, 0)
       val topic2Partition0 = replicaManager.createPartition(t2p0)
       // create leader log
-      val topic2Log0 = logManagers.head.getOrCreateLog(t2p0, topicId = None)
+      val topic2Log0 = logManagers.head.getOrCreateLog(t2p0, topicId = Optional.empty)
       // create a local replica for topic2
       topic2Partition0.setLog(topic2Log0, isFutureLog = false)
       replicaManager.checkpointHighWatermarks()
@@ -188,7 +191,7 @@ class HighwatermarkPersistenceTest {
 
   private def append(partition: Partition, count: Int): Unit = {
     val records = TestUtils.records((0 to count).map(i => new SimpleRecord(s"$i".getBytes)))
-    partition.localLogOrException.appendAsLeader(records, leaderEpoch = 0)
+    partition.localLogOrException.appendAsLeader(records, 0)
   }
 
   private def hwmFor(replicaManager: ReplicaManager, topic: String, partition: Int): Long = {

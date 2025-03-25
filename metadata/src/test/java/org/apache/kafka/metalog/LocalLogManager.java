@@ -48,7 +48,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
@@ -65,7 +64,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
@@ -573,7 +571,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
 
                             listenerData.handleCommit(
                                 MemoryBatchReader.of(
-                                    Collections.singletonList(
+                                    List.of(
                                         Batch.data(
                                             entryOffset - batch.records.size() + 1,
                                             batch.leaderEpoch,
@@ -810,7 +808,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     public List<RaftClient.Listener<ApiMessageAndVersion>> listeners() {
         final CompletableFuture<List<RaftClient.Listener<ApiMessageAndVersion>>> future = new CompletableFuture<>();
         eventQueue.append(() ->
-            future.complete(listeners.values().stream().map(l -> l.listener).collect(Collectors.toList()))
+            future.complete(listeners.values().stream().map(l -> l.listener).toList())
         );
         try {
             return future.get();

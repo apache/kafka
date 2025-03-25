@@ -22,7 +22,7 @@ import kafka.raft.KafkaRaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 
 import scala.collection.immutable
-import kafka.server.metadata.{AclPublisher, ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, DynamicTopicClusterQuotaPublisher, KRaftMetadataCache, KRaftMetadataCachePublisher, ScramPublisher}
+import kafka.server.metadata.{ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, DynamicTopicClusterQuotaPublisher, KRaftMetadataCache, KRaftMetadataCachePublisher, ScramPublisher}
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.network.ListenerName
@@ -37,7 +37,7 @@ import org.apache.kafka.image.publisher.{ControllerRegistrationsPublisher, Metad
 import org.apache.kafka.metadata.{KafkaConfigSchema, ListenerInfo}
 import org.apache.kafka.metadata.authorizer.ClusterMetadataAuthorizer
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
-import org.apache.kafka.metadata.publisher.FeaturesPublisher
+import org.apache.kafka.metadata.publisher.{AclPublisher, FeaturesPublisher}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.authorizer.Authorizer
@@ -140,7 +140,7 @@ class ControllerServer(
       authorizer = config.createNewAuthorizer()
       authorizer.foreach(_.configure(config.originals))
 
-      metadataCache = MetadataCache.kRaftMetadataCache(config.nodeId, () => raftManager.client.kraftVersion())
+      metadataCache = new KRaftMetadataCache(config.nodeId, () => raftManager.client.kraftVersion())
 
       metadataCachePublisher = new KRaftMetadataCachePublisher(metadataCache)
 
@@ -315,7 +315,7 @@ class ControllerServer(
       metadataPublishers.add(new DynamicConfigPublisher(
         config,
         sharedServer.metadataPublishingFaultHandler,
-        immutable.Map[String, ConfigHandler](
+        immutable.Map[ConfigType, ConfigHandler](
           // controllers don't host topics, so no need to do anything with dynamic topic config changes here
           ConfigType.BROKER -> new BrokerConfigHandler(config, quotaManagers)
         ),
@@ -375,7 +375,7 @@ class ControllerServer(
         config.nodeId,
         sharedServer.metadataPublishingFaultHandler,
         "controller",
-        authorizer
+        authorizer.toJava
       ))
 
       // Install all metadata publishers.

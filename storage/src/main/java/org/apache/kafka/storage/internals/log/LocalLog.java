@@ -807,7 +807,7 @@ public class LocalLog {
     public static <T> T maybeHandleIOException(LogDirFailureChannel logDirFailureChannel,
                                                String logDir,
                                                Supplier<String> errorMsgSupplier,
-                                               StorageAction<T, IOException> function) {
+                                               StorageAction<T, IOException> function) throws KafkaStorageException {
         if (logDirFailureChannel.hasOfflineLogDir(logDir)) {
             throw new KafkaStorageException("The log dir " + logDir + " is already offline due to a previous IO exception.");
         }

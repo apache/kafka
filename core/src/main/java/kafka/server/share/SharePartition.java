@@ -187,6 +187,10 @@ public class SharePartition {
                     throw new IllegalArgumentException("Unknown record state id: " + id);
             }
         }
+
+        public byte id() {
+            return this.id;
+        }
     }
 
     /**

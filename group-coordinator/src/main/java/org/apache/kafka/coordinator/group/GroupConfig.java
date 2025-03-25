@@ -59,6 +59,12 @@ public final class GroupConfig extends AbstractConfig {
         "Negative duration is not allowed.</li>" +
         "<li>anything else: throw exception to the share consumer.</li></ul>";
 
+    public static final String STREAMS_SESSION_TIMEOUT_MS_CONFIG = "group.streams.session.timeout.ms";
+
+    public static final String STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG = "group.streams.heartbeat.interval.ms";
+
+    public static final String STREAMS_NUM_STANDBY_REPLICAS_CONFIG = "group.streams.num.standby.replicas";
+
     public final int consumerSessionTimeoutMs;
 
     public final int consumerHeartbeatIntervalMs;
@@ -70,6 +76,12 @@ public final class GroupConfig extends AbstractConfig {
     public final int shareRecordLockDurationMs;
 
     public final String shareAutoOffsetReset;
+
+    public final int streamsSessionTimeoutMs;
+
+    public final int streamsHeartbeatIntervalMs;
+
+    public final int streamsNumStandbyReplicas;
 
     private static final ConfigDef CONFIG = new ConfigDef()
         .define(CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
@@ -107,7 +119,25 @@ public final class GroupConfig extends AbstractConfig {
             SHARE_AUTO_OFFSET_RESET_DEFAULT,
             new ShareGroupAutoOffsetResetStrategy.Validator(),
             MEDIUM,
-            SHARE_AUTO_OFFSET_RESET_DOC);
+            SHARE_AUTO_OFFSET_RESET_DOC)
+        .define(STREAMS_SESSION_TIMEOUT_MS_CONFIG,
+            INT,
+            GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT,
+            atLeast(1),
+            MEDIUM,
+            GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DOC)
+        .define(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG,
+            INT,
+            GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT,
+            atLeast(1),
+            MEDIUM,
+            GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_DOC)
+        .define(STREAMS_NUM_STANDBY_REPLICAS_CONFIG,
+            INT,
+            GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT,
+            atLeast(0),
+            MEDIUM,
+            GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DOC);
 
     public GroupConfig(Map<?, ?> props) {
         super(CONFIG, props, false);
@@ -117,6 +147,9 @@ public final class GroupConfig extends AbstractConfig {
         this.shareHeartbeatIntervalMs = getInt(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.shareRecordLockDurationMs = getInt(SHARE_RECORD_LOCK_DURATION_MS_CONFIG);
         this.shareAutoOffsetReset = getString(SHARE_AUTO_OFFSET_RESET_CONFIG);
+        this.streamsSessionTimeoutMs = getInt(STREAMS_SESSION_TIMEOUT_MS_CONFIG);
+        this.streamsHeartbeatIntervalMs = getInt(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG);
+        this.streamsNumStandbyReplicas = getInt(STREAMS_NUM_STANDBY_REPLICAS_CONFIG);
     }
 
     public static ConfigDef configDef() {
@@ -146,13 +179,16 @@ public final class GroupConfig extends AbstractConfig {
     /**
      * Validates the values of the given properties.
      */
-    @SuppressWarnings("NPathComplexity")
+    @SuppressWarnings({"CyclomaticComplexity", "NPathComplexity"})
     private static void validateValues(Map<?, ?> valueMaps, GroupCoordinatorConfig groupCoordinatorConfig, ShareGroupConfig shareGroupConfig) {
         int consumerHeartbeatInterval = (Integer) valueMaps.get(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
         int consumerSessionTimeout = (Integer) valueMaps.get(CONSUMER_SESSION_TIMEOUT_MS_CONFIG);
         int shareHeartbeatInterval = (Integer) valueMaps.get(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG);
         int shareSessionTimeout = (Integer) valueMaps.get(SHARE_SESSION_TIMEOUT_MS_CONFIG);
         int shareRecordLockDurationMs = (Integer) valueMaps.get(SHARE_RECORD_LOCK_DURATION_MS_CONFIG);
+        int streamsSessionTimeoutMs = (Integer) valueMaps.get(STREAMS_SESSION_TIMEOUT_MS_CONFIG);
+        int streamsHeartbeatIntervalMs = (Integer) valueMaps.get(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG);
+        int streamsNumStandbyReplicas = (Integer) valueMaps.get(STREAMS_NUM_STANDBY_REPLICAS_CONFIG);
         if (consumerHeartbeatInterval < groupCoordinatorConfig.consumerGroupMinHeartbeatIntervalMs()) {
             throw new InvalidConfigurationException(CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG + " must be greater than or equal to " +
                 GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
@@ -193,6 +229,26 @@ public final class GroupConfig extends AbstractConfig {
             throw new InvalidConfigurationException(SHARE_RECORD_LOCK_DURATION_MS_CONFIG + " must be less than or equal to " +
                 ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG);
         }
+        if (streamsHeartbeatIntervalMs < groupCoordinatorConfig.streamsGroupMinHeartbeatIntervalMs()) {
+            throw new InvalidConfigurationException(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG + " must be greater than or equal to " +
+                GroupCoordinatorConfig.STREAMS_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG);
+        }
+        if (streamsHeartbeatIntervalMs > groupCoordinatorConfig.streamsGroupMaxHeartbeatIntervalMs()) {
+            throw new InvalidConfigurationException(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG + " must be less than or equal to " +
+                GroupCoordinatorConfig.STREAMS_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG);
+        }
+        if (streamsSessionTimeoutMs < groupCoordinatorConfig.streamsGroupMinSessionTimeoutMs()) {
+            throw new InvalidConfigurationException(STREAMS_SESSION_TIMEOUT_MS_CONFIG + " must be greater than or equal to " +
+                GroupCoordinatorConfig.STREAMS_GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG);
+        }
+        if (streamsSessionTimeoutMs > groupCoordinatorConfig.streamsGroupMaxSessionTimeoutMs()) {
+            throw new InvalidConfigurationException(STREAMS_SESSION_TIMEOUT_MS_CONFIG + " must be less than or equal to " +
+                GroupCoordinatorConfig.STREAMS_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG);
+        }
+        if (streamsNumStandbyReplicas > groupCoordinatorConfig.streamsGroupMaxNumStandbyReplicas()) {
+            throw new InvalidConfigurationException(STREAMS_NUM_STANDBY_REPLICAS_CONFIG + " must be less than or equal to " +
+                GroupCoordinatorConfig.STREAMS_GROUP_MAX_STANDBY_REPLICAS_CONFIG);
+        }
         if (consumerSessionTimeout <= consumerHeartbeatInterval) {
             throw new InvalidConfigurationException(CONSUMER_SESSION_TIMEOUT_MS_CONFIG + " must be greater than " +
                 CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG);
@@ -200,6 +256,10 @@ public final class GroupConfig extends AbstractConfig {
         if (shareSessionTimeout <= shareHeartbeatInterval) {
             throw new InvalidConfigurationException(SHARE_SESSION_TIMEOUT_MS_CONFIG + " must be greater than " +
                 SHARE_HEARTBEAT_INTERVAL_MS_CONFIG);
+        }
+        if (streamsSessionTimeoutMs <= streamsHeartbeatIntervalMs) {
+            throw new InvalidConfigurationException(STREAMS_SESSION_TIMEOUT_MS_CONFIG + " must be greater than " +
+                STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG);
         }
     }
 
@@ -270,5 +330,26 @@ public final class GroupConfig extends AbstractConfig {
      */
     public ShareGroupAutoOffsetResetStrategy shareAutoOffsetReset() {
         return ShareGroupAutoOffsetResetStrategy.fromString(shareAutoOffsetReset);
+    }
+
+    /**
+     * The streams group session timeout in milliseconds.
+     */
+    public int streamsSessionTimeoutMs() {
+        return streamsSessionTimeoutMs;
+    }
+
+    /**
+     * The streams group heartbeat interval in milliseconds.
+     */
+    public int streamsHeartbeatIntervalMs() {
+        return streamsHeartbeatIntervalMs;
+    }
+
+    /**
+     * The number of streams standby replicas for each task.
+     */
+    public int streamsNumStandbyReplicas() {
+        return streamsNumStandbyReplicas;
     }
 }

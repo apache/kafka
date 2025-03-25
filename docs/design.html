@@ -140,7 +140,7 @@
     example, it validates that the number of records in the batch is same as what batch header states. This batch of messages is then written to disk in compressed form. The batch will remain compressed in the log and it will also be transmitted to the 
     consumer in compressed form. The consumer decompresses any compressed data that it receives.
     <p>
-    Kafka supports GZIP, Snappy, LZ4 and ZStandard compression protocols. More details on compression can be found <a href="https://cwiki.apache.org/confluence/display/KAFKA/Compression">here</a>.
+    Kafka supports GZIP, Snappy, LZ4 and ZStandard compression protocols. More details on compression can be found <a href="https://cwiki.apache.org/confluence/x/S5qoAQ">here</a>.
 
     <h3 class="anchor-heading"><a id="theproducer" class="anchor-link"></a><a href="#theproducer">4.4 The Producer</a></h3>
 
@@ -240,7 +240,7 @@
     the broker version and then throws an UnsupportedException. If you accidentally configure duplicate ids for different instances,
     a fencing mechanism on broker side will inform your duplicate client to shutdown immediately by triggering a <code>org.apache.kafka.common.errors.FencedInstanceIdException</code>.
     For more details, see
-    <a href="https://cwiki.apache.org/confluence/display/KAFKA/KIP-345%3A+Introduce+static+membership+protocol+to+reduce+consumer+rebalances">KIP-345</a>
+    <a href="https://cwiki.apache.org/confluence/x/kRg0BQ">KIP-345</a>
 
     <h3 class="anchor-heading"><a id="semantics" class="anchor-link"></a><a href="#semantics">4.6 Message Delivery Semantics</a></h3>
     <p>
