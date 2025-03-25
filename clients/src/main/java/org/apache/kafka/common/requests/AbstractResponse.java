@@ -52,7 +52,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
 
     // Visible for testing
     final ByteBuffer serialize(short version) {
-        return MessageUtil.toByteBuffer(data(), version);
+        return MessageUtil.toByteBufferAccessor(data(), version).buffer();
     }
 
     /**
