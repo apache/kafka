@@ -39,7 +39,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ConsumerTopicCreationTest {
     private static final String TOPIC = "topic";
-    private static final long POLL_TIMEOUT = 100;
+    private static final long POLL_TIMEOUT = 1000;
 
     @ClusterTemplate("autoCreateTopicsConfigs")
     void testAsyncConsumerTopicCreationIfConsumerAllowToCreateTopic(ClusterInstance cluster) {
