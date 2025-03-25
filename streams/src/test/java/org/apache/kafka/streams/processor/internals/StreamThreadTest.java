@@ -659,7 +659,7 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldProcessWhenPartitionAssigned( final boolean processingThreadsEnabled) {
+    public void shouldProcessWhenPartitionAssigned(final boolean processingThreadsEnabled) {
         assumeFalse(processingThreadsEnabled);
         final Properties props = configProps(false, processingThreadsEnabled);
 
@@ -1396,7 +1396,7 @@ public class StreamThreadTest {
 
         final TaskMigratedException taskMigratedException = new TaskMigratedException(
             "Changelog restore found task migrated", new RuntimeException("restore task migrated"));
-        ChangelogReader changelogReader = this.changelogReader;
+        final ChangelogReader changelogReader = this.changelogReader;
 
         when(taskManager.checkStateUpdater(anyLong(), any())).thenAnswer(answer -> {
             consumer.addRecord(new ConsumerRecord<>(topic1, 1, 11, new byte[0], new byte[0]));
