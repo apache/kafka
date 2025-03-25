@@ -80,20 +80,14 @@ public final class ControlRecord {
     }
 
     public short version() {
-        switch (recordType) {
-            case LEADER_CHANGE:
-                return ((LeaderChangeMessage) message).version();
-            case SNAPSHOT_HEADER:
-                return ((SnapshotHeaderRecord) message).version();
-            case SNAPSHOT_FOOTER:
-                return ((SnapshotFooterRecord) message).version();
-            case KRAFT_VERSION:
-                return ((KRaftVersionRecord) message).version();
-            case KRAFT_VOTERS:
-                return ((VotersRecord) message).version();
-            default:
-                throw new IllegalStateException(String.format("Unknown control record type %s", recordType));
-        }
+        return switch (recordType) {
+            case LEADER_CHANGE -> ((LeaderChangeMessage) message).version();
+            case SNAPSHOT_HEADER -> ((SnapshotHeaderRecord) message).version();
+            case SNAPSHOT_FOOTER -> ((SnapshotFooterRecord) message).version();
+            case KRAFT_VERSION -> ((KRaftVersionRecord) message).version();
+            case KRAFT_VOTERS -> ((VotersRecord) message).version();
+            default -> throw new IllegalStateException(String.format("Unknown control record type %s", recordType));
+        };
     }
 
     public ApiMessage message() {

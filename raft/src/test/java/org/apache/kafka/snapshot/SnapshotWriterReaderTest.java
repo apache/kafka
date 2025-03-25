@@ -32,7 +32,6 @@ import org.apache.kafka.raft.internals.StringSerde;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
@@ -49,7 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public final class SnapshotWriterReaderTest {
     private final int localId = 0;
-    private final Set<Integer> voters = Collections.singleton(localId);
+    private final Set<Integer> voters = Set.of(localId);
 
     @Test
     public void testSnapshotDelimiters() throws Exception {

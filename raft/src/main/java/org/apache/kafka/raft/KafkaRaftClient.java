@@ -98,7 +98,6 @@ import org.slf4j.Logger;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HexFormat;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
@@ -654,7 +653,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         log.initializeLeaderEpoch(quorum.epoch());
 
         // The high watermark can only be advanced once we have written a record
-        // from the new leader's epoch. Hence we write a control message immediately
+        // from the new leader's epoch. Hence, we write a control message immediately
         // to ensure there is no delay committing pending data.
         state.appendStartOfEpochControlRecords(quorum.localVoterNodeOrThrow(), currentTimeMs);
 
@@ -1900,7 +1899,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
      * - {@link Errors#INVALID_REQUEST} if the request epoch is larger than the leader's current epoch
      *     or if either the fetch offset or the last fetched epoch is invalid
-     * - {@link Errors#SNAPSHOT_NOT_FOUND} if the request snapshot id does not exists
+     * - {@link Errors#SNAPSHOT_NOT_FOUND} if the request snapshot id does not exist
      * - {@link Errors#POSITION_OUT_OF_RANGE} if the request snapshot offset out of range
      */
     private FetchSnapshotResponseData handleFetchSnapshotRequest(
@@ -2418,7 +2417,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         final Endpoints leaderEndpoints;
         if (responseLeaderId.isPresent() && data.currentLeader().host().isEmpty()) {
             leaderEndpoints = Endpoints.fromInetSocketAddresses(
-                Collections.singletonMap(
+                Map.of(
                     channel.listenerName(),
                     InetSocketAddress.createUnresolved(
                         data.currentLeader().host(),
@@ -3835,7 +3834,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             List<T> records
         ) {
             Batch<T> batch = Batch.data(baseOffset, epoch, appendTimestamp, sizeInBytes, records);
-            MemoryBatchReader<T> reader = MemoryBatchReader.of(Collections.singletonList(batch), this);
+            MemoryBatchReader<T> reader = MemoryBatchReader.of(List.of(batch), this);
             fireHandleCommit(reader);
         }
 

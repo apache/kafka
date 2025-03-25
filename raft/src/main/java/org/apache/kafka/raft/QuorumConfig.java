@@ -24,7 +24,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 
 import java.net.InetSocketAddress;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -59,14 +58,14 @@ public class QuorumConfig {
     public static final String QUORUM_VOTERS_DOC = "Map of id/endpoint information for " +
         "the set of voters in a comma-separated list of <code>{id}@{host}:{port}</code> entries. " +
         "For example: <code>1@localhost:9092,2@localhost:9093,3@localhost:9094</code>";
-    public static final List<String> DEFAULT_QUORUM_VOTERS = Collections.emptyList();
+    public static final List<String> DEFAULT_QUORUM_VOTERS = List.of();
 
     public static final String QUORUM_BOOTSTRAP_SERVERS_CONFIG = QUORUM_PREFIX + "bootstrap.servers";
     public static final String QUORUM_BOOTSTRAP_SERVERS_DOC = "List of endpoints to use for " +
         "bootstrapping the cluster metadata. The endpoints are specified in comma-separated list " +
         "of <code>{host}:{port}</code> entries. For example: " +
         "<code>localhost:9092,localhost:9093,localhost:9094</code>.";
-    public static final List<String> DEFAULT_QUORUM_BOOTSTRAP_SERVERS = Collections.emptyList();
+    public static final List<String> DEFAULT_QUORUM_BOOTSTRAP_SERVERS = List.of();
 
     public static final String QUORUM_ELECTION_TIMEOUT_MS_CONFIG = QUORUM_PREFIX + "election.timeout.ms";
     public static final String QUORUM_ELECTION_TIMEOUT_MS_DOC = "Maximum time in milliseconds to wait " +

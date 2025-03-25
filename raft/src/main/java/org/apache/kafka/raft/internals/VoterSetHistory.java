@@ -142,7 +142,7 @@ public final class VoterSetHistory {
     }
 
     /**
-     * Removes all of the values from this object.
+     * Removes all the values from this object.
      */
     public void clear() {
         votersHistory.clear();
