@@ -28,6 +28,8 @@ import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.Monitorable;
+import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.RecordBatch;
@@ -154,6 +156,7 @@ import static org.apache.kafka.test.TestUtils.tempFile;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -3741,6 +3744,33 @@ public class RemoteLogManagerTest {
         verifyNoMoreInteractions(remoteStorageManager);
     }
 
+    @Test
+    public void testMonitorableRemoteLogStorageManager() throws IOException {
+        Properties props = new Properties();
+        props.putAll(brokerConfig);
+        appendRLMConfig(props);
+        props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, MonitorableNoOpRemoteStorageManager.class.getName());
+        props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, MonitorableNoOpRemoteLogMetadataManager.class.getName());
+        KafkaConfig config = KafkaConfig.fromProps(props);
+        try (RemoteLogManager remoteLogManager = new RemoteLogManager(
+                config.remoteLogManagerConfig(),
+                brokerId,
+                logDir,
+                clusterId,
+                time,
+                tp -> Optional.of(mockLog),
+                (topicPartition, offset) -> { },
+                brokerTopicStats,
+                metrics)) {
+            // We need to call startup for call config and wrap instance
+            remoteLogManager.startup();
+            assertInstanceOf(MonitorableNoOpRemoteStorageManager.class, remoteLogManager.storageManager());
+            assertInstanceOf(MonitorableNoOpRemoteLogMetadataManager.class, remoteLogManager.remoteLogMetadataManager());
+            assertEquals(true, ((MonitorableNoOpRemoteStorageManager) remoteLogManager.storageManager()).pluginMetrics);
+            assertEquals(true, ((MonitorableNoOpRemoteLogMetadataManager) remoteLogManager.remoteLogMetadataManager()).pluginMetrics);
+        }
+    }
+
     private void appendRecordsToFile(File file, int nRecords, int nRecordsPerBatch) throws IOException {
         byte magic = RecordBatch.CURRENT_MAGIC_VALUE;
         Compression compression = Compression.NONE;
@@ -3785,4 +3815,22 @@ public class RemoteLogManagerTest {
         props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + remoteLogMetadataProducerTestProp, remoteLogMetadataProducerTestVal);
     }
 
+    public static class MonitorableNoOpRemoteStorageManager extends NoOpRemoteStorageManager implements Monitorable {
+        public boolean pluginMetrics = false;
+
+        public MonitorableNoOpRemoteStorageManager() { }
+
+        @Override
+        public void withPluginMetrics(PluginMetrics metrics) {
+            pluginMetrics = true;
+        }
+    }
+
+    public static class MonitorableNoOpRemoteLogMetadataManager extends NoOpRemoteLogMetadataManager implements Monitorable {
+        public boolean pluginMetrics = false;
+        @Override
+        public void withPluginMetrics(PluginMetrics metrics) {
+            pluginMetrics = true;
+        }
+    }
 }
