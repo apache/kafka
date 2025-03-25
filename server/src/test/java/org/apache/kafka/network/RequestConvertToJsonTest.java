@@ -64,7 +64,6 @@ public class RequestConvertToJsonTest {
                 try {
                     RequestConvertToJson.request(req);
                 } catch (IllegalStateException e) {
-                    e.printStackTrace();
                     unhandledKeys.add(key.toString());
                 }
             }
