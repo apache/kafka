@@ -836,7 +836,7 @@ public class StreamsConfig extends AbstractConfig {
     /**
      * {@code windowed.inner.class.serde}
      *
-     * @deprecated since 4.0.0.
+     * @deprecated since 4.1.0.
      * Use {@link TimeWindowedSerializer#WINDOWED_INNER_SERIALIZER_CLASS} for {@link TimeWindowedSerializer}.
      * Use {@link TimeWindowedDeserializer#WINDOWED_INNER_DESERIALIZER_CLASS} for {@link TimeWindowedDeserializer}.
      * Use {@link SessionWindowedSerializer#WINDOWED_INNER_SERIALIZER_CLASS} for {@link SessionWindowedSerializer}.
@@ -851,7 +851,7 @@ public class StreamsConfig extends AbstractConfig {
     /**
      * {@code window.size.ms}
      *
-     * @deprecated since 4.0.0.
+     * @deprecated since 4.1.0.
      * Use {@link TimeWindowedDeserializer#WINDOW_SIZE_MS_CONFIG} for {@link TimeWindowedDeserializer}.
      */
     @Deprecated

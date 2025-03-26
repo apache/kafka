@@ -31,12 +31,12 @@ import java.util.Map;
 public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
     /**
-     * Configuration key for the window size in milliseconds.
+     * Sets window size for the deserializer in order to calculate window end times.
      */
     public static final String WINDOW_SIZE_MS_CONFIG = "window.size.ms";
 
     /**
-     * Configuration key for the windowed inner deserializer class.
+     * Default deserializer for the inner deserializer class of a windowed record. Must implement the {@link Serde} interface.
      */
     public static final String WINDOWED_INNER_DESERIALIZER_CLASS = "windowed.inner.deserializer.class";
 
@@ -121,36 +121,36 @@ public class TimeWindowedDeserializer<T> implements Deserializer<Windowed<T>> {
 
     @SuppressWarnings({"deprecation", "unchecked"})
     private void configureWindowInnerDeserializerClass(final Map<String, ?> configs) {
-        String deserializerConfigFrom = WINDOWED_INNER_DESERIALIZER_CLASS;
-        String windowedInnerDeserializerClassConfig = (String) configs.get(WINDOWED_INNER_DESERIALIZER_CLASS);
-        if (windowedInnerDeserializerClassConfig == null) {
+        String deserializerConfigKey = WINDOWED_INNER_DESERIALIZER_CLASS;
+        String deserializerConfigValue = (String) configs.get(WINDOWED_INNER_DESERIALIZER_CLASS);
+        if (deserializerConfigValue == null) {
             final String windowedInnerClassSerdeConfig = (String) configs.get(StreamsConfig.WINDOWED_INNER_CLASS_SERDE);
             if (windowedInnerClassSerdeConfig != null) {
-                deserializerConfigFrom = StreamsConfig.WINDOWED_INNER_CLASS_SERDE;
-                windowedInnerDeserializerClassConfig = windowedInnerClassSerdeConfig;
+                deserializerConfigKey = StreamsConfig.WINDOWED_INNER_CLASS_SERDE;
+                deserializerConfigValue = windowedInnerClassSerdeConfig;
                 log.warn("Config {} is deprecated. Please use {} instead.",
                     StreamsConfig.WINDOWED_INNER_CLASS_SERDE, WINDOWED_INNER_DESERIALIZER_CLASS);
             }
         }
 
         Serde<T> windowedInnerDeserializerClass = null;
-        if (windowedInnerDeserializerClassConfig != null) {
+        if (deserializerConfigValue != null) {
             try {
-                windowedInnerDeserializerClass = Utils.newInstance(windowedInnerDeserializerClassConfig, Serde.class);
+                windowedInnerDeserializerClass = Utils.newInstance(deserializerConfigValue, Serde.class);
             } catch (final ClassNotFoundException e) {
-                throw new ConfigException(deserializerConfigFrom, windowedInnerDeserializerClassConfig,
-                    "Serde class " + windowedInnerDeserializerClassConfig + " could not be found.");
+                throw new ConfigException(deserializerConfigKey, deserializerConfigValue,
+                    "Serde class " + deserializerConfigValue + " could not be found.");
             }
         }
 
-        if (inner != null && windowedInnerDeserializerClassConfig != null) {
+        if (inner != null && deserializerConfigValue != null) {
             if (!inner.getClass().getName().equals(windowedInnerDeserializerClass.deserializer().getClass().getName())) {
                 throw new IllegalArgumentException("Inner class deserializer set using constructor "
                     + "(" + inner.getClass().getName() + ")" +
-                    " is different from the one set in " + windowedInnerDeserializerClassConfig + " config " +
+                    " is different from the one set in " + deserializerConfigKey + " config " +
                     "(" + windowedInnerDeserializerClass.deserializer().getClass().getName() + ").");
             }
-        } else if (inner == null && windowedInnerDeserializerClassConfig == null) {
+        } else if (inner == null && deserializerConfigValue == null) {
             throw new IllegalArgumentException("Inner class deserializer should be set either via  constructor " +
                 "or via the " + WINDOWED_INNER_DESERIALIZER_CLASS + " config");
         } else if (inner == null)
