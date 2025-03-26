@@ -47,18 +47,10 @@ class ReplicaScaleTest(Test):
         partition_count=[34],
         replication_factor=[3],
         metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[False]
-    )
-    @matrix(
-        topic_count=[50],
-        partition_count=[34],
-        replication_factor=[3],
-        metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True],
         group_protocol=consumer_group.all_group_protocols
     )
     def test_produce_consume(self, topic_count, partition_count, replication_factor, 
-                             metadata_quorum, use_new_coordinator=False, group_protocol=None):
+                             metadata_quorum, group_protocol=None):
         topics_create_start_time = time.time()
         for i in range(topic_count):
             topic = "replicas_produce_consume_%d" % i
@@ -117,11 +109,10 @@ class ReplicaScaleTest(Test):
         topic_count=[50],
         partition_count=[34],
         replication_factor=[3],
-        metadata_quorum=[quorum.isolated_kraft],
-        use_new_coordinator=[True, False]
+        metadata_quorum=[quorum.isolated_kraft]
     )
     def test_clean_bounce(self, topic_count, partition_count, replication_factor,
-                          metadata_quorum, use_new_coordinator=False):
+                          metadata_quorum):
         topics_create_start_time = time.time()
         for i in range(topic_count):
             topic = "topic-%04d" % i

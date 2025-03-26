@@ -55,7 +55,7 @@
   </subpackage>
 
   <subpackage name="coordinator">
-    <allow class="kafka.server.MetadataCache" />
+    <allow class="org.apache.kafka.metadata.MetadataCache" />
   </subpackage>
 
   <subpackage name="docker">

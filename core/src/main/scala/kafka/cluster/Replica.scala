@@ -17,10 +17,10 @@
 
 package kafka.cluster
 
-import kafka.server.MetadataCache
 import kafka.utils.Logging
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
+import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.storage.internals.log.{LogOffsetMetadata, UnifiedLog}
 
 import java.util.concurrent.atomic.AtomicReference
@@ -113,7 +113,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition, val metadat
     replicaState.updateAndGet { currentReplicaState =>
       val cachedBrokerEpoch = metadataCache.getAliveBrokerEpoch(brokerId)
       // Fence the update if it provides a stale broker epoch.
-      if (brokerEpoch != -1 && cachedBrokerEpoch.exists(_ > brokerEpoch)) {
+      if (brokerEpoch != -1 && cachedBrokerEpoch.filter(_ > brokerEpoch).isPresent()) {
         throw new NotLeaderOrFollowerException(s"Received stale fetch state update. broker epoch=$brokerEpoch " +
           s"vs expected=${currentReplicaState.brokerEpoch.get}")
       }

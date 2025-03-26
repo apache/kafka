@@ -17,49 +17,37 @@
 
 package org.apache.kafka.tools.consumer.group.share;
 
-import org.apache.kafka.common.errors.UnsupportedVersionException;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde;
+import org.apache.kafka.coordinator.group.generated.CoordinatorRecordJsonConverters;
 import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
-import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKeyJsonConverter;
-import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValueJsonConverter;
-import org.apache.kafka.tools.consumer.ApiMessageFormatter;
+import org.apache.kafka.tools.consumer.CoordinatorRecordMessageFormatter;
 
 import com.fasterxml.jackson.databind.JsonNode;
-import com.fasterxml.jackson.databind.node.NullNode;
-import com.fasterxml.jackson.databind.node.TextNode;
 
-import java.nio.ByteBuffer;
+import java.util.Set;
 
-public class ShareGroupStatePartitionMetadataFormatter extends ApiMessageFormatter {
-    @Override
-    protected JsonNode readToKeyJson(ByteBuffer byteBuffer) {
-        try {
-            switch (CoordinatorRecordType.fromId(byteBuffer.getShort())) {
-                case SHARE_GROUP_STATE_PARTITION_METADATA:
-                    return ShareGroupStatePartitionMetadataKeyJsonConverter.write(
-                        new ShareGroupStatePartitionMetadataKey(new ByteBufferAccessor(byteBuffer), (short) 0),
-                        (short) 0
-                    );
+public class ShareGroupStatePartitionMetadataFormatter extends CoordinatorRecordMessageFormatter {
+    private static final Set<Short> ALLOWED_RECORDS = Set.of(
+        CoordinatorRecordType.SHARE_GROUP_STATE_PARTITION_METADATA.id()
+    );
 
-                default:
-                    return NullNode.getInstance();
-            }
-        } catch (UnsupportedVersionException ex) {
-            return NullNode.getInstance();
-        }
+    public ShareGroupStatePartitionMetadataFormatter() {
+        super(new GroupCoordinatorRecordSerde());
     }
 
     @Override
-    protected JsonNode readToValueJson(ByteBuffer byteBuffer) {
-        short version = byteBuffer.getShort();
-        if (version >= ShareGroupStatePartitionMetadataValue.LOWEST_SUPPORTED_VERSION && version <= ShareGroupStatePartitionMetadataValue.HIGHEST_SUPPORTED_VERSION) {
-            return ShareGroupStatePartitionMetadataValueJsonConverter.write(
-                new ShareGroupStatePartitionMetadataValue(new ByteBufferAccessor(byteBuffer), version),
-                version
-            );
-        }
-        return new TextNode(UNKNOWN);
+    protected boolean isRecordTypeAllowed(short recordType) {
+        return ALLOWED_RECORDS.contains(recordType);
+    }
+
+    @Override
+    protected JsonNode keyAsJson(ApiMessage message) {
+        return CoordinatorRecordJsonConverters.writeRecordKeyAsJson(message);
+    }
+
+    @Override
+    protected JsonNode valueAsJson(ApiMessage message, short version) {
+        return CoordinatorRecordJsonConverters.writeRecordValueAsJson(message, version);
     }
 }

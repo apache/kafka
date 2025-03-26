@@ -54,7 +54,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   @ClusterTest(
     types = Array(Type.KRAFT),
     serverProperties = Array(
-      new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
       new ClusterConfigProperty(key = "group.share.enable", value = "true"),
       new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
@@ -150,7 +149,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   @ClusterTest(
     types = Array(Type.KRAFT),
     serverProperties = Array(
-      new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
       new ClusterConfigProperty(key = "group.share.enable", value = "true"),
       new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
@@ -313,7 +311,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   @ClusterTest(
     types = Array(Type.KRAFT),
     serverProperties = Array(
-      new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
       new ClusterConfigProperty(key = "group.share.enable", value = "true"),
       new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
@@ -429,7 +426,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   @ClusterTest(
     types = Array(Type.KRAFT),
     serverProperties = Array(
-      new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
       new ClusterConfigProperty(key = "group.share.enable", value = "true"),
       new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
@@ -618,7 +614,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   @ClusterTest(
     types = Array(Type.KRAFT),
     serverProperties = Array(
-      new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
       new ClusterConfigProperty(key = "group.share.enable", value = "true"),
       new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
@@ -807,7 +802,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   @ClusterTest(
     types = Array(Type.KRAFT),
     serverProperties = Array(
-      new ClusterConfigProperty(key = "group.coordinator.new.enable", value = "true"),
       new ClusterConfigProperty(key = "group.share.enable", value = "true"),
       new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
