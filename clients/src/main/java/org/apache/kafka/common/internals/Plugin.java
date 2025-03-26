@@ -73,14 +73,8 @@ public class Plugin<T> implements Supplier<T>, AutoCloseable {
     }
 
     public Plugin<T> initialize(Metrics metrics, String key) {
-        PluginMetricsImpl pluginMetrics = null;
-        if (instance instanceof Monitorable && metrics != null) {
-            pluginMetrics = new PluginMetricsImpl(metrics, tags(key, instance));
-            ((Monitorable) instance).withPluginMetrics(pluginMetrics);
-        }
-        return this;
+        return wrapInstance(instance, metrics, key);
     }
-
 
     @Override
     public T get() {
