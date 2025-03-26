@@ -99,7 +99,12 @@ public class TransactionLogMessageFormatterTest extends CoordinatorRecordMessage
                 MessageUtil.toVersionPrefixedByteBuffer((short) 1, TXN_LOG_VALUE).array(),
                 ""
             ),
-            Arguments.of(null, null, "")
+            Arguments.of(null, null, ""),
+            Arguments.of(
+                MessageUtil.toVersionPrefixedByteBuffer(Short.MAX_VALUE, TXN_LOG_KEY).array(),
+                MessageUtil.toVersionPrefixedByteBuffer((short) 1, TXN_LOG_VALUE).array(),
+                ""
+            )
         );
     }
 }

@@ -183,6 +183,11 @@ public class GroupMetadataMessageFormatterTest extends CoordinatorRecordMessageF
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_KEY).array(),
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_VALUE).array(),
                 ""
+            ),
+            Arguments.of(
+                MessageUtil.toVersionPrefixedByteBuffer(Short.MAX_VALUE, OFFSET_COMMIT_KEY).array(),
+                MessageUtil.toVersionPrefixedByteBuffer((short) 0, OFFSET_COMMIT_VALUE).array(),
+                ""
             )
         );
     }

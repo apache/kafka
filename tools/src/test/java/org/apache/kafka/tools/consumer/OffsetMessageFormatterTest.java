@@ -141,6 +141,11 @@ public class OffsetMessageFormatterTest extends CoordinatorRecordMessageFormatte
                 MessageUtil.toVersionPrefixedByteBuffer((short) 2, GROUP_METADATA_KEY).array(),
                 MessageUtil.toVersionPrefixedByteBuffer((short) 2, GROUP_METADATA_VALUE).array(),
                 ""
+            ),
+            Arguments.of(
+                MessageUtil.toVersionPrefixedByteBuffer(Short.MAX_VALUE, GROUP_METADATA_KEY).array(),
+                MessageUtil.toVersionPrefixedByteBuffer((short) 2, GROUP_METADATA_VALUE).array(),
+                ""
             )
         );
     }
