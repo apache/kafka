@@ -54,8 +54,8 @@ import org.apache.kafka.common.resource.{Resource, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
-import org.apache.kafka.common.{IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.coordinator.group.{Group, GroupConfig, GroupConfigManager, GroupCoordinator}
+import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.coordinator.group.{Group, GroupConfig, GroupCoordinator}
 import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
 import org.apache.kafka.server.ClientMetricsManager
@@ -104,8 +104,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 time: Time,
                 val tokenManager: DelegationTokenManager,
                 val apiVersionManager: ApiVersionManager,
-                val clientMetricsManager: ClientMetricsManager,
-                val groupConfigManager: GroupConfigManager
+                val clientMetricsManager: ClientMetricsManager
 ) extends ApiRequestHandler with Logging {
 
   type FetchResponseStats = Map[TopicPartition, RecordValidationStats]
@@ -3234,22 +3233,13 @@ class KafkaApis(val requestChannel: RequestChannel,
           request.context.principal,
           request.context.listenerName.value))
 
-      def fetchIsolation(): FetchIsolation = {
-        if (groupConfigManager.groupConfig(groupId).isPresent) {
-          val isolationLevel: IsolationLevel = IsolationLevel.forId(groupConfigManager.groupConfig(groupId).get().shareIsolationLevel().toByte)
-          FetchIsolation.of(-1, isolationLevel, true)
-        } else {
-          FetchIsolation.of(-1, GroupConfig.defaultShareIsolationLevel, true)
-        }
-      }
-
       val params = new FetchParams(
         FetchRequest.CONSUMER_REPLICA_ID,
         -1,
         shareFetchRequest.maxWait,
         fetchMinBytes,
         fetchMaxBytes,
-        fetchIsolation(),
+        FetchIsolation.of(-1, GroupConfig.defaultShareIsolationLevel, true),
         clientMetadata,
         true
       )

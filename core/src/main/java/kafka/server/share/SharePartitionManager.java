@@ -19,6 +19,7 @@ package kafka.server.share;
 import kafka.cluster.PartitionListener;
 import kafka.server.ReplicaManager;
 
+import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -51,6 +52,7 @@ import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.session.ShareSession;
 import org.apache.kafka.server.share.session.ShareSessionCache;
 import org.apache.kafka.server.share.session.ShareSessionKey;
+import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.SystemTimer;
@@ -267,8 +269,23 @@ public class SharePartitionManager implements AutoCloseable {
             .rotate(topicIdPartitions, new PartitionRotateMetadata(sessionEpoch));
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
-        processShareFetch(new ShareFetch(fetchParams, groupId, memberId, future, rotatedTopicIdPartitions, batchSize, maxFetchRecords, brokerTopicStats));
-
+        if (groupConfigManager.groupConfig(groupId).isEmpty())
+            processShareFetch(new ShareFetch(fetchParams, groupId, memberId, future, rotatedTopicIdPartitions, batchSize, maxFetchRecords, brokerTopicStats));
+        else {
+            FetchParams updatedFetchParams = new FetchParams(
+                fetchParams.replicaId,
+                fetchParams.replicaEpoch,
+                fetchParams.maxWaitMs,
+                fetchParams.minBytes,
+                fetchParams.maxBytes,
+                FetchIsolation.of(
+                    -1,
+                    IsolationLevel.forId((byte) groupConfigManager.groupConfig(groupId).get().shareIsolationLevel()),
+                    true),
+                fetchParams.clientMetadata
+            );
+            processShareFetch(new ShareFetch(updatedFetchParams, groupId, memberId, future, rotatedTopicIdPartitions, batchSize, maxFetchRecords, brokerTopicStats));
+        }
         return future;
     }
 

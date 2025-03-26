@@ -32,7 +32,6 @@ import kafka.server.share.SharePartitionManager;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.coordinator.share.ShareCoordinator;
 import org.apache.kafka.metadata.ConfigRepository;
@@ -69,7 +68,6 @@ public class KafkaApisBuilder {
     private ApiVersionManager apiVersionManager = null;
     private ClientMetricsManager clientMetricsManager = null;
     private Optional<ShareCoordinator> shareCoordinator = Optional.empty();
-    private GroupConfigManager groupConfigManager = null;
 
     public KafkaApisBuilder setRequestChannel(RequestChannel requestChannel) {
         this.requestChannel = requestChannel;
@@ -181,11 +179,6 @@ public class KafkaApisBuilder {
         return this;
     }
 
-    public KafkaApisBuilder setGroupConfigManager(GroupConfigManager groupConfigManager) {
-        this.groupConfigManager = groupConfigManager;
-        return this;
-    }
-
     @SuppressWarnings({"CyclomaticComplexity"})
     public KafkaApis build() {
         if (requestChannel == null) throw new RuntimeException("you must set requestChannel");
@@ -205,7 +198,6 @@ public class KafkaApisBuilder {
         if (clientMetricsManager == null) throw new RuntimeException("You must set clientMetricsManager");
         if (brokerTopicStats == null) brokerTopicStats = new BrokerTopicStats(config.remoteLogManagerConfig().isRemoteStorageSystemEnabled());
         if (apiVersionManager == null) throw new RuntimeException("You must set apiVersionManager");
-        if (groupConfigManager == null) throw new RuntimeException("You must set groupConfigManager");
 
         return new KafkaApis(requestChannel,
                              forwardingManager,
@@ -228,7 +220,6 @@ public class KafkaApisBuilder {
                              time,
                              tokenManager,
                              apiVersionManager,
-                             clientMetricsManager,
-                             groupConfigManager);
+                             clientMetricsManager);
     }
 }
