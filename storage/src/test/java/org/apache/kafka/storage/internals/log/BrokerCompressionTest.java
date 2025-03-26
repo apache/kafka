@@ -88,17 +88,18 @@ public class BrokerCompressionTest {
             ), 0
         );
 
+        RecordBatch firstBatch = readFirstBatch(log);
+
         if (brokerCompressionType != BrokerCompressionType.PRODUCER) {
-            RecordBatch batch = readBatch(log, 0);
             Compression targetCompression = BrokerCompressionType.targetCompression(log.config().compression, null);
-            assertEquals(targetCompression.type(), batch.compressionType(), "Compression at offset 0 should produce " + brokerCompressionType);
+            assertEquals(targetCompression.type(), firstBatch.compressionType(), "Compression at offset 0 should produce " + brokerCompressionType);
         } else {
-            assertEquals(messageCompressionType, readBatch(log, 0).compressionType(), "Compression at offset 0 should produce " + messageCompressionType);
+            assertEquals(messageCompressionType, firstBatch.compressionType(), "Compression at offset 0 should produce " + messageCompressionType);
         }
     }
 
-    private static RecordBatch readBatch(UnifiedLog log, int offset) throws IOException {
-        FetchDataInfo fetchInfo = log.read(offset, 4096, FetchIsolation.LOG_END, true);
+    private static RecordBatch readFirstBatch(UnifiedLog log) throws IOException {
+        FetchDataInfo fetchInfo = log.read(0, 4096, FetchIsolation.LOG_END, true);
         return fetchInfo.records.batches().iterator().next();
     }
 
