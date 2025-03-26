@@ -890,7 +890,6 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testImplicitAcknowledgeCommitSync() throws InterruptedException {
-        setup();
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
