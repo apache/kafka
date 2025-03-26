@@ -68,7 +68,7 @@ public class AbstractConfig {
     protected static final String CONFIG_PROVIDERS_DOC = 
             "Comma-separated names of <code>ConfigProvider</code> classes, loaded and used "
             + "in the order specified. Implementing the interface  "
-            + "<code>ConfigProvider</code> allows you to replace variable references in connector configurations, "
+            + "<code>ConfigProvider</code> allows you to replace variable references in configurations, "
             + "such as for externalized secrets.";
 
     private static final String CONFIG_PROVIDERS_PARAM = ".param.";

@@ -324,7 +324,8 @@ public abstract class MirrorConnectorConfig extends AbstractConfig {
             .define(CONFIG_PROVIDERS_CONFIG,
                     ConfigDef.Type.LIST,
                     Collections.emptyList(),
-                    ConfigDef.Importance.LOW, CONFIG_PROVIDERS_DOC)
+                    ConfigDef.Importance.LOW, 
+                    CONFIG_PROVIDERS_DOC)
             .withClientSslSupport()
             .withClientSaslSupport();
 
