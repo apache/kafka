@@ -3763,10 +3763,15 @@ public class RemoteLogManagerTest {
                 (topicPartition, offset) -> { },
                 brokerTopicStats,
                 metrics)) {
-            // We need to call startup for call config and wrap instance
-            remoteLogManager.startup();
             assertInstanceOf(MonitorableNoOpRemoteStorageManager.class, remoteLogManager.storageManager());
             assertInstanceOf(MonitorableNoOpRemoteLogMetadataManager.class, remoteLogManager.remoteLogMetadataManager());
+            MonitorableNoOpRemoteStorageManager rsm = (MonitorableNoOpRemoteStorageManager) remoteLogManager.storageManager();
+            MonitorableNoOpRemoteLogMetadataManager rlm = (MonitorableNoOpRemoteLogMetadataManager) remoteLogManager.remoteLogMetadataManager();
+
+            assertEquals(false, rsm.pluginMetrics);
+            assertEquals(false, rlm.pluginMetrics);
+            // We need to call startup for call config() and call withPluginMetrics()
+            remoteLogManager.startup();
             assertEquals(true, ((MonitorableNoOpRemoteStorageManager) remoteLogManager.storageManager()).pluginMetrics);
             assertEquals(true, ((MonitorableNoOpRemoteLogMetadataManager) remoteLogManager.remoteLogMetadataManager()).pluginMetrics);
         }
@@ -3818,8 +3823,6 @@ public class RemoteLogManagerTest {
 
     public static class MonitorableNoOpRemoteStorageManager extends NoOpRemoteStorageManager implements Monitorable {
         public boolean pluginMetrics = false;
-
-        public MonitorableNoOpRemoteStorageManager() { }
 
         @Override
         public void withPluginMetrics(PluginMetrics metrics) {
