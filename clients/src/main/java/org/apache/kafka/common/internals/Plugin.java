@@ -68,6 +68,20 @@ public class Plugin<T> implements Supplier<T>, AutoCloseable {
         return new Plugin<>(instance, pluginMetrics);
     }
 
+    public static <T> Plugin<T> wrapInstanceDelayedInit(T instance) {
+        return new Plugin<>(instance, null);
+    }
+
+    public Plugin<T> initialize(Metrics metrics, String key) {
+        PluginMetricsImpl pluginMetrics = null;
+        if (instance instanceof Monitorable && metrics != null) {
+            pluginMetrics = new PluginMetricsImpl(metrics, tags(key, instance));
+            ((Monitorable) instance).withPluginMetrics(pluginMetrics);
+        }
+        return this;
+    }
+
+
     @Override
     public T get() {
         return instance;

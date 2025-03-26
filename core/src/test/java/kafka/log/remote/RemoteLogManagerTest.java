@@ -26,6 +26,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Monitorable;
@@ -248,11 +249,11 @@ public class RemoteLogManagerTest {
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
                 brokerTopicStats, metrics) {
-            public RemoteStorageManager createRemoteStorageManager() {
-                return remoteStorageManager;
+            public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(remoteStorageManager);
             }
-            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
-                return remoteLogMetadataManager;
+            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
             }
             public RLMQuotaManager createRLMCopyQuotaManager() {
                 return rlmCopyQuotaManager;
@@ -417,11 +418,11 @@ public class RemoteLogManagerTest {
                 (topicPartition, offset) -> { },
                 brokerTopicStats,
                 metrics) {
-            public RemoteStorageManager createRemoteStorageManager() {
-                return remoteStorageManager;
+            public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(remoteStorageManager);
             }
-            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
-                return remoteLogMetadataManager;
+            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
             }
         }) {
 
@@ -1363,8 +1364,8 @@ public class RemoteLogManagerTest {
                     t -> Optional.empty(),
                     (topicPartition, offset) -> { },
                     brokerTopicStats, metrics) {
-                public RemoteStorageManager createRemoteStorageManager() {
-                    return rsmManager;
+                public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
+                    return Plugin.wrapInstanceDelayedInit(rsmManager);
                 }
             }
         ) {
@@ -1755,8 +1756,8 @@ public class RemoteLogManagerTest {
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
                 brokerTopicStats, metrics) {
             @Override
-            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
-                return remoteLogMetadataManager;
+            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
             }
             @Override
             Optional<FileRecords.TimestampAndOffset> lookupTimestamp(RemoteLogSegmentMetadata rlsMetadata, long timestamp, long startingOffset) {
@@ -1811,12 +1812,12 @@ public class RemoteLogManagerTest {
             RemoteLogManager remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId,
                     time, tp -> Optional.of(mockLog), (topicPartition, offset) -> {
             }, brokerTopicStats, metrics) {
-                public RemoteStorageManager createRemoteStorageManager() {
-                    return remoteStorageManager;
+                public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
+                    return Plugin.wrapInstanceDelayedInit(remoteStorageManager);
                 }
 
-                public RemoteLogMetadataManager createRemoteLogMetadataManager() {
-                    return remoteLogMetadataManager;
+                public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
+                    return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
                 }
             };
             // Close RemoteLogManager so that metrics are removed
@@ -2209,8 +2210,8 @@ public class RemoteLogManagerTest {
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
                 brokerTopicStats, metrics) {
-            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
-                return remoteLogMetadataManager;
+            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
             }
         }) {
             assertEquals(500L, remoteLogManager.findLogStartOffset(leaderTopicIdPartition, mockLog));
@@ -2234,8 +2235,8 @@ public class RemoteLogManagerTest {
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
                 brokerTopicStats, metrics) {
-            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
-                return remoteLogMetadataManager;
+            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
             }
         }) {
             assertEquals(250L, remoteLogManager.findLogStartOffset(leaderTopicIdPartition, mockLog));
@@ -2268,8 +2269,8 @@ public class RemoteLogManagerTest {
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) ->  logStartOffset.set(offset),
                 brokerTopicStats, metrics) {
-            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
-                return remoteLogMetadataManager;
+            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
             }
         }) {
             RemoteLogManager.RLMCopyTask task = remoteLogManager.new RLMCopyTask(leaderTopicIdPartition, 128);
@@ -2322,11 +2323,11 @@ public class RemoteLogManagerTest {
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
                 brokerTopicStats, metrics) {
-            public RemoteStorageManager createRemoteStorageManager() {
-                return remoteStorageManager;
+            public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(remoteStorageManager);
             }
-            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
-                return remoteLogMetadataManager;
+            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
             }
             public RLMQuotaManager createRLMCopyQuotaManager() {
                 return rlmCopyQuotaManager;
@@ -2976,11 +2977,11 @@ public class RemoteLogManagerTest {
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> logStartOffset.set(offset),
                 brokerTopicStats, metrics) {
-            public RemoteStorageManager createRemoteStorageManager() {
-                return remoteStorageManager;
+            public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(remoteStorageManager);
             }
-            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
-                return remoteLogMetadataManager;
+            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
             }
         }) {
             RemoteLogManager.RLMExpirationTask task = remoteLogManager.new RLMExpirationTask(leaderTopicIdPartition);
@@ -3142,11 +3143,11 @@ public class RemoteLogManagerTest {
                 (topicPartition, offset) -> { },
                 brokerTopicStats,
                 metrics) {
-            public RemoteStorageManager createRemoteStorageManager() {
-                return rsmManager;
+            public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(rsmManager);
             }
-            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
-                return remoteLogMetadataManager;
+            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
             }
 
             @Override
@@ -3219,11 +3220,11 @@ public class RemoteLogManagerTest {
                 (topicPartition, offset) -> { },
                 brokerTopicStats,
                 metrics) {
-            public RemoteStorageManager createRemoteStorageManager() {
-                return rsmManager;
+            public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(rsmManager);
             }
-            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
-                return remoteLogMetadataManager;
+            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
             }
 
             public Optional<RemoteLogSegmentMetadata> fetchRemoteLogSegmentMetadata(TopicPartition topicPartition,
@@ -3305,12 +3306,12 @@ public class RemoteLogManagerTest {
                 },
                 brokerTopicStats,
                 metrics) {
-            public RemoteStorageManager createRemoteStorageManager() {
-                return rsmManager;
+            public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(remoteStorageManager);
             }
 
-            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
-                return remoteLogMetadataManager;
+            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
             }
 
             public Optional<RemoteLogSegmentMetadata> fetchRemoteLogSegmentMetadata(TopicPartition topicPartition,
@@ -3655,11 +3656,11 @@ public class RemoteLogManagerTest {
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
                 brokerTopicStats, metrics) {
-            public RemoteStorageManager createRemoteStorageManager() {
-                return remoteStorageManager;
+            public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(remoteStorageManager);
             }
-            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
-                return remoteLogMetadataManager;
+            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
             }
             int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
                 return 0;
@@ -3698,11 +3699,11 @@ public class RemoteLogManagerTest {
             tp -> Optional.of(mockLog),
             (topicPartition, offset) -> currentLogStartOffset.set(offset),
             brokerTopicStats, metrics) {
-            public RemoteStorageManager createRemoteStorageManager() {
-                return remoteStorageManager;
+            public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(remoteStorageManager);
             }
-            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
-                return remoteLogMetadataManager;
+            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
+                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
             }
             public RLMQuotaManager createRLMCopyQuotaManager() {
                 return rlmCopyQuotaManager;
