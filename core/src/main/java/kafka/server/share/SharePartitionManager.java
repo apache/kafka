@@ -19,7 +19,6 @@ package kafka.server.share;
 import kafka.cluster.PartitionListener;
 import kafka.server.ReplicaManager;
 
-import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
@@ -278,10 +277,7 @@ public class SharePartitionManager implements AutoCloseable {
                 fetchParams.maxWaitMs,
                 fetchParams.minBytes,
                 fetchParams.maxBytes,
-                FetchIsolation.of(
-                    -1,
-                    IsolationLevel.forId((byte) groupConfigManager.groupConfig(groupId).get().shareIsolationLevel()),
-                    true),
+                FetchIsolation.of(-1, groupConfigManager.groupConfig(groupId).get().shareIsolationLevel(), true),
                 fetchParams.clientMetadata
             );
             processShareFetch(new ShareFetch(updatedFetchParams, groupId, memberId, future, rotatedTopicIdPartitions, batchSize, maxFetchRecords, brokerTopicStats));

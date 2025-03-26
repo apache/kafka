@@ -68,7 +68,7 @@ public class GroupConfigTest {
             } else if (GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "not_a_number", "1.0");
             } else if (GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG.equals(name)) {
-                assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
+                assertPropertyInvalid(name, "hello", "1.0");
             } else {
                 assertPropertyInvalid(name, "not_a_number", "-0.1");
             }
@@ -106,12 +106,12 @@ public class GroupConfigTest {
     public void testValidShareIsolationLevelValues() {
         // Check for value READ_UNCOMMITTED
         Properties props = createValidGroupConfig();
-        props.put(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, 0);
+        props.put(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, "read_committed");
         doTestValidProps(props);
 
         // Check for value READ_COMMITTED
         props = createValidGroupConfig();
-        props.put(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, 1);
+        props.put(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, "read_uncommitted");
         doTestValidProps(props);
     }
 
@@ -205,13 +205,15 @@ public class GroupConfigTest {
         // Check for invalid streamsHeartbeatIntervalMs, > MAX
         props.put(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, "70000");
         doTestInvalidProps(props, InvalidConfigurationException.class);
+        props = createValidGroupConfig();
 
-        // Check for invalid shareIsolationLevel, greater than 1.
-        props.put(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, 2);
+        // Check for invalid shareIsolationLevel.
+        props.put(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, "read_commit");
         doTestInvalidProps(props, ConfigException.class);
+        props = createValidGroupConfig();
 
-        // Check for invalid shareIsolationLevel, lesser than 0.
-        props.put(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, -1);
+        // Check for invalid shareIsolationLevel.
+        props.put(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, "read_uncommit");
         doTestInvalidProps(props, ConfigException.class);
     }
 
@@ -235,7 +237,7 @@ public class GroupConfigTest {
         defaultValue.put(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, "10");
         defaultValue.put(GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, "2000");
         defaultValue.put(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "1");
-        defaultValue.put(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, "0");
+        defaultValue.put(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, "read_uncommitted");
 
         Properties props = new Properties();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "20");
@@ -250,7 +252,7 @@ public class GroupConfigTest {
         assertEquals(10, config.getInt(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG));
         assertEquals(2000, config.getInt(GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG));
         assertEquals(1, config.getInt(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG));
-        assertEquals(0, config.getInt(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG));
+        assertEquals("read_uncommitted", config.getString(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG));
     }
 
     @Test
@@ -272,7 +274,7 @@ public class GroupConfigTest {
         props.put(GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, "50000");
         props.put(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, "6000");
         props.put(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "1");
-        props.put(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, "0");
+        props.put(GroupConfig.SHARE_ISOLATION_LEVEL_CONFIG, "read_uncommitted");
         return props;
     }
 
