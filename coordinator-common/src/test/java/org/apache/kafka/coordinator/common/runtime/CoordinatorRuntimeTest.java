@@ -18,22 +18,14 @@ package org.apache.kafka.coordinator.common.runtime;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.NotCoordinatorException;
 import org.apache.kafka.common.errors.NotEnoughReplicasException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.record.AbstractRecords;
-import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordType;
-import org.apache.kafka.common.record.EndTransactionMarker;
 import org.apache.kafka.common.record.MemoryRecords;
-import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.record.RecordVersion;
-import org.apache.kafka.common.record.SimpleRecord;
-import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -52,8 +44,6 @@ import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.ArgumentMatcher;
 
 import java.nio.BufferOverflowException;
-import java.nio.ByteBuffer;
-import java.nio.charset.Charset;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -77,6 +67,9 @@ import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.Coo
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.CoordinatorState.LOADING;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.HighWatermarkListener.NO_OFFSET;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime.MIN_BUFFER_SIZE;
+import static org.apache.kafka.coordinator.common.runtime.TestUtil.endTransactionMarker;
+import static org.apache.kafka.coordinator.common.runtime.TestUtil.records;
+import static org.apache.kafka.coordinator.common.runtime.TestUtil.transactionalRecords;
 import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -102,123 +95,6 @@ public class CoordinatorRuntimeTest {
     private static final Duration DEFAULT_WRITE_TIMEOUT = Duration.ofMillis(5);
 
     private static final short TXN_OFFSET_COMMIT_LATEST_VERSION = ApiKeys.TXN_OFFSET_COMMIT.latestVersion();
-
-    private static MemoryRecords records(
-        long timestamp,
-        String... records
-    ) {
-        return records(timestamp, Arrays.stream(records).collect(Collectors.toList()));
-    }
-
-    private static MemoryRecords records(
-        long timestamp,
-        List<String> records
-    ) {
-        if (records.isEmpty())
-            return MemoryRecords.EMPTY;
-
-        List<SimpleRecord> simpleRecords = records.stream().map(record ->
-            new SimpleRecord(timestamp, record.getBytes(Charset.defaultCharset()))
-        ).collect(Collectors.toList());
-
-        int sizeEstimate = AbstractRecords.estimateSizeInBytes(
-            RecordVersion.current().value,
-            CompressionType.NONE,
-            simpleRecords
-        );
-
-        ByteBuffer buffer = ByteBuffer.allocate(sizeEstimate);
-
-        MemoryRecordsBuilder builder = MemoryRecords.builder(
-            buffer,
-            RecordVersion.current().value,
-            Compression.NONE,
-            TimestampType.CREATE_TIME,
-            0L,
-            timestamp,
-            RecordBatch.NO_PRODUCER_ID,
-            RecordBatch.NO_PRODUCER_EPOCH,
-            0,
-            false,
-            RecordBatch.NO_PARTITION_LEADER_EPOCH
-        );
-
-        simpleRecords.forEach(builder::append);
-
-        return builder.build();
-    }
-
-    private static MemoryRecords transactionalRecords(
-        long producerId,
-        short producerEpoch,
-        long timestamp,
-        String... records
-    ) {
-        return transactionalRecords(
-            producerId,
-            producerEpoch,
-            timestamp,
-            Arrays.stream(records).collect(Collectors.toList())
-        );
-    }
-
-    private static MemoryRecords transactionalRecords(
-        long producerId,
-        short producerEpoch,
-        long timestamp,
-        List<String> records
-    ) {
-        if (records.isEmpty())
-            return MemoryRecords.EMPTY;
-
-        List<SimpleRecord> simpleRecords = records.stream().map(record ->
-            new SimpleRecord(timestamp, record.getBytes(Charset.defaultCharset()))
-        ).collect(Collectors.toList());
-
-        int sizeEstimate = AbstractRecords.estimateSizeInBytes(
-            RecordVersion.current().value,
-            CompressionType.NONE,
-            simpleRecords
-        );
-
-        ByteBuffer buffer = ByteBuffer.allocate(sizeEstimate);
-
-        MemoryRecordsBuilder builder = MemoryRecords.builder(
-            buffer,
-            RecordVersion.current().value,
-            Compression.NONE,
-            TimestampType.CREATE_TIME,
-            0L,
-            timestamp,
-            producerId,
-            producerEpoch,
-            0,
-            true,
-            RecordBatch.NO_PARTITION_LEADER_EPOCH
-        );
-
-        simpleRecords.forEach(builder::append);
-
-        return builder.build();
-    }
-
-    private static MemoryRecords endTransactionMarker(
-        long producerId,
-        short producerEpoch,
-        long timestamp,
-        int coordinatorEpoch,
-        ControlRecordType result
-    ) {
-        return MemoryRecords.withEndTransactionMarker(
-            timestamp,
-            producerId,
-            producerEpoch,
-            new EndTransactionMarker(
-                result,
-                coordinatorEpoch
-            )
-        );
-    }
 
     @Test
     public void testScheduleLoading() {
