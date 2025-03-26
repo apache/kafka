@@ -112,7 +112,18 @@ public enum MetadataVersion {
     //
 
     // Enables ELR by default for new clusters (KIP-966).
-    IBP_4_1_IV0(26, "4.1", "IV0", false);
+    IBP_4_1_IV0(26, "4.1", "IV0", false),
+
+    // Enables share groups. Note, share groups are for preview only in 4.1. (KIP-932).
+    IBP_4_1_IV1(27, "4.1", "IV1", false),
+
+    // Enables share groups by default for new clusters (KIP-932).
+    //
+    // *** THIS IS A PLACEHOLDER UNSTABLE VERSION WHICH IS USED TO DEFINE THE POINT AT WHICH   ***
+    // *** SHARE GROUPS BECOME PRODUCTION-READY IN THE FUTURE. ITS DEFINITION ALLOWS A SHARE   ***
+    // *** GROUPS FEATURE TO BE DEFAULT IN 4.1 BUT TURNED OFF BY DEFAULT, ABLE TO BE TURNED ON ***
+    // *** DYNAMICALLY TO TRY OUT THE PREVIEW CAPABILITY.                                      ***
+    IBP_4_2_IV0(28, "4.2", "IV0", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -132,7 +143,7 @@ public enum MetadataVersion {
      * <strong>Think carefully before you update this value. ONCE A METADATA VERSION IS PRODUCTION,
      * IT CANNOT BE CHANGED.</strong>
      */
-    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_0_IV3;
+    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_1_IV1;
     // If you change the value above please also update
     // LATEST_STABLE_METADATA_VERSION version in tests/kafkatest/version.py
 

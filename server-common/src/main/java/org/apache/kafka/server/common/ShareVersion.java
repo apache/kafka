@@ -18,26 +18,24 @@ package org.apache.kafka.server.common;
 
 import java.util.Map;
 
-public enum GroupVersion implements FeatureVersion {
+public enum ShareVersion implements FeatureVersion {
 
-    // Version 0 is the original group coordinator prior to KIP-848.
-    GV_0(0, MetadataVersion.MINIMUM_VERSION, Map.of()),
+    // Version 0 does not enable share groups.
+    SV_0(0, MetadataVersion.MINIMUM_VERSION, Map.of()),
 
-    // Version 1 enables the consumer rebalance protocol (KIP-848).
-    GV_1(1, MetadataVersion.IBP_4_0_IV0, Map.of()),
+    // Version 1 enables share groups (KIP-932).
+    // This is a preview in 4.1, and production-ready in 4.2.
+    SV_1(1, MetadataVersion.IBP_4_2_IV0, Map.of(MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_4_1_IV1.featureLevel()));
 
-    // Version 2 enables share groups in the group coordinator (KIP-932).
-    GV_2(2, MetadataVersion.IBP_4_1_IV1, Map.of());
+    public static final String FEATURE_NAME = "share.version";
 
-    public static final String FEATURE_NAME = "group.version";
-
-    public static final GroupVersion LATEST_PRODUCTION = GV_2;
+    public static final ShareVersion LATEST_PRODUCTION = SV_1;
 
     private final short featureLevel;
     private final MetadataVersion bootstrapMetadataVersion;
     private final Map<String, Short> dependencies;
 
-    GroupVersion(
+    ShareVersion(
         int featureLevel,
         MetadataVersion bootstrapMetadataVersion,
         Map<String, Short> dependencies
@@ -67,20 +65,14 @@ public enum GroupVersion implements FeatureVersion {
         return dependencies;
     }
 
-    public boolean isConsumerRebalanceProtocolSupported() {
-        return featureLevel >= GV_1.featureLevel;
-    }
-
-    public static GroupVersion fromFeatureLevel(short version) {
+    public static ShareVersion fromFeatureLevel(short version) {
         switch (version) {
             case 0:
-                return GV_0;
+                return SV_0;
             case 1:
-                return GV_1;
-            case 2:
-                return GV_2;
+                return SV_1;
             default:
-                throw new RuntimeException("Unknown group feature level: " + (int) version);
+                throw new RuntimeException("Unknown share feature level: " + (int) version);
         }
     }
 }
