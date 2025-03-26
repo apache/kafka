@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackRegistrationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
 import org.apache.kafka.common.KafkaException;
@@ -214,6 +215,37 @@ public class ShareConsumerImplTest {
 
         assertThrows(WakeupException.class, () -> consumer.poll(Duration.ZERO));
         assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
+    }
+
+    @Test
+    public void testControlRecordsOnEmptyFetch() {
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
+        // Setup subscription
+        final String topicName = "foo";
+        final List<String> subscriptionTopic = Collections.singletonList(topicName);
+        completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, subscriptionTopic);
+        consumer.subscribe(subscriptionTopic);
+
+        // Create a fetch with only GAP (no records)
+        final TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), 0, topicName);
+        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip);
+        // Add GAP without adding any records
+        batch.addGap(1);
+        
+        final ShareFetch<String, String> fetchWithOnlyGap = ShareFetch.empty();
+        fetchWithOnlyGap.add(tip, batch);
+        doReturn(fetchWithOnlyGap).when(fetchCollector).collect(any(ShareFetchBuffer.class));
+
+        consumer.poll(Duration.ZERO);
+
+        // Verify that next ShareFetchEvent was sent with the acknowledgement GAP for offset 1
+        verify(applicationEventHandler).add(argThat(event -> 
+            event instanceof ShareFetchEvent && 
+            ((ShareFetchEvent) event).acknowledgementsMap().containsKey(tip) &&
+            ((ShareFetchEvent) event).acknowledgementsMap().get(tip).acknowledgements().get(1) == null  // Null indicates GAP
+        ));
     }
 
     @Test
