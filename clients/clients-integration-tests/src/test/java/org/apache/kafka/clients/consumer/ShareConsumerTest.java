@@ -2099,6 +2099,7 @@ public class ShareConsumerTest {
                 messageCounter++;
             }
         }
+        verifyShareGroupStateTopicRecordsProduced();
     }
 
     @ClusterTest
@@ -2120,6 +2121,7 @@ public class ShareConsumerTest {
                 messageCounter++;
             }
         }
+        verifyShareGroupStateTopicRecordsProduced();
     }
 
     @ClusterTest
@@ -2205,6 +2207,7 @@ public class ShareConsumerTest {
                 transactionalProducer.close();
             }
         }
+        verifyShareGroupStateTopicRecordsProduced();
     }
 
     @ClusterTest
@@ -2284,6 +2287,7 @@ public class ShareConsumerTest {
                 transactionalProducer.close();
             }
         }
+        verifyShareGroupStateTopicRecordsProduced();
     }
 
     /**
