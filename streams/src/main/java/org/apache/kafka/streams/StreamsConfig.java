@@ -2123,13 +2123,6 @@ public class StreamsConfig extends AbstractConfig {
         return parsed;
     }
 
-    @Override
-    public Map<String, Object> originals() {
-        final Map<String, Object> map = super.originals();
-        map.remove(AbstractConfig.CONFIG_PROVIDERS_CONFIG);
-        return map;
-    }
-
     public static void main(final String[] args) {
         System.out.println(CONFIG.toHtml(4, config -> "streamsconfigs_" + config));
     }
