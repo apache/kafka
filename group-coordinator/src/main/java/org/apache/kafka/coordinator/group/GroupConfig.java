@@ -24,6 +24,7 @@ import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
@@ -31,9 +32,9 @@ import java.util.Set;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
-import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
+import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
 
 /**
  * Group configuration related parameters and supporting methods like validation, etc. are
@@ -61,18 +62,18 @@ public final class GroupConfig extends AbstractConfig {
         "Negative duration is not allowed.</li>" +
         "<li>anything else: throw exception to the share consumer.</li></ul>";
 
+    public static final String SHARE_ISOLATION_LEVEL_CONFIG = "share.isolation.level";
+    public static final String SHARE_ISOLATION_LEVEL_DEFAULT = IsolationLevel.READ_UNCOMMITTED.toString();
+    public static final String SHARE_ISOLATION_LEVEL_DOC = "Controls how to read records written transactionally. " +
+        "If set to \"read_committed\", the share group will only deliver transactional records which have been committed. " +
+        "If set to \"read_uncommitted\", the share group will return all messages, even transactional messages which have been aborted. " +
+        "Non-transactional records will be returned unconditionally in either mode.";
+
     public static final String STREAMS_SESSION_TIMEOUT_MS_CONFIG = "group.streams.session.timeout.ms";
 
     public static final String STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG = "group.streams.heartbeat.interval.ms";
 
     public static final String STREAMS_NUM_STANDBY_REPLICAS_CONFIG = "group.streams.num.standby.replicas";
-
-    public static final String SHARE_ISOLATION_LEVEL_CONFIG = "share.isolation.level";
-    public static final int SHARE_ISOLATION_LEVEL_DEFAULT = IsolationLevel.READ_UNCOMMITTED.id();
-    public static final String SHARE_ISOLATION_LEVEL_DOC = "Controls how to read records written transactionally. " +
-        "If set to \"read_committed\", the share group will only deliver transactional records which have been committed. " +
-        "If set to \"read_uncommitted\", the share group will return all messages, even transactional messages which have been aborted. " +
-        "Non-transactional records will be returned unconditionally in either mode.";
 
     public final int consumerSessionTimeoutMs;
 
@@ -92,7 +93,7 @@ public final class GroupConfig extends AbstractConfig {
 
     public final int streamsNumStandbyReplicas;
 
-    public final int shareIsolationLevel;
+    public final String shareIsolationLevel;
 
     private static final ConfigDef CONFIG = new ConfigDef()
         .define(CONSUMER_SESSION_TIMEOUT_MS_CONFIG,
@@ -150,9 +151,9 @@ public final class GroupConfig extends AbstractConfig {
             MEDIUM,
             GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DOC)
         .define(SHARE_ISOLATION_LEVEL_CONFIG,
-            INT,
+            STRING,
             SHARE_ISOLATION_LEVEL_DEFAULT,
-            between(0, 1),
+            in(IsolationLevel.READ_COMMITTED.toString(), IsolationLevel.READ_UNCOMMITTED.toString()),
             MEDIUM,
             SHARE_ISOLATION_LEVEL_DOC);
 
@@ -167,7 +168,7 @@ public final class GroupConfig extends AbstractConfig {
         this.streamsSessionTimeoutMs = getInt(STREAMS_SESSION_TIMEOUT_MS_CONFIG);
         this.streamsHeartbeatIntervalMs = getInt(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG);
         this.streamsNumStandbyReplicas = getInt(STREAMS_NUM_STANDBY_REPLICAS_CONFIG);
-        this.shareIsolationLevel = getInt(SHARE_ISOLATION_LEVEL_CONFIG);
+        this.shareIsolationLevel = getString(SHARE_ISOLATION_LEVEL_CONFIG);
     }
 
     public static ConfigDef configDef() {
@@ -309,7 +310,7 @@ public final class GroupConfig extends AbstractConfig {
     }
 
     public static IsolationLevel defaultShareIsolationLevel() {
-        return IsolationLevel.forId((byte) SHARE_ISOLATION_LEVEL_DEFAULT);
+        return IsolationLevel.valueOf(SHARE_ISOLATION_LEVEL_DEFAULT.toUpperCase(Locale.ROOT));
     }
 
     /**
@@ -375,7 +376,14 @@ public final class GroupConfig extends AbstractConfig {
         return streamsNumStandbyReplicas;
     }
 
-    public int shareIsolationLevel() {
-        return shareIsolationLevel;
+    public IsolationLevel shareIsolationLevel() {
+        if (shareIsolationLevel == null) {
+            throw new IllegalArgumentException("Share isolation level is null");
+        }
+        try {
+            return IsolationLevel.valueOf(shareIsolationLevel.toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new IllegalArgumentException("Unknown Share isolation level: " + shareIsolationLevel);
+        }
     }
 }

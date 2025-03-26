@@ -29,7 +29,6 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
-import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -2081,7 +2080,7 @@ public class ShareConsumerTest {
     @ClusterTest
     public void testReadCommittedIsolationLevel() {
         alterShareAutoOffsetReset("group1", "earliest");
-        alterShareIsolationLevel("group1", String.valueOf(IsolationLevel.READ_COMMITTED.id()));
+        alterShareIsolationLevel("group1", "read_committed");
         try (Producer<byte[], byte[]> transactionalProducer = createProducer("T1");
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             produceCommittedAndAbortedTransactionsInInterval(transactionalProducer, 10, 5);
@@ -2105,7 +2104,7 @@ public class ShareConsumerTest {
     @ClusterTest
     public void testReadUncommittedIsolationLevel() {
         alterShareAutoOffsetReset("group1", "earliest");
-        alterShareIsolationLevel("group1", String.valueOf(IsolationLevel.READ_UNCOMMITTED.id()));
+        alterShareIsolationLevel("group1", "read_uncommitted");
         try (Producer<byte[], byte[]> transactionalProducer = createProducer("T1");
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             produceCommittedAndAbortedTransactionsInInterval(transactionalProducer, 10, 5);
@@ -2127,7 +2126,7 @@ public class ShareConsumerTest {
     @ClusterTest
     public void testAlterReadUncommittedToReadCommittedIsolationLevel() {
         alterShareAutoOffsetReset("group1", "earliest");
-        alterShareIsolationLevel("group1", String.valueOf(IsolationLevel.READ_UNCOMMITTED.id()));
+        alterShareIsolationLevel("group1", "read_uncommitted");
         try (Producer<byte[], byte[]> transactionalProducer = createProducer("T1");
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             shareConsumer.subscribe(Set.of(tp.topic()));
@@ -2173,7 +2172,7 @@ public class ShareConsumerTest {
                 shareConsumer.commitSync();
 
                 // We are altering IsolationLevel to READ_COMMITTED now. We will only read committed transactions now.
-                alterShareIsolationLevel("group1", String.valueOf(IsolationLevel.READ_COMMITTED.id()));
+                alterShareIsolationLevel("group1", "read_committed");
 
                 // Fifth transaction is committed.
                 produceCommittedTransaction(transactionalProducer, "Message 5");
@@ -2213,7 +2212,7 @@ public class ShareConsumerTest {
     @ClusterTest
     public void testAlterReadCommittedToReadUncommittedIsolationLevel() {
         alterShareAutoOffsetReset("group1", "earliest");
-        alterShareIsolationLevel("group1", String.valueOf(IsolationLevel.READ_COMMITTED.id()));
+        alterShareIsolationLevel("group1", "read_committed");
         try (Producer<byte[], byte[]> transactionalProducer = createProducer("T1");
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             shareConsumer.subscribe(Set.of(tp.topic()));
@@ -2254,7 +2253,7 @@ public class ShareConsumerTest {
                 shareConsumer.commitSync();
 
                 // We are altering IsolationLevel to READ_UNCOMMITTED now. We will read both committed/aborted transactions now.
-                alterShareIsolationLevel("group1", String.valueOf(IsolationLevel.READ_UNCOMMITTED.id()));
+                alterShareIsolationLevel("group1", "read_uncommitted");
 
                 // Fifth transaction is committed.
                 produceCommittedTransaction(transactionalProducer, "Message 5");
