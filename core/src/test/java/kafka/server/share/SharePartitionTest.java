@@ -6755,7 +6755,7 @@ public class SharePartitionTest {
 
         // We are mocking the result of function fetchAbortedTransactionRecordBatches. The records present at these offsets need to be archived.
         // We won't be utilizing the aborted transactions passed in fetchPartitionData.
-        when(sharePartition.fetchAbortedTransactionRecordBatches(fetchPartitionData.records.batches(), fetchPartitionData.abortedTransactions)).thenReturn(
+        when(sharePartition.fetchAbortedTransactionRecordBatches(fetchPartitionData.records.batches(), fetchPartitionData.abortedTransactions.get())).thenReturn(
             List.of(
                 memoryRecordsBuilder(5, 10).build().batches().iterator().next(),
                 memoryRecordsBuilder(10, 58).build().batches().iterator().next(),

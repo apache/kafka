@@ -753,7 +753,7 @@ public class SharePartition {
                     groupId, topicIdPartition);
                 ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
                     firstBatch.baseOffset(), lastBatch.lastOffset(), batchSize, maxFetchRecords);
-                return filterAbortedTransactionalAcquiredRecords(fetchPartitionData, isolationType, shareAcquiredRecords);
+                return maybeFilterAbortedTransactionalAcquiredRecords(fetchPartitionData, isolationType, shareAcquiredRecords);
             }
 
             log.trace("Overlap exists with in-flight records. Acquire the records if available for"
@@ -863,7 +863,7 @@ public class SharePartition {
             }
             if (!result.isEmpty()) {
                 maybeUpdateReadGapFetchOffset(result.get(result.size() - 1).lastOffset() + 1);
-                return filterAbortedTransactionalAcquiredRecords(fetchPartitionData, isolationType, new ShareAcquiredRecords(result, acquiredCount));
+                return maybeFilterAbortedTransactionalAcquiredRecords(fetchPartitionData, isolationType, new ShareAcquiredRecords(result, acquiredCount));
             }
             return new ShareAcquiredRecords(result, acquiredCount);
         } finally {
@@ -2501,12 +2501,12 @@ public class SharePartition {
         }
     }
 
-    private ShareAcquiredRecords filterAbortedTransactionalAcquiredRecords(FetchPartitionData fetchPartitionData, FetchIsolation isolationLevel, ShareAcquiredRecords shareAcquiredRecords) {
-        if (isolationLevel != FetchIsolation.TXN_COMMITTED)
+    private ShareAcquiredRecords maybeFilterAbortedTransactionalAcquiredRecords(FetchPartitionData fetchPartitionData, FetchIsolation isolationLevel, ShareAcquiredRecords shareAcquiredRecords) {
+        if (isolationLevel != FetchIsolation.TXN_COMMITTED || fetchPartitionData.abortedTransactions.isEmpty())
             return shareAcquiredRecords;
         // When FetchIsolation.TXN_COMMITTED is used as isolation type by the share group, we need to filter any
         // transactions that were aborted/did not commit due to timeout.
-        List<AcquiredRecords> result = filterAbortedTransactionalRecords(fetchPartitionData.records.batches(), shareAcquiredRecords.acquiredRecords(), fetchPartitionData.abortedTransactions);
+        List<AcquiredRecords> result = filterAbortedTransactionalAcquiredRecords(fetchPartitionData.records.batches(), shareAcquiredRecords.acquiredRecords(), fetchPartitionData.abortedTransactions.get());
         int acquiredCount = 0;
         for (AcquiredRecords records : result) {
             acquiredCount += (int) (records.lastOffset() - records.firstOffset() + 1);
@@ -2514,15 +2514,13 @@ public class SharePartition {
         return new ShareAcquiredRecords(result, acquiredCount);
     }
 
-    private List<AcquiredRecords> filterAbortedTransactionalRecords(
+    private List<AcquiredRecords> filterAbortedTransactionalAcquiredRecords(
         Iterable<? extends RecordBatch> batches,
         List<AcquiredRecords> acquiredRecords,
-        Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions
+        List<FetchResponseData.AbortedTransaction> abortedTransactions
     ) {
         lock.writeLock().lock();
         try {
-            if (abortedTransactions.isEmpty())
-                return acquiredRecords;
             // The record batches that need to be archived in cachedState because they were a part of aborted transactions.
             List<RecordBatch> recordsToArchive = fetchAbortedTransactionRecordBatches(batches, abortedTransactions);
             for (RecordBatch recordBatch : recordsToArchive) {
@@ -2677,11 +2675,11 @@ public class SharePartition {
     // Visible for testing.
     List<RecordBatch> fetchAbortedTransactionRecordBatches(
         Iterable<? extends RecordBatch> batches,
-        Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions
+        List<FetchResponseData.AbortedTransaction> abortedTransactions
     ) {
         lock.writeLock().lock();
         try {
-            PriorityQueue<FetchResponseData.AbortedTransaction> abortedTransactionsHeap = abortedTransactionsHeap(abortedTransactions.get());
+            PriorityQueue<FetchResponseData.AbortedTransaction> abortedTransactionsHeap = abortedTransactionsHeap(abortedTransactions);
             Set<Long> abortedProducerIds = new HashSet<>();
             List<RecordBatch> recordsToArchive = new ArrayList<>();
 
@@ -2713,45 +2711,31 @@ public class SharePartition {
     }
 
     private PriorityQueue<FetchResponseData.AbortedTransaction> abortedTransactionsHeap(List<FetchResponseData.AbortedTransaction> abortedTransactions) {
-        lock.writeLock().lock();
-        try {
-            if (abortedTransactions == null || abortedTransactions.isEmpty())
-                return null;
+        if (abortedTransactions == null || abortedTransactions.isEmpty())
+            return null;
 
-            PriorityQueue<FetchResponseData.AbortedTransaction> abortedTransactionsHeap = new PriorityQueue<>(
-                abortedTransactions.size(), Comparator.comparingLong(FetchResponseData.AbortedTransaction::firstOffset)
-            );
-            abortedTransactionsHeap.addAll(abortedTransactions);
-            return abortedTransactionsHeap;
-        } finally {
-            lock.writeLock().unlock();
-        }
+        PriorityQueue<FetchResponseData.AbortedTransaction> abortedTransactionsHeap = new PriorityQueue<>(
+            abortedTransactions.size(), Comparator.comparingLong(FetchResponseData.AbortedTransaction::firstOffset)
+        );
+        abortedTransactionsHeap.addAll(abortedTransactions);
+        return abortedTransactionsHeap;
     }
 
     private boolean isBatchAborted(RecordBatch batch, Set<Long> abortedProducerIds) {
-        lock.writeLock().lock();
-        try {
-            return batch.isTransactional() && abortedProducerIds.contains(batch.producerId());
-        } finally {
-            lock.writeLock().unlock();
-        }
+        return batch.isTransactional() && abortedProducerIds.contains(batch.producerId());
     }
 
     private boolean containsAbortMarker(RecordBatch batch) {
-        lock.writeLock().lock();
-        try {
-            if (!batch.isControlBatch())
-                return false;
+        if (!batch.isControlBatch())
+            return false;
 
-            Iterator<Record> batchIterator = batch.iterator();
-            if (!batchIterator.hasNext())
-                return false;
+        Iterator<Record> batchIterator = batch.iterator();
+        if (!batchIterator.hasNext())
+            return false;
 
-            Record firstRecord = batchIterator.next();
-            return ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
-        } finally {
-            lock.writeLock().unlock();
-        }
+        Record firstRecord = batchIterator.next();
+        return ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
+
     }
 
     // Visible for testing. Should only be used for testing purposes.
