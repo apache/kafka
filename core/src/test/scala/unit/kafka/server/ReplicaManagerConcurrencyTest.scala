@@ -34,7 +34,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{DirectoryId, IsolationLevel, TopicPartition, Uuid}
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
-import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, MockConfigRepository}
+import org.apache.kafka.metadata.{LeaderAndIsr, LeaderRecoveryState, MetadataCache, MockConfigRepository}
 import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.raft.QuorumConfig
@@ -82,7 +82,7 @@ class ReplicaManagerConcurrencyTest extends Logging {
   def testIsrExpandAndShrinkWithConcurrentProduce(): Unit = {
     val localId = 0
     val remoteId = 1
-    val metadataCache = MetadataCache.kRaftMetadataCache(localId, () => KRaftVersion.KRAFT_VERSION_0)
+    val metadataCache = new KRaftMetadataCache(localId, () => KRaftVersion.KRAFT_VERSION_0)
     channel = new ControllerChannel
     replicaManager = buildReplicaManager(localId, channel, metadataCache)
 

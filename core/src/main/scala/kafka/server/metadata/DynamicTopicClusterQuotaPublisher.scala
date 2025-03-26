@@ -13,11 +13,12 @@
  **/
 package kafka.server.metadata
 
-import kafka.server.{KafkaConfig, MetadataCache}
+import kafka.server.KafkaConfig
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.image.loader.LoaderManifest
+import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.fault.FaultHandler
 
 /**
