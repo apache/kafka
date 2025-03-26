@@ -82,6 +82,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.ConcurrentModificationException;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -644,8 +645,12 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         if (currentFetch.isEmpty()) {
             final ShareFetch<K, V> fetch = fetchCollector.collect(fetchBuffer);
             if (fetch.isEmpty()) {
+                // Check for any acknowledgements which could have come from control records (GAP) and include them.
+                Map<TopicIdPartition, NodeAcknowledgements> combinedAcknowledgements = new LinkedHashMap<>(acknowledgementsMap);
+                combinedAcknowledgements.putAll(fetch.takeAcknowledgedRecords());
+
                 // Fetch more records and send any waiting acknowledgements
-                applicationEventHandler.add(new ShareFetchEvent(acknowledgementsMap));
+                applicationEventHandler.add(new ShareFetchEvent(combinedAcknowledgements));
 
                 // Notify the network thread to wake up and start the next round of fetching
                 applicationEventHandler.wakeupNetworkThread();
