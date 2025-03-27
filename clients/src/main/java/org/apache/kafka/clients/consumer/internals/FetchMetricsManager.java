@@ -29,7 +29,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkSeqMap;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 /**
  * The {@link FetchMetricsManager} class provides wrapper methods to record lag, lead, latency, and fetch metrics.
@@ -106,7 +106,7 @@ public class FetchMetricsManager {
         String name = topicBytesFetchedMetricName(topic);
         maybeRecordDeprecatedBytesFetched(name, topic, bytes);
 
-        Sensor bytesFetched = new SensorBuilder(metrics, name, () -> mkSeqMap(mkEntry("topic", topic)))
+        Sensor bytesFetched = new SensorBuilder(metrics, name, () -> mkMap(mkEntry("topic", topic)))
             .withAvg(metricsRegistry.topicFetchSizeAvg)
             .withMax(metricsRegistry.topicFetchSizeMax)
             .withMeter(metricsRegistry.topicBytesConsumedRate, metricsRegistry.topicBytesConsumedTotal)
@@ -118,7 +118,7 @@ public class FetchMetricsManager {
         String name = topicRecordsFetchedMetricName(topic);
         maybeRecordDeprecatedRecordsFetched(name, topic, records);
 
-        Sensor recordsFetched = new SensorBuilder(metrics, name, () -> mkSeqMap(mkEntry("topic", topic)))
+        Sensor recordsFetched = new SensorBuilder(metrics, name, () -> mkMap(mkEntry("topic", topic)))
             .withAvg(metricsRegistry.topicRecordsPerRequestAvg)
             .withMeter(metricsRegistry.topicRecordsConsumedRate, metricsRegistry.topicRecordsConsumedTotal)
             .build();
@@ -131,7 +131,7 @@ public class FetchMetricsManager {
         String name = partitionRecordsLagMetricName(tp);
         maybeRecordDeprecatedPartitionLag(name, tp, lag);
 
-        Sensor recordsLag = new SensorBuilder(metrics, name, () -> mkSeqMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition()))))
+        Sensor recordsLag = new SensorBuilder(metrics, name, () -> mkMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition()))))
             .withValue(metricsRegistry.partitionRecordsLag)
             .withMax(metricsRegistry.partitionRecordsLagMax)
             .withAvg(metricsRegistry.partitionRecordsLagAvg)
@@ -146,7 +146,7 @@ public class FetchMetricsManager {
         String name = partitionRecordsLeadMetricName(tp);
         maybeRecordDeprecatedPartitionLead(name, tp, lead);
 
-        Sensor recordsLead = new SensorBuilder(metrics, name, () -> mkSeqMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition()))))
+        Sensor recordsLead = new SensorBuilder(metrics, name, () -> mkMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition()))))
             .withValue(metricsRegistry.partitionRecordsLead)
             .withMin(metricsRegistry.partitionRecordsLeadMin)
             .withAvg(metricsRegistry.partitionRecordsLeadAvg)
@@ -284,7 +284,7 @@ public class FetchMetricsManager {
     }
 
     private MetricName partitionPreferredReadReplicaMetricName(TopicPartition tp) {
-        Map<String, String> metricTags = mkSeqMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition())));
+        Map<String, String> metricTags = mkMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition())));
         return this.metrics.metricInstance(metricsRegistry.partitionPreferredReadReplica, metricTags);
     }
 
@@ -296,12 +296,12 @@ public class FetchMetricsManager {
 
     @Deprecated
     static LinkedHashMap<String, String> topicTags(String topic) {
-        return mkSeqMap(mkEntry("topic", topic.replace('.', '_')));
+        return mkMap(mkEntry("topic", topic.replace('.', '_')));
     }
 
     @Deprecated
     static LinkedHashMap<String, String> topicPartitionTags(TopicPartition tp) {
-        return mkSeqMap(mkEntry("topic", tp.topic().replace('.', '_')),
+        return mkMap(mkEntry("topic", tp.topic().replace('.', '_')),
             mkEntry("partition", String.valueOf(tp.partition())));
     }
 
