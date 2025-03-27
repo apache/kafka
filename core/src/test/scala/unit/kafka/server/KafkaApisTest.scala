@@ -3849,7 +3849,7 @@ class KafkaApisTest extends Logging {
       ).asJava)
     )
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
       new ShareSessionContext(new ShareRequestMetadata(memberId, shareSessionEpoch), util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)))
     )
@@ -3922,7 +3922,7 @@ class KafkaApisTest extends Logging {
     cachedSharePartitions.mustAdd(new CachedSharePartition(
       new TopicIdPartition(topicId, partitionIndex, topicName), false))
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenThrow(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenThrow(
       Errors.INVALID_REQUEST.exception()
     ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1), new ShareSession(
       new ShareSessionKey(groupId, memberId), cachedSharePartitions, 0L, 0L, 2
@@ -4021,7 +4021,7 @@ class KafkaApisTest extends Logging {
       ).asJava)
     )
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
       new ShareSessionContext(new ShareRequestMetadata(memberId, 0), util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
@@ -4110,7 +4110,7 @@ class KafkaApisTest extends Logging {
       FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
     )
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
       new ShareSessionContext(new ShareRequestMetadata(memberId, 0), util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
@@ -4179,7 +4179,7 @@ class KafkaApisTest extends Logging {
     cachedSharePartitions.mustAdd(new CachedSharePartition(
       new TopicIdPartition(topicId, partitionIndex, topicName), false))
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any()))
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any()))
       .thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1), new ShareSession(
         new ShareSessionKey(groupId, memberId), cachedSharePartitions, 0L, 0L, 2))
       )
@@ -4242,7 +4242,7 @@ class KafkaApisTest extends Logging {
     cachedSharePartitions.mustAdd(new CachedSharePartition(
       new TopicIdPartition(topicId, partitionIndex, topicName), false))
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any()))
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any()))
       .thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1), new ShareSession(
         new ShareSessionKey(groupId, memberId), cachedSharePartitions, 0L, 0L, 2))
       )
@@ -4303,7 +4303,7 @@ class KafkaApisTest extends Logging {
       ).asJava)
     )
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
       new ShareSessionContext(new ShareRequestMetadata(memberId, 0), util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
@@ -4371,7 +4371,7 @@ class KafkaApisTest extends Logging {
       ).asJava)
     )
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
       new ShareSessionContext(new ShareRequestMetadata(memberId, 0), util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
@@ -4461,7 +4461,7 @@ class KafkaApisTest extends Logging {
       ).asJava)
     )
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
       new ShareSessionContext(new ShareRequestMetadata(memberId, 0), util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
@@ -4600,7 +4600,7 @@ class KafkaApisTest extends Logging {
       new TopicIdPartition(topicId, partitionIndex, topicName), false)
     )
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
       new ShareSessionContext(new ShareRequestMetadata(memberId, 0), util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
@@ -4866,7 +4866,7 @@ class KafkaApisTest extends Logging {
       new TopicIdPartition(topicId4, 0, topicName4), false
     ))
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
       new ShareSessionContext(new ShareRequestMetadata(memberId, 0), util.List.of(
         new TopicIdPartition(topicId1, new TopicPartition(topicName1, 0)),
         new TopicIdPartition(topicId1, new TopicPartition(topicName1, 1)),
@@ -5851,7 +5851,7 @@ class KafkaApisTest extends Logging {
       new TopicIdPartition(topicId, 0, topicName), false
     ))
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
       new ShareSessionContext(new ShareRequestMetadata(memberId, 0), util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
@@ -6052,7 +6052,7 @@ class KafkaApisTest extends Logging {
       ).asJava)
     )
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
       new FinalContext()
     )
 

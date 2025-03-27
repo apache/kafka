@@ -21,6 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
+import org.apache.kafka.server.network.ConnectionDisconnectListener;
 import org.apache.kafka.server.share.CachedSharePartition;
 
 import com.yammer.metrics.core.Meter;
@@ -55,12 +56,15 @@ public class ShareSessionCache {
     private final int maxEntries;
     private final long evictionMs;
     private long numPartitions = 0;
+    private final ConnectionDisconnectListener connectionDisconnectListener;
 
     // A map of session key to ShareSession.
     private final Map<ShareSessionKey, ShareSession> sessions = new HashMap<>();
 
     // Maps last used times to sessions.
     private final TreeMap<LastUsedKey, ShareSession> lastUsed = new TreeMap<>();
+
+    private final SessionClientIdMapping sessionClientIdMapping;
 
     @SuppressWarnings("this-escape")
     public ShareSessionCache(int maxEntries, long evictionMs) {
@@ -71,6 +75,8 @@ public class ShareSessionCache {
         metricsGroup.newGauge(SHARE_SESSIONS_COUNT, this::size);
         metricsGroup.newGauge(SHARE_PARTITIONS_COUNT, this::totalPartitions);
         this.evictionsMeter = metricsGroup.newMeter(SHARE_SESSION_EVICTIONS_PER_SEC, "evictions", TimeUnit.SECONDS);
+        this.sessionClientIdMapping = new SessionClientIdMapping();
+        this.connectionDisconnectListener = new ClientConnectionDisconnectListener();
     }
 
     /**
@@ -115,6 +121,7 @@ public class ShareSessionCache {
         if (removeResult != null) {
             numPartitions = numPartitions - session.cachedSize();
         }
+        sessionClientIdMapping.remove(session.key());
         return removeResult;
     }
 
@@ -171,19 +178,63 @@ public class ShareSessionCache {
      * @param partitionMap - The topic partitions to be added to the session.
      * @return - The session key if the session was created, or null if the session was not created.
      */
-    public synchronized ShareSessionKey maybeCreateSession(String groupId, Uuid memberId, long now, ImplicitLinkedHashCollection<CachedSharePartition> partitionMap) {
+    public synchronized ShareSessionKey maybeCreateSession(
+        String groupId,
+        Uuid memberId,
+        long now,
+        ImplicitLinkedHashCollection<CachedSharePartition> partitionMap,
+        String clientConnectionId
+    ) {
         if (sessions.size() < maxEntries || tryEvict(now)) {
             ShareSession session = new ShareSession(new ShareSessionKey(groupId, memberId), partitionMap,
                     now, now, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH));
             sessions.put(session.key(), session);
             touch(session, now);
+            sessionClientIdMapping.add(session.key(), clientConnectionId);
             return session.key();
         }
         return null;
     }
 
+    public ConnectionDisconnectListener connectionDisconnectListener() {
+        return connectionDisconnectListener;
+    }
+
     // Visible for testing.
     Meter evictionsMeter() {
         return evictionsMeter;
+    }
+
+    private final class ClientConnectionDisconnectListener implements ConnectionDisconnectListener {
+
+        // When the client disconnect, the corresponding session should be removed from the cache.
+        @Override
+        public void onDisconnect(String connectionId) {
+            remove(sessionClientIdMapping.getShareSessionKey(connectionId));
+        }
+    }
+
+    private static class SessionClientIdMapping {
+        // A map of session key to client connection id.
+        private final Map<ShareSessionKey, String> sessionConnectionIdMap = new HashMap<>();
+
+        // A map of client connection id to session key.
+        private final Map<String, ShareSessionKey> connectionIdSessionKeyMap = new HashMap<>();
+
+        private void add(ShareSessionKey key, String connectionId) {
+            sessionConnectionIdMap.put(key, connectionId);
+            connectionIdSessionKeyMap.put(connectionId, key);
+        }
+
+        private ShareSessionKey getShareSessionKey(String connectionId) {
+            return connectionIdSessionKeyMap.get(connectionId);
+        }
+
+        private void remove(ShareSessionKey shareSessionKey) {
+            String connectionId = sessionConnectionIdMap.remove(shareSessionKey);
+            if (connectionId != null) {
+                connectionIdSessionKeyMap.remove(connectionId);
+            }
+        }
     }
 }
