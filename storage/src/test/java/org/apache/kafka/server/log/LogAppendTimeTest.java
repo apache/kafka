@@ -30,9 +30,6 @@ import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.common.test.junit.ClusterTestExtensions;
-
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -42,18 +39,17 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@ExtendWith(ClusterTestExtensions.class)
 public class LogAppendTimeTest {
     @ClusterTest(
         types = {Type.KRAFT},
-        brokers = 2,
         serverProperties = {
             @ClusterConfigProperty(key = "log.message.timestamp.type", value = "LogAppendTime"),
-            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "2"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
         }
     )
     public void testProduceConsume(ClusterInstance clusterInstance) throws InterruptedException {
@@ -70,13 +66,8 @@ public class LogAppendTimeTest {
         List<RecordMetadata> recordMetadatas = new ArrayList<>();
         try (Producer<byte[], byte[]> producer = clusterInstance.producer()) {
             producerRecords.stream()
-                .map(record -> {
-                    try {
-                        return producer.send(record).get(10, TimeUnit.SECONDS);
-                    } catch (Exception e) {
-                        throw new RuntimeException(e);
-                    }
-                })
+                .map(record ->
+                    assertDoesNotThrow(() -> producer.send(record).get(10, TimeUnit.SECONDS)))
                 .forEach(recordMetadatas::add);
         }
         assertEquals(recordCount, recordMetadatas.size());
