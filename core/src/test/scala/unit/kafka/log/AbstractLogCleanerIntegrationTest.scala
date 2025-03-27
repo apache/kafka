@@ -28,7 +28,7 @@ import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordVersion
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, UnifiedLog}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogCleaner, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.{AfterEach, Tag}
 
@@ -133,10 +133,10 @@ abstract class AbstractLogCleanerIntegrationTest {
       backoffMs,
       true)
     new LogCleaner(cleanerConfig,
-      logDirs = Array(logDir),
-      logs = logMap,
-      logDirFailureChannel = new LogDirFailureChannel(1),
-      time = time)
+      java.util.List.of(logDir),
+      logMap,
+      new LogDirFailureChannel(1),
+      time)
   }
 
   private var ctr = 0

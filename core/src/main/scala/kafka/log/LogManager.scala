@@ -29,6 +29,7 @@ import kafka.utils.{CoreUtils, Logging, Pool}
 import org.apache.kafka.common.{DirectoryId, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.utils.{Exit, KafkaThread, Time, Utils}
 import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException, LogDirNotFoundException}
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 
 import scala.jdk.CollectionConverters._
 import scala.collection._
@@ -41,7 +42,7 @@ import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsem
 import java.util.{Collections, Optional, OptionalLong, Properties}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{FileLock, Scheduler}
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, LogOffsetsListener, ProducerStateManagerConfig, RemoteIndexCache, UnifiedLog}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogCleaner, LogConfig, LogDirFailureChannel, LogOffsetsListener, ProducerStateManagerConfig, RemoteIndexCache, UnifiedLog}
 import org.apache.kafka.storage.internals.checkpoint.{CleanShutdownFileHandler, OffsetCheckpointFile}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
@@ -628,7 +629,7 @@ class LogManager(logDirs: Seq[File],
                          initialTaskDelayMs)
     }
     if (cleanerConfig.enableCleaner) {
-      _cleaner = new LogCleaner(cleanerConfig, liveLogDirs, currentLogs, logDirFailureChannel, time = time)
+      _cleaner = new LogCleaner(cleanerConfig, liveLogDirs.asJava, currentLogs, logDirFailureChannel, time)
       _cleaner.startup()
     }
   }
@@ -893,7 +894,7 @@ class LogManager(logDirs: Seq[File],
    */
   private def resumeCleaning(topicPartition: TopicPartition): Unit = {
     if (cleaner != null) {
-      cleaner.resumeCleaning(Seq(topicPartition))
+      cleaner.resumeCleaning(util.List.of(topicPartition))
       info(s"Cleaning for partition $topicPartition is resumed")
     }
   }
@@ -1285,7 +1286,7 @@ class LogManager(logDirs: Seq[File],
         if (cleaner != null && !isFuture) {
           cleaner.abortCleaning(topicPartition)
           if (checkpoint) {
-            cleaner.updateCheckpoints(removedLog.parentDirFile, partitionToRemove = Option(topicPartition))
+            cleaner.updateCheckpoints(removedLog.parentDirFile, Optional.of(topicPartition))
           }
         }
         if (isStray) {
@@ -1343,7 +1344,7 @@ class LogManager(logDirs: Seq[File],
 
     val logsByDirCached = logsByDir
     logDirs.foreach { logDir =>
-      if (cleaner != null) cleaner.updateCheckpoints(logDir)
+      if (cleaner != null) cleaner.updateCheckpoints(logDir, Optional.empty())
       val logsToCheckpoint = logsInDir(logsByDirCached, logDir)
       checkpointRecoveryOffsetsInDir(logDir, logsToCheckpoint)
       checkpointLogStartOffsetsInDir(logDir, logsToCheckpoint)
@@ -1384,7 +1385,7 @@ class LogManager(logDirs: Seq[File],
     val deletableLogs = {
       if (cleaner != null) {
         // prevent cleaner from working on same partitions when changing cleanup policy
-        cleaner.pauseCleaningForNonCompactedPartitions()
+        cleaner.pauseCleaningForNonCompactedPartitions().asScala.map(entry => (entry.getKey, entry.getValue))
       } else {
         currentLogs.asScala.filter {
           case (_, log) => !log.config.compact
@@ -1407,7 +1408,7 @@ class LogManager(logDirs: Seq[File],
       }
     } finally {
       if (cleaner != null) {
-        cleaner.resumeCleaning(deletableLogs.map(_._1))
+        cleaner.resumeCleaning(deletableLogs.map(_._1).toList.asJava)
       }
     }
 
@@ -1548,6 +1549,7 @@ object LogManager {
     val defaultLogConfig = new LogConfig(defaultProps)
 
     val cleanerConfig = LogCleaner.cleanerConfig(config)
+    val transactionLogConfig = new TransactionLogConfig(config)
 
     new LogManager(logDirs = config.logDirs.map(new File(_).getAbsoluteFile),
       initialOfflineDirs = initialOfflineDirs.map(new File(_).getAbsoluteFile),
@@ -1560,8 +1562,8 @@ object LogManager {
       flushStartOffsetCheckpointMs = config.logFlushStartOffsetCheckpointIntervalMs,
       retentionCheckMs = config.logCleanupIntervalMs,
       maxTransactionTimeoutMs = config.transactionStateManagerConfig.transactionMaxTimeoutMs,
-      producerStateManagerConfig = new ProducerStateManagerConfig(config.transactionLogConfig.producerIdExpirationMs, config.transactionLogConfig.transactionPartitionVerificationEnable),
-      producerIdExpirationCheckIntervalMs = config.transactionLogConfig.producerIdExpirationCheckIntervalMs,
+      producerStateManagerConfig = new ProducerStateManagerConfig(transactionLogConfig.producerIdExpirationMs, transactionLogConfig.transactionPartitionVerificationEnable),
+      producerIdExpirationCheckIntervalMs = transactionLogConfig.producerIdExpirationCheckIntervalMs,
       scheduler = kafkaScheduler,
       brokerTopicStats = brokerTopicStats,
       logDirFailureChannel = logDirFailureChannel,
