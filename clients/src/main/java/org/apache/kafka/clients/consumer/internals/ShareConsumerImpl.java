@@ -201,7 +201,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     private final SubscriptionState subscriptions;
     private final ConsumerMetadata metadata;
     private final Metrics metrics;
-    private final int defaultApiTimeoutMs;
+    private final long defaultApiTimeoutMs;
     private volatile boolean closed = false;
     // Init value is needed to avoid NPE in case of exception raised in the constructor
     private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
@@ -450,7 +450,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                       final Metrics metrics,
                       final SubscriptionState subscriptions,
                       final ConsumerMetadata metadata,
-                      final int defaultApiTimeoutMs,
+                      final long defaultApiTimeoutMs,
                       final String groupId) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
@@ -651,7 +651,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 applicationEventHandler.wakeupNetworkThread();
             } else if (!acknowledgementsMap.isEmpty()) {
                 // Asynchronously commit any waiting acknowledgements
-                applicationEventHandler.add(new ShareAcknowledgeAsyncEvent(acknowledgementsMap));
+                Timer timer = time.timer(defaultApiTimeoutMs);
+                applicationEventHandler.add(new ShareAcknowledgeAsyncEvent(acknowledgementsMap, calculateDeadlineMs(timer)));
 
                 // Notify the network thread to wake up and start the next round of fetching
                 applicationEventHandler.wakeupNetworkThread();
@@ -660,7 +661,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         } else {
             if (!acknowledgementsMap.isEmpty()) {
                 // Asynchronously commit any waiting acknowledgements
-                applicationEventHandler.add(new ShareAcknowledgeAsyncEvent(acknowledgementsMap));
+                Timer timer = time.timer(defaultApiTimeoutMs);
+                applicationEventHandler.add(new ShareAcknowledgeAsyncEvent(acknowledgementsMap, calculateDeadlineMs(timer)));
 
                 // Notify the network thread to wake up and start the next round of fetching
                 applicationEventHandler.wakeupNetworkThread();
@@ -758,7 +760,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
             Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap = acknowledgementsToSend();
             if (!acknowledgementsMap.isEmpty()) {
-                ShareAcknowledgeAsyncEvent event = new ShareAcknowledgeAsyncEvent(acknowledgementsMap);
+                Timer timer = time.timer(defaultApiTimeoutMs);
+                ShareAcknowledgeAsyncEvent event = new ShareAcknowledgeAsyncEvent(acknowledgementsMap, calculateDeadlineMs(timer));
                 applicationEventHandler.add(event);
             }
         } finally {

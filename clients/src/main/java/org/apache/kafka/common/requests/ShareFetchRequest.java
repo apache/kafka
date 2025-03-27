@@ -22,10 +22,9 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchRequestData;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -166,9 +165,9 @@ public class ShareFetchRequest extends AbstractRequest {
                 .setErrorCode(error.code()));
     }
 
-    public static ShareFetchRequest parse(ByteBuffer buffer, short version) {
+    public static ShareFetchRequest parse(Readable readable, short version) {
         return new ShareFetchRequest(
-                new ShareFetchRequestData(new ByteBufferAccessor(buffer), version),
+                new ShareFetchRequestData(readable, version),
                 version
         );
     }
