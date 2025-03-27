@@ -26,6 +26,7 @@ import org.apache.kafka.server.config.ReplicationQuotaManagerConfig;
 import org.apache.kafka.server.quota.ClientQuotaCallback;
 import org.apache.kafka.server.quota.QuotaType;
 
+import java.util.Map;
 import java.util.Optional;
 
 import scala.Option;
@@ -114,9 +115,15 @@ public class QuotaFactory {
         }
     }
 
-    public static QuotaManagers instantiate(KafkaConfig cfg, Metrics metrics, Time time, String threadNamePrefix) {
-        Plugin<ClientQuotaCallback> clientQuotaCallbackPlugin = createClientQuotaCallback(cfg, metrics);
-        
+    public static QuotaManagers instantiate(
+        KafkaConfig cfg,
+        Metrics metrics,
+        Time time,
+        String threadNamePrefix,
+        String role
+    ) {
+        Plugin<ClientQuotaCallback> clientQuotaCallbackPlugin = createClientQuotaCallback(cfg, metrics, role);
+
         return new QuotaManagers(
             new ClientQuotaManager(clientConfig(cfg), metrics, QuotaType.FETCH, time, threadNamePrefix, Option.apply(clientQuotaCallbackPlugin)),
             new ClientQuotaManager(clientConfig(cfg), metrics, QuotaType.PRODUCE, time, threadNamePrefix, Option.apply(clientQuotaCallbackPlugin)),
@@ -128,11 +135,16 @@ public class QuotaFactory {
             Optional.ofNullable(clientQuotaCallbackPlugin.get())
         );
     }
-    
-    private static Plugin<ClientQuotaCallback> createClientQuotaCallback(KafkaConfig cfg, Metrics metrics) {
+
+    private static Plugin<ClientQuotaCallback> createClientQuotaCallback(KafkaConfig cfg, Metrics metrics, String role) {
         ClientQuotaCallback clientQuotaCallback = cfg.getConfiguredInstance(
                 QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, ClientQuotaCallback.class);
-        return Plugin.wrapInstance(clientQuotaCallback, metrics, QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG);
+        return Plugin.wrapInstance(
+            clientQuotaCallback,
+            metrics,
+            QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG,
+            Map.of("role", role)
+        );
     }
 
     private static ClientQuotaManagerConfig clientConfig(KafkaConfig cfg) {

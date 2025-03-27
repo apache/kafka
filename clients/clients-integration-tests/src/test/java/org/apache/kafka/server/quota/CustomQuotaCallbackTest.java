@@ -31,55 +31,50 @@ import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.common.test.junit.ClusterTestExtensions;
+import org.apache.kafka.server.ProcessRole;
 import org.apache.kafka.server.config.QuotaConfig;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
-@ClusterTestDefaults(controllers = 3, 
-    types = {Type.KRAFT},
-    serverProperties = {
-        @ClusterConfigProperty(id = 3000, key = QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, value = "org.apache.kafka.server.quota.CustomQuotaCallbackTest$CustomQuotaCallback"),
-        @ClusterConfigProperty(id = 3001, key = QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, value = "org.apache.kafka.server.quota.CustomQuotaCallbackTest$CustomQuotaCallback"),
-        @ClusterConfigProperty(id = 3002, key = QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, value = "org.apache.kafka.server.quota.CustomQuotaCallbackTest$CustomQuotaCallback"),
-    }
-)
-@ExtendWith(ClusterTestExtensions.class)
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+
 public class CustomQuotaCallbackTest {
 
-    private final ClusterInstance cluster;
+    @ClusterTest(
+        controllers = 3,
+        types = {Type.KRAFT},
+        serverProperties = {
+            @ClusterConfigProperty(id = 3000, key = QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, value = "org.apache.kafka.server.quota.CustomQuotaCallbackTest$CustomQuotaCallback"),
+            @ClusterConfigProperty(id = 3001, key = QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, value = "org.apache.kafka.server.quota.CustomQuotaCallbackTest$CustomQuotaCallback"),
+            @ClusterConfigProperty(id = 3002, key = QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, value = "org.apache.kafka.server.quota.CustomQuotaCallbackTest$CustomQuotaCallback"),
+        }
+    )
+    public void testCustomQuotaCallbackWithControllerServer(ClusterInstance cluster) throws InterruptedException {
 
-    public CustomQuotaCallbackTest(ClusterInstance clusterInstance) {
-        this.cluster = clusterInstance;
-    }
-
-    @ClusterTest
-    public void testCustomQuotaCallbackWithControllerServer() throws InterruptedException {
-        
         try (Admin admin = cluster.admin(Map.of())) {
             admin.createTopics(List.of(new NewTopic("topic", 1, (short) 1)));
             TestUtils.waitForCondition(
-                () -> CustomQuotaCallback.COUNTERS.size() == 3 
-                        && CustomQuotaCallback.COUNTERS.values().stream().allMatch(counter -> counter.get() > 0), 
+                () -> CustomQuotaCallback.COUNTERS.size() == 3
+                        && CustomQuotaCallback.COUNTERS.values().stream().allMatch(counter -> counter.get() > 0),
                     "The CustomQuotaCallback not triggered in all controllers. "
             );
-            
+
             // Reset the counters, and we expect the callback to be triggered again in all controllers
             CustomQuotaCallback.COUNTERS.clear();
-            
+
             admin.deleteTopics(List.of("topic"));
             TestUtils.waitForCondition(
                 () -> CustomQuotaCallback.COUNTERS.size() == 3
-                        && CustomQuotaCallback.COUNTERS.values().stream().allMatch(counter -> counter.get() > 0), 
+                        && CustomQuotaCallback.COUNTERS.values().stream().allMatch(counter -> counter.get() > 0),
                     "The CustomQuotaCallback not triggered in all controllers. "
             );
-            
+
         }
     }
 
@@ -90,7 +85,8 @@ public class CustomQuotaCallbackTest {
         Plugin<ClientQuotaCallback> clientQuotaCallbackPlugin = Plugin.wrapInstance(
             new MonitorCustomQuotaCallback(),
             metrics,
-            QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG
+            QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG,
+            Map.of("role", ProcessRole.BrokerRole.toString())
         );
         MonitorCustomQuotaCallback clientQuotaCallback = (MonitorCustomQuotaCallback) clientQuotaCallbackPlugin.get();
         assertEquals(MonitorCustomQuotaCallback.class, clientQuotaCallback.getClass());
@@ -103,9 +99,10 @@ public class CustomQuotaCallbackTest {
         assertNotNull(metricName);
         assertEquals(QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG,  metricName.tags().get("config"));
         assertEquals(MonitorCustomQuotaCallback.class.getSimpleName(),  metricName.tags().get("class"));
+        assertEquals(ProcessRole.BrokerRole.toString(),  metricName.tags().get("role"));
         assertEquals(0, metrics.metric(metricName).metricValue());
     }
-    
+
     public static class CustomQuotaCallback implements ClientQuotaCallback {
 
         public static final Map<String, AtomicInteger> COUNTERS = new ConcurrentHashMap<>();
@@ -153,7 +150,7 @@ public class CustomQuotaCallbackTest {
         }
 
     }
-    
+
     public static class MonitorCustomQuotaCallback extends CustomQuotaCallback implements Monitorable {
 
         public final AtomicInteger counter = new AtomicInteger();
@@ -162,8 +159,8 @@ public class CustomQuotaCallbackTest {
         @Override
         public void withPluginMetrics(PluginMetrics metrics) {
             metricName = metrics.metricName(
-                "client quota callback count", 
-                "Number of times client quota callback is triggered", 
+                "client quota callback count",
+                "Number of times client quota callback is triggered",
                 Map.of()
             );
             metrics.addMetric(metricName, (Gauge<Integer>) (config, now) -> counter.get());
