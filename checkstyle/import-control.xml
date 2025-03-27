@@ -338,6 +338,7 @@
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.tools"/>
+      <allow pkg="org.apache.kafka.coordinator.common.runtime" />
       <subpackage name="group">
         <allow pkg="org.apache.kafka.coordinator.group"/>
         <allow pkg="kafka.api"/>

@@ -30,7 +30,7 @@ public interface SubscribedTopicDescriber {
      *
      * @param topicId   Uuid corresponding to the topic.
      * @return The number of partitions corresponding to the given topic Id,
-     *         or -1 if the topic Id does not exist.
+     *         or -1 if the topic id does not exist.
      */
     int numPartitions(Uuid topicId);
 
@@ -43,4 +43,14 @@ public interface SubscribedTopicDescriber {
      *         If the topic Id does not exist, an empty set is returned.
      */
     Set<String> racksForPartition(Uuid topicId, int partition);
+
+    /**
+     * Returns a set of partitions corresponding to a topic id which
+     * are allowlisted based on some criteria. For example, for share groups
+     * only partitions which have been initialized are returned.
+     *
+     * @param topicId   The uuid of the topic
+     * @return The set of integers representing assignable partitions. Could be empty, or contain all partitions.
+     */
+    Set<Integer> assignablePartitions(Uuid topicId);
 }
