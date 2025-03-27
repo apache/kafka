@@ -353,7 +353,7 @@ public class ClusterControlManager {
         if (existing != null) {
             prevIncarnationId = existing.incarnationId();
             storedBrokerEpoch = existing.epoch();
-            if (heartbeatManager.hasValidSession(brokerId, existing.epoch()) && heartbeatManager.isBrokerActive(brokerId)) {
+            if (heartbeatManager.hasValidSession(brokerId, existing.epoch()) && !existing.fenced() && !existing.inControlledShutdown()) {
                 if (!request.incarnationId().equals(prevIncarnationId)) {
                     throw new DuplicateBrokerRegistrationException("Another broker is " +
                         "registered with that broker id.");

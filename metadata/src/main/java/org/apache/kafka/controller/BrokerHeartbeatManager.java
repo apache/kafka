@@ -384,10 +384,6 @@ public class BrokerHeartbeatManager {
         }
     }
 
-    boolean isBrokerActive(int brokerId) {
-        return active.stream().anyMatch(heartbeatState -> heartbeatState.id() == brokerId);
-    }
-
     /**
      * Calculate the next broker state for a broker that just sent a heartbeat request.
      *
