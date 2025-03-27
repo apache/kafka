@@ -21,10 +21,10 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.UpdateFeaturesRequestData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
 import org.junit.jupiter.api.Test;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -80,8 +80,8 @@ public class UpdateFeaturesRequestTest {
             new UpdateFeaturesRequestData().setFeatureUpdates(features),
             UpdateFeaturesRequestData.LOWEST_SUPPORTED_VERSION
         );
-        ByteBuffer buffer = request.serialize();
-        request = UpdateFeaturesRequest.parse(buffer, UpdateFeaturesRequestData.LOWEST_SUPPORTED_VERSION);
+        Readable readable = request.serialize();
+        request = UpdateFeaturesRequest.parse(readable, UpdateFeaturesRequestData.LOWEST_SUPPORTED_VERSION);
 
         List<UpdateFeaturesRequest.FeatureUpdateItem> updates = new ArrayList<>(request.featureUpdates());
         assertEquals(updates.size(), 2);
@@ -110,8 +110,8 @@ public class UpdateFeaturesRequestTest {
             UpdateFeaturesRequestData.HIGHEST_SUPPORTED_VERSION
         );
 
-        ByteBuffer buffer = request.serialize();
-        request = UpdateFeaturesRequest.parse(buffer, UpdateFeaturesRequestData.HIGHEST_SUPPORTED_VERSION);
+        Readable readable = request.serialize();
+        request = UpdateFeaturesRequest.parse(readable, UpdateFeaturesRequestData.HIGHEST_SUPPORTED_VERSION);
 
         List<UpdateFeaturesRequest.FeatureUpdateItem> updates = new ArrayList<>(request.featureUpdates());
         assertEquals(updates.size(), 2);
