@@ -121,8 +121,6 @@ public class RaftEventSimulationTest {
     private static final int FETCH_MAX_WAIT_MS = 100;
     private static final int LINGER_MS = 0;
 
-
-
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
     void canElectInitialLeader(
         @ForAll int seed,
@@ -579,9 +577,10 @@ public class RaftEventSimulationTest {
 
         // Partition a random voter. Add first observer as new voter
         int voterIdToRemove = cluster.running.get(random.nextInt(numVoters)).id();
+        int voterIdToAdd = numVoters;
         router.filter(voterIdToRemove, new DropAllTraffic());
-        expectedVoterIds.add(numVoters);
-        addVoter(cluster, scheduler, numVoters, expectedVoterIds);
+        expectedVoterIds.add(voterIdToAdd);
+        addVoter(cluster, scheduler, voterIdToAdd, expectedVoterIds);
 
         // Remove the partitioned voter
         expectedVoterIds.remove(voterIdToRemove);
@@ -1235,7 +1234,7 @@ public class RaftEventSimulationTest {
                 RaftTestUtils.writeBootstrapSnapshot(
                     persistentState.log,
                     initialVoterSet,
-                    KRaftVersion.KRAFT_VERSION_1,
+                    kraftVersion,
                     serde
                 );
             }
@@ -1316,7 +1315,8 @@ public class RaftEventSimulationTest {
                                         KRaftVersion.LATEST_PRODUCTION.featureLevel()
                                     )
                                 )
-                            )).
+                            )
+                        ).
                         setApiVersions(new ApiVersionsResponseData.ApiVersionCollection()).
                         setFinalizedFeatures(Collections.emptyMap()).
                         build().data();
