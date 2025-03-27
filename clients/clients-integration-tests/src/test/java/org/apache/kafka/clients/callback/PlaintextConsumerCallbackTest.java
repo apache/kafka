@@ -194,7 +194,7 @@ public class PlaintextConsumerCallbackTest {
 
     @ClusterTest
     public void testSeekPositionAndPauseNewlyAssignedPartitionOnPartitionsAssignedCallback() throws InterruptedException {
-        try (var consumer = createConsumer(GroupProtocol.CONSUMER)) {
+        try (var consumer = createConsumer(CLASSIC)) {
             var startingOffset = 100L;
             var totalRecords = 120;
             var startingTimestamp = 0L;
@@ -209,11 +209,37 @@ public class PlaintextConsumerCallbackTest {
             assertTrue(consumer.paused().contains(tp));
             consumer.resume(Collections.singletonList(tp));
             consumeAndVerifyRecords(
-                    consumer,
-                    (int) (totalRecords - startingOffset),
-                    (int) startingOffset,
-                    (int) startingOffset,
-                    startingOffset
+                consumer,
+                (int) (totalRecords - startingOffset),
+                (int) startingOffset,
+                (int) startingOffset,
+                startingOffset
+            );
+        }
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerSeekPositionAndPauseNewlyAssignedPartitionOnPartitionsAssignedCallback() throws InterruptedException {
+        try (var consumer = createConsumer(CONSUMER)) {
+            var startingOffset = 100L;
+            var totalRecords = 120;
+            var startingTimestamp = 0L;
+
+            sendRecords(totalRecords, startingTimestamp);
+
+            triggerOnPartitionsAssigned(tp, consumer, (executeConsumer, partitions) -> {
+                executeConsumer.seek(tp, startingOffset);
+                executeConsumer.pause(Collections.singletonList(tp));
+            });
+
+            assertTrue(consumer.paused().contains(tp));
+            consumer.resume(Collections.singletonList(tp));
+            consumeAndVerifyRecords(
+                consumer,
+                (int) (totalRecords - startingOffset),
+                (int) startingOffset,
+                (int) startingOffset,
+                startingOffset
             );
         }
     }
