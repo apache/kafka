@@ -36,7 +36,6 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -68,7 +67,7 @@ public class PlaintextConsumerCallbackTest {
     }
 
     @ClusterTest
-    public void testConsumerRebalanceListenerAssignOnPartitionsAssigned() throws InterruptedException {
+    public void testClassicConsumerRebalanceListenerAssignOnPartitionsAssigned() throws InterruptedException {
         try (var consumer = createConsumer(CLASSIC)) {
             triggerOnPartitionsAssigned(tp, consumer, (executeConsumer, partitions) -> {
                 var e = assertThrows(IllegalStateException.class, () -> executeConsumer.assign(List.of(tp)));
@@ -88,7 +87,7 @@ public class PlaintextConsumerCallbackTest {
     }
 
     @ClusterTest
-    public void testConsumerRebalanceListenerAssignmentOnPartitionsAssigned() throws InterruptedException {
+    public void testClassicConsumerRebalanceListenerAssignmentOnPartitionsAssigned() throws InterruptedException {
         try (var consumer = createConsumer(CLASSIC)) {
             triggerOnPartitionsAssigned(tp, consumer,
                 (executeConsumer, partitions) -> assertTrue(executeConsumer.assignment().contains(tp))
@@ -105,7 +104,7 @@ public class PlaintextConsumerCallbackTest {
     }
 
     @ClusterTest
-    public void testConsumerRebalanceListenerBeginningOffsetsOnPartitionsAssigned() throws InterruptedException {
+    public void testClassicConsumerRebalanceListenerBeginningOffsetsOnPartitionsAssigned() throws InterruptedException {
         try (var consumer = createConsumer(CLASSIC)) {
             triggerOnPartitionsAssigned(tp, consumer, (executeConsumer, partitions) -> {
                 var map = executeConsumer.beginningOffsets(List.of(tp));
@@ -127,7 +126,7 @@ public class PlaintextConsumerCallbackTest {
     }
 
     @ClusterTest
-    public void testConsumerRebalanceListenerAssignOnPartitionsRevoked() throws InterruptedException {
+    public void testClassicConsumerRebalanceListenerAssignOnPartitionsRevoked() throws InterruptedException {
         triggerOnPartitionsRevoked(tp, CLASSIC, (consumer, partitions) -> {
             var e = assertThrows(IllegalStateException.class, () -> consumer.assign(List.of(tp)));
             assertEquals("Subscription to topics, partitions and pattern are mutually exclusive", e.getMessage());
@@ -143,7 +142,7 @@ public class PlaintextConsumerCallbackTest {
     }
 
     @ClusterTest
-    public void testConsumerRebalanceListenerAssignmentOnPartitionsRevoked() throws InterruptedException {
+    public void testClassicConsumerRebalanceListenerAssignmentOnPartitionsRevoked() throws InterruptedException {
         triggerOnPartitionsRevoked(tp, CLASSIC,
             (consumer, partitions) -> assertTrue(consumer.assignment().contains(tp))
         );
@@ -157,7 +156,7 @@ public class PlaintextConsumerCallbackTest {
     }
 
     @ClusterTest
-    public void testConsumerRebalanceListenerBeginningOffsetsOnPartitionsRevoked() throws InterruptedException {
+    public void testClassicConsumerRebalanceListenerBeginningOffsetsOnPartitionsRevoked() throws InterruptedException {
         triggerOnPartitionsRevoked(tp, CLASSIC, (consumer, partitions) -> {
             var map = consumer.beginningOffsets(List.of(tp));
             assertTrue(map.containsKey(tp));
@@ -175,7 +174,7 @@ public class PlaintextConsumerCallbackTest {
     }
 
     @ClusterTest
-    public void testGetPositionOfNewlyAssignedPartitionOnPartitionsAssignedCallback() throws InterruptedException {
+    public void testClassicConsumerGetPositionOfNewlyAssignedPartitionOnPartitionsAssignedCallback() throws InterruptedException {
         try (var consumer = createConsumer(CLASSIC)) {
             triggerOnPartitionsAssigned(tp, consumer,
                 (executeConsumer, partitions) -> assertDoesNotThrow(() -> executeConsumer.position(tp))
@@ -193,7 +192,7 @@ public class PlaintextConsumerCallbackTest {
     }
 
     @ClusterTest
-    public void testSeekPositionAndPauseNewlyAssignedPartitionOnPartitionsAssignedCallback() throws InterruptedException {
+    public void testClassicConsumerSeekPositionAndPauseNewlyAssignedPartitionOnPartitionsAssignedCallback() throws InterruptedException {
         try (var consumer = createConsumer(CLASSIC)) {
             var startingOffset = 100L;
             var totalRecords = 120;
@@ -203,11 +202,11 @@ public class PlaintextConsumerCallbackTest {
 
             triggerOnPartitionsAssigned(tp, consumer, (executeConsumer, partitions) -> {
                 executeConsumer.seek(tp, startingOffset);
-                executeConsumer.pause(Collections.singletonList(tp));
+                executeConsumer.pause(List.of(tp));
             });
 
             assertTrue(consumer.paused().contains(tp));
-            consumer.resume(Collections.singletonList(tp));
+            consumer.resume(List.of(tp));
             consumeAndVerifyRecords(
                 consumer,
                 (int) (totalRecords - startingOffset),
@@ -229,11 +228,11 @@ public class PlaintextConsumerCallbackTest {
 
             triggerOnPartitionsAssigned(tp, consumer, (executeConsumer, partitions) -> {
                 executeConsumer.seek(tp, startingOffset);
-                executeConsumer.pause(Collections.singletonList(tp));
+                executeConsumer.pause(List.of(tp));
             });
 
             assertTrue(consumer.paused().contains(tp));
-            consumer.resume(Collections.singletonList(tp));
+            consumer.resume(List.of(tp));
             consumeAndVerifyRecords(
                 consumer,
                 (int) (totalRecords - startingOffset),
@@ -282,7 +281,7 @@ public class PlaintextConsumerCallbackTest {
         var partitionsAssigned = new AtomicBoolean(false);
         var partitionsRevoked = new AtomicBoolean(false);
         try (var consumer = createConsumer(protocol)) {
-            consumer.subscribe(Collections.singletonList(topic), new ConsumerRebalanceListener() {
+            consumer.subscribe(List.of(topic), new ConsumerRebalanceListener() {
                 @Override
                 public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
                     // Make sure the partition used in the test is actually assigned before continuing.
@@ -345,7 +344,7 @@ public class PlaintextConsumerCallbackTest {
         var records = consumeRecords(consumer, numRecords);
         for (var i = 0; i < numRecords; i++) {
             var record = records.get(i);
-            int offset = startingOffset + i;
+            var offset = startingOffset + i;
 
             assertEquals(tp.topic(), record.topic());
             assertEquals(tp.partition(), record.partition());
@@ -370,12 +369,9 @@ public class PlaintextConsumerCallbackTest {
     ) throws InterruptedException {
         List<ConsumerRecord<K, V>> records = new ArrayList<>();
         TestUtils.waitForCondition(() -> {
-            var polledRecords = consumer.poll(Duration.ofMillis(100));
-            for (var record : polledRecords) {
-                records.add(record);
-            }
+            consumer.poll(Duration.ofMillis(100)).forEach(records::add);
             return records.size() >= numRecords;
-        }, 60000, "Timed out before consuming expected " + numRecords + " records. ");
+        }, 60000, "Timed out before consuming expected " + numRecords + " records.");
 
         return records;
     }
