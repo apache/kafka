@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
@@ -28,9 +27,7 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ALLOW_AUTO_CREATE_TOPICS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.CLIENT_ID_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.common.test.api.Type.KRAFT;
 import static org.apache.kafka.server.config.ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG;
@@ -43,7 +40,7 @@ public class ConsumerTopicCreationTest {
 
     @ClusterTemplate("autoCreateTopicsConfigs")
     void testAsyncConsumerTopicCreationIfConsumerAllowToCreateTopic(ClusterInstance cluster) {
-        try (Consumer<byte[], byte[]> consumer = createConsumer(GroupProtocol.CONSUMER, true, cluster.bootstrapServers())) {
+        try (Consumer<byte[], byte[]> consumer = createConsumer(cluster, GroupProtocol.CONSUMER, true)) {
             consumer.subscribe(List.of(TOPIC));
             consumer.poll(Duration.ofMillis(POLL_TIMEOUT));
             if (allowAutoCreateTopics(cluster))
@@ -56,7 +53,7 @@ public class ConsumerTopicCreationTest {
 
     @ClusterTemplate("autoCreateTopicsConfigs")
     void testAsyncConsumerTopicCreationIfConsumerDisallowToCreateTopic(ClusterInstance cluster) {
-        try (Consumer<byte[], byte[]> consumer = createConsumer(GroupProtocol.CONSUMER, false, cluster.bootstrapServers())) {
+        try (Consumer<byte[], byte[]> consumer = createConsumer(cluster, GroupProtocol.CONSUMER, false)) {
             consumer.subscribe(List.of(TOPIC));
             consumer.poll(Duration.ofMillis(POLL_TIMEOUT));
             assertFalse(getAllTopics(cluster).contains(TOPIC),
@@ -66,7 +63,7 @@ public class ConsumerTopicCreationTest {
 
     @ClusterTemplate("autoCreateTopicsConfigs")
     void testClassicConsumerTopicCreationIfConsumerAllowToCreateTopic(ClusterInstance cluster) {
-        try (Consumer<byte[], byte[]> consumer = createConsumer(GroupProtocol.CLASSIC, true, cluster.bootstrapServers())) {
+        try (Consumer<byte[], byte[]> consumer = createConsumer(cluster, GroupProtocol.CLASSIC, true)) {
             consumer.subscribe(List.of(TOPIC));
             consumer.poll(Duration.ofMillis(POLL_TIMEOUT));
             if (allowAutoCreateTopics(cluster))
@@ -79,7 +76,7 @@ public class ConsumerTopicCreationTest {
 
     @ClusterTemplate("autoCreateTopicsConfigs")
     void testClassicConsumerTopicCreationIfConsumerDisallowToCreateTopic(ClusterInstance cluster) {
-        try (Consumer<byte[], byte[]> consumer = createConsumer(GroupProtocol.CLASSIC, false, cluster.bootstrapServers())) {
+        try (Consumer<byte[], byte[]> consumer = createConsumer(cluster, GroupProtocol.CLASSIC, false)) {
             consumer.subscribe(List.of(TOPIC));
             consumer.poll(Duration.ofMillis(POLL_TIMEOUT));
             assertFalse(getAllTopics(cluster).contains(TOPIC),
@@ -108,14 +105,12 @@ public class ConsumerTopicCreationTest {
         );
     }
 
-    private Consumer<byte[], byte[]> createConsumer(GroupProtocol protocol, boolean allowConsumerAutoCreateTopics, String bootstrapServer) {
+    private Consumer<byte[], byte[]> createConsumer(ClusterInstance cluster, GroupProtocol protocol, boolean allowConsumerAutoCreateTopics) {
         Map<String, Object> consumerConfig = Map.of(
             CLIENT_ID_CONFIG, "ConsumerTestConsumer",
-            GROUP_ID_CONFIG, "TestGroup",
             ALLOW_AUTO_CREATE_TOPICS_CONFIG, allowConsumerAutoCreateTopics,
-            GROUP_PROTOCOL_CONFIG, protocol.name().toLowerCase(Locale.ROOT),
-            BOOTSTRAP_SERVERS_CONFIG, bootstrapServer
+            GROUP_PROTOCOL_CONFIG, protocol.name().toLowerCase(Locale.ROOT)
         );
-        return new KafkaConsumer<>(consumerConfig, new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        return cluster.consumer(consumerConfig);
     }
 }
