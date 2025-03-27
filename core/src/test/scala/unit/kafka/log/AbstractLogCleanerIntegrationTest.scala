@@ -19,7 +19,7 @@ package kafka.log
 import java.io.File
 import java.nio.file.Files
 import java.util.{Optional, Properties}
-import kafka.utils.{Pool, TestUtils}
+import kafka.utils.TestUtils
 import kafka.utils.Implicits._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
@@ -93,7 +93,7 @@ abstract class AbstractLogCleanerIntegrationTest {
                   cleanerIoBufferSize: Option[Int] = None,
                   propertyOverrides: Properties = new Properties()): LogCleaner = {
 
-    val logMap = new Pool[TopicPartition, UnifiedLog]()
+    val logMap = new java.util.concurrent.ConcurrentHashMap[TopicPartition, UnifiedLog]()
     for (partition <- partitions) {
       val dir = new File(logDir, s"${partition.topic}-${partition.partition}")
       Files.createDirectories(dir.toPath)

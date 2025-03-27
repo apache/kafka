@@ -113,6 +113,7 @@ import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import java.net.InetAddress;
@@ -653,7 +654,7 @@ public class GroupMetadataManagerTestContext {
         return result;
     }
 
-    public CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> shareGroupHeartbeat(
+    public CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> shareGroupHeartbeat(
         ShareGroupHeartbeatRequestData request
     ) {
         RequestContext context = new RequestContext(
@@ -672,10 +673,11 @@ public class GroupMetadataManagerTestContext {
             false
         );
 
-        CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = groupMetadataManager.shareGroupHeartbeat(
-            context,
-            request
-        );
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result =
+            groupMetadataManager.shareGroupHeartbeat(
+                context,
+                request
+            );
 
         result.records().forEach(this::replay);
         return result;
