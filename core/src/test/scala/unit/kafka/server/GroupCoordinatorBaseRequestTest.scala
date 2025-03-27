@@ -135,7 +135,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   }
 
   protected def closeProducer(): Unit = {
-    if( producer != null )
+    if(producer != null)
       producer.close()
   }
 
