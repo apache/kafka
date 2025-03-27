@@ -22,10 +22,9 @@ import org.apache.kafka.common.message.MetadataRequestData;
 import org.apache.kafka.common.message.MetadataRequestData.MetadataRequestTopic;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -192,8 +191,8 @@ public class MetadataRequest extends AbstractRequest {
         return data.allowAutoTopicCreation();
     }
 
-    public static MetadataRequest parse(ByteBuffer buffer, short version) {
-        return new MetadataRequest(new MetadataRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static MetadataRequest parse(Readable readable, short version) {
+        return new MetadataRequest(new MetadataRequestData(readable, version), version);
     }
 
     public static List<MetadataRequestTopic> convertToMetadataRequestTopic(final Collection<String> topics) {

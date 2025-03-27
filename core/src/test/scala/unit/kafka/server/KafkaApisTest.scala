@@ -8881,7 +8881,7 @@ class KafkaApisTest extends Logging {
     })
 
     val data = new ListOffsetsRequestData().setTopics(targetTimes).setReplicaId(ListOffsetsRequest.CONSUMER_REPLICA_ID)
-    val listOffsetRequest = ListOffsetsRequest.parse(MessageUtil.toByteBuffer(data, version), version)
+    val listOffsetRequest = ListOffsetsRequest.parse(MessageUtil.toByteBufferAccessor(data, version), version)
     val request = buildRequest(listOffsetRequest)
 
     kafkaApis = createKafkaApis()
@@ -8981,10 +8981,10 @@ class KafkaApisTest extends Logging {
       any()
     )
     val response = capturedResponse.getValue
-    val buffer = MessageUtil.toByteBuffer(
+    val buffer = MessageUtil.toByteBufferAccessor(
       response.data,
       request.context.header.apiVersion
-    )
+    ).buffer()
     AbstractResponse.parseResponse(
       request.context.header.apiKey,
       buffer,
@@ -9002,10 +9002,10 @@ class KafkaApisTest extends Logging {
       any()
     )
     val response = capturedResponse.getValue
-    val buffer = MessageUtil.toByteBuffer(
+    val buffer = MessageUtil.toByteBufferAccessor(
       response.data,
       request.context.header.apiVersion
-    )
+    ).buffer()
 
     // Create the RequestChannel.Response that is created when sendResponse is called in order to update the metrics.
     val sendResponse = new RequestChannel.SendResponse(

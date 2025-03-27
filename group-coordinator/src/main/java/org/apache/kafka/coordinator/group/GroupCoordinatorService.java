@@ -88,13 +88,18 @@ import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateResult;
+import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
+import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
+import org.apache.kafka.server.share.persister.InitializeShareGroupStateResult;
 import org.apache.kafka.server.share.persister.PartitionErrorData;
 import org.apache.kafka.server.share.persister.PartitionFactory;
+import org.apache.kafka.server.share.persister.PartitionStateData;
 import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryParameters;
 import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.Timer;
+import org.apache.kafka.server.util.timer.TimerTask;
 
 import org.slf4j.Logger;
 
@@ -115,6 +120,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
+import java.util.stream.Collectors;
 
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorOperationExceptionHelper.handleOperationException;
 
@@ -242,7 +248,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 runtime,
                 groupCoordinatorMetrics,
                 groupConfigManager,
-                persister
+                persister,
+                timer
             );
         }
     }
@@ -294,6 +301,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
      */
     private MetadataImage metadataImage = null;
 
+    private Timer timer;
+
     /**
      *
      * @param logContext                The log context.
@@ -309,7 +318,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime,
         GroupCoordinatorMetrics groupCoordinatorMetrics,
         GroupConfigManager groupConfigManager,
-        Persister persister
+        Persister persister,
+        Timer timer
     ) {
         this.log = logContext.logger(GroupCoordinatorService.class);
         this.config = config;
@@ -317,6 +327,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         this.groupCoordinatorMetrics = groupCoordinatorMetrics;
         this.groupConfigManager = groupConfigManager;
         this.persister = persister;
+        this.timer = timer;
     }
 
     /**
@@ -435,7 +446,19 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(request.groupId()),
             Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.shareGroupHeartbeat(context, request)
-        ).exceptionally(exception -> handleOperationException(
+        ).thenCompose(result -> {
+            // This ensures that the previous group write has completed successfully
+            // before we start the persister initialize phase.
+            if (result.getValue().isPresent()) {
+                timer.add(new TimerTask(0L) {
+                    @Override
+                    public void run() {
+                        persisterInitialize(result.getValue().get(), result.getKey());
+                    }
+                });
+            }
+            return CompletableFuture.completedFuture(result.getKey());
+        }).exceptionally(exception -> handleOperationException(
             "share-group-heartbeat",
             request,
             exception,
@@ -444,6 +467,81 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 .setErrorMessage(message),
             log
         ));
+    }
+
+    // Visibility for testing
+    CompletableFuture<ShareGroupHeartbeatResponseData> persisterInitialize(
+        InitializeShareGroupStateParameters request,
+        ShareGroupHeartbeatResponseData defaultResponse
+    ) {
+        return persister.initializeState(request)
+            .thenCompose(
+                response -> handlePersisterInitializeResponse(request.groupTopicPartitionData().groupId(), response, defaultResponse)
+            ).exceptionally(exception -> {
+                GroupTopicPartitionData<PartitionStateData> gtp = request.groupTopicPartitionData();
+                log.error("Unable to initialize share group state {}, {}", gtp.groupId(), gtp.topicsData(), exception);
+                Errors error = Errors.forException(exception);
+                return new ShareGroupHeartbeatResponseData()
+                    .setErrorCode(error.code())
+                    .setErrorMessage(error.message());
+            });
+    }
+
+    private CompletableFuture<ShareGroupHeartbeatResponseData> handlePersisterInitializeResponse(
+        String groupId,
+        InitializeShareGroupStateResult persisterInitializeResult,
+        ShareGroupHeartbeatResponseData defaultResponse
+    ) {
+        Errors persisterError = Errors.NONE;
+        for (TopicData<PartitionErrorData> topicData : persisterInitializeResult.topicsData()) {
+            Optional<PartitionErrorData> errData = topicData.partitions().stream().filter(partition -> partition.errorCode() != Errors.NONE.code()).findAny();
+            if (errData.isPresent()) {
+                persisterError = Errors.forCode(errData.get().errorCode());
+                break;
+            }
+        }
+
+        if (persisterError.code() == Errors.NONE.code()) {
+            Map<Uuid, Set<Integer>> topicPartitionMap = new HashMap<>();
+            for (TopicData<PartitionErrorData> topicData : persisterInitializeResult.topicsData()) {
+                topicPartitionMap.put(
+                    topicData.topicId(),
+                    topicData.partitions().stream().map(PartitionErrorData::partition).collect(Collectors.toSet())
+                );
+            }
+            if (topicPartitionMap.isEmpty()) {
+                return CompletableFuture.completedFuture(defaultResponse);
+            }
+            return performShareGroupStateMetadataInitialize(groupId, topicPartitionMap, defaultResponse);
+        } else {
+            log.error("Received error while calling initialize state for {} on persister {}.", groupId, persisterError.code());
+            return CompletableFuture.completedFuture(
+                new ShareGroupHeartbeatResponseData()
+                    .setErrorCode(persisterError.code())
+                    .setErrorMessage(persisterError.message())
+            );
+        }
+    }
+
+    private CompletableFuture<ShareGroupHeartbeatResponseData> performShareGroupStateMetadataInitialize(
+        String groupId,
+        Map<Uuid, Set<Integer>> topicPartitionMap,
+        ShareGroupHeartbeatResponseData defaultResponse
+    ) {
+        return runtime.scheduleWriteOperation(
+            "initialize-share-group-state",
+            topicPartitionFor(groupId),
+            Duration.ofMillis(config.offsetCommitTimeoutMs()),
+            coordinator -> coordinator.initializeShareGroupState(groupId, topicPartitionMap)
+        ).thenApply(
+            __ -> defaultResponse
+        ).exceptionally(exception -> {
+            log.error("Unable to initialize share group state partition metadata for {}.", groupId, exception);
+            Errors error = Errors.forException(exception);
+            return new ShareGroupHeartbeatResponseData()
+                .setErrorCode(error.code())
+                .setErrorMessage(error.message());
+        });
     }
 
     /**
