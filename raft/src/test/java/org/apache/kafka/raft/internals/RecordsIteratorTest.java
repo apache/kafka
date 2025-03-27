@@ -24,6 +24,7 @@ import org.apache.kafka.common.message.SnapshotFooterRecord;
 import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.ControlRecordType;
@@ -389,10 +390,11 @@ public final class RecordsIteratorTest {
                 buffer.capacity()
             )
         ) {
+            final Message message = defaultControlRecord(type);
             builder.appendControlRecord(
                 0,
                 type,
-                MessageUtil.toByteBuffer(defaultControlRecord(type), defaultControlRecordVersion(type))
+                MessageUtil.toByteBufferAccessor(message, defaultControlRecordVersion(type)).buffer()
             );
         }
 
