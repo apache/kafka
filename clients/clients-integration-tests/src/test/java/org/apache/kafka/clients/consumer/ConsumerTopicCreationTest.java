@@ -41,51 +41,58 @@ public class ConsumerTopicCreationTest {
     @ClusterTemplate("autoCreateTopicsConfigs")
     void testAsyncConsumerTopicCreationIfConsumerAllowToCreateTopic(ClusterInstance cluster) {
         try (Consumer<byte[], byte[]> consumer = createConsumer(cluster, GroupProtocol.CONSUMER, true)) {
-            consumer.subscribe(List.of(TOPIC));
-            consumer.poll(Duration.ofMillis(POLL_TIMEOUT));
-            if (allowAutoCreateTopics(cluster))
-                assertTrue(getAllTopics(cluster).contains(TOPIC));
-            else
-                assertFalse(getAllTopics(cluster).contains(TOPIC),
-                    "Both " + AUTO_CREATE_TOPICS_ENABLE_CONFIG + " and " + ALLOW_AUTO_CREATE_TOPICS_CONFIG + " need to be true to create topic automatically");
+            subscribeAndPoll(consumer);
+            assertTopicCreateBasedOnPermission(cluster);
         }
     }
 
     @ClusterTemplate("autoCreateTopicsConfigs")
     void testAsyncConsumerTopicCreationIfConsumerDisallowToCreateTopic(ClusterInstance cluster) {
         try (Consumer<byte[], byte[]> consumer = createConsumer(cluster, GroupProtocol.CONSUMER, false)) {
-            consumer.subscribe(List.of(TOPIC));
-            consumer.poll(Duration.ofMillis(POLL_TIMEOUT));
-            assertFalse(getAllTopics(cluster).contains(TOPIC),
-                "Both " + AUTO_CREATE_TOPICS_ENABLE_CONFIG + " and " + ALLOW_AUTO_CREATE_TOPICS_CONFIG + " need to be true to create topic automatically");
+            subscribeAndPoll(consumer);
+            assertTopicNotCreate(cluster);
         }
     }
 
     @ClusterTemplate("autoCreateTopicsConfigs")
     void testClassicConsumerTopicCreationIfConsumerAllowToCreateTopic(ClusterInstance cluster) {
         try (Consumer<byte[], byte[]> consumer = createConsumer(cluster, GroupProtocol.CLASSIC, true)) {
-            consumer.subscribe(List.of(TOPIC));
-            consumer.poll(Duration.ofMillis(POLL_TIMEOUT));
-            if (allowAutoCreateTopics(cluster))
-                assertTrue(getAllTopics(cluster).contains(TOPIC));
-            else
-                assertFalse(getAllTopics(cluster).contains(TOPIC),
-                    "Both " + AUTO_CREATE_TOPICS_ENABLE_CONFIG + " and " + ALLOW_AUTO_CREATE_TOPICS_CONFIG + " need to be true to create topic automatically");
+            subscribeAndPoll(consumer);
+            assertTopicCreateBasedOnPermission(cluster);
         }
     }
 
     @ClusterTemplate("autoCreateTopicsConfigs")
     void testClassicConsumerTopicCreationIfConsumerDisallowToCreateTopic(ClusterInstance cluster) {
         try (Consumer<byte[], byte[]> consumer = createConsumer(cluster, GroupProtocol.CLASSIC, false)) {
-            consumer.subscribe(List.of(TOPIC));
-            consumer.poll(Duration.ofMillis(POLL_TIMEOUT));
-            assertFalse(getAllTopics(cluster).contains(TOPIC),
-                "Both " + AUTO_CREATE_TOPICS_ENABLE_CONFIG + " and " + ALLOW_AUTO_CREATE_TOPICS_CONFIG + " need to be true to create topic automatically");
+            subscribeAndPoll(consumer);
+            assertTopicNotCreate(cluster);
         }
+    }
+
+    private void subscribeAndPoll(Consumer<byte[], byte[]> consumer) {
+        consumer.subscribe(List.of(TOPIC));
+        consumer.poll(Duration.ofMillis(POLL_TIMEOUT));
+    }
+
+    private void assertTopicCreateBasedOnPermission(ClusterInstance cluster) {
+        if (allowAutoCreateTopics(cluster))
+            assertTopicCreate(cluster);
+        else
+            assertTopicNotCreate(cluster);
     }
 
     private boolean allowAutoCreateTopics(ClusterInstance cluster) {
         return cluster.config().serverProperties().get(AUTO_CREATE_TOPICS_ENABLE_CONFIG).equals("true");
+    }
+
+    private void assertTopicCreate(ClusterInstance cluster) {
+        assertTrue(getAllTopics(cluster).contains(TOPIC));
+    }
+
+    private void assertTopicNotCreate(ClusterInstance cluster) {
+        assertFalse(getAllTopics(cluster).contains(TOPIC),
+            "Both " + AUTO_CREATE_TOPICS_ENABLE_CONFIG + " and " + ALLOW_AUTO_CREATE_TOPICS_CONFIG + " need to be true to create topic automatically");
     }
 
     private Set<String> getAllTopics(ClusterInstance cluster) {
