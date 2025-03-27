@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.server.log;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
@@ -24,6 +26,7 @@ import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.TestUtils;
@@ -39,12 +42,17 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class LogAppendTimeTest {
+    private static final String TOPIC = "log-append-time-topic";
+    private static final int NUM_PARTITION = 1;
+    private static final short NUM_REPLICAS = 1;
+
     @ClusterTest(
         types = {Type.KRAFT},
         serverProperties = {
@@ -52,15 +60,35 @@ public class LogAppendTimeTest {
             @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
         }
     )
-    public void testProduceConsume(ClusterInstance clusterInstance) throws InterruptedException {
-        String topic = "log-append-time-topic";
-        clusterInstance.createTopic(topic, 1, (short) 1);
+    public void testProduceConsumeWithConfigOnBroker(ClusterInstance clusterInstance) throws InterruptedException {
+        clusterInstance.createTopic(TOPIC, NUM_PARTITION, NUM_REPLICAS);
 
+        testProduceConsume(clusterInstance);
+    }
+
+    @ClusterTest(
+        types = {Type.KRAFT},
+        serverProperties = {
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+        }
+    )
+    public void testProduceConsumeWithConfigOnTopic(ClusterInstance clusterInstance) throws InterruptedException {
+        try (Admin admin = clusterInstance.admin()) {
+            admin.createTopics(List.of(
+                new NewTopic(TOPIC, NUM_PARTITION, NUM_REPLICAS).
+                    configs(Map.of(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "LogAppendTime"))));
+            clusterInstance.waitForTopic(TOPIC, NUM_PARTITION);
+        }
+
+        testProduceConsume(clusterInstance);
+    }
+
+    public void testProduceConsume(ClusterInstance clusterInstance) throws InterruptedException {
         long now = System.currentTimeMillis();
         long createTime = now - TimeUnit.DAYS.toMillis(1);
         int recordCount = 10;
         List<ProducerRecord<byte[], byte[]>> producerRecords = IntStream.range(0, recordCount)
-            .mapToObj(i -> new ProducerRecord<>(topic, null, createTime, "key".getBytes(), "value".getBytes()))
+            .mapToObj(i -> new ProducerRecord<>(TOPIC, null, createTime, "key".getBytes(), "value".getBytes()))
             .toList();
 
         List<RecordMetadata> recordMetadatas = new ArrayList<>();
@@ -80,7 +108,7 @@ public class LogAppendTimeTest {
             try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(
                 Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name())
             )) {
-                consumer.subscribe(Collections.singleton(topic));
+                consumer.subscribe(Collections.singleton(TOPIC));
                 ArrayList<ConsumerRecord<byte[], byte[]>> consumerRecords = new ArrayList<>();
                 TestUtils.waitForCondition(() -> {
                     ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
@@ -92,8 +120,8 @@ public class LogAppendTimeTest {
                     int index = consumerRecords.indexOf(consumerRecord);
                     ProducerRecord<byte[], byte[]> producerRecord = producerRecords.get(index);
                     RecordMetadata recordMetadata = recordMetadatas.get(index);
-                    assertEquals(new String(producerRecord.key()), new String(consumerRecord.key()), "Key mismatch for consumer with protocol " + groupProtocol.name);
-                    assertEquals(new String(producerRecord.value()), new String(consumerRecord.value()), "Value mismatch for consumer with protocol " + groupProtocol.name);
+                    assertArrayEquals(producerRecord.key(), consumerRecord.key(), "Key mismatch for consumer with protocol " + groupProtocol.name);
+                    assertArrayEquals(producerRecord.value(), consumerRecord.value(), "Key mismatch for consumer with protocol " + groupProtocol.name);
                     assertNotEquals(producerRecord.timestamp(), consumerRecord.timestamp(), "Timestamp mismatch with producer record for consumer with protocol " + groupProtocol.name);
                     assertEquals(recordMetadata.timestamp(), consumerRecord.timestamp(), "Timestamp mismatch with record metadata for consumer with protocol " + groupProtocol.name);
                     assertEquals(TimestampType.LOG_APPEND_TIME, consumerRecord.timestampType(), "Timestamp type mismatch for consumer with protocol " + groupProtocol.name);
