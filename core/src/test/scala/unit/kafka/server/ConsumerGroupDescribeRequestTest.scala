@@ -32,7 +32,6 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.common.Feature
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
-import org.junit.jupiter.api.Tag
 
 import java.lang.{Byte => JByte}
 import java.util.Collections

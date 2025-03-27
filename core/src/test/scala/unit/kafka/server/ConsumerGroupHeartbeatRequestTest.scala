@@ -29,7 +29,6 @@ import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.server.common.Feature
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertNotEquals, assertNotNull}
-import org.junit.jupiter.api.Tag
 
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
