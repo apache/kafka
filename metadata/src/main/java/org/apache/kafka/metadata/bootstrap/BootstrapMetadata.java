@@ -24,7 +24,6 @@ import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -71,7 +70,7 @@ public class BootstrapMetadata {
     }
 
     public static BootstrapMetadata fromVersion(MetadataVersion metadataVersion, String source) {
-        List<ApiMessageAndVersion> records = Collections.singletonList(
+        List<ApiMessageAndVersion> records = List.of(
             new ApiMessageAndVersion(new FeatureLevelRecord().
                 setName(MetadataVersion.FEATURE_NAME).
                 setFeatureLevel(metadataVersion.featureLevel()), (short) 0));

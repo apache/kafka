@@ -74,7 +74,7 @@ class DelayedElectLeader(
   private def updateWaiting(): Unit = {
     val metadataCache = replicaManager.metadataCache
     val completedPartitions = waitingPartitions.collect {
-      case (tp, leader) if metadataCache.getLeaderAndIsr(tp.topic, tp.partition).exists(_.leader == leader) => tp
+      case (tp, leader) if metadataCache.getLeaderAndIsr(tp.topic, tp.partition).filter(_.leader == leader).isPresent() => tp
     }
     completedPartitions.foreach  { tp =>
       waitingPartitions -= tp

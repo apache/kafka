@@ -317,6 +317,10 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     } else {
                         // Processing the acknowledgements from commitSync
                         for (AcknowledgeRequestState acknowledgeRequestState : requestStates.getValue().getSyncRequestQueue()) {
+                            if (!isNodeFree(nodeId)) {
+                                log.trace("Skipping acknowledge request because previous request to {} has not been processed, so acks are not sent", nodeId);
+                                break;
+                            }
                             maybeBuildRequest(acknowledgeRequestState, currentTimeMs, false, isAsyncSent).ifPresent(unsentRequests::add);
                         }
                     }
@@ -369,7 +373,9 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                                       AtomicBoolean isAsyncSent) {
         boolean asyncSent = true;
         try {
-            if (acknowledgeRequestState == null || (!acknowledgeRequestState.isCloseRequest() && acknowledgeRequestState.isEmpty())) {
+            if (acknowledgeRequestState == null ||
+                    (!acknowledgeRequestState.isCloseRequest() && acknowledgeRequestState.isEmpty()) ||
+                    (acknowledgeRequestState.isCloseRequest() && acknowledgeRequestState.isProcessed)) {
                 return Optional.empty();
             }
 
@@ -380,6 +386,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                     acknowledgeRequestState.handleAcknowledgeTimedOut(tip);
                 }
                 acknowledgeRequestState.incompleteAcknowledgements.clear();
+                // Reset timer for any future processing on the same request state.
+                acknowledgeRequestState.maybeResetTimerAndRequestState();
                 return Optional.empty();
             }
 
@@ -527,8 +535,12 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
      * Enqueue an AcknowledgeRequestState to be picked up on the next poll.
      *
      * @param acknowledgementsMap The acknowledgements to commit
+     * @param deadlineMs          Time until which the request will be retried if it fails with
+     *                            an expected retriable error.
      */
-    public void commitAsync(final Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
+    public void commitAsync(
+            final Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap,
+            final long deadlineMs) {
         final Cluster cluster = metadata.fetch();
         final ResultHandler resultHandler = new ResultHandler(Optional.empty());
 
@@ -552,7 +564,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                             if (asyncRequestState == null) {
                                 acknowledgeRequestStates.get(nodeId).setAsyncRequest(new AcknowledgeRequestState(logContext,
                                         ShareConsumeRequestManager.class.getSimpleName() + ":2",
-                                        Long.MAX_VALUE,
+                                        deadlineMs,
                                         retryBackoffMs,
                                         retryBackoffMaxMs,
                                         sessionHandler,
@@ -1004,8 +1016,10 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
     }
 
     private TopicIdPartition lookupTopicId(Uuid topicId, int partitionIndex) {
-        String topicName = metadata.topicNames().getOrDefault(topicId,
-                topicNamesMap.remove(new IdAndPartition(topicId, partitionIndex)));
+        String topicName = metadata.topicNames().get(topicId);
+        if (topicName == null) {
+            topicName = topicNamesMap.remove(new IdAndPartition(topicId, partitionIndex));
+        }
         if (topicName == null) {
             log.error("Topic name not found in metadata for topicId {} and partitionIndex {}", topicId, partitionIndex);
             return null;
@@ -1087,6 +1101,11 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
          */
         private boolean isProcessed;
 
+        /**
+         * Timeout in milliseconds indicating how long the request would be retried if it fails with a retriable exception.
+         */
+        private final long timeoutMs;
+
         AcknowledgeRequestState(LogContext logContext,
                                 String owner,
                                 long deadlineMs,
@@ -1106,6 +1125,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             this.incompleteAcknowledgements = new HashMap<>();
             this.requestType = acknowledgeRequestType;
             this.isProcessed = false;
+            this.timeoutMs = remainingMs();
         }
 
         UnsentRequest buildRequest() {
@@ -1189,6 +1209,17 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         }
 
         /**
+         * Resets the timer with the configured timeout and resets the RequestState.
+         * This is only applicable for commitAsync() requests as these states could be re-used.
+         */
+        void maybeResetTimerAndRequestState() {
+            if (requestType == AcknowledgeRequestType.COMMIT_ASYNC) {
+                resetTimeout(timeoutMs);
+                reset();
+            }
+        }
+
+        /**
          * Sets the error code in the acknowledgements and sends the response
          * through a background event.
          */
@@ -1242,6 +1273,7 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             processPendingInFlightAcknowledgements(new InvalidRecordStateException(INVALID_RESPONSE));
             resultHandler.completeIfEmpty();
             isProcessed = true;
+            maybeResetTimerAndRequestState();
         }
 
         /**

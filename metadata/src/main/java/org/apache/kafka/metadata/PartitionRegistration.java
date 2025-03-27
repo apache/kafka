@@ -169,6 +169,10 @@ public class PartitionRegistration {
         return newLeader == NO_LEADER || Replicas.contains(isr, newLeader) || Replicas.contains(elr, newLeader);
     }
 
+    public static boolean electionFromElr(int newLeader, int[] elr) {
+        return Replicas.contains(elr, newLeader);
+    }
+
     private static List<Uuid> checkDirectories(PartitionRecord record) {
         if (record.directories() != null && !record.directories().isEmpty() && record.replicas().size() != record.directories().size()) {
             throw new InvalidReplicaDirectoriesException(record);

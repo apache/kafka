@@ -220,13 +220,13 @@ abstract class QuotaTestClients(topic: String,
   def produceUntilThrottled(maxRecords: Int, waitForRequestCompletion: Boolean = true): Int = {
     var numProduced = 0
     var throttled = false
+    val metric = throttleMetric(QuotaType.PRODUCE, producerClientId)
     do {
       val payload = numProduced.toString.getBytes
       val future = producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, null, null, payload),
         new ErrorLoggingCallback(topic, null, null, true))
       numProduced += 1
       do {
-        val metric = throttleMetric(QuotaType.PRODUCE, producerClientId)
         throttled = metric != null && metricValue(metric) > 0
       } while (!future.isDone && (!throttled || waitForRequestCompletion))
     } while (numProduced < maxRecords && !throttled)
