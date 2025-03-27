@@ -2726,8 +2726,15 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
           client.listGroups(options).all.get.stream().filter(_.groupId == testGroupId).count() == 0
         }, s"Expected to find zero groups")
 
-        val describeWithFakeGroupResult = client.describeShareGroups(util.Arrays.asList(testGroupId, fakeGroupId),
-          new DescribeShareGroupsOptions().includeAuthorizedOperations(true))
+        var describeWithFakeGroupResult: DescribeShareGroupsResult = null
+
+        TestUtils.waitUntilTrue(() => {
+          describeWithFakeGroupResult = client.describeShareGroups(util.Arrays.asList(testGroupId, fakeGroupId),
+            new DescribeShareGroupsOptions().includeAuthorizedOperations(true))
+          val members = describeWithFakeGroupResult.describedGroups().get(testGroupId).get().members()
+          members.asScala.flatMap(_.assignment().topicPartitions().asScala).groupBy(_.topic()).nonEmpty
+        }, s"Could not get partitions assigned. Last response $describeWithFakeGroupResult.")
+
         assertEquals(2, describeWithFakeGroupResult.describedGroups().size())
 
         // Test that we can get information about the test share group.
