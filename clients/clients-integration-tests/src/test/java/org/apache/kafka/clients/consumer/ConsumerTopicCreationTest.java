@@ -114,7 +114,6 @@ public class ConsumerTopicCreationTest {
 
     private Consumer<byte[], byte[]> createConsumer(ClusterInstance cluster, GroupProtocol protocol, boolean allowConsumerAutoCreateTopics) {
         Map<String, Object> consumerConfig = Map.of(
-            CLIENT_ID_CONFIG, "ConsumerTestConsumer",
             ALLOW_AUTO_CREATE_TOPICS_CONFIG, allowConsumerAutoCreateTopics,
             GROUP_PROTOCOL_CONFIG, protocol.name().toLowerCase(Locale.ROOT)
         );
