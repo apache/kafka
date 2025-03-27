@@ -30,6 +30,7 @@ import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateKeyJsonConverter;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValueJsonConverter;
+import org.apache.kafka.tools.consumer.CoordinatorRecordMessageFormatter;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -132,7 +133,7 @@ public class ShareGroupStateMessageFormatter implements MessageFormatter {
      * as per RPC spec.
      * To differentiate, we need to use the corresponding key versions. This is acceptable as
      * the records will always appear in pairs (key, value). However, this means that we cannot
-     * extend {@link org.apache.kafka.tools.consumer.ApiMessageFormatter} as it requires overriding
+     * extend {@link CoordinatorRecordMessageFormatter} as it requires overriding
      * readToValueJson whose signature does not allow for passing keyversion.
      *
      * @param byteBuffer - Represents the raw data read from the topic
