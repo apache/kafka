@@ -127,19 +127,19 @@ public class QuotaFactory {
         return new QuotaManagers(
             new ClientQuotaManager(clientConfig(cfg), metrics, QuotaType.FETCH, time, threadNamePrefix, Option.apply(clientQuotaCallbackPlugin)),
             new ClientQuotaManager(clientConfig(cfg), metrics, QuotaType.PRODUCE, time, threadNamePrefix, Option.apply(clientQuotaCallbackPlugin)),
-            new ClientRequestQuotaManager(clientConfig(cfg), metrics, time, threadNamePrefix, Optional.of(clientQuotaCallbackPlugin)),
+            new ClientRequestQuotaManager(clientConfig(cfg), metrics, time, threadNamePrefix, Optional.ofNullable(clientQuotaCallbackPlugin)),
             new ControllerMutationQuotaManager(clientControllerMutationConfig(cfg), metrics, time, threadNamePrefix, Option.apply(clientQuotaCallbackPlugin)),
             new ReplicationQuotaManager(replicationConfig(cfg), metrics, QuotaType.LEADER_REPLICATION, time),
             new ReplicationQuotaManager(replicationConfig(cfg), metrics, QuotaType.FOLLOWER_REPLICATION, time),
             new ReplicationQuotaManager(alterLogDirsReplicationConfig(cfg), metrics, QuotaType.ALTER_LOG_DIRS_REPLICATION, time),
-            Optional.ofNullable(clientQuotaCallbackPlugin.get())
+            clientQuotaCallbackPlugin == null ? Optional.empty() : Optional.ofNullable(clientQuotaCallbackPlugin.get())
         );
     }
 
     private static Plugin<ClientQuotaCallback> createClientQuotaCallback(KafkaConfig cfg, Metrics metrics, String role) {
         ClientQuotaCallback clientQuotaCallback = cfg.getConfiguredInstance(
                 QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, ClientQuotaCallback.class);
-        return Plugin.wrapInstance(
+        return clientQuotaCallback == null ? null : Plugin.wrapInstance(
             clientQuotaCallback,
             metrics,
             QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG,
