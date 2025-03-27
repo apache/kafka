@@ -184,8 +184,11 @@ public class BrokerHeartbeatManagerTest {
         manager.touch(3, false, 100);
         manager.touch(4, true, 100);
         manager.touch(5, false, 99);
+
+        assertTrue(manager.isBrokerActive(5));
         manager.maybeUpdateControlledShutdownOffset(5, 99);
 
+        assertFalse(manager.isBrokerActive(5));
         assertEquals(98L, manager.lowestActiveOffset());
 
         assertEquals(new BrokerControlStates(FENCED, SHUTDOWN_NOW),
@@ -219,7 +222,9 @@ public class BrokerHeartbeatManagerTest {
         assertEquals(new BrokerControlStates(CONTROLLED_SHUTDOWN, CONTROLLED_SHUTDOWN),
             manager.calculateNextBrokerState(5,
                 new BrokerHeartbeatRequestData().setWantShutDown(true), 100, () -> false));
+        assertTrue(manager.isBrokerActive(1));
         manager.fence(1);
+        assertFalse(manager.isBrokerActive(1));
         assertEquals(new BrokerControlStates(CONTROLLED_SHUTDOWN, SHUTDOWN_NOW),
             manager.calculateNextBrokerState(5,
                 new BrokerHeartbeatRequestData().setWantShutDown(true), 100, () -> false));
