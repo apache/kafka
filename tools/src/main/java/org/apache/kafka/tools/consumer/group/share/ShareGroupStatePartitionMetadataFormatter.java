@@ -14,23 +14,25 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.tools.consumer;
+
+package org.apache.kafka.tools.consumer.group.share;
 
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.coordinator.group.GroupCoordinatorRecordSerde;
 import org.apache.kafka.coordinator.group.generated.CoordinatorRecordJsonConverters;
 import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
+import org.apache.kafka.tools.consumer.CoordinatorRecordMessageFormatter;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
 import java.util.Set;
 
-public class GroupMetadataMessageFormatter extends CoordinatorRecordMessageFormatter {
+public class ShareGroupStatePartitionMetadataFormatter extends CoordinatorRecordMessageFormatter {
     private static final Set<Short> ALLOWED_RECORDS = Set.of(
-        CoordinatorRecordType.GROUP_METADATA.id()
+        CoordinatorRecordType.SHARE_GROUP_STATE_PARTITION_METADATA.id()
     );
 
-    public GroupMetadataMessageFormatter() {
+    public ShareGroupStatePartitionMetadataFormatter() {
         super(new GroupCoordinatorRecordSerde());
     }
 

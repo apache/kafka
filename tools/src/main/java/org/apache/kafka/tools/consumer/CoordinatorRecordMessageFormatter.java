@@ -18,6 +18,9 @@ package org.apache.kafka.tools.consumer;
 
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.MessageFormatter;
+import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecordSerde;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.node.JsonNodeFactory;
@@ -31,44 +34,50 @@ import java.util.Objects;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
 
-public abstract class ApiMessageFormatter implements MessageFormatter {
-
+public abstract class CoordinatorRecordMessageFormatter implements MessageFormatter {
     private static final String TYPE = "type";
     private static final String VERSION = "version";
     private static final String DATA = "data";
     private static final String KEY = "key";
     private static final String VALUE = "value";
-    static final String UNKNOWN = "unknown";
+
+    private final CoordinatorRecordSerde serde;
+
+    public CoordinatorRecordMessageFormatter(CoordinatorRecordSerde serde) {
+        this.serde = serde;
+    }
 
     @Override
     public void writeTo(ConsumerRecord<byte[], byte[]> consumerRecord, PrintStream output) {
+        if (Objects.isNull(consumerRecord.key())) return;
+
         ObjectNode json = new ObjectNode(JsonNodeFactory.instance);
+        try {
+            CoordinatorRecord record = serde.deserialize(
+                ByteBuffer.wrap(consumerRecord.key()),
+                consumerRecord.value() != null ? ByteBuffer.wrap(consumerRecord.value()) : null
+            );
 
-        byte[] key = consumerRecord.key();
-        if (Objects.nonNull(key)) {
-            short keyVersion = ByteBuffer.wrap(key).getShort();
-            JsonNode dataNode = readToKeyJson(ByteBuffer.wrap(key));
+            if (!isRecordTypeAllowed(record.key().apiKey())) return;
 
-            if (dataNode instanceof NullNode) {
-                return;
+            json
+                .putObject(KEY)
+                .put(TYPE, record.key().apiKey())
+                .set(DATA, keyAsJson(record.key()));
+
+            if (Objects.nonNull(record.value())) {
+                json
+                    .putObject(VALUE)
+                    .put(VERSION, record.value().version())
+                    .set(DATA, valueAsJson(record.value().message(), record.value().version()));
+            } else {
+                json.set(VALUE, NullNode.getInstance());
             }
-            json.putObject(KEY)
-                    .put(TYPE, keyVersion)
-                    .set(DATA, dataNode);
-        } else {
+        } catch (CoordinatorRecordSerde.UnknownRecordTypeException ex) {
             return;
-        }
-
-        byte[] value = consumerRecord.value();
-        if (Objects.nonNull(value)) {
-            short valueVersion = ByteBuffer.wrap(value).getShort();
-            JsonNode dataNode = readToValueJson(ByteBuffer.wrap(value));
-
-            json.putObject(VALUE)
-                    .put(VERSION, valueVersion)
-                    .set(DATA, dataNode);
-        } else {
-            json.set(VALUE, NullNode.getInstance());
+        } catch (RuntimeException ex) {
+            throw new RuntimeException("Could not read record at offset " + consumerRecord.offset() +
+                " due to: " + ex.getMessage(), ex);
         }
 
         try {
@@ -78,6 +87,7 @@ public abstract class ApiMessageFormatter implements MessageFormatter {
         }
     }
 
-    protected abstract JsonNode readToKeyJson(ByteBuffer byteBuffer);
-    protected abstract JsonNode readToValueJson(ByteBuffer byteBuffer);
+    protected abstract boolean isRecordTypeAllowed(short recordType);
+    protected abstract JsonNode keyAsJson(ApiMessage message);
+    protected abstract JsonNode valueAsJson(ApiMessage message, short version);
 }  

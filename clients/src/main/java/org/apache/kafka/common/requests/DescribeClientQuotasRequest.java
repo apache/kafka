@@ -20,11 +20,10 @@ import org.apache.kafka.common.message.DescribeClientQuotasRequestData;
 import org.apache.kafka.common.message.DescribeClientQuotasRequestData.ComponentData;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.quota.ClientQuotaFilter;
 import org.apache.kafka.common.quota.ClientQuotaFilterComponent;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -120,8 +119,8 @@ public class DescribeClientQuotasRequest extends AbstractRequest {
             .setEntries(null));
     }
 
-    public static DescribeClientQuotasRequest parse(ByteBuffer buffer, short version) {
-        return new DescribeClientQuotasRequest(new DescribeClientQuotasRequestData(new ByteBufferAccessor(buffer), version),
+    public static DescribeClientQuotasRequest parse(Readable readable, short version) {
+        return new DescribeClientQuotasRequest(new DescribeClientQuotasRequestData(readable, version),
             version);
     }
 
