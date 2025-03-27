@@ -34,7 +34,6 @@ import org.junit.jupiter.api.Tag
     new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000")
   )
 )
-@Tag("integration")
 class ListGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
   @ClusterTest
   def testListGroupsWithNewConsumerGroupProtocol(): Unit = {

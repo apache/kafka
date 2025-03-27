@@ -40,7 +40,6 @@ import scala.concurrent.{Await, Future}
     new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000")
   )
 )
-@Tag("integration")
 class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
   @ClusterTest
   def testSyncGroupWithOldConsumerGroupProtocol(): Unit = {

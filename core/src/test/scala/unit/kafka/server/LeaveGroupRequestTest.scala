@@ -37,7 +37,6 @@ import scala.jdk.CollectionConverters._
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
   )
 )
-@Tag("integration")
 class LeaveGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
   @ClusterTest
   def testLeaveGroupWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {

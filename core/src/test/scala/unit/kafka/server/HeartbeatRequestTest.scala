@@ -38,7 +38,6 @@ import scala.concurrent.Future
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1")
   )
 )
-@Tag("integration")
 class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
   @ClusterTest
   def testHeartbeatWithOldConsumerGroupProtocol(): Unit = {

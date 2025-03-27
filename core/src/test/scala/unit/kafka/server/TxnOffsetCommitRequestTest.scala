@@ -40,7 +40,6 @@ import scala.jdk.CollectionConverters.IterableHasAsScala
     new ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
   )
 )
-@Tag("integration")
 class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
   @ClusterTest
