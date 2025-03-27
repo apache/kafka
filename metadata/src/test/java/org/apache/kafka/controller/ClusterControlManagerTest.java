@@ -1073,7 +1073,8 @@ public class ClusterControlManagerTest {
         assertEquals(OptionalLong.of(1000L), clusterControl.heartbeatManager().tracker().
             contactTime(new BrokerIdAndEpoch(1, 200)));
 
-        // even if session is still valid for old brokers, new registrations will succeed
+        // new registrations should succeed if the broker is fenced or in controlled shutdown, even if the 
+        // last heartbeat was within the session timeout 
         time.sleep(brokerSessionTimeoutMs / 2);
         clusterControl.registerBroker(new BrokerRegistrationRequestData().
                 setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
