@@ -471,6 +471,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
         return builder.build();
     }
 
+
     private void addGlobalStore(final StreamsBuilder builder) {
         builder.addGlobalStore(
             Stores.keyValueStoreBuilder(
@@ -481,22 +482,21 @@ public class KafkaStreamsTelemetryIntegrationTest {
                 globalStoreTopic,
                 Consumed.with(Serdes.String(), Serdes.String()),
                 () -> new Processor<>() {
-                    private KeyValueStore<String, String> store;
 
                     // The store iterator is intentionally not closed here as it needs
                     // to be open during the test, so the Streams app will emit the
                     // org.apache.kafka.stream.state.oldest.iterator.open.since.ms metric
                     // that is expected. So the globalStoreIterator is a global variable
                     // (pun not intended), so it can be closed in the tearDown method.
+                    @SuppressWarnings("unchecked")
                     @Override
                     public void init(final ProcessorContext<Void, Void> context) {
-                        store = context.getStateStore("iq-test-store");
-                        globalStoreIterator = store.all();
+                        globalStoreIterator = ((KeyValueStore<String, String>)context.getStateStore("iq-test-store")).all();
                     }
 
                     @Override
                     public void process(final Record<String, String> record) {
-                        store.put(record.key(), record.value());
+                        // no-op
                     }
                 });
     }
