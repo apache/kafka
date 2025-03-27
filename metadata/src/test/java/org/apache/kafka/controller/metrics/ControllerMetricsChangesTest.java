@@ -29,7 +29,6 @@ import org.apache.kafka.server.common.MetadataVersion;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -131,7 +130,7 @@ public class ControllerMetricsChangesTest {
 
     static {
         ImageWriterOptions options = new ImageWriterOptions.Builder(MetadataVersion.IBP_3_7_IV0).build(); // highest MV for PartitionRecord v0
-        TOPIC_DELTA1 = new TopicDelta(new TopicImage("foo", FOO_ID, Collections.emptyMap()));
+        TOPIC_DELTA1 = new TopicDelta(new TopicImage("foo", FOO_ID, Map.of()));
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NORMAL).
                 toRecord(FOO_ID, 0, options).message());
         TOPIC_DELTA1.replay((PartitionRecord) fakePartitionRegistration(NORMAL).

@@ -19,8 +19,9 @@ package kafka.server
 import java.io.File
 import java.util.{Collections, Optional, Properties}
 import kafka.cluster.{Partition, PartitionTest}
-import kafka.log.{LogManager, UnifiedLog}
+import kafka.log.LogManager
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils._
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.metrics.Metrics
@@ -32,7 +33,7 @@ import org.apache.kafka.metadata.LeaderRecoveryState
 import org.apache.kafka.server.common.KRaftVersion
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams}
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetSnapshot}
+import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogOffsetSnapshot, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt, anyLong}
@@ -260,14 +261,14 @@ class ReplicaManagerQuotasTest {
     when(log.highWatermark).thenReturn(5)
     when(log.lastStableOffset).thenReturn(5)
     when(log.logEndOffsetMetadata).thenReturn(new LogOffsetMetadata(20L))
-    when(log.topicId).thenReturn(Some(topicId))
+    when(log.topicId).thenReturn(Optional.of(topicId))
     when(log.config).thenReturn(new LogConfig(Collections.emptyMap()))
 
     //if we ask for len 1 return a message
     when(log.read(anyLong,
-      maxLength = AdditionalMatchers.geq(1),
-      isolation = any[FetchIsolation],
-      minOneMessage = anyBoolean)).thenReturn(
+      AdditionalMatchers.geq(1),
+      any[FetchIsolation],
+      anyBoolean)).thenReturn(
       new FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.withRecords(Compression.NONE, record)
@@ -275,9 +276,9 @@ class ReplicaManagerQuotasTest {
 
     //if we ask for len = 0, return 0 messages
     when(log.read(anyLong,
-      maxLength = ArgumentMatchers.eq(0),
-      isolation = any[FetchIsolation],
-      minOneMessage = anyBoolean)).thenReturn(
+      ArgumentMatchers.eq(0),
+      any[FetchIsolation],
+      anyBoolean)).thenReturn(
       new FetchDataInfo(
         new LogOffsetMetadata(0L, 0L, 0),
         MemoryRecords.EMPTY
@@ -285,7 +286,7 @@ class ReplicaManagerQuotasTest {
 
     when(log.maybeIncrementHighWatermark(
       any[LogOffsetMetadata]
-    )).thenReturn(None)
+    )).thenReturn(Optional.empty)
 
     //Create log manager
     val logManager: LogManager = mock(classOf[LogManager])
@@ -305,7 +306,7 @@ class ReplicaManagerQuotasTest {
       scheduler = scheduler,
       logManager = logManager,
       quotaManagers = quotaManager,
-      metadataCache = MetadataCache.kRaftMetadataCache(leaderBrokerId, () => KRaftVersion.KRAFT_VERSION_0),
+      metadataCache = new KRaftMetadataCache(leaderBrokerId, () => KRaftVersion.KRAFT_VERSION_0),
       logDirFailureChannel = new LogDirFailureChannel(configs.head.logDirs.size),
       alterPartitionManager = alterIsrManager)
 

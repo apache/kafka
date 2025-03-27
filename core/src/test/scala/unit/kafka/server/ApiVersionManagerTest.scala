@@ -16,6 +16,7 @@
  */
 package kafka.server
 
+import kafka.server.metadata.KRaftMetadataCache
 import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metadata.FeatureLevelRecord
@@ -34,7 +35,7 @@ import scala.jdk.CollectionConverters._
 class ApiVersionManagerTest {
   private val brokerFeatures = BrokerFeatures.createDefault(true)
   private val metadataCache = {
-    val cache = MetadataCache.kRaftMetadataCache(1, () => KRaftVersion.LATEST_PRODUCTION)
+    val cache = new KRaftMetadataCache(1, () => KRaftVersion.LATEST_PRODUCTION)
     val delta = new MetadataDelta(MetadataImage.EMPTY);
     delta.replay(new FeatureLevelRecord()
       .setName(MetadataVersion.FEATURE_NAME)

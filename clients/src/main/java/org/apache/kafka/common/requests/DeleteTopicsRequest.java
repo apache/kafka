@@ -22,9 +22,8 @@ import org.apache.kafka.common.message.DeleteTopicsRequestData.DeleteTopicState;
 import org.apache.kafka.common.message.DeleteTopicsResponseData;
 import org.apache.kafka.common.message.DeleteTopicsResponseData.DeletableTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -114,8 +113,8 @@ public class DeleteTopicsRequest extends AbstractRequest {
         return data.topicNames().stream().map(name -> new DeleteTopicState().setName(name)).collect(Collectors.toList()); 
     }
 
-    public static DeleteTopicsRequest parse(ByteBuffer buffer, short version) {
-        return new DeleteTopicsRequest(new DeleteTopicsRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static DeleteTopicsRequest parse(Readable readable, short version) {
+        return new DeleteTopicsRequest(new DeleteTopicsRequestData(readable, version), version);
     }
 
 }

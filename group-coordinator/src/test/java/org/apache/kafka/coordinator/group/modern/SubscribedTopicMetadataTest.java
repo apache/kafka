@@ -23,6 +23,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -78,5 +79,33 @@ public class SubscribedTopicMetadataTest {
         Uuid topicId = Uuid.randomUuid();
         topicMetadataMap2.put(topicId, new TopicMetadata(topicId, "newTopic", 5));
         assertNotEquals(new SubscribedTopicDescriberImpl(topicMetadataMap2), subscribedTopicMetadata);
+    }
+
+    @Test
+    public void testAssignablePartitions() {
+        // null allow map (all partitions assignable)
+        subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadataMap, null);
+        String t1Name = "t1";
+        Uuid t1Id = Uuid.randomUuid();
+        topicMetadataMap.put(t1Id, new TopicMetadata(t1Id, t1Name, 5));
+        assertEquals(Set.of(0, 1, 2, 3, 4), subscribedTopicMetadata.assignablePartitions(t1Id));
+
+        // empty allow map (nothing assignable)
+        subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadataMap, Map.of());
+        assertEquals(Set.of(), subscribedTopicMetadata.assignablePartitions(t1Id));
+
+        // few assignable partitions
+        subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            topicMetadataMap,
+            Map.of(t1Id, Set.of(0, 5))
+        );
+        assertEquals(Set.of(0, 5), subscribedTopicMetadata.assignablePartitions(t1Id));
+
+        // all assignable partitions
+        subscribedTopicMetadata = new SubscribedTopicDescriberImpl(
+            topicMetadataMap,
+            Map.of(t1Id, Set.of(0, 1, 2, 3, 4))
+        );
+        assertEquals(Set.of(0, 1, 2, 3, 4), subscribedTopicMetadata.assignablePartitions(t1Id));
     }
 }
