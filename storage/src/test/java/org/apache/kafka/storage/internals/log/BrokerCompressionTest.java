@@ -64,7 +64,7 @@ public class BrokerCompressionTest {
         Compression messageCompression = Compression.of(messageCompressionType).build();
 
         /* Configure broker-side compression */
-        UnifiedLog log = UnifiedLog.create(
+        try (UnifiedLog log = UnifiedLog.create(
             logDir,
             new LogConfig(Map.of(TopicConfig.COMPRESSION_TYPE_CONFIG, brokerCompressionType.name)),
             0L,
@@ -78,23 +78,23 @@ public class BrokerCompressionTest {
             new LogDirFailureChannel(10),
             true,
             Optional.empty()
-        );
+        )) {
+            /* Append two messages */
+            log.appendAsLeader(
+                    MemoryRecords.withRecords(messageCompression, 0,
+                            new SimpleRecord("hello".getBytes()),
+                            new SimpleRecord("there".getBytes())
+                    ), 0
+            );
 
-        /* Append two messages */
-        log.appendAsLeader(
-            MemoryRecords.withRecords(messageCompression, 0,
-                new SimpleRecord("hello".getBytes()),
-                new SimpleRecord("there".getBytes())
-            ), 0
-        );
+            RecordBatch firstBatch = readFirstBatch(log);
 
-        RecordBatch firstBatch = readFirstBatch(log);
-
-        if (brokerCompressionType != BrokerCompressionType.PRODUCER) {
-            Compression targetCompression = BrokerCompressionType.targetCompression(log.config().compression, null);
-            assertEquals(targetCompression.type(), firstBatch.compressionType(), "Compression at offset 0 should produce " + brokerCompressionType);
-        } else {
-            assertEquals(messageCompressionType, firstBatch.compressionType(), "Compression at offset 0 should produce " + messageCompressionType);
+            if (brokerCompressionType != BrokerCompressionType.PRODUCER) {
+                Compression targetCompression = BrokerCompressionType.targetCompression(log.config().compression, null);
+                assertEquals(targetCompression.type(), firstBatch.compressionType(), "Compression at offset 0 should produce " + brokerCompressionType);
+            } else {
+                assertEquals(messageCompressionType, firstBatch.compressionType(), "Compression at offset 0 should produce " + messageCompressionType);
+            }
         }
     }
 
