@@ -491,7 +491,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
                     @SuppressWarnings("unchecked")
                     @Override
                     public void init(final ProcessorContext<Void, Void> context) {
-                        globalStoreIterator = ((KeyValueStore<String, String>)context.getStateStore("iq-test-store")).all();
+                        globalStoreIterator = ((KeyValueStore<String, String>) context.getStateStore("iq-test-store")).all();
                     }
 
                     @Override
