@@ -119,7 +119,7 @@ class ActiveTaskCreator {
     }
 
     public void reInitializeProducer() {
-        if (streamsProducer.allowReset())
+        if (!streamsProducer.isResetDisabled())
             streamsProducer.resetProducer(producer());
     }
 

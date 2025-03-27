@@ -190,7 +190,7 @@ public class ActiveTaskCreatorTest {
 
         activeTaskCreator.close();
 
-        assertThat(activeTaskCreator.streamsProducer().allowReset(), is(false));
+        assertThat(activeTaskCreator.streamsProducer().isResetDisabled(), is(true));
         assertThat(mockClientSupplier.producers.get(0).closed(), is(true));
     }
 
