@@ -275,6 +275,13 @@ public interface ClusterInstance {
 
     //---------------------------[wait]---------------------------//
 
+    default void waitForToken() throws InterruptedException {
+        Collection<KafkaBroker> brokers = aliveBrokers().values();
+        TestUtils.waitForCondition(() -> brokers.stream()
+                                                .noneMatch(broker -> broker.tokenCache().tokens().isEmpty()),
+                                   60000L, "Token not propagated after 60000 ms");
+    }
+
     default void waitTopicDeletion(String topic) throws InterruptedException {
         waitForTopic(topic, 0);
     }

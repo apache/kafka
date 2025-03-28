@@ -169,6 +169,7 @@ class ControllerApisTest {
       new KafkaConfig(props),
       "JgxuGe9URy-E-ceaL04lEw",
       new ControllerRegistrationsPublisher(),
+      null,
       new SimpleApiVersionManager(
         ListenerType.CONTROLLER,
         true,

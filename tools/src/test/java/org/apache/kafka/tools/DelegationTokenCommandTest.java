@@ -17,17 +17,28 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.CreateDelegationTokenOptions;
+import org.apache.kafka.clients.admin.CreateDelegationTokenResult;
+import org.apache.kafka.clients.admin.DescribeDelegationTokenResult;
 import org.apache.kafka.clients.admin.MockAdminClient;
+import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
 
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.Type;
+import org.apache.kafka.common.utils.SecurityUtils;
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
+import static org.apache.kafka.server.config.DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -79,6 +90,27 @@ public class DelegationTokenCommandTest {
         // try describing tokens for unknown owner
         assertTrue(DelegationTokenCommand.describeToken(adminClient, getDescribeOpts("User:Unknown")).isEmpty());
 
+    }
+
+    @ClusterTest(types = { Type.KRAFT },
+        brokerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT,
+        controllerSecurityProtocol = SecurityProtocol.SASL_PLAINTEXT,
+        serverProperties = {
+            @ClusterConfigProperty(key = DELEGATION_TOKEN_SECRET_KEY_CONFIG, value = "key")
+        })
+    public void testDescribeDelegationTokenWithBootstrapController(ClusterInstance clusterInstance) throws ExecutionException, InterruptedException {
+        try (Admin brokerAdmin = clusterInstance.admin();
+             Admin controllerAdmin = clusterInstance.admin(Map.of(), true)) {
+            CreateDelegationTokenOptions ops = new CreateDelegationTokenOptions()
+                    .renewers(List.of(SecurityUtils.parseKafkaPrincipal("User:user1")));
+            CreateDelegationTokenResult createResult  = brokerAdmin.createDelegationToken(ops);
+            DelegationToken expected = createResult.delegationToken().get();
+            clusterInstance.waitForToken();
+
+            DescribeDelegationTokenResult describeResult = controllerAdmin.describeDelegationToken();
+            DelegationToken actual = describeResult.delegationTokens().get().get(0);
+            assertEquals(expected, actual);
+        }
     }
 
     private DelegationTokenCommand.DelegationTokenCommandOptions getCreateOpts(String renewer) {
