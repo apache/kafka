@@ -17,6 +17,7 @@
 package kafka.server
 
 import java.io.File
+import java.util
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import kafka.api.IntegrationTestHarness
@@ -202,8 +203,10 @@ class LogDirFailureTest extends IntegrationTestHarness {
       // check if the broker has the offline replica
       hasOfflineDir && brokerWithDirFail.exists(broker =>
         broker.replicaManager.metadataCache
-          .getClusterMetadata(broker.clusterId, broker.config.interBrokerListenerName)
-          .partition(new TopicPartition(topic, 0)).offlineReplicas().map(_.id()).contains(originalLeaderServerId))
+          .getTopicMetadata(util.Set.of(topic), broker.config.interBrokerListenerName, false, false)
+          .stream()
+          .flatMap(t => t.partitions().stream())
+          .anyMatch(p => p.partitionIndex() == 0 && p.offlineReplicas().contains(originalLeaderServerId)))
     }, "Expected to find an offline log dir")
   }
 
