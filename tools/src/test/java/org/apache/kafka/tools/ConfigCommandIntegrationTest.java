@@ -37,7 +37,6 @@ import org.apache.kafka.test.TestUtils;
 
 import org.mockito.Mockito;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -70,6 +69,7 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyMap;
 
 public class ConfigCommandIntegrationTest {
     private final String defaultBrokerId = "0";
@@ -151,7 +151,7 @@ public class ConfigCommandIntegrationTest {
     public void testAddConfigKeyValuesUsingCommand() throws Exception {
         try (Admin client = cluster.admin()) {
             NewTopic newTopic = new NewTopic("topic", 1, (short) 1);
-            client.createTopics(Collections.singleton(newTopic)).all().get();
+            client.createTopics(Set.of(newTopic)).all().get();
             cluster.waitForTopic("topic", 1);
             Stream<String> command = Stream.concat(quorumArgs(), Stream.of(
                     "--entity-type", "topics",
@@ -251,12 +251,14 @@ public class ConfigCommandIntegrationTest {
         try (Admin client = cluster.admin()) {
             // Add config
             Map<String, String> configs = new HashMap<>();
-            configs.put("metrics", "");
+            configs.put("metrics", "org.apache.kafka.producer.");
             configs.put("interval.ms", "6000");
             alterAndVerifyClientMetricsConfig(client, defaultClientMetricsName, configs, alterOpts);
 
             // Delete config
-            deleteAndVerifyClientMetricsConfigValue(client, defaultClientMetricsName, configs.keySet(), alterOpts);
+            configs.put("metrics", "");
+            configs.put("interval.ms", "300000");
+            deleteAndVerifyClientMetricsConfigValue(client, defaultClientMetricsName, configs, alterOpts);
 
             // Unknown config configured should fail
             assertThrows(ExecutionException.class, () -> alterConfigWithAdmin(client, singletonMap("unknown.config", "20000"), alterOpts));
@@ -337,7 +339,7 @@ public class ConfigCommandIntegrationTest {
     private void updateAndCheckInvalidBrokerConfig(Optional<String> brokerIdOrDefault) {
         List<String> alterOpts = generateDefaultAlterOpts(cluster.bootstrapServers());
         try (Admin client = cluster.admin()) {
-            alterConfigWithAdmin(client, brokerIdOrDefault, Collections.singletonMap("invalid", "2"), alterOpts);
+            alterConfigWithAdmin(client, brokerIdOrDefault, Map.of("invalid", "2"), alterOpts);
 
             Stream<String> describeCommand = Stream.concat(
                     Stream.concat(
@@ -357,7 +359,7 @@ public class ConfigCommandIntegrationTest {
     public void testUpdateInvalidTopicConfigs() throws ExecutionException, InterruptedException {
         List<String> alterOpts = asList("--bootstrap-server", cluster.bootstrapServers(), "--entity-type", "topics", "--alter");
         try (Admin client = cluster.admin()) {
-            client.createTopics(Collections.singletonList(new NewTopic("test-config-topic", 1, (short) 1))).all().get();
+            client.createTopics(List.of(new NewTopic("test-config-topic", 1, (short) 1))).all().get();
             assertInstanceOf(
                     InvalidConfigurationException.class,
                     assertThrows(
@@ -412,7 +414,7 @@ public class ConfigCommandIntegrationTest {
             AlterConfigsResult mockResult = AdminClientTestUtils.alterConfigsResult(
                     new ConfigResource(ConfigResource.Type.BROKER, ""), new UnsupportedVersionException("simulated error"));
             Mockito.doReturn(mockResult).when(spyAdmin)
-                    .incrementalAlterConfigs(any(java.util.Map.class), any(AlterConfigsOptions.class));
+                    .incrementalAlterConfigs(anyMap(), any(AlterConfigsOptions.class));
             assertEquals(
                     "The INCREMENTAL_ALTER_CONFIGS API is not supported by the cluster. The API is supported starting from version 2.3.0. You may want to use an older version of this tool to interact with your cluster, or upgrade your brokers to version 2.3.0 or newer to avoid this error.",
                     assertThrows(UnsupportedVersionException.class, () -> {
@@ -425,7 +427,7 @@ public class ConfigCommandIntegrationTest {
                                         "--entity-default"))));
                     }).getMessage()
             );
-            Mockito.verify(spyAdmin).incrementalAlterConfigs(any(java.util.Map.class), any(AlterConfigsOptions.class));
+            Mockito.verify(spyAdmin).incrementalAlterConfigs(anyMap(), any(AlterConfigsOptions.class));
         }
     }
 
@@ -575,17 +577,16 @@ public class ConfigCommandIntegrationTest {
 
     private void deleteAndVerifyClientMetricsConfigValue(Admin client,
                                                          String clientMetricsName,
-                                                         Set<String> defaultConfigs,
+                                                         Map<String, String> defaultConfigs,
                                                          List<String> alterOpts) throws Exception {
         List<String> bootstrapOpts = quorumArgs().collect(Collectors.toList());
         ConfigCommand.ConfigCommandOptions deleteOpts =
             new ConfigCommand.ConfigCommandOptions(toArray(bootstrapOpts,
                     alterOpts,
-                    asList("--delete-config", String.join(",", defaultConfigs))));
+                    asList("--delete-config", String.join(",", defaultConfigs.keySet()))));
         deleteOpts.checkArgs();
         ConfigCommand.alterConfig(client, deleteOpts);
-        // There are no default configs returned for client metrics
-        verifyClientMetricsConfig(client, clientMetricsName, Collections.emptyMap());
+        verifyClientMetricsConfig(client, clientMetricsName, defaultConfigs);
     }
 
     private void verifyPerBrokerConfigValue(Admin client,
