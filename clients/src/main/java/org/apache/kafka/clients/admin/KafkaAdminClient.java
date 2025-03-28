@@ -4839,6 +4839,17 @@ public class KafkaAdminClient extends AdminClient {
         return new AbortTransactionResult(future.all());
     }
 
+    /**
+     * Forcefully terminates an ongoing transaction for a given transactional ID.
+     * <p>
+     * This API is intended for well-formed but long-running transactions that are known to the
+     * transaction coordinator. It is primarily designed for supporting 2PC (two-phase commit) workflows,
+     * where a coordinator may need to unilaterally terminate a participant transaction that hasn't completed.
+     * </p>
+     *
+     * @param transactionalId       The transactional ID whose active transaction should be forcefully terminated.
+     * @return a {@link TerminateTransactionResult} that can be used to await the operation result.
+     */
     @Override
     public TerminateTransactionResult forceTerminateTransaction(String transactionalId, TerminateTransactionOptions options) {
         // Simply leverage the existing fenceProducers implementation with a single transactional ID
