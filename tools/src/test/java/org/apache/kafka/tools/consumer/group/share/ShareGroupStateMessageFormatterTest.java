@@ -164,12 +164,16 @@ public class ShareGroupStateMessageFormatterTest {
             Arguments.of(
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_SNAPSHOT_KEY).array(),
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_UPDATE_VALUE).array(),
-                new RuntimeException("non-nullable field stateBatches was serialized as null")
+                new RuntimeException("Could not read record at offset 0 due to: " +
+                        "Could not read record with version 0 from value's buffer due to: " +
+                        "non-nullable field stateBatches was serialized as null.")
             ),
             Arguments.of(
                 MessageUtil.toVersionPrefixedByteBuffer((short) 1, SHARE_UPDATE_KEY).array(),
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_SNAPSHOT_VALUE).array(),
-                new RuntimeException("non-nullable field stateBatches was serialized as null")
+                new RuntimeException("Could not read record at offset 0 due to: " +
+                        "Could not read record with version 0 from value's buffer due to: " +
+                        "non-nullable field stateBatches was serialized as null.")
             )
         );
     }
