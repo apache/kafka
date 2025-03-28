@@ -54,6 +54,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -241,11 +242,22 @@ public class ShareConsumerImplTest {
         consumer.poll(Duration.ZERO);
 
         // Verify that next ShareFetchEvent was sent with the acknowledgement GAP for offset 1
-        verify(applicationEventHandler).add(argThat(event -> 
-            event instanceof ShareFetchEvent && 
-            ((ShareFetchEvent) event).acknowledgementsMap().containsKey(tip) &&
-            ((ShareFetchEvent) event).acknowledgementsMap().get(tip).acknowledgements().get(1) == null  // Null indicates GAP
-        ));
+        verify(applicationEventHandler).add(argThat(event -> {
+            if (!(event instanceof ShareFetchEvent)) {
+                return false;
+            }
+            ShareFetchEvent fetchEvent = (ShareFetchEvent) event;
+            
+            // Regular acknowledgements map should be empty
+            if (!fetchEvent.acknowledgementsMap().isEmpty()) {
+                return false;
+            }
+            
+            // Control record acknowledgements map should contain the GAP for offset 1
+            Map<TopicIdPartition, NodeAcknowledgements> controlRecordAcks = fetchEvent.controlRecordAcknowledgements();
+            return controlRecordAcks.containsKey(tip) &&
+                   controlRecordAcks.get(tip).acknowledgements().get(1L) == null; // Null indicates GAP
+        }));
     }
 
     @Test
