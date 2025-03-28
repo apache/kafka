@@ -29,7 +29,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogCleanerManager, LogConfig, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.ParameterizedTest
@@ -69,7 +69,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
 
     checkLogAfterAppendingDups(log, startSize, appends)
 
-    val appendInfo = log.appendAsLeader(largeMessageSet, leaderEpoch = 0)
+    val appendInfo = log.appendAsLeader(largeMessageSet, 0)
     // move LSO forward to increase compaction bound
     log.updateHighWatermark(log.logEndOffset)
     val largeMessageOffset = appendInfo.firstOffset
@@ -86,7 +86,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     // and make sure its gone from checkpoint file
     cleaner.logs.remove(topicPartitions(0))
     cleaner.updateCheckpoints(logDir, partitionToRemove = Option(topicPartitions(0)))
-    val checkpoints = new OffsetCheckpointFile(new File(logDir, cleaner.cleanerManager.offsetCheckpointFile), null).read()
+    val checkpoints = new OffsetCheckpointFile(new File(logDir, LogCleanerManager.OFFSET_CHECKPOINT_FILE), null).read()
     // we expect partition 0 to be gone
     assertFalse(checkpoints.containsKey(topicPartitions(0)))
   }
@@ -171,7 +171,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     checkLogAfterAppendingDups(log, startSize, appends1)
 
     val dupsV0 = writeDups(numKeys = 40, numDups = 3, log = log, codec = compression, magicValue = RecordBatch.MAGIC_VALUE_V0)
-    val appendInfo = log.appendAsLeaderWithRecordVersion(largeMessageSet, leaderEpoch = 0, recordVersion = RecordVersion.V0)
+    val appendInfo = log.appendAsLeaderWithRecordVersion(largeMessageSet, 0, RecordVersion.V0)
     // move LSO forward to increase compaction bound
     log.updateHighWatermark(log.logEndOffset)
     val largeMessageOffset = appendInfo.firstOffset
@@ -242,7 +242,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
       if (compressionType == CompressionType.NONE)
         assertEquals(1, recordBatch.iterator().asScala.size)
       else
-        assertTrue(recordBatch.iterator().asScala.size >= 1)
+        assertTrue(recordBatch.iterator().asScala.nonEmpty)
 
       val firstRecordKey = TestUtils.readString(recordBatch.iterator().next().key())
       if (keysForV0RecordsWithNoV1V2Updates.contains(firstRecordKey))
@@ -318,7 +318,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     // TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG
     val topicPartition = new TopicPartition(topic, partitionId)
     cleaner.awaitCleaned(topicPartition, firstDirty)
-    val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints(topicPartition)
+    val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints.get(topicPartition)
     assertTrue(lastCleaned >= firstDirty, s"log cleaner should have processed up to offset $firstDirty, but lastCleaned=$lastCleaned")
   }
 
@@ -353,7 +353,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     }
 
     val appendInfo = log.appendAsLeaderWithRecordVersion(MemoryRecords.withRecords(magicValue, codec, records: _*),
-      leaderEpoch = 0, recordVersion = RecordVersion.lookup(magicValue))
+      0, RecordVersion.lookup(magicValue))
     // move LSO forward to increase compaction bound
     log.updateHighWatermark(log.logEndOffset)
     val offsets = appendInfo.firstOffset to appendInfo.lastOffset

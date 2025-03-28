@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.server.log.remote.storage;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.nio.ByteBuffer;
 import java.nio.file.Path;
 import java.util.Objects;
@@ -28,7 +26,6 @@ import java.util.Optional;
  * storage. This is passed with {@link RemoteStorageManager#copyLogSegmentData(RemoteLogSegmentMetadata, LogSegmentData)}
  * while copying a specific log segment to the remote storage.
  */
-@InterfaceStability.Evolving
 public class LogSegmentData {
 
     private final Path logSegment;

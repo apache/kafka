@@ -27,13 +27,14 @@ import org.apache.kafka.coordinator.group.streams.TopicMetadata;
 import org.slf4j.Logger;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+import java.util.SortedMap;
+import java.util.TreeMap;
 import java.util.TreeSet;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -74,12 +75,16 @@ public class InternalTopicManager {
             Map<String, Integer> decidedPartitionCountsForInternalTopics =
                 decidePartitionCounts(logContext, topology, topicMetadata, copartitionGroupsBySubtopology, log);
 
-            final Map<String, ConfiguredSubtopology> configuredSubtopologies =
+            final SortedMap<String, ConfiguredSubtopology> configuredSubtopologies =
                 subtopologies.stream()
                     .collect(Collectors.toMap(
                         StreamsGroupTopologyValue.Subtopology::subtopologyId,
-                        x -> fromPersistedSubtopology(x, decidedPartitionCountsForInternalTopics))
-                    );
+                        x -> fromPersistedSubtopology(x, decidedPartitionCountsForInternalTopics),
+                        (v1, v2) -> {
+                            throw new RuntimeException(String.format("Duplicate key for values %s and %s", v1, v2));
+                        },
+                        TreeMap::new
+                    ));
 
             Map<String, CreatableTopic> internalTopicsToCreate = missingInternalTopics(configuredSubtopologies, topicMetadata);
             if (!internalTopicsToCreate.isEmpty()) {
@@ -284,7 +289,7 @@ public class InternalTopicManager {
             topicInfo.topicConfigs() != null ? topicInfo.topicConfigs().stream()
                 .collect(Collectors.toMap(StreamsGroupTopologyValue.TopicConfig::key,
                     StreamsGroupTopologyValue.TopicConfig::value))
-                : Collections.emptyMap()
+                : Map.of()
         );
     }
 
@@ -298,6 +303,6 @@ public class InternalTopicManager {
                 copartitionGroup.repartitionSourceTopics().stream()
                     .map(i -> subtopology.repartitionSourceTopics().get(i).name())
             ).collect(Collectors.toSet())
-        ).collect(Collectors.toList());
+        ).toList();
     }
 }

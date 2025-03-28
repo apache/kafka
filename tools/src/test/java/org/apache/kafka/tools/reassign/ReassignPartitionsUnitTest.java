@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools.reassign;
 
-import org.apache.kafka.admin.BrokerMetadata;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.clients.admin.PartitionReassignment;
@@ -29,6 +28,7 @@ import org.apache.kafka.common.errors.InvalidReplicationFactorException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.metadata.placement.UsableBroker;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
 import org.apache.kafka.server.config.QuotaConfig;
@@ -161,7 +161,7 @@ public class ReassignPartitionsUnitTest {
             reassignments.put(new TopicPartition("foo", 0), asList(0, 1, 3));
             reassignments.put(new TopicPartition("quux", 0), asList(1, 2, 3));
 
-            Map<TopicPartition, Throwable> reassignmentResult = alterPartitionReassignments(adminClient, reassignments);
+            Map<TopicPartition, Throwable> reassignmentResult = alterPartitionReassignments(adminClient, reassignments,  false);
 
             assertEquals(1, reassignmentResult.size());
             assertEquals(UnknownTopicOrPartitionException.class, reassignmentResult.get(new TopicPartition("quux", 0)).getClass());
@@ -317,19 +317,19 @@ public class ReassignPartitionsUnitTest {
             build()) {
 
             assertEquals(asList(
-                new BrokerMetadata(0, Optional.of("rack0")),
-                new BrokerMetadata(1, Optional.of("rack1"))
+                new UsableBroker(0, Optional.of("rack0"), false),
+                new UsableBroker(1, Optional.of("rack1"), false)
             ), getBrokerMetadata(adminClient, asList(0, 1), true));
             assertEquals(asList(
-                new BrokerMetadata(0, Optional.empty()),
-                new BrokerMetadata(1, Optional.empty())
+                new UsableBroker(0, Optional.empty(), false),
+                new UsableBroker(1, Optional.empty(), false)
             ), getBrokerMetadata(adminClient, asList(0, 1), false));
             assertStartsWith("Not all brokers have rack information",
                 assertThrows(AdminOperationException.class,
                     () -> getBrokerMetadata(adminClient, asList(1, 2), true)).getMessage());
             assertEquals(asList(
-                new BrokerMetadata(1, Optional.empty()),
-                new BrokerMetadata(2, Optional.empty())
+                new UsableBroker(1, Optional.empty(), false),
+                new UsableBroker(2, Optional.empty(), false)
             ), getBrokerMetadata(adminClient, asList(1, 2), false));
         }
     }
@@ -359,7 +359,7 @@ public class ReassignPartitionsUnitTest {
     public void testGenerateAssignmentFailsWithoutEnoughReplicas() {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(4).build()) {
             addTopics(adminClient);
-            assertStartsWith("Replication factor: 3 larger than available brokers: 2",
+            assertStartsWith("The target replication factor of 3 cannot be reached because only 2 broker(s) are registered",
                 assertThrows(InvalidReplicationFactorException.class,
                     () -> generateAssignment(adminClient, "{\"topics\":[{\"topic\":\"foo\"},{\"topic\":\"bar\"}]}", "0,1", false),
                     "Expected generateAssignment to fail").getMessage());
@@ -606,7 +606,7 @@ public class ReassignPartitionsUnitTest {
                     "{\"version\":1,\"partitions\":" +
                         "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1],\"log_dirs\":[\"any\",\"any\"]}," +
                         "{\"topic\":\"quux\",\"partition\":0,\"replicas\":[2,3,4],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
-                        "]}", -1L, -1L, 10000L, Time.SYSTEM), "Expected reassignment with non-existent topic to fail").getCause().getMessage());
+                        "]}", -1L, -1L, 10000L, Time.SYSTEM, false), "Expected reassignment with non-existent topic to fail").getCause().getMessage());
         }
     }
 
@@ -619,7 +619,7 @@ public class ReassignPartitionsUnitTest {
                     "{\"version\":1,\"partitions\":" +
                         "[{\"topic\":\"foo\",\"partition\":0,\"replicas\":[0,1],\"log_dirs\":[\"any\",\"any\"]}," +
                         "{\"topic\":\"foo\",\"partition\":1,\"replicas\":[2,3,4],\"log_dirs\":[\"any\",\"any\",\"any\"]}" +
-                        "]}", -1L, -1L, 10000L, Time.SYSTEM), "Expected reassignment with non-existent broker id to fail").getMessage());
+                        "]}", -1L, -1L, 10000L, Time.SYSTEM, false), "Expected reassignment with non-existent broker id to fail").getMessage());
         }
     }
 
@@ -670,7 +670,7 @@ public class ReassignPartitionsUnitTest {
             reassignments.put(new TopicPartition("foo", 0), asList(0, 1, 4, 2));
             reassignments.put(new TopicPartition("bar", 0), asList(2, 3));
 
-            Map<TopicPartition, Throwable> reassignmentResult = alterPartitionReassignments(adminClient, reassignments);
+            Map<TopicPartition, Throwable> reassignmentResult = alterPartitionReassignments(adminClient, reassignments, false);
 
             assertTrue(reassignmentResult.isEmpty());
             assertEquals(String.join(System.lineSeparator(),
@@ -762,7 +762,7 @@ public class ReassignPartitionsUnitTest {
         try (MockAdminClient adminClient = new MockAdminClient.Builder().numBrokers(4).build()) {
             addTopics(adminClient);
             assertStartsWith("Unexpected character",
-                assertThrows(AdminOperationException.class, () -> executeAssignment(adminClient, false, "{invalid_json", -1L, -1L, 10000L, Time.SYSTEM)).getMessage());
+                assertThrows(AdminOperationException.class, () -> executeAssignment(adminClient, false, "{invalid_json", -1L, -1L, 10000L, Time.SYSTEM, false)).getMessage());
         }
     }
 }

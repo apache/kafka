@@ -19,6 +19,7 @@ package org.apache.kafka.tools;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientTestUtils;
+import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsResult;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
@@ -29,11 +30,15 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Exit;
 
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
+import java.util.Collection;
 import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.ExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -115,6 +120,14 @@ public class ClientMetricsCommandTest {
     }
 
     @Test
+    public void testOptionsAlterInvalidInterval() {
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> new ClientMetricsCommand.ClientMetricsCommandOptions(
+            new String[]{"--bootstrap-server", bootstrapServer, "--alter", "--name", clientMetricsName,
+                "--interval", "abc"}));
+        assertEquals("Invalid interval value. Enter an integer, or leave empty to reset.", exception.getMessage());
+    }
+
+    @Test
     public void testAlter() {
         Admin adminClient = mock(Admin.class);
         ClientMetricsCommand.ClientMetricsService service = new ClientMetricsCommand.ClientMetricsService(adminClient);
@@ -154,6 +167,39 @@ public class ClientMetricsCommandTest {
             }
         });
         assertTrue(capturedOutput.contains("Altered client metrics config"));
+    }
+
+    @Test
+    public void testAlterResetConfigs() {
+        Admin adminClient = mock(Admin.class);
+        ClientMetricsCommand.ClientMetricsService service = new ClientMetricsCommand.ClientMetricsService(adminClient);
+
+        AlterConfigsResult result = AdminClientTestUtils.alterConfigsResult(new ConfigResource(ConfigResource.Type.CLIENT_METRICS, clientMetricsName));
+        @SuppressWarnings("unchecked")
+        final ArgumentCaptor<Map<ConfigResource, Collection<AlterConfigOp>>> configCaptor = ArgumentCaptor.forClass(Map.class);
+        when(adminClient.incrementalAlterConfigs(configCaptor.capture(), any())).thenReturn(result);
+
+        String capturedOutput = ToolsTestUtils.captureStandardOut(() -> {
+            try {
+                service.alterClientMetrics(new ClientMetricsCommand.ClientMetricsCommandOptions(
+                        new String[]{"--bootstrap-server", bootstrapServer, "--alter",
+                                     "--name", clientMetricsName, "--metrics", "",
+                                     "--interval", "", "--match", ""}));
+            } catch (Throwable t) {
+                fail(t);
+            }
+        });
+        Map<ConfigResource, Collection<AlterConfigOp>> alteredConfigOps = configCaptor.getValue();
+        assertNotNull(alteredConfigOps, "alteredConfigOps should not be null");
+        assertEquals(1, alteredConfigOps.size(), "Should have exactly one ConfigResource");
+        assertEquals(3, alteredConfigOps.values().iterator().next().size(), "Should have exactly 3 operations");
+        for (Collection<AlterConfigOp> operations : alteredConfigOps.values()) {
+            for (AlterConfigOp op : operations) {
+                assertEquals(AlterConfigOp.OpType.DELETE, op.opType(),
+                        "Expected DELETE operation for config: " + op.configEntry().name());
+            }
+        }
+        assertTrue(capturedOutput.contains("Altered client metrics config for " + clientMetricsName + "."));
     }
 
     @Test

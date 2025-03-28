@@ -122,7 +122,7 @@ public class SessionedProtocolIntegrationTest {
         // Create the connector now
         // setup up props for the sink connector
         Map<String, String> connectorProps = new HashMap<>();
-        connectorProps.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, TestableSinkConnector.class.getSimpleName());
         connectorProps.put(TASKS_MAX_CONFIG, String.valueOf(1));
         connectorProps.put(TOPICS_CONFIG, "test-topic");
         connectorProps.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());

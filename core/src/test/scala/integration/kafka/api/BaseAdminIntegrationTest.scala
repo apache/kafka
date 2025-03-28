@@ -33,9 +33,7 @@ import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -71,9 +69,8 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     super.tearDown()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testCreateDeleteTopics(quorum: String): Unit = {
+  @Test
+  def testCreateDeleteTopics(): Unit = {
     client = createAdminClient
     val topics = Seq("mytopic", "mytopic2", "mytopic3")
     val newTopics = Seq(
@@ -109,14 +106,14 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     val failedCreateResult = client.createTopics(newTopics.asJava)
     val results = failedCreateResult.values()
     assertTrue(results.containsKey("mytopic"))
-    assertFutureThrows(results.get("mytopic"), classOf[TopicExistsException])
+    assertFutureThrows(classOf[TopicExistsException], results.get("mytopic"))
     assertTrue(results.containsKey("mytopic2"))
-    assertFutureThrows(results.get("mytopic2"), classOf[TopicExistsException])
+    assertFutureThrows(classOf[TopicExistsException], results.get("mytopic2"))
     assertTrue(results.containsKey("mytopic3"))
-    assertFutureThrows(results.get("mytopic3"), classOf[TopicExistsException])
-    assertFutureThrows(failedCreateResult.numPartitions("mytopic3"), classOf[TopicExistsException])
-    assertFutureThrows(failedCreateResult.replicationFactor("mytopic3"), classOf[TopicExistsException])
-    assertFutureThrows(failedCreateResult.config("mytopic3"), classOf[TopicExistsException])
+    assertFutureThrows(classOf[TopicExistsException], results.get("mytopic3"))
+    assertFutureThrows(classOf[TopicExistsException], failedCreateResult.numPartitions("mytopic3"))
+    assertFutureThrows(classOf[TopicExistsException], failedCreateResult.replicationFactor("mytopic3"))
+    assertFutureThrows(classOf[TopicExistsException], failedCreateResult.config("mytopic3"))
 
     val topicToDescription = client.describeTopics(topics.asJava).allTopicNames.get()
     assertEquals(topics.toSet, topicToDescription.keySet.asScala)
@@ -164,9 +161,8 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     waitForTopics(client, List(), topics)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testAuthorizedOperations(quorum: String): Unit = {
+  @Test
+  def testAuthorizedOperations(): Unit = {
     client = createAdminClient
 
     // without includeAuthorizedOperations flag

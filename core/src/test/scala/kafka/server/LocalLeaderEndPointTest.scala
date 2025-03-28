@@ -18,18 +18,19 @@
 package kafka.server
 
 import kafka.server.QuotaFactory.QuotaManagers
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.{CoreUtils, Logging, TestUtils}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
-import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, TopicRecord}
+import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionChangeRecord, PartitionRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataProvenance}
-import org.apache.kafka.server.common.{KRaftVersion, OffsetAndEpoch}
+import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.util.{MockScheduler, MockTime}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogDirFailureChannel}
@@ -69,12 +70,16 @@ class LocalLeaderEndPointTest extends Logging {
       scheduler = new MockScheduler(time),
       logManager = mockLogMgr,
       quotaManagers = quotaManager,
-      metadataCache = MetadataCache.kRaftMetadataCache(config.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
+      metadataCache = new KRaftMetadataCache(config.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size),
       alterPartitionManager = alterPartitionManager
     )
 
     val delta = new MetadataDelta(MetadataImage.EMPTY)
+    delta.replay(new FeatureLevelRecord()
+      .setName(MetadataVersion.FEATURE_NAME)
+      .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+    )
     delta.replay(new TopicRecord()
       .setName(topic)
       .setTopicId(topicId)
@@ -141,7 +146,7 @@ class LocalLeaderEndPointTest extends Logging {
     bumpLeaderEpoch()
     appendRecords(replicaManager, topicPartition, records)
       .onFire(response => assertEquals(Errors.NONE, response.error))
-    replicaManager.logManager.getLog(topicPartition).foreach(log => log._localLogStartOffset = 3)
+    replicaManager.logManager.getLog(topicPartition).foreach(log => log.updateLocalLogStartOffset(3))
     assertEquals(new OffsetAndEpoch(0L, 0), endPoint.fetchEarliestOffset(topicPartition, currentLeaderEpoch = 7))
     assertEquals(new OffsetAndEpoch(3L, 1), endPoint.fetchEarliestLocalOffset(topicPartition, currentLeaderEpoch = 7))
   }

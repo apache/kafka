@@ -28,7 +28,6 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Supplier;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.MINUTES;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
@@ -186,7 +185,7 @@ class PeriodicTaskControlManager {
             // collection of operations before picking from the non-deferred collection of
             // operations. This can result in some unfairness if deferred operation are
             // scheduled for immediate execution. This delays them by a small amount of time.
-            return MILLISECONDS.toNanos(10);
+            return task.immediatePeriodNs();
         } else if (error) {
             // If the periodic task hit an error, reschedule it in 5 minutes. This is to avoid
             // scenarios where we spin in a tight loop hitting errors, but still give the task

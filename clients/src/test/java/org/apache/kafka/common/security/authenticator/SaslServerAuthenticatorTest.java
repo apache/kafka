@@ -354,7 +354,7 @@ public class SaslServerAuthenticatorTest {
     private void mockRequest(RequestHeader header, AbstractRequest request, TransportLayer transportLayer) throws IOException {
         ByteBuffer headerBuffer = RequestTestUtils.serializeRequestHeader(header);
 
-        ByteBuffer requestBuffer = request.serialize();
+        ByteBuffer requestBuffer = request.serialize().buffer();
         requestBuffer.rewind();
 
         when(transportLayer.read(any(ByteBuffer.class))).then(invocation -> {
@@ -401,7 +401,7 @@ public class SaslServerAuthenticatorTest {
         Map<String, AuthenticateCallbackHandler> callbackHandlers = Collections.singletonMap(
                 mechanism, new SaslServerCallbackHandler());
         ApiVersionsResponse apiVersionsResponse = TestUtils.defaultApiVersionsResponse(
-                ApiMessageType.ListenerType.ZK_BROKER);
+                ApiMessageType.ListenerType.BROKER);
         Map<String, Long> connectionsMaxReauthMsByMechanism = maxReauth != null ?
                 Collections.singletonMap(mechanism, maxReauth) : Collections.emptyMap();
 

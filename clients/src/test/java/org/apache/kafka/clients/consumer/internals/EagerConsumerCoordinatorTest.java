@@ -22,6 +22,4 @@ public class EagerConsumerCoordinatorTest extends ConsumerCoordinatorTest {
     public EagerConsumerCoordinatorTest() {
         super(ConsumerPartitionAssignor.RebalanceProtocol.EAGER);
     }
-
-    // @Flaky("KAFKA-15900") -> testOutdatedCoordinatorAssignment (in super class)
 }
