@@ -89,10 +89,7 @@ public class FetchResponse extends AbstractResponse {
      */
     public FetchResponse(FetchResponseData fetchResponseData) {
         super(ApiKeys.FETCH);
-        // To protect the clients from failing due to null records,
-        // we always convert null records to MemoryRecords.EMPTY
-        // We will propose a KIP to change the schema definitions in the future
-        this.data = convertNullRecordsToEmpty(fetchResponseData);
+        this.data = fetchResponseData;
     }
 
     public Errors error() {
@@ -261,6 +258,9 @@ public class FetchResponse extends AbstractResponse {
             FetchResponseData.PartitionData partitionData = entry.getValue();
             // Since PartitionData alone doesn't know the partition ID, we set it here
             partitionData.setPartitionIndex(entry.getKey().topicPartition().partition());
+            // To protect the clients from failing due to null records,
+            // we always convert null records to MemoryRecords.EMPTY
+            // We will propose a KIP to change the schema definitions in the future
             if (partitionData.records() == null)
                 partitionData.setRecords(MemoryRecords.EMPTY);
             // We have to keep the order of input topic-partition. Hence, we batch the partitions only if the last
@@ -290,15 +290,5 @@ public class FetchResponse extends AbstractResponse {
                 .setErrorCode(error.code())
                 .setSessionId(sessionId)
                 .setResponses(topicResponseList);
-    }
-
-    private static FetchResponseData convertNullRecordsToEmpty(FetchResponseData fetchResponseData) {
-        for (FetchResponseData.FetchableTopicResponse response : fetchResponseData.responses()) {
-            for (FetchResponseData.PartitionData partition : response.partitions()) {
-                if (partition.records() == null)
-                    partition.setRecords(MemoryRecords.EMPTY);
-            }
-        }
-        return fetchResponseData;
     }
 }

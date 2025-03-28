@@ -597,11 +597,9 @@ public class RequestResponseTest {
             .setPartitions(List.of(partitionData))
             .setTopicId(id);
         FetchResponseData data = new FetchResponseData().setResponses(List.of(response));
-        FetchResponse fetchResponse = new FetchResponse(data);
-        validateNoNullRecords(fetchResponse);
 
         response.setPartitions(List.of(FetchResponse.partitionResponse(0, Errors.NONE)));
-        fetchResponse = new FetchResponse(data);
+        FetchResponse fetchResponse = new FetchResponse(data);
         validateNoNullRecords(fetchResponse);
 
         TopicIdPartition topicIdPartition = new TopicIdPartition(id, new TopicPartition("test", 0));
@@ -629,17 +627,15 @@ public class RequestResponseTest {
             .setTopicId(id);
 
         ShareFetchResponseData data = new ShareFetchResponseData().setResponses(List.of(response));
-        ShareFetchResponse fetchResponse = new ShareFetchResponse(data);
-        validateNoNullRecords(fetchResponse);
 
         response.setPartitions(List.of(ShareFetchResponse.partitionResponse(0, Errors.NONE)));
-        fetchResponse = new ShareFetchResponse(data);
-        validateNoNullRecords(fetchResponse);
+        ShareFetchResponse shareFetchResponse = new ShareFetchResponse(data);
+        validateNoNullRecords(shareFetchResponse);
 
         TopicIdPartition topicIdPartition = new TopicIdPartition(id, new TopicPartition("test", 0));
         LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> tpToData = new LinkedHashMap<>(Map.of(topicIdPartition, partitionData));
-        fetchResponse = ShareFetchResponse.of(Errors.NONE, 0, tpToData, List.of());
-        validateNoNullRecords(fetchResponse);
+        shareFetchResponse = ShareFetchResponse.of(Errors.NONE, 0, tpToData, List.of());
+        validateNoNullRecords(shareFetchResponse);
     }
 
     private void validateNoNullRecords(ShareFetchResponse fetchResponse) {

@@ -59,10 +59,7 @@ public class ShareFetchResponse extends AbstractResponse {
 
     public ShareFetchResponse(ShareFetchResponseData data) {
         super(ApiKeys.SHARE_FETCH);
-        // To protect the clients from failing due to null records,
-        // we always convert null records to MemoryRecords.EMPTY
-        // We will propose a KIP to change the schema definitions in the future
-        this.data = convertNullRecordsToEmpty(data);
+        this.data = data;
     }
 
     public Errors error() {
@@ -175,6 +172,9 @@ public class ShareFetchResponse extends AbstractResponse {
             ShareFetchResponseData.PartitionData partitionData = entry.getValue();
             // Since PartitionData alone doesn't know the partition ID, we set it here
             partitionData.setPartitionIndex(entry.getKey().topicPartition().partition());
+            // To protect the clients from failing due to null records,
+            // we always convert null records to MemoryRecords.EMPTY
+            // We will propose a KIP to change the schema definitions in the future
             if (partitionData.records() == null)
                 partitionData.setRecords(MemoryRecords.EMPTY);
             // Checking if the topic is already present in the map
@@ -210,15 +210,5 @@ public class ShareFetchResponse extends AbstractResponse {
                 .setPartitionIndex(partition)
                 .setErrorCode(error.code())
                 .setRecords(MemoryRecords.EMPTY);
-    }
-
-    private static ShareFetchResponseData convertNullRecordsToEmpty(ShareFetchResponseData shareFetchResponseData) {
-        for (ShareFetchResponseData.ShareFetchableTopicResponse response : shareFetchResponseData.responses()) {
-            for (ShareFetchResponseData.PartitionData partition : response.partitions()) {
-                if (partition.records() == null)
-                    partition.setRecords(MemoryRecords.EMPTY);
-            }
-        }
-        return shareFetchResponseData;
     }
 }
