@@ -17,31 +17,15 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 /**
  * Options for {@link Admin#forceTerminateTransaction(String, TerminateTransactionOptions)}.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class TerminateTransactionOptions extends AbstractOptions<TerminateTransactionOptions> {
 
-    private Integer timeoutMs;
-
-    /**
-     * Set the request timeout in milliseconds for this operation or {@code null} if the default request timeout for the
-     * AdminClient should be used.
-     */
-    public TerminateTransactionOptions timeoutMs(Integer timeoutMs) {
-        this.timeoutMs = timeoutMs;
-        return this;
-    }
-
-    /**
-     * Returns the request timeout in milliseconds for this operation.
-     */
-    public Integer timeoutMs() {
-        return timeoutMs;
+    @Override
+    public String toString() {
+        return "TerminateTransactionOptions{" +
+                "timeoutMs=" + timeoutMs +
+                '}';
     }
 }
