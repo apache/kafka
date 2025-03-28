@@ -644,7 +644,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         if (currentFetch.isEmpty()) {
             final ShareFetch<K, V> fetch = fetchCollector.collect(fetchBuffer);
             if (fetch.isEmpty()) {
-                // Check for any acknowledgements which could have come from control records (GAP)
+                // Check for any acknowledgements which could have come from control records (GAP) and include them.
                 applicationEventHandler.add(new ShareFetchEvent(acknowledgementsMap, fetch.takeAcknowledgedRecords()));
 
                 // Notify the network thread to wake up and start the next round of fetching
