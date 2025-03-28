@@ -645,12 +645,20 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         if (currentFetch.isEmpty()) {
             final ShareFetch<K, V> fetch = fetchCollector.collect(fetchBuffer);
             if (fetch.isEmpty()) {
-                // Check for any acknowledgements which could have come from control records (GAP) and include them.
-                Map<TopicIdPartition, NodeAcknowledgements> combinedAcknowledgements = new LinkedHashMap<>(acknowledgementsMap);
-                combinedAcknowledgements.putAll(fetch.takeAcknowledgedRecords());
+                // Check for any acknowledgements which could have come from control records (GAP)
+                // In these cases, the ShareFetch will be empty as we do not want to return control records to the application.
+                // But we still need to send any acknowledgements for these control records to the broker.
+                Map<TopicIdPartition, NodeAcknowledgements> newAcknowledgements = fetch.takeAcknowledgedRecords();
 
-                // Fetch more records and send any waiting acknowledgements
-                applicationEventHandler.add(new ShareFetchEvent(combinedAcknowledgements));
+                if (newAcknowledgements != null && !newAcknowledgements.isEmpty()) {
+                    // Combine these acknowledgements with the existing acknowledgementsMap.
+                    Map<TopicIdPartition, NodeAcknowledgements> combinedAcknowledgements = new LinkedHashMap<>(acknowledgementsMap);
+                    combinedAcknowledgements.putAll(newAcknowledgements);
+                    applicationEventHandler.add(new ShareFetchEvent(combinedAcknowledgements));
+                } else {
+                    // If we have existing acknowledgements but no new ones, use the existing map
+                    applicationEventHandler.add(new ShareFetchEvent(acknowledgementsMap));
+                }
 
                 // Notify the network thread to wake up and start the next round of fetching
                 applicationEventHandler.wakeupNetworkThread();
