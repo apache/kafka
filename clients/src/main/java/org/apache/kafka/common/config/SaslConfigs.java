@@ -18,8 +18,6 @@ package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.config.ConfigDef.Range;
 
-import java.util.List;
-
 public class SaslConfigs {
 
     private static final String OAUTHBEARER_NOTE = " Currently applies only to OAUTHBEARER.";
@@ -137,6 +135,35 @@ public class SaslConfigs {
 
 
 
+    public static final String SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS = "sasl.oauthbearer.jwt.retriever.class";
+    public static final String DEFAULT_SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS = "org.apache.kafka.common.security.oauthbearer.DefaultJwtRetriever";
+    public static final String SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS_DOC = "The fully-qualified class name of a JwtRetriever implementation used to request tokens from the"
+            + " identity provider. The default value represents a class that maintains backward compatibility with previous versions of Apache Kafka. The default"
+            + " implementation uses the configuration to determine which concrete implementation to create.";
+
+    public static final String SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS = "sasl.oauthbearer.jwt.retriever.class";
+    public static final String DEFAULT_SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS = "org.apache.kafka.common.security.oauthbearer.DefaultJwtRetriever";
+    public static final String SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS_DOC = "The fully-qualified class name of a JwtValidator implementation used to validate the token from the"
+            + " identity provider. The default value represents a class that maintains backward compatibility with previous versions of Apache Kafka. The default"
+            + " implementation uses the configuration to determine which concrete implementation to create.";
+
+    public static final String SASL_OAUTHBEARER_GRANT_TYPE = "sasl.oauthbearer.grant.type";
+    public static final String DEFAULT_SASL_OAUTHBEARER_GRANT_TYPE = "client_credentials";
+    public static final String SASL_OAUTHBEARER_GRANT_TYPE_DOC = "The OAuth grant type to use when communicating with the identity provider. On the whole, the OAuth layer"
+            + " does not rely on this value and expects it to be used and/or verified for correctness by the JwtRetriever implementation. The default value of \"client_credentials\""
+            + " maintains backward compatibility. The built-in grant types are \"client_credentials\" and \"urn:ietf:params:oauth:grant-type:jwt-bearer\"."
+            + " The OAuth code in Kafka does not limit the values that are used. A user can write a custom JwtRetriever implementation that uses a completely different grant"
+            + " type, if desired.";
+
+    public static final String SASL_OAUTHBEARER_SCOPE = "sasl.oauthbearer.scope";
+    public static final String DEFAULT_SASL_OAUTHBEARER_SCOPE = "client_credentials";
+    public static final String SASL_OAUTHBEARER_SCOPE_DOC = "This is the level of access a client application is granted to a resource or API which is included in"
+            + " the token request. If provided, it should match one or more scopes configured in the identity provider. Note: the OAuth scope was previously stored as part"
+            + " of the sasl.jaas.config configuration with the key \"scope\". For backward compatibility, the \"scope\" JAAS option can still be used, but if both are present,"
+            + " this configuration value takes precedence over the value from sasl.jaas.config.";
+
+
+
 
 
 
@@ -152,16 +179,6 @@ public class SaslConfigs {
     public static final String SASL_OAUTHBEARER_SUB_CLAIM_NAME_DOC = "The OAuth claim for the subject is often named \"" + DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME + "\", but this (optional)"
             + " setting can provide a different name to use for the subject included in the JWT payload's claims if the OAuth/OIDC provider uses a different"
             + " name for that claim.";
-
-    public static final String SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPE = "sasl.oauthbearer.token.endpoint.grant.type";
-    public static final String DEFAULT_SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPE = "client_credentials";
-    public static final List<String> SUPPORTED_SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPES = List.of(
-            "client_credentials",
-            "urn:ietf:params:oauth:grant-type:jwt-bearer"
-    );
-    public static final String SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPE_DOC = "The grant type used when sending the JWT token to the token endpoint. "
-        + "This should be set explicitly to determine which token retriever to use. The supported values are "
-        + SUPPORTED_SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPES;
 
     public static final String SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL = "sasl.oauthbearer.token.endpoint.url";
     public static final String SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_DOC = "The URL for the OAuth/OIDC identity provider. If the URL is HTTP(S)-based, it is the issuer's token"
@@ -239,7 +256,7 @@ public class SaslConfigs {
                 .define(SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS, ConfigDef.Type.LONG, DEFAULT_SASL_LOGIN_RETRY_BACKOFF_MS, ConfigDef.Importance.LOW, SASL_LOGIN_RETRY_BACKOFF_MS_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, ConfigDef.Type.STRING, DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME, ConfigDef.Type.STRING, DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_SUB_CLAIM_NAME_DOC)
-                .define(SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPE, ConfigDef.Type.STRING, DEFAULT_SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPE, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPE_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_GRANT_TYPE, ConfigDef.Type.STRING, DEFAULT_SASL_OAUTHBEARER_GRANT_TYPE, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_GRANT_TYPE)
                 .define(SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_JWKS_ENDPOINT_URL_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, ConfigDef.Type.LONG, DEFAULT_SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS_DOC)

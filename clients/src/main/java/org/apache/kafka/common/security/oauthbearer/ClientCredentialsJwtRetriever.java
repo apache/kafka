@@ -31,15 +31,11 @@ import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARE
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
 
 /**
- * {@code ClientCredentialsAccessTokenRetriever} is an {@link AccessTokenRetriever} that will
- * communicate with an OAuth/OIDC provider directly via HTTP to post client credentials using
- * the JAAS {@code clientId} and {@code clientSecret} values to a publicized token endpoint URL
+ * A {@link JwtRetriever} that will communicate with an OAuth/OIDC provider directly via HTTP to post client
+ * credentials using the client ID and client secret values to a publicized token endpoint URL
  * ({@link SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL}).
- *
- * @see AccessTokenRetriever
- * @see SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL
  */
-public class ClientCredentialsAccessTokenRetriever extends HttpAccessTokenRetriever {
+public class ClientCredentialsJwtRetriever extends HttpJwtRetriever {
 
     private static final String CLIENT_ID_CONFIG = "clientId";
     private static final String CLIENT_SECRET_CONFIG = "clientSecret";
@@ -73,7 +69,7 @@ public class ClientCredentialsAccessTokenRetriever extends HttpAccessTokenRetrie
      * <p/>
      *
      * This utility method ensures that we have a non-{@code null} value to use in the
-     * {@link ClientCredentialsAccessTokenRetriever} constructor.
+     * {@link ClientCredentialsJwtRetriever} constructor.
      */
     public static boolean validateUrlencodeHeader(ConfigurationUtils configurationUtils) {
         Boolean urlencodeHeader = configurationUtils.validateBoolean(SASL_OAUTHBEARER_HEADER_URLENCODE, false);

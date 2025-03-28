@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.ListenerName;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerConfigurable;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.File;
@@ -25,10 +27,13 @@ import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Arrays;
+import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
+
+import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT;
@@ -242,5 +247,39 @@ public class ConfigurationUtils {
             throw new ConfigException(value + " is not allowed. Update system property '"
                     + ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG + "' to allow " + value);
         }
+    }
+
+    public static <T> T getConfiguredInstanceOrDefault(Map<String, ?> configs,
+                                                       String saslMechanism,
+                                                       List<AppConfigurationEntry> jaasConfigEntries,
+                                                       String configName,
+                                                       Class<T> clazz) {
+        Object classOrClassName = configs.get(configName);
+        Object o;
+
+        if (classOrClassName instanceof String) {
+            try {
+                o = Utils.newInstance((String) classOrClassName, clazz);
+            } catch (ClassNotFoundException e) {
+                throw new KafkaException("Class " + classOrClassName + " cannot be found", e);
+            }
+        } else if (classOrClassName instanceof Class<?>) {
+            o = Utils.newInstance((Class<?>) classOrClassName);
+        } else {
+            throw new KafkaException("Unexpected element of type " + classOrClassName.getClass().getName() + ", expected String or Class");
+        }
+
+        if (!clazz.isInstance(o))
+            throw new KafkaException(classOrClassName + " is not an instance of " + clazz.getName());
+
+        try {
+            if (o instanceof OAuthBearerConfigurable)
+                ((OAuthBearerConfigurable) o).configure(configs, saslMechanism, jaasConfigEntries);
+        } catch (Exception e) {
+            Utils.closeQuietly((AutoCloseable) o, "AutoCloseable object constructed and configured during failed call to configure()");
+            throw e;
+        }
+
+        return clazz.cast(o);
     }
 }

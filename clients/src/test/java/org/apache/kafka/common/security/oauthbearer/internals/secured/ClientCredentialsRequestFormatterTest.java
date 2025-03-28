@@ -16,7 +16,8 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import org.apache.kafka.common.security.oauthbearer.ClientCredentialsAccessTokenRetriever;
+import org.apache.kafka.common.security.oauthbearer.ClientCredentialsJwtRetriever;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -97,7 +98,7 @@ public class ClientCredentialsRequestFormatterTest extends RequestFormatterTest 
     @MethodSource("urlencodeHeaderSupplier")
     public void testUrlencodeHeader(Map<String, Object> configs, boolean expectedValue) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, OAUTHBEARER_MECHANISM);
-        boolean actualValue = ClientCredentialsAccessTokenRetriever.validateUrlencodeHeader(cu);
+        boolean actualValue = ClientCredentialsJwtRetriever.validateUrlencodeHeader(cu);
         assertEquals(expectedValue, actualValue);
     }
 

@@ -62,7 +62,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CL
 import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
 
 /**
- * Implementation of {@link AccessTokenValidator} that is used
+ * Implementation of {@link JwtValidator} that is used
  * by the broker to perform more extensive validation of the JWT access token that is received
  * from the client, but ultimately from posting the client credentials to the OAuth/OIDC provider's
  * token endpoint.
@@ -85,9 +85,9 @@ import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
  *     </li>
  * </ol>
  */
-public class BrokerAccessTokenValidator implements AccessTokenValidator {
+public class BrokerJwtValidator implements JwtValidator {
 
-    private static final Logger log = LoggerFactory.getLogger(BrokerAccessTokenValidator.class);
+    private static final Logger log = LoggerFactory.getLogger(BrokerJwtValidator.class);
 
     /**
      * Because a {@link CloseableVerificationKeyResolver} instance can spawn threads and issue
@@ -107,11 +107,11 @@ public class BrokerAccessTokenValidator implements AccessTokenValidator {
 
     private String subClaimName;
 
-    public BrokerAccessTokenValidator() {
+    public BrokerJwtValidator() {
         this(Time.SYSTEM);
     }
 
-    public BrokerAccessTokenValidator(Time time) {
+    public BrokerJwtValidator(Time time) {
         this.time = time;
     }
 
@@ -180,23 +180,23 @@ public class BrokerAccessTokenValidator implements AccessTokenValidator {
      * Accepts an OAuth JWT access token in base-64 encoded format, validates, and returns an
      * OAuthBearerToken.
      *
-     * @param accessToken Non-<code>null</code> JWT access token
+     * @param jwt Non-<code>null</code> JWT
      * @return {@link OAuthBearerToken}
      * @throws InvalidJwtException Thrown on errors performing validation of given token
      */
     @SuppressWarnings("unchecked")
-    public OAuthBearerToken validate(String accessToken) throws InvalidJwtException {
-        SerializedJwt serializedJwt = new SerializedJwt(accessToken);
+    public OAuthBearerToken validate(String jwt) throws InvalidJwtException {
+        SerializedJwt serializedJwt = new SerializedJwt(jwt);
 
-        JwtContext jwt;
+        JwtContext jwtContext;
 
         try {
-            jwt = jwtConsumer.process(serializedJwt.getToken());
+            jwtContext = jwtConsumer.process(serializedJwt.getToken());
         } catch (org.jose4j.jwt.consumer.InvalidJwtException e) {
             throw new InvalidJwtException(String.format("Could not validate the access token: %s", e.getMessage()), e);
         }
 
-        JwtClaims claims = jwt.getJwtClaims();
+        JwtClaims claims = jwtContext.getJwtClaims();
 
         Object scopeRaw = getClaim(() -> claims.getClaimValue(scopeClaimName), scopeClaimName);
         Collection<String> scopeRawCollection;
@@ -219,11 +219,13 @@ public class BrokerAccessTokenValidator implements AccessTokenValidator {
         Long issuedAt = ClaimValidationUtils.validateIssuedAt(ReservedClaimNames.ISSUED_AT,
             issuedAtRaw != null ? issuedAtRaw.getValueInMillis() : null);
 
-        return new BasicOAuthBearerToken(accessToken,
+        return new BasicOAuthBearerToken(
+            jwt,
             scopes,
             expiration,
             sub,
-            issuedAt);
+            issuedAt
+        );
     }
 
     private <T> T getClaim(ClaimSupplier<T> supplier, String claimName) throws InvalidJwtException {

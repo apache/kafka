@@ -16,57 +16,43 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.utils.Utils;
 
+import java.io.File;
 import java.io.IOException;
-import java.net.URL;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBearerRequestFormatter.GRANT_TYPE;
 
-public class DefaultAccessTokenRetriever implements AccessTokenRetriever {
+/**
+ * A {@link JwtRetriever} that will load the contents of a file, interpreting them as a JWT in serialized form.
+ */
+public class FileJwtRetriever implements JwtRetriever {
 
-    private AccessTokenRetriever delegate;
+    private String jwt;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        URL tokenEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+        File fileName = cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
-        if (tokenEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {
-            delegate = new FileAccessTokenRetriever();
-        } else {
-            String grantType = cu.validateString(SASL_OAUTHBEARER_TOKEN_ENDPOINT_GRANT_TYPE, false);
-
-            if (grantType != null && grantType.equalsIgnoreCase(GRANT_TYPE)) {
-                delegate = new JwtBearerAccessTokenRetriever();
-            } else {
-                delegate = new ClientCredentialsAccessTokenRetriever();
-            }
+        try {
+            String fileContents = Utils.readFileAsString(fileName.getPath());
+            // always non-null; to remove any newline chars or backend will report err
+            jwt = fileContents.trim();
+        } catch (Exception e) {
+            throw new KafkaException("An error occurred reading the OAuth JWT from " + fileName);
         }
-
-        delegate.configure(configs, saslMechanism, jaasConfigEntries);
     }
 
     @Override
     public String retrieve() throws IOException {
-        return Objects.requireNonNull(delegate).retrieve();
-    }
-
-    @Override
-    public void close() {
-        Utils.closeQuietly(delegate, "delegate");
-    }
-
-    public AccessTokenRetriever delegate() {
-        return delegate;
+        return Objects.requireNonNull(jwt, "JWT is null; please call configure() first");
     }
 }

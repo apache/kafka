@@ -20,6 +20,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
@@ -33,6 +34,8 @@ import java.util.Map;
 import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
+
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS;
 
 /**
  * <p>
@@ -95,31 +98,39 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
     private static final Logger log = LoggerFactory.getLogger(OAuthBearerValidatorCallbackHandler.class);
 
-    private AccessTokenValidator accessTokenValidator;
+    private JwtValidator jwtValidator;
 
     private boolean isInitialized = false;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         try {
-            configure(new DefaultAccessTokenValidator(), configs, saslMechanism, jaasConfigEntries);
+            this.jwtValidator = ConfigurationUtils.getConfiguredInstanceOrDefault(
+                configs,
+                saslMechanism,
+                jaasConfigEntries,
+                SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS,
+                JwtValidator.class
+            );
+
+            this.isInitialized = true;
         } catch (Throwable t) {
             throw new KafkaException("The OAuth validator configuration encountered an error during initialization", t);
         }
     }
 
-    void configure(AccessTokenValidator accessTokenValidator,
+    void configure(JwtValidator jwtValidator,
                    Map<String, ?> configs,
                    String saslMechanism,
                    List<AppConfigurationEntry> jaasConfigEntries) {
-        this.accessTokenValidator = accessTokenValidator;
-        this.accessTokenValidator.configure(configs, saslMechanism, jaasConfigEntries);
+        this.jwtValidator = jwtValidator;
+        this.jwtValidator.configure(configs, saslMechanism, jaasConfigEntries);
         this.isInitialized = true;
     }
 
     @Override
     public void close() {
-        Utils.closeQuietly(accessTokenValidator, "accessTokenValidator");
+        Utils.closeQuietly(jwtValidator, "jwtValidator");
     }
 
     @Override
@@ -141,7 +152,7 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
         checkInitialized();
 
         try {
-            OAuthBearerToken token = accessTokenValidator.validate(callback.tokenValue());
+            OAuthBearerToken token = jwtValidator.validate(callback.tokenValue());
             callback.token(token);
         } catch (InvalidJwtException e) {
             log.warn(e.getMessage(), e);

@@ -17,7 +17,7 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 /**
- * An instance of <code>AccessTokenValidator</code> acts as a function object that, given an access
+ * An instance of <code>JwtValidator</code> acts as a function object that, given an access
  * token in base-64 encoded JWT format, can parse the data, perform validation, and construct an
  * {@link OAuthBearerToken} for use by the caller.
  *
@@ -37,26 +37,24 @@ package org.apache.kafka.common.security.oauthbearer;
  *     <li><a href="https://datatracker.ietf.org/doc/html/draft-ietf-oauth-access-token-jwt">RFC 6750, Section 2.1</a></li>
  * </ul>
  *
- * @see DefaultAccessTokenValidator   Default validator that acts as a wrapper over one of the other validators
- * @see ClientAccessTokenValidator     A basic AccessTokenValidator used by client-side login
- *                                    authentication
- * @see BrokerAccessTokenValidator A more robust AccessTokenValidator that is used on the broker
- *                                    to validate the token's contents and verify the signature
+ * @see DefaultJwtValidator Default validator that acts as a wrapper over one of the other validators
+ * @see ClientJwtValidator  A basic validator used by client-side login authentication
+ * @see BrokerJwtValidator  A more robust validator that is used on the broker to validate the token's contents
+ *                          and verify the signature
  */
-public interface AccessTokenValidator extends OAuthBearerConfigurable {
+public interface JwtValidator extends OAuthBearerConfigurable {
 
     /**
-     * Accepts an OAuth JWT access token in base-64 encoded format, validates, and returns an
-     * OAuthBearerToken.
+     * Accepts an OAuth JWT in base-64 encoded format, validates, and returns an OAuthBearerToken.
      *
-     * @param accessToken Non-<code>null</code> JWT access token
+     * @param jwt Non-<code>null</code> JWT to validate
      *
      * @return {@link OAuthBearerToken}
      *
      * @throws InvalidJwtException Thrown on errors performing validation of given token
      */
 
-    OAuthBearerToken validate(String accessToken) throws InvalidJwtException;
+    OAuthBearerToken validate(String jwt) throws InvalidJwtException;
 
     @Override
     default void close() {

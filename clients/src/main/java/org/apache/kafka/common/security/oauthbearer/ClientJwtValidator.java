@@ -40,7 +40,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
 
 /**
- * {@code ClientAccessTokenValidator} is an implementation of {@link AccessTokenValidator} that is used
+ * {@code ClientJwtValidator} is an implementation of {@link JwtValidator} that is used
  * by the client to perform some rudimentary validation of the JWT access token that is received
  * as part of the response from posting the client credentials to the OAuth/OIDC provider's
  * token endpoint.
@@ -56,9 +56,9 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CL
  *     <li>Presence of scope, <code>exp</code>, <code>sub</code>, and <code>iat</code> claims</li>
  * </ol>
  */
-public class ClientAccessTokenValidator implements AccessTokenValidator {
+public class ClientJwtValidator implements JwtValidator {
 
-    private static final Logger log = LoggerFactory.getLogger(ClientAccessTokenValidator.class);
+    private static final Logger log = LoggerFactory.getLogger(ClientJwtValidator.class);
 
     public static final String EXPIRATION_CLAIM_NAME = "exp";
 
@@ -85,14 +85,14 @@ public class ClientAccessTokenValidator implements AccessTokenValidator {
      * Accepts an OAuth JWT access token in base-64 encoded format, validates, and returns an
      * OAuthBearerToken.
      *
-     * @param accessToken Non-<code>null</code> JWT access token
+     * @param jwt Non-<code>null</code> JWT
      * @return {@link OAuthBearerToken}
      * @throws InvalidJwtException Thrown on errors performing validation of given token
      */
 
     @SuppressWarnings("unchecked")
-    public OAuthBearerToken validate(String accessToken) throws InvalidJwtException {
-        SerializedJwt serializedJwt = new SerializedJwt(accessToken);
+    public OAuthBearerToken validate(String jwt) throws InvalidJwtException {
+        SerializedJwt serializedJwt = new SerializedJwt(jwt);
         Map<String, Object> payload;
 
         try {
@@ -123,7 +123,7 @@ public class ClientAccessTokenValidator implements AccessTokenValidator {
             issuedAtRaw != null ? issuedAtRaw.longValue() * 1000L : null);
 
         return new BasicOAuthBearerToken(
-            accessToken,
+            jwt,
             scopes,
             expiration,
             subject,

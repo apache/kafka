@@ -17,8 +17,8 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.config.ConfigException;
-
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
@@ -32,7 +32,7 @@ import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALL
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class DefaultAccessTokenRetrieverTest extends OAuthBearerTest {
+public class DefaultJwtRetrieverTest extends OAuthBearerTest {
 
     @AfterEach
     public void tearDown() throws Exception {
@@ -40,43 +40,43 @@ public class DefaultAccessTokenRetrieverTest extends OAuthBearerTest {
     }
 
     @Test
-    public void testConfigureRefreshingFileAccessTokenRetriever() throws Exception {
+    public void testConfigureRefreshingFileJwtRetriever() throws Exception {
         String expected = "{}";
 
-        File tmpDir = createTempDir("access-token");
-        File accessTokenFile = createTempFile(tmpDir, "access-token-", ".json", expected);
+        File tmpDir = createTempDir("jwt");
+        File jwtFile = createTempFile(tmpDir, "jwt-", ".json", expected);
 
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, accessTokenFile.toURI().toString());
-        Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, jwtFile.toURI().toString());
+        Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, jwtFile.toURI().toString());
 
-        try (AccessTokenRetriever accessTokenRetriever = new DefaultAccessTokenRetriever()) {
-            accessTokenRetriever.configure(configs, OAUTHBEARER_MECHANISM, List.of());
-            assertEquals(expected, accessTokenRetriever.retrieve());
+        try (JwtRetriever jwtRetriever = new DefaultJwtRetriever()) {
+            jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, List.of());
+            assertEquals(expected, jwtRetriever.retrieve());
         }
     }
 
     @Test
-    public void testConfigureRefreshingFileAccessTokenRetrieverWithInvalidDirectory() {
+    public void testConfigureRefreshingFileJwtRetrieverWithInvalidDirectory() {
         // Should fail because the parent path doesn't exist.
         String file = new File("/tmp/this-directory-does-not-exist/foo.json").toURI().toString();
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, file);
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, file);
 
-        try (AccessTokenRetriever accessTokenRetriever = new DefaultAccessTokenRetriever()) {
-            assertThrowsWithMessage(ConfigException.class, () -> accessTokenRetriever.configure(configs, OAUTHBEARER_MECHANISM, List.of()), "that doesn't exist");
+        try (JwtRetriever jwtRetriever = new DefaultJwtRetriever()) {
+            assertThrowsWithMessage(ConfigException.class, () -> jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, List.of()), "that doesn't exist");
         }
     }
 
     @Test
-    public void testConfigureRefreshingFileAccessTokenRetrieverWithInvalidFile() throws Exception {
+    public void testConfigureRefreshingFileJwtRetrieverWithInvalidFile() throws Exception {
         // Should fail because while the parent path exists, the file itself doesn't.
         File tmpDir = createTempDir("this-directory-does-exist");
-        File accessTokenFile = new File(tmpDir, "this-file-does-not-exist.json");
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, accessTokenFile.toURI().toString());
-        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
+        File jwtFile = new File(tmpDir, "this-file-does-not-exist.json");
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, jwtFile.toURI().toString());
+        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, jwtFile.toURI().toString());
 
-        try (AccessTokenRetriever accessTokenRetriever = new DefaultAccessTokenRetriever()) {
-            assertThrowsWithMessage(ConfigException.class, () -> accessTokenRetriever.configure(configs, OAUTHBEARER_MECHANISM, List.of()), "that doesn't exist");
+        try (JwtRetriever jwtRetriever = new DefaultJwtRetriever()) {
+            assertThrowsWithMessage(ConfigException.class, () -> jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, List.of()), "that doesn't exist");
         }
     }
 
@@ -84,11 +84,11 @@ public class DefaultAccessTokenRetrieverTest extends OAuthBearerTest {
     public void testSaslOauthbearerTokenEndpointUrlIsNotAllowed() throws Exception {
         // Should fail if the URL is not allowed
         File tmpDir = createTempDir("not_allowed");
-        File accessTokenFile = new File(tmpDir, "not_allowed.json");
-        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
+        File jwtFile = new File(tmpDir, "not_allowed.json");
+        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, jwtFile.toURI().toString());
 
-        try (AccessTokenRetriever accessTokenRetriever = new DefaultAccessTokenRetriever()) {
-            assertThrowsWithMessage(ConfigException.class, () -> accessTokenRetriever.configure(configs, OAUTHBEARER_MECHANISM, List.of()), ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
+        try (JwtRetriever jwtRetriever = new DefaultJwtRetriever()) {
+            assertThrowsWithMessage(ConfigException.class, () -> jwtRetriever.configure(configs, OAUTHBEARER_MECHANISM, List.of()), ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG);
         }
     }
 }

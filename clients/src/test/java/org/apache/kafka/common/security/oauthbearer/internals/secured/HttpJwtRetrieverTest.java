@@ -16,11 +16,12 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.security.oauthbearer.HttpClient;
+import org.apache.kafka.common.security.oauthbearer.HttpJwtRetriever;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import org.apache.kafka.common.security.oauthbearer.HttpAccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.HttpClient;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
@@ -32,7 +33,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
+public class HttpJwtRetrieverTest extends OAuthBearerTest {
 
     @Test
     public void testErrorResponseUnretryableCode() {
@@ -81,37 +82,37 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
     }
 
     @Test
-    public void testParseAccessToken() throws IOException {
+    public void testParseJwt() throws IOException {
         String expected = "abc";
         ObjectMapper mapper = new ObjectMapper();
         ObjectNode node = mapper.createObjectNode();
         node.put("access_token", expected);
 
-        String actual = HttpAccessTokenRetriever.parseAccessToken(mapper.writeValueAsString(node));
+        String actual = HttpJwtRetriever.parseJwt(mapper.writeValueAsString(node));
         assertEquals(expected, actual);
     }
 
     @Test
-    public void testParseAccessTokenEmptyAccessToken() {
+    public void testParseJwtEmptyJwt() {
         ObjectMapper mapper = new ObjectMapper();
         ObjectNode node = mapper.createObjectNode();
         node.put("access_token", "");
 
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.parseAccessToken(mapper.writeValueAsString(node)));
+        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.parseJwt(mapper.writeValueAsString(node)));
     }
 
     @Test
-    public void testParseAccessTokenMissingAccessToken() {
+    public void testParseJwtMissingJwt() {
         ObjectMapper mapper = new ObjectMapper();
         ObjectNode node = mapper.createObjectNode();
         node.put("sub", "jdoe");
 
-        assertThrows(IllegalArgumentException.class, () -> HttpAccessTokenRetriever.parseAccessToken(mapper.writeValueAsString(node)));
+        assertThrows(IllegalArgumentException.class, () -> HttpJwtRetriever.parseJwt(mapper.writeValueAsString(node)));
     }
 
     @Test
-    public void testParseAccessTokenInvalidJson() {
-        assertThrows(IOException.class, () -> HttpAccessTokenRetriever.parseAccessToken("not valid JSON"));
+    public void testParseJwtInvalidJson() {
+        assertThrows(IOException.class, () -> HttpJwtRetriever.parseJwt("not valid JSON"));
     }
 
     private <T extends Exception> void testErrorResponse(Class<T> exceptionClazz,
@@ -125,7 +126,7 @@ public class HttpAccessTokenRetrieverTest extends OAuthBearerTest {
         );
         Exception e = assertThrows(
             exceptionClazz,
-            () -> HttpAccessTokenRetriever.handleOutput("https://www.example.com", response)
+            () -> HttpJwtRetriever.handleOutput("https://www.example.com", response)
         );
         assertTrue(e.getMessage().contains(substringMatch), e.getMessage());
     }

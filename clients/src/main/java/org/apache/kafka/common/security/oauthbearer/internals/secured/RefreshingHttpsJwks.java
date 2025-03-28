@@ -17,7 +17,7 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.security.oauthbearer.DefaultAccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerConfigurable;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -61,12 +61,12 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_E
  * This instance is created and provided to the
  * {@link org.jose4j.keys.resolvers.HttpsJwksVerificationKeyResolver} that is used when using
  * an HTTP-/HTTPS-based {@link org.jose4j.keys.resolvers.VerificationKeyResolver}, which is then
- * provided to the {@link DefaultAccessTokenValidator} to use in validating the signature of
+ * provided to the {@link DefaultJwtValidator} to use in validating the signature of
  * a JWT.
  *
  * @see org.jose4j.keys.resolvers.HttpsJwksVerificationKeyResolver
  * @see org.jose4j.keys.resolvers.VerificationKeyResolver
- * @see DefaultAccessTokenValidator
+ * @see DefaultJwtValidator
  */
 public class RefreshingHttpsJwks implements OAuthBearerConfigurable {
 

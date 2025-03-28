@@ -16,14 +16,14 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.AccessTokenValidatorTest;
-import org.apache.kafka.common.security.oauthbearer.ClientAccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.ClientJwtValidator;
+import org.apache.kafka.common.security.oauthbearer.JwtValidator;
+import org.apache.kafka.common.security.oauthbearer.JwtValidatorTest;
 
-public class ClientAccessTokenValidatorTest extends AccessTokenValidatorTest {
+public class ClientJwtValidatorTest extends JwtValidatorTest {
 
     @Override
-    protected AccessTokenValidator createAccessTokenValidator(AccessTokenBuilder builder) {
-        return new ClientAccessTokenValidator();
+    protected JwtValidator createValidator(JwtBuilder builder) {
+        return new ClientJwtValidator();
     }
 }

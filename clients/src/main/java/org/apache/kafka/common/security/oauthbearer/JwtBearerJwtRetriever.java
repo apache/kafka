@@ -25,7 +25,7 @@ import java.util.Map;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
-public class JwtBearerAccessTokenRetriever extends HttpAccessTokenRetriever {
+public class JwtBearerJwtRetriever extends HttpJwtRetriever {
 
     // The private key ID of the private key used to sign the JWT token sent to the token endpoint. This will
     // be added as a header in the JWT token sent to the token endpoint.
@@ -54,11 +54,11 @@ public class JwtBearerAccessTokenRetriever extends HttpAccessTokenRetriever {
 
     private JwtBearerRequestFormatter requestFormatter;
 
-    public JwtBearerAccessTokenRetriever() {
+    public JwtBearerJwtRetriever() {
         this(Time.SYSTEM);
     }
 
-    public JwtBearerAccessTokenRetriever(Time time) {
+    public JwtBearerJwtRetriever(Time time) {
         this.time = time;
     }
 

@@ -30,23 +30,23 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_E
  *
  */
 
-public class DefaultAccessTokenValidator implements AccessTokenValidator {
+public class DefaultJwtValidator implements JwtValidator {
 
-    private AccessTokenValidator delegate;
+    private JwtValidator delegate;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        AccessTokenValidator validator;
+        JwtValidator validator;
 
         if (configs.get(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL) != null)
-            validator = new BrokerAccessTokenValidator();
+            validator = new BrokerJwtValidator();
         else
-            validator = new ClientAccessTokenValidator();
+            validator = new ClientJwtValidator();
 
         configure(validator, configs, saslMechanism, jaasConfigEntries);
     }
 
-    void configure(AccessTokenValidator validator,
+    void configure(JwtValidator validator,
                    Map<String, ?> configs,
                    String saslMechanism,
                    List<AppConfigurationEntry> jaasConfigEntries) {
@@ -55,8 +55,8 @@ public class DefaultAccessTokenValidator implements AccessTokenValidator {
     }
 
     @Override
-    public OAuthBearerToken validate(String accessToken) throws InvalidJwtException {
-        return Objects.requireNonNull(delegate).validate(accessToken);
+    public OAuthBearerToken validate(String jwt) throws InvalidJwtException {
+        return Objects.requireNonNull(delegate).validate(jwt);
     }
 
     @Override

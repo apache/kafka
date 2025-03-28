@@ -40,7 +40,7 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModul
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
-public class FileAccessTokenRetrieverTest extends OAuthBearerTest {
+public class FileJwtRetrieverTest extends OAuthBearerTest {
 
     @Test
     public void testFileTokenRetrieverHandlesNewline() throws IOException {
@@ -52,14 +52,14 @@ public class FileAccessTokenRetrieverTest extends OAuthBearerTest {
         String expected = createAccessKey("{}", String.format("{\"exp\":%s, \"iat\":%s, \"sub\":\"subj\"}", exp, iat), "sign");
         String withNewline = expected + "\n";
 
-        File tmpDir = createTempDir("access-token");
-        File accessTokenFile = createTempFile(tmpDir, "access-token-", ".json", withNewline);
+        File tmpDir = createTempDir("jwt");
+        File jwtFile = createTempFile(tmpDir, "jwt-", ".json", withNewline);
 
         List<AppConfigurationEntry> jaasConfigEntries = new ArrayList<>();
         jaasConfigEntries.add(new AppConfigurationEntry("dummy", OPTIONAL, Collections.emptyMap()));
 
-        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, accessTokenFile.toURI().toString());
-        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
+        System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, jwtFile.toURI().toString());
+        Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, jwtFile.toURI().toString());
 
         try (OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler()) {
             handler.configure(configs, OAUTHBEARER_MECHANISM, jaasConfigEntries);

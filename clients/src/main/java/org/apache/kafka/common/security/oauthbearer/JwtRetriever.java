@@ -21,22 +21,22 @@ import java.io.IOException;
 import javax.security.auth.spi.LoginModule;
 
 /**
- * An implementation of <code>AccessTokenRetriever</code> is the means by which the login module will
- * retrieve an OAuth access token that is used to authorize with a broker. The implementation may
+ * An implementation of <code>JwtRetriever</code> is the means by which the login module will
+ * retrieve an OAuth JWT that is used to authorize with a broker. The implementation may
  * involve authentication to one or more remote systems, or it can be as simple as loading the contents
  * from a file or configuration setting.
  *
- * <i>Retrieval</i> of a token is a separate concern from <i>validation</i>.
- * <code>AccessTokenRetriever</code> implementations should not validate the integrity of the access
- * token, but should rely on the companion {@link AccessTokenValidator} for that task.
+ * <i>Retrieval</i> of a token is a separate concern from <i>validation</i>. <code>JwtRetriever</code>
+ * implementations should not validate the integrity of the JWT, but should rely on the companion
+ * {@link JwtValidator} for that task.
  *
- * @see ClientCredentialsAccessTokenRetriever
- * @see DefaultAccessTokenRetriever
- * @see FileAccessTokenRetriever
- * @see HttpAccessTokenRetriever
- * @see JwtBearerAccessTokenRetriever
+ * @see ClientCredentialsJwtRetriever
+ * @see DefaultJwtRetriever
+ * @see FileJwtRetriever
+ * @see HttpJwtRetriever
+ * @see JwtBearerJwtRetriever
  */
-public interface AccessTokenRetriever extends OAuthBearerConfigurable {
+public interface JwtRetriever extends OAuthBearerConfigurable {
 
     /**
      * <p>

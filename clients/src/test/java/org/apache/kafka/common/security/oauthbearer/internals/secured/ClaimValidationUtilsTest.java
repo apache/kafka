@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.security.oauthbearer.InvalidJwtException;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;

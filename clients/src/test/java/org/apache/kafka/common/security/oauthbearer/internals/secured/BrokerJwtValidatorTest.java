@@ -16,11 +16,11 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.AccessTokenValidatorTest;
+import org.apache.kafka.common.security.oauthbearer.BrokerJwtValidator;
+import org.apache.kafka.common.security.oauthbearer.JwtValidator;
+import org.apache.kafka.common.security.oauthbearer.JwtValidatorTest;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 
-import org.apache.kafka.common.security.oauthbearer.BrokerAccessTokenValidator;
 import org.jose4j.jwk.PublicJsonWebKey;
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.jose4j.lang.InvalidAlgorithmException;
@@ -40,15 +40,15 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class BrokerAccessTokenValidatorTest extends AccessTokenValidatorTest {
+public class BrokerJwtValidatorTest extends JwtValidatorTest {
 
     @Override
-    protected AccessTokenValidator createAccessTokenValidator(AccessTokenBuilder builder) throws Exception {
+    protected JwtValidator createValidator(JwtBuilder builder) throws Exception {
         Key key = builder.jwk() != null ? builder.jwk().getKey() : null;
         CloseableVerificationKeyResolver keyResolver = mock(CloseableVerificationKeyResolver.class);
         when(keyResolver.resolveKey(any(), any())).thenReturn(key);
 
-        return new BrokerAccessTokenValidator() {
+        return new BrokerJwtValidator() {
             @Override
             public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
                 super.configure(keyResolver, configs, saslMechanism, jaasConfigEntries);
@@ -82,13 +82,13 @@ public class BrokerAccessTokenValidatorTest extends AccessTokenValidatorTest {
         String subClaimName = "client_id";
         String subject = "otherSub";
         PublicJsonWebKey jwk = createRsaJwk();
-        AccessTokenBuilder tokenBuilder = new AccessTokenBuilder()
+        JwtBuilder tokenBuilder = new JwtBuilder()
             .jwk(jwk)
             .alg(AlgorithmIdentifiers.RSA_USING_SHA256)
             .addCustomClaim(subClaimName, subject)
             .subjectClaimName(subClaimName)
             .subject(null);
-        AccessTokenValidator validator = createAccessTokenValidator(tokenBuilder);
+        JwtValidator validator = createValidator(tokenBuilder);
         Map<String, Object> configs = Collections.singletonMap(SASL_OAUTHBEARER_SUB_CLAIM_NAME, tokenBuilder.subjectClaimName());
         validator.configure(getSaslConfigs(configs), OAUTHBEARER_MECHANISM, List.of());
 
@@ -99,11 +99,11 @@ public class BrokerAccessTokenValidatorTest extends AccessTokenValidatorTest {
     }
 
     private void testEncryptionAlgorithm(PublicJsonWebKey jwk, String alg) throws Exception {
-        AccessTokenBuilder builder = new AccessTokenBuilder().jwk(jwk).alg(alg);
-        AccessTokenValidator validator = createAccessTokenValidator(builder);
+        JwtBuilder builder = new JwtBuilder().jwk(jwk).alg(alg);
+        JwtValidator validator = createValidator(builder);
         validator.configure(getSaslConfigs(), OAUTHBEARER_MECHANISM, List.of());
-        String accessToken = builder.build();
-        OAuthBearerToken token = validator.validate(accessToken);
+        String jwt = builder.build();
+        OAuthBearerToken token = validator.validate(jwt);
 
         assertEquals(builder.subject(), token.principalName());
         assertEquals(builder.issuedAtSeconds() * 1000, token.startTimeMs());

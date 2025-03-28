@@ -16,46 +16,57 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBearerRequestFormatter;
 import org.apache.kafka.common.utils.Utils;
 
-import java.io.File;
 import java.io.IOException;
+import java.net.URL;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_GRANT_TYPE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 
-/**
- * <code>FileAccessTokenRetriever</code> is an {@link AccessTokenRetriever} that will load the contents of a file,
- * interpreting them as a JWT access key in the serialized form.
- *
- * @see AccessTokenRetriever
- */
-public class FileAccessTokenRetriever implements AccessTokenRetriever {
+public class DefaultJwtRetriever implements JwtRetriever {
 
-    private String accessToken;
+    private JwtRetriever delegate;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        File accessTokenFileName = cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+        URL tokenEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
-        try {
-            String fileContents = Utils.readFileAsString(accessTokenFileName.getPath());
-            // always non-null; to remove any newline chars or backend will report err
-            accessToken = fileContents.trim();
-        } catch (Exception e) {
-            throw new KafkaException("An error occurred reading the OAuth token from " + accessTokenFileName);
+        if (tokenEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {
+            delegate = new FileJwtRetriever();
+        } else {
+            String grantType = cu.validateString(SASL_OAUTHBEARER_GRANT_TYPE, false);
+
+            if (grantType != null && grantType.equalsIgnoreCase(JwtBearerRequestFormatter.GRANT_TYPE)) {
+                delegate = new JwtBearerJwtRetriever();
+            } else {
+                delegate = new ClientCredentialsJwtRetriever();
+            }
         }
+
+        delegate.configure(configs, saslMechanism, jaasConfigEntries);
     }
 
     @Override
     public String retrieve() throws IOException {
-        return Objects.requireNonNull(accessToken, "Access token is null; please call configure() first");
+        return Objects.requireNonNull(delegate).retrieve();
+    }
+
+    @Override
+    public void close() {
+        Utils.closeQuietly(delegate, "delegate");
+    }
+
+    public JwtRetriever delegate() {
+        return delegate;
     }
 }

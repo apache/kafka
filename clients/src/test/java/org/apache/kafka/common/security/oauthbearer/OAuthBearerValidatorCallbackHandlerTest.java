@@ -17,7 +17,7 @@
 
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBuilder;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 
 import org.jose4j.jws.AlgorithmIdentifiers;
@@ -42,21 +42,21 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
     public void testBasic() throws Exception {
         String expectedAudience = "a";
         List<String> allAudiences = Arrays.asList(expectedAudience, "b", "c");
-        AccessTokenBuilder builder = new AccessTokenBuilder()
+        JwtBuilder builder = new JwtBuilder()
             .audience(expectedAudience)
             .jwk(createRsaJwk())
             .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
-        String accessToken = builder.build();
+        String jwt = builder.build();
 
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_EXPECTED_AUDIENCE, allAudiences);
 
         try (OAuthBearerValidatorCallbackHandler handler = createHandler(configs, builder)) {
-            OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(accessToken);
+            OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(jwt);
             handler.handle(new Callback[]{callback});
 
             assertNotNull(callback.token());
             OAuthBearerToken token = callback.token();
-            assertEquals(accessToken, token.value());
+            assertEquals(jwt, token.value());
             assertEquals(builder.subject(), token.principalName());
             assertEquals(builder.expirationSeconds() * 1000, token.lifetimeMs());
             assertEquals(builder.issuedAtSeconds() * 1000, token.startTimeMs());
@@ -64,21 +64,21 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
     }
 
     @Test
-    public void testInvalidAccessToken() throws Exception {
+    public void testInvalidJwt() throws Exception {
         // There aren't different error messages for the validation step, so these are all the
         // same :(
         String substring = "invalid_token";
-        assertInvalidAccessTokenFails("this isn't valid", substring);
-        assertInvalidAccessTokenFails("this.isn't.valid", substring);
-        assertInvalidAccessTokenFails(createAccessKey("this", "isn't", "valid"), substring);
-        assertInvalidAccessTokenFails(createAccessKey("{}", "{}", "{}"), substring);
+        assertInvalidJwtFails("this isn't valid", substring);
+        assertInvalidJwtFails("this.isn't.valid", substring);
+        assertInvalidJwtFails(createAccessKey("this", "isn't", "valid"), substring);
+        assertInvalidJwtFails(createAccessKey("{}", "{}", "{}"), substring);
     }
 
-    private void assertInvalidAccessTokenFails(String accessToken, String expectedMessageSubstring) throws Exception {
+    private void assertInvalidJwtFails(String jwt, String expectedMessageSubstring) throws Exception {
         Map<String, ?> configs = getSaslConfigs();
 
-        try (OAuthBearerValidatorCallbackHandler handler = createHandler(configs, new AccessTokenBuilder())) {
-            OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(accessToken);
+        try (OAuthBearerValidatorCallbackHandler handler = createHandler(configs, new JwtBuilder())) {
+            OAuthBearerValidatorCallback callback = new OAuthBearerValidatorCallback(jwt);
             handler.handle(new Callback[]{callback});
 
             assertNull(callback.token());
@@ -88,10 +88,10 @@ public class OAuthBearerValidatorCallbackHandlerTest extends OAuthBearerTest {
         }
     }
 
-    private OAuthBearerValidatorCallbackHandler createHandler(Map<String, ?> configs, AccessTokenBuilder builder) throws Exception {
+    private OAuthBearerValidatorCallbackHandler createHandler(Map<String, ?> configs, JwtBuilder builder) throws Exception {
         OAuthBearerValidatorCallbackHandler handler = new OAuthBearerValidatorCallbackHandler();
-        DefaultAccessTokenValidator accessTokenValidator = new DefaultAccessTokenValidator();
-        handler.configure(accessTokenValidator, configs, OAUTHBEARER_MECHANISM, List.of());
+        DefaultJwtValidator validator = new DefaultJwtValidator();
+        handler.configure(validator, configs, OAUTHBEARER_MECHANISM, List.of());
         return handler;
     }
 }

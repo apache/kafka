@@ -33,7 +33,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
-public class AccessTokenBuilder {
+public class JwtBuilder {
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -57,11 +57,11 @@ public class AccessTokenBuilder {
 
     private final Map<String, String> customClaims = new HashMap<>();
 
-    public AccessTokenBuilder() {
+    public JwtBuilder() {
         this(new MockTime());
     }
 
-    public AccessTokenBuilder(Time time) {
+    public JwtBuilder(Time time) {
         this.issuedAtSeconds = time.milliseconds() / 1000;
         this.expirationSeconds = this.issuedAtSeconds + 60;
     }
@@ -70,12 +70,12 @@ public class AccessTokenBuilder {
         return alg;
     }
 
-    public AccessTokenBuilder alg(String alg) {
+    public JwtBuilder alg(String alg) {
         this.alg = alg;
         return this;
     }
 
-    public AccessTokenBuilder audience(String audience) {
+    public JwtBuilder audience(String audience) {
         this.audience = audience;
         return this;
     }
@@ -84,7 +84,7 @@ public class AccessTokenBuilder {
         return subject;
     }
 
-    public AccessTokenBuilder subject(String subject) {
+    public JwtBuilder subject(String subject) {
         this.subject = subject;
         return this;
     }
@@ -93,7 +93,7 @@ public class AccessTokenBuilder {
         return subjectClaimName;
     }
 
-    public AccessTokenBuilder subjectClaimName(String subjectClaimName) {
+    public JwtBuilder subjectClaimName(String subjectClaimName) {
         this.subjectClaimName = subjectClaimName;
         return this;
     }
@@ -102,7 +102,7 @@ public class AccessTokenBuilder {
         return scope;
     }
 
-    public AccessTokenBuilder scope(Object scope) {
+    public JwtBuilder scope(Object scope) {
         this.scope = scope;
 
         if (scope instanceof String) {
@@ -130,7 +130,7 @@ public class AccessTokenBuilder {
         return expirationSeconds;
     }
 
-    public AccessTokenBuilder expirationSeconds(Long expirationSeconds) {
+    public JwtBuilder expirationSeconds(Long expirationSeconds) {
         this.expirationSeconds = expirationSeconds;
         return this;
     }
@@ -139,12 +139,12 @@ public class AccessTokenBuilder {
         return jwk;
     }
 
-    public AccessTokenBuilder jwk(PublicJsonWebKey jwk) {
+    public JwtBuilder jwk(PublicJsonWebKey jwk) {
         this.jwk = jwk;
         return this;
     }
 
-    public AccessTokenBuilder addCustomClaim(String name, String value) {
+    public JwtBuilder addCustomClaim(String name, String value) {
         String validatedName = ClaimValidationUtils.validateClaimNameOverride("claim name", name);
         String validatedValue = ClaimValidationUtils.validateClaimNameOverride(validatedName, value);
 

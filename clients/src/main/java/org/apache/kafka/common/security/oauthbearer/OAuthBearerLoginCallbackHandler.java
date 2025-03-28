@@ -25,6 +25,7 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 import org.apache.kafka.common.utils.Utils;
 
@@ -41,6 +42,9 @@ import javax.security.auth.callback.Callback;
 import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
 import javax.security.sasl.SaslException;
+
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS;
 
 /**
  * <p>
@@ -174,47 +178,57 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     private Map<String, Object> moduleOptions;
 
-    private AccessTokenValidator accessTokenValidator;
+    private JwtValidator jwtValidator;
 
     private boolean isInitialized = false;
 
-    protected AccessTokenRetriever accessTokenRetriever;
+    protected JwtRetriever jwtRetriever;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
 
         try {
-            configure(
-                new DefaultAccessTokenRetriever(),
-                new DefaultAccessTokenValidator(),
+            this.jwtRetriever = ConfigurationUtils.getConfiguredInstanceOrDefault(
                 configs,
                 saslMechanism,
-                jaasConfigEntries
+                jaasConfigEntries,
+                SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS,
+                JwtRetriever.class
             );
+
+            this.jwtValidator = ConfigurationUtils.getConfiguredInstanceOrDefault(
+                configs,
+                saslMechanism,
+                jaasConfigEntries,
+                SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS,
+                JwtValidator.class
+            );
+
+            this.isInitialized = true;
         } catch (Throwable t) {
             throw new KafkaException("The OAuth login configuration encountered an error during initialization", t);
         }
     }
 
-    void configure(AccessTokenRetriever accessTokenRetriever,
-                   AccessTokenValidator accessTokenValidator,
+    void configure(JwtRetriever jwtRetriever,
+                   JwtValidator jwtValidator,
                    Map<String, ?> configs,
                    String saslMechanism,
                    List<AppConfigurationEntry> jaasConfigEntries) {
-        this.accessTokenRetriever = accessTokenRetriever;
-        this.accessTokenValidator = accessTokenValidator;
+        this.jwtRetriever = jwtRetriever;
+        this.jwtValidator = jwtValidator;
 
-        this.accessTokenRetriever.configure(configs, saslMechanism, jaasConfigEntries);
-        this.accessTokenValidator.configure(configs, saslMechanism, jaasConfigEntries);
+        this.jwtRetriever.configure(configs, saslMechanism, jaasConfigEntries);
+        this.jwtValidator.configure(configs, saslMechanism, jaasConfigEntries);
 
         this.isInitialized = true;
     }
 
     @Override
     public void close() {
-        Utils.closeQuietly(accessTokenRetriever, "accessTokenRetriever");
-        Utils.closeQuietly(accessTokenValidator, "accessTokenValidator");
+        Utils.closeQuietly(jwtRetriever, "jwtRetriever");
+        Utils.closeQuietly(jwtValidator, "jwtValidator");
     }
 
     @Override
@@ -234,10 +248,10 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     protected void handleTokenCallback(OAuthBearerTokenCallback callback) throws IOException {
         checkInitialized();
-        String accessToken = accessTokenRetriever.retrieve();
+        String jwt = jwtRetriever.retrieve();
 
         try {
-            OAuthBearerToken token = accessTokenValidator.validate(accessToken);
+            OAuthBearerToken token = jwtValidator.validate(jwt);
             callback.token(token);
         } catch (InvalidJwtException e) {
             log.warn(e.getMessage(), e);

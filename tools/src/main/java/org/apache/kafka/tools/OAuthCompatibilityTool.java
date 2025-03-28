@@ -23,10 +23,10 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.security.JaasContext;
-import org.apache.kafka.common.security.oauthbearer.AccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.DefaultAccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.DefaultAccessTokenValidator;
+import org.apache.kafka.common.security.oauthbearer.DefaultJwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator;
+import org.apache.kafka.common.security.oauthbearer.JwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.JwtValidator;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 
@@ -78,11 +78,11 @@ public class OAuthCompatibilityTool {
         }
 
         try {
-            String accessToken;
+            String jwt;
 
             // Client retrieval
-            try (AccessTokenRetriever retriever = new DefaultAccessTokenRetriever();
-                 AccessTokenValidator validator = new DefaultAccessTokenValidator()) {
+            try (JwtRetriever retriever = new DefaultJwtRetriever();
+                 JwtValidator validator = new DefaultJwtValidator()) {
                 // Fill in the defaults for the values the user didn't specify.
                 ConfigDef cd = new ConfigDef();
                 SaslConfigs.addClientSaslSupport(cd);
@@ -100,15 +100,15 @@ public class OAuthCompatibilityTool {
                 validator.configure(configs, OAUTHBEARER_MECHANISM, jaasConfigEntries);
                 System.out.println("PASSED 1/5: client configuration");
 
-                accessToken = retriever.retrieve();
+                jwt = retriever.retrieve();
                 System.out.println("PASSED 2/5: client JWT retrieval");
 
-                validator.validate(accessToken);
+                validator.validate(jwt);
                 System.out.println("PASSED 3/5: client JWT validation");
             }
 
             // Broker validation
-            try (AccessTokenValidator validator = new DefaultAccessTokenValidator()) {
+            try (JwtValidator validator = new DefaultJwtValidator()) {
                 String fileName = namespace.getString("brokerConfigurationFileName");
                 Map<String, ?> configs = Utils.propsToMap(Utils.loadProps(fileName));
                 JaasContext context = JaasContext.loadClientContext(configs);
@@ -117,7 +117,7 @@ public class OAuthCompatibilityTool {
                 validator.configure(configs, OAUTHBEARER_MECHANISM, jaasConfigEntries);
                 System.out.println("PASSED 4/5: broker configuration");
 
-                validator.validate(accessToken);
+                validator.validate(jwt);
                 System.out.println("PASSED 5/5: broker JWT validation");
             }
 

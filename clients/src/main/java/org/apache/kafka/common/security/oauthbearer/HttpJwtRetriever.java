@@ -50,14 +50,13 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOF
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 
 /**
- * <code>HttpAccessTokenRetriever</code> is an {@link AccessTokenRetriever} that will
- * communicate with an OAuth/OIDC provider directly via HTTP.
+ * A {@link JwtRetriever} that will communicate with an OAuth/OIDC provider directly via HTTP.
  *
- * @see AccessTokenRetriever
+ * @see JwtRetriever
  */
-public abstract class HttpAccessTokenRetriever implements AccessTokenRetriever {
+public abstract class HttpJwtRetriever implements JwtRetriever {
 
-    private static final Logger log = LoggerFactory.getLogger(HttpAccessTokenRetriever.class);
+    private static final Logger log = LoggerFactory.getLogger(HttpJwtRetriever.class);
 
     private static final Set<Integer> UNRETRYABLE_HTTP_CODES;
 
@@ -162,7 +161,7 @@ public abstract class HttpAccessTokenRetriever implements AccessTokenRetriever {
                 throw new KafkaException(e.getCause());
         }
 
-        return parseAccessToken(responseBody);
+        return parseJwt(responseBody);
     }
 
     public static String handleOutput(String url, HttpClient.HttpResponse httpResponse) throws IOException {
@@ -236,7 +235,7 @@ public abstract class HttpAccessTokenRetriever implements AccessTokenRetriever {
         return String.format("{%s}", errorResponseBody);
     }
 
-    public static String parseAccessToken(String responseBody) throws IOException {
+    public static String parseJwt(String responseBody) throws IOException {
         ObjectMapper mapper = new ObjectMapper();
         JsonNode rootNode = mapper.readTree(responseBody);
         JsonNode accessTokenNode = rootNode.at("/access_token");
@@ -256,19 +255,19 @@ public abstract class HttpAccessTokenRetriever implements AccessTokenRetriever {
         }
 
         String name = "the token endpoint response's access_token JSON attribute";
-        String value = accessTokenNode.textValue();
+        String jwt = accessTokenNode.textValue();
 
-        if (value == null)
+        if (jwt == null)
             throw new IllegalArgumentException(String.format("The value for %s must be non-null", name));
 
-        if (value.isEmpty())
+        if (jwt.isEmpty())
             throw new IllegalArgumentException(String.format("The value for %s must be non-empty", name));
 
-        value = value.trim();
+        jwt = jwt.trim();
 
-        if (value.isEmpty())
+        if (jwt.isEmpty())
             throw new IllegalArgumentException(String.format("The value for %s must not contain only whitespace", name));
 
-        return value;
+        return jwt;
     }
 }
