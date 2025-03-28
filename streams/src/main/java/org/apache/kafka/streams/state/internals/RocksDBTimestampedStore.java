@@ -193,13 +193,13 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
                                                             final Bytes to,
                                                             final boolean forward) {
             return RocksDBDualCFRangeIterator.of(
-                    from,
-                    to,
-                    accessor.newIterator(oldColumnFamily),
-                    accessor.newIterator(newColumnFamily),
-                    name,
-                    forward,
-                    true);
+                from,
+                to,
+                accessor.newIterator(oldColumnFamily),
+                accessor.newIterator(newColumnFamily),
+                name,
+                forward,
+                true);
         }
 
         @Override
@@ -234,13 +234,13 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         public ManagedKeyValueIterator<Bytes, byte[]> prefixScan(final DBAccessor accessor, final Bytes prefix) {
             final Bytes to = incrementWithoutOverflow(prefix);
             return RocksDBDualCFRangeIterator.of(
-                    prefix,
-                    to,
-                    accessor.newIterator(oldColumnFamily),
-                    accessor.newIterator(newColumnFamily),
-                    name,
-                    true,
-                    false
+                prefix,
+                to,
+                accessor.newIterator(oldColumnFamily),
+                accessor.newIterator(newColumnFamily),
+                name,
+                true,
+                false
             );
         }
 
