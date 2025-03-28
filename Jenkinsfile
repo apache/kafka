@@ -180,6 +180,25 @@ pipeline {
             echo 'Skipping Kafka Streams archetype test for Java 21'
           }
         }
+
+        stage('JDK 23 and Scala 2.13') {
+          agent { label 'ubuntu' }
+          tools {
+            jdk 'jdk_23_latest'
+          }
+          options {
+            timeout(time: 8, unit: 'HOURS')
+            timestamps()
+          }
+          environment {
+            SCALA_VERSION=2.13
+          }
+          steps {
+            doValidation()
+            doTest(env)
+            echo 'Skipping Kafka Streams archetype test for Java 23'
+          }
+        }
       }
     }
   }
