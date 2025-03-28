@@ -192,7 +192,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
                                                             final Bytes from,
                                                             final Bytes to,
                                                             final boolean forward) {
-            return new RocksDBDualCFRangeIterator(
+            return RocksDBDualCFRangeIterator.of(
                     from,
                     to,
                     accessor.newIterator(oldColumnFamily),
@@ -220,7 +220,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
 
         @Override
         public ManagedKeyValueIterator<Bytes, byte[]> all(final DBAccessor accessor, final boolean forward) {
-            return new RocksDBDualCFRangeIterator(
+            return RocksDBDualCFRangeIterator.of(
                     null,
                     null,
                     accessor.newIterator(oldColumnFamily),
@@ -233,7 +233,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         @Override
         public ManagedKeyValueIterator<Bytes, byte[]> prefixScan(final DBAccessor accessor, final Bytes prefix) {
             final Bytes to = incrementWithoutOverflow(prefix);
-            return new RocksDBDualCFRangeIterator(
+            return RocksDBDualCFRangeIterator.of(
                     prefix,
                     to,
                     accessor.newIterator(oldColumnFamily),
@@ -321,6 +321,9 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
      *
      * <h3>Thread Safety:</h3>
      *
+     * <p>This iterator is not thread-safe. If access from multiple threads is required, external synchronization must
+     * be provided by the caller.</p>
+     *
      * <p>The iterator is thread-safe for sequential operations but should not be accessed concurrently from multiple
      * threads without external synchronization.</p>
      *
@@ -372,21 +375,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         private final byte[] rawLastKey;
         private volatile boolean open = true;
 
-        /**
-         * Constructs a new {@code RocksDBDualCFRangeIterator}.
-         *
-         * <p>Initializes the RocksDB iterators for two column families (timestamped and non-timestamped) and sets up
-         * the range and direction for iteration.</p>
-         *
-         * @param from                  The starting key of the range. Can be {@code null} for an open range.
-         * @param to                    The ending key of the range. Can be {@code null} for an open range.
-         * @param noTimestampIterator   The iterator for the non-timestamped column family.
-         * @param withTimestampIterator The iterator for the timestamped column family.
-         * @param storeName             The name of the store associated with this iterator.
-         * @param forward               {@code true} for forward iteration; {@code false} for reverse iteration.
-         * @param toInclusive           Whether the upper boundary of the range is inclusive.
-         */
-        RocksDBDualCFRangeIterator(final Bytes from,
+        private RocksDBDualCFRangeIterator(final Bytes from,
                                    final Bytes to,
                                    final RocksIterator noTimestampIterator,
                                    final RocksIterator withTimestampIterator,
@@ -400,6 +389,41 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
             this.withTimestampIterator = withTimestampIterator;
 
             this.rawLastKey = initializeIterators(from, to);
+        }
+
+        /**
+         * Creates a new {@code RocksDBDualCFRangeIterator}.
+         *
+         * <p>Initializes the RocksDB iterators for two column families (timestamped and non-timestamped) and sets up
+         * the range and direction for iteration.</p>
+         *
+         * @param from                  The starting key of the range. Can be {@code null} for an open range.
+         * @param to                    The ending key of the range. Can be {@code null} for an open range.
+         * @param noTimestampIterator   The iterator for the non-timestamped column family.
+         * @param withTimestampIterator The iterator for the timestamped column family.
+         * @param storeName             The name of the store associated with this iterator.
+         * @param forward               {@code true} for forward iteration; {@code false} for reverse iteration.
+         * @param toInclusive           Whether the upper boundary of the range is inclusive.
+         */
+        public static RocksDBDualCFRangeIterator of(final Bytes from,
+                                             final Bytes to,
+                                             final RocksIterator noTimestampIterator,
+                                             final RocksIterator withTimestampIterator,
+                                             final String storeName,
+                                             final boolean forward,
+                                             final boolean toInclusive) {
+            final RocksDBDualCFRangeIterator iterator =
+                new RocksDBDualCFRangeIterator(
+                    from,
+                    to,
+                    noTimestampIterator,
+                    withTimestampIterator,
+                    storeName,
+                    forward,
+                    toInclusive
+                );
+            iterator.initializeIterators(from, to);
+            return iterator;
         }
 
         /**
@@ -549,9 +573,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         private boolean isInRange(final KeyValue<Bytes, byte[]> keyValue) {
             if (rawLastKey == null) return true; // Open-ended range
             final int comparison = comparator.compare(keyValue.key.get(), rawLastKey);
-            return forward
-                    ? comparison < 0 || (toInclusive && comparison == 0)
-                    : comparison > 0 || (toInclusive && comparison == 0);
+            return (toInclusive && comparison == 0) || (forward ? comparison < 0 : comparison > 0);
         }
 
         /**
