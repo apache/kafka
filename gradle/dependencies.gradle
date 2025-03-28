@@ -23,7 +23,7 @@ ext {
 }
 
 // Add Scala version
-def defaultScala213Version = '2.13.15'
+def defaultScala213Version = '2.13.16'
 if (hasProperty('scalaVersion')) {
   if (scalaVersion == '2.13') {
     versions["scala"] = defaultScala213Version
@@ -121,7 +121,7 @@ versions += [
   scoverage: "2.0.11",
   slf4j: "1.7.36",
   snappy: "1.1.10.5",
-  spotbugs: "4.8.6",
+  spotbugs: "4.9.4-SNAPSHOT",
   zinc: "1.9.2",
   // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json
   // Also make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid

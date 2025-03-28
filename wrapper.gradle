@@ -65,8 +65,8 @@ task bootstrapWrapper() {
         wrapperScript.withPrintWriter { out ->
             def bootstrapWritten = false
             wrapperLines.each { line ->
-                // Print the wrapper bootstrap before the first usage of the wrapper jar.
-                if (!bootstrapWritten && line.contains("gradle-wrapper.jar")) {
+                // Print the wrapper bootstrap before the script execs the wrapper jar.
+                if (!bootstrapWritten && line.startsWith("exec ")) {
                     out.println(bootstrapString)
                     bootstrapWritten = true
                 }
