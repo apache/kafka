@@ -268,16 +268,16 @@ public class SharePartitionManager implements AutoCloseable {
             .rotate(topicIdPartitions, new PartitionRotateMetadata(sessionEpoch));
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
-        if (groupConfigManager.groupConfig(groupId).isEmpty())
+        if (groupConfigManager.groupConfig(groupId).isEmpty()) {
             processShareFetch(new ShareFetch(fetchParams, groupId, memberId, future, rotatedTopicIdPartitions, batchSize, maxFetchRecords, brokerTopicStats));
-        else {
+        } else {
             FetchParams updatedFetchParams = new FetchParams(
                 fetchParams.replicaId,
                 fetchParams.replicaEpoch,
                 fetchParams.maxWaitMs,
                 fetchParams.minBytes,
                 fetchParams.maxBytes,
-                FetchIsolation.of(-1, groupConfigManager.groupConfig(groupId).get().shareIsolationLevel(), true),
+                FetchIsolation.of(-1, groupConfigManager.groupConfig(groupId).get().shareIsolationLevel()),
                 fetchParams.clientMetadata
             );
             processShareFetch(new ShareFetch(updatedFetchParams, groupId, memberId, future, rotatedTopicIdPartitions, batchSize, maxFetchRecords, brokerTopicStats));
