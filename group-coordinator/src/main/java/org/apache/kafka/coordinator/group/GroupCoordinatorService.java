@@ -453,6 +453,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 timer.add(new TimerTask(0L) {
                     @Override
                     public void run() {
+                        System.err.println("smjn: calling persister init " + result.getValue().get());
                         persisterInitialize(result.getValue().get(), result.getKey());
                     }
                 });
