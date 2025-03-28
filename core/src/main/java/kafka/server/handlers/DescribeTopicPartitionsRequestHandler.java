@@ -89,7 +89,7 @@ public class DescribeTopicPartitionsRequestHandler {
         // Do not disclose the existence of topics unauthorized for Describe, so we've not even checked if they exist or not
         Set<DescribeTopicPartitionsResponseTopic> unauthorizedForDescribeTopicMetadata = new HashSet<>();
 
-        Stream<String> authorizedTopicsStream = topics.stream().sorted().filter(topicName -> {
+        Stream<String> authorizedTopicsStream = topics.stream().filter(topicName -> {
             boolean isAuthorized = authHelper.authorize(
                 abstractRequest.context(), DESCRIBE, TOPIC, topicName, true, true, 1);
             if (!fetchAllTopics && !isAuthorized) {
@@ -99,7 +99,7 @@ public class DescribeTopicPartitionsRequestHandler {
                 );
             }
             return isAuthorized;
-        });
+        }).sorted();
 
         DescribeTopicPartitionsResponseData response = metadataCache.describeTopicResponse(
             authorizedTopicsStream.iterator(),
