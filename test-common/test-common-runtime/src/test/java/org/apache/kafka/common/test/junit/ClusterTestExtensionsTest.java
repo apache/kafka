@@ -186,9 +186,7 @@ public class ClusterTestExtensionsTest {
     public void testClusterTestWithDisksPerBroker() throws ExecutionException, InterruptedException {
         try (Admin admin = clusterInstance.admin()) {
             DescribeLogDirsResult result = admin.describeLogDirs(clusterInstance.brokerIds());
-            result.allDescriptions().get().forEach((brokerId, logDirDescriptionMap) -> {
-                assertEquals(clusterInstance.config().numDisksPerBroker(), logDirDescriptionMap.size());
-            });
+            result.allDescriptions().get().forEach((brokerId, logDirDescriptionMap) -> assertEquals(clusterInstance.config().numDisksPerBroker(), logDirDescriptionMap.size()));
         }
     }
 
