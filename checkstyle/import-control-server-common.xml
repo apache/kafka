@@ -74,9 +74,6 @@
         <subpackage name="common">
             <allow pkg="org.apache.kafka.server.common" />
             <allow pkg="org.apache.kafka.clients" />
-            <allow pkg="org.apache.kafka.server.metrics" />
-            <allow pkg="org.apache.kafka.server.purgatory" />
-            <allow pkg="com.yammer.metrics" />
         </subpackage>
 
         <subpackage name="immutable">
@@ -100,6 +97,7 @@
         <subpackage name="purgatory">
             <allow pkg="org.apache.kafka.server.metrics" />
             <allow pkg="org.apache.kafka.server.util" />
+            <allow pkg="com.yammer.metrics" />
         </subpackage>
 
         <subpackage name="share">

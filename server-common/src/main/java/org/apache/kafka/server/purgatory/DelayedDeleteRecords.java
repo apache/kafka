@@ -14,13 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.common;
+package org.apache.kafka.server.purgatory;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
-import org.apache.kafka.server.purgatory.DelayedOperation;
 
 import com.yammer.metrics.core.Meter;
 
