@@ -200,7 +200,7 @@ class DelayedRemoteFetchTest {
     delayedRemoteFetch.run()
 
     // Check that the task was cancelled and force-completed
-    verify(remoteFetchTask).cancel(true)
+    verify(remoteFetchTask).cancel(false)
     assertTrue(delayedRemoteFetch.isCompleted)
 
     // Check that the ExpiresPerSec metric was incremented
