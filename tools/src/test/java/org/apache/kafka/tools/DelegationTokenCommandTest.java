@@ -23,12 +23,12 @@ import org.apache.kafka.clients.admin.DescribeDelegationTokenResult;
 import org.apache.kafka.clients.admin.MockAdminClient;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.security.token.delegation.DelegationToken;
-
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.SecurityUtils;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
