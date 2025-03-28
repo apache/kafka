@@ -332,14 +332,14 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
      * <h3>Iterate over a range:</h3>
      *
      * <pre>{@code
-     * RocksIterator noTimestampIterator = accessor.newIterator(noTimestampColumnFamily);
-     * RocksIterator withTimestampIterator = accessor.newIterator(withTimestampColumnFamily);
+     * RocksIterator nonTimestampedIterator = accessor.newIterator(noTimestampColumnFamily);
+     * RocksIterator timestampedIterator = accessor.newIterator(withTimestampColumnFamily);
      *
      * try (RocksDBDualCFRangeIterator iterator = new RocksDBDualCFRangeIterator(
      *         new Bytes("keyStart".getBytes()),
      *         new Bytes("keyEnd".getBytes()),
-     *         noTimestampIterator,
-     *         withTimestampIterator,
+     *         nonTimestampedIterator,
+     *         timestampedIterator,
      *         "storeName",
      *         true,  // Forward iteration
      *         true   // Inclusive upper boundary
@@ -364,11 +364,11 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
      */
     private static class RocksDBDualCFRangeIterator extends AbstractIterator<KeyValue<Bytes, byte[]>> implements ManagedKeyValueIterator<Bytes, byte[]> {
         private Runnable closeCallback;
-        private byte[] noTimestampNext;
-        private byte[] withTimestampNext;
+        private byte[] nonTimestampedNext;
+        private byte[] timestampedNext;
         private final Comparator<byte[]> comparator = Bytes.BYTES_LEXICO_COMPARATOR;
-        private final RocksIterator noTimestampIterator;
-        private final RocksIterator withTimestampIterator;
+        private final RocksIterator nonTimestampedIterator;
+        private final RocksIterator timestampedIterator;
         private final String storeName;
         private final boolean forward;
         private final boolean toInclusive;
@@ -376,17 +376,17 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         private volatile boolean open = true;
 
         private RocksDBDualCFRangeIterator(final Bytes from,
-                                   final Bytes to,
-                                   final RocksIterator noTimestampIterator,
-                                   final RocksIterator withTimestampIterator,
-                                   final String storeName,
-                                   final boolean forward,
-                                   final boolean toInclusive) {
+                                           final Bytes to,
+                                           final RocksIterator nonTimestampedIterator,
+                                           final RocksIterator timestampedIterator,
+                                           final String storeName,
+                                           final boolean forward,
+                                           final boolean toInclusive) {
             this.forward = forward;
-            this.noTimestampIterator = noTimestampIterator;
+            this.nonTimestampedIterator = nonTimestampedIterator;
             this.storeName = storeName;
             this.toInclusive = toInclusive;
-            this.withTimestampIterator = withTimestampIterator;
+            this.timestampedIterator = timestampedIterator;
 
             this.rawLastKey = initializeIterators(from, to);
         }
@@ -397,27 +397,27 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
          * <p>Initializes the RocksDB iterators for two column families (timestamped and non-timestamped) and sets up
          * the range and direction for iteration.</p>
          *
-         * @param from                  The starting key of the range. Can be {@code null} for an open range.
-         * @param to                    The ending key of the range. Can be {@code null} for an open range.
-         * @param noTimestampIterator   The iterator for the non-timestamped column family.
-         * @param withTimestampIterator The iterator for the timestamped column family.
-         * @param storeName             The name of the store associated with this iterator.
-         * @param forward               {@code true} for forward iteration; {@code false} for reverse iteration.
-         * @param toInclusive           Whether the upper boundary of the range is inclusive.
+         * @param from                   The starting key of the range. Can be {@code null} for an open range.
+         * @param to                     The ending key of the range. Can be {@code null} for an open range.
+         * @param nonTimestampedIterator The iterator for the non-timestamped column family.
+         * @param timestampedIterator    The iterator for the timestamped column family.
+         * @param storeName              The name of the store associated with this iterator.
+         * @param forward                {@code true} for forward iteration; {@code false} for reverse iteration.
+         * @param toInclusive            Whether the upper boundary of the range is inclusive.
          */
         public static RocksDBDualCFRangeIterator of(final Bytes from,
-                                             final Bytes to,
-                                             final RocksIterator noTimestampIterator,
-                                             final RocksIterator withTimestampIterator,
-                                             final String storeName,
-                                             final boolean forward,
-                                             final boolean toInclusive) {
+                                                    final Bytes to,
+                                                    final RocksIterator nonTimestampedIterator,
+                                                    final RocksIterator timestampedIterator,
+                                                    final String storeName,
+                                                    final boolean forward,
+                                                    final boolean toInclusive) {
             final RocksDBDualCFRangeIterator iterator =
                 new RocksDBDualCFRangeIterator(
                     from,
                     to,
-                    noTimestampIterator,
-                    withTimestampIterator,
+                    nonTimestampedIterator,
+                    timestampedIterator,
                     storeName,
                     forward,
                     toInclusive
@@ -438,7 +438,7 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         @Override
         protected KeyValue<Bytes, byte[]> makeNext() {
             loadNextKeys();
-            if (noTimestampNext == null && withTimestampNext == null) return allDone();
+            if (nonTimestampedNext == null && timestampedNext == null) return allDone();
             final KeyValue<Bytes, byte[]> next = fetchNextKeyValue();
             return isInRange(next) ? next : allDone();
         }
@@ -503,8 +503,8 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
             }
             closeCallback.run();
 
-            noTimestampIterator.close();
-            withTimestampIterator.close();
+            nonTimestampedIterator.close();
+            timestampedIterator.close();
             open = false;
         }
 
@@ -519,11 +519,11 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
         }
 
         private KeyValue<Bytes, byte[]> compareAndHandleKeys() {
-            final int comparison = comparator.compare(noTimestampNext, withTimestampNext);
+            final int comparison = comparator.compare(nonTimestampedNext, timestampedNext);
             if (forward ? comparison <= 0 : comparison >= 0) {
-                return handleNoTimestampOnly();
+                return handleNonTimestampedOnly();
             } else {
-                return handleWithTimestampOnly();
+                return handleTimestampedOnly();
             }
         }
 
@@ -537,26 +537,26 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
          * @return The next {@link KeyValue} pair to return.
          */
         private KeyValue<Bytes, byte[]> fetchNextKeyValue() {
-            if (noTimestampNext == null) {
-                return handleWithTimestampOnly();
-            } else if (withTimestampNext == null) {
-                return handleNoTimestampOnly();
+            if (nonTimestampedNext == null) {
+                return handleTimestampedOnly();
+            } else if (timestampedNext == null) {
+                return handleNonTimestampedOnly();
             } else {
                 return compareAndHandleKeys();
             }
         }
 
-        private KeyValue<Bytes, byte[]> handleNoTimestampOnly() {
-            final KeyValue<Bytes, byte[]> result = KeyValue.pair(new Bytes(noTimestampNext), convertToTimestampedFormat(noTimestampIterator.value()));
-            moveIterator(noTimestampIterator);
-            noTimestampNext = null;
+        private KeyValue<Bytes, byte[]> handleNonTimestampedOnly() {
+            final KeyValue<Bytes, byte[]> result = KeyValue.pair(new Bytes(nonTimestampedNext), convertToTimestampedFormat(nonTimestampedIterator.value()));
+            moveIterator(nonTimestampedIterator);
+            nonTimestampedNext = null;
             return result;
         }
 
-        private KeyValue<Bytes, byte[]> handleWithTimestampOnly() {
-            final KeyValue<Bytes, byte[]> result = KeyValue.pair(new Bytes(withTimestampNext), withTimestampIterator.value());
-            moveIterator(withTimestampIterator);
-            withTimestampNext = null;
+        private KeyValue<Bytes, byte[]> handleTimestampedOnly() {
+            final KeyValue<Bytes, byte[]> result = KeyValue.pair(new Bytes(timestampedNext), timestampedIterator.value());
+            moveIterator(timestampedIterator);
+            timestampedNext = null;
             return result;
         }
 
@@ -589,12 +589,12 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
          */
         private byte[] initializeIterators(final Bytes from, final Bytes to) {
             if (forward) {
-                seekIterator(from, withTimestampIterator, true);
-                seekIterator(from, noTimestampIterator, true);
+                seekIterator(from, timestampedIterator, true);
+                seekIterator(from, nonTimestampedIterator, true);
                 return to == null ? null : to.get();
             } else {
-                seekIterator(to, withTimestampIterator, false);
-                seekIterator(to, noTimestampIterator, false);
+                seekIterator(to, timestampedIterator, false);
+                seekIterator(to, nonTimestampedIterator, false);
                 return from == null ? null : from.get();
             }
         }
@@ -613,8 +613,8 @@ public class RocksDBTimestampedStore extends RocksDBStore implements Timestamped
          * valid, it fetches the next key.</p>
          */
         private void loadNextKeys() {
-            if (noTimestampNext == null && noTimestampIterator.isValid()) noTimestampNext = noTimestampIterator.key();
-            if (withTimestampNext == null && withTimestampIterator.isValid()) withTimestampNext = withTimestampIterator.key();
+            if (nonTimestampedNext == null && nonTimestampedIterator.isValid()) nonTimestampedNext = nonTimestampedIterator.key();
+            if (timestampedNext == null && timestampedIterator.isValid()) timestampedNext = timestampedIterator.key();
         }
 
         /**
