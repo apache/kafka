@@ -30,9 +30,9 @@ import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.persister.PersisterStateBatch;
-
 import org.apache.kafka.tools.consumer.CoordinatorRecordMessageFormatter;
 import org.apache.kafka.tools.consumer.CoordinatorRecordMessageFormatterTest;
+
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
