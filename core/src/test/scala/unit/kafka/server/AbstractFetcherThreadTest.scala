@@ -33,6 +33,7 @@ import kafka.server.FetcherThreadTestUtils.{initialFetchState, mkBatch}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.util.Optional
 import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Set}
@@ -406,7 +407,7 @@ class AbstractFetcherThreadTest {
           super.truncate(topicPartition, truncationState)
         }
 
-        override def latestEpoch(topicPartition: TopicPartition): Option[Int] = None
+        override def latestEpoch(topicPartition: TopicPartition): Optional[Integer] = Optional.empty
       }
 
     val replicaLog = Seq(
@@ -439,7 +440,7 @@ class AbstractFetcherThreadTest {
         super.truncateToHighWatermark(partitions)
       }
 
-      override def latestEpoch(topicPartition: TopicPartition): Option[Int] = None
+      override def latestEpoch(topicPartition: TopicPartition): Optional[Integer] = Optional.empty
     }
 
     val replicaLog = Seq(
@@ -1152,4 +1153,28 @@ class AbstractFetcherThreadTest {
     assertTrue(fetcher.fetchState(unknownPartition).isEmpty)
   }
 
+  @Test
+  def testIgnoreFetchResponseWhenLeaderEpochChanged(): Unit = {
+    val newEpoch = 1
+    val initEpoch = 0
+
+    val partition = new TopicPartition("topic", 0)
+    val mockLeaderEndpoint = new MockLeaderEndPoint(version = version)
+    val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint)
+    val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine)
+    val replicaState = PartitionState(leaderEpoch = newEpoch)
+    fetcher.setReplicaState(partition, replicaState)
+    val initFetchState = initialFetchState(topicIds.get(partition.topic), 0L, leaderEpoch = newEpoch)
+    fetcher.addPartitions(Map(partition -> initFetchState))
+
+    val batch = mkBatch(baseOffset = 0L, leaderEpoch = initEpoch, new SimpleRecord("a".getBytes))
+    val leaderState = PartitionState(Seq(batch), leaderEpoch = initEpoch, highWatermark = 1L)
+    fetcher.mockLeader.setLeaderState(partition, leaderState)
+
+    val partitionData = Map(partition -> new FetchRequest.PartitionData(Uuid.randomUuid(), 0, 0, 1048576, Optional.of(initEpoch), Optional.of(initEpoch))).asJava
+    val fetchRequestOpt = FetchRequest.Builder.forReplica(0, 0, initEpoch, 0, Int.MaxValue, partitionData)
+
+    fetcher.processFetchRequest(partitionData, fetchRequestOpt)
+    assertEquals(0, replicaState.logEndOffset, "FetchResponse should be ignored when leader epoch does not match")
+  }
 }

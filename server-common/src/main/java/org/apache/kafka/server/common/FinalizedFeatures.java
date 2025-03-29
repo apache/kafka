@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.common;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -27,7 +26,7 @@ public record FinalizedFeatures(
     long finalizedFeaturesEpoch
 ) {
     public static FinalizedFeatures fromKRaftVersion(MetadataVersion version) {
-        return new FinalizedFeatures(version, Collections.emptyMap(), -1);
+        return new FinalizedFeatures(version, Map.of(), -1);
     }
 
     public FinalizedFeatures(
@@ -43,7 +42,16 @@ public record FinalizedFeatures(
 
     public FinalizedFeatures setFinalizedLevel(String key, short level) {
         if (level == (short) 0) {
-            return this;
+            if (finalizedFeatures.containsKey(key)) {
+                Map<String, Short> newFinalizedFeatures = new HashMap<>(finalizedFeatures);
+                newFinalizedFeatures.remove(key);
+                return new FinalizedFeatures(
+                    metadataVersion,
+                    newFinalizedFeatures,
+                    finalizedFeaturesEpoch);
+            } else {
+                return this;
+            }
         } else {
             Map<String, Short> newFinalizedFeatures = new HashMap<>(finalizedFeatures);
             newFinalizedFeatures.put(key, level);
