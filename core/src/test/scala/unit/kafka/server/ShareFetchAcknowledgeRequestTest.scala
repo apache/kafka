@@ -25,7 +25,7 @@ import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.requests.{ShareAcknowledgeRequest, ShareAcknowledgeResponse, ShareFetchRequest, ShareFetchResponse, ShareRequestMetadata}
 import org.apache.kafka.common.test.ClusterInstance
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.api.{AfterEach, Tag, Timeout}
+import org.junit.jupiter.api.{AfterEach, Timeout}
 
 import java.util
 import java.util.Collections
@@ -35,7 +35,6 @@ import scala.jdk.CollectionConverters._
 @ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1, serverProperties = Array(
   new ClusterConfigProperty(key = "group.share.persister.class.name", value = "")
 ))
-@Tag("integration")
 class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster){
 
   private final val MAX_WAIT_MS = 5000
