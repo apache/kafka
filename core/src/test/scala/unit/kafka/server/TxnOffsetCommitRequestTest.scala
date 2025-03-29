@@ -26,11 +26,13 @@ import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.utils.ProducerIdAndEpoch
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.junit.jupiter.api.Assertions.{assertThrows, assertTrue, fail}
+import org.junit.jupiter.api.Assertions.{assertThrows, assertTrue}
 
 import scala.jdk.CollectionConverters.IterableHasAsScala
 
-@ClusterTestDefaults(types = Array(Type.KRAFT), serverProperties = Array(
+@ClusterTestDefaults(
+  types = Array(Type.KRAFT),
+  serverProperties = Array(
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
     new ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, value = "1"),
@@ -40,30 +42,16 @@ import scala.jdk.CollectionConverters.IterableHasAsScala
 class TxnOffsetCommitRequestTest(cluster:ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
   @ClusterTest
-  def testTxnOffsetCommitWithNewConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
+  def testTxnOffsetCommitWithNewConsumerGroupProtocol(): Unit = {
     testTxnOffsetCommit(true)
   }
 
   @ClusterTest
-  def testTxnOffsetCommitWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
-    testTxnOffsetCommit(false)
-  }
-
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG, value = "false"),
-      new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, value = "classic"),
-    )
-  )
-  def testTxnOffsetCommitWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
+  def testTxnOffsetCommitWithOldConsumerGroupProtocol(): Unit = {
     testTxnOffsetCommit(false)
   }
 
   private def testTxnOffsetCommit(useNewProtocol: Boolean): Unit = {
-    if (useNewProtocol && !isNewGroupCoordinatorEnabled) {
-      fail("Cannot use the new protocol with the old group coordinator.")
-    }
-
     val topic = "topic"
     val partition = 0
     val transactionalId = "txn"
