@@ -555,6 +555,10 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         return initialized.get();
     }
 
+    boolean isInitializationFailed() {
+        return initializationFailed;
+    }
+
     private void ensureInitializedAndNotClosed() {
         if (initializationFailed) {
             // If initialization is failed, shutdown the broker.
