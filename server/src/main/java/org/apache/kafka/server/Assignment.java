@@ -24,6 +24,9 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.TopicIdPartition;
 
+/**
+ * The class is not converted to a Java record since record classes are meant for pure data, but this one contains a Runnable
+ **/
 final class Assignment {
     /**
      * The topic ID and partition index of the replica.
