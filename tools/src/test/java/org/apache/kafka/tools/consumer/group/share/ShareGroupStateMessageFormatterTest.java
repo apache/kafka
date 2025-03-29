@@ -31,6 +31,8 @@ import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.persister.PersisterStateBatch;
 
+import org.apache.kafka.tools.consumer.CoordinatorRecordMessageFormatter;
+import org.apache.kafka.tools.consumer.CoordinatorRecordMessageFormatterTest;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
@@ -46,7 +48,7 @@ import static java.util.Collections.emptyMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class ShareGroupStateMessageFormatterTest {
+public class ShareGroupStateMessageFormatterTest extends CoordinatorRecordMessageFormatterTest {
     private static final SharePartitionKey KEY_1 = SharePartitionKey.getInstance("gs1", Uuid.fromString("gtb2stGYRk-vWZ2zAozmoA"), 0);
     private static final ShareGroupOffset SHARE_GROUP_OFFSET_1 = new ShareGroupOffset.Builder()
         .setSnapshotEpoch(0)
@@ -132,7 +134,13 @@ public class ShareGroupStateMessageFormatterTest {
                 .collect(Collectors.toList())
         );
 
-    private static Stream<Arguments> parameters() {
+    @Override
+    protected CoordinatorRecordMessageFormatter formatter() {
+        return new ShareGroupStateMessageFormatter();
+    }
+
+    @Override
+    protected Stream<Arguments> parameters() {
         return Stream.of(
             Arguments.of(
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_SNAPSHOT_KEY).array(),
@@ -176,27 +184,6 @@ public class ShareGroupStateMessageFormatterTest {
                         "non-nullable field stateBatches was serialized as null.")
             )
         );
-    }
-
-    @ParameterizedTest
-    @MethodSource("parameters")
-    public void testShareGroupStateMessageFormatter(
-        byte[] keyBuffer,
-        byte[] valueBuffer,
-        String expectedOutput
-    ) {
-        ConsumerRecord<byte[], byte[]> record = new ConsumerRecord<>(
-            Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0, 0,
-            0L, TimestampType.CREATE_TIME, 0,
-            0, keyBuffer, valueBuffer,
-            new RecordHeaders(), Optional.empty());
-
-        try (MessageFormatter formatter = new ShareGroupStateMessageFormatter()) {
-            formatter.configure(emptyMap());
-            ByteArrayOutputStream out = new ByteArrayOutputStream();
-            formatter.writeTo(record, new PrintStream(out));
-            assertEquals(expectedOutput, out.toString());
-        }
     }
 
     @ParameterizedTest
