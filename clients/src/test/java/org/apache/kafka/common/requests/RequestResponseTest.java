@@ -599,7 +599,7 @@ public class RequestResponseTest {
         FetchResponseData data = new FetchResponseData().setResponses(List.of(response));
 
         response.setPartitions(List.of(FetchResponse.partitionResponse(0, Errors.NONE)));
-        FetchResponse fetchResponse = new FetchResponse(data);
+        FetchResponse fetchResponse = FetchResponse.of(data);
         validateNoNullRecords(fetchResponse);
 
         TopicIdPartition topicIdPartition = new TopicIdPartition(id, new TopicPartition("test", 0));
@@ -629,7 +629,7 @@ public class RequestResponseTest {
         ShareFetchResponseData data = new ShareFetchResponseData().setResponses(List.of(response));
 
         response.setPartitions(List.of(ShareFetchResponse.partitionResponse(0, Errors.NONE)));
-        ShareFetchResponse shareFetchResponse = new ShareFetchResponse(data);
+        ShareFetchResponse shareFetchResponse = ShareFetchResponse.of(data);
         validateNoNullRecords(shareFetchResponse);
 
         TopicIdPartition topicIdPartition = new TopicIdPartition(id, new TopicPartition("test", 0));
@@ -1521,7 +1521,7 @@ public class RequestResponseTest {
         data.setResponses(singletonList(response));
         data.setThrottleTimeMs(345);
         data.setErrorCode(Errors.NONE.code());
-        return new ShareFetchResponse(data);
+        return ShareFetchResponse.of(data);
     }
 
     private ShareAcknowledgeRequest createShareAcknowledgeRequest(short version) {
@@ -2164,7 +2164,7 @@ public class RequestResponseTest {
             response.setTopicId(Uuid.randomUuid());
         }
         data.setResponses(singletonList(response));
-        return new FetchResponse(data);
+        return FetchResponse.of(data);
     }
 
     private HeartbeatRequest createHeartBeatRequest(short version) {

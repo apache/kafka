@@ -87,7 +87,7 @@ public class FetchResponse extends AbstractResponse {
      * We may also return INCONSISTENT_TOPIC_ID error as a partition-level error when a partition in the session has a topic ID
      * inconsistent with the log.
      */
-    public FetchResponse(FetchResponseData fetchResponseData) {
+    private FetchResponse(FetchResponseData fetchResponseData) {
         super(ApiKeys.FETCH);
         this.data = fetchResponseData;
     }
@@ -138,6 +138,13 @@ public class FetchResponse extends AbstractResponse {
         return errorCounts;
     }
 
+    /**
+     * Creates a {@link org.apache.kafka.common.requests.FetchResponse} from the given byte buffer.
+     * Unlike {@link org.apache.kafka.common.requests.FetchResponse#of(FetchResponseData)}, this method doesn't convert
+     * null records to {@link org.apache.kafka.common.record.MemoryRecords#EMPTY}.
+     *
+     * <p><strong>This method should only be used in client-side.</strong></p>
+     */
     public static FetchResponse parse(ByteBuffer buffer, short version) {
         return new FetchResponse(new FetchResponseData(new ByteBufferAccessor(buffer), version));
     }
@@ -218,6 +225,23 @@ public class FetchResponse extends AbstractResponse {
      */
     public static int recordsSize(FetchResponseData.PartitionData partition) {
         return partition.records() == null ? 0 : partition.records().sizeInBytes();
+    }
+
+    /**
+     * Creates a {@link org.apache.kafka.common.requests.FetchResponse} from the given data.
+     * This method converts null records to {@link org.apache.kafka.common.record.MemoryRecords#EMPTY}
+     * to ensure consistent record representation in the response.
+     *
+     * <p><strong>This method should only be used in server-side.</strong></p>
+     */
+    public static FetchResponse of(FetchResponseData data) {
+        for (FetchResponseData.FetchableTopicResponse response : data.responses()) {
+            for (FetchResponseData.PartitionData partition : response.partitions()) {
+                if (partition.records() == null)
+                    partition.setRecords(MemoryRecords.EMPTY);
+            }
+        }
+        return new FetchResponse(data);
     }
 
     // TODO: remove as a part of KAFKA-12410

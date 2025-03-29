@@ -50,7 +50,7 @@ public abstract class ShareFetchContext {
      * @return - An empty throttled response.
      */
     public ShareFetchResponse throttleResponse(int throttleTimeMs) {
-        return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, throttleTimeMs,
+        return ShareFetchResponse.of(ShareFetchResponse.toMessage(Errors.NONE, throttleTimeMs,
                 Collections.emptyIterator(), List.of()));
     }
 

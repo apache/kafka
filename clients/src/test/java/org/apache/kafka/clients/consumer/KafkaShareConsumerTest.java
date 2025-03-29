@@ -391,7 +391,7 @@ public class KafkaShareConsumerTest {
         ShareFetchResponseData.ShareFetchableTopicResponse topicResponse = new ShareFetchResponseData.ShareFetchableTopicResponse()
             .setTopicId(tip.topicId())
             .setPartitions(List.of(partData));
-        return new ShareFetchResponse(
+        return ShareFetchResponse.of(
             new ShareFetchResponseData()
                 .setResponses(List.of(topicResponse))
         );

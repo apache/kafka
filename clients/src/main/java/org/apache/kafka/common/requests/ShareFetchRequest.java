@@ -160,7 +160,7 @@ public class ShareFetchRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
-        return new ShareFetchResponse(new ShareFetchResponseData()
+        return ShareFetchResponse.of(new ShareFetchResponseData()
                 .setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(error.code()));
     }

@@ -57,7 +57,7 @@ public class ShareFetchResponse extends AbstractResponse {
 
     private volatile LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData = null;
 
-    public ShareFetchResponse(ShareFetchResponseData data) {
+    private ShareFetchResponse(ShareFetchResponseData data) {
         super(ApiKeys.SHARE_FETCH);
         this.data = data;
     }
@@ -114,6 +114,13 @@ public class ShareFetchResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
+    /**
+     * Creates a {@link org.apache.kafka.common.requests.ShareFetchResponse} from the given byte buffer.
+     * Unlike {@link org.apache.kafka.common.requests.ShareFetchResponse#of(ShareFetchResponseData)}, this method doesn't convert
+     * null records to {@link org.apache.kafka.common.record.MemoryRecords#EMPTY}.
+     *
+     * <p><strong>This method should only be used in client-side.</strong></p>
+     */
     public static ShareFetchResponse parse(ByteBuffer buffer, short version) {
         return new ShareFetchResponse(
                 new ShareFetchResponseData(new ByteBufferAccessor(buffer), version)
@@ -154,6 +161,23 @@ public class ShareFetchResponse extends AbstractResponse {
      */
     public static int recordsSize(ShareFetchResponseData.PartitionData partition) {
         return partition.records() == null ? 0 : partition.records().sizeInBytes();
+    }
+
+    /**
+     * Creates a {@link org.apache.kafka.common.requests.ShareFetchResponse} from the given data.
+     * This method converts null records to {@link org.apache.kafka.common.record.MemoryRecords#EMPTY}
+     * to ensure consistent record representation in the response.
+     *
+     * <p><strong>This method should only be used in server-side.</strong></p>
+     */
+    public static ShareFetchResponse of(ShareFetchResponseData data) {
+        for (ShareFetchResponseData.ShareFetchableTopicResponse response : data.responses()) {
+            for (ShareFetchResponseData.PartitionData partition : response.partitions()) {
+                if (partition.records() == null)
+                    partition.setRecords(MemoryRecords.EMPTY);
+            }
+        }
+        return new ShareFetchResponse(data);
     }
 
     public static ShareFetchResponse of(Errors error,

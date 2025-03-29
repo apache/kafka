@@ -170,7 +170,7 @@ public class ShareSessionHandlerTest {
         assertListEquals(expectedToSend1, reqFetchList(requestData1, topicNames));
         assertEquals(memberId.toString(), requestData1.memberId());
 
-        ShareFetchResponse resp = new ShareFetchResponse(
+        ShareFetchResponse resp = ShareFetchResponse.of(
                 new ShareFetchResponseData()
                         .setErrorCode(Errors.NONE.code())
                         .setThrottleTimeMs(0)
@@ -194,7 +194,7 @@ public class ShareSessionHandlerTest {
         expectedToSend2.add(new TopicIdPartition(barId, 0, "bar"));
         assertListEquals(expectedToSend2, reqFetchList(requestData2, topicNames));
 
-        ShareFetchResponse resp2 = new ShareFetchResponse(
+        ShareFetchResponse resp2 = ShareFetchResponse.of(
                 new ShareFetchResponseData()
                         .setErrorCode(Errors.NONE.code())
                         .setThrottleTimeMs(0)
@@ -203,7 +203,7 @@ public class ShareSessionHandlerTest {
         handler.handleResponse(resp2, ApiKeys.SHARE_FETCH.latestVersion(true));
 
         // A top-level error code will reset the session epoch
-        ShareFetchResponse resp3 = new ShareFetchResponse(
+        ShareFetchResponse resp3 = ShareFetchResponse.of(
                 new ShareFetchResponseData()
                         .setErrorCode(Errors.INVALID_SHARE_SESSION_EPOCH.code()));
         handler.handleResponse(resp3, ApiKeys.SHARE_FETCH.latestVersion(true));
@@ -251,7 +251,7 @@ public class ShareSessionHandlerTest {
         assertListEquals(expectedToSend1, reqFetchList(requestData1, topicNames));
         assertEquals(memberId.toString(), requestData1.memberId());
 
-        ShareFetchResponse resp = new ShareFetchResponse(
+        ShareFetchResponse resp = ShareFetchResponse.of(
                 new ShareFetchResponseData()
                         .setErrorCode(Errors.NONE.code())
                         .setThrottleTimeMs(0)
@@ -275,7 +275,7 @@ public class ShareSessionHandlerTest {
         assertListEquals(expectedToForget2, reqForgetList(requestData2, topicNames));
 
         // A top-level error code will reset the session epoch
-        ShareFetchResponse resp2 = new ShareFetchResponse(
+        ShareFetchResponse resp2 = ShareFetchResponse.of(
                 new ShareFetchResponseData()
                         .setErrorCode(Errors.INVALID_SHARE_SESSION_EPOCH.code()));
         handler.handleResponse(resp2, ApiKeys.SHARE_FETCH.latestVersion(true));
@@ -309,7 +309,7 @@ public class ShareSessionHandlerTest {
         expectedToSend1.add(new TopicIdPartition(topicId1, 0, "foo"));
         assertListEquals(expectedToSend1, reqFetchList(requestData1, topicNames));
 
-        ShareFetchResponse resp = new ShareFetchResponse(
+        ShareFetchResponse resp = ShareFetchResponse.of(
                 new ShareFetchResponseData()
                         .setErrorCode(Errors.NONE.code())
                         .setThrottleTimeMs(0)
@@ -354,7 +354,7 @@ public class ShareSessionHandlerTest {
         expectedToSend1.add(new TopicIdPartition(topicId, 0, "foo"));
         assertListEquals(expectedToSend1, reqFetchList(requestData1, topicNames));
 
-        ShareFetchResponse resp = new ShareFetchResponse(
+        ShareFetchResponse resp = ShareFetchResponse.of(
                 new ShareFetchResponseData()
                         .setErrorCode(Errors.NONE.code())
                         .setThrottleTimeMs(0)
@@ -390,7 +390,7 @@ public class ShareSessionHandlerTest {
         expectedToSend1.add(new TopicIdPartition(topicId, 0, "foo"));
         assertListEquals(expectedToSend1, reqFetchList(requestData1, topicNames));
 
-        ShareFetchResponse resp = new ShareFetchResponse(
+        ShareFetchResponse resp = ShareFetchResponse.of(
             new ShareFetchResponseData()
                 .setErrorCode(Errors.NONE.code())
                 .setThrottleTimeMs(0)
@@ -424,7 +424,7 @@ public class ShareSessionHandlerTest {
         expectedToSend1.add(new TopicIdPartition(topicId, 0, "foo"));
         assertListEquals(expectedToSend1, reqFetchList(requestData1, topicNames));
 
-        ShareFetchResponse resp = new ShareFetchResponse(
+        ShareFetchResponse resp = ShareFetchResponse.of(
                 new ShareFetchResponseData()
                         .setErrorCode(Errors.NONE.code())
                         .setThrottleTimeMs(0)
@@ -436,7 +436,7 @@ public class ShareSessionHandlerTest {
         ShareFetchRequestData requestData2 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
         assertTrue(handler.sessionPartitionMap().isEmpty());
         assertTrue(requestData2.topics().isEmpty());
-        ShareFetchResponse resp2 = new ShareFetchResponse(
+        ShareFetchResponse resp2 = ShareFetchResponse.of(
                 new ShareFetchResponseData()
                         .setErrorCode(Errors.NONE.code())
                         .setThrottleTimeMs(0)
