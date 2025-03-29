@@ -20,6 +20,8 @@ import org.apache.kafka.common.record.Records;
 
 /**
  * Metadata for the records fetched from log, including the records itself
+ *
+ * The class is not converted to a Java record because records are mutable, affecting equals behavior
  */
 public class LogFetchInfo {
 
