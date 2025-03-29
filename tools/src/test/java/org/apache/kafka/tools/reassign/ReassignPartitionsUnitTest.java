@@ -77,6 +77,7 @@ import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.modifyTo
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.parseExecuteAssignmentArgs;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.parseGenerateAssignmentArgs;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.partitionReassignmentStatesToString;
+import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.rebalanceAssignment;
 import static org.apache.kafka.tools.reassign.ReassignPartitionsCommand.replicaMoveStatesToString;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -763,6 +764,23 @@ public class ReassignPartitionsUnitTest {
             addTopics(adminClient);
             assertStartsWith("Unexpected character",
                 assertThrows(AdminOperationException.class, () -> executeAssignment(adminClient, false, "{invalid_json", -1L, -1L, 10000L, Time.SYSTEM, false)).getMessage());
+        }
+    }
+
+    @Test
+    public void testrebalanceAssignment() throws Exception {
+        try (MockAdminClient adminClient = new MockAdminClient.Builder().
+            brokers(asList(
+                new Node(0, "localhost", 9092, "rack0"),
+                new Node(1, "localhost", 9093, "rack0"),
+                new Node(2, "localhost", 9094, null),
+                new Node(3, "localhost", 9095, "rack1"),
+                new Node(4, "localhost", 9096, "rack1"),
+                new Node(5, "localhost", 9097, "rack2"))).
+            build()) {
+            addTopics(adminClient);
+            Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartition, List<Integer>>> proposedCurrent = rebalanceAssignment(adminClient, "foo", "1,2,3", true);
+            assertEquals("{foo-0=[3, 1, 2], foo-1=[1, 3, 2]}={foo-0=[0, 1, 2], foo-1=[1, 2, 3]}", proposedCurrent.toString());
         }
     }
 }
