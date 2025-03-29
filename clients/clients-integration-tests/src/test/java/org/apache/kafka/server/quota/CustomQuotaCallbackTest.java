@@ -26,10 +26,7 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.common.test.junit.ClusterTestExtensions;
 import org.apache.kafka.server.config.QuotaConfig;
-
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.List;
 import java.util.Map;
@@ -44,7 +41,6 @@ import java.util.concurrent.atomic.AtomicInteger;
         @ClusterConfigProperty(id = 3002, key = QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, value = "org.apache.kafka.server.quota.CustomQuotaCallbackTest$CustomQuotaCallback"),
     }
 )
-@ExtendWith(ClusterTestExtensions.class)
 public class CustomQuotaCallbackTest {
 
     private final ClusterInstance cluster;
