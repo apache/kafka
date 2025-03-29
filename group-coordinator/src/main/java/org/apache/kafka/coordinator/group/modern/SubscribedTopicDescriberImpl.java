@@ -20,10 +20,11 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 /**
  * The subscribed topic metadata class is used by the {@link PartitionAssignor} to obtain
@@ -35,9 +36,15 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
      * object, which contains topic and partition metadata.
      */
     private final Map<Uuid, TopicMetadata> topicMetadata;
+    private final Map<Uuid, Set<Integer>> topicPartitionAllowedMap;
 
     public SubscribedTopicDescriberImpl(Map<Uuid, TopicMetadata> topicMetadata) {
+        this(topicMetadata, null);
+    }
+
+    public SubscribedTopicDescriberImpl(Map<Uuid, TopicMetadata> topicMetadata, Map<Uuid, Set<Integer>> topicPartitionAllowedMap) {
         this.topicMetadata = Objects.requireNonNull(topicMetadata);
+        this.topicPartitionAllowedMap = topicPartitionAllowedMap;
     }
 
     /**
@@ -72,7 +79,30 @@ public class SubscribedTopicDescriberImpl implements SubscribedTopicDescriber {
      */
     @Override
     public Set<String> racksForPartition(Uuid topicId, int partition) {
-        return Collections.emptySet();
+        return Set.of();
+    }
+
+    /**
+     * Returns a set of assignable partitions from the topic metadata.
+     * If the allowed partition map is null, all the partitions in the corresponding
+     * topic metadata are returned for the argument topic id. If allowed map is empty,
+     * empty set is returned.
+     *
+     * @param topicId The uuid of the topic
+     * @return Set of integers if assignable partitions available, empty otherwise.
+     */
+    @Override
+    public Set<Integer> assignablePartitions(Uuid topicId) {
+        TopicMetadata topic = this.topicMetadata.get(topicId);
+        if (topic == null) {
+            return Set.of();
+        }
+
+        if (topicPartitionAllowedMap == null) {
+            return IntStream.range(0, topic.numPartitions()).boxed().collect(Collectors.toUnmodifiableSet());
+        }
+
+        return topicPartitionAllowedMap.getOrDefault(topicId, Set.of());
     }
 
     @Override

@@ -20,10 +20,10 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.kstream.KTable;
+import org.apache.kafka.streams.kstream.internals.graph.GracePeriodGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
+import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorParameters;
-import org.apache.kafka.streams.kstream.internals.graph.StatefulProcessorNode;
-import org.apache.kafka.streams.processor.internals.StoreFactory;
 
 import java.util.Collections;
 import java.util.Set;
@@ -66,24 +66,70 @@ class GroupedStreamAggregateBuilder<K, V> {
         this.userProvidedRepartitionTopicName = groupedInternal.name();
     }
 
-    <KR, VR> KTable<KR, VR> build(final NamedInternal functionName,
-                                  final StoreFactory storeFactory,
-                                  final KStreamAggProcessorSupplier<K, V, KR, VR> aggregateSupplier,
-                                  final String queryableStoreName,
-                                  final Serde<KR> keySerde,
-                                  final Serde<VR> valueSerde,
-                                  final boolean isOutputVersioned) {
-        assert queryableStoreName == null || queryableStoreName.equals(storeFactory.storeName());
-
+    <KR, VR> KTable<KR, VR> buildNonWindowed(final NamedInternal functionName,
+                                             final String storeName,
+                                             final KStreamAggProcessorSupplier<K, V, KR, VR> aggregateSupplier,
+                                             final String queryableStoreName,
+                                             final Serde<KR> keySerde,
+                                             final Serde<VR> valueSerde,
+                                             final boolean isOutputVersioned) {
         final String aggFunctionName = functionName.name();
+
+        final ProcessorGraphNode<K, V> aggProcessorNode =
+            new ProcessorGraphNode<>(
+                aggFunctionName,
+                new ProcessorParameters<>(aggregateSupplier, aggFunctionName)
+            );
+
+        aggProcessorNode.setOutputVersioned(isOutputVersioned);
+
+        return build(aggFunctionName, storeName, aggregateSupplier, aggProcessorNode, queryableStoreName, keySerde, valueSerde);
+    }
+
+    <KR, VR> KTable<KR, VR> buildWindowed(final NamedInternal functionName,
+                                          final String storeName,
+                                          final long gracePeriod,
+                                          final KStreamAggProcessorSupplier<K, V, KR, VR> aggregateSupplier,
+                                          final String queryableStoreName,
+                                          final Serde<KR> keySerde,
+                                          final Serde<VR> valueSerde,
+                                          final boolean isOutputVersioned) {
+        final String aggFunctionName = functionName.name();
+
+        final GracePeriodGraphNode<K, V> gracePeriodAggProcessorNode =
+            new GracePeriodGraphNode<>(
+                aggFunctionName,
+                new ProcessorParameters<>(aggregateSupplier, aggFunctionName),
+                gracePeriod
+            );
+
+        gracePeriodAggProcessorNode.setOutputVersioned(isOutputVersioned);
+
+        return build(aggFunctionName, storeName, aggregateSupplier, gracePeriodAggProcessorNode, queryableStoreName, keySerde, valueSerde);
+    }
+
+    private <KR, VR> KTable<KR, VR> build(final String aggFunctionName,
+                                          final String storeName,
+                                          final KStreamAggProcessorSupplier<K, V, KR, VR> aggregateSupplier,
+                                          final ProcessorGraphNode<K, V> aggProcessorNode,
+                                          final String queryableStoreName,
+                                          final Serde<KR> keySerde,
+                                          final Serde<VR> valueSerde) {
+        if (!(queryableStoreName == null || queryableStoreName.equals(storeName))) {
+            throw new IllegalStateException(String.format("queryableStoreName should be null or equal to storeName"
+                                                              + " but got storeName='%s' and queryableStoreName='%s'",
+                                                          storeName, queryableStoreName));
+        }
 
         String sourceName = this.name;
         GraphNode parentNode = graphNode;
 
         if (repartitionRequired) {
             final OptimizableRepartitionNodeBuilder<K, V> repartitionNodeBuilder = optimizableRepartitionNodeBuilder();
-            final String repartitionTopicPrefix = userProvidedRepartitionTopicName != null ? userProvidedRepartitionTopicName : storeFactory.storeName();
-            sourceName = createRepartitionSource(repartitionTopicPrefix, repartitionNodeBuilder);
+
+            final String repartitionTopicPrefix = userProvidedRepartitionTopicName != null ? userProvidedRepartitionTopicName : storeName;
+
+            sourceName = createRepartitionSource(repartitionTopicPrefix, repartitionNodeBuilder, userProvidedRepartitionTopicName != null || queryableStoreName != null);
 
             // First time through we need to create a repartition node.
             // Any subsequent calls to GroupedStreamAggregateBuilder#build we check if
@@ -97,15 +143,7 @@ class GroupedStreamAggregateBuilder<K, V> {
             parentNode = repartitionNode;
         }
 
-        final StatefulProcessorNode<K, V> statefulProcessorNode =
-            new StatefulProcessorNode<>(
-                aggFunctionName,
-                new ProcessorParameters<>(aggregateSupplier, aggFunctionName),
-                new String[] {storeFactory.storeName()}
-            );
-        statefulProcessorNode.setOutputVersioned(isOutputVersioned);
-
-        builder.addGraphNode(parentNode, statefulProcessorNode);
+        builder.addGraphNode(parentNode, aggProcessorNode);
 
         return new KTableImpl<>(aggFunctionName,
                                 keySerde,
@@ -113,23 +151,24 @@ class GroupedStreamAggregateBuilder<K, V> {
                                 sourceName.equals(this.name) ? subTopologySourceNodes : Collections.singleton(sourceName),
                                 queryableStoreName,
                                 aggregateSupplier,
-                                statefulProcessorNode,
+                                aggProcessorNode,
                                 builder);
-
     }
 
     /**
      * @return the new sourceName of the repartitioned source
      */
     private String createRepartitionSource(final String repartitionTopicNamePrefix,
-                                           final OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder) {
+                                           final OptimizableRepartitionNodeBuilder<K, V> optimizableRepartitionNodeBuilder,
+                                           final boolean isRepartitionTopicNameProvidedByUser) {
 
         return KStreamImpl.createRepartitionedSource(builder,
                                                      keySerde,
                                                      valueSerde,
                                                      repartitionTopicNamePrefix,
                                                      null,
-                                                     optimizableRepartitionNodeBuilder);
+                                                     optimizableRepartitionNodeBuilder,
+                                                     isRepartitionTopicNameProvidedByUser);
 
     }
 }

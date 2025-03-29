@@ -123,7 +123,6 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             return new MetadataLoader(
                 time,
                 logContext,
-                nodeId,
                 threadNamePrefix,
                 faultHandler,
                 metrics,
@@ -194,7 +193,6 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     private MetadataLoader(
         Time time,
         LogContext logContext,
-        int nodeId,
         String threadNamePrefix,
         FaultHandler faultHandler,
         MetadataLoaderMetrics metrics,
@@ -293,8 +291,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 setImage(MetadataImage.EMPTY).
                 build();
         ImageReWriter writer = new ImageReWriter(delta);
-        image.write(writer, new ImageWriterOptions.Builder().
-                setMetadataVersion(image.features().metadataVersion()).
+        image.write(writer, new ImageWriterOptions.Builder(image.features().metadataVersionOrThrow()).
+                setEligibleLeaderReplicasEnabled(image.features().isElrEnabled()).
                 build());
         // ImageReWriter#close invokes finishSnapshot, so we don't need to invoke it here.
         SnapshotManifest manifest = new SnapshotManifest(
@@ -347,7 +345,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             }
         }
         metrics.updateLastAppliedImageProvenance(image.provenance());
-        metrics.setCurrentMetadataVersion(image.features().metadataVersion());
+        metrics.setCurrentMetadataVersion(image.features().metadataVersionOrThrow());
         if (!uninitializedPublishers.isEmpty()) {
             scheduleInitializeNewPublishers(0);
         }

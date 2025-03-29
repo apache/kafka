@@ -129,8 +129,8 @@ class ConsumerTask implements Runnable, Closeable {
         log.info("Exited from consumer task thread");
     }
 
-    // public for testing
-    public void ingestRecords() {
+    // visible for testing
+    void ingestRecords() {
         try {
             if (hasAssignmentChanged) {
                 maybeWaitForPartitionAssignments();
@@ -153,8 +153,8 @@ class ConsumerTask implements Runnable, Closeable {
         }
     }
 
-    // public for testing
-    public void closeConsumer() {
+    // visible for testing
+    void closeConsumer() {
         try {
             consumer.close(Duration.ofSeconds(30));
         } catch (final Exception e) {
@@ -298,11 +298,11 @@ class ConsumerTask implements Runnable, Closeable {
         log.info("Unassigned user-topic-partitions: {}", unassignedPartitions.size());
     }
 
-    public void addAssignmentsForPartitions(final Set<TopicIdPartition> partitions) {
+    void addAssignmentsForPartitions(final Set<TopicIdPartition> partitions) {
         updateAssignments(Objects.requireNonNull(partitions), Collections.emptySet());
     }
 
-    public void removeAssignmentsForPartitions(final Set<TopicIdPartition> partitions) {
+    void removeAssignmentsForPartitions(final Set<TopicIdPartition> partitions) {
         updateAssignments(Collections.emptySet(), Objects.requireNonNull(partitions));
     }
 
@@ -325,15 +325,15 @@ class ConsumerTask implements Runnable, Closeable {
         }
     }
 
-    public Optional<Long> readOffsetForMetadataPartition(final int partition) {
+    Optional<Long> readOffsetForMetadataPartition(final int partition) {
         return Optional.ofNullable(readOffsetsByMetadataPartition.get(partition));
     }
 
-    public boolean isMetadataPartitionAssigned(final int partition) {
+    boolean isMetadataPartitionAssigned(final int partition) {
         return assignedMetadataPartitions.contains(partition);
     }
 
-    public boolean isUserPartitionAssigned(final TopicIdPartition partition) {
+    boolean isUserPartitionAssigned(final TopicIdPartition partition) {
         final UserTopicIdPartition utp = assignedUserTopicIdPartitions.get(partition);
         return utp != null && utp.isAssigned;
     }
@@ -351,7 +351,7 @@ class ConsumerTask implements Runnable, Closeable {
         }
     }
 
-    public Set<Integer> metadataPartitionsAssigned() {
+    Set<Integer> metadataPartitionsAssigned() {
         return Collections.unmodifiableSet(assignedMetadataPartitions);
     }
 

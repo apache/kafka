@@ -151,8 +151,7 @@ streams.start();</code></pre>
         For more information, see <a class="reference internal" href="../architecture.html#streams_architecture_tasks"><span class="std std-ref">Stream Partitions and Tasks</span></a> and <a class="reference internal" href="../architecture.html#streams_architecture_threads"><span class="std std-ref">Threading Model</span></a>.</p>
       <p>To catch any unexpected exceptions, you can set an <code class="docutils literal"><span class="pre">java.lang.Thread.UncaughtExceptionHandler</span></code> before you start the
         application.  This handler is called whenever a stream thread is terminated by an unexpected exception:</p>
-        <pre class="line-numbers"><code class="language-java">// Java 8+, using lambda expressions
-streams.setUncaughtExceptionHandler((Thread thread, Throwable throwable) -&gt; {
+        <pre class="line-numbers"><code class="language-java">streams.setUncaughtExceptionHandler((Thread thread, Throwable throwable) -&gt; {
   // here you should examine the throwable/exception and perform an appropriate action!
 });
 </code></pre>
@@ -161,7 +160,7 @@ streams.setUncaughtExceptionHandler((Thread thread, Throwable throwable) -&gt; {
 streams.close();</code></pre>
       <p>To allow your application to gracefully shutdown in response to SIGTERM, it is recommended that you add a shutdown hook
         and call <code class="docutils literal"><span class="pre">KafkaStreams#close</span></code>.</p>
-      <p class="first">Here is a shutdown hook example in Java 8+:</p>
+      <p class="first">Here is a shutdown hook example in Java:</p>
             <pre class="line-numbers"><code class="language-java">// Add shutdown hook to stop the Kafka Streams threads.
 // You can optionally provide a timeout to `close`.
 Runtime.getRuntime().addShutdownHook(new Thread(streams::close));</code></pre>

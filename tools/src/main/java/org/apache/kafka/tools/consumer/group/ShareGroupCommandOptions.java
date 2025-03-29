@@ -37,7 +37,7 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
 
     private static final String BOOTSTRAP_SERVER_DOC = "REQUIRED: The server(s) to connect to.";
     private static final String GROUP_DOC = "The share group we wish to act on.";
-    private static final String TOPIC_DOC = "The topic whose share group information should be deleted or topic whose should be included in the reset offset process. " +
+    private static final String TOPIC_DOC = "The topic whose offset information should be deleted or included in the reset offset process. " +
         "When resetting offsets, partitions can be specified using this format: 'topic1:0,1,2', where 0,1,2 are the partitions to be included.";
     private static final String ALL_TOPICS_DOC = "Consider all topics assigned to a share group in the 'reset-offsets' process.";
     private static final String LIST_DOC = "List all share groups.";
@@ -64,7 +64,7 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
         "When specified with '--list', it displays the state of all groups. It can also be used to list groups with specific states. " +
         "Valid values are Empty, Stable and Dead.";
     private static final String VERBOSE_DOC = "Provide additional information, if any, when describing the group. This option may be used " +
-        "with the '--describe --state' and '--describe --members' options only.";
+        "with the '--describe' option only.";
     private static final String DELETE_OFFSETS_DOC = "Delete offsets of share group. Supports one share group at the time, and multiple topics.";
 
     final OptionSpec<String> bootstrapServerOpt;
@@ -118,7 +118,7 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
             .withRequiredArg()
             .describedAs("timeout (ms)")
             .ofType(Long.class)
-            .defaultsTo(5000L);
+            .defaultsTo(30000L);
         commandConfigOpt = parser.accepts("command-config", COMMAND_CONFIG_DOC)
             .withRequiredArg()
             .describedAs("command config property file")
@@ -142,8 +142,7 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
             .withOptionalArg()
             .ofType(String.class);
         verboseOpt = parser.accepts("verbose", VERBOSE_DOC)
-            .availableIf(membersOpt, stateOpt)
-            .availableUnless(listOpt);
+            .availableIf(describeOpt);
 
         allGroupSelectionScopeOpts = new HashSet<>(Arrays.asList(groupOpt, allGroupsOpt));
         allShareGroupLevelOpts = new HashSet<>(Arrays.asList(listOpt, describeOpt, deleteOpt, deleteOffsetsOpt, resetOffsetsOpt));
@@ -174,12 +173,15 @@ public class ShareGroupCommandOptions extends CommandDefaultOptions {
         }
 
         if (options.has(deleteOpt)) {
-            if (!options.has(groupOpt))
+            if (!options.has(groupOpt) && !options.has(allGroupsOpt))
                 CommandLineUtils.printUsageAndExit(parser,
-                    "Option " + deleteOpt + " takes the option: " + groupOpt);
+                    String.format("Option %s takes the options %s or %s", deleteOpt, groupOpt, allGroupsOpt));
+            if (options.has(allGroupsOpt) && options.has(groupOpt))
+                CommandLineUtils.printUsageAndExit(parser,
+                    String.format("Option %s takes either %s or %s, not both.", deleteOpt, groupOpt, allGroupsOpt));
             if (options.has(topicOpt))
-                CommandLineUtils.printUsageAndExit(parser, "The consumer does not support topic-specific offset " +
-                    "deletion from a share group.");
+                CommandLineUtils.printUsageAndExit(parser,
+                    "Option " + deleteOpt + " does not take the option: " + topicOpt);
         }
 
         if (options.has(deleteOffsetsOpt)) {

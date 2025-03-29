@@ -885,7 +885,6 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
 
     @Override
     protected void maybeUpdateGroupState() {
-        ConsumerGroupState previousState = state.get();
         ConsumerGroupState newState = STABLE;
         if (members.isEmpty()) {
             newState = EMPTY;
@@ -901,7 +900,6 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         }
 
         state.set(newState);
-        metrics.onConsumerGroupStateTransition(previousState, newState);
     }
 
     /**
@@ -1153,7 +1151,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
             // We should accept the empty assignment.
             Map<Uuid, Set<Integer>> assignedPartitions;
             if (Arrays.equals(classicGroupMember.assignment(), EMPTY_ASSIGNMENT)) {
-                assignedPartitions = Collections.emptyMap();
+                assignedPartitions = Map.of();
             } else {
                 ConsumerProtocolAssignment assignment = ConsumerProtocol.deserializeConsumerProtocolAssignment(
                     ByteBuffer.wrap(classicGroupMember.assignment())
@@ -1255,12 +1253,27 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
     /**
      * Checks whether all the members use the classic protocol except the given member.
      *
-     * @param memberId The member to remove.
+     * @param member The member to remove.
      * @return A boolean indicating whether all the members use the classic protocol.
      */
-    public boolean allMembersUseClassicProtocolExcept(String memberId) {
-        return numClassicProtocolMembers() == members().size() - 1 &&
-            !getOrMaybeCreateMember(memberId, false).useClassicProtocol();
+    public boolean allMembersUseClassicProtocolExcept(ConsumerGroupMember member) {
+        return numClassicProtocolMembers() == members().size() - 1 && !member.useClassicProtocol();
+    }
+
+    /**
+     * Checks whether all the members use the classic protocol except the given members.
+     *
+     * @param members The members to remove.
+     * @return A boolean indicating whether all the members use the classic protocol.
+     */
+    public boolean allMembersUseClassicProtocolExcept(Set<ConsumerGroupMember> members) {
+        int numExcludedClassicProtocolMembers = 0;
+        for (ConsumerGroupMember member : members) {
+            if (member.useClassicProtocol()) {
+                numExcludedClassicProtocolMembers++;
+            }
+        }
+        return numClassicProtocolMembers() - numExcludedClassicProtocolMembers == members().size() - members.size();
     }
 
     /**
@@ -1274,7 +1287,7 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         if (member.state() == MemberState.UNRELEASED_PARTITIONS) {
             for (Map.Entry<Uuid, Set<Integer>> entry : targetAssignment().get(member.memberId()).partitions().entrySet()) {
                 Uuid topicId = entry.getKey();
-                Set<Integer> assignedPartitions = member.assignedPartitions().getOrDefault(topicId, Collections.emptySet());
+                Set<Integer> assignedPartitions = member.assignedPartitions().getOrDefault(topicId, Set.of());
 
                 for (int partition : entry.getValue()) {
                     if (!assignedPartitions.contains(partition) && currentPartitionEpoch(topicId, partition) != -1) {

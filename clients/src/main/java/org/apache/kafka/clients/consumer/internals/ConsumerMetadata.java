@@ -94,6 +94,6 @@ public class ConsumerMetadata extends Metadata {
         if (isInternal && !includeInternalTopics)
             return false;
 
-        return subscription.matchesSubscribedPattern(topic);
+        return subscription.matchesSubscribedPattern(topic) || subscription.isAssignedFromRe2j(topic);
     }
 }

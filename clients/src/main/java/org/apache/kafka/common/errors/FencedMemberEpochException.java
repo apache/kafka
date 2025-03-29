@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.common.errors;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
-@InterfaceStability.Evolving
 public class FencedMemberEpochException extends ApiException {
     public FencedMemberEpochException(String message) {
         super(message);

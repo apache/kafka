@@ -32,36 +32,17 @@ import java.util.regex.Pattern;
  * We consider a version newer than another if it is lower in the enum list (to avoid depending on lexicographic order)
  * <br>
  * Since the api protocol may change more than once within the same release and to facilitate people deploying code from
- * trunk, we have the concept of internal versions (first introduced during the 0.10.0 development cycle). For example,
- * the first time we introduce a version change in a release, say 0.10.0, we will add a config value "0.10.0-IV0" and a
- * corresponding enum constant IBP_0_10_0-IV0. We will also add a config value "0.10.0" that will be mapped to the
- * latest internal version object, which is IBP_0_10_0-IV0. When we change the protocol a second time while developing
- * 0.10.0, we will add a new config value "0.10.0-IV1" and a corresponding enum constant IBP_0_10_0-IV1. We will change
- * the config value "0.10.0" to map to the latest internal version IBP_0_10_0-IV1. The config value of
- * "0.10.0-IV0" is still mapped to IBP_0_10_0-IV0. This way, if people are deploying from trunk, they can use
- * "0.10.0-IV0" and "0.10.0-IV1" to upgrade one internal version at a time. For most people who just want to use
- * released version, they can use "0.10.0" when upgrading to the 0.10.0 release.
+ * trunk, we have the concept of internal versions (first introduced during the 1.0 development cycle). For example,
+ * the first time we introduce a version change in a release, say 1.0, we will add a config value "1.0-IV0" and a
+ * corresponding enum constant IBP_1_0-IV0. We will also add a config value "1.0" that will be mapped to the
+ * latest internal version object, which is IBP_1_0-IV0. When we change the protocol a second time while developing
+ * 1.0, we will add a new config value "1.0-IV1" and a corresponding enum constant IBP_1_0-IV1. We will change
+ * the config value "1.0" to map to the latest internal version IBP_1_0-IV1. The config value of
+ * "1.0-IV0" is still mapped to IBP_1_0-IV0. This way, if people are deploying from trunk, they can use
+ * "1.0-IV0" and "1.0-IV1" to upgrade one internal version at a time. For most people who just want to use
+ * released version, they can use "1.0" when upgrading to the 1.0 release.
  */
 public enum MetadataVersion {
-
-    // Introduce ListOffsets V7 which supports listing offsets by max timestamp (KIP-734)
-    // Assume message format version is 3.0 (KIP-724)
-    IBP_3_0_IV1(1, "3.0", "IV1", true),
-
-    // Adds topic IDs to Fetch requests/responses (KIP-516)
-    IBP_3_1_IV0(2, "3.1", "IV0", false),
-
-    // Support for leader recovery for unclean leader election (KIP-704)
-    IBP_3_2_IV0(3, "3.2", "IV0", true),
-
-    // Support for metadata.version feature flag and Removes min_version_level from the finalized version range that is written to ZooKeeper (KIP-778)
-    IBP_3_3_IV0(4, "3.3", "IV0", false),
-
-    // Support NoopRecord for the cluster metadata log (KIP-835)
-    IBP_3_3_IV1(5, "3.3", "IV1", true),
-
-    // In KRaft mode, use BrokerRegistrationChangeRecord instead of UnfenceBrokerRecord and FenceBrokerRecord.
-    IBP_3_3_IV2(6, "3.3", "IV2", true),
 
     // Adds InControlledShutdown state to RegisterBrokerRecord and BrokerRegistrationChangeRecord (KIP-841).
     IBP_3_3_IV3(7, "3.3", "IV3", true),
@@ -113,20 +94,25 @@ public enum MetadataVersion {
     // Bootstrap metadata version for version 1 of the GroupVersion feature (KIP-848).
     IBP_4_0_IV0(22, "4.0", "IV0", false),
 
-    //
-    // NOTE: MetadataVersions after this point are unstable and may be changed.
-    // If users attempt to use an unstable MetadataVersion, they will get an error.
-    // Please move this comment when updating the LATEST_PRODUCTION constant.
-    //
-
-    // Add ELR related supports (KIP-966).
+    // Add ELR related metadata records (KIP-966). Note, ELR is for preview only in 4.0.
+    // PartitionRecord and PartitionChangeRecord are updated.
+    // ClearElrRecord is added.
     IBP_4_0_IV1(23, "4.0", "IV1", true),
 
     // Bootstrap metadata version for transaction versions 1 and 2 (KIP-890)
     IBP_4_0_IV2(24, "4.0", "IV2", false),
 
     // Enables async remote LIST_OFFSETS support (KIP-1075)
-    IBP_4_0_IV3(25, "4.0", "IV3", false);
+    IBP_4_0_IV3(25, "4.0", "IV3", false),
+
+    //
+    // NOTE: MetadataVersions after this point are unstable and may be changed.
+    // If users attempt to use an unstable MetadataVersion, they will get an error.
+    // Please move this comment when updating the LATEST_PRODUCTION constant.
+    //
+
+    // Enables ELR by default for new clusters (KIP-966).
+    IBP_4_1_IV0(26, "4.1", "IV0", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
@@ -134,15 +120,9 @@ public enum MetadataVersion {
     public static final String FEATURE_NAME = "metadata.version";
 
     /**
-     * The first version we currently support in KRaft.
+     * Minimum supported version.
      */
-    public static final MetadataVersion MINIMUM_KRAFT_VERSION = IBP_3_0_IV1;
-
-    /**
-     * The first version we currently support in the bootstrap metadata. We chose 3.3IV0 since it
-     * is the first version that supports storing the metadata.version in the log.
-     */
-    public static final MetadataVersion MINIMUM_BOOTSTRAP_VERSION = IBP_3_3_IV0;
+    public static final MetadataVersion MINIMUM_VERSION = IBP_3_3_IV3;
 
     /**
      * The latest production-ready MetadataVersion. This is the latest version that is stable
@@ -152,12 +132,12 @@ public enum MetadataVersion {
      * <strong>Think carefully before you update this value. ONCE A METADATA VERSION IS PRODUCTION,
      * IT CANNOT BE CHANGED.</strong>
      */
-    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_0_IV0;
+    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_0_IV3;
     // If you change the value above please also update
     // LATEST_STABLE_METADATA_VERSION version in tests/kafkatest/version.py
 
     /**
-     * An array containing all of the MetadataVersion entries.
+     * An array containing all the MetadataVersion entries.
      *
      * This is essentially a cached copy of MetadataVersion.values. Unlike that function, it doesn't
      * allocate a new array each time.
@@ -168,10 +148,6 @@ public enum MetadataVersion {
     private final String release;
     private final String ibpVersion;
     private final boolean didMetadataChange;
-
-    MetadataVersion(int featureLevel, String release, String subVersion) {
-        this(featureLevel, release, subVersion, true);
-    }
 
     MetadataVersion(int featureLevel, String release, String subVersion, boolean didMetadataChange) {
         this.featureLevel = (short) featureLevel;
@@ -190,18 +166,6 @@ public enum MetadataVersion {
 
     public short featureLevel() {
         return featureLevel;
-    }
-
-    public boolean isLeaderRecoverySupported() {
-        return this.isAtLeast(IBP_3_2_IV0);
-    }
-
-    public boolean isNoOpRecordSupported() {
-        return this.isAtLeast(IBP_3_3_IV1);
-    }
-
-    public boolean isApiForwardingEnabled() {
-        return this.isAtLeast(IBP_3_4_IV0);
     }
 
     public boolean isScramSupported() {
@@ -228,18 +192,6 @@ public enum MetadataVersion {
         return this.isAtLeast(IBP_4_0_IV1);
     }
 
-    public boolean isKRaftSupported() {
-        return this.featureLevel > 0;
-    }
-
-    public boolean isBrokerRegistrationChangeRecordSupported() {
-        return this.isAtLeast(IBP_3_3_IV2);
-    }
-
-    public boolean isInControlledShutdownStateSupported() {
-        return this.isAtLeast(IBP_3_3_IV3);
-    }
-
     public boolean isMigrationSupported() {
         return this.isAtLeast(MetadataVersion.IBP_3_4_IV0);
     }
@@ -251,10 +203,8 @@ public enum MetadataVersion {
         } else if (isMigrationSupported()) {
             // new isMigrationZkBroker field
             return (short) 2;
-        } else if (isInControlledShutdownStateSupported()) {
-            return (short) 1;
         } else {
-            return (short) 0;
+            return (short) 1;
         }
     }
 
@@ -300,10 +250,9 @@ public enum MetadataVersion {
             return 15;
         } else if (this.isAtLeast(IBP_3_5_IV0)) {
             return 14;
-        } else if (this.isAtLeast(IBP_3_1_IV0)) {
+        } else {
             return 13;
         }
-        return 12;
     }
 
     public short listOffsetRequestVersion() {
@@ -361,14 +310,14 @@ public enum MetadataVersion {
     }
 
     /**
-     * Return an `MetadataVersion` instance for `versionString`, which can be in a variety of formats (e.g. "0.8.0", "0.8.0.x",
-     * "0.10.0", "0.10.0-IV1"). `IllegalArgumentException` is thrown if `versionString` cannot be mapped to an `MetadataVersion`.
-     * Note that 'misconfigured' values such as "1.0.1" will be parsed to `IBP_1_0_IV0` as we ignore anything after the first
-     * two digits for versions that don't start with "0."
+     * Return an `MetadataVersion` instance for `versionString`, which can be in a variety of formats (e.g. "3.8", "3.8.x",
+     * "3.8.0", "3.8-IV0"). `IllegalArgumentException` is thrown if `versionString` cannot be mapped to an `MetadataVersion`.
+     * Note that 'misconfigured' values such as "3.8.1" will be parsed to `IBP_3_8_IV0` as we ignore anything after the first
+     * two segments.
      */
     public static MetadataVersion fromVersionString(String versionString) {
         String[] versionSegments = versionString.split(Pattern.quote("."));
-        int numSegments = (versionString.startsWith("0.")) ? 3 : 2;
+        int numSegments = 2;
         String key;
         if (numSegments >= versionSegments.length) {
             key = versionString;
@@ -376,7 +325,8 @@ public enum MetadataVersion {
             key = String.join(".", Arrays.copyOfRange(versionSegments, 0, numSegments));
         }
         return Optional.ofNullable(IBP_VERSIONS.get(key)).orElseThrow(() ->
-            new IllegalArgumentException("Version " + versionString + " is not a valid version")
+            new IllegalArgumentException("Version " + versionString + " is not a valid version. The minimum version is " + MINIMUM_VERSION
+                + " and the maximum version is " + latestTesting())
         );
     }
 
@@ -386,7 +336,8 @@ public enum MetadataVersion {
                 return metadataVersion;
             }
         }
-        throw new IllegalArgumentException("No MetadataVersion with feature level " + version);
+        throw new IllegalArgumentException("No MetadataVersion with feature level " + version + ". Valid feature levels are from "
+            + MINIMUM_VERSION.featureLevel + " to " + latestTesting().featureLevel + ".");
     }
 
     // Testing only

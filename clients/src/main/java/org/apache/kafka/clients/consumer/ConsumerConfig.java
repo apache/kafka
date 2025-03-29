@@ -121,9 +121,9 @@ public class ConsumerConfig extends AbstractConfig {
     */
     public static final String GROUP_REMOTE_ASSIGNOR_CONFIG = "group.remote.assignor";
     public static final String DEFAULT_GROUP_REMOTE_ASSIGNOR = null;
-    public static final String GROUP_REMOTE_ASSIGNOR_DOC = "The server-side assignor to use. If no assignor is specified, " +
-        "the group coordinator will pick one. This configuration is applied only if <code>group.protocol</code> is " +
-        "set to \"consumer\".";
+    public static final String GROUP_REMOTE_ASSIGNOR_DOC = "The name of the server-side assignor to use. " +
+        "If not specified, the group coordinator will pick the first assignor defined in the broker config group.consumer.assignors." +
+        "This configuration is applied only if <code>group.protocol</code> is set to \"consumer\".";
 
     /**
      * <code>bootstrap.servers</code>
@@ -380,13 +380,28 @@ public class ConsumerConfig extends AbstractConfig {
     public static final String SECURITY_PROVIDERS_CONFIG = SecurityConfig.SECURITY_PROVIDERS_CONFIG;
     private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
 
+    /**
+     * <code>share.acknowledgement.mode</code> is being evaluated as a new configuration to control the acknowledgement mode
+     * for share consumers. It will be removed or converted to a proper configuration before release.
+     * An alternative being considered is <code>enable.explicit.share.acknowledgement</code> as a boolean configuration.
+     */
+    public static final String INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_CONFIG = "internal.share.acknowledgement.mode";
+    private static final String INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_DOC = "Controls the acknowledgement mode for a share consumer." +
+            " If unset, the acknowledgement mode of the consumer is decided by the method calls it uses to fetch and commit." +
+            " If set to <code>implicit</code>, the acknowledgement mode of the consumer is implicit and it must not" +
+            " use <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records. Instead," +
+            " delivery is acknowledged implicitly on the next call to poll or commit." +
+            " If set to <code>explicit</code>, the acknowledgement mode of the consumer is explicit and it must use" +
+            " <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records.";
+
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
     /**
      * A list of configuration keys not supported for CLASSIC protocol.
      */
-    private static final List<String> CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS = Collections.singletonList(
-            GROUP_REMOTE_ASSIGNOR_CONFIG
+    private static final List<String> CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
+            GROUP_REMOTE_ASSIGNOR_CONFIG,
+            INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_CONFIG
     );
 
     /**
@@ -395,7 +410,8 @@ public class ConsumerConfig extends AbstractConfig {
     private static final List<String> CONSUMER_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
             PARTITION_ASSIGNMENT_STRATEGY_CONFIG, 
             HEARTBEAT_INTERVAL_MS_CONFIG, 
-            SESSION_TIMEOUT_MS_CONFIG
+            SESSION_TIMEOUT_MS_CONFIG,
+            INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_CONFIG
     );
     
     static {
@@ -678,8 +694,13 @@ public class ConsumerConfig extends AbstractConfig {
                                         CommonClientConfigs.DEFAULT_METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS,
                                         atLeast(0),
                                         Importance.LOW,
-                                        CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC);
-
+                                        CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
+                                .define(ConsumerConfig.INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
+                                        Type.STRING,
+                                        null,
+                                        in(null, "implicit", "explicit"),
+                                        Importance.MEDIUM,
+                                        ConsumerConfig.INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_DOC);
     }
 
     @Override
@@ -689,7 +710,7 @@ public class ConsumerConfig extends AbstractConfig {
         Map<String, Object> refinedConfigs = CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
         maybeOverrideClientId(refinedConfigs);
         maybeOverrideEnableAutoCommit(refinedConfigs);
-        checkUnsupportedConfigs();
+        checkUnsupportedConfigsPostProcess();
         return refinedConfigs;
     }
 
@@ -736,16 +757,16 @@ public class ConsumerConfig extends AbstractConfig {
         }
     }
 
-    private void checkUnsupportedConfigs() {
+    protected void checkUnsupportedConfigsPostProcess() {
         String groupProtocol = getString(GROUP_PROTOCOL_CONFIG);
         if (GroupProtocol.CLASSIC.name().equalsIgnoreCase(groupProtocol)) {
-            checkUnsupportedConfigs(GroupProtocol.CLASSIC, CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS);
+            checkUnsupportedConfigsPostProcess(GroupProtocol.CLASSIC, CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS);
         } else if (GroupProtocol.CONSUMER.name().equalsIgnoreCase(groupProtocol)) {
-            checkUnsupportedConfigs(GroupProtocol.CONSUMER, CONSUMER_PROTOCOL_UNSUPPORTED_CONFIGS);
+            checkUnsupportedConfigsPostProcess(GroupProtocol.CONSUMER, CONSUMER_PROTOCOL_UNSUPPORTED_CONFIGS);
         }
     }
 
-    private void checkUnsupportedConfigs(GroupProtocol groupProtocol, List<String> unsupportedConfigs) {
+    private void checkUnsupportedConfigsPostProcess(GroupProtocol groupProtocol, List<String> unsupportedConfigs) {
         if (getString(GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(groupProtocol.name())) {
             List<String> invalidConfigs = new ArrayList<>();
             unsupportedConfigs.forEach(configName -> {

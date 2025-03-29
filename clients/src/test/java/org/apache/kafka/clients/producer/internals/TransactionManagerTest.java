@@ -182,7 +182,6 @@ public class TransactionManagerTest {
                 .setName("transaction.version")
                 .setMaxVersion(transactionV2Enabled ? (short) 2 : (short) 1)
                 .setMinVersion((short) 0)),
-            false,
             Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
                 .setName("transaction.version")
                 .setMaxVersionLevel(transactionV2Enabled ? (short) 2 : (short) 1)
@@ -770,7 +769,7 @@ public class TransactionManagerTest {
         // is reached even though the delivery timeout has expired and the
         // future has completed exceptionally.
         assertTrue(responseFuture1.isDone());
-        TestUtils.assertFutureThrows(responseFuture1, TimeoutException.class);
+        TestUtils.assertFutureThrows(TimeoutException.class, responseFuture1);
         assertFalse(transactionManager.hasInFlightRequest());
         assertEquals(1, client.inFlightRequestCount());
 
@@ -930,7 +929,6 @@ public class TransactionManagerTest {
                 .setName("transaction.version")
                 .setMaxVersion((short) 2)
                 .setMinVersion((short) 0)),
-            false,
             Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
                 .setName("transaction.version")
                 .setMaxVersionLevel((short) 2)
@@ -1035,7 +1033,6 @@ public class TransactionManagerTest {
                 .setName("transaction.version")
                 .setMaxVersion((short) 1)
                 .setMinVersion((short) 0)),
-            false,
             Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
                 .setName("transaction.version")
                 .setMaxVersionLevel((short) 1)
@@ -1530,8 +1527,8 @@ public class TransactionManagerTest {
         assertAbortableError(TopicAuthorizationException.class);
         sender.runOnce();
 
-        TestUtils.assertFutureThrows(firstPartitionAppend, TransactionAbortedException.class);
-        TestUtils.assertFutureThrows(secondPartitionAppend, TransactionAbortedException.class);
+        TestUtils.assertFutureThrows(TransactionAbortedException.class, firstPartitionAppend);
+        TestUtils.assertFutureThrows(TransactionAbortedException.class, secondPartitionAppend);
     }
 
     @Test
@@ -1578,8 +1575,8 @@ public class TransactionManagerTest {
         // the pending transaction commit.
         sender.runOnce();
         assertTrue(commitResult.isCompleted());
-        TestUtils.assertFutureThrows(firstPartitionAppend, TopicAuthorizationException.class);
-        TestUtils.assertFutureThrows(secondPartitionAppend, TopicAuthorizationException.class);
+        TestUtils.assertFutureThrows(TopicAuthorizationException.class, firstPartitionAppend);
+        TestUtils.assertFutureThrows(TopicAuthorizationException.class, secondPartitionAppend);
         assertInstanceOf(TopicAuthorizationException.class, commitResult.error());
     }
 
@@ -2187,7 +2184,7 @@ public class TransactionManagerTest {
         runUntil(commitResult::isCompleted);  // commit should be cancelled with exception without being sent.
 
         assertThrows(KafkaException.class, commitResult::await);
-        TestUtils.assertFutureThrows(responseFuture, OutOfOrderSequenceException.class);
+        TestUtils.assertFutureThrows(OutOfOrderSequenceException.class, responseFuture);
 
         // Commit is not allowed, so let's abort and try again.
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
@@ -2376,7 +2373,7 @@ public class TransactionManagerTest {
         assertTrue(abortResult.isSuccessful());
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
-        TestUtils.assertFutureThrows(responseFuture, TransactionAbortedException.class);
+        TestUtils.assertFutureThrows(TransactionAbortedException.class, responseFuture);
     }
 
     @Test
@@ -2402,7 +2399,7 @@ public class TransactionManagerTest {
         assertTrue(abortResult.isSuccessful());
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
-        TestUtils.assertFutureThrows(responseFuture, TransactionAbortedException.class);
+        TestUtils.assertFutureThrows(TransactionAbortedException.class, responseFuture);
     }
 
     @Test
@@ -2972,7 +2969,6 @@ public class TransactionManagerTest {
                     .setMinVersion((short) 0)
                     .setMaxVersion((short) 7)),
                 Collections.emptyList(),
-                false,
                 Collections.emptyList(),
                 0));
 
@@ -3267,7 +3263,6 @@ public class TransactionManagerTest {
                         .setMinVersion((short) 0)
                         .setMaxVersion((short) 7)),
                 Collections.emptyList(),
-                false,
                 Collections.emptyList(),
                 0));
 
@@ -3328,7 +3323,6 @@ public class TransactionManagerTest {
                      .setMinVersion((short) 0)
                      .setMaxVersion((short) 4)),
                 Collections.emptyList(),
-                false,
                 Collections.emptyList(),
                 0));
 

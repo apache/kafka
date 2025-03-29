@@ -16,9 +16,11 @@
 {
   "apiKey": 0,
   "type": "request",
-  "listeners": ["zkBroker", "broker"],
+  "listeners": ["broker"],
   "name": "ProduceRequest",
-  // Versions 0-2 were removed in Apache Kafka 4.0, Version 3 is the new baseline.
+  // Versions 0-2 were removed in Apache Kafka 4.0, version 3 is the new baseline. Due to a bug in librdkafka,
+  // these versions have to be included in the api versions response (see KAFKA-18659), but are rejected otherwise.
+  // See `ApiKeys.PRODUCE_API_VERSIONS_RESPONSE_MIN_VERSION` for more details.
   //
   // Version 1 and 2 are the same as version 0.
   //

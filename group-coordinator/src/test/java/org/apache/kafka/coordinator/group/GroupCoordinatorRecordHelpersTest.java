@@ -45,6 +45,8 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
@@ -55,10 +57,10 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -108,12 +110,10 @@ public class GroupCoordinatorRecordHelpersTest {
                 .setSupportedProtocols(protocols))
             .build();
 
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupMemberMetadataKey()
-                    .setGroupId("group-id")
-                    .setMemberId("member-id"),
-                (short) 5),
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new ConsumerGroupMemberMetadataKey()
+                .setGroupId("group-id")
+                .setMemberId("member-id"),
             new ApiMessageAndVersion(
                 new ConsumerGroupMemberMetadataValue()
                     .setInstanceId("instance-id")
@@ -126,7 +126,9 @@ public class GroupCoordinatorRecordHelpersTest {
                     .setServerAssignor("range")
                     .setClassicMemberMetadata(new ConsumerGroupMemberMetadataValue.ClassicMemberMetadata()
                         .setSupportedProtocols(protocols)),
-                (short) 0));
+                (short) 0
+            )
+        );
 
         assertEquals(expectedRecord, newConsumerGroupMemberSubscriptionRecord(
             "group-id",
@@ -136,14 +138,11 @@ public class GroupCoordinatorRecordHelpersTest {
 
     @Test
     public void testNewConsumerGroupMemberSubscriptionTombstoneRecord() {
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupMemberMetadataKey()
-                    .setGroupId("group-id")
-                    .setMemberId("member-id"),
-                (short) 5
-            ),
-            null);
+        CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
+            new ConsumerGroupMemberMetadataKey()
+                .setGroupId("group-id")
+                .setMemberId("member-id")
+        );
 
         assertEquals(expectedRecord, newConsumerGroupMemberSubscriptionTombstoneRecord(
             "group-id",
@@ -168,12 +167,9 @@ public class GroupCoordinatorRecordHelpersTest {
             20
         ));
 
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupPartitionMetadataKey()
-                    .setGroupId("group-id"),
-                (short) 4
-            ),
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new ConsumerGroupPartitionMetadataKey()
+                .setGroupId("group-id"),
             new ApiMessageAndVersion(
                 new ConsumerGroupPartitionMetadataValue()
                     .setTopics(Arrays.asList(
@@ -185,7 +181,9 @@ public class GroupCoordinatorRecordHelpersTest {
                             .setTopicId(barTopicId)
                             .setTopicName("bar")
                             .setNumPartitions(20))),
-                (short) 0));
+                (short) 0
+            )
+        );
 
         assertRecordEquals(expectedRecord, newConsumerGroupSubscriptionMetadataRecord(
             "group-id",
@@ -195,13 +193,10 @@ public class GroupCoordinatorRecordHelpersTest {
 
     @Test
     public void testNewConsumerGroupSubscriptionMetadataTombstoneRecord() {
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupPartitionMetadataKey()
-                    .setGroupId("group-id"),
-                (short) 4
-            ),
-            null);
+        CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
+            new ConsumerGroupPartitionMetadataKey()
+                .setGroupId("group-id")
+        );
 
         assertEquals(expectedRecord, newConsumerGroupSubscriptionMetadataTombstoneRecord(
             "group-id"
@@ -225,12 +220,9 @@ public class GroupCoordinatorRecordHelpersTest {
             20
         ));
 
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupPartitionMetadataKey()
-                    .setGroupId("group-id"),
-                (short) 4
-            ),
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new ConsumerGroupPartitionMetadataKey()
+                .setGroupId("group-id"),
             new ApiMessageAndVersion(
                 new ConsumerGroupPartitionMetadataValue()
                     .setTopics(Arrays.asList(
@@ -242,7 +234,9 @@ public class GroupCoordinatorRecordHelpersTest {
                             .setTopicId(barTopicId)
                             .setTopicName("bar")
                             .setNumPartitions(20))),
-                (short) 0));
+                (short) 0
+            )
+        );
 
         assertRecordEquals(expectedRecord, newConsumerGroupSubscriptionMetadataRecord(
             "group-id",
@@ -252,15 +246,15 @@ public class GroupCoordinatorRecordHelpersTest {
 
     @Test
     public void testNewConsumerGroupEpochRecord() {
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupMetadataKey()
-                    .setGroupId("group-id"),
-                (short) 3),
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new ConsumerGroupMetadataKey()
+                .setGroupId("group-id"),
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue()
                     .setEpoch(10),
-                (short) 0));
+                (short) 0
+            )
+        );
 
         assertEquals(expectedRecord, newConsumerGroupEpochRecord(
             "group-id",
@@ -270,12 +264,10 @@ public class GroupCoordinatorRecordHelpersTest {
 
     @Test
     public void testNewConsumerGroupEpochTombstoneRecord() {
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupMetadataKey()
-                    .setGroupId("group-id"),
-                (short) 3),
-            null);
+        CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
+            new ConsumerGroupMetadataKey()
+                .setGroupId("group-id")
+        );
 
         assertEquals(expectedRecord, newConsumerGroupEpochTombstoneRecord(
             "group-id"
@@ -284,16 +276,64 @@ public class GroupCoordinatorRecordHelpersTest {
 
     @Test
     public void testNewShareGroupEpochTombstoneRecord() {
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ShareGroupMetadataKey()
-                    .setGroupId("group-id"),
-                (short) 11),
-            null);
+        CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
+            new ShareGroupMetadataKey()
+                .setGroupId("group-id")
+        );
 
         assertEquals(expectedRecord, newShareGroupEpochTombstoneRecord(
             "group-id"
         ));
+    }
+
+    @Test
+    public void testNewShareGroupPartitionMetadataRecord() {
+        String groupId = "group-id";
+        String topicName1 = "t1";
+        Uuid topicId1 = Uuid.randomUuid();
+        String topicName2 = "t2";
+        Uuid topicId2 = Uuid.randomUuid();
+        Set<Integer> partitions = new LinkedHashSet<>();
+        partitions.add(0);
+        partitions.add(1);
+
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new ShareGroupStatePartitionMetadataKey()
+                .setGroupId(groupId),
+            new ApiMessageAndVersion(
+                new ShareGroupStatePartitionMetadataValue()
+                    .setInitializedTopics(
+                        List.of(
+                            new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                                .setTopicId(topicId1)
+                                .setTopicName(topicName1)
+                                .setPartitions(List.of(0, 1))
+                        )
+                    )
+                    .setDeletingTopics(
+                        List.of(
+                            new ShareGroupStatePartitionMetadataValue.TopicInfo()
+                                .setTopicId(topicId2)
+                                .setTopicName(topicName2)
+                        )
+                    ),
+                (short) 0
+            )
+        );
+
+        CoordinatorRecord record = GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+            groupId,
+            Map.of(
+                topicId1,
+                Map.entry(topicName1, partitions)
+            ),
+            Map.of(
+                topicId2,
+                topicName2
+            )
+        );
+
+        assertEquals(expectedRecord, record);
     }
 
     @Test
@@ -306,12 +346,10 @@ public class GroupCoordinatorRecordHelpersTest {
             mkTopicAssignment(topicId2, 21, 22, 23)
         );
 
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupTargetAssignmentMemberKey()
-                    .setGroupId("group-id")
-                    .setMemberId("member-id"),
-                (short) 7),
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new ConsumerGroupTargetAssignmentMemberKey()
+                .setGroupId("group-id")
+                .setMemberId("member-id"),
             new ApiMessageAndVersion(
                 new ConsumerGroupTargetAssignmentMemberValue()
                     .setTopicPartitions(Arrays.asList(
@@ -321,7 +359,9 @@ public class GroupCoordinatorRecordHelpersTest {
                         new ConsumerGroupTargetAssignmentMemberValue.TopicPartition()
                             .setTopicId(topicId2)
                             .setPartitions(Arrays.asList(21, 22, 23)))),
-                (short) 0));
+                (short) 0
+            )
+        );
 
         assertEquals(expectedRecord, newConsumerGroupTargetAssignmentRecord(
             "group-id",
@@ -332,13 +372,11 @@ public class GroupCoordinatorRecordHelpersTest {
 
     @Test
     public void testNewConsumerGroupTargetAssignmentTombstoneRecord() {
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupTargetAssignmentMemberKey()
-                    .setGroupId("group-id")
-                    .setMemberId("member-id"),
-                (short) 7),
-            null);
+        CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
+            new ConsumerGroupTargetAssignmentMemberKey()
+                .setGroupId("group-id")
+                .setMemberId("member-id")
+        );
 
         assertEquals(expectedRecord, newConsumerGroupTargetAssignmentTombstoneRecord(
             "group-id",
@@ -348,15 +386,15 @@ public class GroupCoordinatorRecordHelpersTest {
 
     @Test
     public void testNewConsumerGroupTargetAssignmentEpochRecord() {
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupTargetAssignmentMetadataKey()
-                    .setGroupId("group-id"),
-                (short) 6),
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new ConsumerGroupTargetAssignmentMetadataKey()
+                .setGroupId("group-id"),
             new ApiMessageAndVersion(
                 new ConsumerGroupTargetAssignmentMetadataValue()
                     .setAssignmentEpoch(10),
-                (short) 0));
+                (short) 0
+            )
+        );
 
         assertEquals(expectedRecord, newConsumerGroupTargetAssignmentEpochRecord(
             "group-id",
@@ -366,12 +404,10 @@ public class GroupCoordinatorRecordHelpersTest {
 
     @Test
     public void testNewConsumerGroupTargetAssignmentEpochTombstoneRecord() {
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupTargetAssignmentMetadataKey()
-                    .setGroupId("group-id"),
-                (short) 6),
-            null);
+        CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
+            new ConsumerGroupTargetAssignmentMetadataKey()
+                .setGroupId("group-id")
+        );
 
         assertEquals(expectedRecord, newConsumerGroupTargetAssignmentEpochTombstoneRecord(
             "group-id"
@@ -393,12 +429,10 @@ public class GroupCoordinatorRecordHelpersTest {
             mkOrderedTopicAssignment(topicId2, 24, 25, 26)
         );
 
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupCurrentMemberAssignmentKey()
-                    .setGroupId("group-id")
-                    .setMemberId("member-id"),
-                (short) 8),
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new ConsumerGroupCurrentMemberAssignmentKey()
+                .setGroupId("group-id")
+                .setMemberId("member-id"),
             new ApiMessageAndVersion(
                 new ConsumerGroupCurrentMemberAssignmentValue()
                     .setState(MemberState.UNREVOKED_PARTITIONS.value())
@@ -418,7 +452,9 @@ public class GroupCoordinatorRecordHelpersTest {
                         new ConsumerGroupCurrentMemberAssignmentValue.TopicPartitions()
                             .setTopicId(topicId2)
                             .setPartitions(Arrays.asList(24, 25, 26)))),
-                (short) 0));
+                (short) 0
+            )
+        );
 
         assertEquals(expectedRecord, newConsumerGroupCurrentAssignmentRecord(
             "group-id",
@@ -434,13 +470,11 @@ public class GroupCoordinatorRecordHelpersTest {
 
     @Test
     public void testNewConsumerGroupCurrentAssignmentTombstoneRecord() {
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupCurrentMemberAssignmentKey()
-                    .setGroupId("group-id")
-                    .setMemberId("member-id"),
-                (short) 8),
-            null);
+        CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
+            new ConsumerGroupCurrentMemberAssignmentKey()
+                .setGroupId("group-id")
+                .setMemberId("member-id")
+        );
 
         assertEquals(expectedRecord, newConsumerGroupCurrentAssignmentTombstoneRecord(
             "group-id",
@@ -477,11 +511,9 @@ public class GroupCoordinatorRecordHelpersTest {
                 .setAssignment(new byte[]{2, 3})
         );
 
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new GroupMetadataKey()
-                    .setGroup("group-id"),
-                (short) 2),
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new GroupMetadataKey()
+                .setGroup("group-id"),
             new ApiMessageAndVersion(
                 new GroupMetadataValue()
                     .setProtocol("range")
@@ -490,7 +522,9 @@ public class GroupCoordinatorRecordHelpersTest {
                     .setGeneration(1)
                     .setCurrentStateTimestamp(time.milliseconds())
                     .setMembers(expectedMembers),
-                (short) 3));
+                (short) 3
+            )
+        );
 
         ClassicGroup group = new ClassicGroup(
             new LogContext(),
@@ -533,12 +567,10 @@ public class GroupCoordinatorRecordHelpersTest {
 
     @Test
     public void testNewGroupMetadataTombstoneRecord() {
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new GroupMetadataKey()
-                    .setGroup("group-id"),
-                (short) 2),
-            null);
+        CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
+            new GroupMetadataKey()
+                .setGroup("group-id")
+        );
 
         CoordinatorRecord groupMetadataRecord = GroupCoordinatorRecordHelpers.newGroupMetadataTombstoneRecord("group-id");
         assertEquals(expectedRecord, groupMetadataRecord);
@@ -590,7 +622,7 @@ public class GroupCoordinatorRecordHelpersTest {
         assertThrows(IllegalStateException.class, () ->
             GroupCoordinatorRecordHelpers.newGroupMetadataRecord(
                 group,
-                Collections.emptyMap()
+                Map.of()
             ));
     }
 
@@ -640,7 +672,7 @@ public class GroupCoordinatorRecordHelpersTest {
         assertThrows(IllegalStateException.class, () ->
             GroupCoordinatorRecordHelpers.newGroupMetadataRecord(
                 group,
-                Collections.emptyMap()
+                Map.of()
             ));
     }
       
@@ -648,13 +680,11 @@ public class GroupCoordinatorRecordHelpersTest {
     public void testEmptyGroupMetadataRecord() {
         Time time = new MockTime();
 
-        List<GroupMetadataValue.MemberMetadata> expectedMembers = Collections.emptyList();
+        List<GroupMetadataValue.MemberMetadata> expectedMembers = List.of();
 
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new GroupMetadataKey()
-                    .setGroup("group-id"),
-                (short) 2),
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new GroupMetadataKey()
+                .setGroup("group-id"),
             new ApiMessageAndVersion(
                 new GroupMetadataValue()
                     .setProtocol(null)
@@ -663,7 +693,9 @@ public class GroupCoordinatorRecordHelpersTest {
                     .setGeneration(0)
                     .setCurrentStateTimestamp(time.milliseconds())
                     .setMembers(expectedMembers),
-                (short) 3));
+                (short) 3
+            )
+        );
 
         ClassicGroup group = new ClassicGroup(
             new LogContext(),
@@ -699,13 +731,12 @@ public class GroupCoordinatorRecordHelpersTest {
             .setCommitTimestamp(1234L)
             .setExpireTimestamp(-1L);
 
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                key,
-                (short) 1),
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            key,
             new ApiMessageAndVersion(
                 value,
-                GroupCoordinatorRecordHelpers.offsetCommitValueVersion(false))
+                GroupCoordinatorRecordHelpers.offsetCommitValueVersion(false)
+            )
         );
 
         assertEquals(expectedRecord, GroupCoordinatorRecordHelpers.newOffsetCommitRecord(
@@ -737,13 +768,11 @@ public class GroupCoordinatorRecordHelpersTest {
 
     @Test
     public void testNewOffsetCommitRecordWithExpireTimestamp() {
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new OffsetCommitKey()
-                    .setGroup("group-id")
-                    .setTopic("foo")
-                    .setPartition(1),
-                (short) 1),
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new OffsetCommitKey()
+                .setGroup("group-id")
+                .setTopic("foo")
+                .setPartition(1),
             new ApiMessageAndVersion(
                 new OffsetCommitValue()
                     .setOffset(100L)
@@ -770,14 +799,12 @@ public class GroupCoordinatorRecordHelpersTest {
 
     @Test
     public void testNewOffsetCommitTombstoneRecord() {
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new OffsetCommitKey()
-                    .setGroup("group-id")
-                    .setTopic("foo")
-                    .setPartition(1),
-                (short) 1),
-            null);
+        CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
+            new OffsetCommitKey()
+                .setGroup("group-id")
+                .setTopic("foo")
+                .setPartition(1)
+        );
 
         CoordinatorRecord record = GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord("group-id", "foo", 1);
         assertEquals(expectedRecord, record);
@@ -785,13 +812,10 @@ public class GroupCoordinatorRecordHelpersTest {
 
     @Test
     public void testNewConsumerGroupRegularExpressionRecord() {
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupRegularExpressionKey()
-                    .setGroupId("group-id")
-                    .setRegularExpression("ab*"),
-                (short) 16
-            ),
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new ConsumerGroupRegularExpressionKey()
+                .setGroupId("group-id")
+                .setRegularExpression("ab*"),
             new ApiMessageAndVersion(
                 new ConsumerGroupRegularExpressionValue()
                     .setTopics(Arrays.asList("abc", "abcd"))
@@ -816,14 +840,10 @@ public class GroupCoordinatorRecordHelpersTest {
 
     @Test
     public void testNewConsumerGroupRegularExpressionTombstone() {
-        CoordinatorRecord expectedRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupRegularExpressionKey()
-                    .setGroupId("group-id")
-                    .setRegularExpression("ab*"),
-                (short) 16
-            ),
-            null
+        CoordinatorRecord expectedRecord = CoordinatorRecord.tombstone(
+            new ConsumerGroupRegularExpressionKey()
+                .setGroupId("group-id")
+                .setRegularExpression("ab*")
         );
 
         CoordinatorRecord record = GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone(

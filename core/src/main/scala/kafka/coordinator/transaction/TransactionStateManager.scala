@@ -20,7 +20,7 @@ import java.nio.ByteBuffer
 import java.util.Properties
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import kafka.server.{MetadataCache, ReplicaManager}
+import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
 import kafka.utils.{Logging, Pool}
 import org.apache.kafka.common.config.TopicConfig
@@ -35,6 +35,7 @@ import org.apache.kafka.common.requests.TransactionResult
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
+import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{RequestLocal, TransactionVersion}
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.record.BrokerCompressionType
@@ -107,6 +108,8 @@ class TransactionStateManager(brokerId: Int,
     version
   }
 
+  private[transaction] def isTransaction2pcEnabled(): Boolean = { config.transaction2PCEnable }
+
   // visible for testing only
   private[transaction] def addLoadingPartition(partitionId: Int, coordinatorEpoch: Int): Unit = {
     val partitionAndLeaderEpoch = TransactionPartitionAndLeaderEpoch(partitionId, coordinatorEpoch)
@@ -129,7 +132,9 @@ class TransactionStateManager(brokerId: Int,
           } else {
             txnMetadata.state match {
               case Ongoing =>
-                txnMetadata.txnStartTimestamp + txnMetadata.txnTimeoutMs < now
+                // Do not apply timeout to distributed two phase commit transactions.
+                (!txnMetadata.isDistributedTwoPhaseCommitTxn) &&
+                (txnMetadata.txnStartTimestamp + txnMetadata.txnTimeoutMs < now)
               case _ => false
             }
           }
@@ -395,10 +400,18 @@ class TransactionStateManager(brokerId: Int,
   }
 
   /**
-   * Validate the given transaction timeout value
+   * Validates the provided transaction timeout.
+   * - If 2PC is enabled, the timeout is always valid (set to Int.MAX by default).
+   * - Otherwise, the timeout must be a positive value and not exceed the
+   *   configured transaction max timeout.
+   *
+   * @param enableTwoPC       Whether Two-Phase Commit (2PC) is enabled.
+   * @param txnTimeoutMs      The requested transaction timeout in milliseconds.
+   * @return `true` if the timeout is valid, `false` otherwise.
    */
-  def validateTransactionTimeoutMs(txnTimeoutMs: Int): Boolean =
-    txnTimeoutMs <= config.transactionMaxTimeoutMs && txnTimeoutMs > 0
+  def validateTransactionTimeoutMs(enableTwoPC: Boolean, txnTimeoutMs: Int): Boolean = {
+    enableTwoPC || (txnTimeoutMs <= config.transactionMaxTimeoutMs && txnTimeoutMs > 0)
+  }
 
   def transactionTopicConfigs: Properties = {
     val props = new Properties
@@ -438,10 +451,7 @@ class TransactionStateManager(brokerId: Int,
           while (currOffset < logEndOffset && readAtLeastOneRecord && !shuttingDown.get() && inReadLock(stateLock) {
             loadingPartitions.exists { idAndEpoch: TransactionPartitionAndLeaderEpoch =>
               idAndEpoch.txnPartitionId == topicPartition.partition && idAndEpoch.coordinatorEpoch == coordinatorEpoch}}) {
-            val fetchDataInfo = log.read(currOffset,
-              maxLength = config.transactionLogLoadBufferSize,
-              isolation = FetchIsolation.LOG_END,
-              minOneMessage = true)
+            val fetchDataInfo = log.read(currOffset, config.transactionLogLoadBufferSize, FetchIsolation.LOG_END, true)
 
             readAtLeastOneRecord = fetchDataInfo.records.sizeInBytes > 0
 
@@ -465,25 +475,22 @@ class TransactionStateManager(brokerId: Int,
                 fileRecords.readInto(buffer, 0)
                 MemoryRecords.readableRecords(buffer)
             }
-
             memRecords.batches.forEach { batch =>
               for (record <- batch.asScala) {
                 require(record.hasKey, "Transaction state log's key should not be null")
                 TransactionLog.readTxnRecordKey(record.key) match {
-                  case txnKey: TxnKey =>
+                  case Left(version) =>
+                    warn(s"Unknown message key with version $version" +
+                      s" while loading transaction state from $topicPartition. Ignoring it. " +
+                      "It could be a left over from an aborted upgrade.")
+                  case Right(transactionalId) =>
                     // load transaction metadata along with transaction state
-                    val transactionalId = txnKey.transactionalId
                     TransactionLog.readTxnRecordValue(transactionalId, record.value) match {
                       case None =>
                         loadedTransactions.remove(transactionalId)
                       case Some(txnMetadata) =>
                         loadedTransactions.put(transactionalId, txnMetadata)
                     }
-
-                  case unknownKey: UnknownKey =>
-                    warn(s"Unknown message key with version ${unknownKey.version}" +
-                      s" while loading transaction state from $topicPartition. Ignoring it. " +
-                      "It could be a left over from an aborted upgrade.")
                 }
               }
               currOffset = batch.nextOffset
@@ -831,6 +838,7 @@ private[transaction] case class TransactionConfig(transactionalIdExpirationMs: I
                                                   transactionLogMinInsyncReplicas: Int = TransactionLogConfig.TRANSACTIONS_TOPIC_MIN_ISR_DEFAULT,
                                                   abortTimedOutTransactionsIntervalMs: Int = TransactionStateManagerConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT,
                                                   removeExpiredTransactionalIdsIntervalMs: Int = TransactionStateManagerConfig.TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_DEFAULT,
+                                                  transaction2PCEnable: Boolean = TransactionStateManagerConfig.TRANSACTIONS_2PC_ENABLED_DEFAULT,
                                                   requestTimeoutMs: Int = ServerConfigs.REQUEST_TIMEOUT_MS_DEFAULT)
 
 case class TransactionalIdAndProducerIdEpoch(transactionalId: String, producerId: Long, producerEpoch: Short) {

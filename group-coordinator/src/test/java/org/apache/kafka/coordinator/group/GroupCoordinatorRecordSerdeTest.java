@@ -18,8 +18,8 @@ package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.MessageUtil;
-import org.apache.kafka.coordinator.common.runtime.CoordinatorLoader;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.Deserializer;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
@@ -40,11 +40,8 @@ public class GroupCoordinatorRecordSerdeTest {
     @Test
     public void testSerializeKey() {
         GroupCoordinatorRecordSerde serializer = new GroupCoordinatorRecordSerde();
-        CoordinatorRecord record = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupMetadataKey().setGroupId("group"),
-                (short) 3
-            ),
+        CoordinatorRecord record = CoordinatorRecord.record(
+            new ConsumerGroupMetadataKey().setGroupId("group"),
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue().setEpoch(10),
                 (short) 0
@@ -52,7 +49,7 @@ public class GroupCoordinatorRecordSerdeTest {
         );
 
         assertArrayEquals(
-            MessageUtil.toVersionPrefixedBytes(record.key().version(), record.key().message()),
+            MessageUtil.toVersionPrefixedBytes(record.key().apiKey(), record.key()),
             serializer.serializeKey(record)
         );
     }
@@ -60,11 +57,8 @@ public class GroupCoordinatorRecordSerdeTest {
     @Test
     public void testSerializeValue() {
         GroupCoordinatorRecordSerde serializer = new GroupCoordinatorRecordSerde();
-        CoordinatorRecord record = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupMetadataKey().setGroupId("group"),
-                (short) 3
-            ),
+        CoordinatorRecord record = CoordinatorRecord.record(
+            new ConsumerGroupMetadataKey().setGroupId("group"),
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue().setEpoch(10),
                 (short) 0
@@ -80,12 +74,8 @@ public class GroupCoordinatorRecordSerdeTest {
     @Test
     public void testSerializeNullValue() {
         GroupCoordinatorRecordSerde serializer = new GroupCoordinatorRecordSerde();
-        CoordinatorRecord record = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new ConsumerGroupMetadataKey().setGroupId("group"),
-                (short) 1
-            ),
-            null
+        CoordinatorRecord record = CoordinatorRecord.tombstone(
+            new ConsumerGroupMetadataKey().setGroupId("group")
         );
 
         assertNull(serializer.serializeValue(record));
@@ -95,11 +85,8 @@ public class GroupCoordinatorRecordSerdeTest {
     public void testDeserialize() {
         GroupCoordinatorRecordSerde serde = new GroupCoordinatorRecordSerde();
 
-        ApiMessageAndVersion key = new ApiMessageAndVersion(
-            new ConsumerGroupMetadataKey().setGroupId("foo"),
-            (short) 3
-        );
-        ByteBuffer keyBuffer = MessageUtil.toVersionPrefixedByteBuffer(key.version(), key.message());
+        ApiMessage key = new ConsumerGroupMetadataKey().setGroupId("foo");
+        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer(key);
 
         ApiMessageAndVersion value = new ApiMessageAndVersion(
             new ConsumerGroupMetadataValue().setEpoch(10),
@@ -116,11 +103,8 @@ public class GroupCoordinatorRecordSerdeTest {
     public void testDeserializeWithTombstoneForValue() {
         GroupCoordinatorRecordSerde serde = new GroupCoordinatorRecordSerde();
 
-        ApiMessageAndVersion key = new ApiMessageAndVersion(
-            new ConsumerGroupMetadataKey().setGroupId("foo"),
-            (short) 3
-        );
-        ByteBuffer keyBuffer = MessageUtil.toVersionPrefixedByteBuffer(key.version(), key.message());
+        ApiMessage key = new ConsumerGroupMetadataKey().setGroupId("foo");
+        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer(key);
 
         CoordinatorRecord record = serde.deserialize(keyBuffer, null);
         assertEquals(key, record.key());
@@ -137,8 +121,8 @@ public class GroupCoordinatorRecordSerdeTest {
 
         ByteBuffer valueBuffer = ByteBuffer.allocate(64);
 
-        CoordinatorLoader.UnknownRecordTypeException ex =
-            assertThrows(CoordinatorLoader.UnknownRecordTypeException.class,
+        Deserializer.UnknownRecordTypeException ex =
+            assertThrows(Deserializer.UnknownRecordTypeException.class,
                 () -> serde.deserialize(keyBuffer, valueBuffer));
         assertEquals((short) 255, ex.unknownType());
     }
@@ -215,29 +199,55 @@ public class GroupCoordinatorRecordSerdeTest {
     }
 
     @Test
+    public void testDeserializeWithInvalidValueVersion() {
+        GroupCoordinatorRecordSerde serde = new GroupCoordinatorRecordSerde();
+
+        ApiMessage key = new ConsumerGroupMetadataKey().setGroupId("foo");
+        ByteBuffer keyBuffer = MessageUtil.toCoordinatorTypePrefixedByteBuffer(key);
+
+        ByteBuffer valueBuffer1 = ByteBuffer.allocate(2);
+        valueBuffer1.putShort((short) (ConsumerGroupMetadataValue.HIGHEST_SUPPORTED_VERSION + 1));
+        valueBuffer1.rewind();
+
+        Deserializer.UnknownRecordVersionException ex =
+            assertThrows(Deserializer.UnknownRecordVersionException.class,
+                () -> serde.deserialize(keyBuffer, valueBuffer1));
+        assertEquals(key.apiKey(), ex.type());
+        assertEquals(ConsumerGroupMetadataValue.HIGHEST_SUPPORTED_VERSION + 1, ex.unknownVersion());
+
+        keyBuffer.rewind();
+        ByteBuffer valueBuffer2 = ByteBuffer.allocate(2);
+        valueBuffer2.putShort((short) (ConsumerGroupMetadataValue.LOWEST_SUPPORTED_VERSION - 1));
+        valueBuffer2.rewind();
+
+        ex = assertThrows(Deserializer.UnknownRecordVersionException.class,
+            () -> serde.deserialize(keyBuffer, valueBuffer2));
+        assertEquals(key.apiKey(), ex.type());
+        assertEquals(ConsumerGroupMetadataValue.LOWEST_SUPPORTED_VERSION - 1, ex.unknownVersion());
+    }
+
+    @Test
     public void testDeserializeAllRecordTypes() {
         for (CoordinatorRecordType record : CoordinatorRecordType.values()) {
-            roundTrip(record.id(), record.newRecordKey(), record.newRecordValue());
+            roundTrip(record.newRecordKey(), record.newRecordValue());
         }
     }
 
     private void roundTrip(
-        short recordType,
         ApiMessage key,
         ApiMessage val
     ) {
         GroupCoordinatorRecordSerde serde = new GroupCoordinatorRecordSerde();
 
         for (short version = val.lowestSupportedVersion(); version < val.highestSupportedVersion(); version++) {
-            ApiMessageAndVersion keyMessageAndVersion = new ApiMessageAndVersion(key, recordType);
             ApiMessageAndVersion valMessageAndVersion = new ApiMessageAndVersion(val, version);
 
             CoordinatorRecord record = serde.deserialize(
-                MessageUtil.toVersionPrefixedByteBuffer(recordType, key),
+                MessageUtil.toCoordinatorTypePrefixedByteBuffer(key),
                 MessageUtil.toVersionPrefixedByteBuffer(version, val)
             );
 
-            assertEquals(keyMessageAndVersion, record.key());
+            assertEquals(key, record.key());
             assertEquals(valMessageAndVersion, record.value());
         }
     }

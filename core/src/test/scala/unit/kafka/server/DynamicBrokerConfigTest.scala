@@ -30,10 +30,12 @@ import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.{ConfigException, SslConfigs}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.network.ListenerName
+import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.server.DynamicThreadPool
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.util.KafkaScheduler
@@ -57,7 +59,7 @@ class DynamicBrokerConfigTest {
     props.put(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG, oldKeystore)
     val config = KafkaConfig(props)
     val dynamicConfig = config.dynamicConfig
-    dynamicConfig.initialize(None, None)
+    dynamicConfig.initialize(None)
 
     assertEquals(config, dynamicConfig.currentKafkaConfig)
     assertEquals(oldKeystore, config.values.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG))
@@ -123,7 +125,7 @@ class DynamicBrokerConfigTest {
     Mockito.when(serverMock.logManager).thenReturn(logManagerMock)
     Mockito.when(serverMock.kafkaScheduler).thenReturn(schedulerMock)
 
-    config.dynamicConfig.initialize(None, None)
+    config.dynamicConfig.initialize(None)
     config.dynamicConfig.addBrokerReconfigurable(new BrokerDynamicThreadPool(serverMock))
     config.dynamicConfig.addReconfigurable(acceptorMock)
 
@@ -179,7 +181,7 @@ class DynamicBrokerConfigTest {
     when(serverMock.config).thenReturn(config)
     when(serverMock.remoteLogManagerOpt).thenReturn(Some(remoteLogManager))
 
-    config.dynamicConfig.initialize(None, None)
+    config.dynamicConfig.initialize(None)
     config.dynamicConfig.addBrokerReconfigurable(new DynamicRemoteLogConfig(serverMock))
 
     // Test dynamic update with valid values
@@ -215,7 +217,7 @@ class DynamicBrokerConfigTest {
     when(serverMock.config).thenReturn(config)
     when(serverMock.remoteLogManagerOpt).thenReturn(Some(remoteLogManager))
 
-    config.dynamicConfig.initialize(None, None)
+    config.dynamicConfig.initialize(None)
     config.dynamicConfig.addBrokerReconfigurable(new DynamicRemoteLogConfig(serverMock))
 
     // Test dynamic update with invalid values
@@ -246,13 +248,13 @@ class DynamicBrokerConfigTest {
     val origProps = TestUtils.createBrokerConfig(0, port = 8181)
     origProps.put(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG, "JKS")
     val config = KafkaConfig(origProps)
-    config.dynamicConfig.initialize(None, None)
+    config.dynamicConfig.initialize(None)
 
     val validProps = Map(s"listener.name.external.${SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG}" -> "ks.p12")
 
     val securityPropsWithoutListenerPrefix = Map(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG -> "PKCS12")
     verifyConfigUpdateWithInvalidConfig(config, origProps, validProps, securityPropsWithoutListenerPrefix)
-    val nonDynamicProps = Map(ZkConfigs.ZK_CONNECT_CONFIG -> "somehost:2181")
+    val nonDynamicProps = Map(KRaftConfigs.NODE_ID_CONFIG -> "123")
     verifyConfigUpdateWithInvalidConfig(config, origProps, validProps, nonDynamicProps)
 
     // Test update of configs with invalid type
@@ -265,7 +267,7 @@ class DynamicBrokerConfigTest {
     val origProps = TestUtils.createBrokerConfig(0, port = 8181)
     origProps.put(CleanerConfig.LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP, "100000000")
     val config = KafkaConfig(origProps)
-    config.dynamicConfig.initialize(None, None)
+    config.dynamicConfig.initialize(None)
 
     val validProps = Map.empty[String, String]
     val invalidProps = Map(CleanerConfig.LOG_CLEANER_THREADS_PROP -> "20")
@@ -368,7 +370,7 @@ class DynamicBrokerConfigTest {
   private def verifyConfigUpdate(name: String, value: Object, perBrokerConfig: Boolean, expectFailure: Boolean): Unit = {
     val configProps = TestUtils.createBrokerConfig(0, port = 8181)
     val config = KafkaConfig(configProps)
-    config.dynamicConfig.initialize(None, None)
+    config.dynamicConfig.initialize(None)
 
     val props = new Properties
     props.put(name, value)
@@ -376,7 +378,7 @@ class DynamicBrokerConfigTest {
 
     def updateConfig(): Unit = {
       if (perBrokerConfig)
-        config.dynamicConfig.updateBrokerConfig(0, config.dynamicConfig.toPersistentProps(props, perBrokerConfig))
+        config.dynamicConfig.updateBrokerConfig(0, props)
       else
         config.dynamicConfig.updateDefaultConfig(props)
     }
@@ -403,8 +405,8 @@ class DynamicBrokerConfigTest {
     // in an AlterConfigs request. Validation should fail with an exception if any of the configs are invalid.
     assertThrows(classOf[ConfigException], () => config.dynamicConfig.validate(props, perBrokerConfig = true))
 
-    // DynamicBrokerConfig#updateBrokerConfig is used to update configs from ZooKeeper during
-    // startup and when configs are updated in ZK. Update should apply valid configs and ignore
+    // DynamicBrokerConfig#updateBrokerConfig is used to update configs from broker during
+    // startup and when configs are updated in broker. Update should apply valid configs and ignore
     // invalid ones.
     config.dynamicConfig.updateBrokerConfig(0, props)
     validProps.foreach { case (name, value) => assertEquals(value, config.originals.get(name)) }
@@ -459,7 +461,7 @@ class DynamicBrokerConfigTest {
   def testAuthorizerConfig(): Unit = {
     val props = TestUtils.createBrokerConfig(0, port = 9092)
     val oldConfig =  KafkaConfig.fromProps(props)
-    oldConfig.dynamicConfig.initialize(None, None)
+    oldConfig.dynamicConfig.initialize(None)
 
     val kafkaServer: KafkaBroker = mock(classOf[kafka.server.KafkaBroker])
     when(kafkaServer.config).thenReturn(oldConfig)
@@ -505,7 +507,7 @@ class DynamicBrokerConfigTest {
   def testCombinedControllerAuthorizerConfig(): Unit = {
     val props = createCombinedControllerConfig(0, 9092)
     val oldConfig = KafkaConfig.fromProps(props)
-    oldConfig.dynamicConfig.initialize(None, None)
+    oldConfig.dynamicConfig.initialize(None)
 
     val controllerServer: ControllerServer = mock(classOf[kafka.server.ControllerServer])
     when(controllerServer.config).thenReturn(oldConfig)
@@ -550,7 +552,7 @@ class DynamicBrokerConfigTest {
   def testIsolatedControllerAuthorizerConfig(): Unit = {
     val props = createIsolatedControllerConfig(0, port = 9092)
     val oldConfig = KafkaConfig.fromProps(props)
-    oldConfig.dynamicConfig.initialize(None, None)
+    oldConfig.dynamicConfig.initialize(None)
 
     val controllerServer: ControllerServer = mock(classOf[kafka.server.ControllerServer])
     when(controllerServer.config).thenReturn(oldConfig)
@@ -589,7 +591,7 @@ class DynamicBrokerConfigTest {
   def testImproperConfigsAreRemoved(): Unit = {
     val props = TestUtils.createBrokerConfig(0)
     val config = KafkaConfig(props)
-    config.dynamicConfig.initialize(None, None)
+    config.dynamicConfig.initialize(None)
 
     assertEquals(SocketServerConfigs.MAX_CONNECTIONS_DEFAULT, config.maxConnections)
     assertEquals(LogConfig.DEFAULT_MAX_MESSAGE_BYTES, config.messageMaxBytes)
@@ -624,7 +626,7 @@ class DynamicBrokerConfigTest {
 
     Mockito.when(serverMock.config).thenReturn(config)
 
-    config.dynamicConfig.initialize(None, None)
+    config.dynamicConfig.initialize(None)
     val m = new DynamicMetricsReporters(brokerId, config, metrics, "clusterId")
     config.dynamicConfig.addReconfigurable(m)
     assertEquals(1, m.currentReporters.size)
@@ -649,7 +651,7 @@ class DynamicBrokerConfigTest {
 
     Mockito.when(serverMock.config).thenReturn(config)
 
-    config.dynamicConfig.initialize(None, None)
+    config.dynamicConfig.initialize(None)
     val m = new DynamicMetricsReporters(brokerId, config, metrics, "clusterId")
     config.dynamicConfig.addReconfigurable(m)
     assertTrue(m.currentReporters.isEmpty)
@@ -680,8 +682,8 @@ class DynamicBrokerConfigTest {
     val props = TestUtils.createBrokerConfig(0, port = 8181)
     props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "2592000000")
     val config = KafkaConfig(props)
-    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[KafkaBroker]))
-    config.dynamicConfig.initialize(None, None)
+    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]))
+    config.dynamicConfig.initialize(None)
     config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
 
     val newProps = new Properties()
@@ -703,8 +705,8 @@ class DynamicBrokerConfigTest {
     val props = TestUtils.createBrokerConfig(0, port = 8181)
     props.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, "4294967296")
     val config = KafkaConfig(props)
-    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[KafkaBroker]))
-    config.dynamicConfig.initialize(None, None)
+    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]))
+    config.dynamicConfig.initialize(None)
     config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
 
     val newProps = new Properties()
@@ -727,7 +729,7 @@ class DynamicBrokerConfigTest {
     props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP, "1000")
     props.put(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_BYTES_PROP, "1024")
     val config = KafkaConfig(props)
-    config.dynamicConfig.initialize(None, None)
+    config.dynamicConfig.initialize(None)
 
     // Check for invalid localRetentionMs < -2
     verifyConfigUpdateWithInvalidConfig(config, props, Map.empty, Map(RemoteLogManagerConfig.LOG_LOCAL_RETENTION_MS_PROP -> "-3"))
@@ -757,7 +759,7 @@ class DynamicBrokerConfigTest {
     assertEquals(500, config.remoteLogManagerConfig.remoteFetchMaxWaitMs)
 
     val dynamicRemoteLogConfig = new DynamicRemoteLogConfig(kafkaBroker)
-    config.dynamicConfig.initialize(None, None)
+    config.dynamicConfig.initialize(None)
     config.dynamicConfig.addBrokerReconfigurable(dynamicRemoteLogConfig)
 
     val newProps = new Properties()
@@ -792,7 +794,7 @@ class DynamicBrokerConfigTest {
       config.remoteLogManagerConfig.remoteListOffsetsRequestTimeoutMs)
 
     val dynamicRemoteLogConfig = new DynamicRemoteLogConfig(kafkaBroker)
-    config.dynamicConfig.initialize(None, None)
+    config.dynamicConfig.initialize(None)
     config.dynamicConfig.addBrokerReconfigurable(dynamicRemoteLogConfig)
 
     val newProps = new Properties()
@@ -828,7 +830,7 @@ class DynamicBrokerConfigTest {
     Mockito.when(serverMock.config).thenReturn(config)
     Mockito.when(serverMock.remoteLogManagerOpt).thenReturn(Some(remoteLogManager))
 
-    config.dynamicConfig.initialize(None, None)
+    config.dynamicConfig.initialize(None)
     config.dynamicConfig.addBrokerReconfigurable(new DynamicRemoteLogConfig(serverMock))
 
     val props = new Properties()
@@ -851,7 +853,7 @@ class DynamicBrokerConfigTest {
     Mockito.when(serverMock.config).thenReturn(config)
     Mockito.when(serverMock.remoteLogManagerOpt).thenReturn(Some(remoteLogManager))
 
-    config.dynamicConfig.initialize(None, None)
+    config.dynamicConfig.initialize(None)
     config.dynamicConfig.addBrokerReconfigurable(new DynamicRemoteLogConfig(serverMock))
 
     assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND,
@@ -882,7 +884,7 @@ class DynamicBrokerConfigTest {
     Mockito.when(serverMock.config).thenReturn(config)
     Mockito.when(serverMock.remoteLogManagerOpt).thenReturn(Some(remoteLogManager))
 
-    config.dynamicConfig.initialize(None, None)
+    config.dynamicConfig.initialize(None)
     config.dynamicConfig.addBrokerReconfigurable(new DynamicRemoteLogConfig(serverMock))
 
     assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND,
@@ -917,7 +919,7 @@ class DynamicBrokerConfigTest {
     Mockito.when(serverMock.config).thenReturn(config)
     Mockito.when(serverMock.remoteLogManagerOpt).thenReturn(Some(remoteLogManager))
 
-    config.dynamicConfig.initialize(None, None)
+    config.dynamicConfig.initialize(None)
     config.dynamicConfig.addBrokerReconfigurable(new DynamicRemoteLogConfig(serverMock))
 
     // Default values
@@ -963,8 +965,8 @@ class DynamicBrokerConfigTest {
     props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, retentionMs.toString)
     props.put(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, retentionBytes.toString)
     val config = KafkaConfig(props)
-    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]), mock(classOf[KafkaBroker]))
-    config.dynamicConfig.initialize(None, None)
+    val dynamicLogConfig = new DynamicLogConfig(mock(classOf[LogManager]))
+    config.dynamicConfig.initialize(None)
     config.dynamicConfig.addBrokerReconfigurable(dynamicLogConfig)
 
     val newProps = new Properties()
@@ -990,8 +992,8 @@ class DynamicBrokerConfigTest {
     Mockito.when(logManagerMock.reconfigureDefaultLogConfig(ArgumentMatchers.any(classOf[LogConfig])))
       .thenAnswer(invocation => currentDefaultLogConfig.set(invocation.getArgument(0)))
 
-    config.dynamicConfig.initialize(None, None)
-    config.dynamicConfig.addBrokerReconfigurable(new DynamicLogConfig(logManagerMock, serverMock))
+    config.dynamicConfig.initialize(None)
+    config.dynamicConfig.addBrokerReconfigurable(new DynamicLogConfig(logManagerMock))
   }
 
   @Test
@@ -1020,12 +1022,27 @@ class DynamicBrokerConfigTest {
     assertEquals(TimeUnit.HOURS.toMillis(1), ctx.config.logRetentionTimeMillis)
     assertFalse(ctx.currentDefaultLogConfig.get().originals().containsKey(ServerLogConfigs.LOG_RETENTION_TIME_MINUTES_CONFIG))
   }
+
+  @Test
+  def testAdvertisedListenersIsNotDynamicallyReconfigurable(): Unit = {
+    val origProps = TestUtils.createBrokerConfig(0, port = 8181)
+    val ctx = new DynamicLogConfigContext(origProps)
+
+    // update advertised listeners should not work
+    val props = new Properties()
+    props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "SASL_PLAINTEXT://localhost:8181")
+    ctx.config.dynamicConfig.updateDefaultConfig(props)
+    ctx.config.effectiveAdvertisedBrokerListeners.foreach(e =>
+      assertEquals(SecurityProtocol.PLAINTEXT.name, e.listenerName.value)
+    )
+    assertFalse(ctx.currentDefaultLogConfig.get().originals().containsKey(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG))
+  }
 }
 
 class TestDynamicThreadPool extends BrokerReconfigurable {
 
   override def reconfigurableConfigs: Set[String] = {
-    DynamicThreadPool.ReconfigurableConfigs
+    DynamicThreadPool.RECONFIGURABLE_CONFIGS.asScala
   }
 
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {

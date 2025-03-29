@@ -98,7 +98,7 @@ public final class ShareConsumeBenchSpec extends TaskSpec {
                             @JsonProperty("bootstrapServers") String bootstrapServers,
                             @JsonProperty("targetMessagesPerSec") int targetMessagesPerSec,
                             @JsonProperty("maxMessages") long maxMessages,
-                            @JsonProperty("consumerGroup") String shareGroup,
+                            @JsonProperty("shareGroup") String shareGroup,
                             @JsonProperty("consumerConf") Map<String, String> consumerConf,
                             @JsonProperty("commonClientConf") Map<String, String> commonClientConf,
                             @JsonProperty("adminClientConf") Map<String, String> adminClientConf,

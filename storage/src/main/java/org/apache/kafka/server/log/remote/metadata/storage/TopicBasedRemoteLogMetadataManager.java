@@ -272,15 +272,6 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         }
     }
 
-    public int metadataPartition(TopicIdPartition topicIdPartition) {
-        return rlmTopicPartitioner.metadataPartition(topicIdPartition);
-    }
-
-    // Visible For Testing
-    public Optional<Long> readOffsetForPartition(int metadataPartition) {
-        return consumerManager.readOffsetForPartition(metadataPartition);
-    }
-
     @Override
     public void onPartitionLeadershipChanges(Set<TopicIdPartition> leaderPartitions,
                                              Set<TopicIdPartition> followerPartitions) {
@@ -560,8 +551,12 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
         return doesTopicExist;
     }
 
-    public boolean isInitialized() {
+    boolean isInitialized() {
         return initialized.get();
+    }
+
+    boolean isInitializationFailed() {
+        return initializationFailed;
     }
 
     private void ensureInitializedAndNotClosed() {
@@ -573,11 +568,6 @@ public class TopicBasedRemoteLogMetadataManager implements RemoteLogMetadataMana
             throw new IllegalStateException("This instance is in invalid state, initialized: " + initialized +
                                                     " close: " + closing);
         }
-    }
-
-    // Visible for testing.
-    public TopicBasedRemoteLogMetadataManagerConfig config() {
-        return rlmmConfig;
     }
 
     @Override

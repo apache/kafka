@@ -24,6 +24,7 @@ USER root
 ARG kafka_url
 
 COPY jsa_launch /etc/kafka/docker/jsa_launch
+COPY server.properties /etc/kafka/docker/server.properties
 
 RUN set -eux ; \
     apk update ; \
@@ -78,11 +79,11 @@ RUN set -eux ; \
     chmod -R ug+w /etc/kafka /var/lib/kafka /etc/kafka/secrets; \
     cp /opt/kafka/config/log4j2.yaml /etc/kafka/docker/log4j2.yaml; \
     cp /opt/kafka/config/tools-log4j2.yaml /etc/kafka/docker/tools-log4j2.yaml; \
-    cp /opt/kafka/config/kraft/reconfig-server.properties /etc/kafka/docker/server.properties; \
     rm kafka.tgz kafka.tgz.asc KEYS; \
     apk del wget gpg gpg-agent; \
     apk cache clean;
 
+COPY server.properties /etc/kafka/docker/server.properties
 COPY --from=build-jsa kafka.jsa /opt/kafka/kafka.jsa
 COPY --from=build-jsa storage.jsa /opt/kafka/storage.jsa
 COPY --chown=appuser:appuser resources/common-scripts /etc/kafka/docker
