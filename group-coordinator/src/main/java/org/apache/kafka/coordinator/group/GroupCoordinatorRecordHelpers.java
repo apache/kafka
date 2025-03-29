@@ -47,6 +47,8 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
@@ -809,6 +811,44 @@ public class GroupCoordinatorRecordHelpers {
             new ShareGroupCurrentMemberAssignmentKey()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
+        );
+    }
+
+    /**
+     * Creates a ShareGroupStatePartitionMetadata record.
+     *
+     * @param groupId   The share group id.
+     * @param initializedTopics  Topics which have been initialized.
+     * @param deletingTopics  Topics which are being deleted.
+     * @return The record.
+     */
+    public static CoordinatorRecord newShareGroupStatePartitionMetadataRecord(
+        String groupId,
+        Map<Uuid, Map.Entry<String, Set<Integer>>> initializedTopics,
+        Map<Uuid, String> deletingTopics
+    ) {
+        List<ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo> initializedTopicPartitionInfo = initializedTopics.entrySet().stream()
+            .map(entry -> new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                .setTopicId(entry.getKey())
+                .setTopicName(entry.getValue().getKey())
+                .setPartitions(entry.getValue().getValue().stream().toList()))
+            .toList();
+
+        List<ShareGroupStatePartitionMetadataValue.TopicInfo> deletingTopicsInfo = deletingTopics.entrySet().stream()
+            .map(entry -> new ShareGroupStatePartitionMetadataValue.TopicInfo()
+                .setTopicId(entry.getKey())
+                .setTopicName(entry.getValue()))
+            .toList();
+
+        return CoordinatorRecord.record(
+            new ShareGroupStatePartitionMetadataKey()
+                .setGroupId(groupId),
+            new ApiMessageAndVersion(
+                new ShareGroupStatePartitionMetadataValue()
+                    .setInitializedTopics(initializedTopicPartitionInfo)
+                    .setDeletingTopics(deletingTopicsInfo),
+                (short) 0
+            )
         );
     }
 

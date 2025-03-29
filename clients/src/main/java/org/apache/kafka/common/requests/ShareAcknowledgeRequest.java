@@ -21,10 +21,9 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareAcknowledgeRequestData;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -118,9 +117,9 @@ public class ShareAcknowledgeRequest extends AbstractRequest {
                 .setErrorCode(error.code()));
     }
 
-    public static ShareAcknowledgeRequest parse(ByteBuffer buffer, short version) {
+    public static ShareAcknowledgeRequest parse(Readable readable, short version) {
         return new ShareAcknowledgeRequest(
-                new ShareAcknowledgeRequestData(new ByteBufferAccessor(buffer), version),
+                new ShareAcknowledgeRequestData(readable, version),
                 version
         );
     }

@@ -19,10 +19,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.UnregisterBrokerRequestData;
 import org.apache.kafka.common.message.UnregisterBrokerResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.Readable;
 
 public class UnregisterBrokerRequest extends AbstractRequest {
 
@@ -61,8 +59,8 @@ public class UnregisterBrokerRequest extends AbstractRequest {
                 .setErrorMessage(e.getMessage()));
     }
 
-    public static UnregisterBrokerRequest parse(ByteBuffer buffer, short version) {
-        return new UnregisterBrokerRequest(new UnregisterBrokerRequestData(new ByteBufferAccessor(buffer), version),
+    public static UnregisterBrokerRequest parse(Readable readable, short version) {
+        return new UnregisterBrokerRequest(new UnregisterBrokerRequestData(readable, version),
                 version);
     }
 }
