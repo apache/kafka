@@ -295,13 +295,6 @@ public class AdminClientConfig extends AbstractConfig {
         CommonClientConfigs.warnDisablingExponentialBackoff(this);
         return CommonClientConfigs.postProcessReconnectBackoffConfigs(this, parsedValues);
     }
-    
-    @Override
-    public Map<String, Object> originals() {
-        Map<String, Object> map = super.originals();
-        map.remove(AbstractConfig.CONFIG_PROVIDERS_CONFIG);
-        return map;
-    }
 
     public AdminClientConfig(Map<?, ?> props) {
         this(props, false);
