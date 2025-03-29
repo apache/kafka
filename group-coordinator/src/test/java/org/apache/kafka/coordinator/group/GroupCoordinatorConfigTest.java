@@ -153,6 +153,7 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, 666);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 111);
         configs.put(GroupCoordinatorConfig.CONSUMER_GROUP_MAX_HEARTBEAT_INTERVAL_MS_CONFIG, 222);
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_GROUPS_CONFIG, (short) 22);
 
         GroupCoordinatorConfig config = createConfig(configs);
 
@@ -181,6 +182,7 @@ public class GroupCoordinatorConfigTest {
         assertEquals(666, config.consumerGroupMaxSessionTimeoutMs());
         assertEquals(111, config.consumerGroupMinHeartbeatIntervalMs());
         assertEquals(222, config.consumerGroupMaxHeartbeatIntervalMs());
+        assertEquals(22, config.shareGroupMaxGroups());
     }
 
     @Test
@@ -280,6 +282,24 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_CONFIG, 50000);
         assertEquals("group.streams.heartbeat.interval.ms must be less than group.streams.session.timeout.ms",
             assertThrows(IllegalArgumentException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        // test for when SHARE_GROUP_MAX_GROUPS_CONFIG is of incorrect data type
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_GROUPS_CONFIG, 10);
+        assertEquals("Invalid value 10 for configuration group.share.max.groups: Expected value to be a 16-bit integer (short), but it was a java.lang.Integer",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        // test for when SHARE_GROUP_MAX_GROUPS_CONFIG is out of bounds
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_GROUPS_CONFIG, (short) 0);
+        assertEquals("Invalid value 0 for configuration group.share.max.groups: Value must be at least 1",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        // test for when SHARE_GROUP_MAX_GROUPS_CONFIG is out of bounds
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_GROUPS_CONFIG, (short) 110);
+        assertEquals("Invalid value 110 for configuration group.share.max.groups: Value must be no more than 100",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
     }
 
     public static GroupCoordinatorConfig createGroupCoordinatorConfig(
@@ -312,6 +332,7 @@ public class GroupCoordinatorConfigTest {
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, 5);
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, 5);
         configs.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG, 1000);
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_GROUPS_CONFIG, (short) 100);
 
         return createConfig(configs);
     }

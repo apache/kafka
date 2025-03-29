@@ -4052,7 +4052,7 @@ public class GroupMetadataManagerTest {
             .setProcessId("process-id")
             .setUserEndpoint(new Endpoint().setHost("localhost").setPort(1500));
     }
-    
+
     @Test
     public void testGenerateRecordsOnNewClassicGroup() throws Exception {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -15369,12 +15369,76 @@ public class GroupMetadataManagerTest {
         );
 
         // Member 2 joins the group.
-        assertThrows(GroupMaxSizeReachedException.class, () -> context.shareGroupHeartbeat(
+        Exception ex = assertThrows(GroupMaxSizeReachedException.class, () -> context.shareGroupHeartbeat(
             new ShareGroupHeartbeatRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId2)
                 .setMemberEpoch(0)
-                .setSubscribedTopicNames(List.of("foo", "bar"))));
+                .setSubscribedTopicNames(List.of(fooTopicName, barTopicName))));
+        assertEquals("The share group has reached its maximum capacity of 1 members.", ex.getMessage());
+    }
+
+    @Test
+    public void testShareGroupIsRejectedWithMaximumShareGroupIsReached() {
+        List<String> groupIds = List.of("group-id-1", "group-id-2");
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+
+        // A share group cannot have pre-defined members and member metadata as members and assignments
+        // are not persisted.
+        MockPartitionAssignor assignor = new MockPartitionAssignor("share");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .withConfig(GroupCoordinatorConfig.SHARE_GROUP_MAX_GROUPS_CONFIG, (short) 1)
+            .build();
+
+        assignor.prepareGroupAssignment(new GroupAssignment(
+            Map.of()
+        ));
+
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupIds.get(0), 100));
+
+        Uuid fooTopicId = Uuid.randomUuid();
+        String fooTopicName = "foo";
+
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(fooTopicId, fooTopicName, 1)
+            .build();
+
+        MetadataDelta delta = new MetadataDelta.Builder()
+            .setImage(image)
+            .build();
+
+        context.groupMetadataManager.onNewMetadataImage(image, delta);
+
+        // Group 1 initialize.
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupIds.get(0))
+                .setMemberId(memberId1)
+                .setMemberEpoch(0)
+                .setSubscribedTopicNames(List.of(fooTopicName)));
+        assertEquals(101, result.response().getKey().memberEpoch());
+
+        verifyShareGroupHeartbeatInitializeRequest(
+            result.response().getValue(),
+            Map.of(
+                fooTopicId,
+                Set.of(0)
+            ),
+            groupIds.get(0),
+            101,
+            true
+        );
+
+        // Group 2 initialize is reject.
+        Exception ex = assertThrows(GroupMaxSizeReachedException.class, () -> context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupIds.get(1))
+                .setMemberId(memberId2)
+                .setMemberEpoch(0)
+                .setSubscribedTopicNames(List.of(fooTopicName))));
+        assertEquals("The number of share groups has reached the limit of 1.", ex.getMessage());
     }
 
     @Test

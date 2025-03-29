@@ -39,7 +39,6 @@ public class ShareGroupConfigTest {
         configs.put(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG, true);
         configs.put(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, 200);
         configs.put(ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG, 5);
-        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_GROUPS_CONFIG, (short) 10);
         configs.put(ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, 30000);
         configs.put(ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, 15000);
         configs.put(ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, 60000);
@@ -50,7 +49,6 @@ public class ShareGroupConfigTest {
         assertTrue(config.isShareGroupEnabled());
         assertEquals(200, config.shareGroupPartitionMaxRecordLocks());
         assertEquals(5, config.shareGroupDeliveryCountLimit());
-        assertEquals(10, config.shareGroupMaxGroups());
         assertEquals(30000, config.shareGroupRecordLockDurationMs());
         assertEquals(15000, config.shareGroupMinRecordLockDurationMs());
         assertEquals(60000, config.shareGroupMaxRecordLockDurationMs());
@@ -88,24 +86,6 @@ public class ShareGroupConfigTest {
             assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
 
         configs.clear();
-        // test for when SHARE_GROUP_MAX_GROUPS_CONFIG is of incorrect data type
-        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_GROUPS_CONFIG, 10);
-        assertEquals("Invalid value 10 for configuration group.share.max.groups: Expected value to be a 16-bit integer (short), but it was a java.lang.Integer",
-            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
-
-        configs.clear();
-        // test for when SHARE_GROUP_MAX_GROUPS_CONFIG is out of bounds
-        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_GROUPS_CONFIG, (short) 0);
-        assertEquals("Invalid value 0 for configuration group.share.max.groups: Value must be at least 1",
-            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
-
-        configs.clear();
-        // test for when SHARE_GROUP_MAX_GROUPS_CONFIG is out of bounds
-        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_GROUPS_CONFIG, (short) 110);
-        assertEquals("Invalid value 110 for configuration group.share.max.groups: Value must be no more than 100",
-            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
-
-        configs.clear();
         // test for when SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG is out of bounds
         configs.put(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, 50);
         assertEquals("Invalid value 50 for configuration group.share.partition.max.record.locks: Value must be at least 100",
@@ -122,7 +102,6 @@ public class ShareGroupConfigTest {
         boolean shareGroupEnable,
         int shareGroupPartitionMaxRecordLocks,
         int shareGroupDeliveryCountLimit,
-        short shareGroupsMaxGroups,
         int shareGroupRecordLockDurationsMs,
         int shareGroupMinRecordLockDurationMs,
         int shareGroupMaxRecordLockDurationMs
@@ -131,7 +110,6 @@ public class ShareGroupConfigTest {
         configs.put(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG, shareGroupEnable);
         configs.put(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, shareGroupPartitionMaxRecordLocks);
         configs.put(ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_CONFIG, shareGroupDeliveryCountLimit);
-        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_GROUPS_CONFIG, shareGroupsMaxGroups);
         configs.put(ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupRecordLockDurationsMs);
         configs.put(ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupMinRecordLockDurationMs);
         configs.put(ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, shareGroupMaxRecordLockDurationMs);

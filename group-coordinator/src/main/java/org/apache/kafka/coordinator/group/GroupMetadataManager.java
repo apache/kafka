@@ -423,7 +423,7 @@ public class GroupMetadataManager {
     private final ConsumerGroupPartitionAssignor defaultConsumerGroupAssignor;
 
     /**
-     * The classic and consumer groups keyed by their name.
+     * The groups keyed by their name.
      */
     private final TimelineHashMap<String, Group> groups;
 
@@ -835,7 +835,7 @@ public class GroupMetadataManager {
             }
         }
     }
-    
+
     /**
      * Gets a streams group by committed offset.
      *
@@ -1047,8 +1047,9 @@ public class GroupMetadataManager {
      *                          created if it does not exist.
      *
      * @return A ShareGroup.
-     * @throws GroupIdNotFoundException if the group does not exist and createIfNotExists is false or
-     *                                  if the group is not a share group.
+     * @throws GroupIdNotFoundException     if the group does not exist and createIfNotExists is false or
+     *                                      if the group is not a share group.
+     * @throws GroupMaxSizeReachedException if the maximum for share groups has been reached.
      */
     private ShareGroup getOrMaybeCreateShareGroup(
         String groupId,
@@ -1061,6 +1062,12 @@ public class GroupMetadataManager {
         }
 
         if (group == null) {
+            long shareGroupCount = groups.values().stream().filter(g -> g.type() == SHARE).count();
+            // The group is rejected, if the maximum for share groups has been reached.
+            if (shareGroupCount >= config.shareGroupMaxGroups()) {
+                throw new GroupMaxSizeReachedException("The number of share groups has reached the limit of "
+                    + config.shareGroupMaxGroups() + ".");
+            }
             return new ShareGroup(snapshotRegistry, groupId);
         } else {
             if (group.type() == SHARE) {
@@ -2498,7 +2505,7 @@ public class GroupMetadataManager {
      * @param useClassicProtocol    Whether the member uses the classic protocol.
      * @param records               The list to accumulate records created to replace
      *                              the previous static member.
-     *                              
+     *
      * @return The existing consumer group member or a new one.
      */
     private ConsumerGroupMember getOrMaybeSubscribeStaticConsumerGroupMember(
