@@ -99,8 +99,8 @@ public class MinimalMovementReplicaBalancerTest {
 
     private static Map<Integer, List<Integer>> twoConflictAssignment = Map.of(
         0, List.of(1, 2),
-        1, List.of(1, 2),
-        2, List.of(2, 3),
+        1, List.of(2, 3),
+        2, List.of(1, 2),
         3, List.of(2, 3),
         4, List.of(3, 1),
         5, List.of(3, 1)
@@ -241,9 +241,9 @@ public class MinimalMovementReplicaBalancerTest {
         Map<Integer, List<Integer>> newAssignment = minimalMovementReplicaBalancer.assignReplicasToBrokers();
         Map<Integer, List<Integer>> expectAssignment = Map.of(
             0, List.of(1, 2),
-            1, List.of(2, 1),
-            2, List.of(3, 2),
-            3, List.of(2, 3),
+            1, List.of(2, 3),
+            2, List.of(2, 1),
+            3, List.of(3, 2),
             4, List.of(3, 1),
             5, List.of(1, 3)
         );
