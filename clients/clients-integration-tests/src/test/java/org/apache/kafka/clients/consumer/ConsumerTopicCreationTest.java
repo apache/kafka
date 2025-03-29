@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.TopicListing;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
@@ -38,7 +40,7 @@ public class ConsumerTopicCreationTest {
     private static final long POLL_TIMEOUT = 1000;
 
     @ClusterTemplate("autoCreateTopicsConfigs")
-    void testAsyncConsumerTopicCreationIfConsumerAllowToCreateTopic(ClusterInstance cluster) {
+    void testAsyncConsumerTopicCreationIfConsumerAllowToCreateTopic(ClusterInstance cluster) throws Exception {
         try (Consumer<byte[], byte[]> consumer = createConsumer(cluster, GroupProtocol.CONSUMER, true)) {
             subscribeAndPoll(consumer);
             assertTopicCreateBasedOnPermission(cluster);
@@ -46,7 +48,7 @@ public class ConsumerTopicCreationTest {
     }
 
     @ClusterTemplate("autoCreateTopicsConfigs")
-    void testAsyncConsumerTopicCreationIfConsumerDisallowToCreateTopic(ClusterInstance cluster) {
+    void testAsyncConsumerTopicCreationIfConsumerDisallowToCreateTopic(ClusterInstance cluster) throws Exception {
         try (Consumer<byte[], byte[]> consumer = createConsumer(cluster, GroupProtocol.CONSUMER, false)) {
             subscribeAndPoll(consumer);
             assertTopicNotCreate(cluster);
@@ -54,7 +56,7 @@ public class ConsumerTopicCreationTest {
     }
 
     @ClusterTemplate("autoCreateTopicsConfigs")
-    void testClassicConsumerTopicCreationIfConsumerAllowToCreateTopic(ClusterInstance cluster) {
+    void testClassicConsumerTopicCreationIfConsumerAllowToCreateTopic(ClusterInstance cluster) throws Exception {
         try (Consumer<byte[], byte[]> consumer = createConsumer(cluster, GroupProtocol.CLASSIC, true)) {
             subscribeAndPoll(consumer);
             assertTopicCreateBasedOnPermission(cluster);
@@ -62,7 +64,7 @@ public class ConsumerTopicCreationTest {
     }
 
     @ClusterTemplate("autoCreateTopicsConfigs")
-    void testClassicConsumerTopicCreationIfConsumerDisallowToCreateTopic(ClusterInstance cluster) {
+    void testClassicConsumerTopicCreationIfConsumerDisallowToCreateTopic(ClusterInstance cluster) throws Exception {
         try (Consumer<byte[], byte[]> consumer = createConsumer(cluster, GroupProtocol.CLASSIC, false)) {
             subscribeAndPoll(consumer);
             assertTopicNotCreate(cluster);
@@ -74,7 +76,7 @@ public class ConsumerTopicCreationTest {
         consumer.poll(Duration.ofMillis(POLL_TIMEOUT));
     }
 
-    private void assertTopicCreateBasedOnPermission(ClusterInstance cluster) {
+    private void assertTopicCreateBasedOnPermission(ClusterInstance cluster) throws Exception {
         if (allowAutoCreateTopics(cluster))
             assertTopicCreate(cluster);
         else
@@ -85,17 +87,19 @@ public class ConsumerTopicCreationTest {
         return cluster.config().serverProperties().get(AUTO_CREATE_TOPICS_ENABLE_CONFIG).equals("true");
     }
 
-    private void assertTopicCreate(ClusterInstance cluster) {
+    private void assertTopicCreate(ClusterInstance cluster) throws Exception {
         assertTrue(getAllTopics(cluster).contains(TOPIC));
     }
 
-    private void assertTopicNotCreate(ClusterInstance cluster) {
+    private void assertTopicNotCreate(ClusterInstance cluster) throws Exception {
         assertFalse(getAllTopics(cluster).contains(TOPIC),
             "Both " + AUTO_CREATE_TOPICS_ENABLE_CONFIG + " and " + ALLOW_AUTO_CREATE_TOPICS_CONFIG + " need to be true to create topic automatically");
     }
 
-    private Set<String> getAllTopics(ClusterInstance cluster) {
-        return cluster.brokers().values().iterator().next().metadataCache().getAllTopics();
+    private List<String> getAllTopics(ClusterInstance cluster) throws Exception {
+        try (Admin admin = cluster.admin()) {
+            return admin.listTopics().listings().get().stream().map(TopicListing::name).toList();
+        }
     }
 
     private static List<ClusterConfig> autoCreateTopicsConfigs() {
