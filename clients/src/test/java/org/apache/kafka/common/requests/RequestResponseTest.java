@@ -624,11 +624,10 @@ public class RequestResponseTest {
 
         ShareFetchResponseData.ShareFetchableTopicResponse response = new ShareFetchResponseData.ShareFetchableTopicResponse()
             .setPartitions(List.of(partitionData))
-            .setTopicId(id);
+            .setTopicId(id)
+            .setPartitions(List.of(ShareFetchResponse.partitionResponse(0, Errors.NONE)));
 
         ShareFetchResponseData data = new ShareFetchResponseData().setResponses(List.of(response));
-
-        response.setPartitions(List.of(ShareFetchResponse.partitionResponse(0, Errors.NONE)));
         ShareFetchResponse shareFetchResponse = ShareFetchResponse.of(data);
         validateNoNullRecords(shareFetchResponse);
 
