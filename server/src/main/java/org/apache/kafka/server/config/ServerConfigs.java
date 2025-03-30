@@ -108,7 +108,11 @@ public class ServerConfigs {
 
     /** Internal Configurations **/
     public static final String UNSTABLE_API_VERSIONS_ENABLE_CONFIG = "unstable.api.versions.enable";
+    public static final boolean UNSTABLE_API_VERSIONS_ENABLE_DEFAULT = false;
+    public static final String UNSTABLE_API_VERSIONS_ENABLE_DOC = "This indicates whether unreleased APIs should be advertised by this node.";
     public static final String UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG = "unstable.feature.versions.enable";
+    public static final boolean UNSTABLE_FEATURE_VERSIONS_ENABLE_DEFAULT = false;
+    public static final String UNSTABLE_FEATURE_VERSIONS_ENABLE_DOC = "This indicates whether unreleased MetadataVersions should be enabled on this node.";
 
     /************* Authorizer Configuration ***********/
     public static final String AUTHORIZER_CLASS_NAME_CONFIG = "authorizer.class.name";
@@ -148,8 +152,6 @@ public class ServerConfigs {
             /** ********* Request Limit Configuration ***********/
             .define(MAX_REQUEST_PARTITION_SIZE_LIMIT_CONFIG, INT, MAX_REQUEST_PARTITION_SIZE_LIMIT_DEFAULT, atLeast(1), MEDIUM, MAX_REQUEST_PARTITION_SIZE_LIMIT_DOC)
             /** Internal Configurations **/
-            // This indicates whether unreleased APIs should be advertised by this node.
-            .defineInternal(UNSTABLE_API_VERSIONS_ENABLE_CONFIG, BOOLEAN, false, HIGH)
-            // This indicates whether unreleased MetadataVersions should be enabled on this node.
-            .defineInternal(UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, BOOLEAN, false, HIGH);
+            .defineInternal(UNSTABLE_API_VERSIONS_ENABLE_CONFIG, BOOLEAN, UNSTABLE_API_VERSIONS_ENABLE_DEFAULT, null, HIGH, UNSTABLE_API_VERSIONS_ENABLE_DOC)
+            .defineInternal(UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, BOOLEAN, UNSTABLE_FEATURE_VERSIONS_ENABLE_DEFAULT, null, HIGH, UNSTABLE_FEATURE_VERSIONS_ENABLE_DOC);
 }
