@@ -151,10 +151,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
   private val lock = new ReentrantReadWriteLock()
   private val sensorAccessor = new SensorAccess(lock, metrics)
   private val quotaCallback = clientQuotaCallbackPlugin match {
-    case Some(plugin) => if (plugin.get() == null)
-      new DefaultQuotaCallback
-    else
-      plugin.get()
+    case Some(plugin) => plugin.get()
     case None => new DefaultQuotaCallback
   }
   private val clientQuotaType = QuotaType.toClientQuotaType(quotaType)

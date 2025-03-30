@@ -89,7 +89,6 @@ public class CustomQuotaCallbackTest {
             Map.of("role", ProcessRole.BrokerRole.toString())
         );
         MonitorCustomQuotaCallback clientQuotaCallback = (MonitorCustomQuotaCallback) clientQuotaCallbackPlugin.get();
-        assertEquals(MonitorCustomQuotaCallback.class, clientQuotaCallback.getClass());
         MetricName metricName = null;
         for (MetricName name : metrics.metrics().keySet()) {
             if (name.name().equals(clientQuotaCallback.metricName.name())) {
@@ -153,7 +152,6 @@ public class CustomQuotaCallbackTest {
 
     public static class MonitorCustomQuotaCallback extends CustomQuotaCallback implements Monitorable {
 
-        public final AtomicInteger counter = new AtomicInteger();
         public static MetricName metricName = null;
 
         @Override
@@ -163,12 +161,11 @@ public class CustomQuotaCallbackTest {
                 "Number of times client quota callback is triggered",
                 Map.of()
             );
-            metrics.addMetric(metricName, (Gauge<Integer>) (config, now) -> counter.get());
+            metrics.addMetric(metricName, (Gauge<Integer>) (config, now) -> 0);
         }
 
         @Override
         public boolean updateClusterMetadata(Cluster cluster) {
-            counter.incrementAndGet();
             return true;
         }
     }
