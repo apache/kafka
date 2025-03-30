@@ -31,9 +31,9 @@ import java.util.concurrent.atomic.AtomicBoolean
  */
 class PlaintextConsumerCallbackTest extends AbstractConsumerTest {
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testConsumerRebalanceListenerAssignOnPartitionsAssigned(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testConsumerRebalanceListenerAssignOnPartitionsAssigned(groupProtocol: String): Unit = {
     val tp = new TopicPartition(topic, 0)
     triggerOnPartitionsAssigned(tp, { (consumer, _) =>
       val e: Exception = assertThrows(classOf[IllegalStateException], () => consumer.assign(Collections.singletonList(tp)))
@@ -41,18 +41,18 @@ class PlaintextConsumerCallbackTest extends AbstractConsumerTest {
     })
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testConsumerRebalanceListenerAssignmentOnPartitionsAssigned(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testConsumerRebalanceListenerAssignmentOnPartitionsAssigned(groupProtocol: String): Unit = {
     val tp = new TopicPartition(topic, 0)
     triggerOnPartitionsAssigned(tp, { (consumer, _) =>
       assertTrue(consumer.assignment().contains(tp));
     })
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testConsumerRebalanceListenerBeginningOffsetsOnPartitionsAssigned(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testConsumerRebalanceListenerBeginningOffsetsOnPartitionsAssigned(groupProtocol: String): Unit = {
     val tp = new TopicPartition(topic, 0)
     triggerOnPartitionsAssigned(tp, { (consumer, _) =>
       val map = consumer.beginningOffsets(Collections.singletonList(tp))
@@ -61,9 +61,9 @@ class PlaintextConsumerCallbackTest extends AbstractConsumerTest {
     })
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testConsumerRebalanceListenerAssignOnPartitionsRevoked(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testConsumerRebalanceListenerAssignOnPartitionsRevoked(groupProtocol: String): Unit = {
     val tp = new TopicPartition(topic, 0)
     triggerOnPartitionsRevoked(tp, { (consumer, _) =>
       val e: Exception = assertThrows(classOf[IllegalStateException], () => consumer.assign(Collections.singletonList(tp)))
@@ -71,18 +71,18 @@ class PlaintextConsumerCallbackTest extends AbstractConsumerTest {
     })
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testConsumerRebalanceListenerAssignmentOnPartitionsRevoked(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testConsumerRebalanceListenerAssignmentOnPartitionsRevoked(groupProtocol: String): Unit = {
     val tp = new TopicPartition(topic, 0)
     triggerOnPartitionsRevoked(tp, { (consumer, _) =>
       assertTrue(consumer.assignment().contains(tp))
     })
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testConsumerRebalanceListenerBeginningOffsetsOnPartitionsRevoked(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testConsumerRebalanceListenerBeginningOffsetsOnPartitionsRevoked(groupProtocol: String): Unit = {
     val tp = new TopicPartition(topic, 0)
     triggerOnPartitionsRevoked(tp, { (consumer, _) =>
       val map = consumer.beginningOffsets(Collections.singletonList(tp))
@@ -91,17 +91,16 @@ class PlaintextConsumerCallbackTest extends AbstractConsumerTest {
     })
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testGetPositionOfNewlyAssignedPartitionOnPartitionsAssignedCallback(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testGetPositionOfNewlyAssignedPartitionOnPartitionsAssignedCallback(groupProtocol: String): Unit = {
     val tp = new TopicPartition(topic, 0)
     triggerOnPartitionsAssigned(tp, { (consumer, _) => assertDoesNotThrow(() => consumer.position(tp)) })
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testSeekPositionAndPauseNewlyAssignedPartitionOnPartitionsAssignedCallback(quorum: String,
-                                                                                 groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testSeekPositionAndPauseNewlyAssignedPartitionOnPartitionsAssignedCallback(groupProtocol: String): Unit = {
     val consumer = createConsumer()
     val startingOffset = 100L
     val totalRecords = 120L
