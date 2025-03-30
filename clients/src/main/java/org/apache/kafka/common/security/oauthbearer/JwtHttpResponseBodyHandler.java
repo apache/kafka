@@ -91,6 +91,6 @@ public class JwtHttpResponseBodyHandler implements HttpResponse.BodyHandler<Stri
             snippet = String.format("%s (trimmed to first %d characters out of %d total)", s, MAX_RESPONSE_BODY_LENGTH, actualLength);
         }
 
-        throw new JwtRetrieverException(String.format("The token endpoint response did not contain an access_token value. Response: (%s)", snippet));
+        throw new JwtRetrieverException(String.format("The token endpoint response did not contain a JWT value. Response: (%s)", snippet));
     }
 }

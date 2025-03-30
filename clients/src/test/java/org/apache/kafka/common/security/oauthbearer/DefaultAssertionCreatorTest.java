@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -36,6 +35,7 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.FileChannel;
 import java.nio.file.StandardOpenOption;
+import java.security.GeneralSecurityException;
 import java.security.KeyPair;
 import java.security.KeyPairGenerator;
 import java.security.NoSuchAlgorithmException;
@@ -51,6 +51,7 @@ import static org.apache.kafka.common.security.oauthbearer.DefaultAssertionCreat
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class DefaultAssertionCreatorTest {
 
@@ -86,20 +87,24 @@ public class DefaultAssertionCreatorTest {
     @Test
     public void testInvalidPrivateKeySecret() throws Exception {
         File privateKeyFile = generatePrivateKeySecret();
+        long originalFileLength = privateKeyFile.length();
+        int bytesToTruncate = 10;       // A single byte isn't enough
 
-        // Intentionally "mangle" the private key secret by stripping off the last byte.
+        // Intentionally "mangle" the private key secret by truncating the file.
         try (FileChannel channel = FileChannel.open(privateKeyFile.toPath(), StandardOpenOption.WRITE)) {
             long size = channel.size();
-            if (size > 0) {
-                channel.truncate(size - 1); // Truncate last byte
-            }
+            assertEquals(originalFileLength, size);
+            assertTrue(size > bytesToTruncate);
+            channel.truncate(size - bytesToTruncate);
         }
+
+        assertEquals(originalFileLength - bytesToTruncate, privateKeyFile.length());
 
         TestAssertionJwtTemplate jwtTemplate = new TestAssertionJwtTemplate();
         AssertionCreator assertionCreator = new Builder()
             .setPrivateKeyFile(privateKeyFile)
             .build();
-        assertThrows(KafkaException.class, () -> assertionCreator.create(jwtTemplate));
+        assertThrows(GeneralSecurityException.class, () -> assertionCreator.create(jwtTemplate));
     }
 
     @ParameterizedTest
@@ -159,7 +164,7 @@ public class DefaultAssertionCreatorTest {
         File file = File.createTempFile("private-", ".key");
         byte[] bytes = Base64.getEncoder().encode(privateKey.getEncoded());
 
-        try (FileChannel channel = FileChannel.open(file.toPath(), EnumSet.of(StandardOpenOption.WRITE, StandardOpenOption.CREATE_NEW))) {
+        try (FileChannel channel = FileChannel.open(file.toPath(), EnumSet.of(StandardOpenOption.WRITE))) {
             Utils.writeFully(channel, ByteBuffer.wrap(bytes));
         }
 

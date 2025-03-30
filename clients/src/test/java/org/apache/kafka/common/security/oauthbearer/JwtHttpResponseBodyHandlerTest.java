@@ -35,7 +35,7 @@ public class JwtHttpResponseBodyHandlerTest extends OAuthBearerTest {
         String expected = "abc";
         ObjectMapper mapper = new ObjectMapper();
         ObjectNode node = mapper.createObjectNode();
-        node.put("access_token", expected);
+        node.put("id_token", expected);
 
         JwtHttpResponseBodyHandler handler = new JwtHttpResponseBodyHandler();
         String actual = handler.extractJwt(mapper.writeValueAsString(node));
@@ -46,7 +46,7 @@ public class JwtHttpResponseBodyHandlerTest extends OAuthBearerTest {
     public void testParseJwtEmptyJwt() {
         ObjectMapper mapper = new ObjectMapper();
         ObjectNode node = mapper.createObjectNode();
-        node.put("access_token", "");
+        node.put("id_token", "");
 
         JwtHttpResponseBodyHandler handler = new JwtHttpResponseBodyHandler();
         assertThrows(JwtRetrieverException.class, () -> handler.extractJwt(mapper.writeValueAsString(node)));
