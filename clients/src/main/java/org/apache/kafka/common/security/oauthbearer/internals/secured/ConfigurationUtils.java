@@ -24,6 +24,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.io.File;
 import java.net.MalformedURLException;
+import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Arrays;
@@ -191,6 +192,17 @@ public class ConfigurationUtils {
         return url;
     }
 
+    public URI validateUri(String name) {
+        String value = validateString(name);
+
+        try {
+            URL url = validateUrl(name);
+            return url.toURI();
+        } catch (URISyntaxException e) {
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a URI (%s) that is malformed: %s", name, value, e.getMessage()));
+        }
+    }
+
     public String validateString(String name) {
         return validateString(name, true);
     }
@@ -198,23 +210,14 @@ public class ConfigurationUtils {
     public String validateString(String name, boolean isRequired) {
         String value = get(name);
 
-        if (value == null) {
+        if (Utils.isBlank(value)) {
             if (isRequired)
-                throw new ConfigException(String.format("The OAuth configuration option %s value must be non-null", name));
+                throw new ConfigException(String.format("The OAuth configuration option %s value must be non-null, non-empty, and non-whitespace", name));
             else
                 return null;
         }
 
-        value = value.trim();
-
-        if (value.isEmpty()) {
-            if (isRequired)
-                throw new ConfigException(String.format("The OAuth configuration option %s value must not contain only whitespace", name));
-            else
-                return null;
-        }
-
-        return value;
+        return value.trim();
     }
 
     public Boolean validateBoolean(String name, boolean isRequired) {

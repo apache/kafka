@@ -51,10 +51,10 @@ public interface JwtValidator extends OAuthBearerConfigurable {
      *
      * @return {@link OAuthBearerToken}
      *
-     * @throws InvalidJwtException Thrown on errors performing validation of given token
+     * @throws JwtValidatorException Thrown on errors performing validation of given token
      */
 
-    OAuthBearerToken validate(String jwt) throws InvalidJwtException;
+    OAuthBearerToken validate(String jwt) throws JwtValidatorException;
 
     @Override
     default void close() {

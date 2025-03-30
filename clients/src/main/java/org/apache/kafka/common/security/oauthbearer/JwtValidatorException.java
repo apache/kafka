@@ -16,11 +16,29 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
-import java.util.Map;
+import org.apache.kafka.common.KafkaException;
 
-public interface HttpRequestFormatter {
+import javax.security.auth.callback.Callback;
+import javax.security.auth.callback.CallbackHandler;
 
-    String formatBody();
+/**
+ * A {@code JwtValidatorException} is thrown in cases where the validity of a JWT access token
+ * cannot be determined. It is intended to be used when errors arise within the processing of a
+ * {@link CallbackHandler#handle(Callback[])}. This error, however, is not thrown from that method directly.
+ *
+ * @see JwtValidator#validate(String)
+ */
+public class JwtValidatorException extends KafkaException {
 
-    Map<String, String> formatHeaders();
+    public JwtValidatorException(String message) {
+        super(message);
+    }
+
+    public JwtValidatorException(Throwable cause) {
+        super(cause);
+    }
+
+    public JwtValidatorException(String message, Throwable cause) {
+        super(message, cause);
+    }
 }

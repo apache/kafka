@@ -17,48 +17,131 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsRequestFormatter;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsRequestGenerator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestGenerator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
+import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 
 /**
  * A {@link JwtRetriever} that will communicate with an OAuth/OIDC provider directly via HTTP to post client
  * credentials using the client ID and client secret values to a publicized token endpoint URL
  * ({@link SaslConfigs#SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL}).
  */
-public class ClientCredentialsJwtRetriever extends HttpJwtRetriever {
+public class ClientCredentialsJwtRetriever implements JwtRetriever {
 
-    private static final String CLIENT_ID_CONFIG = "clientId";
-    private static final String CLIENT_SECRET_CONFIG = "clientSecret";
-    private static final String SCOPE_CONFIG = "scope";
+    private static final String CLIENT_ID_JAAS = "clientId";
+    private static final String CLIENT_SECRET_JAAS = "clientSecret";
+    private static final String SCOPE_JAAS = "scope";
 
-    private HttpRequestFormatter requestFormatter;
+    private final Time time;
 
-    @Override
-    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        super.configure(configs, saslMechanism, jaasConfigEntries);
+    private HttpRequestGenerator requestGenerator;
+    private long retryBackoffMs;
+    private long retryBackoffMaxMs;
+    private HttpClient client;
 
-        JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
-        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        String clientId = jou.validateString(CLIENT_ID_CONFIG);
-        String clientSecret = jou.validateString(CLIENT_SECRET_CONFIG);
-        String scope = jou.validateString(SCOPE_CONFIG, false);
-        boolean urlencodeHeader = validateUrlencodeHeader(cu);
-        requestFormatter = new ClientCredentialsRequestFormatter(clientId, clientSecret, scope, urlencodeHeader);
+    public ClientCredentialsJwtRetriever() {
+        this(Time.SYSTEM);
+    }
+
+    public ClientCredentialsJwtRetriever(Time time) {
+        this.time = time;
     }
 
     @Override
-    protected HttpRequestFormatter requestFormatter() {
-        return requestFormatter;
+    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
+        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
+
+        retryBackoffMs =  cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS);
+        retryBackoffMaxMs = cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
+
+//        Optional<SslResource> sslResource = jou.maybeCreateSslResource(url);
+        Optional<Integer> connectTimeoutMs = Optional.ofNullable(cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false));
+
+        HttpClient.Builder clientBuilder = HttpClient.newBuilder();
+
+        if (connectTimeoutMs.isPresent())
+            clientBuilder = clientBuilder.connectTimeout(Duration.ofMillis(connectTimeoutMs.get()));
+
+//        if (sslResource.isPresent())
+//            clientBuilder = clientBuilder.sslContext(sslResource.get());
+
+        client = clientBuilder.build();
+
+        URI tokenEndpoint = cu.validateUri(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+        String clientId = configOrJaas(
+            configs,
+            cu,
+            jou,
+            SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID,
+            CLIENT_ID_JAAS,
+            true
+        );
+        String clientSecret = configOrJaas(
+            configs,
+            cu,
+            jou,
+            SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET,
+            CLIENT_SECRET_JAAS,
+            true
+        );
+        String scope = configOrJaas(
+            configs,
+            cu,
+            jou,
+            SASL_OAUTHBEARER_SCOPE,
+            SCOPE_JAAS,
+            false
+        );
+        boolean urlencodeHeader = validateUrlencodeHeader(cu);
+
+        requestGenerator = new ClientCredentialsRequestGenerator(
+            tokenEndpoint,
+            clientId,
+            clientSecret,
+            scope,
+            urlencodeHeader
+        );
+    }
+
+    @Override
+    public String retrieve() throws JwtRetrieverException {
+        HttpRequest request = requestGenerator.generateRequest();
+        JwtHttpClient jwtHttpClient = new JwtHttpClient(time);
+        HttpResponse.BodyHandler<String> responseBodyHandler = new JwtHttpResponseBodyHandler();
+
+        return jwtHttpClient.request(
+            client,
+            request,
+            responseBodyHandler,
+            retryBackoffMs,
+            retryBackoffMaxMs
+        );
     }
 
     /**
@@ -71,9 +154,26 @@ public class ClientCredentialsJwtRetriever extends HttpJwtRetriever {
      * This utility method ensures that we have a non-{@code null} value to use in the
      * {@link ClientCredentialsJwtRetriever} constructor.
      */
-    public static boolean validateUrlencodeHeader(ConfigurationUtils configurationUtils) {
-        Boolean urlencodeHeader = configurationUtils.validateBoolean(SASL_OAUTHBEARER_HEADER_URLENCODE, false);
+    public static boolean validateUrlencodeHeader(ConfigurationUtils cu) {
+        Boolean urlencodeHeader = cu.validateBoolean(SASL_OAUTHBEARER_HEADER_URLENCODE, false);
         return Objects.requireNonNullElse(urlencodeHeader, DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE);
     }
 
+    private String configOrJaas(Map<String, ?> configs,
+                                ConfigurationUtils cu,
+                                JaasOptionsUtils jou,
+                                String configName,
+                                String jaasName,
+                                boolean isRequired) {
+        if (configs.containsKey(configName)) {
+            return cu.validateString(configName, isRequired);
+        } else {
+            return jou.validateString(jaasName, isRequired);
+        }
+    }
+
+    @Override
+    public void close() {
+        Utils.closeQuietly(requestGenerator, "requestGenerator");
+    }
 }

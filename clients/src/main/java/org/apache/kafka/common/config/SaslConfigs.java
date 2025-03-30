@@ -162,6 +162,16 @@ public class SaslConfigs {
             + " of the sasl.jaas.config configuration with the key \"scope\". For backward compatibility, the \"scope\" JAAS option can still be used, but if both are present,"
             + " this configuration value takes precedence over the value from sasl.jaas.config.";
 
+    public static final String SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID = "sasl.oauthbearer.client.credentials.client.id";
+    public static final String SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET = "sasl.oauthbearer.client.credentials.client.secret";
+    public static final String SASL_OAUTHBEARER_ASSERTION_ALGORITHM = "sasl.oauthbearer.assertion.algorithm";
+    public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_MINUTES = "sasl.oauthbearer.assertion.claim.exp.minutes";
+    public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_MINUTES = "sasl.oauthbearer.assertion.claim.nbf.minutes";
+    public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_JTI_INCLUDE = "sasl.oauthbearer.assertion.claim.jti.include";
+    public static final String SASL_OAUTHBEARER_ASSERTION_FILE = "sasl.oauthbearer.assertion.file";
+    public static final String SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE = "sasl.oauthbearer.assertion.private.key.file";
+    public static final String SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE = "sasl.oauthbearer.assertion.private.key.passphrase";
+    public static final String SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE = "sasl.oauthbearer.assertion.template.file";
 
 
 

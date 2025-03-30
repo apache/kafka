@@ -23,6 +23,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
+import java.net.URI;
 import java.util.Collections;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -31,42 +32,43 @@ import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARE
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-public class ClientCredentialsRequestFormatterTest extends RequestFormatterTest {
+public class ClientCredentialsRequestGeneratorTest extends HttpRequestGeneratorTest {
 
     @Test
     public void testFormatAuthorizationHeader() {
-        ClientCredentialsRequestFormatter requestFormatter = new Builder()
+        ClientCredentialsRequestGenerator requestGenerator = new Builder()
             .setClientId("id")
             .setClientSecret("secret")
             .build();
-        assertAuthorizationHeaderEquals(requestFormatter, "Basic aWQ6c2VjcmV0");
+        assertAuthorizationHeaderEquals(requestGenerator, "Basic aWQ6c2VjcmV0");
     }
 
     @Test
     public void testFormatAuthorizationHeaderEncoding() {
-        ClientCredentialsRequestFormatter requestFormatter = new Builder()
+        ClientCredentialsRequestGenerator requestGenerator = new Builder()
             .setClientId("SOME_RANDOM_LONG_USER_01234")
             .setClientSecret("9Q|0`8i~ute-n9ksjLWb\\50\"AX@UUED5E")
             .build();
         // according to RFC-7617, we need to use the *non-URL safe* base64 encoder. See KAFKA-14496.
-        assertAuthorizationHeaderEquals(requestFormatter, "Basic U09NRV9SQU5ET01fTE9OR19VU0VSXzAxMjM0OjlRfDBgOGl+dXRlLW45a3NqTFdiXDUwIkFYQFVVRUQ1RQ==");
+        assertAuthorizationHeaderEquals(requestGenerator, "Basic U09NRV9SQU5ET01fTE9OR19VU0VSXzAxMjM0OjlRfDBgOGl+dXRlLW45a3NqTFdiXDUwIkFYQFVVRUQ1RQ==");
 
-        requestFormatter = new Builder()
+        requestGenerator = new Builder()
             .setClientId("user!@~'")
             .setClientSecret("secret-(*)!")
             .setUrlencode(true)
             .build();
         // according to RFC-6749 clientId & clientSecret must be urlencoded, see https://tools.ietf.org/html/rfc6749#section-2.3.1
-        assertAuthorizationHeaderEquals(requestFormatter, "Basic dXNlciUyMSU0MCU3RSUyNzpzZWNyZXQtJTI4KiUyOSUyMQ==");
+        assertAuthorizationHeaderEquals(requestGenerator, "Basic dXNlciUyMSU0MCU3RSUyNzpzZWNyZXQtJTI4KiUyOSUyMQ==");
     }
 
     @Test
     public void testFormatRequestBody() {
-        ClientCredentialsRequestFormatter requestFormatter = new Builder()
+        ClientCredentialsRequestGenerator requestGenerator = new Builder()
             .setScope("test")
             .build();
-        assertBodyEquals(requestFormatter, "grant_type=client_credentials&scope=test");
+        assertBodyEquals(requestGenerator, "grant_type=client_credentials&scope=test");
     }
 
     @Test
@@ -111,8 +113,10 @@ public class ClientCredentialsRequestFormatterTest extends RequestFormatterTest 
         );
     }
 
-    private void assertAuthorizationHeaderEquals(ClientCredentialsRequestFormatter requestFormatter, String expected) {
-        assertHeadersEqual(requestFormatter, Collections.singletonMap("Authorization", expected));
+    private void assertAuthorizationHeaderEquals(ClientCredentialsRequestGenerator requestGenerator, String expected) {
+        String actual = requestGenerator.generateHeaders().get("Authorization");
+        assertNotNull(actual);
+        assertEquals(expected, actual);
     }
 
     private static class Builder {
@@ -142,8 +146,9 @@ public class ClientCredentialsRequestFormatterTest extends RequestFormatterTest 
             return this;
         }
 
-        private ClientCredentialsRequestFormatter build() {
-            return new ClientCredentialsRequestFormatter(
+        private ClientCredentialsRequestGenerator build() {
+            return new ClientCredentialsRequestGenerator(
+                URI.create("http://www.example.com"),
                 clientId,
                 clientSecret,
                 scope,

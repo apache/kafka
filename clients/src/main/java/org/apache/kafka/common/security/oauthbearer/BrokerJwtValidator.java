@@ -182,10 +182,10 @@ public class BrokerJwtValidator implements JwtValidator {
      *
      * @param jwt Non-<code>null</code> JWT
      * @return {@link OAuthBearerToken}
-     * @throws InvalidJwtException Thrown on errors performing validation of given token
+     * @throws JwtValidatorException Thrown on errors performing validation of given token
      */
     @SuppressWarnings("unchecked")
-    public OAuthBearerToken validate(String jwt) throws InvalidJwtException {
+    public OAuthBearerToken validate(String jwt) throws JwtValidatorException {
         SerializedJwt serializedJwt = new SerializedJwt(jwt);
 
         JwtContext jwtContext;
@@ -193,7 +193,7 @@ public class BrokerJwtValidator implements JwtValidator {
         try {
             jwtContext = jwtConsumer.process(serializedJwt.getToken());
         } catch (org.jose4j.jwt.consumer.InvalidJwtException e) {
-            throw new InvalidJwtException(String.format("Could not validate the access token: %s", e.getMessage()), e);
+            throw new JwtValidatorException(String.format("Could not validate the access token: %s", e.getMessage()), e);
         }
 
         JwtClaims claims = jwtContext.getJwtClaims();
@@ -228,13 +228,13 @@ public class BrokerJwtValidator implements JwtValidator {
         );
     }
 
-    private <T> T getClaim(ClaimSupplier<T> supplier, String claimName) throws InvalidJwtException {
+    private <T> T getClaim(ClaimSupplier<T> supplier, String claimName) throws JwtValidatorException {
         try {
             T value = supplier.get();
             log.debug("getClaim - {}: {}", claimName, value);
             return value;
         } catch (MalformedClaimException e) {
-            throw new InvalidJwtException(String.format("Could not extract the '%s' claim from the access token", claimName), e);
+            throw new JwtValidatorException(String.format("Could not extract the '%s' claim from the access token", claimName), e);
         }
     }
 

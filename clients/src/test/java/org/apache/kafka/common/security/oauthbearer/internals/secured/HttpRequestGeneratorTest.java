@@ -16,11 +16,17 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import org.apache.kafka.common.KafkaException;
+import java.util.Map;
 
-public class UnretryableException extends KafkaException {
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-    public UnretryableException(Throwable cause) {
-        super(cause);
+public abstract class HttpRequestGeneratorTest extends OAuthBearerTest {
+
+    protected void assertBodyEquals(HttpRequestGenerator requestGenerator, String expected) {
+        assertEquals(expected, requestGenerator.generateBody());
+    }
+
+    protected void assertHeadersEqual(HttpRequestGenerator requestGenerator, Map<String, String> expected) {
+        assertEquals(expected, requestGenerator.generateHeaders());
     }
 }

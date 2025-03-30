@@ -154,7 +154,7 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
         try {
             OAuthBearerToken token = jwtValidator.validate(callback.tokenValue());
             callback.token(token);
-        } catch (InvalidJwtException e) {
+        } catch (JwtValidatorException e) {
             log.warn(e.getMessage(), e);
             callback.error("invalid_token", null, null);
         }

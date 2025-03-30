@@ -45,25 +45,25 @@ public abstract class JwtValidatorTest extends OAuthBearerTest {
     @Test
     public void testNull() throws Exception {
         JwtValidator validator = createValidator();
-        assertThrowsWithMessage(InvalidJwtException.class, () -> validator.validate(null), "Malformed JWT provided; expected three sections (header, payload, and signature)");
+        assertThrowsWithMessage(JwtValidatorException.class, () -> validator.validate(null), "Malformed JWT provided; expected three sections (header, payload, and signature)");
     }
 
     @Test
     public void testEmptyString() throws Exception {
         JwtValidator validator = createValidator();
-        assertThrowsWithMessage(InvalidJwtException.class, () -> validator.validate(""), "Malformed JWT provided; expected three sections (header, payload, and signature)");
+        assertThrowsWithMessage(JwtValidatorException.class, () -> validator.validate(""), "Malformed JWT provided; expected three sections (header, payload, and signature)");
     }
 
     @Test
     public void testWhitespace() throws Exception {
         JwtValidator validator = createValidator();
-        assertThrowsWithMessage(InvalidJwtException.class, () -> validator.validate("    "), "Malformed JWT provided; expected three sections (header, payload, and signature)");
+        assertThrowsWithMessage(JwtValidatorException.class, () -> validator.validate("    "), "Malformed JWT provided; expected three sections (header, payload, and signature)");
     }
 
     @Test
     public void testEmptySections() throws Exception {
         JwtValidator validator = createValidator();
-        assertThrowsWithMessage(InvalidJwtException.class, () -> validator.validate(".."), "Malformed JWT provided; expected three sections (header, payload, and signature)");
+        assertThrowsWithMessage(JwtValidatorException.class, () -> validator.validate(".."), "Malformed JWT provided; expected three sections (header, payload, and signature)");
     }
 
     @Test
@@ -73,7 +73,7 @@ public abstract class JwtValidatorTest extends OAuthBearerTest {
         String payload = createBase64JsonJwtSection(node -> { });
         String signature = "";
         String jwt = String.format("%s.%s.%s", header, payload, signature);
-        assertThrows(InvalidJwtException.class, () -> validator.validate(jwt));
+        assertThrows(JwtValidatorException.class, () -> validator.validate(jwt));
     }
 
     @Test
@@ -83,7 +83,7 @@ public abstract class JwtValidatorTest extends OAuthBearerTest {
         String payload = "";
         String signature = "";
         String jwt = String.format("%s.%s.%s", header, payload, signature);
-        assertThrows(InvalidJwtException.class, () -> validator.validate(jwt));
+        assertThrows(JwtValidatorException.class, () -> validator.validate(jwt));
     }
 
     @Test
@@ -93,6 +93,6 @@ public abstract class JwtValidatorTest extends OAuthBearerTest {
         String payload = createBase64JsonJwtSection(node -> { });
         String signature = "";
         String jwt = String.format("%s.%s.%s", header, payload, signature);
-        assertThrows(InvalidJwtException.class, () -> validator.validate(jwt));
+        assertThrows(JwtValidatorException.class, () -> validator.validate(jwt));
     }
 }

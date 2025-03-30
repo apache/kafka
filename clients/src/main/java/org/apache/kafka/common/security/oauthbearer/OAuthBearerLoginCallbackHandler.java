@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
@@ -207,7 +206,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
             this.isInitialized = true;
         } catch (Throwable t) {
-            throw new KafkaException("The OAuth login configuration encountered an error during initialization", t);
+            throw new ConfigException("The OAuth login configuration encountered an error during initialization", t);
         }
     }
 
@@ -253,7 +252,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
         try {
             OAuthBearerToken token = jwtValidator.validate(jwt);
             callback.token(token);
-        } catch (InvalidJwtException e) {
+        } catch (JwtValidatorException e) {
             log.warn(e.getMessage(), e);
             callback.error("invalid_token", e.getMessage(), null);
         }

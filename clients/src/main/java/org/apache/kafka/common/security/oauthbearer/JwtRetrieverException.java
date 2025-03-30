@@ -18,27 +18,22 @@ package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.KafkaException;
 
-import javax.security.auth.callback.Callback;
-import javax.security.auth.callback.CallbackHandler;
-
 /**
- * An {@code InvalidJwtException} is thrown in cases where the validity of a JWT access token
- * cannot be determined. It is intended to be used when errors arise within the processing of a
- * {@link CallbackHandler#handle(Callback[])}. This error, however, is not thrown from that method directly.
+ * A {@code JwtRetrieverException} is thrown in cases where the JWT cannot be retrieved.
  *
- * @see JwtValidator#validate(String)
+ * @see JwtRetriever#retrieve()
  */
-public class InvalidJwtException extends KafkaException {
+public class JwtRetrieverException extends KafkaException {
 
-    public InvalidJwtException(String message) {
+    public JwtRetrieverException(String message) {
         super(message);
     }
 
-    public InvalidJwtException(Throwable cause) {
+    public JwtRetrieverException(Throwable cause) {
         super(cause);
     }
 
-    public InvalidJwtException(String message, Throwable cause) {
+    public JwtRetrieverException(String message, Throwable cause) {
         super(message, cause);
     }
 }

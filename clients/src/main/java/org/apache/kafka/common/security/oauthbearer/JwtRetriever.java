@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
-import java.io.IOException;
-
 import javax.security.auth.spi.LoginModule;
 
 /**
@@ -33,7 +31,7 @@ import javax.security.auth.spi.LoginModule;
  * @see ClientCredentialsJwtRetriever
  * @see DefaultJwtRetriever
  * @see FileJwtRetriever
- * @see HttpJwtRetriever
+ * @see JwtHttpClient
  * @see JwtBearerJwtRetriever
  */
 public interface JwtRetriever extends OAuthBearerConfigurable {
@@ -53,9 +51,9 @@ public interface JwtRetriever extends OAuthBearerConfigurable {
      *
      * @return Non-<code>null</code> JWT access token string
      *
-     * @throws IOException Thrown on errors related to I/O during retrieval
+     * @throws JwtRetrieverException Thrown on errors related to retrieval
      */
-    String retrieve() throws IOException;
+    String retrieve() throws JwtRetrieverException;
 
     @Override
     default void close() {

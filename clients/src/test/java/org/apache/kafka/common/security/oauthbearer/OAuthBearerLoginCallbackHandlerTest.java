@@ -186,7 +186,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
     @Test
     public void testMissingJwt() throws IOException {
         JwtRetriever jwtRetriever = mock(JwtRetriever.class);
-        when(jwtRetriever.retrieve()).thenThrow(new IOException("The token endpoint response access_token value must be non-null"));
+        when(jwtRetriever.retrieve()).thenThrow(new JwtRetrieverException("The token endpoint response access_token value must be non-null"));
 
         try (OAuthBearerLoginCallbackHandler handler = createHandler(jwtRetriever)) {
             OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
@@ -231,7 +231,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         jaasConfig.put("clientSecret", "a secret");
         configureHandler(handler, configs, jaasConfig);
         assertInstanceOf(DefaultJwtRetriever.class, handler.jwtRetriever);
-        assertInstanceOf(HttpJwtRetriever.class, ((DefaultJwtRetriever) handler.jwtRetriever).delegate());
+        assertInstanceOf(JwtHttpClient.class, ((DefaultJwtRetriever) handler.jwtRetriever).delegate());
     }
 
     private void testInvalidJwt(String jwt, String expectedMessageSubstring) throws Exception {

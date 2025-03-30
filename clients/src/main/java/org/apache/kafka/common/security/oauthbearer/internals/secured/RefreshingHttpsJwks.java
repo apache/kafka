@@ -36,7 +36,6 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -296,14 +295,46 @@ public class RefreshingHttpsJwks implements OAuthBearerConfigurable {
 
         try {
             log.info("OAuth JWKS refresh of {} starting", httpsJwks.getLocation());
-            Retry<List<JsonWebKey>> retry = new Retry<>(refreshRetryBackoffMs, refreshRetryBackoffMaxMs);
-            List<JsonWebKey> localJWKs = retry.execute(() -> {
+
+            List<JsonWebKey> localJWKs = null;
+            long endMs = time.milliseconds() + refreshRetryBackoffMaxMs;
+            int currAttempt = 0;
+
+            while (time.milliseconds() <= endMs) {
+                currAttempt++;
+
                 try {
-                    return refreshJsonWebKeys();
-                } catch (Exception e) {
-                    throw new ExecutionException(e);
+                    localJWKs = refreshJsonWebKeys();
+                    break;
+                } catch (IOException | JoseException e) {
+                    long waitMs = refreshRetryBackoffMs * (long) Math.pow(2, currAttempt - 1);
+                    long diff = endMs - time.milliseconds();
+                    waitMs = Math.min(waitMs, diff);
+
+                    if (waitMs <= 0)
+                        break;
+
+                    log.warn(
+                        "An error was encountered on attempt {} to retrieve the OAuth JWKS from {}; sleeping {} ms before attempting again",
+                        currAttempt,
+                        httpsJwks.getLocation(),
+                        waitMs,
+                        e
+                    );
+
+                    time.sleep(waitMs);
                 }
-            });
+            }
+
+            if (localJWKs == null) {
+                log.warn(
+                    "{} attempts were made to refresh the OAuth JWKS from {}, but none were successful; not updating local JWKS cache",
+                    currAttempt,
+                    httpsJwks.getLocation()
+                );
+
+                return;
+            }
 
             try {
                 refreshLock.writeLock().lock();
@@ -317,8 +348,6 @@ public class RefreshingHttpsJwks implements OAuthBearerConfigurable {
             }
 
             log.info("OAuth JWKS refresh of {} complete", httpsJwks.getLocation());
-        } catch (ExecutionException e) {
-            log.warn("OAuth JWKS refresh of {} encountered an error; not updating local JWKS cache", httpsJwks.getLocation(), e);
         } finally {
             refreshInProgressFlag.set(false);
         }

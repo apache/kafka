@@ -17,10 +17,10 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBearerRequestFormatter;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBearerRequestGenerator;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
-import java.io.IOException;
 import java.net.URL;
 import java.util.List;
 import java.util.Locale;
@@ -34,7 +34,17 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
 
 public class DefaultJwtRetriever implements JwtRetriever {
 
+    private final Time time;
+
     private JwtRetriever delegate;
+
+    public DefaultJwtRetriever() {
+        this(Time.SYSTEM);
+    }
+
+    public DefaultJwtRetriever(Time time) {
+        this.time = time;
+    }
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
@@ -46,10 +56,10 @@ public class DefaultJwtRetriever implements JwtRetriever {
         } else {
             String grantType = cu.validateString(SASL_OAUTHBEARER_GRANT_TYPE, false);
 
-            if (grantType != null && grantType.equalsIgnoreCase(JwtBearerRequestFormatter.GRANT_TYPE)) {
-                delegate = new JwtBearerJwtRetriever();
+            if (grantType != null && grantType.equalsIgnoreCase(JwtBearerRequestGenerator.GRANT_TYPE)) {
+                delegate = new JwtBearerJwtRetriever(time);
             } else {
-                delegate = new ClientCredentialsJwtRetriever();
+                delegate = new ClientCredentialsJwtRetriever(time);
             }
         }
 
@@ -57,7 +67,7 @@ public class DefaultJwtRetriever implements JwtRetriever {
     }
 
     @Override
-    public String retrieve() throws IOException {
+    public String retrieve() throws JwtRetrieverException {
         return Objects.requireNonNull(delegate).retrieve();
     }
 

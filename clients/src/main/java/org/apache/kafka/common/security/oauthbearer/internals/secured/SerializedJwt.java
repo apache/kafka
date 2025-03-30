@@ -16,7 +16,7 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import org.apache.kafka.common.security.oauthbearer.InvalidJwtException;
+import org.apache.kafka.common.security.oauthbearer.JwtValidatorException;
 
 /**
  * SerializedJwt provides a modicum of structure and validation around a JWT's serialized form by
@@ -39,12 +39,12 @@ public class SerializedJwt {
             token = token.trim();
 
         if (token.isEmpty())
-            throw new InvalidJwtException("Malformed JWT provided; expected three sections (header, payload, and signature)");
+            throw new JwtValidatorException("Malformed JWT provided; expected three sections (header, payload, and signature)");
 
         String[] splits = token.split("\\.");
 
         if (splits.length != 3)
-            throw new InvalidJwtException("Malformed JWT provided; expected three sections (header, payload, and signature)");
+            throw new JwtValidatorException("Malformed JWT provided; expected three sections (header, payload, and signature)");
 
         this.token = token.trim();
         this.header = validateSection(splits[0]);
@@ -92,11 +92,11 @@ public class SerializedJwt {
         return signature;
     }
 
-    private String validateSection(String section) throws InvalidJwtException {
+    private String validateSection(String section) throws JwtValidatorException {
         section = section.trim();
 
         if (section.isEmpty())
-            throw new InvalidJwtException("Malformed JWT provided; expected three sections (header, payload, and signature)");
+            throw new JwtValidatorException("Malformed JWT provided; expected three sections (header, payload, and signature)");
 
         return section;
     }

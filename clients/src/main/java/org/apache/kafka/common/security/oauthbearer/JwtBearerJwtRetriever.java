@@ -16,43 +16,39 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBearerRequestFormatter;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestGenerator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBearerRequestGenerator;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 
+import java.io.File;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
+import java.time.Duration;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
-public class JwtBearerJwtRetriever extends HttpJwtRetriever {
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_ALGORITHM;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 
-    // The private key ID of the private key used to sign the JWT token sent to the token endpoint. This will
-    // be added as a header in the JWT token sent to the token endpoint.
-    private static final String TOKEN_ENDPOINT_PRIVATE_KEY_ID = "privateKeyId";
-
-    // The private key used to sign the JWT token sent to the token endpoint. This must be in PEM format without
-    // the header and footer.
-    private static final String TOKEN_ENDPOINT_PRIVATE_KEY_SECRET = "privateKeySecret";
-
-    // The algorithm used to sign the JWT token sent to the token endpoint.
-    private static final String TOKEN_ENDPOINT_SIGNING_ALGO = "tokenSigningAlgo";
-
-    // The subject of the JWT token sent to the token endpoint.
-    private static final String TOKEN_SUBJECT = "tokenSubject";
-
-    // The issuer of the JWT token sent to the token endpoint.
-    private static final String TOKEN_ISSUER = "tokenIssuer";
-
-    // The audience of the JWT token sent to the token endpoint.
-    private static final String TOKEN_AUDIENCE = "tokenAudience";
-
-    // The target audience of the JWT token sent to the token endpoint.
-    private static final String TOKEN_TARGET_AUDIENCE = "tokenTargetAudience";
+public class JwtBearerJwtRetriever implements JwtRetriever {
 
     private final Time time;
 
-    private JwtBearerRequestFormatter requestFormatter;
+    private HttpRequestGenerator requestGenerator;
+    private long retryBackoffMs;
+    private long retryBackoffMaxMs;
+    private HttpClient client;
 
     public JwtBearerJwtRetriever() {
         this(Time.SYSTEM);
@@ -64,31 +60,57 @@ public class JwtBearerJwtRetriever extends HttpJwtRetriever {
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        super.configure(configs, saslMechanism, jaasConfigEntries);
+//        JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
+        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
 
-        JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
-        String privateKeyId = jou.validateString(TOKEN_ENDPOINT_PRIVATE_KEY_ID);
-        String privateKeySecret = jou.validateString(TOKEN_ENDPOINT_PRIVATE_KEY_SECRET);
-        String tokenSigningAlgo = jou.validateString(TOKEN_ENDPOINT_SIGNING_ALGO);
-        String tokenSubject = jou.validateString(TOKEN_SUBJECT);
-        String tokenIssuer = jou.validateString(TOKEN_ISSUER);
-        String tokenAudience = jou.validateString(TOKEN_AUDIENCE);
-        String tokenTargetAudience = jou.validateString(TOKEN_TARGET_AUDIENCE, false);
+        retryBackoffMs =  cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS);
+        retryBackoffMaxMs = cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
 
-        requestFormatter = new JwtBearerRequestFormatter(
-            time,
-            privateKeyId,
-            privateKeySecret,
-            tokenSigningAlgo,
-            tokenSubject,
-            tokenIssuer,
-            tokenAudience,
-            tokenTargetAudience
+//        Optional<SslResource> sslResource = jou.maybeCreateSslResource(url);
+        Optional<Integer> connectTimeoutMs = Optional.ofNullable(cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false));
+
+        HttpClient.Builder clientBuilder = HttpClient.newBuilder();
+
+        if (connectTimeoutMs.isPresent())
+            clientBuilder = clientBuilder.connectTimeout(Duration.ofMillis(connectTimeoutMs.get()));
+
+//        if (sslResource.isPresent())
+//            clientBuilder = clientBuilder.sslContext(sslResource.get());
+
+        client = clientBuilder.build();
+
+        String algorithm = cu.validateString(SASL_OAUTHBEARER_ASSERTION_ALGORITHM);
+        File privateKeyFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE);
+        AssertionCreator assertionCreator = new DefaultAssertionCreator(time, algorithm, privateKeyFile);
+
+        AssertionJwtTemplate assertionJwtTemplate = new AssertionJwtTemplateFile();
+
+        URI tokenEndpoint = cu.validateUri(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+
+        requestGenerator = new JwtBearerRequestGenerator(
+            tokenEndpoint,
+            assertionCreator,
+            assertionJwtTemplate
         );
     }
 
     @Override
-    protected HttpRequestFormatter requestFormatter() {
-        return requestFormatter;
+    public String retrieve() throws JwtRetrieverException {
+        HttpRequest request = requestGenerator.generateRequest();
+        JwtHttpClient jwtHttpClient = new JwtHttpClient(time);
+        HttpResponse.BodyHandler<String> responseBodyHandler = new JwtHttpResponseBodyHandler();
+
+        return jwtHttpClient.request(
+            client,
+            request,
+            responseBodyHandler,
+            retryBackoffMs,
+            retryBackoffMaxMs
+        );
+    }
+
+    @Override
+    public void close() {
+        Utils.closeQuietly(requestGenerator, "requestGenerator");
     }
 }

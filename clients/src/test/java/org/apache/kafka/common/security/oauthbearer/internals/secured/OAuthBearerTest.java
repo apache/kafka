@@ -45,12 +45,9 @@ import java.io.FileWriter;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URL;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collections;
-import java.util.Iterator;
 import java.util.Map;
-import java.util.concurrent.ExecutionException;
 import java.util.function.Consumer;
 
 import javax.security.auth.login.AppConfigurationEntry;
@@ -131,24 +128,24 @@ public abstract class OAuthBearerTest {
         }
     }
 
-    protected Retryable<String> createRetryable(Exception[] attempts) {
-        Iterator<Exception> i = Arrays.asList(attempts).iterator();
-
-        return () -> {
-            Exception e = i.hasNext() ? i.next() : null;
-
-            if (e == null) {
-                return "success!";
-            } else {
-                if (e instanceof IOException)
-                    throw new ExecutionException(e);
-                else if (e instanceof RuntimeException)
-                    throw (RuntimeException) e;
-                else
-                    throw new RuntimeException(e);
-            }
-        };
-    }
+//    protected Retryable<String> createRetryable(Exception[] attempts) {
+//        Iterator<Exception> i = Arrays.asList(attempts).iterator();
+//
+//        return () -> {
+//            Exception e = i.hasNext() ? i.next() : null;
+//
+//            if (e == null) {
+//                return "success!";
+//            } else {
+//                if (e instanceof IOException)
+//                    throw new ExecutionException(e);
+//                else if (e instanceof RuntimeException)
+//                    throw (RuntimeException) e;
+//                else
+//                    throw new RuntimeException(e);
+//            }
+//        };
+//    }
 
     protected HttpURLConnection createHttpURLConnection(String response) throws IOException {
         HttpURLConnection mockedCon = mock(HttpURLConnection.class);

@@ -55,7 +55,7 @@ public class DefaultJwtValidator implements JwtValidator {
     }
 
     @Override
-    public OAuthBearerToken validate(String jwt) throws InvalidJwtException {
+    public OAuthBearerToken validate(String jwt) throws JwtValidatorException {
         return Objects.requireNonNull(delegate).validate(jwt);
     }
 

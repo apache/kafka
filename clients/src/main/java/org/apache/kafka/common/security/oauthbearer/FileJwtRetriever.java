@@ -21,10 +21,8 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.Configurat
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
@@ -52,7 +50,10 @@ public class FileJwtRetriever implements JwtRetriever {
     }
 
     @Override
-    public String retrieve() throws IOException {
-        return Objects.requireNonNull(jwt, "JWT is null; please call configure() first");
+    public String retrieve() throws JwtRetrieverException {
+        if (Utils.isBlank(jwt))
+            throw new JwtRetrieverException("JWT is null; please call configure() first");
+
+        return jwt;
     }
 }
