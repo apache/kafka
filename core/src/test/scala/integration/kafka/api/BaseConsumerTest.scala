@@ -37,9 +37,9 @@ import scala.collection.Seq
  */
 abstract class BaseConsumerTest extends AbstractConsumerTest {
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testSimpleConsumption(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testSimpleConsumption(groupProtocol: String): Unit = {
     val numRecords = 10000
     val producer = createProducer()
     val startingTimestamp = System.currentTimeMillis()
@@ -57,9 +57,9 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     sendAndAwaitAsyncCommit(consumer)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testClusterResourceListener(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testClusterResourceListener(groupProtocol: String): Unit = {
     val numRecords = 100
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[BaseConsumerTest.TestClusterResourceListenerSerializer])
@@ -79,9 +79,9 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     assertNotEquals(0, BaseConsumerTest.updateConsumerCount.get())
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testCoordinatorFailover(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testCoordinatorFailover(groupProtocol: String): Unit = {
     val listener = new TestConsumerReassignmentListener()
     if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
       this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5001")
