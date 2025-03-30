@@ -78,7 +78,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * For example:
  *
  * <pre>
- * &#64;ExtendWith(value = Array(classOf[ClusterTestExtensions]))
  * class SomeIntegrationTest {
  *   &#64;ClusterTest(brokers = 1, controllers = 1, clusterType = ClusterType.Both)
  *   def someTest(): Unit = {
