@@ -26,15 +26,15 @@ import com.yammer.metrics.core.MetricsRegistry;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.concurrent.atomic.AtomicReference;
 
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_3_IV2;
+import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
@@ -70,14 +70,14 @@ public class MetadataLoaderMetricsTest {
         try {
             try (FakeMetadataLoaderMetrics fakeMetrics = new FakeMetadataLoaderMetrics(registry)) {
                 ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
-                    new HashSet<>(Arrays.asList(
+                    new HashSet<>(List.of(
                         "kafka.server:type=MetadataLoader,name=CurrentControllerId",
                         "kafka.server:type=MetadataLoader,name=CurrentMetadataVersion",
                         "kafka.server:type=MetadataLoader,name=HandleLoadSnapshotCount"
                     )));
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
-                    Collections.emptySet());
+                    Set.of());
         } finally {
             registry.shutdown();
         }
@@ -116,7 +116,7 @@ public class MetadataLoaderMetricsTest {
         MetricsRegistry registry = new MetricsRegistry();
         try {
             try (FakeMetadataLoaderMetrics fakeMetrics = new FakeMetadataLoaderMetrics(registry)) {
-                fakeMetrics.metrics.setCurrentMetadataVersion(IBP_3_3_IV2);
+                fakeMetrics.metrics.setCurrentMetadataVersion(MINIMUM_VERSION);
                 fakeMetrics.metrics.incrementHandleLoadSnapshotCount();
                 fakeMetrics.metrics.incrementHandleLoadSnapshotCount();
 
@@ -124,7 +124,7 @@ public class MetadataLoaderMetricsTest {
                 Gauge<Integer> currentMetadataVersion = (Gauge<Integer>) registry
                     .allMetrics()
                     .get(metricName("MetadataLoader", "CurrentMetadataVersion"));
-                assertEquals(IBP_3_3_IV2.featureLevel(),
+                assertEquals(MINIMUM_VERSION.featureLevel(),
                     currentMetadataVersion.value().shortValue());
 
                 @SuppressWarnings("unchecked")
@@ -134,7 +134,7 @@ public class MetadataLoaderMetricsTest {
                 assertEquals(2L, loadSnapshotCount.value().longValue());
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.server",
-                Collections.emptySet());
+                Set.of());
         } finally {
             registry.shutdown();
         }

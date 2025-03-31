@@ -21,7 +21,6 @@ import kafka.network.RequestChannel
 import kafka.raft.RaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.KRaftMetadataCache
-import org.apache.kafka.common.test.MockController
 import org.apache.kafka.clients.admin.AlterConfigOp
 import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation
@@ -47,6 +46,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern, ResourceType}
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
+import org.apache.kafka.common.test.MockController
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.common.{ElectionType, Uuid}
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
@@ -126,7 +126,7 @@ class ControllerApisTest {
   )
   private val replicaQuotaManager: ReplicationQuotaManager = mock(classOf[ReplicationQuotaManager])
   private val raftManager: RaftManager[ApiMessageAndVersion] = mock(classOf[RaftManager[ApiMessageAndVersion]])
-  private val metadataCache: KRaftMetadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
+  private val metadataCache: KRaftMetadataCache = new KRaftMetadataCache(0, () => KRaftVersion.KRAFT_VERSION_0)
 
   private val quotasNeverThrottleControllerMutations = new QuotaManagers(
     clientQuotaManager,
@@ -411,7 +411,7 @@ class ControllerApisTest {
     assertThrows(classOf[ClusterAuthorizationException], () => {
       controllerApis = createControllerApis(Some(createDenyAllAuthorizer()), new MockController.Builder().build())
       controllerApis.handleAlterPartitionRequest(buildRequest(new AlterPartitionRequest.Builder(
-        new AlterPartitionRequestData()).build(0)))
+        new AlterPartitionRequestData()).build(ApiKeys.ALTER_PARTITION.latestVersion)))
     })
   }
 

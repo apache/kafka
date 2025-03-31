@@ -22,19 +22,18 @@ import kafka.cluster.DelayedOperations;
 import kafka.cluster.Partition;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
-import kafka.server.MetadataCache;
 import kafka.server.builders.LogManagerBuilder;
-import kafka.server.metadata.MockConfigRepository;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.message.LeaderAndIsrRequestData;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.requests.LeaderAndIsrRequest;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.common.MetadataVersion;
+import org.apache.kafka.metadata.MetadataCache;
+import org.apache.kafka.metadata.MockConfigRepository;
 import org.apache.kafka.server.util.KafkaScheduler;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpoints;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
@@ -111,7 +110,6 @@ public class PartitionMakeFollowerBenchmark {
             setFlushStartOffsetCheckpointMs(10000L).
             setRetentionCheckMs(1000L).
             setProducerStateManagerConfig(60000, false).
-            setInterBrokerProtocolVersion(MetadataVersion.latestTesting()).
             setScheduler(scheduler).
             setBrokerTopicStats(brokerTopicStats).
             setLogDirFailureChannel(logDirFailureChannel).
@@ -136,7 +134,7 @@ public class PartitionMakeFollowerBenchmark {
             int initialOffSet = 0;
             while (true) {
                 MemoryRecords memoryRecords =  MemoryRecords.withRecords(initialOffSet, Compression.NONE, 0, simpleRecords);
-                partition.appendRecordsToFollowerOrFutureReplica(memoryRecords, false);
+                partition.appendRecordsToFollowerOrFutureReplica(memoryRecords, false, Integer.MAX_VALUE);
                 initialOffSet = initialOffSet + 2;
             }
         });
@@ -152,7 +150,7 @@ public class PartitionMakeFollowerBenchmark {
 
     @Benchmark
     public boolean testMakeFollower() {
-        LeaderAndIsrRequestData.LeaderAndIsrPartitionState partitionState = new LeaderAndIsrRequestData.LeaderAndIsrPartitionState()
+        LeaderAndIsrRequest.PartitionState partitionState = new LeaderAndIsrRequest.PartitionState()
             .setControllerEpoch(0)
             .setLeader(0)
             .setLeaderEpoch(0)

@@ -419,6 +419,12 @@ private[transaction] class TransactionMetadata(val transactionalId: String,
    */
   def isProducerEpochExhausted: Boolean = TransactionMetadata.isEpochExhausted(producerEpoch)
 
+  /**
+   * Check if this is a distributed two phase commit transaction.
+   * Such transactions have no timeout (identified by maximum value for timeout).
+   */
+  def isDistributedTwoPhaseCommitTxn: Boolean = txnTimeoutMs == Int.MaxValue
+
   private def hasPendingTransaction: Boolean = {
     state match {
       case Ongoing | PrepareAbort | PrepareCommit => true

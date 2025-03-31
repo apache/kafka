@@ -32,6 +32,7 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.quota.ClientQuotaAlteration
 import org.apache.kafka.common.quota.ClientQuotaEntity
 import org.apache.kafka.common.security.auth.KafkaPrincipal
+import org.apache.kafka.common.test.api.Flaky
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -61,6 +62,7 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
   this.producerConfig.setProperty(ProducerConfig.ACKS_CONFIG, "-1")
   this.producerConfig.setProperty(ProducerConfig.BUFFER_MEMORY_CONFIG, "300000")
   this.producerConfig.setProperty(ProducerConfig.CLIENT_ID_CONFIG, producerClientId)
+  this.producerConfig.setProperty(ProducerConfig.LINGER_MS_CONFIG, 0.toString)
   this.consumerConfig.setProperty(ConsumerConfig.GROUP_ID_CONFIG, "QuotasTest")
   this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, 4096.toString)
   this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
@@ -89,9 +91,10 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients = createQuotaTestClients(topic1, leaderNode)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testThrottledProducerConsumer(quorum: String, groupProtocol: String): Unit = {
+  @Flaky("KAFKA-8073")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testThrottledProducerConsumer(groupProtocol: String): Unit = {
     val numRecords = 1000
     val produced = quotaTestClients.produceUntilThrottled(numRecords)
     quotaTestClients.verifyProduceThrottle(expectThrottle = true)
@@ -101,9 +104,9 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testProducerConsumerOverrideUnthrottled(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProducerConsumerOverrideUnthrottled(groupProtocol: String): Unit = {
     // Give effectively unlimited quota for producer and consumer
     val props = new Properties()
     props.put(QuotaConfig.PRODUCER_BYTE_RATE_OVERRIDE_CONFIG, Long.MaxValue.toString)
@@ -121,9 +124,9 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = false)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testProducerConsumerOverrideLowerQuota(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProducerConsumerOverrideLowerQuota(groupProtocol: String): Unit = {
     // consumer quota is set such that consumer quota * default quota window (10 seconds) is less than
     // MAX_PARTITION_FETCH_BYTES_CONFIG, so that we can test consumer ability to fetch in this case
     // In this case, 250 * 10 < 4096
@@ -139,9 +142,10 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testQuotaOverrideDelete(quorum: String, groupProtocol: String): Unit = {
+  @Flaky("KAFKA-18810")
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testQuotaOverrideDelete(groupProtocol: String): Unit = {
     // Override producer and consumer quotas to unlimited
     quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
     quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, Long.MaxValue.toDouble)
@@ -166,9 +170,9 @@ abstract class BaseQuotaTest extends IntegrationTestHarness {
     quotaTestClients.verifyConsumeThrottle(expectThrottle = true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testThrottledRequest(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testThrottledRequest(groupProtocol: String): Unit = {
     quotaTestClients.overrideQuotas(Long.MaxValue, Long.MaxValue, 0.1)
     quotaTestClients.waitForQuotaUpdate(Long.MaxValue, Long.MaxValue, 0.1)
 
@@ -216,13 +220,13 @@ abstract class QuotaTestClients(topic: String,
   def produceUntilThrottled(maxRecords: Int, waitForRequestCompletion: Boolean = true): Int = {
     var numProduced = 0
     var throttled = false
+    val metric = throttleMetric(QuotaType.PRODUCE, producerClientId)
     do {
       val payload = numProduced.toString.getBytes
       val future = producer.send(new ProducerRecord[Array[Byte], Array[Byte]](topic, null, null, payload),
         new ErrorLoggingCallback(topic, null, null, true))
       numProduced += 1
       do {
-        val metric = throttleMetric(QuotaType.PRODUCE, producerClientId)
         throttled = metric != null && metricValue(metric) > 0
       } while (!future.isDone && (!throttled || waitForRequestCompletion))
     } while (numProduced < maxRecords && !throttled)

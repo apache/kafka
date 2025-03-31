@@ -31,6 +31,8 @@ public interface ReplicatedLog extends AutoCloseable {
      * be written atomically in a single batch or the call will fail and raise an
      * exception.
      *
+     * @param records records batches to append
+     * @param epoch the epoch of the replica
      * @return the metadata information of the appended batch
      * @throws IllegalArgumentException if the record set is empty
      * @throws RuntimeException if the batch base offset doesn't match the log end offset
@@ -42,11 +44,16 @@ public interface ReplicatedLog extends AutoCloseable {
      * difference from appendAsLeader is that we do not need to assign the epoch
      * or do additional validation.
      *
+     * The log will append record batches up to and including batches that have a partition
+     * leader epoch less than or equal to the passed epoch.
+     *
+     * @param records records batches to append
+     * @param epoch the epoch of the replica
      * @return the metadata information of the appended batch
      * @throws IllegalArgumentException if the record set is empty
      * @throws RuntimeException if the batch base offset doesn't match the log end offset
      */
-    LogAppendInfo appendAsFollower(Records records);
+    LogAppendInfo appendAsFollower(Records records, int epoch);
 
     /**
      * Read a set of records within a range of offsets.

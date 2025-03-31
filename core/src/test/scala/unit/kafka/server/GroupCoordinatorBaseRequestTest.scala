@@ -17,7 +17,6 @@
 package kafka.server
 
 import kafka.network.SocketServer
-import org.apache.kafka.common.test.api.ClusterInstance
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
@@ -29,6 +28,7 @@ import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AddOffsetsTo
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, AddOffsetsToTxnRequest, AddOffsetsToTxnResponse, ConsumerGroupDescribeRequest, ConsumerGroupDescribeResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, EndTxnRequest, EndTxnResponse, HeartbeatRequest, HeartbeatResponse, InitProducerIdRequest, InitProducerIdResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsRequest, ListGroupsResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetDeleteRequest, OffsetDeleteResponse, OffsetFetchRequest, OffsetFetchResponse, ShareGroupDescribeRequest, ShareGroupDescribeResponse, ShareGroupHeartbeatRequest, ShareGroupHeartbeatResponse, SyncGroupRequest, SyncGroupResponse, TxnOffsetCommitRequest, TxnOffsetCommitResponse}
 import org.apache.kafka.common.serialization.StringSerializer
+import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.utils.ProducerIdAndEpoch
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
@@ -117,10 +117,6 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     cluster.brokers.values.stream.allMatch(b => b.config.unstableApiVersionsEnabled)
   }
 
-  protected def isNewGroupCoordinatorEnabled: Boolean = {
-    cluster.brokers.values.stream.allMatch(b => b.config.isNewGroupCoordinatorEnabled)
-  }
-
   protected def getTopicIds: Map[String, Uuid] = {
     cluster.controllers().get(cluster.controllerIds().iterator().next()).controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().asScala.toMap
   }
@@ -139,7 +135,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   }
 
   protected def closeProducer(): Unit = {
-    if( producer != null )
+    if(producer != null)
       producer.close()
   }
 

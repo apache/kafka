@@ -196,7 +196,8 @@ public class FetchResponse extends AbstractResponse {
         return new FetchResponseData.PartitionData()
             .setPartitionIndex(partition)
             .setErrorCode(error.code())
-            .setHighWatermark(FetchResponse.INVALID_HIGH_WATERMARK);
+            .setHighWatermark(FetchResponse.INVALID_HIGH_WATERMARK)
+            .setRecords(MemoryRecords.EMPTY);
     }
 
     /**

@@ -887,7 +887,9 @@ public class ValuesTest {
 
     @Test
     public void shouldConvertDateValues() {
-        java.util.Date current = new java.util.Date();
+        LocalDateTime localTime = LocalDateTime.now();
+        ZoneOffset zoneOffset = ZoneId.systemDefault().getRules().getOffset(localTime);
+        java.util.Date current = new java.util.Date(localTime.toEpochSecond(zoneOffset) * 1000);
         long currentMillis = current.getTime() % MILLIS_PER_DAY;
         long days = current.getTime() / MILLIS_PER_DAY;
 
@@ -901,8 +903,10 @@ public class ValuesTest {
         assertEquals(currentDate, d2);
 
         // ISO8601 strings - accept a string matching pattern "yyyy-MM-dd"
+        LocalDateTime localTimeTruncated = localTime.truncatedTo(ChronoUnit.DAYS);
         java.util.Date d3 = Values.convertToDate(Date.SCHEMA, LocalDate.ofEpochDay(days).format(DateTimeFormatter.ISO_LOCAL_DATE));
-        assertEquals(currentDate, d3);
+        LocalDateTime date3 = LocalDateTime.ofInstant(Instant.ofEpochMilli(d3.getTime()), ZoneId.systemDefault());
+        assertEquals(localTimeTruncated, date3);
 
         // Days as string
         java.util.Date d4 = Values.convertToDate(Date.SCHEMA, Long.toString(days));
@@ -1175,6 +1179,17 @@ public class ValuesTest {
         assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, 300.01f), Values.parseString("300.01"));
         assertEquals(new SchemaAndValue(Schema.INT32_SCHEMA, 66000), Values.parseString("66000.0"));
         assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, 66000.0008f), Values.parseString("66000.0008"));
+    }
+
+    @Test
+    public void avoidCpuAndMemoryIssuesConvertingExtremeBigDecimals() {
+        String parsingBig = "1e+100000000"; // new BigDecimal().setScale(0, RoundingMode.FLOOR) takes around two minutes and uses 3GB;
+        BigDecimal valueBig = new BigDecimal(parsingBig);
+        assertEquals(new SchemaAndValue(Decimal.schema(-100000000), valueBig), Values.parseString(parsingBig), "parsing number that's too big");
+
+        String parsingSmall = "1e-100000000";
+        BigDecimal valueSmall = new BigDecimal(parsingSmall);
+        assertEquals(new SchemaAndValue(Schema.FLOAT32_SCHEMA, (float) valueSmall.doubleValue()), Values.parseString(parsingSmall), "parsing number that's too big, strictly this should return a bigdecimal");
     }
 
     protected void assertParsed(String input) {

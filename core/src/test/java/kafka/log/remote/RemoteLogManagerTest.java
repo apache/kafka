@@ -17,7 +17,6 @@
 package kafka.log.remote;
 
 import kafka.cluster.Partition;
-import kafka.log.UnifiedLog;
 import kafka.server.KafkaConfig;
 
 import org.apache.kafka.common.Endpoint;
@@ -75,6 +74,7 @@ import org.apache.kafka.storage.internals.log.ProducerStateManager;
 import org.apache.kafka.storage.internals.log.RemoteStorageFetchInfo;
 import org.apache.kafka.storage.internals.log.TimeIndex;
 import org.apache.kafka.storage.internals.log.TransactionIndex;
+import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 import org.apache.kafka.test.TestUtils;
 
@@ -132,7 +132,6 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import scala.Option;
-import scala.jdk.javaapi.CollectionConverters;
 
 import static kafka.log.remote.RemoteLogManager.isRemoteSegmentWithinLeaderEpochs;
 import static org.apache.kafka.common.record.TimestampType.CREATE_TIME;
@@ -524,7 +523,7 @@ public class RemoteLogManagerTest {
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
         when(mockLog.logStartOffset()).thenReturn(oldSegmentStartOffset);
-        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(CollectionConverters.asScala(Arrays.asList(oldSegment, activeSegment)));
+        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(Arrays.asList(oldSegment, activeSegment));
 
         ProducerStateManager mockStateManager = mock(ProducerStateManager.class);
         when(mockLog.producerStateManager()).thenReturn(mockStateManager);
@@ -638,7 +637,7 @@ public class RemoteLogManagerTest {
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
         when(mockLog.logStartOffset()).thenReturn(oldSegmentStartOffset);
-        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(CollectionConverters.asScala(Arrays.asList(oldSegment, activeSegment)));
+        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(Arrays.asList(oldSegment, activeSegment));
 
         ProducerStateManager mockStateManager = mock(ProducerStateManager.class);
         when(mockLog.producerStateManager()).thenReturn(mockStateManager);
@@ -730,7 +729,7 @@ public class RemoteLogManagerTest {
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
         when(mockLog.logStartOffset()).thenReturn(oldSegmentStartOffset);
-        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(CollectionConverters.asScala(Arrays.asList(oldSegment, activeSegment)));
+        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(Arrays.asList(oldSegment, activeSegment));
 
         ProducerStateManager mockStateManager = mock(ProducerStateManager.class);
         when(mockLog.producerStateManager()).thenReturn(mockStateManager);
@@ -779,10 +778,10 @@ public class RemoteLogManagerTest {
 
     @Test
     void testLeadershipChangesWithoutRemoteLogManagerConfiguring() {
-        assertThrows(KafkaException.class, () -> {
+        assertThrows(KafkaException.class, () ->
             remoteLogManager.onLeadershipChange(
-                Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
-        }, "RemoteLogManager is not configured when remote storage system is enabled");
+                Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds),
+                "RemoteLogManager is not configured when remote storage system is enabled");
     }
 
     @Test
@@ -818,7 +817,7 @@ public class RemoteLogManagerTest {
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
         when(mockLog.logStartOffset()).thenReturn(oldSegmentStartOffset);
-        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(CollectionConverters.asScala(Arrays.asList(oldSegment, activeSegment)));
+        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(Arrays.asList(oldSegment, activeSegment));
 
         ProducerStateManager mockStateManager = mock(ProducerStateManager.class);
         when(mockLog.producerStateManager()).thenReturn(mockStateManager);
@@ -939,7 +938,7 @@ public class RemoteLogManagerTest {
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
         when(mockLog.logStartOffset()).thenReturn(oldSegmentStartOffset);
-        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(CollectionConverters.asScala(Arrays.asList(oldSegment, activeSegment)));
+        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(Arrays.asList(oldSegment, activeSegment));
 
         ProducerStateManager mockStateManager = mock(ProducerStateManager.class);
         when(mockLog.producerStateManager()).thenReturn(mockStateManager);
@@ -1060,7 +1059,7 @@ public class RemoteLogManagerTest {
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
         when(mockLog.logStartOffset()).thenReturn(oldestSegmentStartOffset);
-        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(CollectionConverters.asScala(Arrays.asList(oldestSegment, olderSegment, activeSegment)));
+        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(Arrays.asList(oldestSegment, olderSegment, activeSegment));
 
         ProducerStateManager mockStateManager = mock(ProducerStateManager.class);
         when(mockLog.producerStateManager()).thenReturn(mockStateManager);
@@ -1216,7 +1215,7 @@ public class RemoteLogManagerTest {
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
         when(mockLog.logStartOffset()).thenReturn(oldSegmentStartOffset);
-        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(CollectionConverters.asScala(Arrays.asList(oldSegment, activeSegment)));
+        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(Arrays.asList(oldSegment, activeSegment));
 
         ProducerStateManager mockStateManager = mock(ProducerStateManager.class);
         when(mockLog.producerStateManager()).thenReturn(mockStateManager);
@@ -1285,7 +1284,7 @@ public class RemoteLogManagerTest {
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
         when(mockLog.logStartOffset()).thenReturn(oldSegmentStartOffset);
-        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(CollectionConverters.asScala(Arrays.asList(oldSegment, activeSegment)));
+        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(Arrays.asList(oldSegment, activeSegment));
         when(mockLog.lastStableOffset()).thenReturn(250L);
 
         // Ensure the metrics for remote write requests/failures is zero before attempt to copy log segment
@@ -1639,16 +1638,16 @@ public class RemoteLogManagerTest {
 
         File tpDir = new File(logDir, tp.toString());
         Files.createDirectory(tpDir.toPath());
-        File txnIdxFile = new File(tpDir, "txn-index" + UnifiedLog.TxnIndexFileSuffix());
+        File txnIdxFile = new File(tpDir, "txn-index" + UnifiedLog.TXN_INDEX_FILE_SUFFIX);
         txnIdxFile.createNewFile();
         when(remoteStorageManager.fetchIndex(any(RemoteLogSegmentMetadata.class), any(IndexType.class)))
                 .thenAnswer(ans -> {
                     RemoteLogSegmentMetadata metadata = ans.getArgument(0);
                     IndexType indexType = ans.getArgument(1);
                     int maxEntries = (int) (metadata.endOffset() - metadata.startOffset());
-                    OffsetIndex offsetIdx = new OffsetIndex(new File(tpDir, metadata.startOffset() + UnifiedLog.IndexFileSuffix()),
+                    OffsetIndex offsetIdx = new OffsetIndex(new File(tpDir, metadata.startOffset() + UnifiedLog.INDEX_FILE_SUFFIX),
                             metadata.startOffset(), maxEntries * 8);
-                    TimeIndex timeIdx = new TimeIndex(new File(tpDir, metadata.startOffset() + UnifiedLog.TimeIndexFileSuffix()),
+                    TimeIndex timeIdx = new TimeIndex(new File(tpDir, metadata.startOffset() + UnifiedLog.TIME_INDEX_FILE_SUFFIX),
                             metadata.startOffset(), maxEntries * 12);
                     switch (indexType) {
                         case OFFSET:
@@ -2050,8 +2049,7 @@ public class RemoteLogManagerTest {
         when(segment2.baseOffset()).thenReturn(10L);
         when(activeSegment.baseOffset()).thenReturn(15L);
 
-        when(log.logSegments(5L, Long.MAX_VALUE))
-                .thenReturn(CollectionConverters.asScala(Arrays.asList(segment1, segment2, activeSegment)));
+        when(log.logSegments(5L, Long.MAX_VALUE)).thenReturn(Arrays.asList(segment1, segment2, activeSegment));
 
         RemoteLogManager.RLMCopyTask task = remoteLogManager.new RLMCopyTask(leaderTopicIdPartition, 128);
         List<RemoteLogManager.EnrichedLogSegment> expected =
@@ -2076,8 +2074,7 @@ public class RemoteLogManagerTest {
         when(segment3.baseOffset()).thenReturn(15L);
         when(activeSegment.baseOffset()).thenReturn(20L);
 
-        when(log.logSegments(5L, Long.MAX_VALUE))
-                .thenReturn(CollectionConverters.asScala(Arrays.asList(segment1, segment2, segment3, activeSegment)));
+        when(log.logSegments(5L, Long.MAX_VALUE)).thenReturn(Arrays.asList(segment1, segment2, segment3, activeSegment));
 
         RemoteLogManager.RLMCopyTask task = remoteLogManager.new RLMCopyTask(leaderTopicIdPartition, 128);
         List<RemoteLogManager.EnrichedLogSegment> expected =
@@ -2368,7 +2365,7 @@ public class RemoteLogManagerTest {
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
         when(mockLog.logStartOffset()).thenReturn(oldSegmentStartOffset);
-        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(CollectionConverters.asScala(Arrays.asList(oldSegment, activeSegment)));
+        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(Arrays.asList(oldSegment, activeSegment));
 
         File mockProducerSnapshotIndex = TestUtils.tempFile();
         ProducerStateManager mockStateManager = mock(ProducerStateManager.class);
@@ -2765,7 +2762,7 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    public void testDeleteRetentionMsBiggerThanTimeMs() throws RemoteStorageException, ExecutionException, InterruptedException {
+    public void testDeleteRetentionMsBiggerThanTimeMs() throws RemoteStorageException {
         // add 1 month to the current time to avoid flaky test
         LogConfig mockLogConfig = new LogConfig(Map.of("retention.ms", time.milliseconds() + 24 * 30 * 60 * 60 * 1000L));
         when(mockLog.config()).thenReturn(mockLogConfig);
@@ -3129,7 +3126,7 @@ public class RemoteLogManagerTest {
         );
 
         RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(
-                0, false, tp, partitionData, FetchIsolation.TXN_COMMITTED, false
+                0, false, tp, partitionData, FetchIsolation.TXN_COMMITTED
         );
 
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(
@@ -3206,7 +3203,7 @@ public class RemoteLogManagerTest {
         );
 
         RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(
-                0, minOneMessage, tp, partitionData, FetchIsolation.HIGH_WATERMARK, false
+                0, minOneMessage, tp, partitionData, FetchIsolation.HIGH_WATERMARK
         );
 
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(
@@ -3290,7 +3287,7 @@ public class RemoteLogManagerTest {
         when(firstBatch.sizeInBytes()).thenReturn(recordBatchSizeInBytes);
         doNothing().when(firstBatch).writeTo(capture.capture());
         RemoteStorageFetchInfo fetchInfo = new RemoteStorageFetchInfo(
-                0, true, tp, partitionData, FetchIsolation.HIGH_WATERMARK, false
+                0, true, tp, partitionData, FetchIsolation.HIGH_WATERMARK
         );
 
 
@@ -3496,7 +3493,7 @@ public class RemoteLogManagerTest {
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
         when(mockLog.logStartOffset()).thenReturn(oldSegmentStartOffset);
-        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(CollectionConverters.asScala(Arrays.asList(oldSegment, activeSegment)));
+        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(Arrays.asList(oldSegment, activeSegment));
 
         File mockProducerSnapshotIndex = TestUtils.tempFile();
         ProducerStateManager mockStateManager = mock(ProducerStateManager.class);
@@ -3565,7 +3562,7 @@ public class RemoteLogManagerTest {
 
         when(mockLog.activeSegment()).thenReturn(activeSegment);
         when(mockLog.logStartOffset()).thenReturn(oldestSegmentStartOffset);
-        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(CollectionConverters.asScala(Arrays.asList(segmentToCopy, segmentToThrottle, activeSegment)));
+        when(mockLog.logSegments(anyLong(), anyLong())).thenReturn(Arrays.asList(segmentToCopy, segmentToThrottle, activeSegment));
 
         File mockProducerSnapshotIndex = TestUtils.tempFile();
         ProducerStateManager mockStateManager = mock(ProducerStateManager.class);
@@ -3674,7 +3671,7 @@ public class RemoteLogManagerTest {
                 Uuid.randomUuid(), fetchOffset, 0, 100, Optional.empty());
         RemoteStorageFetchInfo remoteStorageFetchInfo = new RemoteStorageFetchInfo(
                 1048576, true, leaderTopicIdPartition.topicPartition(),
-                partitionData, FetchIsolation.HIGH_WATERMARK, false);
+                partitionData, FetchIsolation.HIGH_WATERMARK);
         FetchDataInfo fetchDataInfo = remoteLogManager.read(remoteStorageFetchInfo);
         // firstBatch baseOffset may not be equal to the fetchOffset
         assertEquals(9, fetchDataInfo.fetchOffsetMetadata.messageOffset);

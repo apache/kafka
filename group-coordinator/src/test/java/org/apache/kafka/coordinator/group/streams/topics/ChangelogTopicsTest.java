@@ -24,7 +24,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.To
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
@@ -46,23 +45,23 @@ public class ChangelogTopicsTest {
         .setTopicConfigs(List.of(TOPIC_CONFIG));
     private static final Subtopology SUBTOPOLOGY_NO_SOURCE = new Subtopology()
         .setSubtopologyId("SUBTOPOLOGY_NO_SOURCE")
-        .setSourceTopics(Collections.emptyList())
-        .setRepartitionSinkTopics(Collections.singletonList(SINK_TOPIC_NAME))
+        .setSourceTopics(List.of())
+        .setRepartitionSinkTopics(List.of(SINK_TOPIC_NAME))
         .setRepartitionSourceTopics(List.of(REPARTITION_TOPIC_INFO))
-        .setStateChangelogTopics(Collections.emptyList());
+        .setStateChangelogTopics(List.of());
     private static final Subtopology SUBTOPOLOGY_STATELESS = new Subtopology()
         .setSubtopologyId("SUBTOPOLOGY_STATELESS")
-        .setSourceTopics(Collections.singletonList(SOURCE_TOPIC_NAME))
-        .setRepartitionSinkTopics(Collections.singletonList(SINK_TOPIC_NAME))
+        .setSourceTopics(List.of(SOURCE_TOPIC_NAME))
+        .setRepartitionSinkTopics(List.of(SINK_TOPIC_NAME))
         .setRepartitionSourceTopics(List.of(REPARTITION_TOPIC_INFO))
-        .setStateChangelogTopics(Collections.emptyList());
+        .setStateChangelogTopics(List.of());
     private static final TopicInfo SOURCE_CHANGELOG_TOPIC_CONFIG = new TopicInfo()
         .setName(SOURCE_TOPIC_NAME)
         .setTopicConfigs(List.of(TOPIC_CONFIG));
     private static final Subtopology SUBTOPOLOGY_SOURCE_CHANGELOG = new Subtopology()
         .setSubtopologyId("SUBTOPOLOGY_SOURCE_CHANGELOG")
-        .setSourceTopics(Collections.singletonList(SOURCE_TOPIC_NAME))
-        .setRepartitionSinkTopics(Collections.singletonList(SINK_TOPIC_NAME))
+        .setSourceTopics(List.of(SOURCE_TOPIC_NAME))
+        .setRepartitionSinkTopics(List.of(SINK_TOPIC_NAME))
         .setRepartitionSourceTopics(List.of(REPARTITION_TOPIC_INFO))
         .setStateChangelogTopics(List.of(SOURCE_CHANGELOG_TOPIC_CONFIG));
     private static final TopicInfo CHANGELOG_TOPIC_CONFIG = new TopicInfo()
@@ -70,14 +69,14 @@ public class ChangelogTopicsTest {
         .setTopicConfigs(List.of(TOPIC_CONFIG));
     private static final Subtopology SUBTOPOLOGY_STATEFUL = new Subtopology()
         .setSubtopologyId("SUBTOPOLOGY_STATEFUL")
-        .setSourceTopics(Collections.singletonList(SOURCE_TOPIC_NAME))
-        .setRepartitionSinkTopics(Collections.singletonList(SINK_TOPIC_NAME))
+        .setSourceTopics(List.of(SOURCE_TOPIC_NAME))
+        .setRepartitionSinkTopics(List.of(SINK_TOPIC_NAME))
         .setRepartitionSourceTopics(List.of(REPARTITION_TOPIC_INFO))
         .setStateChangelogTopics(List.of(CHANGELOG_TOPIC_CONFIG));
     private static final Subtopology SUBTOPOLOGY_BOTH = new Subtopology()
         .setSubtopologyId("SUBTOPOLOGY_BOTH")
-        .setSourceTopics(Collections.singletonList(SOURCE_TOPIC_NAME))
-        .setRepartitionSinkTopics(Collections.singletonList(SINK_TOPIC_NAME))
+        .setSourceTopics(List.of(SOURCE_TOPIC_NAME))
+        .setRepartitionSinkTopics(List.of(SINK_TOPIC_NAME))
         .setRepartitionSourceTopics(List.of(REPARTITION_TOPIC_INFO))
         .setStateChangelogTopics(List.of(SOURCE_CHANGELOG_TOPIC_CONFIG, CHANGELOG_TOPIC_CONFIG));
 
@@ -104,7 +103,7 @@ public class ChangelogTopicsTest {
             new ChangelogTopics(LOG_CONTEXT, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
         Map<String, Integer> setup = changelogTopics.setup();
 
-        assertEquals(Collections.emptyMap(), setup);
+        assertEquals(Map.of(), setup);
     }
 
     @Test
@@ -126,7 +125,7 @@ public class ChangelogTopicsTest {
             new ChangelogTopics(LOG_CONTEXT, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
         Map<String, Integer> setup = changelogTopics.setup();
 
-        assertEquals(Collections.emptyMap(), setup);
+        assertEquals(Map.of(), setup);
     }
 
     @Test

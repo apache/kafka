@@ -24,17 +24,18 @@ import java.util.Properties
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import kafka.log.LogManager
 import kafka.server.{BrokerServer, KafkaConfig, ReplicaManager}
-import org.apache.kafka.common.test.{KafkaClusterTestKit, TestKitNodes}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET
 import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ConfigEntry, NewTopic}
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.BROKER
+import org.apache.kafka.common.test.{KafkaClusterTestKit, TestKitNodes}
 import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, MetadataImageTest, MetadataProvenance}
 import org.apache.kafka.image.loader.LogDeltaManifest
+import org.apache.kafka.metadata.publisher.AclPublisher
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.LeaderAndEpoch
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion}
@@ -198,6 +199,7 @@ class BrokerMetadataPublisherTest {
       Some(mock(classOf[ShareCoordinator])),
       mock(classOf[DynamicConfigPublisher]),
       mock(classOf[DynamicClientQuotaPublisher]),
+      mock(classOf[DynamicTopicClusterQuotaPublisher]),
       mock(classOf[ScramPublisher]),
       mock(classOf[DelegationTokenPublisher]),
       mock(classOf[AclPublisher]),

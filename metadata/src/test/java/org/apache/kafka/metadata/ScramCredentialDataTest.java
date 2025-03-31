@@ -25,7 +25,6 @@ import org.apache.kafka.server.util.MockRandom;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
-import java.util.Arrays;
 import java.util.List;
 import java.util.Random;
 
@@ -43,7 +42,7 @@ public class ScramCredentialDataTest {
         return buf;
     }
 
-    private static final List<ScramCredentialData> SCRAMCREDENTIALDATA = Arrays.asList(
+    private static final List<ScramCredentialData> SCRAMCREDENTIALDATA = List.of(
         new ScramCredentialData(
             randomBuffer(random, 1024),
             randomBuffer(random, 1024),

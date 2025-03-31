@@ -169,7 +169,7 @@ public class Joined<K, VLeft, VRight> implements NamedOperation<Joined<K, VLeft,
 
 
     /**
-     * Create an instance of {@code Joined} with aother value {@link Serde}.
+     * Create an instance of {@code Joined} with another value {@link Serde}.
      * {@code null} values are accepted and will be replaced by the default value serde as defined in config.
      *
      * @param rightValueSerde
