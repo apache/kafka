@@ -1480,4 +1480,8 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
             return super.toString().toLowerCase(Locale.ROOT);
         }
     }
+
+    Map<TopicIdPartition, Acknowledgements> getFetchAcknowledgementsToSend(Integer nodeId) {
+        return fetchAcknowledgementsToSend.get(nodeId);
+    }
 }
