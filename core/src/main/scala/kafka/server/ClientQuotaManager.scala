@@ -158,10 +158,7 @@ class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
 
   @volatile
   private var quotaTypesEnabled = clientQuotaCallbackPlugin match {
-    case Some(plugin) => if (plugin.get() == null)
-      QuotaTypes.NoQuotas
-    else
-      QuotaTypes.CustomQuotas
+    case Some(_) => QuotaTypes.CustomQuotas
     case None => QuotaTypes.NoQuotas
   }
 
