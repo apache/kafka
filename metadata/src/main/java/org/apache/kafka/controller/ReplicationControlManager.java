@@ -641,6 +641,32 @@ public class ReplicationControlManager {
         Map<ConfigResource, Map<String, Entry<OpType, String>>> configChanges =
             computeConfigChanges(topicErrors, request.topics());
 
+        // calculate the total partitions in the request excluding the topics already marked with errors
+        int totalPartitions = request.topics().stream()
+            .filter(topic -> !topicErrors.containsKey(topic.name()))
+            .mapToInt(topic -> {
+                if (topic.assignments().isEmpty()) {
+                    if (topic.numPartitions() == -1) {
+                        return defaultNumPartitions;
+                    } else {
+                        return topic.numPartitions();
+                    }
+                } else {
+                    return topic.assignments().size();
+                }
+            })
+            .sum();
+        try {
+            context.applyPartitionChangeQuota(totalPartitions); // check controller mutation quota with the total partitions
+        } catch (ThrottlingQuotaExceededException e) {
+            log.debug("Total partition count of {} for the createTopics request is not allowed because quota is violated. " +
+                    "Throttle time: {}", totalPartitions, e.throttleTimeMs());
+            for (CreatableTopic topic : request.topics()) {
+                if (topicErrors.containsKey(topic.name())) continue;
+                topicErrors.put(topic.name(), new ApiError(Errors.THROTTLING_QUOTA_EXCEEDED, e.getMessage()));
+            }
+        }
+
         // Try to create whatever topics are needed.
         Map<String, CreatableTopicResult> successes = new HashMap<>();
         for (CreatableTopic topic : request.topics()) {
@@ -801,13 +827,6 @@ public class ReplicationControlManager {
             if (error.isFailure()) return error;
         }
         int numPartitions = newParts.size();
-        try {
-            context.applyPartitionChangeQuota(numPartitions); // check controller mutation quota
-        } catch (ThrottlingQuotaExceededException e) {
-            log.debug("Topic creation of {} partitions not allowed because quota is violated. Delay time: {}",
-                numPartitions, e.throttleTimeMs());
-            return ApiError.fromThrowable(e);
-        }
         Uuid topicId = Uuid.randomUuid();
         CreatableTopicResult result = new CreatableTopicResult().
             setName(topic.name()).
@@ -975,7 +994,28 @@ public class ReplicationControlManager {
         StringBuilder resultsBuilder = new StringBuilder();
         String resultsPrefix = "";
 
+        int totalPartitions = 0;
         for (Uuid id : ids) {
+            if (topics.get(id) != null) {
+                totalPartitions += topics.get(id).parts.size();
+            }
+        }
+
+        try {
+            context.applyPartitionChangeQuota(totalPartitions); // check controller mutation quota with the total partitions
+        } catch (ThrottlingQuotaExceededException e) {
+            log.debug("Total partition count of {} for the deleteTopics request is not allowed because quota is violated. " +
+                    "Throttle time: {}", totalPartitions, e.throttleTimeMs());
+            // Mark every topic in the request with the THROTTLING_QUOTA_EXCEEDED error.
+            for (Uuid id : ids) {
+                results.put(id, new ApiError(Errors.THROTTLING_QUOTA_EXCEEDED, e.getMessage()));
+            }
+        }
+
+        for (Uuid id : ids) {
+            if (results.containsKey(id)) {
+                continue;
+            }
             String topicName = "null";
             ApiError error;
             try {
@@ -1015,15 +1055,6 @@ public class ReplicationControlManager {
         }
         int numPartitions = topic.parts.size();
         log.trace("Deleting topic {} with ID {} and {} partitions", topic.name, id, numPartitions);
-        try {
-            context.applyPartitionChangeQuota(numPartitions); // check controller mutation quota
-            log.trace("Checked for a partition change quota on topic {} with ID {}", topic.name, id);
-        } catch (ThrottlingQuotaExceededException e) {
-            // log a message and rethrow the exception
-            log.debug("Topic deletion of {} partitions not allowed because quota is violated. Delay time: {}",
-                numPartitions, e.throttleTimeMs());
-            throw e;
-        }
         records.add(new ApiMessageAndVersion(new RemoveTopicRecord().
             setTopicId(id), (short) 0));
     }
@@ -1808,10 +1839,23 @@ public class ReplicationControlManager {
     ) {
         List<ApiMessageAndVersion> records = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
         List<CreatePartitionsTopicResult> results = BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
+
+        Optional<ApiError> quotaExceededError = checkQuotaForTotalPartition(context, topics);
+        if (quotaExceededError.isPresent()) {
+            ApiError apiError = quotaExceededError.get();
+            for (CreatePartitionsTopic topic : topics) {
+                results.add(new CreatePartitionsTopicResult()
+                    .setName(topic.name())
+                    .setErrorCode(apiError.error().code())
+                    .setErrorMessage(apiError.message()));
+            }
+            return ControllerResult.atomicOf(Collections.emptyList(), results);
+        }
+
         for (CreatePartitionsTopic topic : topics) {
             ApiError apiError = ApiError.NONE;
             try {
-                createPartitions(context, topic, records);
+                createPartitions(topic, records);
             } catch (ApiException e) {
                 apiError = ApiError.fromThrowable(e);
             } catch (Exception e) {
@@ -1826,8 +1870,30 @@ public class ReplicationControlManager {
         return ControllerResult.atomicOf(records, results);
     }
 
-    void createPartitions(ControllerRequestContext context,
-                          CreatePartitionsTopic topic,
+    private Optional<ApiError> checkQuotaForTotalPartition(ControllerRequestContext context,
+                                                           List<CreatePartitionsTopic> topicsCreatePartition) {
+        int totalPartitionsToAdd = 0;
+        for (CreatePartitionsTopic topic : topicsCreatePartition) {
+            Uuid topicId = topicsByName.get(topic.name());
+            if (topicId != null) {
+                TopicControlInfo topicInfo = topics.get(topicId);
+                if (topicInfo != null) {
+                    totalPartitionsToAdd += Math.max(0, topic.count() - topicInfo.parts.size());
+                }
+            }
+        }
+        try {
+            context.applyPartitionChangeQuota(totalPartitionsToAdd); // check controller mutation quota
+        } catch (ThrottlingQuotaExceededException e) {
+            // log a message and rethrow the exception
+            log.debug("Total partition count of {} for the createPartitions request is not allowed because quota is violated. " +
+                    "Delay time: {}", totalPartitionsToAdd, e.throttleTimeMs());
+            return Optional.of(new ApiError(Errors.THROTTLING_QUOTA_EXCEEDED, e.getMessage()));
+        }
+        return Optional.empty();
+    }
+
+    void createPartitions(CreatePartitionsTopic topic,
                           List<ApiMessageAndVersion> records) {
         Uuid topicId = topicsByName.get(topic.name());
         if (topicId == null) {
@@ -1852,14 +1918,6 @@ public class ReplicationControlManager {
                     " additional partition(s), but only " + topic.assignments().size() +
                     " assignment(s) were specified.");
             }
-        }
-        try {
-            context.applyPartitionChangeQuota(additional); // check controller mutation quota
-        } catch (ThrottlingQuotaExceededException e) {
-            // log a message and rethrow the exception
-            log.debug("Partition creation of {} partitions not allowed because quota is violated. Delay time: {}",
-                additional, e.throttleTimeMs());
-            throw e;
         }
         Iterator<PartitionRegistration> iterator = topicInfo.parts.values().iterator();
         if (!iterator.hasNext()) {
