@@ -208,8 +208,4 @@ public final class SnapshotFileReader implements AutoCloseable {
         beginShutdown("closing");
         queue.close();
     }
-
-    public CompletableFuture<Void> caughtUpFuture() {
-        return caughtUpFuture;
-    }
 }

@@ -31,7 +31,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{Tag, Timeout}
+import org.junit.jupiter.api.Timeout
 
 import java.lang.{Byte => JByte}
 import scala.jdk.CollectionConverters._
@@ -40,7 +40,6 @@ import scala.jdk.CollectionConverters._
 @ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1, serverProperties = Array(
   new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "")
 ))
-@Tag("integration")
 class ShareGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
   @ClusterTest(

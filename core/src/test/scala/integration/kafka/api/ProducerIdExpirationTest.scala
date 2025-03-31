@@ -79,9 +79,9 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     super.tearDown()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testProducerIdExpirationWithNoTransactions(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProducerIdExpirationWithNoTransactions(groupProtocol: String): Unit = {
     producer = TestUtils.createProducer(bootstrapServers(), enableIdempotence = true)
 
     // Send records to populate producer state cache.
@@ -103,9 +103,9 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     assertEquals(1, producerState.size)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testTransactionAfterTransactionIdExpiresButProducerIdRemains(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testTransactionAfterTransactionIdExpiresButProducerIdRemains(groupProtocol: String): Unit = {
     producer = TestUtils.createTransactionalProducer("transactionalProducer", brokers)
     producer.initTransactions()
 
@@ -158,9 +158,9 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testDynamicProducerIdExpirationMs(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testDynamicProducerIdExpirationMs(groupProtocol: String): Unit = {
     producer = TestUtils.createProducer(bootstrapServers(), enableIdempotence = true)
 
     // Send records to populate producer state cache.
