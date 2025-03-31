@@ -29,7 +29,7 @@ import java.util.Map;
  * <ul>
  *     <li><code>config</code> set to <code>clientQuotaCallback.class</code></li>
  *     <li><code>class</code> set to the ClientQuotaCallback class name</li>
- *     <li><code>role</code> set to broker/ controller, which indicates the role of the server</li>
+ *     <li><code>role</code> set to broker/controller, which indicates the role of the server</li>
  * </ul>
  */
 public interface ClientQuotaCallback extends Configurable {

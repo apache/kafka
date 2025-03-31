@@ -159,7 +159,7 @@ public class CustomQuotaCallbackTest {
 
         public static MetricName metricName = null;
         public static String name = "client quota callback";
-        public static String description = "client quota callback";
+        public static String description = "client quota callback description";
 
         @Override
         public void withPluginMetrics(PluginMetrics metrics) {

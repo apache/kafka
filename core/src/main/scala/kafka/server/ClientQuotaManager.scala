@@ -139,7 +139,7 @@ object ClientQuotaManager {
  * @param time @Time object to use
  * @param threadNamePrefix The thread prefix to use
  * @param clientQuotaCallbackPlugin An optional @ClientQuotaCallback and 
- *                                  warp it in a {@link org.apache.kafka.common.internals.Plugin}
+ *                                  wrap it in a {@link org.apache.kafka.common.internals.Plugin}
  */
 class ClientQuotaManager(private val config: ClientQuotaManagerConfig,
                          private val metrics: Metrics,
