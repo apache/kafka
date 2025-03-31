@@ -45,6 +45,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
@@ -1380,6 +1381,132 @@ class StreamsGroupHeartbeatRequestManagerTest {
         return Arrays.stream(Errors.values())
             .filter(error -> !consideredErrors.contains(error))
             .map(Arguments::of);
+    }
+
+    @Test
+    public void testPollOnCloseWhenIsNotLeaving() {
+        final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.pollOnClose(time.milliseconds());
+
+        assertEquals(NetworkClientDelegate.PollResult.EMPTY, result);
+    }
+
+    @Test
+    public void testPollOnCloseWhenIsLeaving() {
+        final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+        when(membershipManager.isLeavingGroup()).thenReturn(true);
+        when(membershipManager.groupId()).thenReturn(GROUP_ID);
+        when(membershipManager.memberId()).thenReturn(MEMBER_ID);
+        when(membershipManager.memberEpoch()).thenReturn(LEAVE_GROUP_MEMBER_EPOCH);
+
+        NetworkClientDelegate.PollResult result = heartbeatRequestManager.pollOnClose(time.milliseconds());
+
+        assertEquals(1, result.unsentRequests.size());
+        final NetworkClientDelegate.UnsentRequest networkRequest = result.unsentRequests.get(0);
+        StreamsGroupHeartbeatRequest streamsRequest = (StreamsGroupHeartbeatRequest) networkRequest.requestBuilder().build();
+        assertEquals(GROUP_ID, streamsRequest.data().groupId());
+        assertEquals(MEMBER_ID, streamsRequest.data().memberId());
+        assertEquals(LEAVE_GROUP_MEMBER_EPOCH, streamsRequest.data().memberEpoch());
+    }
+
+    @Test
+    public void testMaximumTimeToWaitPollTimerExpired() {
+        try (
+            final MockedConstruction<Timer> timerMockedConstruction = mockConstruction(Timer.class, (mock, context) -> {
+                when(mock.isExpired()).thenReturn(true);
+            });
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> {
+                    when(mock.requestInFlight()).thenReturn(false);
+                })
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final Timer pollTimer = timerMockedConstruction.constructed().get(0);
+            time.sleep(1234);
+
+            final long maximumTimeToWait = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+
+            assertEquals(0, maximumTimeToWait);
+            verify(pollTimer).update(time.milliseconds());
+        }
+    }
+
+    @Test
+    public void testMaximumTimeToWaitWhenHeartbeatShouldBeSentImmediately() {
+        try (
+            final MockedConstruction<Timer> timerMockedConstruction = mockConstruction(Timer.class);
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> {
+                    when(mock.requestInFlight()).thenReturn(false);
+                })
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final Timer pollTimer = timerMockedConstruction.constructed().get(0);
+            when(membershipManager.shouldNotWaitForHeartbeatInterval()).thenReturn(true);
+            time.sleep(1234);
+
+            final long maximumTimeToWait = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+
+            assertEquals(0, maximumTimeToWait);
+            verify(pollTimer).update(time.milliseconds());
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"true, false", "false, false", "true, true"})
+    public void testMaximumTimeToWaitWhenHeartbeatShouldBeNotSentImmediately(final boolean isRequestInFlight,
+                                                                             final boolean shouldNotWaitForHeartbeatInterval) {
+        final long remainingMs = 12L;
+        final long timeToNextHeartbeatMs = 6L;
+        try (
+            final MockedConstruction<Timer> timerMockedConstruction = mockConstruction(Timer.class, (mock, context) -> {
+                when(mock.remainingMs()).thenReturn(remainingMs);
+            });
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> {
+                    when(mock.requestInFlight()).thenReturn(isRequestInFlight);
+                    when(mock.timeToNextHeartbeatMs(anyLong())).thenReturn(timeToNextHeartbeatMs);
+                })
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final Timer pollTimer = timerMockedConstruction.constructed().get(0);
+            when(membershipManager.shouldNotWaitForHeartbeatInterval()).thenReturn(shouldNotWaitForHeartbeatInterval);
+            time.sleep(1234);
+
+            final long maximumTimeToWait = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+
+            assertEquals(timeToNextHeartbeatMs, maximumTimeToWait);
+            verify(pollTimer).update(time.milliseconds());
+        }
+    }
+
+    @ParameterizedTest
+    @CsvSource({"12, 5", "10, 6"})
+    public void testMaximumTimeToWaitSelectingMinimumWaitTime(final long remainingMs,
+                                                              final long timeToNextHeartbeatMs) {
+        try (
+            final MockedConstruction<Timer> timerMockedConstruction = mockConstruction(Timer.class, (mock, context) -> {
+                when(mock.remainingMs()).thenReturn(remainingMs);
+            });
+            final MockedConstruction<HeartbeatRequestState> heartbeatRequestStateMockedConstruction = mockConstruction(
+                HeartbeatRequestState.class,
+                (mock, context) -> {
+                    when(mock.timeToNextHeartbeatMs(anyLong())).thenReturn(timeToNextHeartbeatMs);
+                })
+        ) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final Timer pollTimer = timerMockedConstruction.constructed().get(0);
+            time.sleep(1234);
+
+            final long maximumTimeToWait = heartbeatRequestManager.maximumTimeToWait(time.milliseconds());
+
+            assertEquals(5, maximumTimeToWait);
+            verify(pollTimer).update(time.milliseconds());
+        }
     }
 
     private static ConsumerConfig config() {

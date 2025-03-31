@@ -36,11 +36,8 @@ import org.apache.kafka.common.test.JaasUtils;
 import org.apache.kafka.common.test.api.ClusterConfig;
 import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.common.test.junit.ClusterTestExtensions;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.security.authorizer.AclEntry;
-
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.HashMap;
 import java.util.List;
@@ -57,7 +54,6 @@ import static org.apache.kafka.common.acl.AclPermissionType.ALLOW;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 
-@ExtendWith(ClusterTestExtensions.class)
 public class DescribeAuthorizedOperationsTest {
     private static final String GROUP1 = "group1";
     private static final String GROUP2 = "group2";
