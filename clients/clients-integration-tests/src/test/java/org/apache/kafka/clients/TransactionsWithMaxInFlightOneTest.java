@@ -46,6 +46,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -69,8 +70,8 @@ public class TransactionsWithMaxInFlightOneTest {
     private static final String TOPIC1 = "topic1";
     private static final String TOPIC2 = "topic2";
     private static final String HEADER_KEY = "transactionStatus";
-    private static final String ABORTED_VALUE = "aborted";
-    private static final String COMMITTED_VALUE = "committed";
+    private static final byte[] ABORTED_VALUE = "aborted".getBytes();
+    private static final byte[] COMMITTED_VALUE = "committed".getBytes();
 
     @ClusterTest
     public void testTransactionalProducerSingleBrokerMaxInFlightOne(ClusterInstance clusterInstance) throws InterruptedException {
@@ -88,14 +89,14 @@ public class TransactionsWithMaxInFlightOneTest {
             producer.initTransactions();
 
             producer.beginTransaction();
-            producer.send(new ProducerRecord<>(TOPIC2, null, "2".getBytes(), "2".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, ABORTED_VALUE.getBytes()))));
-            producer.send(new ProducerRecord<>(TOPIC1, null, "4".getBytes(), "4".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, ABORTED_VALUE.getBytes()))));
+            producer.send(new ProducerRecord<>(TOPIC2, null, "2".getBytes(), "2".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, ABORTED_VALUE))));
+            producer.send(new ProducerRecord<>(TOPIC1, null, "4".getBytes(), "4".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, ABORTED_VALUE))));
             producer.flush();
             producer.abortTransaction();
 
             producer.beginTransaction();
-            producer.send(new ProducerRecord<>(TOPIC1, null, "1".getBytes(), "1".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, COMMITTED_VALUE.getBytes()))));
-            producer.send(new ProducerRecord<>(TOPIC2, null, "3".getBytes(), "3".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, COMMITTED_VALUE.getBytes()))));
+            producer.send(new ProducerRecord<>(TOPIC1, null, "1".getBytes(), "1".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, COMMITTED_VALUE))));
+            producer.send(new ProducerRecord<>(TOPIC2, null, "3".getBytes(), "3".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, COMMITTED_VALUE))));
             producer.commitTransaction();
 
             for (GroupProtocol groupProtocol : clusterInstance.supportedGroupProtocols()) {
@@ -117,7 +118,7 @@ public class TransactionsWithMaxInFlightOneTest {
                     Iterator<Header> headers = record.headers().headers(HEADER_KEY).iterator();
                     assertTrue(headers.hasNext());
                     Header header = headers.next();
-                    assertEquals(COMMITTED_VALUE, new String(header.value()), "Record does not have the expected header value.");
+                    assertArrayEquals(COMMITTED_VALUE, header.value(), "Record does not have the expected header value");
                 });
             }
         }
