@@ -56,6 +56,7 @@ import java.util.stream.Collectors;
  *   <li><b>Optional Rack Awareness:</b> Supports configurable rack-aware allocation when enabled.</li>
  *   <li><b>Leader Balancing:</b> Ensures that the number of leaders is distributed as evenly as possible among nodes.</li>
  *   <li><b>ISR Order Optimization:</b> Implements adjacency relationship balancing, prevents failover traffic concentration during broker outages.</li>
+ *   <li><b>Leader Stability:</b> Keep the original partition leader unchanged as much as possible to minimize leader transitions. This objective has a lower priority than the first five.</li>
  * </ol>
  *
  * <ul>
