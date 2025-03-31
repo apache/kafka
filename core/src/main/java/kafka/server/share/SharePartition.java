@@ -692,7 +692,7 @@ public class SharePartition {
      *                           if the records are already part of the same fetch batch.
      * @param fetchOffset        The fetch offset for which the records are fetched.
      * @param fetchPartitionData The fetched records for the share partition.
-     * @param isolationType      The isolation level for the share fetch request.
+     * @param isolationLevel      The isolation level for the share fetch request.
      * @return The acquired records for the share partition.
      */
     @SuppressWarnings("cyclomaticcomplexity") // Consider refactoring to avoid suppression
@@ -702,7 +702,7 @@ public class SharePartition {
         int maxFetchRecords,
         long fetchOffset,
         FetchPartitionData fetchPartitionData,
-        FetchIsolation isolationType
+        FetchIsolation isolationLevel
     ) {
         log.trace("Received acquire request for share partition: {}-{} memberId: {}", groupId, topicIdPartition, memberId);
         if (stateNotActive() || maxFetchRecords <= 0) {
@@ -749,7 +749,7 @@ public class SharePartition {
                     groupId, topicIdPartition);
                 ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
                     firstBatch.baseOffset(), lastBatch.lastOffset(), batchSize, maxFetchRecords);
-                return maybeFilterAbortedTransactionalAcquiredRecords(fetchPartitionData, isolationType, shareAcquiredRecords);
+                return maybeFilterAbortedTransactionalAcquiredRecords(fetchPartitionData, isolationLevel, shareAcquiredRecords);
             }
 
             log.trace("Overlap exists with in-flight records. Acquire the records if available for"
@@ -859,7 +859,7 @@ public class SharePartition {
             }
             if (!result.isEmpty()) {
                 maybeUpdateReadGapFetchOffset(result.get(result.size() - 1).lastOffset() + 1);
-                return maybeFilterAbortedTransactionalAcquiredRecords(fetchPartitionData, isolationType, new ShareAcquiredRecords(result, acquiredCount));
+                return maybeFilterAbortedTransactionalAcquiredRecords(fetchPartitionData, isolationLevel, new ShareAcquiredRecords(result, acquiredCount));
             }
             return new ShareAcquiredRecords(result, acquiredCount);
         } finally {
@@ -2497,10 +2497,14 @@ public class SharePartition {
         }
     }
 
-    private ShareAcquiredRecords maybeFilterAbortedTransactionalAcquiredRecords(FetchPartitionData fetchPartitionData, FetchIsolation isolationLevel, ShareAcquiredRecords shareAcquiredRecords) {
-        if (isolationLevel != FetchIsolation.TXN_COMMITTED || fetchPartitionData.abortedTransactions.isEmpty())
+    private ShareAcquiredRecords maybeFilterAbortedTransactionalAcquiredRecords(
+        FetchPartitionData fetchPartitionData,
+        FetchIsolation isolationLevel,
+        ShareAcquiredRecords shareAcquiredRecords
+    ) {
+        if (isolationLevel != FetchIsolation.TXN_COMMITTED || fetchPartitionData.abortedTransactions.isEmpty() || fetchPartitionData.abortedTransactions.get().isEmpty())
             return shareAcquiredRecords;
-        // When FetchIsolation.TXN_COMMITTED is used as isolation type by the share group, we need to filter any
+        // When FetchIsolation.TXN_COMMITTED is used as isolation level by the share group, we need to filter any
         // transactions that were aborted/did not commit due to timeout.
         List<AcquiredRecords> result = filterAbortedTransactionalAcquiredRecords(fetchPartitionData.records.batches(), shareAcquiredRecords.acquiredRecords(), fetchPartitionData.abortedTransactions.get());
         int acquiredCount = 0;
@@ -2675,20 +2679,17 @@ public class SharePartition {
     ) {
         lock.writeLock().lock();
         try {
-            PriorityQueue<FetchResponseData.AbortedTransaction> abortedTransactionsHeap = abortedTransactionsHeap(abortedTransactions);
+            PriorityQueue<FetchResponseData.AbortedTransaction> orderedAbortedTransactions = orderedAbortedTransactions(abortedTransactions);
             Set<Long> abortedProducerIds = new HashSet<>();
             List<RecordBatch> recordsToArchive = new ArrayList<>();
 
             for (RecordBatch currentBatch : batches) {
                 if (currentBatch.hasProducerId()) {
-                    // remove from the aborted transactions queue, all aborted transactions which have begun
-                    // before the current batch's last offset and add the associated producerIds to the
-                    // aborted producer set
-                    if (abortedTransactionsHeap != null) {
-                        while (!abortedTransactionsHeap.isEmpty() && abortedTransactionsHeap.peek().firstOffset() <= currentBatch.lastOffset()) {
-                            FetchResponseData.AbortedTransaction abortedTransaction = abortedTransactionsHeap.poll();
-                            abortedProducerIds.add(abortedTransaction.producerId());
-                        }
+                    // remove from the aborted transactions queue, all aborted transactions which have begun before the
+                    // current batch's last offset and add the associated producerIds to the aborted producer set.
+                    while (!orderedAbortedTransactions.isEmpty() && orderedAbortedTransactions.peek().firstOffset() <= currentBatch.lastOffset()) {
+                        FetchResponseData.AbortedTransaction abortedTransaction = orderedAbortedTransactions.poll();
+                        abortedProducerIds.add(abortedTransaction.producerId());
                     }
                     long producerId = currentBatch.producerId();
                     if (containsAbortMarker(currentBatch)) {
@@ -2706,15 +2707,12 @@ public class SharePartition {
         }
     }
 
-    private PriorityQueue<FetchResponseData.AbortedTransaction> abortedTransactionsHeap(List<FetchResponseData.AbortedTransaction> abortedTransactions) {
-        if (abortedTransactions == null || abortedTransactions.isEmpty())
-            return null;
-
-        PriorityQueue<FetchResponseData.AbortedTransaction> abortedTransactionsHeap = new PriorityQueue<>(
+    private PriorityQueue<FetchResponseData.AbortedTransaction> orderedAbortedTransactions(List<FetchResponseData.AbortedTransaction> abortedTransactions) {
+        PriorityQueue<FetchResponseData.AbortedTransaction> orderedAbortedTransactions = new PriorityQueue<>(
             abortedTransactions.size(), Comparator.comparingLong(FetchResponseData.AbortedTransaction::firstOffset)
         );
-        abortedTransactionsHeap.addAll(abortedTransactions);
-        return abortedTransactionsHeap;
+        orderedAbortedTransactions.addAll(abortedTransactions);
+        return orderedAbortedTransactions;
     }
 
     private boolean isBatchAborted(RecordBatch batch, Set<Long> abortedProducerIds) {
