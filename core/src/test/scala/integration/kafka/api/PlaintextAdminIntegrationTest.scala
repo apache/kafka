@@ -1565,7 +1565,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testDeleteRecordsAfterCorruptRecords(groupProtocol: String): Unit = {
     val config = new Properties()
     config.put(TopicConfig.SEGMENT_BYTES_CONFIG, "200")
@@ -1586,6 +1586,11 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     }
     sendRecords(0, 10)
     sendRecords(10, 20)
+
+    TestUtils.waitUntilTrue(() => {
+      val records = consumer.poll(JDuration.ofMillis(100L))
+      !records.isEmpty
+    }, "Consumer should be able to consume records")
 
     val topicDesc = client.describeTopics(Collections.singletonList(topic)).allTopicNames().get().get(topic)
     assertEquals(1, topicDesc.partitions().size())
