@@ -166,10 +166,5 @@ public class CustomQuotaCallbackTest {
             metricName = metrics.metricName(name, description, Map.of());
             metrics.addMetric(metricName, (Gauge<Integer>) (config, now) -> 1);
         }
-
-        @Override
-        public boolean updateClusterMetadata(Cluster cluster) {
-            return true;
-        }
     }
 }
