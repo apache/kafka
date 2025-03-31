@@ -3239,7 +3239,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         shareFetchRequest.maxWait,
         fetchMinBytes,
         fetchMaxBytes,
-        FetchIsolation.of(-1, GroupConfig.defaultShareIsolationLevel),
+        FetchIsolation.of(FetchRequest.CONSUMER_REPLICA_ID, GroupConfig.defaultShareIsolationLevel),
         clientMetadata,
         true
       )

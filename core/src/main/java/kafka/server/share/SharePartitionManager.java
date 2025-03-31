@@ -30,6 +30,7 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
@@ -277,7 +278,7 @@ public class SharePartitionManager implements AutoCloseable {
                 fetchParams.maxWaitMs,
                 fetchParams.minBytes,
                 fetchParams.maxBytes,
-                FetchIsolation.of(-1, groupConfigManager.groupConfig(groupId).get().shareIsolationLevel()),
+                FetchIsolation.of(FetchRequest.CONSUMER_REPLICA_ID, groupConfigManager.groupConfig(groupId).get().shareIsolationLevel()),
                 fetchParams.clientMetadata
             );
             processShareFetch(new ShareFetch(updatedFetchParams, groupId, memberId, future, rotatedTopicIdPartitions, batchSize, maxFetchRecords, brokerTopicStats));
