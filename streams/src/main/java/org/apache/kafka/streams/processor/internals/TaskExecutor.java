@@ -185,12 +185,12 @@ public class TaskExecutor {
                     updateTaskCommitMetadata(allOffsets);
                 } catch (final TimeoutException timeoutException) {
                     log.error(
-                        String.format("Committing task(s) %s failed.",
+                        String.format("Committing task(s) %s failed due to %s",
                                       offsetsPerTask
                                           .keySet()
                                           .stream()
                                           .map(t -> t.id().toString())
-                                          .collect(Collectors.joining(", "))),
+                                          .collect(Collectors.joining(", ")), timeoutException.getMessage()),
                         timeoutException
                     );
                     offsetsPerTask
@@ -212,12 +212,12 @@ public class TaskExecutor {
                                                         "indicating the corresponding thread is no longer part of the group", error);
                 } catch (final TimeoutException timeoutException) {
                     log.error(
-                        String.format("Committing task(s) %s failed.",
+                        String.format("Committing task(s) %s failed due to %s.",
                                       offsetsPerTask
                                           .keySet()
                                           .stream()
                                           .map(t -> t.id().toString())
-                                          .collect(Collectors.joining(", "))),
+                                          .collect(Collectors.joining(", ")), timeoutException.getMessage()),
                         timeoutException
                     );
                     throw timeoutException;
