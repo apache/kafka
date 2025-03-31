@@ -56,9 +56,9 @@ public class CustomQuotaCallbackTest {
         try (Admin admin = cluster.admin(Map.of())) {
             admin.createTopics(List.of(new NewTopic("topic", 1, (short) 1)));
             TestUtils.waitForCondition(
-                    () -> CustomQuotaCallback.COUNTERS.size() == 3
-                            && CustomQuotaCallback.COUNTERS.values().stream().allMatch(counter -> counter.get() > 0),
-                    "The CustomQuotaCallback not triggered in all controllers. "
+                () -> CustomQuotaCallback.COUNTERS.size() == 3
+                    && CustomQuotaCallback.COUNTERS.values().stream().allMatch(counter -> counter.get() > 0),
+                "The CustomQuotaCallback not triggered in all controllers. "
             );
 
             // Reset the counters, and we expect the callback to be triggered again in all controllers
@@ -66,9 +66,9 @@ public class CustomQuotaCallbackTest {
 
             admin.deleteTopics(List.of("topic"));
             TestUtils.waitForCondition(
-                    () -> CustomQuotaCallback.COUNTERS.size() == 3
-                            && CustomQuotaCallback.COUNTERS.values().stream().allMatch(counter -> counter.get() > 0),
-                    "The CustomQuotaCallback not triggered in all controllers. "
+                () -> CustomQuotaCallback.COUNTERS.size() == 3
+                    && CustomQuotaCallback.COUNTERS.values().stream().allMatch(counter -> counter.get() > 0),
+                "The CustomQuotaCallback not triggered in all controllers. "
             );
 
         }
