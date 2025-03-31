@@ -47,21 +47,21 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 public class CustomQuotaCallbackTest {
 
     @ClusterTest(
-        controllers = 3,
-        types = {Type.KRAFT},
-        serverProperties = {
-            @ClusterConfigProperty(id = 3000, key = QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, value = "org.apache.kafka.server.quota.CustomQuotaCallbackTest$CustomQuotaCallback"),
-            @ClusterConfigProperty(id = 3001, key = QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, value = "org.apache.kafka.server.quota.CustomQuotaCallbackTest$CustomQuotaCallback"),
-            @ClusterConfigProperty(id = 3002, key = QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, value = "org.apache.kafka.server.quota.CustomQuotaCallbackTest$CustomQuotaCallback"),
-        }
+            controllers = 3,
+            types = {Type.KRAFT},
+            serverProperties = {
+                    @ClusterConfigProperty(id = 3000, key = QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, value = "org.apache.kafka.server.quota.CustomQuotaCallbackTest$CustomQuotaCallback"),
+                    @ClusterConfigProperty(id = 3001, key = QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, value = "org.apache.kafka.server.quota.CustomQuotaCallbackTest$CustomQuotaCallback"),
+                    @ClusterConfigProperty(id = 3002, key = QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, value = "org.apache.kafka.server.quota.CustomQuotaCallbackTest$CustomQuotaCallback"),
+            }
     )
     public void testCustomQuotaCallbackWithControllerServer(ClusterInstance cluster) throws InterruptedException {
 
         try (Admin admin = cluster.admin(Map.of())) {
             admin.createTopics(List.of(new NewTopic("topic", 1, (short) 1)));
             TestUtils.waitForCondition(
-                () -> CustomQuotaCallback.COUNTERS.size() == 3
-                        && CustomQuotaCallback.COUNTERS.values().stream().allMatch(counter -> counter.get() > 0),
+                    () -> CustomQuotaCallback.COUNTERS.size() == 3
+                            && CustomQuotaCallback.COUNTERS.values().stream().allMatch(counter -> counter.get() > 0),
                     "The CustomQuotaCallback not triggered in all controllers. "
             );
 
@@ -70,8 +70,8 @@ public class CustomQuotaCallbackTest {
 
             admin.deleteTopics(List.of("topic"));
             TestUtils.waitForCondition(
-                () -> CustomQuotaCallback.COUNTERS.size() == 3
-                        && CustomQuotaCallback.COUNTERS.values().stream().allMatch(counter -> counter.get() > 0),
+                    () -> CustomQuotaCallback.COUNTERS.size() == 3
+                            && CustomQuotaCallback.COUNTERS.values().stream().allMatch(counter -> counter.get() > 0),
                     "The CustomQuotaCallback not triggered in all controllers. "
             );
 
@@ -83,10 +83,10 @@ public class CustomQuotaCallbackTest {
         Metrics metrics = new Metrics();
         assertEquals(1, metrics.metrics().size());
         Plugin<ClientQuotaCallback> clientQuotaCallbackPlugin = Plugin.wrapInstance(
-            new MonitorableCustomQuotaCallback(),
-            metrics,
-            QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG,
-            Map.of("role", ProcessRole.BrokerRole.toString())
+                new MonitorableCustomQuotaCallback(),
+                metrics,
+                QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG,
+                Map.of("role", ProcessRole.BrokerRole.toString())
         );
         MonitorableCustomQuotaCallback clientQuotaCallback = (MonitorableCustomQuotaCallback) clientQuotaCallbackPlugin.get();
         MetricName metricName = null;
@@ -157,9 +157,9 @@ public class CustomQuotaCallbackTest {
         @Override
         public void withPluginMetrics(PluginMetrics metrics) {
             metricName = metrics.metricName(
-                "client quota callback count",
-                "Number of times client quota callback is triggered",
-                Map.of()
+                    "client quota callback count",
+                    "Number of times client quota callback is triggered",
+                    Map.of()
             );
             metrics.addMetric(metricName, (Gauge<Integer>) (config, now) -> 0);
         }

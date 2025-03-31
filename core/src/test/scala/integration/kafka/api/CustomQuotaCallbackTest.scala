@@ -101,9 +101,9 @@ class CustomQuotaCallbackTest extends IntegrationTestHarness with SaslSetup {
       kafkaClientSaslMechanism, JaasTestUtils.KAFKA_SCRAM_ADMIN, JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testCustomQuotaCallback(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testCustomQuotaCallback(groupProtocol: String): Unit = {
     // Large quota override, should not throttle
     var brokerId = 0
     var user = createGroupWithOneUser("group0_user1", brokerId)
