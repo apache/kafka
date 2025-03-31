@@ -45,7 +45,7 @@ public class SessionWindowedSerializerTest {
     }
 
     @Test
-    public void shouldSetWindowedInnerClassSerialiserThroughConfig() {
+    public void shouldSetSerializerThroughWindowedInnerClassSerdeConfig() {
         props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, Serdes.ByteArraySerde.class.getName());
         final SessionWindowedSerializer<?> serializer = new SessionWindowedSerializer<>();
         serializer.configure(props, false);
@@ -53,20 +53,49 @@ public class SessionWindowedSerializerTest {
     }
 
     @Test
-    public void shouldThrowErrorIfWindowInnerClassSerialiserIsNotSet() {
+    public void shouldSetSerializerThroughWindowedInnerSerializerClassConfig() {
+        props.put(SessionWindowedSerializer.WINDOWED_INNER_SERIALIZER_CLASS, Serdes.ByteArraySerde.class.getName());
+        final SessionWindowedSerializer<?> serializer = new SessionWindowedSerializer<>();
+        serializer.configure(props, false);
+        assertInstanceOf(ByteArraySerializer.class, serializer.innerSerializer());
+    }
+
+    @Test
+    public void shouldIgnoreWindowedInnerClassSerdeConfigIfWindowedInnerSerializerClassConfigIsSet() {
+        props.put(SessionWindowedSerializer.WINDOWED_INNER_SERIALIZER_CLASS, Serdes.ByteArraySerde.class.getName());
+        props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, "some.non.existent.class");
+        final SessionWindowedSerializer<?> serializer = new SessionWindowedSerializer<>();
+        serializer.configure(props, false);
+        assertInstanceOf(ByteArraySerializer.class, serializer.innerSerializer());
+    }
+
+    @Test
+    public void shouldThrowErrorIfWindowedInnerClassSerdeAndWindowedInnerSerializerClassAreNotSet() {
         final SessionWindowedSerializer<?> serializer = new SessionWindowedSerializer<>();
         assertThrows(IllegalArgumentException.class, () -> serializer.configure(props, false));
     }
 
     @Test
-    public void shouldThrowErrorIfSerialisersConflictInConstructorAndConfig() {
+    public void shouldThrowErrorIfSerializersConflictInConstructorAndWindowedInnerClassSerdeConfig() {
         props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, Serdes.ByteArraySerde.class.getName());
         assertThrows(IllegalArgumentException.class, () -> sessionWindowedSerializer.configure(props, false));
     }
 
     @Test
-    public void shouldThrowConfigExceptionWhenInvalidWindowInnerClassSerialiserSupplied() {
+    public void shouldThrowErrorIfSerializersConflictInConstructorAndWindowedInnerSerializerClassConfig() {
+        props.put(SessionWindowedSerializer.WINDOWED_INNER_SERIALIZER_CLASS, Serdes.ByteArraySerde.class.getName());
+        assertThrows(IllegalArgumentException.class, () -> sessionWindowedSerializer.configure(props, false));
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionWhenInvalidWindowedInnerClassSerdeSupplied() {
         props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, "some.non.existent.class");
+        assertThrows(ConfigException.class, () -> sessionWindowedSerializer.configure(props, false));
+    }
+
+    @Test
+    public void shouldThrowConfigExceptionWhenInvalidWindowedInnerSerializerClassSupplied() {
+        props.put(SessionWindowedSerializer.WINDOWED_INNER_SERIALIZER_CLASS, "some.non.existent.class");
         assertThrows(ConfigException.class, () -> sessionWindowedSerializer.configure(props, false));
     }
 }

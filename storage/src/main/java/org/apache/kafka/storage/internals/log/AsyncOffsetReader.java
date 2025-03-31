@@ -20,13 +20,20 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
 
+import java.io.IOException;
 import java.util.Optional;
-import java.util.function.Supplier;
 
 /**
  * Interface used to decouple UnifiedLog and RemoteLogManager.
  */
 public interface AsyncOffsetReader {
+
+    /**
+     * Supplier interface that allows throwing IOException
+     */
+    interface TimestampAndOffsetSupplier {
+        Optional<FileRecords.TimestampAndOffset> get() throws IOException;
+    }
 
     /**
      * Retrieve the offset for the specified timestamp. UnifiedLog may call this method when handling ListOffsets
@@ -43,5 +50,5 @@ public interface AsyncOffsetReader {
             long timestamp,
             long startingOffset,
             LeaderEpochFileCache leaderEpochCache,
-            Supplier<Optional<FileRecords.TimestampAndOffset>> searchLocalLog);
+            TimestampAndOffsetSupplier searchLocalLog);
 }

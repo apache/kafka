@@ -215,7 +215,7 @@ public class MockLogTest {
         assertEquals(1, log.endOffset().offset());
         assertEquals(currentEpoch, log.lastFetchedEpoch());
 
-        Records records = log.read(0, Isolation.UNCOMMITTED).records;
+        Records records = log.read(0, Isolation.UNCOMMITTED).records();
         for (RecordBatch batch : records.batches()) {
             assertTrue(batch.isControlBatch());
         }
@@ -250,7 +250,7 @@ public class MockLogTest {
         assertEquals(initialOffset + 1, log.endOffset().offset());
         assertEquals(3, log.lastFetchedEpoch());
 
-        Records records = log.read(5L, Isolation.UNCOMMITTED).records;
+        Records records = log.read(5L, Isolation.UNCOMMITTED).records();
         List<ByteBuffer> extractRecords = new ArrayList<>();
         for (Record record : records.records()) {
             extractRecords.add(record.value());
@@ -276,7 +276,7 @@ public class MockLogTest {
 
         appendAsLeader(Arrays.asList(recordOne, recordTwo), epoch);
 
-        Records records = log.read(0, Isolation.UNCOMMITTED).records;
+        Records records = log.read(0, Isolation.UNCOMMITTED).records();
 
         List<ByteBuffer> extractRecords = new ArrayList<>();
         for (Record record : records.records()) {
@@ -347,12 +347,12 @@ public class MockLogTest {
         appendBatch(5, 1);
 
         LogFetchInfo readInfo = log.read(5, Isolation.UNCOMMITTED);
-        assertEquals(5L, readInfo.startOffsetMetadata.offset());
-        assertTrue(readInfo.startOffsetMetadata.metadata().isPresent());
+        assertEquals(5L, readInfo.startOffsetMetadata().offset());
+        assertTrue(readInfo.startOffsetMetadata().metadata().isPresent());
 
         // Update to a high watermark with valid offset metadata
-        log.updateHighWatermark(readInfo.startOffsetMetadata);
-        assertEquals(readInfo.startOffsetMetadata.offset(), log.highWatermark().offset());
+        log.updateHighWatermark(readInfo.startOffsetMetadata());
+        assertEquals(readInfo.startOffsetMetadata().offset(), log.highWatermark().offset());
 
         // Now update to a high watermark with invalid metadata
         assertThrows(IllegalArgumentException.class, () ->
@@ -361,17 +361,17 @@ public class MockLogTest {
 
         // Ensure we can update the high watermark to the end offset
         LogFetchInfo readFromEndInfo = log.read(15L, Isolation.UNCOMMITTED);
-        assertEquals(15, readFromEndInfo.startOffsetMetadata.offset());
-        assertTrue(readFromEndInfo.startOffsetMetadata.metadata().isPresent());
-        log.updateHighWatermark(readFromEndInfo.startOffsetMetadata);
+        assertEquals(15, readFromEndInfo.startOffsetMetadata().offset());
+        assertTrue(readFromEndInfo.startOffsetMetadata().metadata().isPresent());
+        log.updateHighWatermark(readFromEndInfo.startOffsetMetadata());
 
         // Ensure that the end offset metadata is valid after new entries are appended
         appendBatch(5, 1);
-        log.updateHighWatermark(readFromEndInfo.startOffsetMetadata);
+        log.updateHighWatermark(readFromEndInfo.startOffsetMetadata());
 
         // Check handling of a fetch from the middle of a batch
         LogFetchInfo readFromMiddleInfo = log.read(16L, Isolation.UNCOMMITTED);
-        assertEquals(readFromEndInfo.startOffsetMetadata, readFromMiddleInfo.startOffsetMetadata);
+        assertEquals(readFromEndInfo.startOffsetMetadata(), readFromMiddleInfo.startOffsetMetadata());
     }
 
     @Test
@@ -1003,7 +1003,7 @@ public class MockLogTest {
         while (foundRecord) {
             foundRecord = false;
 
-            Records records = log.read(currentStart, isolation).records;
+            Records records = log.read(currentStart, isolation).records();
             for (Record record : records.records()) {
                 foundRecord = true;
 
@@ -1082,7 +1082,7 @@ public class MockLogTest {
 
         int currentOffset = 0;
         while (currentOffset < log.endOffset().offset()) {
-            Records records = log.read(currentOffset, Isolation.UNCOMMITTED).records;
+            Records records = log.read(currentOffset, Isolation.UNCOMMITTED).records();
             List<? extends RecordBatch> batches = Utils.toList(records.batches().iterator());
 
             assertFalse(batches.isEmpty());

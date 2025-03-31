@@ -111,9 +111,9 @@ public class LeaveGroupResponseTest {
                 .setThrottleTimeMs(throttleTimeMs);
         for (short version : ApiKeys.LEAVE_GROUP.allVersions()) {
             LeaveGroupResponse primaryResponse = LeaveGroupResponse.parse(
-                MessageUtil.toByteBuffer(responseData, version), version);
+                MessageUtil.toByteBufferAccessor(responseData, version).buffer(), version);
             LeaveGroupResponse secondaryResponse = LeaveGroupResponse.parse(
-                MessageUtil.toByteBuffer(responseData, version), version);
+                MessageUtil.toByteBufferAccessor(responseData, version).buffer(), version);
 
             assertEquals(primaryResponse, primaryResponse);
             assertEquals(primaryResponse, secondaryResponse);
@@ -130,7 +130,7 @@ public class LeaveGroupResponseTest {
             .setThrottleTimeMs(throttleTimeMs);
 
         for (short version : ApiKeys.LEAVE_GROUP.allVersions()) {
-            ByteBuffer buffer = MessageUtil.toByteBuffer(data, version);
+            ByteBuffer buffer = MessageUtil.toByteBufferAccessor(data, version).buffer();
             LeaveGroupResponse leaveGroupResponse = LeaveGroupResponse.parse(buffer, version);
             assertEquals(expectedErrorCounts, leaveGroupResponse.errorCounts());
 
