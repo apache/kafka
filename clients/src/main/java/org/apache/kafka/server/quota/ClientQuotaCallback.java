@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.server.quota;
 
+import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -26,8 +27,11 @@ import java.util.Map;
  * Quota callback interface for brokers and controllers that enables customization of client quota computation.
  * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the callback to register metrics. 
  * The following tags are automatically added to all metrics registered: 
- * <code>config</code> set to <code>clientQuotaCallback.class</code>, and <code>class</code> set to the 
- * ClientQuotaCallback class name.
+ * <ul>
+ *     <li><code>config</code> set to <code>clientQuotaCallback.class</code></li>
+ *     <li><code>class</code> set to the ClientQuotaCallback class name</li>
+ *     <li><code>role</code> set to broker/ controller, which indicates the role of the server</li>
+ * </ul>
  */
 public interface ClientQuotaCallback extends Configurable {
 

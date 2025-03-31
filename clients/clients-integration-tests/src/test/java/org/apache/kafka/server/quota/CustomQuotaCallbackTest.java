@@ -83,12 +83,12 @@ public class CustomQuotaCallbackTest {
         Metrics metrics = new Metrics();
         assertEquals(1, metrics.metrics().size());
         Plugin<ClientQuotaCallback> clientQuotaCallbackPlugin = Plugin.wrapInstance(
-            new MonitorCustomQuotaCallback(),
+            new MonitorableCustomQuotaCallback(),
             metrics,
             QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG,
             Map.of("role", ProcessRole.BrokerRole.toString())
         );
-        MonitorCustomQuotaCallback clientQuotaCallback = (MonitorCustomQuotaCallback) clientQuotaCallbackPlugin.get();
+        MonitorableCustomQuotaCallback clientQuotaCallback = (MonitorableCustomQuotaCallback) clientQuotaCallbackPlugin.get();
         MetricName metricName = null;
         for (MetricName name : metrics.metrics().keySet()) {
             if (name.name().equals(clientQuotaCallback.metricName.name())) {
@@ -97,7 +97,7 @@ public class CustomQuotaCallbackTest {
         }
         assertNotNull(metricName);
         assertEquals(QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG,  metricName.tags().get("config"));
-        assertEquals(MonitorCustomQuotaCallback.class.getSimpleName(),  metricName.tags().get("class"));
+        assertEquals(MonitorableCustomQuotaCallback.class.getSimpleName(),  metricName.tags().get("class"));
         assertEquals(ProcessRole.BrokerRole.toString(),  metricName.tags().get("role"));
         assertEquals(0, metrics.metric(metricName).metricValue());
     }
@@ -150,7 +150,7 @@ public class CustomQuotaCallbackTest {
 
     }
 
-    public static class MonitorCustomQuotaCallback extends CustomQuotaCallback implements Monitorable {
+    public static class MonitorableCustomQuotaCallback extends CustomQuotaCallback implements Monitorable {
 
         public static MetricName metricName = null;
 

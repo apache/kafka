@@ -123,12 +123,13 @@ public class QuotaFactory {
         String role
     ) {
         Optional<Plugin<ClientQuotaCallback>> clientQuotaCallbackPlugin = createClientQuotaCallback(cfg, metrics, role);
+        Option<Plugin<ClientQuotaCallback>> clientQuotaCallbackPluginOption = clientQuotaCallbackPlugin.map(Option::apply).orElse(Option.empty());
 
         return new QuotaManagers(
-            new ClientQuotaManager(clientConfig(cfg), metrics, QuotaType.FETCH, time, threadNamePrefix, toOption(clientQuotaCallbackPlugin)),
-            new ClientQuotaManager(clientConfig(cfg), metrics, QuotaType.PRODUCE, time, threadNamePrefix, toOption(clientQuotaCallbackPlugin)),
+            new ClientQuotaManager(clientConfig(cfg), metrics, QuotaType.FETCH, time, threadNamePrefix, clientQuotaCallbackPluginOption),
+            new ClientQuotaManager(clientConfig(cfg), metrics, QuotaType.PRODUCE, time, threadNamePrefix, clientQuotaCallbackPluginOption),
             new ClientRequestQuotaManager(clientConfig(cfg), metrics, time, threadNamePrefix, clientQuotaCallbackPlugin),
-            new ControllerMutationQuotaManager(clientControllerMutationConfig(cfg), metrics, time, threadNamePrefix, toOption(clientQuotaCallbackPlugin)),
+            new ControllerMutationQuotaManager(clientControllerMutationConfig(cfg), metrics, time, threadNamePrefix, clientQuotaCallbackPluginOption),
             new ReplicationQuotaManager(replicationConfig(cfg), metrics, QuotaType.LEADER_REPLICATION, time),
             new ReplicationQuotaManager(replicationConfig(cfg), metrics, QuotaType.FOLLOWER_REPLICATION, time),
             new ReplicationQuotaManager(alterLogDirsReplicationConfig(cfg), metrics, QuotaType.ALTER_LOG_DIRS_REPLICATION, time),
@@ -149,10 +150,6 @@ public class QuotaFactory {
             QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG,
             Map.of("role", role)
         ));
-    }
-    
-    private static Option<Plugin<ClientQuotaCallback>> toOption(Optional<Plugin<ClientQuotaCallback>> plugin) {
-        return plugin.map(Option::apply).orElse(Option.empty());
     }
 
     private static ClientQuotaManagerConfig clientConfig(KafkaConfig cfg) {
