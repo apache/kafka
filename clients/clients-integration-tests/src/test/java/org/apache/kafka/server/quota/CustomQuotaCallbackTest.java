@@ -87,6 +87,8 @@ public class CustomQuotaCallbackTest {
         assertEquals(QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, metricName.tags().get("config"));
         assertEquals(MonitorableCustomQuotaCallback.class.getSimpleName(), metricName.tags().get("class"));
         assertEquals(ProcessRole.ControllerRole.toString(), metricName.tags().get("role"));
+        assertEquals(MonitorableCustomQuotaCallback.name, metricName.name());
+        assertEquals(MonitorableCustomQuotaCallback.description, metricName.description());
     }
 
     @ClusterTest(
@@ -101,6 +103,8 @@ public class CustomQuotaCallbackTest {
         assertEquals(QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, metricName.tags().get("config"));
         assertEquals(MonitorableCustomQuotaCallback.class.getSimpleName(), metricName.tags().get("class"));
         assertEquals(ProcessRole.BrokerRole.toString(), metricName.tags().get("role"));
+        assertEquals(MonitorableCustomQuotaCallback.name, metricName.name());
+        assertEquals(MonitorableCustomQuotaCallback.description, metricName.description());
     }
 
     public static class CustomQuotaCallback implements ClientQuotaCallback {
@@ -154,14 +158,12 @@ public class CustomQuotaCallbackTest {
     public static class MonitorableCustomQuotaCallback extends CustomQuotaCallback implements Monitorable {
 
         public static MetricName metricName = null;
+        public static String name = "client quota callback";
+        public static String description = "client quota callback";
 
         @Override
         public void withPluginMetrics(PluginMetrics metrics) {
-            metricName = metrics.metricName(
-                "client quota callback",
-                "client quota callback registry",
-                Map.of()
-            );
+            metricName = metrics.metricName(name, description, Map.of());
             metrics.addMetric(metricName, (Gauge<Integer>) (config, now) -> 1);
         }
 
