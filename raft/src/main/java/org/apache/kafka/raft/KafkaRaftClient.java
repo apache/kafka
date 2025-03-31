@@ -2434,14 +2434,16 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
         if (handled.isPresent()) {
             return handled.get();
-        } else if (error != Errors.NONE) {
+        } else if (error == Errors.NONE || error == Errors.UNSUPPORTED_VERSION) {
+            FollowerState follower = quorum.followerStateOrThrow();
+            follower.setHasUpdatedLeader();
+            // Treat update voter similar to fetch and fetch snapshot, and reset the timer
+            follower.resetFetchTimeoutForSuccessfulFetch(currentTimeMs);
+
+            return true;
+        } else {
             return handleUnexpectedError(error, responseMetadata);
         }
-
-        FollowerState follower = quorum.followerStateOrThrow();
-        follower.setHasUpdatedLeader();
-
-        return true;
     }
 
     private boolean hasConsistentLeader(int epoch, OptionalInt leaderId) {
@@ -3659,7 +3661,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             () -> new NotLeaderException("Upgrade kraft version failed because the replica is not the current leader")
         );
 
-        leaderState.upgradeKraftVersion(epoch, version);
+        leaderState.upgradeKraftVersion(
+            epoch,
+            version,
+            partitionState.lastKraftVersion(),
+            partitionState.lastVoterSet()
+        );
     }
 
     @Override

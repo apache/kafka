@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.errors.InvalidUpdateVersionException;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
 import org.apache.kafka.common.message.LeaderChangeMessage.Voter;
@@ -74,10 +75,6 @@ public class LeaderState<T> implements EpochState {
     private Map<Integer, ReplicaState> voterStates = new HashMap<>();
     private Optional<AddVoterHandlerState> addVoterHandlerState = Optional.empty();
     private Optional<RemoveVoterHandlerState> removeVoterHandlerState = Optional.empty();
-    /* When the kraft version is 0 the latest updated voter set cannot be written to disk. Hold it in memory
-     * until the cluster is upgraded to a version that supports reconfig (greater than 1).
-     */
-    private Optional<VoterSet> updatedVolatileVoters = Optional.empty();
 
     private final Map<ReplicaKey, ReplicaState> observerStates = new HashMap<>();
     private final Logger log;
@@ -94,6 +91,12 @@ public class LeaderState<T> implements EpochState {
     private volatile boolean resignRequested = false;
     // Atomic because kraft version upgrade is requested by an external thread.
     private final AtomicReference<Optional<KRaftVersion>> requestedVersionUpgrade = new AtomicReference<>(Optional.empty());
+    /* When the kraft version is 0 the latest updated voter set cannot be written to disk. Hold it in memory
+     * until the cluster is upgraded to a version that supports reconfig (greater than 1).
+     *
+     * Only the kraft driver thread writes to this field. Many threads read this field.
+     */
+    private AtomicReference<Optional<VoterSet>> updatedVolatileVoters = new AtomicReference<>(Optional.empty());
 
     protected LeaderState(
         Time time,
@@ -404,11 +407,11 @@ public class LeaderState<T> implements EpochState {
     }
 
     public void updateVolatileVoters(VoterSet voters) {
-        updatedVolatileVoters = Optional.of(voters);
+        updatedVolatileVoters.set(Optional.of(voters));
     }
 
     public Optional<VoterSet> volatileVoters() {
-        return updatedVolatileVoters;
+        return updatedVolatileVoters.get();
     }
 
     public boolean isResignRequested() {
@@ -432,7 +435,12 @@ public class LeaderState<T> implements EpochState {
         this.resignRequested = true;
     }
 
-    public void upgradeKraftVersion(int epoch, KRaftVersion version) {
+    public void upgradeKraftVersion(
+        int epoch,
+        KRaftVersion newVersion,
+        KRaftVersion persistedVersion,
+        VoterSet persistedVoters
+    ) {
         if (epoch < epoch()) {
             throw new NotLeaderException(
                 String.format(
@@ -449,9 +457,54 @@ public class LeaderState<T> implements EpochState {
                     this.epoch
                 )
             );
-        } else {
-            // Check kraft version is greater than kraft version and all of the voters support the kraft version
-            // TODO: implement this
+        } else if (persistedVersion.isAtLeast(newVersion)) {
+            throw new InvalidUpdateVersionException(
+                String.format(
+                    "Invalid upgrade of %s from version %s to %s",
+                    KRaftVersion.FEATURE_NAME,
+                    persistedVersion,
+                    newVersion
+                )
+            );
+        }
+
+        var pendingVersion = requestedVersionUpgrade.get();
+        if (pendingVersion.stream().anyMatch(version -> version.isAtLeast(newVersion))) {
+            throw new InvalidUpdateVersionException(
+                String.format(
+                    "Invalid upgrade of %s from version %s to %s",
+                    KRaftVersion.FEATURE_NAME,
+                    pendingVersion.get(),
+                    newVersion
+                )
+            );
+        }
+
+        var voterSet = updatedVolatileVoters.get().orElse(persistedVoters);
+        if (!voterSet.voterIds().equals(persistedVoters.voterIds())) {
+            throw new InvalidUpdateVersionException(
+                String.format(
+                    "Invalid upgrade of %s to %s because not all of the supported versions are known",
+                    KRaftVersion.FEATURE_NAME,
+                    newVersion
+                )
+            );
+        } else if (!voterSet.supportsVersion(newVersion)) {
+            throw new InvalidUpdateVersionException(
+                String.format(
+                    "Invalid upgrade of %s to %s because not all of the voters support it",
+                    KRaftVersion.FEATURE_NAME,
+                    newVersion
+                )
+            );
+        } else if (!requestedVersionUpgrade.compareAndSet(pendingVersion, Optional.of(newVersion))) {
+            throw new InvalidUpdateVersionException(
+                String.format(
+                    "Concurrent attempt to upgrade the version. Previous pending value %s; new pending value %s",
+                    pendingVersion,
+                    requestedVersionUpgrade.get()
+                )
+            );
         }
     }
 
