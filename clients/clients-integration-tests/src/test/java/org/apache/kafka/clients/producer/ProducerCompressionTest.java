@@ -32,6 +32,7 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.test.TestUtils;
 
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -70,8 +71,9 @@ class ProducerCompressionTest {
 
     @ClusterTest
     void testCompression(ClusterInstance cluster) {
-        Set<String> compressionSet = Set.of("none"/*, "gzip", "snappy", "lz4", "zstd"*/);
-        Set<String> protocolSet = Set.of("classic");
+        Set<String> compressionSet = Set.of("none", "gzip", "snappy", "lz4", "zstd");
+        Set<String> protocolSet = Set.of("consumer", "classic");
+
         compressionSet.forEach(compression -> {
             protocolSet.forEach(protocol -> {
                 try {
@@ -86,7 +88,7 @@ class ProducerCompressionTest {
 
     void processCompressionTest(ClusterInstance cluster, String compression, String protocol) throws InterruptedException,
             ExecutionException {
-        String compressionTopic = topicName + "_" + compression;
+        String compressionTopic = topicName + "_" + protocol + "_" + compression;
         cluster.createTopic(compressionTopic, 1, (short) 1);
         Map<String, Object> producerProps = new HashMap<>();
         producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compression);
@@ -95,12 +97,8 @@ class ProducerCompressionTest {
         producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
         producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
         Producer<byte[], byte[]> producer = cluster.producer(producerProps);
-
-        Map<String, Object> consumerProps = new HashMap<>();
-        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "group_" + compression);
-        consumerProps.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, protocol);
-        Consumer<byte[], byte[]> consumer = cluster.consumer(consumerProps);
-        try (producer; consumer) {
+        Consumer<byte[], byte[]> consumer = cluster.consumer(Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, protocol));
+        try (producer) {
             int partition = 0;
             // prepare the messages
             List<String> messages = IntStream.range(0, numRecords).mapToObj(this::messageValue).toList();
@@ -122,15 +120,11 @@ class ProducerCompressionTest {
                         String.valueOf(message.length()).getBytes(), message.getBytes(), headers)));
             });
             for (int offset = 0; offset < responses.size(); offset++) {
-                assertEquals(offset, responses.get(offset).get().offset());
+                assertEquals(offset, responses.get(offset).get().offset(), compression);
             }
             verifyConsumerRecords(consumer, messages, now, headerArr, partition, compressionTopic);
-            System.out.println("verify success");
         } finally {
-            System.out.println("start close");
-            producer.close();
-            consumer.close();
-            System.out.println("close success");
+            consumer.close(Duration.ofSeconds(1));
         }
     }
 
