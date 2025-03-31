@@ -22,15 +22,14 @@ import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.Utils;
 
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -227,8 +226,8 @@ public class ProduceRequest extends AbstractRequest {
         }
     }
 
-    public static ProduceRequest parse(ByteBuffer buffer, short version) {
-        return new ProduceRequest(new ProduceRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static ProduceRequest parse(Readable readable, short version) {
+        return new ProduceRequest(new ProduceRequestData(readable, version), version);
     }
 
     public static boolean isTransactionV2Requested(short version) {

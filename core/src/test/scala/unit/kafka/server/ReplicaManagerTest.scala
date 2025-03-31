@@ -40,6 +40,8 @@ import org.apache.kafka.common.message.{DeleteRecordsResponseData, ShareFetchRes
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.metadata.{PartitionChangeRecord, PartitionRecord, RemoveTopicRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.metrics.Monitorable
+import org.apache.kafka.common.metrics.PluginMetrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record._
@@ -56,7 +58,7 @@ import org.apache.kafka.image._
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.{LeaderAndIsr, MetadataCache}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
-import org.apache.kafka.server.common.{DirectoryEventHandler, KRaftVersion, MetadataVersion, OffsetAndEpoch, StopPartition}
+import org.apache.kafka.server.common.{DirectoryEventHandler, KRaftVersion, MetadataVersion, OffsetAndEpoch, RequestLocal, StopPartition}
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage._
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics}
@@ -70,7 +72,7 @@ import org.apache.kafka.server.util.timer.MockTimer
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.LazyOffsetCheckpoints
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LocalLog, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegments, ProducerStateManager, ProducerStateManagerConfig, RemoteStorageFetchInfo, UnifiedLog, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LocalLog, LogAppendInfo, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetMetadata, LogOffsetSnapshot, LogOffsetsListener, LogSegments, ProducerStateManager, ProducerStateManagerConfig, RemoteStorageFetchInfo, UnifiedLog, VerificationGuard}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterAll, AfterEach, BeforeEach, Test}
@@ -1660,7 +1662,7 @@ class ReplicaManagerTest {
 
       // PartitionView passed to ReplicaSelector should not contain the follower as it's not in the ISR
       val expectedReplicaViews = Set(new DefaultReplicaView(leaderNode, 1, 0))
-      val partitionView = replicaManager.replicaSelectorOpt.get
+      val partitionView = replicaManager.replicaSelectorPlugin.get.get
         .asInstanceOf[MockReplicaSelector].getPartitionViewArgument
 
       assertTrue(partitionView.isDefined)
@@ -1709,7 +1711,7 @@ class ReplicaManagerTest {
       assertTrue(consumerResult.hasFired)
 
       // Expect not run the preferred read replica selection
-      assertEquals(0, replicaManager.replicaSelectorOpt.get.asInstanceOf[MockReplicaSelector].getSelectionCount)
+      assertEquals(0, replicaManager.replicaSelectorPlugin.get.get.asInstanceOf[MockReplicaSelector].getSelectionCount)
 
       // Only leader will compute preferred replica
       assertTrue(!consumerResult.assertFired.preferredReadReplica.isPresent)
@@ -1893,7 +1895,7 @@ class ReplicaManagerTest {
       topicPartition, leaderEpoch + leaderEpochIncrement, followerBrokerId,
       leaderBrokerId, countDownLatch, expectTruncation = true)
     try {
-      assertFalse(replicaManager.replicaSelectorOpt.isDefined)
+      assertFalse(replicaManager.replicaSelectorPlugin.isDefined)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
     }
@@ -6132,6 +6134,82 @@ class ReplicaManagerTest {
 
   }
 
+  @Test
+  def testAppendRecordsToLeader(): Unit = {
+    val localId = 0
+    val foo = new TopicIdPartition(Uuid.randomUuid, 0, "foo")
+    val bar = new TopicIdPartition(Uuid.randomUuid, 0, "bar")
+
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(
+      timer = new MockTimer(time),
+      brokerId = localId
+    )
+
+    try {
+      val topicDelta = new TopicsDelta(TopicsImage.EMPTY)
+      topicDelta.replay(new TopicRecord()
+        .setName(foo.topic)
+        .setTopicId(foo.topicId)
+      )
+      topicDelta.replay(new PartitionRecord()
+        .setTopicId(foo.topicId)
+        .setPartitionId(foo.partition)
+        .setLeader(localId)
+        .setLeaderEpoch(0)
+        .setPartitionEpoch(0)
+        .setReplicas(List[Integer](localId).asJava)
+        .setIsr(List[Integer](localId).asJava)
+      )
+
+      val metadataImage = imageFromTopics(topicDelta.apply())
+      replicaManager.applyDelta(topicDelta, metadataImage)
+
+      // Create test records.
+      val records = TestUtils.singletonRecords(
+        value = "test".getBytes,
+        timestamp = time.milliseconds
+      )
+
+      // Append records to both foo and bar.
+      val result = replicaManager.appendRecordsToLeader(
+        requiredAcks = 1,
+        internalTopicsAllowed = true,
+        origin = AppendOrigin.CLIENT,
+        entriesPerPartition = Map(
+          foo.topicPartition -> records,
+          bar.topicPartition -> records
+        ),
+        requestLocal = RequestLocal.noCaching
+      )
+
+      assertNotNull(result)
+      assertEquals(2, result.size)
+
+      val fooResult = result(foo.topicPartition)
+      assertEquals(Errors.NONE, fooResult.error)
+      assertEquals(0, fooResult.info.logStartOffset)
+      assertEquals(0, fooResult.info.firstOffset)
+      assertEquals(0, fooResult.info.lastOffset)
+
+      val barResult = result(bar.topicPartition)
+      assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, barResult.error)
+      assertEquals(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO, barResult.info)
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
+  @Test
+  def testMonitorableReplicaSelector(): Unit = {
+    val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time),
+      propsModifier = props => props.put(ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG, classOf[MonitorableReplicaSelector].getName))
+    try {
+      assertTrue(replicaManager.replicaSelectorPlugin.get.get.asInstanceOf[MonitorableReplicaSelector].pluginMetrics)
+    } finally {
+      replicaManager.shutdown(checkpointHW = false)
+    }
+  }
+
   private def readFromLogWithOffsetOutOfRange(tp: TopicPartition): Seq[(TopicIdPartition, LogReadResult)] = {
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true)
     try {
@@ -6209,5 +6287,14 @@ class MockReplicaSelector extends ReplicaSelector {
     selectionCount.incrementAndGet()
     partitionViewArgument = Some(partitionView)
     Optional.of(partitionView.leader)
+  }
+}
+
+
+class MonitorableReplicaSelector extends MockReplicaSelector with Monitorable {
+  var pluginMetrics = false
+
+  override def withPluginMetrics(metrics: PluginMetrics): Unit = {
+    pluginMetrics = true
   }
 }

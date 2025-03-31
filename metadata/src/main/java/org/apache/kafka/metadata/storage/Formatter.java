@@ -347,15 +347,22 @@ public class Formatter {
         if (configuredKRaftVersionLevel.isPresent()) {
             if (configuredKRaftVersionLevel.get() == 0) {
                 if (hasDynamicQuorum()) {
-                    throw new FormatterException("Cannot set kraft.version to " +
-                        configuredKRaftVersionLevel.get() + " if KIP-853 configuration is present. " +
-                            "Try removing the --feature flag for kraft.version.");
+                    throw new FormatterException(
+                        "Cannot set kraft.version to " +
+                        configuredKRaftVersionLevel.get() +
+                        " if one of the flags --standalone, --initial-controllers, or --no-initial-controllers is used. " +
+                        "For dynamic controllers support, try removing the --feature flag for kraft.version."
+                    );
                 }
             } else {
                 if (!hasDynamicQuorum()) {
-                    throw new FormatterException("Cannot set kraft.version to " +
-                        configuredKRaftVersionLevel.get() + " unless KIP-853 configuration is present. " +
-                            "Try removing the --feature flag for kraft.version.");
+                    throw new FormatterException(
+                        "Cannot set kraft.version to " +
+                        configuredKRaftVersionLevel.get() +
+                        " unless one of the flags --standalone, --initial-controllers, or --no-initial-controllers is used. " +
+                        "For dynamic controllers support, try using one of --standalone, --initial-controllers, or " +
+                        "--no-initial-controllers."
+                    );
                 }
             }
             return configuredKRaftVersionLevel.get();
