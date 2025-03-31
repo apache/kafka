@@ -508,7 +508,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         }
 
         ShareConsumeRequestManager manager = requestManagers.shareConsumeRequestManager.get();
-        manager.commitAsync(event.acknowledgementsMap());
+        manager.commitAsync(event.acknowledgementsMap(), event.deadlineMs());
     }
 
     /**

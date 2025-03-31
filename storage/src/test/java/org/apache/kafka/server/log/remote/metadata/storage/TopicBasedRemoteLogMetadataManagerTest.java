@@ -29,6 +29,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteResourceNotFoundException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 
@@ -308,4 +309,16 @@ public class TopicBasedRemoteLogMetadataManagerTest {
         assertEquals(0, topicBasedRemoteLogMetadataManager.remoteLogSize(topicIdPartition, 9001));
     }
 
+    @ClusterTest
+    public void testInitializationFailure() throws IOException, InterruptedException {
+        try (TopicBasedRemoteLogMetadataManager rlmm = new TopicBasedRemoteLogMetadataManager()) {
+            // configure rlmm without bootstrap servers, so it will fail to initialize admin client.
+            Map<String, Object> configs = Map.of(
+                TopicBasedRemoteLogMetadataManagerConfig.LOG_DIR, TestUtils.tempDirectory("rlmm_segs_").getAbsolutePath(),
+                TopicBasedRemoteLogMetadataManagerConfig.BROKER_ID, 0
+            );
+            rlmm.configure(configs);
+            TestUtils.waitForCondition(rlmm::isInitializationFailed, "Initialization should fail");
+        }
+    }
 }

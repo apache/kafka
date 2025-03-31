@@ -218,7 +218,7 @@ public class KRaftMetadataRequestBenchmark {
     private RequestChannel.Request buildAllTopicMetadataRequest() {
         MetadataRequest metadataRequest = MetadataRequest.Builder.allTopics().build();
         RequestHeader header = new RequestHeader(metadataRequest.apiKey(), metadataRequest.version(), "", 0);
-        ByteBuffer bodyBuffer = metadataRequest.serialize();
+        ByteBuffer bodyBuffer = metadataRequest.serialize().buffer();
 
         RequestContext context = new RequestContext(header, "1", null, principal,
                 ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT),
