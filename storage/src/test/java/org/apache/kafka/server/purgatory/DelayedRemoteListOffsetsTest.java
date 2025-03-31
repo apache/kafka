@@ -48,7 +48,7 @@ public class DelayedRemoteListOffsetsTest {
 
     private final int delayMs = 10;
     private final MockTimer timer = new MockTimer();
-    private final PartitionChecker partitionChecker = mock(PartitionChecker.class);
+    private final Consumer<TopicPartition> partitionOrException = mock(Consumer.class);
     private final DelayedOperationPurgatory<DelayedRemoteListOffsets> purgatory =
             new DelayedOperationPurgatory<>("test-purgatory", timer, 0, 10, true, true);
 
@@ -87,20 +87,20 @@ public class DelayedRemoteListOffsetsTest {
             new TopicPartition("test1", 0), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build()
         );
 
-        DelayedRemoteListOffsets delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, 5, statusByPartition, partitionChecker, responseCallback);
+        DelayedRemoteListOffsets delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, 5, statusByPartition, partitionOrException, responseCallback);
         List<TopicPartitionOperationKey> listOffsetsRequestKeys = statusByPartition.keySet().stream().map(TopicPartitionOperationKey::new).toList();
-        assertEquals(0, delayedRemoteListOffsets.aggregateExpirationMeter.count());
-        assertEquals(0, delayedRemoteListOffsets.partitionExpirationMeters.size());
+        assertEquals(0, DelayedRemoteListOffsets.AGGREGATE_EXPIRATION_METER.count());
+        assertEquals(0, DelayedRemoteListOffsets.PARTITION_EXPIRATION_METERS.size());
         purgatory.tryCompleteElseWatch(delayedRemoteListOffsets, listOffsetsRequestKeys);
 
         Thread.sleep(100);
         assertEquals(3, listOffsetsRequestKeys.size());
         assertEquals(cancelledCount.get(), listOffsetsRequestKeys.size());
         assertEquals(numResponse.get(), listOffsetsRequestKeys.size());
-        assertEquals(listOffsetsRequestKeys.size(), delayedRemoteListOffsets.aggregateExpirationMeter.count());
+        assertEquals(listOffsetsRequestKeys.size(), DelayedRemoteListOffsets.AGGREGATE_EXPIRATION_METER.count());
         listOffsetsRequestKeys.forEach(key -> {
             TopicPartition tp = new TopicPartition(key.topic, key.partition);
-            assertEquals(1, delayedRemoteListOffsets.partitionExpirationMeters.get(tp).count());
+            assertEquals(1, DelayedRemoteListOffsets.PARTITION_EXPIRATION_METERS.get(tp).count());
         });
     }
 
@@ -138,7 +138,7 @@ public class DelayedRemoteListOffsetsTest {
             new TopicPartition("test1", 0), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build()
         );
 
-        DelayedRemoteListOffsets delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, 5, statusByPartition, partitionChecker, responseCallback);
+        DelayedRemoteListOffsets delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, 5, statusByPartition, partitionOrException, responseCallback);
         List<TopicPartitionOperationKey> listOffsetsRequestKeys = statusByPartition.keySet().stream().map(TopicPartitionOperationKey::new).toList();
         purgatory.tryCompleteElseWatch(delayedRemoteListOffsets, listOffsetsRequestKeys);
 
@@ -193,7 +193,7 @@ public class DelayedRemoteListOffsetsTest {
             new TopicPartition("test1", 0), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(errorFutureHolder)).build()
         );
 
-        DelayedRemoteListOffsets delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, 5, statusByPartition, partitionChecker, responseCallback);
+        DelayedRemoteListOffsets delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, 5, statusByPartition, partitionOrException, responseCallback);
         List<TopicPartitionOperationKey> listOffsetsRequestKeys = statusByPartition.keySet().stream().map(TopicPartitionOperationKey::new).toList();
         purgatory.tryCompleteElseWatch(delayedRemoteListOffsets, listOffsetsRequestKeys);
 
@@ -237,7 +237,7 @@ public class DelayedRemoteListOffsetsTest {
         });
 
         doThrow(new NotLeaderOrFollowerException("Not leader or follower!"))
-                .when(partitionChecker).existsOrThrow(new TopicPartition("test1", 0));
+                .when(partitionOrException).accept(new TopicPartition("test1", 0));
         AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError> errorFutureHolder = mock(AsyncOffsetReadFutureHolder.class);
         CompletableFuture<OffsetResultHolder.FileRecordsOrError> errorTaskFuture = new CompletableFuture<>();
         when(errorFutureHolder.taskFuture()).thenAnswer(f -> errorTaskFuture);
@@ -250,7 +250,7 @@ public class DelayedRemoteListOffsetsTest {
             new TopicPartition("test1", 1), ListOffsetsPartitionStatus.builder().futureHolderOpt(Optional.of(holder)).build()
         );
 
-        DelayedRemoteListOffsets delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, 5, statusByPartition, partitionChecker, responseCallback);
+        DelayedRemoteListOffsets delayedRemoteListOffsets = new DelayedRemoteListOffsets(delayMs, 5, statusByPartition, partitionOrException, responseCallback);
         List<TopicPartitionOperationKey> listOffsetsRequestKeys = statusByPartition.keySet().stream().map(TopicPartitionOperationKey::new).toList();
         purgatory.tryCompleteElseWatch(delayedRemoteListOffsets, listOffsetsRequestKeys);
 

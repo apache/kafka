@@ -45,23 +45,25 @@ public class DelayedRemoteListOffsets extends DelayedOperation {
 
     private static final Logger LOG = LoggerFactory.getLogger(DelayedRemoteListOffsets.class);
 
-    private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.server", "DelayedRemoteListOffsetsMetrics");
-    final Meter aggregateExpirationMeter = metricsGroup.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS);
-    final Map<TopicPartition, Meter> partitionExpirationMeters = new ConcurrentHashMap<>();
+    // For compatibility, metrics are defined to be under `kafka.server.DelayedRemoteListOffsetsMetrics` class
+    private static final KafkaMetricsGroup METRICS_GROUP = new KafkaMetricsGroup("kafka.server", "DelayedRemoteListOffsetsMetrics");
+    static final Meter AGGREGATE_EXPIRATION_METER = METRICS_GROUP.newMeter("ExpiresPerSec", "requests", TimeUnit.SECONDS);
+    static final Map<TopicPartition, Meter> PARTITION_EXPIRATION_METERS = new ConcurrentHashMap<>();
+
     private final int version;
     private final Map<TopicPartition, ListOffsetsPartitionStatus> statusByPartition;
-    private final PartitionChecker partitionChecker;
+    private final Consumer<TopicPartition> partitionOrException;
     private final Consumer<List<ListOffsetsResponseData.ListOffsetsTopicResponse>> responseCallback;
 
     public DelayedRemoteListOffsets(long delayMs,
                                     int version,
                                     Map<TopicPartition, ListOffsetsPartitionStatus> statusByPartition,
-                                    PartitionChecker partitionChecker,
+                                    Consumer<TopicPartition> partitionOrException,
                                     Consumer<List<ListOffsetsResponseData.ListOffsetsTopicResponse>> responseCallback) {
         super(delayMs);
         this.version = version;
         this.statusByPartition = statusByPartition;
-        this.partitionChecker = partitionChecker;
+        this.partitionOrException = partitionOrException;
         this.responseCallback = responseCallback;
         // Mark the status as completed, if there is no async task to track.
         // If there is a task to track, then build the response as REQUEST_TIMED_OUT by default.
@@ -122,7 +124,7 @@ public class DelayedRemoteListOffsets extends DelayedOperation {
         statusByPartition.forEach((partition, status) -> {
             if (!status.completed()) {
                 try {
-                    partitionChecker.existsOrThrow(partition);
+                    partitionOrException.accept(partition);
                 } catch (ApiException e) {
                     status.futureHolderOpt().ifPresent(futureHolder -> {
                         futureHolder.jobFuture().cancel(false);
@@ -188,9 +190,9 @@ public class DelayedRemoteListOffsets extends DelayedOperation {
                         .setOffset(ListOffsetsResponse.UNKNOWN_OFFSET);
     }
 
-    private void recordExpiration(TopicPartition partition) {
-        aggregateExpirationMeter.mark();
-        partitionExpirationMeters.computeIfAbsent(partition, tp -> metricsGroup.newMeter("ExpiresPerSec",
+    private static void recordExpiration(TopicPartition partition) {
+        AGGREGATE_EXPIRATION_METER.mark();
+        PARTITION_EXPIRATION_METERS.computeIfAbsent(partition, tp -> METRICS_GROUP.newMeter("ExpiresPerSec",
                 "requests",
                 TimeUnit.SECONDS,
                 Map.of("topic", tp.topic(), "partition", String.valueOf(tp.partition())))).mark();
