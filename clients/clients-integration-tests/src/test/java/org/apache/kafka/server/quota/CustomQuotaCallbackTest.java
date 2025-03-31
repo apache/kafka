@@ -84,9 +84,9 @@ public class CustomQuotaCallbackTest {
     public void testMonitorableCustomQuotaCallbackWithControllerServer(ClusterInstance cluster) {
         MetricName metricName = MonitorableCustomQuotaCallback.metricName;
         assertNotNull(metricName);
-        assertEquals(QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG,  metricName.tags().get("config"));
-        assertEquals(MonitorableCustomQuotaCallback.class.getSimpleName(),  metricName.tags().get("class"));
-        assertEquals(ProcessRole.ControllerRole.toString(),  metricName.tags().get("role"));
+        assertEquals(QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, metricName.tags().get("config"));
+        assertEquals(MonitorableCustomQuotaCallback.class.getSimpleName(), metricName.tags().get("class"));
+        assertEquals(ProcessRole.ControllerRole.toString(), metricName.tags().get("role"));
     }
 
     @ClusterTest(
@@ -98,9 +98,9 @@ public class CustomQuotaCallbackTest {
     public void testMonitorableCustomQuotaCallbackWithBrokerServer(ClusterInstance cluster) {
         MetricName metricName = MonitorableCustomQuotaCallback.metricName;
         assertNotNull(metricName);
-        assertEquals(QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG,  metricName.tags().get("config"));
-        assertEquals(MonitorableCustomQuotaCallback.class.getSimpleName(),  metricName.tags().get("class"));
-        assertEquals(ProcessRole.BrokerRole.toString(),  metricName.tags().get("role"));
+        assertEquals(QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, metricName.tags().get("config"));
+        assertEquals(MonitorableCustomQuotaCallback.class.getSimpleName(), metricName.tags().get("class"));
+        assertEquals(ProcessRole.BrokerRole.toString(), metricName.tags().get("role"));
     }
 
     public static class CustomQuotaCallback implements ClientQuotaCallback {
