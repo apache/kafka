@@ -17924,12 +17924,11 @@ public class GroupMetadataManagerTest {
     @Test
     public void testStreamsOnNewMetadataImage() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
-        String subtopology1 = "subtopology1";
 
         // Topology of group 1 uses a and b.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord("group1",
             new Topology().setSubtopologies(List.of(
-                new Subtopology().setSubtopologyId(subtopology1)
+                new Subtopology().setSubtopologyId("subtopology1")
                     .setSourceTopics(List.of("a"))
                     .setRepartitionSourceTopics(List.of(new TopicInfo().setName("b"))
             ))
@@ -17938,7 +17937,7 @@ public class GroupMetadataManagerTest {
         // Topology of group 2 uses b and c.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord("group2",
             new Topology().setSubtopologies(List.of(
-                new Subtopology().setSubtopologyId(subtopology1)
+                new Subtopology().setSubtopologyId("subtopology2")
                     .setSourceTopics(List.of("b"))
                     .setStateChangelogTopics(List.of(new TopicInfo().setName("c")))
             ))
@@ -17947,7 +17946,7 @@ public class GroupMetadataManagerTest {
         // Topology of group 3 uses d.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord("group3",
             new Topology().setSubtopologies(List.of(
-                new Subtopology().setSubtopologyId(subtopology1)
+                new Subtopology().setSubtopologyId("subtopology3")
                     .setSourceTopics(List.of("d"))
             ))
         ));
@@ -17955,7 +17954,7 @@ public class GroupMetadataManagerTest {
         // Topology of group 4 subscribes to e.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord("group4",
             new Topology().setSubtopologies(List.of(
-                new Subtopology().setSubtopologyId(subtopology1)
+                new Subtopology().setSubtopologyId("subtopology4")
                     .setSourceTopics(List.of("e"))
             ))
         ));
@@ -17963,7 +17962,7 @@ public class GroupMetadataManagerTest {
         // Topology of group 5 subscribes to f.
         context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord("group5",
             new Topology().setSubtopologies(List.of(
-                new Subtopology().setSubtopologyId(subtopology1)
+                new Subtopology().setSubtopologyId("subtopology5")
                     .setSourceTopics(List.of("f"))
             ))
         ));
