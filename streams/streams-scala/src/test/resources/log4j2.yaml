@@ -24,8 +24,8 @@ Configuration:
       name: A1
     RollingFile:
       - name: R
-        fileName: logs/kafka-streams-scala.log
-        filePattern: "streams-scala-%d{yyyy-MM-dd}.log"
+        fileName: build/logs/kafka-streams-scala.log
+        filePattern: "build/logs/streams-scala-%d{yyyy-MM-dd}.log"
         PatternLayout:
           pattern: "${logPattern}"
         SizeBasedTriggeringPolicy:
