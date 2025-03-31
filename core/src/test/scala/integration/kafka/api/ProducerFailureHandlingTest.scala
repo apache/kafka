@@ -87,9 +87,9 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   /**
    * With ack == 0 the future metadata will have no exceptions with offset -1
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testTooLargeRecordWithAckZero(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testTooLargeRecordWithAckZero(groupProtocol: String): Unit = {
     // create topic
     createTopic(topic1, replicationFactor = numServers)
 
@@ -105,9 +105,9 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   /**
    * With ack == 1 the future metadata will throw ExecutionException caused by RecordTooLargeException
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testTooLargeRecordWithAckOne(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testTooLargeRecordWithAckOne(groupProtocol: String): Unit = {
     // create topic
     createTopic(topic1, replicationFactor = numServers)
 
@@ -151,9 +151,9 @@ class ProducerFailureHandlingTest extends KafkaServerTestHarness {
   /**
    * With non-exist-topic the future metadata should return ExecutionException caused by TimeoutException
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testNonExistentTopic(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testNonExistentTopic(groupProtocol: String): Unit = {
     // send a record with non-exist topic
     val record = new ProducerRecord(topic2, null, "key".getBytes, "value".getBytes)
     assertThrows(classOf[ExecutionException], () => producer1.send(record).get)
