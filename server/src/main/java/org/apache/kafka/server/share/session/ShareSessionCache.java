@@ -210,7 +210,10 @@ public class ShareSessionCache {
         // When the client disconnect, the corresponding session should be removed from the cache.
         @Override
         public void onDisconnect(String connectionId) {
-            remove(sessionClientIdMapping.getShareSessionKey(connectionId));
+            ShareSessionKey shareSessionKey = sessionClientIdMapping.getShareSessionKey(connectionId);
+            if (shareSessionKey != null) {
+                remove(shareSessionKey);
+            }
         }
     }
 

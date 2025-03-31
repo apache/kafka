@@ -34,6 +34,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.errors.InvalidRecordStateException;
@@ -104,6 +105,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+@SuppressWarnings("ClassFanOutComplexity")
 @Timeout(1200)
 @Tag("integration")
 @ClusterTestDefaults(
@@ -2074,6 +2076,48 @@ public class ShareConsumerTest {
         shutdownExecutorService(service);
 
         verifyShareGroupStateTopicRecordsProduced();
+    }
+
+    @ClusterTest(
+        brokers = 1,
+        serverProperties = {
+            @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
+            @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
+            @ClusterConfigProperty(key = "group.share.enable", value = "true"),
+            @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
+            @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
+            @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.min.isr", value = "1"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "transaction.state.log.min.isr", value = "1"),
+            @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "1"),
+            @ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
+            @ClusterConfigProperty(key = "group.share.max.size", value = "3") // Setting max group size to 3
+        }
+    )
+    public void testShareGroupMaxSizeConfigExceeds() {
+        // creating 3 consumers in the group1
+        ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1");
+        ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer("group1");
+        ShareConsumer<byte[], byte[]> shareConsumer3 = createShareConsumer("group1");
+
+        shareConsumer1.subscribe(Set.of(tp.topic()));
+        shareConsumer2.subscribe(Set.of(tp.topic()));
+        shareConsumer3.subscribe(Set.of(tp.topic()));
+
+        shareConsumer1.poll(Duration.ofMillis(5000));
+        shareConsumer2.poll(Duration.ofMillis(5000));
+        shareConsumer3.poll(Duration.ofMillis(5000));
+
+        ShareConsumer<byte[], byte[]> shareConsumer4 = createShareConsumer("group1");
+        shareConsumer4.subscribe(Set.of(tp.topic()));
+        assertThrows(GroupMaxSizeReachedException.class, () -> shareConsumer4.poll(Duration.ofMillis(5000)));
+
+        shareConsumer1.close();
+        shareConsumer2.close();
+        shareConsumer3.close();
+        shareConsumer4.close();
     }
 
     /**
