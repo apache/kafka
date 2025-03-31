@@ -1975,6 +1975,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       val testNumPartitions = 2
       prepareTopics(List(testTopicName, testTopicName1, testTopicName2), testNumPartitions)
 
+      val producer = createProducer()
+      try {
+        producer.send(new ProducerRecord(testTopicName, 0, null, null)).get()
+      } finally {
+        Utils.closeQuietly(producer, "producer")
+      }
+
       val testGroupId = "test_group_id"
       val testClientId = "test_client_id"
       val testInstanceId1 = "test_instance_id_1"
