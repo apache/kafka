@@ -57,6 +57,7 @@ import java.util.Map;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -88,8 +89,8 @@ public class TransactionsExpirationTest {
     private static final String TOPIC2 = "topic2";
     private static final String TRANSACTION_ID = "transactionalProducer";
     private static final String HEADER_KEY = "transactionStatus";
-    private static final String ABORTED_VALUE = "aborted";
-    private static final String COMMITTED_VALUE = "committed";
+    private static final byte[] ABORTED_VALUE = "aborted".getBytes();
+    private static final byte[] COMMITTED_VALUE = "committed".getBytes();
     private static final TopicPartition TOPIC1_PARTITION0 = new TopicPartition(TOPIC1, 0);
 
     @ClusterTest(features = {@ClusterFeature(feature = Feature.TRANSACTION_VERSION, version = 1)})
@@ -122,8 +123,8 @@ public class TransactionsExpirationTest {
             producer.initTransactions();
             // Start and then abort a transaction to allow the transactional ID to expire.
             producer.beginTransaction();
-            producer.send(new ProducerRecord<>(TOPIC1, 0, "2".getBytes(), "2".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, ABORTED_VALUE.getBytes()))));
-            producer.send(new ProducerRecord<>(TOPIC2, 0, "4".getBytes(), "4".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, ABORTED_VALUE.getBytes()))));
+            producer.send(new ProducerRecord<>(TOPIC1, 0, "2".getBytes(), "2".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, ABORTED_VALUE))));
+            producer.send(new ProducerRecord<>(TOPIC2, 0, "4".getBytes(), "4".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, ABORTED_VALUE))));
             producer.abortTransaction();
 
             // Check the transactional state exists and then wait for it to expire.
@@ -134,7 +135,7 @@ public class TransactionsExpirationTest {
             // due to the expired transactional ID, resulting in a fatal error.
             producer.beginTransaction();
             Future<RecordMetadata> failedFuture = producer.send(
-                new ProducerRecord<>(TOPIC1, 3, "1".getBytes(), "1".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, ABORTED_VALUE.getBytes()))));
+                new ProducerRecord<>(TOPIC1, 3, "1".getBytes(), "1".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, ABORTED_VALUE))));
             TestUtils.waitForCondition(failedFuture::isDone, "Producer future never completed.");
             org.apache.kafka.test.TestUtils.assertFutureThrows(InvalidPidMappingException.class, failedFuture);
 
@@ -150,10 +151,10 @@ public class TransactionsExpirationTest {
             producer.initTransactions();
             // Proceed with a new transaction after reinitializing.
             producer.beginTransaction();
-            producer.send(new ProducerRecord<>(TOPIC2, null, "2".getBytes(), "2".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, COMMITTED_VALUE.getBytes()))));
-            producer.send(new ProducerRecord<>(TOPIC1, 2, "4".getBytes(), "4".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, COMMITTED_VALUE.getBytes()))));
-            producer.send(new ProducerRecord<>(TOPIC2, null, "1".getBytes(), "1".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, COMMITTED_VALUE.getBytes()))));
-            producer.send(new ProducerRecord<>(TOPIC1, 3, "3".getBytes(), "3".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, COMMITTED_VALUE.getBytes()))));
+            producer.send(new ProducerRecord<>(TOPIC2, null, "2".getBytes(), "2".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, COMMITTED_VALUE))));
+            producer.send(new ProducerRecord<>(TOPIC1, 2, "4".getBytes(), "4".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, COMMITTED_VALUE))));
+            producer.send(new ProducerRecord<>(TOPIC2, null, "1".getBytes(), "1".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, COMMITTED_VALUE))));
+            producer.send(new ProducerRecord<>(TOPIC1, 3, "3".getBytes(), "3".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, COMMITTED_VALUE))));
             producer.commitTransaction();
 
             waitUntilTransactionalStateExists(clusterInstance);
@@ -175,7 +176,7 @@ public class TransactionsExpirationTest {
 
             // Start and then abort a transaction to allow the producer ID to expire.
             producer.beginTransaction();
-            producer.send(new ProducerRecord<>(TOPIC1, 0, "2".getBytes(), "2".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, ABORTED_VALUE.getBytes()))));
+            producer.send(new ProducerRecord<>(TOPIC1, 0, "2".getBytes(), "2".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, ABORTED_VALUE))));
             producer.flush();
 
             // Ensure producer IDs are added.
@@ -213,8 +214,8 @@ public class TransactionsExpirationTest {
 
             // Start a new transaction and attempt to send. This should work since only the producer ID was removed from its mapping in ProducerStateManager.
             producer.beginTransaction();
-            producer.send(new ProducerRecord<>(TOPIC1, 0, "4".getBytes(), "4".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, COMMITTED_VALUE.getBytes()))));
-            producer.send(new ProducerRecord<>(TOPIC1, 3, "3".getBytes(), "3".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, COMMITTED_VALUE.getBytes()))));
+            producer.send(new ProducerRecord<>(TOPIC1, 0, "4".getBytes(), "4".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, COMMITTED_VALUE))));
+            producer.send(new ProducerRecord<>(TOPIC1, 3, "3".getBytes(), "3".getBytes(), Collections.singleton(new RecordHeader(HEADER_KEY, COMMITTED_VALUE))));
             producer.commitTransaction();
 
             // Producer IDs should repopulate.
@@ -302,7 +303,7 @@ public class TransactionsExpirationTest {
                 Iterator<Header> headers = record.headers().headers(HEADER_KEY).iterator();
                 assertTrue(headers.hasNext());
                 Header header = headers.next();
-                assertEquals(COMMITTED_VALUE, new String(header.value()), "Record does not have the expected header value.");
+                assertArrayEquals(COMMITTED_VALUE, header.value(), "Record does not have the expected header value.");
             });
         }
     }
