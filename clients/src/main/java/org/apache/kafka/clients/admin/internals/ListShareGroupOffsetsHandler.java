@@ -84,19 +84,23 @@ public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coordi
             DescribeShareGroupOffsetsRequestGroup requestGroup = new DescribeShareGroupOffsetsRequestGroup()
                 .setGroupId(groupId);
 
-            Map<String, List<Integer>> topicPartitionMap = new HashMap<>();
-            spec.topicPartitions().forEach(tp -> topicPartitionMap.computeIfAbsent(tp.topic(), t -> new LinkedList<>()).add(tp.partition()));
+            if (spec.topicPartitions() != null) {
+                Map<String, List<Integer>> topicPartitionMap = new HashMap<>();
+                spec.topicPartitions().forEach(tp -> topicPartitionMap.computeIfAbsent(tp.topic(), t -> new LinkedList<>()).add(tp.partition()));
 
-            Map<String, DescribeShareGroupOffsetsRequestTopic> requestTopics = new HashMap<>();
-            for (TopicPartition tp : spec.topicPartitions()) {
-                requestTopics.computeIfAbsent(tp.topic(), t ->
-                        new DescribeShareGroupOffsetsRequestTopic()
-                            .setTopicName(tp.topic())
-                            .setPartitions(new LinkedList<>()))
-                    .partitions()
-                    .add(tp.partition());
+                Map<String, DescribeShareGroupOffsetsRequestTopic> requestTopics = new HashMap<>();
+                for (TopicPartition tp : spec.topicPartitions()) {
+                    requestTopics.computeIfAbsent(tp.topic(), t ->
+                            new DescribeShareGroupOffsetsRequestTopic()
+                                .setTopicName(tp.topic())
+                                .setPartitions(new LinkedList<>()))
+                        .partitions()
+                        .add(tp.partition());
+                }
+                requestGroup.setTopics(new ArrayList<>(requestTopics.values()));
+            } else {
+                requestGroup.setTopics(null);
             }
-            requestGroup.setTopics(new ArrayList<>(requestTopics.values()));
             groups.add(requestGroup);
         });
         DescribeShareGroupOffsetsRequestData data = new DescribeShareGroupOffsetsRequestData()

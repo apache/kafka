@@ -17787,6 +17787,8 @@ public class GroupMetadataManagerTest {
             2,
             true
         );
+
+        assertEquals(Map.of(t1Uuid, Set.of(0, 1), t2Uuid, Set.of(0, 1)), context.groupMetadataManager.initializedShareGroupPartitions(groupId));
     }
 
     @Test
@@ -17858,6 +17860,8 @@ public class GroupMetadataManagerTest {
 
         assertNull(result.response());
         assertEquals(List.of(), result.records());
+
+        assertEquals(Map.of(), context.groupMetadataManager.initializedShareGroupPartitions(groupId));
     }
 
     @Test
@@ -17968,6 +17972,8 @@ public class GroupMetadataManagerTest {
                 t2Name, new TopicMetadata(t2Id, t2Name, 2)
             ))
         );
+
+        assertEquals(Map.of(t1Id, Set.of(0, 1)), context.groupMetadataManager.initializedShareGroupPartitions(groupId));
     }
 
     private static void checkJoinGroupResponse(
