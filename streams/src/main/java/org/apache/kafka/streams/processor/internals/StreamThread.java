@@ -434,7 +434,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         final DefaultTaskManager schedulingTaskManager =
             maybeCreateSchedulingTaskManager(processingThreadsEnabled, topologyMetadata, time, threadId, tasks);
         final StateUpdater stateUpdater =
-            maybeCreateAndStartStateUpdater(
+                createAndStartStateUpdater(
                 streamsMetrics,
                 config,
                 restoreConsumer,
@@ -526,7 +526,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         return null;
     }
 
-    private static StateUpdater maybeCreateAndStartStateUpdater(final StreamsMetricsImpl streamsMetrics,
+    private static StateUpdater createAndStartStateUpdater(final StreamsMetricsImpl streamsMetrics,
                                                                 final StreamsConfig streamsConfig,
                                                                 final Consumer<byte[], byte[]> restoreConsumer,
                                                                 final ChangelogReader changelogReader,
