@@ -52,11 +52,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.fail;
 
 
-/**
- * testCompression
- * <p>
- * Compressed messages should be able to sent and consumed correctly
- */
 @ClusterTestDefaults(
         types = {Type.KRAFT},
         serverProperties = {
@@ -68,7 +63,11 @@ class ProducerCompressionTest {
     private final String topicName = "topic";
     private final int numRecords = 2000;
 
-
+    /**
+     * testCompression
+     *
+     * Compressed messages should be able to sent and consumed correctly
+     */
     @ClusterTest
     void testCompression(ClusterInstance cluster) {
         Set<String> compressionSet = Set.of("none", "gzip", "snappy", "lz4", "zstd");
