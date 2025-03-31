@@ -1701,8 +1701,8 @@ public class StreamThreadTest {
         // the third actually polls, processes the record, and throws the corruption exception
         TestUtils.waitForCondition(
                 () -> thread.taskManager().checkStateUpdater(
-                        mockTime.milliseconds(),
-                        topicPartitions -> mockConsumer.seekToBeginning(singleton(t1p1))
+                    mockTime.milliseconds(),
+                    topicPartitions -> mockConsumer.seekToBeginning(singleton(t1p1))
                 ),
                 10 * 1000,
                 "State updater never returned tasks.");
@@ -1720,8 +1720,8 @@ public class StreamThreadTest {
         thread.taskManager().handleCorruption(taskCorruptedException.corruptedTasks());
         TestUtils.waitForCondition(
                 () -> thread.taskManager().checkStateUpdater(
-                        mockTime.milliseconds(),
-                        topicPartitions -> mockConsumer.seekToBeginning(singleton(t1p1))
+                    mockTime.milliseconds(),
+                    topicPartitions -> mockConsumer.seekToBeginning(singleton(t1p1))
                 ),
                 10 * 1000,
                 "State updater never returned tasks.");
