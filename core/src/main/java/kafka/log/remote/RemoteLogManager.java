@@ -228,7 +228,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                             Function<TopicPartition, Optional<UnifiedLog>> fetchLog,
                             BiConsumer<TopicPartition, Long> updateRemoteLogStartOffset,
                             BrokerTopicStats brokerTopicStats,
-                            Metrics metrics) throws IOException {
+                            Metrics metrics,
+                            Optional<Endpoint> endpoint) throws IOException {
         this.rlmConfig = rlmConfig;
         this.brokerId = brokerId;
         this.logDir = logDir;
@@ -238,9 +239,12 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         this.updateRemoteLogStartOffset = updateRemoteLogStartOffset;
         this.brokerTopicStats = brokerTopicStats;
         this.metrics = metrics;
+        this.endpoint = endpoint;
 
-        remoteLogStorageManagerPlugin = createRemoteStorageManagerPlugin();
-        remoteLogMetadataManagerPlugin = createRemoteLogMetadataManagerPlugin();
+        remoteLogStorageManagerPlugin = configAndWrapRSM(createRemoteStorageManager());
+        remoteLogMetadataManagerPlugin = configAndWrapRLMM(createRemoteLogMetadataManager());
+        remoteLogManagerConfigured = true;
+
         rlmCopyQuotaManager = createRLMCopyQuotaManager();
         rlmFetchQuotaManager = createRLMFetchQuotaManager();
 
@@ -359,48 +363,49 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         }
     }
 
-    Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
+    RemoteStorageManager createRemoteStorageManager() {
         return SecurityManagerCompatibility.get().doPrivileged(() -> {
             final String classPath = rlmConfig.remoteStorageManagerClassPath();
             if (classPath != null && !classPath.trim().isEmpty()) {
                 ChildFirstClassLoader classLoader = new ChildFirstClassLoader(classPath, this.getClass().getClassLoader());
                 RemoteStorageManager delegate = createDelegate(classLoader, rlmConfig.remoteStorageManagerClassName());
-                return Plugin.wrapInstanceDelayedInit(new ClassLoaderAwareRemoteStorageManager(delegate, classLoader));
+                return (RemoteStorageManager) new ClassLoaderAwareRemoteStorageManager(delegate, classLoader);
             } else {
-                return Plugin.wrapInstanceDelayedInit(createDelegate(this.getClass().getClassLoader(), rlmConfig.remoteStorageManagerClassName()));
+                return createDelegate(this.getClass().getClassLoader(), rlmConfig.remoteStorageManagerClassName());
             }
         });
     }
 
-    private void configureRSM() {
+    private void configureRSM(RemoteStorageManager remoteLogStorageManager) {
         final Map<String, Object> rsmProps = new HashMap<>(rlmConfig.remoteStorageManagerProps());
         rsmProps.put(ServerConfigs.BROKER_ID_CONFIG, brokerId);
-        remoteLogStorageManagerPlugin.get().configure(rsmProps);
+        remoteLogStorageManager.configure(rsmProps);
     }
 
-    Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
+    private Plugin<RemoteStorageManager> configAndWrapRSM(RemoteStorageManager rsm) {
+        configureRSM(rsm);
+        return Plugin.wrapInstance(rsm, metrics, RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP);
+    }
+
+    RemoteLogMetadataManager createRemoteLogMetadataManager() {
         return SecurityManagerCompatibility.get().doPrivileged(() -> {
             final String classPath = rlmConfig.remoteLogMetadataManagerClassPath();
             if (classPath != null && !classPath.trim().isEmpty()) {
                 ClassLoader classLoader = new ChildFirstClassLoader(classPath, this.getClass().getClassLoader());
                 RemoteLogMetadataManager delegate = createDelegate(classLoader, rlmConfig.remoteLogMetadataManagerClassName());
-                return Plugin.wrapInstanceDelayedInit(new ClassLoaderAwareRemoteLogMetadataManager(delegate, classLoader));
+                return (RemoteLogMetadataManager) new ClassLoaderAwareRemoteLogMetadataManager(delegate, classLoader);
             } else {
-                return Plugin.wrapInstanceDelayedInit(createDelegate(this.getClass().getClassLoader(), rlmConfig.remoteLogMetadataManagerClassName()));
+                return createDelegate(this.getClass().getClassLoader(), rlmConfig.remoteLogMetadataManagerClassName());
             }
         });
     }
 
-
-    RemoteLogMetadataManager remoteLogMetadataManager() {
-        return remoteLogMetadataManagerPlugin.get();
+    private Plugin<RemoteLogMetadataManager> configAndWrapRLMM(RemoteLogMetadataManager rlmm) {
+        configureRLMM(rlmm);
+        return Plugin.wrapInstance(rlmm, metrics, RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP);
     }
 
-    public void onEndPointCreated(Endpoint endpoint) {
-        this.endpoint = Optional.of(endpoint);
-    }
-
-    private void configureRLMM() {
+    private void configureRLMM(RemoteLogMetadataManager remoteLogMetadataManager) {
         final Map<String, Object> rlmmProps = new HashMap<>();
         endpoint.ifPresent(e -> {
             rlmmProps.put(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "bootstrap.servers", e.host() + ":" + e.port());
@@ -413,22 +418,12 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         rlmmProps.put(LOG_DIR_CONFIG, logDir);
         rlmmProps.put("cluster.id", clusterId);
 
-        remoteLogMetadataManagerPlugin.get().configure(rlmmProps);
+        remoteLogMetadataManager.configure(rlmmProps);
     }
 
-    public void startup() {
-        // Initialize and configure RSM and RLMM. This will start RSM, RLMM resources which may need to start resources
-        // in connecting to the brokers or remote storages.
-        configureRSM();
-        configureRLMM();
-        // the withPluginMetrics() method will be called when the plugin is instantiated (after configure() if the plugin also implements Configurable)
-        remoteLogStorageManagerPlugin.initialize(metrics, rlmConfig.remoteStorageManagerClassName());
-        remoteLogMetadataManagerPlugin.initialize(metrics, rlmConfig.remoteLogMetadataManagerClassName());
-        remoteLogManagerConfigured = true;
-    }
 
-    private boolean isRemoteLogManagerConfigured() {
-        return this.remoteLogManagerConfigured;
+    RemoteLogMetadataManager remoteLogMetadataManager() {
+        return remoteLogMetadataManagerPlugin.get();
     }
 
     public RemoteStorageManager storageManager() {
@@ -462,7 +457,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                                    Map<String, Uuid> topicIds) {
         LOGGER.debug("Received leadership changes for leaders: {} and followers: {}", partitionsBecomeLeader, partitionsBecomeFollower);
 
-        if (rlmConfig.isRemoteStorageSystemEnabled() && !isRemoteLogManagerConfigured()) {
+        if (rlmConfig.isRemoteStorageSystemEnabled() && !this.remoteLogManagerConfigured) {
             throw new KafkaException("RemoteLogManager is not configured when remote storage system is enabled");
         }
 

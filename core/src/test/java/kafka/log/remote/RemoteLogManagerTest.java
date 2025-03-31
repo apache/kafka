@@ -26,7 +26,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
-import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Monitorable;
@@ -233,6 +232,11 @@ public class RemoteLogManagerTest {
     private final MockScheduler scheduler = new MockScheduler(time);
     private final Properties brokerConfig = kafka.utils.TestUtils.createDummyBrokerConfig();
 
+    private final String host = "localhost";
+    private final int port = 1234;
+    private final String securityProtocol = "PLAINTEXT";
+    private final Optional<Endpoint> endPoint = Optional.of(new Endpoint(securityProtocol, SecurityProtocol.PLAINTEXT, host, port));
+
     @BeforeEach
     void setUp() throws Exception {
         checkpoint = new LeaderEpochCheckpointFile(TestUtils.tempFile(), new LogDirFailureChannel(1));
@@ -248,16 +252,20 @@ public class RemoteLogManagerTest {
         remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
-                brokerTopicStats, metrics) {
-            public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(remoteStorageManager);
+                brokerTopicStats, metrics, endPoint) {
+            @Override
+            public RemoteStorageManager createRemoteStorageManager() {
+                return remoteStorageManager;
             }
-            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
+            @Override
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
             }
+            @Override
             public RLMQuotaManager createRLMCopyQuotaManager() {
                 return rlmCopyQuotaManager;
             }
+            @Override
             public Duration quotaTimeout() {
                 return Duration.ofMillis(100);
             }
@@ -385,13 +393,6 @@ public class RemoteLogManagerTest {
 
     @Test
     void testRemoteLogMetadataManagerWithEndpointConfig() {
-        String host = "localhost";
-        int port = 1234;
-        String securityProtocol = "PLAINTEXT";
-        Endpoint endPoint = new Endpoint(securityProtocol, SecurityProtocol.PLAINTEXT, host, port);
-        remoteLogManager.onEndPointCreated(endPoint);
-        remoteLogManager.startup();
-
         ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);
         verify(remoteLogMetadataManager, times(1)).configure(capture.capture());
         assertEquals(host + ":" + port, capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "bootstrap.servers"));
@@ -417,24 +418,19 @@ public class RemoteLogManagerTest {
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
                 brokerTopicStats,
-                metrics) {
-            public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(remoteStorageManager);
+                metrics,
+                endPoint) {
+            @Override
+            public RemoteStorageManager createRemoteStorageManager() {
+                return remoteStorageManager;
             }
-            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
+            @Override
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
             }
         }) {
-
-            String host = "localhost";
-            int port = 1234;
-            String securityProtocol = "PLAINTEXT";
-            Endpoint endpoint = new Endpoint(securityProtocol, SecurityProtocol.PLAINTEXT, host, port);
-            remoteLogManager.onEndPointCreated(endpoint);
-            remoteLogManager.startup();
-
             ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);
-            verify(remoteLogMetadataManager, times(1)).configure(capture.capture());
+            verify(remoteLogMetadataManager, times(2)).configure(capture.capture());
             assertEquals(host + ":" + port, capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "bootstrap.servers"));
             // should be overridden as SSL
             assertEquals("SSL", capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol"));
@@ -445,7 +441,6 @@ public class RemoteLogManagerTest {
 
     @Test
     void testStartup() {
-        remoteLogManager.startup();
         ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);
         verify(remoteStorageManager, times(1)).configure(capture.capture());
         assertEquals(brokerId, capture.getValue().get("broker.id"));
@@ -781,16 +776,7 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    void testLeadershipChangesWithoutRemoteLogManagerConfiguring() {
-        assertThrows(KafkaException.class, () ->
-            remoteLogManager.onLeadershipChange(
-                Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds),
-                "RemoteLogManager is not configured when remote storage system is enabled");
-    }
-
-    @Test
     void testRemoteLogManagerTasksAvgIdlePercentAndMetadataCountMetrics() throws Exception {
-        remoteLogManager.startup();
         long oldSegmentStartOffset = 0L;
         long nextSegmentStartOffset = 150L;
         int segmentCount = 3;
@@ -909,7 +895,6 @@ public class RemoteLogManagerTest {
 
     @Test
     void testRemoteLogTaskUpdateRemoteLogSegmentMetadataAfterLogDirChanged() throws Exception {
-        remoteLogManager.startup();
         long oldSegmentStartOffset = 0L;
         long nextSegmentStartOffset = 150L;
         int segmentCount = 3;
@@ -1024,7 +1009,6 @@ public class RemoteLogManagerTest {
 
     @Test
     void testRemoteLogManagerRemoteMetrics() throws Exception {
-        remoteLogManager.startup();
         long oldestSegmentStartOffset = 0L;
         long olderSegmentStartOffset = 75L;
         long nextSegmentStartOffset = 150L;
@@ -1363,9 +1347,10 @@ public class RemoteLogManagerTest {
             new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
                     t -> Optional.empty(),
                     (topicPartition, offset) -> { },
-                    brokerTopicStats, metrics) {
-                public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
-                    return Plugin.wrapInstanceDelayedInit(rsmManager);
+                    brokerTopicStats, metrics, endPoint) {
+                @Override
+                public RemoteStorageManager createRemoteStorageManager() {
+                    return rsmManager;
                 }
             }
         ) {
@@ -1388,7 +1373,6 @@ public class RemoteLogManagerTest {
 
     @Test
     void testTopicIdCacheUpdates() throws RemoteStorageException {
-        remoteLogManager.startup();
         Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
         Partition mockFollowerPartition = mockPartition(followerTopicIdPartition);
 
@@ -1413,7 +1397,6 @@ public class RemoteLogManagerTest {
 
     @Test
     void testFetchRemoteLogSegmentMetadata() throws RemoteStorageException {
-        remoteLogManager.startup();
         remoteLogManager.onLeadershipChange(
             Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
         remoteLogManager.fetchRemoteLogSegmentMetadata(leaderTopicIdPartition.topicPartition(), 10, 100L);
@@ -1427,7 +1410,6 @@ public class RemoteLogManagerTest {
 
     @Test
     public void testFetchNextSegmentWithTxnIndex() throws RemoteStorageException {
-        remoteLogManager.startup();
         remoteLogManager.onLeadershipChange(
             Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
         remoteLogManager.fetchNextSegmentWithTxnIndex(leaderTopicIdPartition.topicPartition(), 10, 100L);
@@ -1460,7 +1442,6 @@ public class RemoteLogManagerTest {
                     return Optional.of(metadata);
                 });
 
-        remoteLogManager.startup();
         remoteLogManager.onLeadershipChange(
                 Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
 
@@ -1495,7 +1476,6 @@ public class RemoteLogManagerTest {
                     return metadataOpt;
                 });
 
-        remoteLogManager.startup();
         remoteLogManager.onLeadershipChange(
                 Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
 
@@ -1513,7 +1493,6 @@ public class RemoteLogManagerTest {
 
     @Test
     void testOnLeadershipChangeWillInvokeHandleLeaderOrFollowerPartitions() {
-        remoteLogManager.startup();
         RemoteLogManager spyRemoteLogManager = spy(remoteLogManager);
         spyRemoteLogManager.onLeadershipChange(
             Collections.emptySet(), Collections.singleton(mockPartition(followerTopicIdPartition)), topicIds);
@@ -1538,7 +1517,6 @@ public class RemoteLogManagerTest {
 
     @Test
     void testFindOffsetByTimestamp() throws IOException, RemoteStorageException {
-        remoteLogManager.startup();
         TopicPartition tp = leaderTopicIdPartition.topicPartition();
 
         long ts = time.milliseconds();
@@ -1572,7 +1550,6 @@ public class RemoteLogManagerTest {
 
     @Test
     void testFindOffsetByTimestampWithInvalidEpochSegments() throws IOException, RemoteStorageException {
-        remoteLogManager.startup();
         TopicPartition tp = leaderTopicIdPartition.topicPartition();
 
         long ts = time.milliseconds();
@@ -1604,7 +1581,6 @@ public class RemoteLogManagerTest {
 
     @Test
     void testFindOffsetByTimestampWithSegmentNotReady() throws IOException, RemoteStorageException {
-        remoteLogManager.startup();
         TopicPartition tp = leaderTopicIdPartition.topicPartition();
 
         long ts = time.milliseconds();
@@ -1754,17 +1730,16 @@ public class RemoteLogManagerTest {
         remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
                 partition -> Optional.of(mockLog),
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
-                brokerTopicStats, metrics) {
+                brokerTopicStats, metrics, endPoint) {
             @Override
-            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
             }
             @Override
             Optional<FileRecords.TimestampAndOffset> lookupTimestamp(RemoteLogSegmentMetadata rlsMetadata, long timestamp, long startingOffset) {
                 return Optional.of(expectedRemoteResult);
             }
         };
-        remoteLogManager.startup();
         remoteLogManager.onLeadershipChange(Collections.emptySet(), Collections.singleton(mockFollowerPartition), topicIds);
 
         // Read the offset from the remote storage, since the local-log starts from offset 50L and the message with `timestamp` does not exist in the local log
@@ -1811,13 +1786,14 @@ public class RemoteLogManagerTest {
         try (MockedConstruction<KafkaMetricsGroup> mockMetricsGroupCtor = mockConstruction(KafkaMetricsGroup.class)) {
             RemoteLogManager remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId,
                     time, tp -> Optional.of(mockLog), (topicPartition, offset) -> {
-            }, brokerTopicStats, metrics) {
-                public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
-                    return Plugin.wrapInstanceDelayedInit(remoteStorageManager);
+            }, brokerTopicStats, metrics, endPoint) {
+                @Override
+                public RemoteStorageManager createRemoteStorageManager() {
+                    return remoteStorageManager;
                 }
-
-                public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
-                    return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
+                @Override
+                public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                    return remoteLogMetadataManager;
                 }
             };
             // Close RemoteLogManager so that metrics are removed
@@ -2121,7 +2097,6 @@ public class RemoteLogManagerTest {
 
     @Test
     public void testStopPartitionsWithoutDeletion() throws RemoteStorageException {
-        remoteLogManager.startup();
         BiConsumer<TopicPartition, Throwable> errorHandler = (topicPartition, throwable) -> fail("shouldn't be called");
         Set<StopPartition> partitions = new HashSet<>();
         partitions.add(new StopPartition(leaderTopicIdPartition.topicPartition(), true, false, false));
@@ -2143,7 +2118,6 @@ public class RemoteLogManagerTest {
 
     @Test
     public void testStopPartitionsWithDeletion() throws RemoteStorageException {
-        remoteLogManager.startup();
         BiConsumer<TopicPartition, Throwable> errorHandler =
                 (topicPartition, ex) -> fail("shouldn't be called: " + ex);
         Set<StopPartition> partitions = new HashSet<>();
@@ -2209,9 +2183,10 @@ public class RemoteLogManagerTest {
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
-                brokerTopicStats, metrics) {
-            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
+                brokerTopicStats, metrics, endPoint) {
+            @Override
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
             }
         }) {
             assertEquals(500L, remoteLogManager.findLogStartOffset(leaderTopicIdPartition, mockLog));
@@ -2234,9 +2209,10 @@ public class RemoteLogManagerTest {
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
-                brokerTopicStats, metrics) {
-            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
+                brokerTopicStats, metrics, endPoint) {
+            @Override
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
             }
         }) {
             assertEquals(250L, remoteLogManager.findLogStartOffset(leaderTopicIdPartition, mockLog));
@@ -2268,9 +2244,10 @@ public class RemoteLogManagerTest {
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) ->  logStartOffset.set(offset),
-                brokerTopicStats, metrics) {
-            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
+                brokerTopicStats, metrics, endPoint) {
+            @Override
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
             }
         }) {
             RemoteLogManager.RLMCopyTask task = remoteLogManager.new RLMCopyTask(leaderTopicIdPartition, 128);
@@ -2322,16 +2299,20 @@ public class RemoteLogManagerTest {
         remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
-                brokerTopicStats, metrics) {
-            public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(remoteStorageManager);
+                brokerTopicStats, metrics, endPoint) {
+            @Override
+            public RemoteStorageManager createRemoteStorageManager() {
+                return remoteStorageManager;
             }
-            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
+            @Override
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
             }
+            @Override
             public RLMQuotaManager createRLMCopyQuotaManager() {
                 return rlmCopyQuotaManager;
             }
+            @Override
             public Duration quotaTimeout() {
                 return Duration.ofMillis(100);
             }
@@ -2976,12 +2957,12 @@ public class RemoteLogManagerTest {
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> logStartOffset.set(offset),
-                brokerTopicStats, metrics) {
-            public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(remoteStorageManager);
+                brokerTopicStats, metrics, endPoint) {
+            public RemoteStorageManager createRemoteStorageManager() {
+                return remoteStorageManager;
             }
-            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
             }
         }) {
             RemoteLogManager.RLMExpirationTask task = remoteLogManager.new RLMExpirationTask(leaderTopicIdPartition);
@@ -3015,7 +2996,6 @@ public class RemoteLogManagerTest {
 
             task.cleanupExpiredRemoteLogSegments();
 
-            verifyNoMoreInteractions(remoteStorageManager);
             assertEquals(0L, logStartOffset.get());
         } catch (ExecutionException | InterruptedException e) {
             throw new RuntimeException(e);
@@ -3142,12 +3122,15 @@ public class RemoteLogManagerTest {
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
                 brokerTopicStats,
-                metrics) {
-            public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(rsmManager);
+                metrics,
+                endPoint) {
+            @Override
+            public RemoteStorageManager createRemoteStorageManager() {
+                return rsmManager;
             }
-            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
+            @Override
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
             }
 
             @Override
@@ -3219,23 +3202,25 @@ public class RemoteLogManagerTest {
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
                 brokerTopicStats,
-                metrics) {
-            public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(rsmManager);
+                metrics,
+                endPoint) {
+            @Override
+            public RemoteStorageManager createRemoteStorageManager() {
+                return rsmManager;
             }
-            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
+            @Override
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
             }
-
-            public Optional<RemoteLogSegmentMetadata> fetchRemoteLogSegmentMetadata(TopicPartition topicPartition,
-                                                                                    int epochForOffset, long offset) {
+            @Override
+            public Optional<RemoteLogSegmentMetadata> fetchRemoteLogSegmentMetadata(TopicPartition topicPartition, int epochForOffset, long offset) {
                 return Optional.of(segmentMetadata);
             }
-
+            @Override
             int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
                 return 1;
             }
-
+            @Override
             EnrichedRecordBatch findFirstBatch(RemoteLogInputStream remoteLogInputStream, long offset) {
                 when(firstBatch.sizeInBytes()).thenReturn(recordBatchSizeInBytes);
                 doNothing().when(firstBatch).writeTo(capture.capture());
@@ -3305,23 +3290,25 @@ public class RemoteLogManagerTest {
                 (topicPartition, offset) -> {
                 },
                 brokerTopicStats,
-                metrics) {
-            public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(remoteStorageManager);
+                metrics,
+                endPoint) {
+            @Override
+            public RemoteStorageManager createRemoteStorageManager() {
+                return rsmManager;
             }
-
-            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
+            @Override
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
             }
-
-            public Optional<RemoteLogSegmentMetadata> fetchRemoteLogSegmentMetadata(TopicPartition topicPartition,
-                                                                                    int epochForOffset, long offset) {
+            @Override
+            public Optional<RemoteLogSegmentMetadata> fetchRemoteLogSegmentMetadata(TopicPartition topicPartition, int epochForOffset, long offset) {
                 return Optional.of(segmentMetadata);
             }
+            @Override
             public RemoteLogInputStream getRemoteLogInputStream(InputStream in) {
                 return remoteLogInputStream;
             }
-
+            @Override
             int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
                 return 1;
             }
@@ -3451,7 +3438,6 @@ public class RemoteLogManagerTest {
 
     @Test
     public void testRLMShutdownDuringQuotaExceededScenario() throws Exception {
-        remoteLogManager.startup();
         setupRLMTask(true);
         remoteLogManager.onLeadershipChange(
             Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds);
@@ -3612,7 +3598,6 @@ public class RemoteLogManagerTest {
 
     @Test
     public void testTierLagResetsToZeroOnBecomingFollower() {
-        remoteLogManager.startup();
         remoteLogManager.onLeadershipChange(
                 Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds);
         RemoteLogManager.RLMCopyTask rlmTask = (RemoteLogManager.RLMCopyTask) remoteLogManager.rlmCopyTask(leaderTopicIdPartition);
@@ -3655,18 +3640,20 @@ public class RemoteLogManagerTest {
         RemoteLogManager remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
-                brokerTopicStats, metrics) {
-            public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(remoteStorageManager);
+                brokerTopicStats, metrics, endPoint) {
+            @Override
+            public RemoteStorageManager createRemoteStorageManager() {
+                return remoteStorageManager;
             }
-            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
+            @Override
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
             }
+            @Override
             int lookupPositionForOffset(RemoteLogSegmentMetadata remoteLogSegmentMetadata, long offset) {
                 return 0;
             }
         };
-        remoteLogManager.startup();
         remoteLogManager.onLeadershipChange(
                 Collections.singleton(mockPartition(leaderTopicIdPartition)), Collections.emptySet(), topicIds);
 
@@ -3698,16 +3685,20 @@ public class RemoteLogManagerTest {
         remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
             tp -> Optional.of(mockLog),
             (topicPartition, offset) -> currentLogStartOffset.set(offset),
-            brokerTopicStats, metrics) {
-            public Plugin<RemoteStorageManager> createRemoteStorageManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(remoteStorageManager);
+            brokerTopicStats, metrics, endPoint) {
+            @Override
+            public RemoteStorageManager createRemoteStorageManager() {
+                return remoteStorageManager;
             }
-            public Plugin<RemoteLogMetadataManager> createRemoteLogMetadataManagerPlugin() {
-                return Plugin.wrapInstanceDelayedInit(remoteLogMetadataManager);
+            @Override
+            public RemoteLogMetadataManager createRemoteLogMetadataManager() {
+                return remoteLogMetadataManager;
             }
+            @Override
             public RLMQuotaManager createRLMCopyQuotaManager() {
                 return rlmCopyQuotaManager;
             }
+            @Override
             public Duration quotaTimeout() {
                 return Duration.ofMillis(100);
             }
@@ -3723,7 +3714,6 @@ public class RemoteLogManagerTest {
                     latch.countDown();
                     return false;
                 });
-        remoteLogManager.startup();
         remoteLogManager.onLeadershipChange(
                 Collections.singleton(mockPartition(leaderTopicIdPartition)),
                 Collections.singleton(mockPartition(followerTopicIdPartition)),
@@ -3762,16 +3752,12 @@ public class RemoteLogManagerTest {
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
                 brokerTopicStats,
-                metrics)) {
+                metrics,
+                endPoint)) {
             assertInstanceOf(MonitorableNoOpRemoteStorageManager.class, remoteLogManager.storageManager());
             assertInstanceOf(MonitorableNoOpRemoteLogMetadataManager.class, remoteLogManager.remoteLogMetadataManager());
-            MonitorableNoOpRemoteStorageManager rsm = (MonitorableNoOpRemoteStorageManager) remoteLogManager.storageManager();
-            MonitorableNoOpRemoteLogMetadataManager rlm = (MonitorableNoOpRemoteLogMetadataManager) remoteLogManager.remoteLogMetadataManager();
 
-            assertEquals(false, rsm.pluginMetrics);
-            assertEquals(false, rlm.pluginMetrics);
             // We need to call startup for call config() and call withPluginMetrics()
-            remoteLogManager.startup();
             assertEquals(true, ((MonitorableNoOpRemoteStorageManager) remoteLogManager.storageManager()).pluginMetrics);
             assertEquals(true, ((MonitorableNoOpRemoteLogMetadataManager) remoteLogManager.remoteLogMetadataManager()).pluginMetrics);
         }
