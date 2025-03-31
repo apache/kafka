@@ -791,27 +791,6 @@ public class StreamThread extends Thread implements ProcessingThread {
                 }
             }
 
-
-            if (!restoreConsumerInstanceIdFuture.isDone()) {
-                if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
-                    try {
-                        restoreConsumerInstanceIdFuture.complete(restoreConsumer.clientInstanceId(Duration.ZERO));
-                    } catch (final IllegalStateException disabledError) {
-                        // if telemetry is disabled on a client, we swallow the error,
-                        // to allow returning a partial result for all other clients
-                        restoreConsumerInstanceIdFuture.complete(null);
-                    } catch (final TimeoutException swallow) {
-                        // swallow
-                    } catch (final Exception error) {
-                        restoreConsumerInstanceIdFuture.completeExceptionally(error);
-                    }
-                } else {
-                    restoreConsumerInstanceIdFuture.completeExceptionally(
-                        new TimeoutException("Could not retrieve restore consumer client instance id.")
-                    );
-                }
-            }
-
             if (!producerInstanceIdFuture.isDone()) {
                 if (fetchDeadlineClientInstanceId >= time.milliseconds()) {
                     try {
@@ -835,7 +814,6 @@ public class StreamThread extends Thread implements ProcessingThread {
             }
 
             if (mainConsumerInstanceIdFuture.isDone()
-                && restoreConsumerInstanceIdFuture.isDone()
                 && producerInstanceIdFuture.isDone()) {
 
                 fetchDeadlineClientInstanceId = -1L;
@@ -1196,7 +1174,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
         final int numRecords = records.count();
 
-        for (final TopicPartition topicPartition : records.partitions()) {
+        for (final TopicPartition topicPartition: records.partitions()) {
             records
                 .records(topicPartition)
                 .stream()
