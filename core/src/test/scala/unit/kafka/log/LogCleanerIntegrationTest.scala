@@ -25,7 +25,7 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.UnifiedLog
+import org.apache.kafka.storage.internals.log.{LogCleanerManager, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test}
 
@@ -78,8 +78,8 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
     val uncleanableBytesGauge = getGauge[Long]("uncleanable-bytes", uncleanableDirectory)
 
     TestUtils.waitUntilTrue(() => uncleanablePartitionsCountGauge.value() == 2, "There should be 2 uncleanable partitions", 2000L)
-    val expectedTotalUncleanableBytes = LogCleanerManager.calculateCleanableBytes(log, 0, log.logSegments.asScala.last.baseOffset)._2 +
-      LogCleanerManager.calculateCleanableBytes(log2, 0, log2.logSegments.asScala.last.baseOffset)._2
+    val expectedTotalUncleanableBytes = LogCleanerManager.calculateCleanableBytes(log, 0, log.logSegments.asScala.last.baseOffset).getValue +
+      LogCleanerManager.calculateCleanableBytes(log2, 0, log2.logSegments.asScala.last.baseOffset).getValue
     TestUtils.waitUntilTrue(() => uncleanableBytesGauge.value() == expectedTotalUncleanableBytes,
       s"There should be $expectedTotalUncleanableBytes uncleanable bytes", 1000L)
 
@@ -172,7 +172,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
     cleaner.awaitCleaned(new TopicPartition("log", 0), firstBlockCleanableSegmentOffset)
 
     val read1 = readFromLog(log)
-    val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints(new TopicPartition("log", 0))
+    val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints.get(new TopicPartition("log", 0))
     assertTrue(lastCleaned >= firstBlockCleanableSegmentOffset,
       s"log cleaner should have processed at least to offset $firstBlockCleanableSegmentOffset, but lastCleaned=$lastCleaned")
 
@@ -187,7 +187,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
 
     assertEquals(appends1, read2, s"log should only contains zero keys now")
 
-    val lastCleaned2 = cleaner.cleanerManager.allCleanerCheckpoints(new TopicPartition("log", 0))
+    val lastCleaned2 = cleaner.cleanerManager.allCleanerCheckpoints.get(new TopicPartition("log", 0))
     val secondBlockCleanableSegmentOffset = activeSegAtT1.baseOffset
     assertTrue(lastCleaned2 >= secondBlockCleanableSegmentOffset,
       s"log cleaner should have processed at least to offset $secondBlockCleanableSegmentOffset, but lastCleaned=$lastCleaned2")

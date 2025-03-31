@@ -103,6 +103,8 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
@@ -150,6 +152,7 @@ import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
+import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.PartitionIdData;
 import org.apache.kafka.server.share.persister.TopicData;
@@ -209,6 +212,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupMemberSubscriptionTombstoneRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupSubscriptionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
@@ -429,6 +433,11 @@ public class GroupMetadataManager {
     private final TimelineHashMap<String, TimelineHashSet<String>> groupsByTopics;
 
     /**
+     * The share group partition metadata info keyed by group id.
+     */
+    private final TimelineHashMap<String, ShareGroupStatePartitionMetadataInfo> shareGroupPartitionMetadata;
+
+    /**
      * The group manager.
      */
     private final GroupConfigManager groupConfigManager;
@@ -464,6 +473,19 @@ public class GroupMetadataManager {
     private final ShareGroupPartitionAssignor shareGroupAssignor;
 
     /**
+     * A record class to hold the value representing ShareGroupStatePartitionMetadata for the TimelineHashmap
+     * keyed on share group id.
+     *
+     * @param initializedTopics Map of set of partition ids keyed on the topic id.
+     * @param deletingTopics    Set of topic ids.
+     */
+    private record ShareGroupStatePartitionMetadataInfo(
+        Map<Uuid, Set<Integer>> initializedTopics,
+        Set<Uuid> deletingTopics
+    ) {
+    }
+
+    /**
      * The authorizer to validate the regex subscription topics.
      */
     private final Optional<Authorizer> authorizer;
@@ -497,6 +519,7 @@ public class GroupMetadataManager {
         this.defaultConsumerGroupAssignor = config.consumerGroupAssignors().get(0);
         this.groups = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupsByTopics = new TimelineHashMap<>(snapshotRegistry, 0);
+        this.shareGroupPartitionMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupConfigManager = groupConfigManager;
         this.shareGroupAssignor = shareGroupAssignor;
         this.streamsGroupSessionTimeoutMs = 45000;
@@ -2190,10 +2213,10 @@ public class GroupMetadataManager {
      * @param clientHost            The client host.
      * @param subscribedTopicNames  The list of subscribed topic names from the request or null.
      *
-     * @return A Result containing the ShareGroupHeartbeat response and
-     *         a list of records to update the state machine.
+     * @return A Result containing a pair of ShareGroupHeartbeat response and maybe InitializeShareGroupStateParameters
+     *         and a list of records to update the state machine.
      */
-    private CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> shareGroupHeartbeat(
+    private CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> shareGroupHeartbeat(
         String groupId,
         String memberId,
         int memberEpoch,
@@ -2235,7 +2258,7 @@ public class GroupMetadataManager {
             member,
             updatedMember,
             records
-        );
+        ) || initializedAssignmentPending(group);
 
         int groupEpoch = group.groupEpoch();
         Map<String, TopicMetadata> subscriptionMetadata = group.subscriptionMetadata();
@@ -2323,10 +2346,112 @@ public class GroupMetadataManager {
         // 2. The member's assignment has been updated.
         boolean isFullRequest = subscribedTopicNames != null;
         if (memberEpoch == 0 || isFullRequest || hasAssignedPartitionsChanged(member, updatedMember)) {
-            response.setAssignment(createShareGroupResponseAssignment(updatedMember));
+            ShareGroupHeartbeatResponseData.Assignment assignment = createShareGroupResponseAssignment(updatedMember);
+            response.setAssignment(assignment);
         }
 
-        return new CoordinatorResult<>(records, response);
+        return new CoordinatorResult<>(
+            records,
+            Map.entry(
+                response,
+                maybeCreateInitializeShareGroupStateRequest(groupId, groupEpoch, subscriptionMetadata)
+            )
+        );
+    }
+
+    private boolean initializedAssignmentPending(ShareGroup group) {
+        if (!shareGroupPartitionMetadata.containsKey(group.groupId())) {
+            // No initialized share partitions for the group so nothing can be assigned.
+            return false;
+        }
+
+        if (group.isEmpty()) {
+            // No members then no point of computing assignment.
+            return false;
+        }
+
+        // We need to check if all the group initialized share partitions are part of the group assignment.
+        Map<Uuid, Set<Integer>> initializedTps = shareGroupPartitionMetadata.get(group.groupId()).initializedTopics();
+        Map<Uuid, Set<Integer>> currentAssigned = new HashMap<>();
+        for (Assignment assignment : group.targetAssignment().values()) {
+            for (Map.Entry<Uuid, Set<Integer>> tps : assignment.partitions().entrySet()) {
+                currentAssigned.computeIfAbsent(tps.getKey(), k -> new HashSet<>())
+                    .addAll(tps.getValue());
+            }
+        }
+
+        return !initializedTps.equals(currentAssigned);
+    }
+
+    /**
+     * Computes the diff between the subscribed metadata and the initialized share topic
+     * partitions corresponding to a share group.
+     *
+     * @param groupId               The share group id for which diff is being calculated
+     * @param subscriptionMetadata  The subscription metadata corresponding to the share group.
+     * @return  A map of topic partitions which are subscribed by the share group but not initialized yet.
+     */
+    // Visibility for testing
+    Map<Uuid, Map.Entry<String, Set<Integer>>> subscribedTopicsChangeMap(String groupId, Map<String, TopicMetadata> subscriptionMetadata) {
+        TopicsImage topicsImage = metadataImage.topics();
+        if (topicsImage == null || topicsImage.isEmpty() || subscriptionMetadata == null || subscriptionMetadata.isEmpty()) {
+            return Map.of();
+        }
+
+        Map<Uuid, Map.Entry<String, Set<Integer>>> topicPartitionChangeMap = new HashMap<>();
+        ShareGroupStatePartitionMetadataInfo info = shareGroupPartitionMetadata.get(groupId);
+        Map<Uuid, Set<Integer>> alreadyInitialized = info == null ? Map.of() : info.initializedTopics();
+
+        subscriptionMetadata.forEach((topicName, topicMetadata) -> {
+            Set<Integer> alreadyInitializedPartSet = alreadyInitialized.getOrDefault(topicMetadata.id(), Set.of());
+            if (alreadyInitializedPartSet.isEmpty() || alreadyInitializedPartSet.size() < topicMetadata.numPartitions()) {
+                Set<Integer> partitionSet = IntStream.range(0, topicMetadata.numPartitions()).boxed().collect(Collectors.toSet());
+                partitionSet.removeAll(alreadyInitializedPartSet);
+
+                topicPartitionChangeMap.computeIfAbsent(topicMetadata.id(), k -> Map.entry(
+                    topicName,
+                    partitionSet
+                ));
+            }
+        });
+        return topicPartitionChangeMap;
+    }
+
+    /**
+     * Based on the diff between the subscribed topic partitions and the initialized topic partitions,
+     * created initialize request for the non-initialized ones.
+     *
+     * @param groupId               The share group id for which partitions need to be initialized.
+     * @param groupEpoch            The group epoch of the share group.
+     * @param subscriptionMetadata  The subscription metadata for the share group.
+     * @return An optional representing the persister initialize request.
+     */
+    private Optional<InitializeShareGroupStateParameters> maybeCreateInitializeShareGroupStateRequest(
+        String groupId,
+        int groupEpoch,
+        Map<String, TopicMetadata> subscriptionMetadata
+    ) {
+        if (subscriptionMetadata == null || subscriptionMetadata.isEmpty() || metadataImage.isEmpty()) {
+            return Optional.empty();
+        }
+
+        Map<Uuid, Map.Entry<String, Set<Integer>>> topicPartitionChangeMap = subscribedTopicsChangeMap(groupId, subscriptionMetadata);
+
+        // Nothing to initialize.
+        if (topicPartitionChangeMap.isEmpty()) {
+            return Optional.empty();
+        }
+
+        return Optional.of(new InitializeShareGroupStateParameters.Builder().setGroupTopicPartitionData(
+            new GroupTopicPartitionData<>(groupId, topicPartitionChangeMap.entrySet().stream()
+                .map(entry -> new TopicData<>(
+                    entry.getKey(),
+                    entry.getValue().getValue().stream()
+                        .map(partitionId -> PartitionFactory.newPartitionStateData(partitionId, groupEpoch, -1))
+                        .toList())
+                ).toList()
+            )).build()
+        );
     }
 
     /**
@@ -3104,12 +3229,17 @@ public class GroupMetadataManager {
         List<CoordinatorRecord> records
     ) {
         try {
+            Map<Uuid, Set<Integer>> initializedTopicPartitions = shareGroupPartitionMetadata.containsKey(group.groupId()) ?
+                shareGroupPartitionMetadata.get(group.groupId()).initializedTopics() :
+                Map.of();
+
             TargetAssignmentBuilder.ShareTargetAssignmentBuilder assignmentResultBuilder =
                 new TargetAssignmentBuilder.ShareTargetAssignmentBuilder(group.groupId(), groupEpoch, shareGroupAssignor)
                     .withMembers(group.members())
                     .withSubscriptionMetadata(subscriptionMetadata)
                     .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(group.targetAssignment())
+                    .withTopicAssignablePartitionsMap(initializedTopicPartitions)
                     .withInvertedTargetAssignment(group.invertedTargetAssignment())
                     .withTopicsImage(metadataImage.topics())
                     .addOrUpdateMember(updatedMember.memberId(), updatedMember);
@@ -3954,10 +4084,10 @@ public class GroupMetadataManager {
      * @param context The request context.
      * @param request The actual ShareGroupHeartbeat request.
      *
-     * @return A Result containing the ShareGroupHeartbeat response and
-     *         a list of records to update the state machine.
+     * @return A Result containing a pair of ShareGroupHeartbeat response and maybe InitializeShareGroupStateParameters
+     *         and a list of records to update the state machine.
      */
-    public CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> shareGroupHeartbeat(
+    public CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> shareGroupHeartbeat(
         RequestContext context,
         ShareGroupHeartbeatRequestData request
     ) throws ApiException {
@@ -3965,10 +4095,15 @@ public class GroupMetadataManager {
 
         if (request.memberEpoch() == ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH) {
             // -1 means that the member wants to leave the group.
-            return shareGroupLeave(
+            CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = shareGroupLeave(
                 request.groupId(),
                 request.memberId(),
-                request.memberEpoch());
+                request.memberEpoch()
+            );
+            return new CoordinatorResult<>(
+                result.records(),
+                Map.entry(result.response(), Optional.empty())
+            );
         }
         // Otherwise, it is a regular heartbeat.
         return shareGroupHeartbeat(
@@ -3979,6 +4114,55 @@ public class GroupMetadataManager {
             context.clientId(),
             context.clientAddress.toString(),
             request.subscribedTopicNames());
+    }
+
+    /**
+     * Handles an initialize share group state request. This is usually part of
+     * shareGroupHeartbeat code flow.
+     * @param groupId The group id corresponding to the share group whose share partitions have been initialized.
+     * @param topicPartitionMap Map representing topic partition data to be added to the share state partition metadata.
+     *
+     * @return A Result containing ShareGroupStatePartitionMetadata records and Void response.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> initializeShareGroupState(
+        String groupId,
+        Map<Uuid, Set<Integer>> topicPartitionMap
+    ) {
+        // Should be present
+        if (topicPartitionMap == null || topicPartitionMap.isEmpty()) {
+            return new CoordinatorResult<>(List.of(), null);
+        }
+        ShareGroup group = (ShareGroup) groups.get(groupId);
+
+        // We must combine the existing information in the record with the
+        // topicPartitionMap argument.
+        Map<Uuid, Map.Entry<String, Set<Integer>>> finalMap = new HashMap<>();
+
+        ShareGroupStatePartitionMetadataInfo currentMap = shareGroupPartitionMetadata.get(groupId);
+        if (currentMap == null) {
+            topicPartitionMap.forEach((k, v) -> finalMap.put(k, Map.entry(metadataImage.topics().getTopic(k).name(), v)));
+            return new CoordinatorResult<>(
+                List.of(newShareGroupStatePartitionMetadataRecord(group.groupId(), finalMap, Map.of())),
+                null
+            );
+        }
+
+        Set<Uuid> combinedTopicIdSet = new HashSet<>(topicPartitionMap.keySet());
+        combinedTopicIdSet.addAll(currentMap.initializedTopics.keySet());
+
+        for (Uuid topicId : combinedTopicIdSet) {
+            String topicName = metadataImage.topics().getTopic(topicId).name();
+            Set<Integer> partitions = new HashSet<>(currentMap.initializedTopics.getOrDefault(topicId, new HashSet<>()));
+            if (topicPartitionMap.containsKey(topicId)) {
+                partitions.addAll(topicPartitionMap.get(topicId));
+            }
+            finalMap.computeIfAbsent(topicId, k -> Map.entry(topicName, partitions));
+        }
+
+        return new CoordinatorResult<>(
+            List.of(newShareGroupStatePartitionMetadataRecord(group.groupId(), finalMap, Map.of())),
+            null
+        );
     }
 
     /**
@@ -4744,6 +4928,41 @@ public class GroupMetadataManager {
                     .setAssignedPartitions(Map.of())
                     .build();
             group.updateMember(newMember);
+        }
+    }
+
+    /**
+     * Replays ShareGroupStatePartitionMetadataKey/Value to update the hard state of
+     * the share group.
+     *
+     * @param key   A ShareGroupStatePartitionMetadataKey key.
+     * @param value A ShareGroupStatePartitionMetadataValue record.
+     */
+    public void replay(
+        ShareGroupStatePartitionMetadataKey key,
+        ShareGroupStatePartitionMetadataValue value
+    ) {
+        String groupId = key.groupId();
+
+        getOrMaybeCreatePersistedShareGroup(groupId, false);
+
+        // Update timeline structures with info about initialized/deleted topics.
+        if (value == null) {
+            // Tombstone!
+            shareGroupPartitionMetadata.remove(groupId);
+        } else {
+
+            ShareGroupStatePartitionMetadataInfo info = new ShareGroupStatePartitionMetadataInfo(
+                value.initializedTopics().stream()
+                    .map(topicPartitionInfo -> Map.entry(topicPartitionInfo.topicId(), new HashSet<>(topicPartitionInfo.partitions())))
+                    .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue)),
+                value.deletingTopics().stream()
+                    .map(ShareGroupStatePartitionMetadataValue.TopicInfo::topicId)
+                    .collect(Collectors.toSet())
+            );
+
+            // Init java record.
+            shareGroupPartitionMetadata.put(groupId, info);
         }
     }
 

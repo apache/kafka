@@ -34,6 +34,8 @@ import org.apache.kafka.common.utils.Time;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mock;
 import org.mockito.Mockito;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -1471,22 +1473,14 @@ public class StreamsMembershipManagerTest {
         membershipManager.onHeartbeatRequestGenerated();
         assertFalse(groupLeft.isDone());
 
-        membershipManager.onHeartbeatFailure(true);
+        membershipManager.onRetriableHeartbeatFailure();
 
         assertTrue(groupLeft.isDone());
     }
 
-    @Test
-    public void testOnHeartbeatFatalFailure() {
-        testOnHeartbeatFailure(false);
-    }
-
-    @Test
-    public void testOnHeartbeatRetriableFailure() {
-        testOnHeartbeatFailure(true);
-    }
-
-    private void testOnHeartbeatFailure(boolean retriable) {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOnHeartbeatFailure(boolean retriable) {
         final MetricName failedRebalanceTotalMetricName = metrics.metricName(
             "failed-rebalance-total",
             CONSUMER_METRIC_GROUP_PREFIX + COORDINATOR_METRICS_SUFFIX
@@ -1503,7 +1497,11 @@ public class StreamsMembershipManagerTest {
         final double failedRebalancesTotalBefore = (double) metrics.metric(failedRebalanceTotalMetricName).metricValue();
         assertEquals(0L, failedRebalancesTotalBefore);
 
-        membershipManager.onHeartbeatFailure(retriable);
+        if (retriable) {
+            membershipManager.onRetriableHeartbeatFailure();
+        } else {
+            membershipManager.onFatalHeartbeatFailure();
+        }
 
         final double failedRebalancesTotalAfter = (double) metrics.metric(failedRebalanceTotalMetricName).metricValue();
         assertEquals(retriable ? 0L : 1L, failedRebalancesTotalAfter);

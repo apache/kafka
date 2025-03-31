@@ -112,9 +112,9 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     new AccessControlEntry(principal.toString, WILDCARD_HOST, aclOperation, aclPermissionType)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testUnauthorizedProduceAndConsume(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testUnauthorizedProduceAndConsume(groupProtocol: String): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition("topic", 0)
 
@@ -133,9 +133,9 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     assertEquals(Set(topic), consumeException.unauthorizedTopics.asScala)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testConsumeUnsubscribeWithoutGroupPermission(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testConsumeUnsubscribeWithoutGroupPermission(groupProtocol: String): Unit = {
     val topic = "topic"
 
     createTopic(topic, listenerName = interBrokerListenerName)
@@ -173,9 +173,9 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     })
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testConsumeCloseWithoutGroupPermission(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testConsumeCloseWithoutGroupPermission(groupProtocol: String): Unit = {
     val topic = "topic"
     createTopic(topic, listenerName = interBrokerListenerName)
 
@@ -211,9 +211,9 @@ class GroupAuthorizerIntegrationTest extends BaseRequestTest {
     })
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testAuthorizedProduceAndConsume(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testAuthorizedProduceAndConsume(groupProtocol: String): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition("topic", 0)
 

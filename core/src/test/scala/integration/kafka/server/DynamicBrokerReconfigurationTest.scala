@@ -175,9 +175,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     closeSasl()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testConfigDescribeUsingAdminClient(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testConfigDescribeUsingAdminClient(groupProtocol: String): Unit = {
 
     def verifyConfig(configName: String, configEntry: ConfigEntry, isSensitive: Boolean, isReadOnly: Boolean,
                      expectedProps: Properties): Unit = {
@@ -275,9 +275,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     assertEquals(List((CleanerConfig.LOG_CLEANER_THREADS_PROP, ConfigSource.DEFAULT_CONFIG)), synonymsList(logCleanerThreads))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testUpdatesUsingConfigProvider(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testUpdatesUsingConfigProvider(groupProtocol: String): Unit = {
     val PollingIntervalVal = f"$${file:polling.interval:interval}"
     val PollingIntervalUpdateVal = f"$${file:polling.interval:updinterval}"
     val SslTruststoreTypeVal = f"$${file:ssl.truststore.type:storetype}"
@@ -340,9 +340,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testKeyStoreAlter(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testKeyStoreAlter(groupProtocol: String): Unit = {
     val topic2 = "testtopic2"
     TestUtils.createTopicWithAdmin(adminClients.head, topic2, servers, controllerServers, numPartitions, replicationFactor = numServers)
 
@@ -409,9 +409,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     stopAndVerifyProduceConsume(producerThread, consumerThread)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testTrustStoreAlter(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testTrustStoreAlter(groupProtocol: String): Unit = {
     val producerBuilder = ProducerBuilder().listenerName(SecureInternal).securityProtocol(SecurityProtocol.SSL)
 
     // Producer with new keystore should fail to connect before truststore update
@@ -485,9 +485,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     waitForAuthenticationFailure(producerBuilder.keyStoreProps(sslProperties1))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testSocketServerConfigTest(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testSocketServerConfigTest(groupProtocol: String): Unit = {
     val updatedMaxConnections = "20"
     val connectionsIpsOverride = "1.2.3.4:1234,1.2.4.5:2345"
     val properties = new Properties()
@@ -509,9 +509,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testLogCleanerConfig(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testLogCleanerConfig(groupProtocol: String): Unit = {
     val (producerThread, consumerThread) = startProduceConsume(retries = 0, groupProtocol)
 
     verifyThreads("kafka-log-cleaner-thread-", countPerBroker = 1)
@@ -562,9 +562,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     verifyThreads("kafka-log-cleaner-thread-", countPerBroker = 2)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testConsecutiveConfigChange(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testConsecutiveConfigChange(groupProtocol: String): Unit = {
     val topic2 = "testtopic2"
     val topicProps = new Properties
     topicProps.put(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "2")
@@ -606,9 +606,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     assertEquals("2", log.config.originals().get(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG).toString) // Verify topic-level config still survives
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testDefaultTopicConfig(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testDefaultTopicConfig(groupProtocol: String): Unit = {
     val (producerThread, consumerThread) = startProduceConsume(retries = 0, groupProtocol)
 
     val props = new Properties
@@ -727,9 +727,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testUncleanLeaderElectionEnable(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testUncleanLeaderElectionEnable(groupProtocol: String): Unit = {
     // Create a topic with two replicas on brokers other than the controller
     val topic = "testtopic2"
     TestUtils.createTopicWithAdmin(adminClients.head, topic, servers, controllerServers, replicaAssignment = Map(0 -> Seq(0, 1)))
@@ -785,9 +785,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     consumer.commitSync()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testThreadPoolResize(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testThreadPoolResize(groupProtocol: String): Unit = {
 
     // In kraft mode, the StripedReplicaPlacer#initialize includes some randomization,
     // so the replica assignment is not deterministic.
@@ -939,9 +939,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testMetricsReporterUpdate(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testMetricsReporterUpdate(groupProtocol: String): Unit = {
     // Add a new metrics reporter
     val newProps = new Properties
     newProps.put(TestMetricsReporter.PollingIntervalProp, "100")
@@ -1033,9 +1033,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     stopAndVerifyProduceConsume(producerThread, consumerThread)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testReconfigureRemovedListener(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testReconfigureRemovedListener(groupProtocol: String): Unit = {
     val client = adminClients.head
     val broker = servers.head
     assertEquals(2, broker.config.dynamicConfig.reconfigurables.asScala.count(r => r.isInstanceOf[DataPlaneAcceptor]))
@@ -1062,9 +1062,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       s"failed to remove DataPlaneAcceptor. current: ${acceptors.map(_.endPoint.toString).mkString(",")}")
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testTransactionVerificationEnable(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testTransactionVerificationEnable(groupProtocol: String): Unit = {
     def verifyConfiguration(enabled: Boolean): Unit = {
       servers.foreach { server =>
         TestUtils.waitUntilTrue(() => server.logManager.producerStateManagerConfig.transactionVerificationEnabled == enabled, "Configuration was not updated.")
@@ -1094,9 +1094,9 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     verifyConfiguration(true)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testServersCanStartWithInvalidStaticConfigsAndValidDynamicConfigs(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testServersCanStartWithInvalidStaticConfigsAndValidDynamicConfigs(groupProtocol: String): Unit = {
     // modify snapshot interval config to explicitly take snapshot on a broker with valid dynamic configs
     val props = defaultStaticConfig(numServers)
     props.put(KRaftConfigs.METADATA_SNAPSHOT_MAX_INTERVAL_MS_CONFIG, "10000")
