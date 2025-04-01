@@ -2506,7 +2506,8 @@ public class SharePartition {
             return shareAcquiredRecords;
         // When FetchIsolation.TXN_COMMITTED is used as isolation level by the share group, we need to filter any
         // transactions that were aborted/did not commit due to timeout.
-        List<AcquiredRecords> result = filterAbortedTransactionalAcquiredRecords(fetchPartitionData.records.batches(), shareAcquiredRecords.acquiredRecords(), fetchPartitionData.abortedTransactions.get());
+        List<AcquiredRecords> result = filterAbortedTransactionalAcquiredRecords(fetchPartitionData.records.batches(),
+            shareAcquiredRecords.acquiredRecords(), fetchPartitionData.abortedTransactions.get());
         int acquiredCount = 0;
         for (AcquiredRecords records : result) {
             acquiredCount += (int) (records.lastOffset() - records.firstOffset() + 1);
@@ -2525,7 +2526,7 @@ public class SharePartition {
             List<RecordBatch> recordsToArchive = fetchAbortedTransactionRecordBatches(batches, abortedTransactions);
             for (RecordBatch recordBatch : recordsToArchive) {
                 // Archive the offsets/batches in the cached state.
-                NavigableMap<Long, InFlightBatch> subMap = fetchSubMap(recordBatch);
+                NavigableMap<Long, InFlightBatch> subMap = fetchSubMapOrException(recordBatch);
                 archiveAcquiredBatchRecords(subMap, recordBatch);
             }
             return filterRecordBatchesFromAcquiredRecords(acquiredRecords, recordsToArchive);
@@ -2656,19 +2657,25 @@ public class SharePartition {
         }
     }
 
-    private NavigableMap<Long, InFlightBatch> fetchSubMap(RecordBatch recordBatch) {
-        lock.writeLock().lock();
+    /**
+     * This function fetches the sub map from cachedState where all the offset details present in the recordBatch can be referred to
+     * OR it gives an exception if those offsets are not present in cachedState.
+     * @param recordBatch The record batch for which we want to find the sub map.
+     * @return the sub map containing all the offset details.
+     */
+    private NavigableMap<Long, InFlightBatch> fetchSubMapOrException(RecordBatch recordBatch) {
+        lock.readLock().lock();
         try {
-            Map.Entry<Long, InFlightBatch> floorOffset = cachedState.floorEntry(recordBatch.baseOffset());
-            if (floorOffset == null) {
+            Map.Entry<Long, InFlightBatch> floorEntry = cachedState.floorEntry(recordBatch.baseOffset());
+            if (floorEntry == null) {
                 log.debug("Fetched batch record {} not found for share partition: {}-{}", recordBatch, groupId,
                     topicIdPartition);
                 throw new InvalidRecordStateException(
                     "Batch record not found. The request batch offsets are not found in the cache.");
             }
-            return cachedState.subMap(floorOffset.getKey(), true, recordBatch.lastOffset(), true);
+            return cachedState.subMap(floorEntry.getKey(), true, recordBatch.lastOffset(), true);
         } finally {
-            lock.writeLock().unlock();
+            lock.readLock().unlock();
         }
     }
 
@@ -2677,34 +2684,29 @@ public class SharePartition {
         Iterable<? extends RecordBatch> batches,
         List<FetchResponseData.AbortedTransaction> abortedTransactions
     ) {
-        lock.writeLock().lock();
-        try {
-            PriorityQueue<FetchResponseData.AbortedTransaction> orderedAbortedTransactions = orderedAbortedTransactions(abortedTransactions);
-            Set<Long> abortedProducerIds = new HashSet<>();
-            List<RecordBatch> recordsToArchive = new ArrayList<>();
+        PriorityQueue<FetchResponseData.AbortedTransaction> orderedAbortedTransactions = orderedAbortedTransactions(abortedTransactions);
+        Set<Long> abortedProducerIds = new HashSet<>();
+        List<RecordBatch> recordsToArchive = new ArrayList<>();
 
-            for (RecordBatch currentBatch : batches) {
-                if (currentBatch.hasProducerId()) {
-                    // remove from the aborted transactions queue, all aborted transactions which have begun before the
-                    // current batch's last offset and add the associated producerIds to the aborted producer set.
-                    while (!orderedAbortedTransactions.isEmpty() && orderedAbortedTransactions.peek().firstOffset() <= currentBatch.lastOffset()) {
-                        FetchResponseData.AbortedTransaction abortedTransaction = orderedAbortedTransactions.poll();
-                        abortedProducerIds.add(abortedTransaction.producerId());
-                    }
-                    long producerId = currentBatch.producerId();
-                    if (containsAbortMarker(currentBatch)) {
-                        abortedProducerIds.remove(producerId);
-                    } else if (isBatchAborted(currentBatch, abortedProducerIds)) {
-                        log.debug("Skipping aborted record batch for share partition: {}-{} with producerId {} and " +
-                            "offsets {} to {}", groupId, topicIdPartition, producerId, currentBatch.baseOffset(), currentBatch.lastOffset());
-                        recordsToArchive.add(currentBatch);
-                    }
+        for (RecordBatch currentBatch : batches) {
+            if (currentBatch.hasProducerId()) {
+                // remove from the aborted transactions queue, all aborted transactions which have begun before the
+                // current batch's last offset and add the associated producerIds to the aborted producer set.
+                while (!orderedAbortedTransactions.isEmpty() && orderedAbortedTransactions.peek().firstOffset() <= currentBatch.lastOffset()) {
+                    FetchResponseData.AbortedTransaction abortedTransaction = orderedAbortedTransactions.poll();
+                    abortedProducerIds.add(abortedTransaction.producerId());
+                }
+                long producerId = currentBatch.producerId();
+                if (containsAbortMarker(currentBatch)) {
+                    abortedProducerIds.remove(producerId);
+                } else if (isBatchAborted(currentBatch, abortedProducerIds)) {
+                    log.debug("Skipping aborted record batch for share partition: {}-{} with producerId {} and " +
+                        "offsets {} to {}", groupId, topicIdPartition, producerId, currentBatch.baseOffset(), currentBatch.lastOffset());
+                    recordsToArchive.add(currentBatch);
                 }
             }
-            return recordsToArchive;
-        } finally {
-            lock.writeLock().unlock();
         }
+        return recordsToArchive;
     }
 
     private PriorityQueue<FetchResponseData.AbortedTransaction> orderedAbortedTransactions(List<FetchResponseData.AbortedTransaction> abortedTransactions) {
@@ -2729,7 +2731,6 @@ public class SharePartition {
 
         Record firstRecord = batchIterator.next();
         return ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
-
     }
 
     // Visible for testing. Should only be used for testing purposes.

@@ -269,20 +269,9 @@ public class SharePartitionManager implements AutoCloseable {
             .rotate(topicIdPartitions, new PartitionRotateMetadata(sessionEpoch));
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
-        if (groupConfigManager.groupConfig(groupId).isEmpty()) {
-            processShareFetch(new ShareFetch(fetchParams, groupId, memberId, future, rotatedTopicIdPartitions, batchSize, maxFetchRecords, brokerTopicStats));
-        } else {
-            FetchParams updatedFetchParams = new FetchParams(
-                fetchParams.replicaId,
-                fetchParams.replicaEpoch,
-                fetchParams.maxWaitMs,
-                fetchParams.minBytes,
-                fetchParams.maxBytes,
-                FetchIsolation.of(FetchRequest.CONSUMER_REPLICA_ID, groupConfigManager.groupConfig(groupId).get().shareIsolationLevel()),
-                fetchParams.clientMetadata
-            );
-            processShareFetch(new ShareFetch(updatedFetchParams, groupId, memberId, future, rotatedTopicIdPartitions, batchSize, maxFetchRecords, brokerTopicStats));
-        }
+        FetchParams updatedFetchParams = maybUpdateFetchParams(fetchParams, groupId);
+        processShareFetch(new ShareFetch(updatedFetchParams, groupId, memberId, future, rotatedTopicIdPartitions, batchSize, maxFetchRecords, brokerTopicStats));
+
         return future;
     }
 
@@ -761,6 +750,21 @@ public class SharePartitionManager implements AutoCloseable {
                 brokerTopicStats.topicStats(topic).failedShareAcknowledgementRequestRate().mark();
             });
         };
+    }
+
+    private FetchParams maybUpdateFetchParams(FetchParams fetchParams, String groupId) {
+        if (groupConfigManager.groupConfig(groupId).isEmpty()) {
+            return fetchParams;
+        }
+        return new FetchParams(
+            fetchParams.replicaId,
+            fetchParams.replicaEpoch,
+            fetchParams.maxWaitMs,
+            fetchParams.minBytes,
+            fetchParams.maxBytes,
+            FetchIsolation.of(FetchRequest.CONSUMER_REPLICA_ID, groupConfigManager.groupConfig(groupId).get().shareIsolationLevel()),
+            fetchParams.clientMetadata
+        );
     }
 
     /**

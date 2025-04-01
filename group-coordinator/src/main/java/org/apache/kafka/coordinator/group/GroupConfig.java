@@ -309,6 +309,9 @@ public final class GroupConfig extends AbstractConfig {
         return ShareGroupAutoOffsetResetStrategy.fromString(SHARE_AUTO_OFFSET_RESET_DEFAULT);
     }
 
+    /**
+     * The default share group isolation level.
+     */
     public static IsolationLevel defaultShareIsolationLevel() {
         return IsolationLevel.valueOf(SHARE_ISOLATION_LEVEL_DEFAULT.toUpperCase(Locale.ROOT));
     }
@@ -376,6 +379,9 @@ public final class GroupConfig extends AbstractConfig {
         return streamsNumStandbyReplicas;
     }
 
+    /**
+     * The share group isolation level.
+     */
     public IsolationLevel shareIsolationLevel() {
         if (shareIsolationLevel == null) {
             throw new IllegalArgumentException("Share isolation level is null");
