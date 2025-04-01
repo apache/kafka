@@ -23,7 +23,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
-import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -93,8 +92,6 @@ class ProducerCompressionTest {
         producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compression);
         producerProps.put(ProducerConfig.BATCH_SIZE_CONFIG, "66000");
         producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "200");
-        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
-        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, ByteArraySerializer.class);
         Producer<byte[], byte[]> producer = cluster.producer(producerProps);
         Consumer<byte[], byte[]> consumer = cluster.consumer(Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, protocol));
         try (producer) {
