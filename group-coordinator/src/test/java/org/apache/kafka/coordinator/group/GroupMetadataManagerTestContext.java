@@ -108,8 +108,13 @@ import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupBuilder;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupBuilder;
+import org.apache.kafka.coordinator.group.streams.MockTaskAssignor;
+import org.apache.kafka.coordinator.group.streams.StreamsGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupBuilder;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
+import org.apache.kafka.coordinator.group.streams.StreamsGroupMember;
+import org.apache.kafka.coordinator.group.streams.TasksTuple;
+import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
@@ -158,6 +163,7 @@ import static org.mockito.Mockito.mock;
 public class GroupMetadataManagerTestContext {
     static final String DEFAULT_CLIENT_ID = "client";
     static final InetAddress DEFAULT_CLIENT_ADDRESS = InetAddress.getLoopbackAddress();
+    static final String DEFAULT_PROCESS_ID = "process-id";
 
     private static class GroupCoordinatorConfigContext extends GroupCoordinatorConfig {
         GroupCoordinatorConfigContext(AbstractConfig config) {
@@ -465,6 +471,7 @@ public class GroupMetadataManagerTestContext {
         private final List<ShareGroupBuilder> shareGroupBuilders = new ArrayList<>();
         private final Map<String, Object> config = new HashMap<>();
         private Optional<Authorizer> authorizer = Optional.empty();
+        private List<TaskAssignor> streamsGroupAssignors = Collections.singletonList(new MockTaskAssignor("mock"));
 
         public Builder withConfig(String key, Object value) {
             config.put(key, value);
@@ -500,6 +507,11 @@ public class GroupMetadataManagerTestContext {
             this.authorizer = Optional.of(authorizer);
             return this;
         }
+        
+        public Builder withStreamsGroupTaskAssignors(List<TaskAssignor> assignors) {
+            this.streamsGroupAssignors = assignors;
+            return this;
+        }
 
         public GroupMetadataManagerTestContext build() {
             if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
@@ -531,6 +543,7 @@ public class GroupMetadataManagerTestContext {
                     .withShareGroupAssignor(shareGroupAssignor)
                     .withGroupConfigManager(groupConfigManager)
                     .withAuthorizer(authorizer)
+                    .withStreamsGroupAssignors(streamsGroupAssignors)
                     .build(),
                 groupConfigManager
             );
@@ -607,6 +620,14 @@ public class GroupMetadataManagerTestContext {
             .state();
     }
 
+    public StreamsGroup.StreamsGroupState streamsGroupState(
+        String groupId
+    ) {
+        return groupMetadataManager
+            .streamsGroup(groupId)
+            .state();
+    }
+
     public MemberState consumerGroupMemberState(
         String groupId,
         String memberId
@@ -617,6 +638,16 @@ public class GroupMetadataManagerTestContext {
             .state();
     }
 
+    public org.apache.kafka.coordinator.group.streams.MemberState streamsGroupMemberState(
+        String groupId,
+        String memberId
+    ) {
+        return groupMetadataManager
+            .streamsGroup(groupId)
+            .getMemberOrThrow(memberId)
+            .state();
+    }
+    
     public CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> consumerGroupHeartbeat(
         ConsumerGroupHeartbeatRequestData request
     ) {
@@ -1745,5 +1776,23 @@ public class GroupMetadataManagerTestContext {
 
     public void updateGroupConfig(String groupId, Properties newGroupConfig) {
         groupConfigManager.updateGroupConfig(groupId, newGroupConfig);
+    }
+
+    public static StreamsGroupMember.Builder streamsGroupMemberBuilderWithDefaults(String memberId) {
+        return new StreamsGroupMember.Builder(memberId)
+            .setState(org.apache.kafka.coordinator.group.streams.MemberState.STABLE)
+            .setAssignedTasks(TasksTuple.EMPTY)
+            .setTasksPendingRevocation(TasksTuple.EMPTY)
+            .setClientId(DEFAULT_CLIENT_ID)
+            .setClientHost(DEFAULT_CLIENT_ADDRESS.toString())
+            .setRackId(null)
+            .setInstanceId(null)
+            .setRebalanceTimeoutMs(1500)
+            .setAssignedTasks(TasksTuple.EMPTY)
+            .setTasksPendingRevocation(TasksTuple.EMPTY)
+            .setTopologyEpoch(0)
+            .setClientTags(Map.of())
+            .setProcessId(DEFAULT_PROCESS_ID)
+            .setUserEndpoint(null);
     }
 }

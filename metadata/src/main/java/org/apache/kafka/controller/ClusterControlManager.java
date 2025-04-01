@@ -521,7 +521,7 @@ public class ClusterControlManager {
      * @param brokerId      The broker id to track.
      * @param brokerEpoch   The broker epoch to track.
      *
-     * @returns             True only if the ClusterControlManager is active.
+     * @return              True only if the ClusterControlManager is active.
      */
     boolean trackBrokerHeartbeat(int brokerId, long brokerEpoch) {
         BrokerHeartbeatManager manager = heartbeatManager;
