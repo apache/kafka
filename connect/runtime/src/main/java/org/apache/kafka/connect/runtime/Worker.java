@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.commons.lang3.StringUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.AlterConsumerGroupOffsetsOptions;
@@ -1897,6 +1898,13 @@ public final class Worker {
             Map<String, Object> consumerProps = baseConsumerConfigs(
                     id.connector(),  "connector-consumer-" + id, config, connectorConfig, connectorClass,
                     connectorClientConfigOverridePolicy, kafkaClusterId, ConnectorType.SINK);
+            String overrideClientId = connectorConfig.getString(
+                    ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX + ConsumerConfig.CLIENT_ID_CONFIG
+            );
+            if (StringUtils.isNotBlank(overrideClientId)) {
+                // Ensure each consumer has a unique client ID to avoid metric registration conflicts.
+                consumerProps.put(ConsumerConfig.CLIENT_ID_CONFIG, overrideClientId + "-" + id.task());
+            }
             KafkaConsumer<byte[], byte[]> consumer = new KafkaConsumer<>(consumerProps);
 
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverterPlugin,
