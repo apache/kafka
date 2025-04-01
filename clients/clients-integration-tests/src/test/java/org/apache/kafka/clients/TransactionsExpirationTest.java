@@ -297,7 +297,7 @@ public class TransactionsExpirationTest {
                     ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
                     records.forEach(consumerRecords::add);
                     return consumerRecords.size() == expectedCount;
-                }, "Consumer with protocol " + groupProtocol.name + " should consume " + expectedCount + " records, but get " + consumerRecords.size());
+                }, 15_000, () -> "Consumer with protocol " + groupProtocol.name + " should consume " + expectedCount + " records, but get " + consumerRecords.size());
             }
             consumerRecords.forEach(record -> {
                 Iterator<Header> headers = record.headers().headers(HEADER_KEY).iterator();
