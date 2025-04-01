@@ -27,7 +27,7 @@ import kafka.server.ReplicaManager.{AtMinIsrPartitionCountMetricName, FailedIsrU
 import kafka.server.share.DelayedShareFetch
 import kafka.utils._
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.internals.{Plugin, Topic}
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
 import org.apache.kafka.common.message.DescribeLogDirsResponseData.DescribeLogDirsTopic
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
@@ -338,7 +338,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   // Visible for testing
-  private[server] val replicaSelectorOpt: Option[ReplicaSelector] = createReplicaSelector()
+  private[server] val replicaSelectorPlugin: Option[Plugin[ReplicaSelector]] = createReplicaSelector(metrics)
 
   metricsGroup.newGauge(LeaderCountMetricName, () => leaderPartitionsIterator.size)
   // Visible for testing
@@ -624,6 +624,50 @@ class ReplicaManager(val config: KafkaConfig,
   def addToActionQueue(action: Runnable): Unit = defaultActionQueue.add(action)
 
   /**
+   * Append messages to leader replicas of the partition, without waiting on replication.
+   *
+   * Noted that all pending delayed check operations are stored in a queue. All callers to ReplicaManager.appendRecordsToLeader()
+   * are expected to call ActionQueue.tryCompleteActions for all affected partitions, without holding any conflicting
+   * locks.
+   *
+   * @param requiredAcks                  the required acks -- it is only used to ensure that the append meets the
+   *                                      required acks.
+   * @param internalTopicsAllowed         boolean indicating whether internal topics can be appended to
+   * @param origin                        source of the append request (ie, client, replication, coordinator)
+   * @param entriesPerPartition           the records per partition to be appended
+   * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
+   *                                      thread calling this method
+   * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
+   * @param verificationGuards            the mapping from topic partition to verification guards if transaction verification is used
+   */
+  def appendRecordsToLeader(
+    requiredAcks: Short,
+    internalTopicsAllowed: Boolean,
+    origin: AppendOrigin,
+    entriesPerPartition: Map[TopicPartition, MemoryRecords],
+    requestLocal: RequestLocal = RequestLocal.noCaching,
+    actionQueue: ActionQueue = this.defaultActionQueue,
+    verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty
+  ): Map[TopicPartition, LogAppendResult] = {
+    val startTimeMs = time.milliseconds
+    val localProduceResultsWithTopicId = appendToLocalLog(
+      internalTopicsAllowed = internalTopicsAllowed,
+      origin,
+      entriesPerPartition,
+      requiredAcks,
+      requestLocal,
+      verificationGuards.toMap
+    )
+    debug("Produce to local log in %d ms".format(time.milliseconds - startTimeMs))
+
+    addCompletePurgatoryAction(actionQueue, localProduceResultsWithTopicId)
+
+    localProduceResultsWithTopicId.map {
+      case (k, v) => (k.topicPartition, v)
+    }
+  }
+
+  /**
    * Append messages to leader replicas of the partition, and wait for them to be replicated to other replicas;
    * the callback function will be triggered either when timeout or the required acks are satisfied;
    * if the callback function itself is already synchronized on some object then pass this object to avoid deadlock.
@@ -642,7 +686,6 @@ class ReplicaManager(val config: KafkaConfig,
    * @param recordValidationStatsCallback callback for updating stats on record conversions
    * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
    *                                      thread calling this method
-   * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
    * @param verificationGuards            the mapping from topic partition to verification guards if transaction verification is used
    */
   def appendRecords(timeout: Long,
@@ -654,23 +697,24 @@ class ReplicaManager(val config: KafkaConfig,
                     delayedProduceLock: Option[Lock] = None,
                     recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
                     requestLocal: RequestLocal = RequestLocal.noCaching,
-                    actionQueue: ActionQueue = this.defaultActionQueue,
                     verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
     if (!isValidRequiredAcks(requiredAcks)) {
       sendInvalidRequiredAcksResponse(entriesPerPartition, responseCallback)
       return
     }
 
-    val sTime = time.milliseconds
-    val localProduceResultsWithTopicId = appendToLocalLog(internalTopicsAllowed = internalTopicsAllowed,
-      origin, entriesPerPartition, requiredAcks, requestLocal, verificationGuards.toMap)
-    debug("Produce to local log in %d ms".format(time.milliseconds - sTime))
-    val localProduceResults : Map[TopicPartition, LogAppendResult] = localProduceResultsWithTopicId.map {
-      case(k, v) => (k.topicPartition, v)}
+    val localProduceResults = appendRecordsToLeader(
+      requiredAcks,
+      internalTopicsAllowed,
+      origin,
+      entriesPerPartition,
+      requestLocal,
+      defaultActionQueue,
+      verificationGuards
+    )
 
     val produceStatus = buildProducePartitionStatus(localProduceResults)
 
-    addCompletePurgatoryAction(actionQueue, localProduceResultsWithTopicId)
     recordValidationStatsCallback(localProduceResults.map { case (k, v) =>
       k -> v.info.recordValidationStats
     })
@@ -698,7 +742,6 @@ class ReplicaManager(val config: KafkaConfig,
    * @param recordValidationStatsCallback callback for updating stats on record conversions
    * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
    *                                      thread calling this method
-   * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
    * @param transactionSupportedOperation determines the supported Operation based on the client's Request api version
    *
    * The responseCallback is wrapped so that it is scheduled on a request handler thread. There, it should be called with
@@ -712,7 +755,6 @@ class ReplicaManager(val config: KafkaConfig,
                           responseCallback: Map[TopicPartition, PartitionResponse] => Unit,
                           recordValidationStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
                           requestLocal: RequestLocal = RequestLocal.noCaching,
-                          actionQueue: ActionQueue = this.defaultActionQueue,
                           transactionSupportedOperation: TransactionSupportedOperation): Unit = {
 
     val transactionalProducerInfo = mutable.HashSet[(Long, Short)]()
@@ -779,7 +821,6 @@ class ReplicaManager(val config: KafkaConfig,
         responseCallback = newResponseCallback,
         recordValidationStatsCallback = recordValidationStatsCallback,
         requestLocal = newRequestLocal,
-        actionQueue = actionQueue,
         verificationGuards = verificationGuards
       )
     }
@@ -1723,8 +1764,8 @@ class ReplicaManager(val config: KafkaConfig,
           metadata => findPreferredReadReplica(partition, metadata, params.replicaId, fetchInfo.fetchOffset, fetchTimeMs))
 
         if (preferredReadReplica.isDefined) {
-          replicaSelectorOpt.foreach { selector =>
-            debug(s"Replica selector ${selector.getClass.getSimpleName} returned preferred replica " +
+          replicaSelectorPlugin.foreach { selector =>
+            debug(s"Replica selector ${selector.get.getClass.getSimpleName} returned preferred replica " +
               s"${preferredReadReplica.get} for ${params.clientMetadata}")
           }
           // If a preferred read-replica is set, skip the read
@@ -1890,7 +1931,7 @@ class ReplicaManager(val config: KafkaConfig,
       if (FetchRequest.isValidBrokerId(replicaId))
         None
       else {
-        replicaSelectorOpt.flatMap { replicaSelector =>
+        replicaSelectorPlugin.flatMap { replicaSelector =>
           val replicaEndpoints = metadataCache.getPartitionReplicaEndpoints(partition.topicPartition,
             new ListenerName(clientMetadata.listenerName)).asScala
           val replicaInfoSet = mutable.Set[ReplicaView]()
@@ -1921,7 +1962,7 @@ class ReplicaManager(val config: KafkaConfig,
           replicaInfoSet.add(leaderReplica)
 
           val partitionInfo = new DefaultPartitionView(replicaInfoSet.asJava, leaderReplica)
-          replicaSelector.select(partition.topicPartition, clientMetadata, partitionInfo).toScala.collect {
+          replicaSelector.get.select(partition.topicPartition, clientMetadata, partitionInfo).toScala.collect {
             // Even though the replica selector can return the leader, we don't want to send it out with the
             // FetchResponse, so we exclude it here
             case selected if !selected.endpoint.isEmpty && selected != leaderReplica => selected.endpoint.id
@@ -2565,7 +2606,7 @@ class ReplicaManager(val config: KafkaConfig,
     delayedShareFetchPurgatory.shutdown()
     if (checkpointHW)
       checkpointHighWatermarks()
-    replicaSelectorOpt.foreach(_.close)
+    replicaSelectorPlugin.foreach(_.close)
     removeAllTopicMetrics()
     addPartitionsToTxnManager.foreach(_.shutdown())
     info("Shut down completely")
@@ -2587,11 +2628,11 @@ class ReplicaManager(val config: KafkaConfig,
     new ReplicaAlterLogDirsManager(config, this, quotaManager, brokerTopicStats, directoryEventHandler)
   }
 
-  private def createReplicaSelector(): Option[ReplicaSelector] = {
+  private def createReplicaSelector(metrics: Metrics): Option[Plugin[ReplicaSelector]] = {
     config.replicaSelectorClassName.map { className =>
       val tmpReplicaSelector: ReplicaSelector = Utils.newInstance(className, classOf[ReplicaSelector])
       tmpReplicaSelector.configure(config.originals())
-      tmpReplicaSelector
+      Plugin.wrapInstance(tmpReplicaSelector, metrics, className)
     }
   }
 

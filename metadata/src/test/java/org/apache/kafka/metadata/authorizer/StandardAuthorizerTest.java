@@ -56,7 +56,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletionStage;
-import java.util.concurrent.atomic.AtomicLong;
 
 import static org.apache.kafka.common.acl.AclOperation.ALL;
 import static org.apache.kafka.common.acl.AclOperation.ALTER;
@@ -251,8 +250,6 @@ public class StandardAuthorizerTest {
         authorizer.completeInitialLoad();
         return authorizer;
     }
-
-    private static final AtomicLong NEXT_ID = new AtomicLong(0);
 
     static StandardAcl newFooAcl(AclOperation op, AclPermissionType permission) {
         return new StandardAcl(

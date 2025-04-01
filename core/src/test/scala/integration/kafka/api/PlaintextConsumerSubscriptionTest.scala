@@ -41,9 +41,9 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
    * metadata refresh the consumer becomes subscribed to this new topic and all partitions
    * of that topic are assigned to it.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testPatternSubscription(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testPatternSubscription(groupProtocol: String): Unit = {
     val numRecords = 10000
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
@@ -99,9 +99,9 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
    * The metadata refresh interval is intentionally increased to a large enough value to guarantee
    * that it is the subscription call that triggers a metadata refresh, and not the timeout.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testSubsequentPatternSubscription(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testSubsequentPatternSubscription(groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.METADATA_MAX_AGE_CONFIG, "30000")
     val consumer = createConsumer()
 
@@ -151,9 +151,9 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
    * When consumer unsubscribes from all its subscriptions, it is expected that its
    * assignments are cleared right away.
    */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testPatternUnsubscription(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testPatternUnsubscription(groupProtocol: String): Unit = {
     val numRecords = 10000
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
@@ -178,9 +178,9 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
     assertEquals(0, consumer.assignment().size)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
-  def testRe2JPatternSubscription(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
+  def testRe2JPatternSubscription(groupProtocol: String): Unit = {
     val topic1 = "tblablac" // matches subscribed pattern
     createTopic(topic1, 2, brokerCount)
 
@@ -215,9 +215,9 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
     awaitAssignment(consumer, assignment)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
-  def testRe2JPatternSubscriptionFetch(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
+  def testRe2JPatternSubscriptionFetch(groupProtocol: String): Unit = {
     val topic1 = "topic1" // matches subscribed pattern
     createTopic(topic1, 2, brokerCount)
 
@@ -242,9 +242,9 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
     consumeAndVerifyRecords(consumer = consumer, numRecords = totalRecords.toInt, startingOffset = 0, startingTimestamp = startingTimestamp, tp = tp)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
-  def testRe2JPatternExpandSubscription(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
+  def testRe2JPatternExpandSubscription(groupProtocol: String): Unit = {
     val topic1 = "topic1" // matches first pattern
     createTopic(topic1, 2, brokerCount)
 
@@ -273,9 +273,9 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
     awaitAssignment(consumer, expandedAssignment)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
-  def testRe2JPatternSubscriptionAndTopicSubscription(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
+  def testRe2JPatternSubscriptionAndTopicSubscription(groupProtocol: String): Unit = {
     val topic1 = "topic1" // matches subscribed pattern
     createTopic(topic1, 2, brokerCount)
 
@@ -313,9 +313,9 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
     awaitAssignment(consumer, patternAssignment)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly"))
-  def testRe2JPatternSubscriptionInvalidRegex(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersConsumerGroupProtocolOnly"))
+  def testRe2JPatternSubscriptionInvalidRegex(groupProtocol: String): Unit = {
     val consumer = createConsumer()
     assertEquals(0, consumer.assignment().size)
 
@@ -328,9 +328,9 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
     consumer.unsubscribe()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testExpandingTopicSubscriptions(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testExpandingTopicSubscriptions(groupProtocol: String): Unit = {
     val otherTopic = "other"
     val initialAssignment = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1))
     val consumer = createConsumer()
@@ -343,9 +343,9 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
     awaitAssignment(consumer, expandedAssignment)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testShrinkingTopicSubscriptions(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testShrinkingTopicSubscriptions(groupProtocol: String): Unit = {
     val otherTopic = "other"
     createTopic(otherTopic, 2, brokerCount)
     val initialAssignment = Set(new TopicPartition(topic, 0), new TopicPartition(topic, 1), new TopicPartition(otherTopic, 0), new TopicPartition(otherTopic, 1))
@@ -358,9 +358,9 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
     awaitAssignment(consumer, shrunkenAssignment)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testUnsubscribeTopic(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testUnsubscribeTopic(groupProtocol: String): Unit = {
     if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
       this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "100") // timeout quickly to avoid slow test
       this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "30")
@@ -377,9 +377,9 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
     assertEquals(0, consumer.assignment.size())
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testSubscribeInvalidTopicCanUnsubscribe(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testSubscribeInvalidTopicCanUnsubscribe(groupProtocol: String): Unit = {
     val consumer = createConsumer()
 
     setupSubscribeInvalidTopic(consumer)
@@ -393,9 +393,9 @@ class PlaintextConsumerSubscriptionTest extends AbstractConsumerTest {
     })
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testSubscribeInvalidTopicCanClose(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testSubscribeInvalidTopicCanClose(groupProtocol: String): Unit = {
     val consumer = createConsumer()
 
     setupSubscribeInvalidTopic(consumer)
