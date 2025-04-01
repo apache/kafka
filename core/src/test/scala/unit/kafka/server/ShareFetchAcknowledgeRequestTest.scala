@@ -2298,7 +2298,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
   )
   def testShareFetchRequestWithMaxRecordsAndBatchSize(): Unit = {
     val groupId: String = "group"
-    val memberId = Uuid.randomUuid()
+    val memberId = Uuid.randomUuid
     val topic = "topic"
     val partition = 0
 
@@ -2322,20 +2322,20 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMap, maxRecords = 1, batchSize = 1)
     val shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
-    val shareFetchResponseData = shareFetchResponse.data()
+    val shareFetchResponseData = shareFetchResponse.data
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
-    assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(1, shareFetchResponseData.responses.size)
+    assertEquals(topicId, shareFetchResponseData.responses.get(0).topicId)
+    assertEquals(1, shareFetchResponseData.responses.get(0).partitions.size)
 
     val expectedPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
-      .setErrorCode(Errors.NONE.code())
-      .setAcknowledgeErrorCode(Errors.NONE.code())
+      .setErrorCode(Errors.NONE.code)
+      .setAcknowledgeErrorCode(Errors.NONE.code)
       .setAcquiredRecords(expectedAcquiredRecords(util.List.of(0), util.List.of(0), util.List.of(1)))
 
-    val partitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    val partitionData = shareFetchResponseData.responses.get(0).partitions.get(0)
     compareFetchResponsePartitions(expectedPartitionData, partitionData)
   }
 
@@ -2365,7 +2365,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
   )
   def testShareFetchRequestMultipleBatchesWithMaxRecordsAndBatchSize(): Unit = {
     val groupId: String = "group"
-    val memberId = Uuid.randomUuid()
+    val memberId = Uuid.randomUuid
     val topic = "topic"
     val partition = 0
 
@@ -2389,20 +2389,20 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, acknowledgementsMap, maxRecords = 5, batchSize = 1)
     val shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
-    val shareFetchResponseData = shareFetchResponse.data()
+    val shareFetchResponseData = shareFetchResponse.data
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
     assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
-    assertEquals(1, shareFetchResponseData.responses().size())
-    assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
-    assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
+    assertEquals(1, shareFetchResponseData.responses.size)
+    assertEquals(topicId, shareFetchResponseData.responses.get(0).topicId)
+    assertEquals(1, shareFetchResponseData.responses.get(0).partitions.size)
 
     val expectedPartitionData = new ShareFetchResponseData.PartitionData()
       .setPartitionIndex(partition)
-      .setErrorCode(Errors.NONE.code())
-      .setAcknowledgeErrorCode(Errors.NONE.code())
+      .setErrorCode(Errors.NONE.code)
+      .setAcknowledgeErrorCode(Errors.NONE.code)
       .setAcquiredRecords(expectedAcquiredRecords(util.List.of(0, 1, 2, 3, 4), util.List.of(0, 1, 2, 3, 4), util.List.of(1, 1, 1, 1, 1)))
 
-    val partitionData = shareFetchResponseData.responses().get(0).partitions().get(0)
+    val partitionData = shareFetchResponseData.responses.get(0).partitions.get(0)
     compareFetchResponsePartitions(expectedPartitionData, partitionData)
   }
 
