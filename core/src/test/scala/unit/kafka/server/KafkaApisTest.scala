@@ -2088,7 +2088,6 @@ class KafkaApisTest extends Logging {
         responseCallback.capture(),
         any(),
         any(),
-        any(),
         any()
       )).thenAnswer(_ => responseCallback.getValue.apply(Map(tp -> new PartitionResponse(Errors.INVALID_PRODUCER_EPOCH))))
 
@@ -2148,7 +2147,6 @@ class KafkaApisTest extends Logging {
         any(),
         any(),
         responseCallback.capture(),
-        any(),
         any(),
         any(),
         any())
@@ -2215,7 +2213,6 @@ class KafkaApisTest extends Logging {
         responseCallback.capture(),
         any(),
         any(),
-        any(),
         any())
       ).thenAnswer(_ => responseCallback.getValue.apply(Map(tp -> new PartitionResponse(Errors.NOT_LEADER_OR_FOLLOWER))))
 
@@ -2277,7 +2274,6 @@ class KafkaApisTest extends Logging {
         any(),
         any(),
         responseCallback.capture(),
-        any(),
         any(),
         any(),
         any())
@@ -2343,7 +2339,6 @@ class KafkaApisTest extends Logging {
           anyShort,
           ArgumentMatchers.eq(false),
           ArgumentMatchers.eq(transactionalId),
-          any(),
           any(),
           any(),
           any(),
@@ -2492,7 +2487,6 @@ class KafkaApisTest extends Logging {
       any(),
       any(),
       ArgumentMatchers.eq(requestLocal),
-      any(),
       any()
     )).thenAnswer(_ => responseCallback.getValue.apply(Map(tp2 -> new PartitionResponse(Errors.NONE))))
     kafkaApis = createKafkaApis()
@@ -2549,7 +2543,6 @@ class KafkaApisTest extends Logging {
       any(),
       any(),
       ArgumentMatchers.eq(requestLocal),
-      any(),
       any())
   }
 
@@ -2626,7 +2619,6 @@ class KafkaApisTest extends Logging {
       any(),
       any(),
       ArgumentMatchers.eq(RequestLocal.noCaching),
-      any(),
       any()
     )).thenAnswer { _ =>
       responseCallback.getValue.apply(
@@ -8881,7 +8873,7 @@ class KafkaApisTest extends Logging {
     })
 
     val data = new ListOffsetsRequestData().setTopics(targetTimes).setReplicaId(ListOffsetsRequest.CONSUMER_REPLICA_ID)
-    val listOffsetRequest = ListOffsetsRequest.parse(MessageUtil.toByteBuffer(data, version), version)
+    val listOffsetRequest = ListOffsetsRequest.parse(MessageUtil.toByteBufferAccessor(data, version), version)
     val request = buildRequest(listOffsetRequest)
 
     kafkaApis = createKafkaApis()
@@ -8981,10 +8973,10 @@ class KafkaApisTest extends Logging {
       any()
     )
     val response = capturedResponse.getValue
-    val buffer = MessageUtil.toByteBuffer(
+    val buffer = MessageUtil.toByteBufferAccessor(
       response.data,
       request.context.header.apiVersion
-    )
+    ).buffer()
     AbstractResponse.parseResponse(
       request.context.header.apiKey,
       buffer,
@@ -9002,10 +8994,10 @@ class KafkaApisTest extends Logging {
       any()
     )
     val response = capturedResponse.getValue
-    val buffer = MessageUtil.toByteBuffer(
+    val buffer = MessageUtil.toByteBufferAccessor(
       response.data,
       request.context.header.apiVersion
-    )
+    ).buffer()
 
     // Create the RequestChannel.Response that is created when sendResponse is called in order to update the metrics.
     val sendResponse = new RequestChannel.SendResponse(
@@ -9652,7 +9644,7 @@ class KafkaApisTest extends Logging {
   def testStreamsGroupHeartbeatReturnsUnsupportedVersion(): Unit = {
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group")
 
-    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest).build())
+    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
     metadataCache = {
       val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
       val delta = new MetadataDelta(MetadataImage.EMPTY);
