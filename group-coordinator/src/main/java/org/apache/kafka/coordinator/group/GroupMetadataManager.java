@@ -2922,17 +2922,19 @@ public class GroupMetadataManager {
         }
 
         addInitializingTopicsRecords(groupId, records, topicPartitionChangeMap);
+        return Optional.of(buildInitializeShareGroupStateRequest(groupId, groupEpoch, topicPartitionChangeMap));
+    }
 
-        return Optional.of(new InitializeShareGroupStateParameters.Builder().setGroupTopicPartitionData(
-            new GroupTopicPartitionData<>(groupId, topicPartitionChangeMap.entrySet().stream()
+    private InitializeShareGroupStateParameters buildInitializeShareGroupStateRequest(String groupId, int groupEpoch, Map<Uuid, Set<Integer>> topicPartitions) {
+        return new InitializeShareGroupStateParameters.Builder().setGroupTopicPartitionData(
+            new GroupTopicPartitionData<>(groupId, topicPartitions.entrySet().stream()
                 .map(entry -> new TopicData<>(
                     entry.getKey(),
                     entry.getValue().stream()
                         .map(partitionId -> PartitionFactory.newPartitionStateData(partitionId, groupEpoch, -1))
                         .toList())
                 ).toList()
-            )).build()
-        );
+            )).build();
     }
 
     private void addInitializingTopicsRecords(String groupId, List<CoordinatorRecord> records, Map<Uuid, Set<Integer>> topicPartitionMap) {
@@ -5016,6 +5018,24 @@ public class GroupMetadataManager {
             finalMap.put(topicId, Map.entry(topicName, entry.getValue()));
         }
         return Collections.unmodifiableMap(finalMap);
+    }
+
+    public List<InitializeShareGroupStateParameters> reconcileShareGroupStateInitializingState(long offset) {
+        List<InitializeShareGroupStateParameters> requests = new ArrayList<>();
+        for (Group group : groups.values()) {
+            if (!(group instanceof ShareGroup shareGroup)) {
+                continue;
+            }
+            if (!(shareGroupPartitionMetadata.containsKey(group.groupId()))) {
+                continue;
+            }
+            Map<Uuid, Set<Integer>> initializing = shareGroupPartitionMetadata.get(shareGroup.groupId(), offset).initializingTopics();
+            if (initializing == null || initializing.isEmpty()) {
+                continue;
+            }
+            requests.add(buildInitializeShareGroupStateRequest(shareGroup.groupId(), shareGroup.groupEpoch(), initializing));
+        }
+        return requests;
     }
 
     /**

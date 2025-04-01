@@ -565,6 +565,33 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }).thenCompose(resp -> resp);
     }
 
+    // Visibility for testing
+    CompletableFuture<Void> reconcileShareGroupStateInitializingState() {
+        List<CompletableFuture<List<InitializeShareGroupStateParameters>>> requestsStages = runtime.scheduleReadAllOperation(
+            "reconcile-share-group-initializing-state",
+            GroupCoordinatorShard::reconcileShareGroupStateInitializingState
+        );
+
+        if (requestsStages.isEmpty()) {
+            log.info("Nothing to reconcile for share group initializing state.");
+            return CompletableFuture.completedFuture(null);
+        }
+
+        CompletableFuture<Void> allRequestsStage = CompletableFuture.allOf(requestsStages.toArray(new CompletableFuture<?>[0]));
+        final List<CompletableFuture<ShareGroupHeartbeatResponseData>> persisterResponses = new ArrayList<>();
+        allRequestsStage.thenApply(__ -> {
+            requestsStages.forEach(requestsStage -> requestsStage.join().forEach(request -> timer.add(new TimerTask(0L) {
+                @Override
+                public void run() {
+                    log.info("Reconciling initializing state - {}", request);
+                    persisterResponses.add(persisterInitialize(request, new ShareGroupHeartbeatResponseData()));
+                }
+            })));
+            return null;
+        });
+        return CompletableFuture.allOf(persisterResponses.toArray(new CompletableFuture<?>[0]));
+    }
+
     /**
      * See {@link GroupCoordinator#joinGroup(RequestContext, JoinGroupRequestData, BufferSupplier)}.
      */
@@ -1607,6 +1634,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
             new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, groupMetadataPartitionIndex),
             groupMetadataPartitionLeaderEpoch
         );
+
+        // Wait for reconciliation to complete.
+        reconcileShareGroupStateInitializingState().join();
     }
 
     /**
