@@ -17741,6 +17741,16 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(0)
                 .setSubscribedTopicNames(List.of(t1Name, t2Name)));
 
+        assertTrue(result.records().contains(
+            newShareGroupStatePartitionMetadataRecord(groupId, mkShareGroupStateMap(List.of(
+                    mkShareGroupStateMetadataEntry(t1Uuid, t1Name, List.of(0, 1)),
+                    mkShareGroupStateMetadataEntry(t2Uuid, t2Name, List.of(0, 1))
+                )),
+                Map.of(),
+                Map.of()
+            ))
+        );
+
         verifyShareGroupHeartbeatInitializeRequest(
             result.response().getValue(),
             Map.of(
@@ -17799,6 +17809,18 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId.toString())
                 .setMemberEpoch(1)
                 .setSubscribedTopicNames(null));
+
+        assertTrue(result.records().contains(
+            newShareGroupStatePartitionMetadataRecord(groupId, mkShareGroupStateMap(List.of(
+                    mkShareGroupStateMetadataEntry(t1Uuid, t1Name, List.of(2, 3))
+                )),
+                mkShareGroupStateMap(List.of(
+                    mkShareGroupStateMetadataEntry(t1Uuid, t1Name, List.of(0, 1)),
+                    mkShareGroupStateMetadataEntry(t2Uuid, t2Name, List.of(0, 1))
+                )),
+                Map.of()
+            ))
+        );
 
         verifyShareGroupHeartbeatInitializeRequest(
             result.response().getValue(),
