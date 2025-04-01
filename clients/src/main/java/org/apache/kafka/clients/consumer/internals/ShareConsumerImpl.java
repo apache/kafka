@@ -202,7 +202,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     private final ConsumerMetadata metadata;
     private final Metrics metrics;
     private final int requestTimeoutMs;
-    private final long defaultApiTimeoutMs;
+    private final int defaultApiTimeoutMs;
     private volatile boolean closed = false;
     // Init value is needed to avoid NPE in case of exception raised in the constructor
     private Optional<ClientTelemetryReporter> clientTelemetryReporter = Optional.empty();
@@ -454,7 +454,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                       final SubscriptionState subscriptions,
                       final ConsumerMetadata metadata,
                       final int requestTimeoutMs,
-                      final long defaultApiTimeoutMs,
+                      final int defaultApiTimeoutMs,
                       final String groupId) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
