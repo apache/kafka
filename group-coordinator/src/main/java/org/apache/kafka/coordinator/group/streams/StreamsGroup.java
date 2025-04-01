@@ -1048,5 +1048,5 @@ public class StreamsGroup implements Group {
         );
         return describedGroup;
     }
-    
+
 }
