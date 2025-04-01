@@ -193,7 +193,7 @@ public class ShareFetchResponse extends AbstractResponse {
                         .setRack(endpoint.rack())));
         return data.setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(error.code())
-                .setAcquisitionLockTimeout(acquisitionLockTimeout)
+                .setAcquisitionLockTimeoutMs(acquisitionLockTimeout)
                 .setResponses(new ArrayList<>(topicResponseList.values()));
     }
 

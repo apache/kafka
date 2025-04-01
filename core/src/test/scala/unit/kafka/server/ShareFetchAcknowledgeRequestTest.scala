@@ -61,7 +61,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
 
     assertEquals(Errors.UNSUPPORTED_VERSION.code, shareFetchResponse.data.errorCode)
-    assertEquals(0, shareFetchResponse.data.acquisitionLockTimeout)
+    assertEquals(0, shareFetchResponse.data.acquisitionLockTimeoutMs)
   }
 
   @ClusterTest(
@@ -128,7 +128,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // Send the share fetch request to the non-replica and verify the error code
     val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
     val shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest, nonReplicaId)
-    assertEquals(30000, shareFetchResponse.data.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponse.data.acquisitionLockTimeoutMs)
 
     val partitionData = shareFetchResponse.responseData(topicNames).get(topicIdPartition)
     assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code, partitionData.errorCode)
@@ -187,7 +187,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -262,7 +262,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       val shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
       val shareFetchResponseData = shareFetchResponse.data()
       assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-      assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+      assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
       assertEquals(1, shareFetchResponseData.responses().size())
       val partitionsCount = shareFetchResponseData.responses().get(0).partitions().size()
       if (partitionsCount > 0) {
@@ -381,7 +381,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val shareFetchResponseData1 = shareFetchResponse1.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData1.errorCode)
-    assertEquals(30000, shareFetchResponseData1.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData1.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData1.responses().size())
     assertEquals(topicId, shareFetchResponseData1.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData1.responses().get(0).partitions().size())
@@ -389,7 +389,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val shareFetchResponseData2 = shareFetchResponse2.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData2.errorCode)
-    assertEquals(30000, shareFetchResponseData2.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData2.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData2.responses().size())
     assertEquals(topicId, shareFetchResponseData2.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData2.responses().get(0).partitions().size())
@@ -479,7 +479,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     var shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -528,7 +528,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -599,7 +599,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     var shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(15000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(15000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -628,7 +628,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(15000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(15000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -653,7 +653,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(15000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(15000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -722,7 +722,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     var shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -768,7 +768,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -837,7 +837,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     var shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -882,7 +882,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
       shareFetchResponseData = shareFetchResponse.data()
       assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-      assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+      assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
       assertEquals(1, shareFetchResponseData.responses().size())
       assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
       val responseSize = shareFetchResponseData.responses().get(0).partitions().size()
@@ -956,7 +956,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     var shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -1005,7 +1005,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -1074,7 +1074,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     var shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -1103,7 +1103,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -1128,7 +1128,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -1199,7 +1199,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     var shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -1245,7 +1245,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -1293,7 +1293,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -1560,7 +1560,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     var shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -1589,7 +1589,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -1615,7 +1615,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(0, shareFetchResponseData.responses().size()) // responses list will be empty because there are no responses for the final fetch request
   }
 
@@ -1673,7 +1673,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     var shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -1702,7 +1702,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -1795,7 +1795,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val shareFetchResponseData = shareFetchResponse.data()
     // The response will have a top level error code because this is an Initial Fetch request with acknowledgement data present
     assertEquals(Errors.INVALID_REQUEST.code(), shareFetchResponseData.errorCode)
-    assertEquals(0, shareFetchResponse.data.acquisitionLockTimeout)
+    assertEquals(0, shareFetchResponse.data.acquisitionLockTimeoutMs)
   }
 
   @ClusterTests(
@@ -1902,7 +1902,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     var shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -1979,7 +1979,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -2062,7 +2062,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     var shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -2140,7 +2140,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -2230,7 +2230,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       val shareFetchResponse = connectAndReceive[ShareFetchResponse](shareFetchRequest)
       val shareFetchResponseData = shareFetchResponse.data()
       assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-      assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+      assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
       assertEquals(1, shareFetchResponseData.responses().size())
       val partitionsCount = shareFetchResponseData.responses().get(0).partitions().size()
       if (partitionsCount > 0) {
@@ -2257,7 +2257,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val shareFetchResponseData = shareFetchResponse.data()
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses().size())
     assertEquals(topicId, shareFetchResponseData.responses().get(0).topicId())
     assertEquals(1, shareFetchResponseData.responses().get(0).partitions().size())
@@ -2324,7 +2324,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val shareFetchResponseData = shareFetchResponse.data
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses.size)
     assertEquals(topicId, shareFetchResponseData.responses.get(0).topicId)
     assertEquals(1, shareFetchResponseData.responses.get(0).partitions.size)
@@ -2391,7 +2391,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val shareFetchResponseData = shareFetchResponse.data
     assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeout)
+    assertEquals(30000, shareFetchResponseData.acquisitionLockTimeoutMs)
     assertEquals(1, shareFetchResponseData.responses.size)
     assertEquals(topicId, shareFetchResponseData.responses.get(0).topicId)
     assertEquals(1, shareFetchResponseData.responses.get(0).partitions.size)
@@ -2417,7 +2417,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       val shareFetchResponseData = shareFetchResponse.data()
 
       assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
-      assertEquals(lockTimeout, shareFetchResponseData.acquisitionLockTimeout)
+      assertEquals(lockTimeout, shareFetchResponseData.acquisitionLockTimeoutMs)
       shareFetchResponseData.responses().asScala.foreach(response => {
         if (!response.partitions().isEmpty) {
           response.partitions().forEach(partitionData => partitions.add(partitionData.partitionIndex))
