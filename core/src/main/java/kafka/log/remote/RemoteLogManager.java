@@ -241,8 +241,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         this.metrics = metrics;
         this.endpoint = endpoint;
 
-        remoteLogStorageManagerPlugin = configAndWrapRSM(createRemoteStorageManager());
-        remoteLogMetadataManagerPlugin = configAndWrapRLMM(createRemoteLogMetadataManager());
+        remoteLogStorageManagerPlugin = configAndWrapRSMPlugin(createRemoteStorageManager());
+        remoteLogMetadataManagerPlugin = configAndWrapRLMMPlugin(createRemoteLogMetadataManager());
         remoteLogManagerConfigured = true;
 
         rlmCopyQuotaManager = createRLMCopyQuotaManager();
@@ -376,14 +376,10 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         });
     }
 
-    private void configureRSM(RemoteStorageManager remoteLogStorageManager) {
+    private Plugin<RemoteStorageManager> configAndWrapRSMPlugin(RemoteStorageManager rsm) {
         final Map<String, Object> rsmProps = new HashMap<>(rlmConfig.remoteStorageManagerProps());
         rsmProps.put(ServerConfigs.BROKER_ID_CONFIG, brokerId);
-        remoteLogStorageManager.configure(rsmProps);
-    }
-
-    private Plugin<RemoteStorageManager> configAndWrapRSM(RemoteStorageManager rsm) {
-        configureRSM(rsm);
+        rsm.configure(rsmProps);
         return Plugin.wrapInstance(rsm, metrics, RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP);
     }
 
@@ -400,12 +396,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         });
     }
 
-    private Plugin<RemoteLogMetadataManager> configAndWrapRLMM(RemoteLogMetadataManager rlmm) {
-        configureRLMM(rlmm);
-        return Plugin.wrapInstance(rlmm, metrics, RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP);
-    }
-
-    private void configureRLMM(RemoteLogMetadataManager remoteLogMetadataManager) {
+    private Plugin<RemoteLogMetadataManager> configAndWrapRLMMPlugin(RemoteLogMetadataManager rlmm) {
         final Map<String, Object> rlmmProps = new HashMap<>();
         endpoint.ifPresent(e -> {
             rlmmProps.put(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "bootstrap.servers", e.host() + ":" + e.port());
@@ -418,9 +409,9 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         rlmmProps.put(LOG_DIR_CONFIG, logDir);
         rlmmProps.put("cluster.id", clusterId);
 
-        remoteLogMetadataManager.configure(rlmmProps);
+        rlmm.configure(rlmmProps);
+        return Plugin.wrapInstance(rlmm, metrics, RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP);
     }
-
 
     RemoteLogMetadataManager remoteLogMetadataManager() {
         return remoteLogMetadataManagerPlugin.get();
