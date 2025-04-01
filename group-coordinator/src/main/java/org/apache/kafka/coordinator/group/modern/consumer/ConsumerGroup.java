@@ -1298,4 +1298,9 @@ public class ConsumerGroup extends ModernGroup<ConsumerGroupMember> {
         }
         return false;
     }
+
+    @Override
+    public boolean shouldExpire() {
+        return true;
+    }
 }

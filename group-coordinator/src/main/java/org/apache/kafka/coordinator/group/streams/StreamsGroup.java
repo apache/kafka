@@ -1049,4 +1049,8 @@ public class StreamsGroup implements Group {
         return describedGroup;
     }
 
+    @Override
+    public boolean shouldExpire() {
+        return true;
+    }
 }

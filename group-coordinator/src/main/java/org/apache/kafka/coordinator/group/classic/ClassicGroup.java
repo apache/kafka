@@ -1485,4 +1485,9 @@ public class ClassicGroup implements Group {
             "currentState=" + currentState() + ", " +
             "members=" + members + ")";
     }
+
+    @Override
+    public boolean shouldExpire() {
+        return true;
+    }
 }
