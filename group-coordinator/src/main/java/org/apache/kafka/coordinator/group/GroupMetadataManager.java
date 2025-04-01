@@ -4250,7 +4250,9 @@ public class GroupMetadataManager {
             } else {
                 Set<Integer> partitions = new HashSet<>(entry.getValue());
                 partitions.removeAll(topicPartitionMap.get(topicId));
-                finalInitializingTopics.put(entry.getKey(), partitions);
+                if (!partitions.isEmpty()) {
+                    finalInitializingTopics.put(entry.getKey(), partitions);
+                }
             }
         }
 

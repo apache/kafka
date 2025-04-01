@@ -17912,11 +17912,13 @@ public class GroupMetadataManagerTest {
             ))
         );
 
-        // Calculates correct diff
+        // Calculates correct diff respecting both initialized and initializing maps.
         String t1Name = "t1";
         Uuid t1Id = Uuid.randomUuid();
         String t2Name = "t2";
         Uuid t2Id = Uuid.randomUuid();
+        String t3Name = "t3";
+        Uuid t3Id = Uuid.randomUuid();
 
         context.groupMetadataManager.replay(
             new ShareGroupMetadataKey()
@@ -17928,24 +17930,93 @@ public class GroupMetadataManagerTest {
             new ShareGroupStatePartitionMetadataKey()
                 .setGroupId(groupId),
             new ShareGroupStatePartitionMetadataValue()
-                .setInitializedTopics(List.of(
+                .setInitializingTopics(List.of(
                     new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
                         .setTopicId(t1Id)
                         .setTopicName(t1Name)
                         .setPartitions(List.of(0, 1))
                 ))
+                .setInitializedTopics(List.of(
+                    new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                        .setTopicId(t2Id)
+                        .setTopicName(t2Name)
+                        .setPartitions(List.of(0, 1, 2))
+                ))
                 .setDeletingTopics(List.of())
         );
 
-        // Since t1 is already initialized due to replay above
+        // Since t1 is initializing and t2 is initialized due to replay above.
         assertEquals(
             Map.of(
-                t2Id, Set.of(0, 1)
+                t3Id, Set.of(0, 1, 2)
             ),
             context.groupMetadataManager.subscribedTopicsChangeMap(groupId, Map.of(
                 t1Name, new TopicMetadata(t1Id, t1Name, 2),
-                t2Name, new TopicMetadata(t2Id, t2Name, 2)
+                t2Name, new TopicMetadata(t2Id, t2Name, 2),
+                t3Name, new TopicMetadata(t3Id, t3Name, 3)
             ))
+        );
+    }
+
+    @Test
+    public void testUninitializeTopics() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("simple");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        String groupId = "shareGroupId";
+        Uuid t1Id = Uuid.randomUuid();
+        String t1Name = "t1Name";
+        Uuid t2Id = Uuid.randomUuid();
+        String t2Name = "t2Name";
+
+        // No records if topics to be uninitialized are not in metadata info.
+        CoordinatorResult<Void, CoordinatorRecord> result = context.groupMetadataManager.uninitializeShareGroupState(groupId, Map.of(t1Id, Set.of(0)));
+        assertEquals(
+            List.of(),
+            result.records()
+        );
+
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(t1Id, t1Name, 2)
+            .addTopic(t2Id, t2Name, 3)
+            .build();
+
+        MetadataDelta delta = new MetadataDelta(image);
+        context.groupMetadataManager.onNewMetadataImage(image, delta);
+
+        // Cleanup happens from initialzing state only.
+        context.groupMetadataManager.replay(
+            new ShareGroupMetadataKey()
+                .setGroupId(groupId),
+            new ShareGroupMetadataValue()
+                .setEpoch(0)
+        );
+        context.groupMetadataManager.replay(
+            new ShareGroupStatePartitionMetadataKey()
+                .setGroupId(groupId),
+            new ShareGroupStatePartitionMetadataValue()
+                .setInitializingTopics(List.of(
+                    new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                        .setTopicId(t1Id)
+                        .setTopicName(t1Name)
+                        .setPartitions(List.of(0, 1))
+                ))
+                .setInitializedTopics(List.of(
+                    new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                        .setTopicId(t2Id)
+                        .setTopicName(t2Name)
+                        .setPartitions(List.of(0, 1, 2))
+                ))
+                .setDeletingTopics(List.of())
+        );
+        result = context.groupMetadataManager.uninitializeShareGroupState(groupId, Map.of(t1Id, Set.of(0, 1)));
+        Set<Integer> partitions = new LinkedHashSet<>(List.of(0, 1, 2));
+        assertEquals(
+            List.of(newShareGroupStatePartitionMetadataRecord(groupId, Map.of(), Map.of(t2Id, Map.entry(t2Name, partitions)), Map.of())),
+            result.records()
         );
     }
 
