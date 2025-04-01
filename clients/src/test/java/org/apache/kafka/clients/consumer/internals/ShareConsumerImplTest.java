@@ -149,6 +149,7 @@ public class ShareConsumerImplTest {
             String clientId
     ) {
         final int defaultApiTimeoutMs = 1000;
+        final int requestTimeoutMs = 30000;
 
         return new ShareConsumerImpl<>(
                 new LogContext(),
@@ -164,6 +165,7 @@ public class ShareConsumerImplTest {
                 new Metrics(),
                 subscriptions,
                 metadata,
+                requestTimeoutMs,
                 defaultApiTimeoutMs,
                 groupId
         );
