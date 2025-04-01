@@ -68,7 +68,7 @@ public class FeatureCommandTest {
         assertEquals("Feature: share.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(4)));
         assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(5)));
+                "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(5)));
     }
 
     // Use the first MetadataVersion that supports KIP-919
@@ -90,7 +90,7 @@ public class FeatureCommandTest {
         assertEquals("Feature: metadata.version\tSupportedMinVersion: 3.3-IV3\t" +
                 "SupportedMaxVersion: 4.2-IV0\tFinalizedVersionLevel: 3.7-IV0\t", outputWithoutEpoch(features.get(3)));
         assertEquals("Feature: share.version\tSupportedMinVersion: 0\t" +
-            "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(4)));
+                "SupportedMaxVersion: 1\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(4)));
         assertEquals("Feature: transaction.version\tSupportedMinVersion: 0\t" +
                 "SupportedMaxVersion: 2\tFinalizedVersionLevel: 0\t", outputWithoutEpoch(features.get(5)));
     }
