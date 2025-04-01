@@ -68,6 +68,8 @@ public class DelayedDeleteRecords extends DelayedOperation {
             } else {
                 status.setAcksPending(false);
             }
+            
+            LOG.trace("Initial partition status for {} is {}", topicPartition, status);
         });
     }
 
@@ -94,11 +96,7 @@ public class DelayedDeleteRecords extends DelayedOperation {
 
     @Override
     public void onExpiration() {
-        deleteRecordsStatus.forEach((topicPartition, status) -> {
-            if (status.acksPending()) {
-                AGGREGATE_EXPIRATION_METER.mark();
-            }
-        });
+        AGGREGATE_EXPIRATION_METER.mark(deleteRecordsStatus.values().stream().filter(DeleteRecordsPartitionStatus::acksPending).count());
     }
 
     /**

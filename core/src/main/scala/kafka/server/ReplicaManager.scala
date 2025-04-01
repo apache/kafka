@@ -1351,7 +1351,7 @@ class ReplicaManager(val config: KafkaConfig,
         }
       }
       // create delayed delete records operation
-      val delayedDeleteRecords = new DelayedDeleteRecords(timeout, deleteRecordsStatus.asJava, onAcks ,  response => responseCallback(response.asScala))
+      val delayedDeleteRecords = new DelayedDeleteRecords(timeout, deleteRecordsStatus.asJava, onAcks,  response => responseCallback(response.asScala))
 
       // create a list of (topic, partition) pairs to use as keys for this delayed delete records operation
       val deleteRecordsRequestKeys = offsetPerPartition.keys.map(new TopicPartitionOperationKey(_)).toList
