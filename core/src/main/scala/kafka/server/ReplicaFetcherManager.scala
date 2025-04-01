@@ -47,7 +47,7 @@ class ReplicaFetcherManager(brokerConfig: KafkaConfig,
     val leader = new RemoteLeaderEndPoint(logContext.logPrefix, endpoint, fetchSessionHandler, brokerConfig,
       replicaManager, quotaManager, metadataVersionSupplier, brokerEpochSupplier)
     new ReplicaFetcherThread(threadName, leader, brokerConfig, failedPartitions, replicaManager,
-      quotaManager, logContext.logPrefix, metadataVersionSupplier)
+      quotaManager, logContext.logPrefix)
   }
 
   def shutdown(): Unit = {

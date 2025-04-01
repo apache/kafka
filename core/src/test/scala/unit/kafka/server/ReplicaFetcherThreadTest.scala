@@ -100,8 +100,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaMgr,
       quota,
-      logContext.logPrefix,
-      () => metadataVersion)
+      logContext.logPrefix)
   }
 
   @Test
@@ -291,8 +290,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      logContext.logPrefix,
-      () => MetadataVersion.MINIMUM_VERSION
+      logContext.logPrefix
     ) {
       override def processPartitionData(
         topicPartition: TopicPartition,
@@ -423,8 +421,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      logContext.logPrefix,
-      () => MetadataVersion.MINIMUM_VERSION
+      logContext.logPrefix
     )
 
     thread.addPartitions(Map(
@@ -515,8 +512,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      logContext.logPrefix,
-      () => MetadataVersion.MINIMUM_VERSION
+      logContext.logPrefix
     )
 
     thread.addPartitions(Map(
@@ -620,8 +616,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       replicaQuota,
-      logContext.logPrefix,
-      () => MetadataVersion.MINIMUM_VERSION)
+      logContext.logPrefix)
 
     val leaderEpoch = 1
 
