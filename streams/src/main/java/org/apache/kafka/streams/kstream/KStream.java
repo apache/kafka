@@ -175,14 +175,14 @@ public interface KStream<K, V> {
      * @see #groupByKey()
      * @see #selectKey(KeyValueMapper)
      */
-    KStream<K, V> skipRepartition();
+    KStream<K, V> skipRepartitioning();
 
     /**
-     * See {@link #skipRepartition()}.
+     * See {@link #skipRepartitioning()}.
      *
-     * @see #skipRepartition()
+     * @see #skipRepartitioning()
      */
-    KStream<K, V> skipRepartition(final Named named);
+    KStream<K, V> skipRepartitioning(final Named named);
 
     /**
      * Create a new {@code KStream} that consists of all records of this stream but with a modified value.

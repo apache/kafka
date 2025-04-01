@@ -44,7 +44,7 @@ import org.apache.kafka.streams.kstream.ValueMapperWithKey;
 import org.apache.kafka.streams.kstream.internals.graph.BaseRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.BaseRepartitionNode.BaseRepartitionNodeBuilder;
 import org.apache.kafka.streams.kstream.internals.graph.GraphNode;
-import org.apache.kafka.streams.kstream.internals.graph.SkipRepartitionNode;
+import org.apache.kafka.streams.kstream.internals.graph.SkipRepartitioningNode;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode;
 import org.apache.kafka.streams.kstream.internals.graph.OptimizableRepartitionNode.OptimizableRepartitionNodeBuilder;
 import org.apache.kafka.streams.kstream.internals.graph.ProcessorGraphNode;
@@ -1368,25 +1368,25 @@ public class KStreamImpl<K, V> extends AbstractStream<K, V> implements KStream<K
     }
 
     @Override
-    public KStream<K, V> skipRepartition() {
-        return skipRepartition(NamedInternal.empty());
+    public KStream<K, V> skipRepartitioning() {
+        return skipRepartitioning(NamedInternal.empty());
     }
 
     @Override
-    public KStream<K, V> skipRepartition(final Named named) {
+    public KStream<K, V> skipRepartitioning(final Named named) {
         final String name = new NamedInternal(named).orElseGenerateWithPrefix(builder, SKIP_REPARTITION_NAME);
         final ProcessorParameters<? super K, ? super V, ?, ?> processorParameters =
             new ProcessorParameters<>(new PassThrough<>(), name);
-        final SkipRepartitionNode<? super K, ? super V> skipRepartitionNode =
-            new SkipRepartitionNode<>(name, processorParameters);
-        builder.addGraphNode(graphNode, skipRepartitionNode);
+        final SkipRepartitioningNode<? super K, ? super V> skipRepartitioningNode =
+            new SkipRepartitioningNode<>(name, processorParameters);
+        builder.addGraphNode(graphNode, skipRepartitioningNode);
         return new KStreamImpl<>(
             name,
             keySerde,
             valueSerde,
             subTopologySourceNodes,
             false,
-            skipRepartitionNode,
+            skipRepartitioningNode,
             builder
         );
     }

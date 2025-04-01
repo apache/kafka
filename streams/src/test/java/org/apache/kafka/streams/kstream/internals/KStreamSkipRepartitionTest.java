@@ -32,12 +32,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class KStreamSkipRepartitionTest {
     @Test
-    void shouldAllowAggregationWithSkipRepartition() {
+    void shouldAllowAggregationWithSkipRepartitioning() {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KTable<Object, Long> aggregatedTable = builder.stream("input-topic")
             .selectKey((key, value) -> key)
-            .skipRepartition()
+            .skipRepartitioning()
             .groupByKey()
             .count();
 
@@ -45,7 +45,7 @@ class KStreamSkipRepartitionTest {
     }
 
     @Test
-    void shouldContainSinkNodeWhenNotUsingSkipRepartition() {
+    void shouldContainSinkNodeWhenNotUsingSkipRepartitioning() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic").selectKey((key, value) -> key).groupByKey().count();
 
@@ -58,17 +58,17 @@ class KStreamSkipRepartitionTest {
     }
 
     @Test
-    void shouldNotAllowNullNamedOnSkipRepartition() {
+    void shouldNotAllowNullNamedOnSkipRepartitioning() {
         final KStream<String, String> stream = new StreamsBuilder().stream("input-topic");
         final NullPointerException exception =
-            assertThrows(NullPointerException.class, () -> stream.skipRepartition(null));
+            assertThrows(NullPointerException.class, () -> stream.skipRepartitioning(null));
         assertThat(exception.getMessage(), equalTo("named cannot be null"));
     }
 
     @Test
-    void shouldNotContainSinkNodeWhenNotUsingSkipRepartition() {
+    void shouldNotContainSinkNodeWhenNotUsingSkipRepartitioning() {
         final StreamsBuilder builder = new StreamsBuilder();
-        builder.stream("input-topic").selectKey((key, value) -> key).skipRepartition().groupByKey().count();
+        builder.stream("input-topic").selectKey((key, value) -> key).skipRepartitioning().groupByKey().count();
 
         final TopologyDescription description = builder.build().describe();
         final boolean hasSinkTopic = description.subtopologies().stream()
@@ -79,12 +79,12 @@ class KStreamSkipRepartitionTest {
     }
 
     @Test
-    void shouldNotCreateMultipleSubtopologiesEvenWithMultipleSkipRepartitionCalls() {
+    void shouldNotCreateMultipleSubtopologiesEvenWithMultipleSkipRepartitioningCalls() {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.stream("input-topic")
             .selectKey((key, value) -> key)
-            .skipRepartition()
-            .skipRepartition()
+            .skipRepartitioning()
+            .skipRepartitioning()
             .groupByKey();
 
         final TopologyDescription description = builder.build().describe();

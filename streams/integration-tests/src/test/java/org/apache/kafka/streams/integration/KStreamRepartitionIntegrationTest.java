@@ -439,7 +439,7 @@ public class KStreamRepartitionIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
-    public void shouldNotRepartitionWithSkipRepartitionFollowingSelectKey(final String topologyOptimization) throws Exception {
+    public void shouldNotRepartitionWithSkipRepartitioningFollowingSelectKey(final String topologyOptimization) throws Exception {
         final long timestamp = System.currentTimeMillis();
 
         sendEvents(
@@ -454,7 +454,7 @@ public class KStreamRepartitionIntegrationTest {
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
                 .selectKey((key, value) -> Integer.valueOf(value))
-                .skipRepartition(Named.as("partition-preserved"))
+                .skipRepartitioning(Named.as("partition-preserved"))
                 .groupByKey()
                 .count()
                 .toStream()
@@ -479,7 +479,7 @@ public class KStreamRepartitionIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(strings = {StreamsConfig.OPTIMIZE, StreamsConfig.NO_OPTIMIZATION})
-    public void shouldNotRepartitionWithSkipRepartitionFollowingMap(final String topologyOptimization) throws Exception {
+    public void shouldNotRepartitionWithSkipRepartitioningFollowingMap(final String topologyOptimization) throws Exception {
         final String topicBMapperName = "topic-b-mapper";
         final long timestamp = System.currentTimeMillis();
 
@@ -495,7 +495,7 @@ public class KStreamRepartitionIntegrationTest {
 
         builder.stream(inputTopic, Consumed.with(Serdes.Integer(), Serdes.String()))
                 .map(KeyValue::new, Named.as(topicBMapperName))
-                .skipRepartition(Named.as("partition-preserved"))
+                .skipRepartitioning(Named.as("partition-preserved"))
                 .groupByKey()
                 .count()
                 .toStream()

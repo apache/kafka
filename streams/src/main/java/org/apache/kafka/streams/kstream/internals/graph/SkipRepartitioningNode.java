@@ -37,7 +37,7 @@ package org.apache.kafka.streams.kstream.internals.graph;
  * @param <K> the type of keys
  * @param <V> the type of values
  */
-public class SkipRepartitionNode<K, V> extends ProcessorGraphNode<K, V> {
+public class SkipRepartitioningNode<K, V> extends ProcessorGraphNode<K, V> {
 
     /**
      * Constructs a {@code SkipRepartitionNode} with the specified node name and processor parameters.
@@ -45,7 +45,7 @@ public class SkipRepartitionNode<K, V> extends ProcessorGraphNode<K, V> {
      * @param nodeName            the name of this node in the processor topology
      * @param processorParameters the parameters associated with this processor
      */
-    public SkipRepartitionNode(final String nodeName, final ProcessorParameters<K, V, ?, ?> processorParameters) {
+    public SkipRepartitioningNode(final String nodeName, final ProcessorParameters<K, V, ?, ?> processorParameters) {
         super(nodeName, processorParameters);
     }
 
