@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.producer;
 
 import kafka.server.KafkaBroker;
+
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.config.TopicConfig;
