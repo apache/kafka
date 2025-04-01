@@ -159,13 +159,13 @@ public class ShareFetchResponse extends AbstractResponse {
     public static ShareFetchResponse of(Errors error,
                                         int throttleTimeMs,
                                         LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData,
-                                        List<Node> nodeEndpoints, long acquisitionLockTimeout) {
+                                        List<Node> nodeEndpoints, int acquisitionLockTimeout) {
         return new ShareFetchResponse(toMessage(error, throttleTimeMs, responseData.entrySet().iterator(), nodeEndpoints, acquisitionLockTimeout));
     }
 
     public static ShareFetchResponseData toMessage(Errors error, int throttleTimeMs,
                                                    Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partIterator,
-                                                   List<Node> nodeEndpoints, long acquisitionLockTimeout) {
+                                                   List<Node> nodeEndpoints, int acquisitionLockTimeout) {
         Map<Uuid, ShareFetchResponseData.ShareFetchableTopicResponse> topicResponseList = new LinkedHashMap<>();
         while (partIterator.hasNext()) {
             Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData> entry = partIterator.next();
