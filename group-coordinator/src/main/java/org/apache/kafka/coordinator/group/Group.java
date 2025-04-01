@@ -206,5 +206,7 @@ public interface Group {
      *
      * @return whether the group should be expired
      */
-    boolean shouldExpire();
+    default boolean shouldExpire() {
+        return true;
+    }
 }
