@@ -1636,7 +1636,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
         );
 
         // Wait for reconciliation to complete.
-        reconcileShareGroupStateInitializingState().join();
+        try {
+            reconcileShareGroupStateInitializingState().join();
+        } catch (Exception e) {
+            log.error("Share group reconciliation failed", e);
+        }
     }
 
     /**
