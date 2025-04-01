@@ -584,7 +584,7 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testFetchResponseShouldNotHasNullRecords() {
+    public void testFetchResponseShouldNotHaveNullRecords() {
         Uuid id = Uuid.randomUuid();
         FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
             .setPartitionIndex(0)
@@ -615,25 +615,16 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testShareFetchResponseShouldNotHasNullRecords() {
+    public void testShareFetchResponseShouldNotHaveNullRecords() {
         Uuid id = Uuid.randomUuid();
         ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
             .setPartitionIndex(0)
             .setAcquiredRecords(List.of())
             .setRecords(null);
 
-        ShareFetchResponseData.ShareFetchableTopicResponse response = new ShareFetchResponseData.ShareFetchableTopicResponse()
-            .setPartitions(List.of(partitionData))
-            .setTopicId(id)
-            .setPartitions(List.of(ShareFetchResponse.partitionResponse(0, Errors.NONE)));
-
-        ShareFetchResponseData data = new ShareFetchResponseData().setResponses(List.of(response));
-        ShareFetchResponse shareFetchResponse = ShareFetchResponse.of(data);
-        validateNoNullRecords(shareFetchResponse);
-
         TopicIdPartition topicIdPartition = new TopicIdPartition(id, new TopicPartition("test", 0));
         LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> tpToData = new LinkedHashMap<>(Map.of(topicIdPartition, partitionData));
-        shareFetchResponse = ShareFetchResponse.of(Errors.NONE, 0, tpToData, List.of());
+        ShareFetchResponse shareFetchResponse = ShareFetchResponse.of(Errors.NONE, 0, tpToData, List.of());
         validateNoNullRecords(shareFetchResponse);
     }
 
@@ -1503,7 +1494,6 @@ public class RequestResponseTest {
     }
 
     private ShareFetchResponse createShareFetchResponse() {
-        ShareFetchResponseData data = new ShareFetchResponseData();
         MemoryRecords records = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("blah".getBytes()));
         ShareFetchResponseData.PartitionData partition = new ShareFetchResponseData.PartitionData()
                 .setPartitionIndex(0)
@@ -1513,14 +1503,10 @@ public class RequestResponseTest {
                         .setFirstOffset(0)
                         .setLastOffset(0)
                         .setDeliveryCount((short) 1)));
-        ShareFetchResponseData.ShareFetchableTopicResponse response = new ShareFetchResponseData.ShareFetchableTopicResponse()
-                .setTopicId(Uuid.randomUuid())
-                .setPartitions(singletonList(partition));
-
-        data.setResponses(singletonList(response));
-        data.setThrottleTimeMs(345);
-        data.setErrorCode(Errors.NONE.code());
-        return ShareFetchResponse.of(data);
+        TopicIdPartition topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("", partition.partitionIndex()));
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> topicIdPartitionToPartition = new LinkedHashMap<>();
+        topicIdPartitionToPartition.put(topicIdPartition, partition);
+        return ShareFetchResponse.of(Errors.NONE, 345, topicIdPartitionToPartition, List.of());
     }
 
     private ShareAcknowledgeRequest createShareAcknowledgeRequest(short version) {

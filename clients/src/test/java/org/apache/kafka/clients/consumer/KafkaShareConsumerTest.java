@@ -56,6 +56,7 @@ import org.junit.jupiter.api.Timeout;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -388,13 +389,9 @@ public class KafkaShareConsumerTest {
             .setPartitionIndex(tip.partition())
             .setRecords(records)
             .setAcquiredRecords(List.of(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(count - 1).setDeliveryCount((short) 1)));
-        ShareFetchResponseData.ShareFetchableTopicResponse topicResponse = new ShareFetchResponseData.ShareFetchableTopicResponse()
-            .setTopicId(tip.topicId())
-            .setPartitions(List.of(partData));
-        return ShareFetchResponse.of(
-            new ShareFetchResponseData()
-                .setResponses(List.of(topicResponse))
-        );
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> topicIdPartitionToPartition = new LinkedHashMap<>();
+        topicIdPartitionToPartition.put(tip, partData);
+        return ShareFetchResponse.of(Errors.NONE, 0, topicIdPartitionToPartition, List.of());
     }
 
     private ShareAcknowledgeResponse shareAcknowledgeResponse() {

@@ -25,7 +25,6 @@ import org.apache.kafka.server.share.ErroneousAndValidPartitionData;
 import org.apache.kafka.server.share.session.ShareSession;
 
 import java.util.Collection;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 
@@ -50,8 +49,7 @@ public abstract class ShareFetchContext {
      * @return - An empty throttled response.
      */
     public ShareFetchResponse throttleResponse(int throttleTimeMs) {
-        return ShareFetchResponse.of(ShareFetchResponse.toMessage(Errors.NONE, throttleTimeMs,
-                Collections.emptyIterator(), List.of()));
+        return ShareFetchResponse.of(Errors.NONE, throttleTimeMs, new LinkedHashMap<>(), List.of());
     }
 
     /**

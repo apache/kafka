@@ -116,8 +116,8 @@ public class ShareFetchResponse extends AbstractResponse {
 
     /**
      * Creates a {@link org.apache.kafka.common.requests.ShareFetchResponse} from the given byte buffer.
-     * Unlike {@link org.apache.kafka.common.requests.ShareFetchResponse#of(ShareFetchResponseData)}, this method doesn't convert
-     * null records to {@link org.apache.kafka.common.record.MemoryRecords#EMPTY}.
+     * Unlike {@link org.apache.kafka.common.requests.ShareFetchResponse#of(Errors, int, LinkedHashMap, List)},
+     * this method doesn't convert null records to {@link org.apache.kafka.common.record.MemoryRecords#EMPTY}.
      *
      * <p><strong>This method should only be used in client-side.</strong></p>
      */
@@ -170,16 +170,6 @@ public class ShareFetchResponse extends AbstractResponse {
      *
      * <p><strong>This method should only be used in server-side.</strong></p>
      */
-    public static ShareFetchResponse of(ShareFetchResponseData data) {
-        for (ShareFetchResponseData.ShareFetchableTopicResponse response : data.responses()) {
-            for (ShareFetchResponseData.PartitionData partition : response.partitions()) {
-                if (partition.records() == null)
-                    partition.setRecords(MemoryRecords.EMPTY);
-            }
-        }
-        return new ShareFetchResponse(data);
-    }
-
     public static ShareFetchResponse of(Errors error,
                                         int throttleTimeMs,
                                         LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData,
