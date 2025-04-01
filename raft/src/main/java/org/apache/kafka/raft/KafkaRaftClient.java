@@ -592,9 +592,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         this.updateVoterHandler = new UpdateVoterHandler(
             nodeId,
             partitionState,
-            channel.listenerName(),
-            time,
-            quorumConfig.requestTimeoutMs()
+            channel.listenerName()
         );
     }
 
@@ -2886,15 +2884,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private long maybeSendFetchToAnyBootstrap(long currentTimeMs) {
         Optional<Node> readyNode = requestManager.findReadyBootstrapServer(currentTimeMs);
-        if (readyNode.isPresent()) {
-            return maybeSendRequest(
-                currentTimeMs,
-                readyNode.get(),
-                this::buildFetchRequest
-            );
-        } else {
-            return requestManager.backoffBeforeAvailableBootstrapServer(currentTimeMs);
-        }
+        return readyNode.map(node -> maybeSendRequest(
+            currentTimeMs,
+            node,
+            this::buildFetchRequest
+        )).orElseGet(() -> requestManager.backoffBeforeAvailableBootstrapServer(currentTimeMs));
     }
 
     private FetchSnapshotRequestData buildFetchSnapshotRequest(OffsetAndEpoch snapshotId, long snapshotSize) {
@@ -3330,7 +3324,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void pollListeners() {
-        // Apply all of the pending registration
+        // Apply all the pending registration
         while (true) {
             Registration<T> registration = pendingRegistrations.poll();
             if (registration == null) {
@@ -3824,7 +3818,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
          * This API is used for committed records originating from {@link #prepareAppend(int, List)}
          * on this instance. In this case, we are able to save the original record objects, which
          * saves the need to read them back from disk. This is a nice optimization for the leader
-         * which is typically doing more work than all of the * followers.
+         * which is typically doing more work than all the * followers.
          */
         private void fireHandleCommit(
             long baseOffset,

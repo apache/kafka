@@ -56,7 +56,7 @@ public final class VoterSet {
      *
      * @param voterIds the ids of the voters
      * @param listenerName the name of the listener
-     * @return the node information for all of the voter ids
+     * @return the node information for all the voter ids
      * @throws IllegalArgumentException if there are missing endpoints
      */
     public Set<Node> voterNodes(Stream<Integer> voterIds, ListenerName listenerName) {
