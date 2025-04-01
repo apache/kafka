@@ -2099,7 +2099,7 @@ public class ShareConsumerTest {
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             produceCommittedAndAbortedTransactionsInInterval(transactionalProducer, 10, 5);
             shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 8);
             // 5th and 10th message transaction was aborted, hence they won't be included in the fetched records.
             assertEquals(8, records.count());
             int messageCounter = 1;
@@ -2123,7 +2123,7 @@ public class ShareConsumerTest {
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             produceCommittedAndAbortedTransactionsInInterval(transactionalProducer, 10, 5);
             shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 10);
             // Even though 5th and 10th message transaction was aborted, they will be included in the fetched records since IsolationLevel is READ_UNCOMMITTED.
             assertEquals(10, records.count());
             int messageCounter = 1;
@@ -2149,7 +2149,7 @@ public class ShareConsumerTest {
                 // First transaction is committed.
                 produceCommittedTransaction(transactionalProducer, "Message 1");
 
-                ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+                ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
                 assertEquals(1, records.count());
                 ConsumerRecord<byte[], byte[]> record = records.iterator().next();
                 assertEquals("Message 1", new String(record.value()));
@@ -2161,7 +2161,7 @@ public class ShareConsumerTest {
                 // Second transaction is aborted.
                 produceAbortedTransaction(transactionalProducer, "Message 2");
 
-                records = shareConsumer.poll(Duration.ofMillis(5000));
+                records = waitedPoll(shareConsumer, 2500L, 1);
                 assertEquals(1, records.count());
                 record = records.iterator().next();
                 assertEquals("Message 2", new String(record.value()));
@@ -2173,7 +2173,7 @@ public class ShareConsumerTest {
                 // Fourth transaction is aborted.
                 produceAbortedTransaction(transactionalProducer, "Message 4");
 
-                records = shareConsumer.poll(Duration.ofMillis(5000));
+                records = waitedPoll(shareConsumer, 2500L, 2);
                 // Message 3 and Message 4 would be returned by this poll.
                 assertEquals(2, records.count());
                 Iterator<ConsumerRecord<byte[], byte[]>> recordIterator = records.iterator();
@@ -2236,7 +2236,7 @@ public class ShareConsumerTest {
                 // First transaction is committed.
                 produceCommittedTransaction(transactionalProducer, "Message 1");
 
-                ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+                ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
                 assertEquals(1, records.count());
                 ConsumerRecord<byte[], byte[]> record = records.iterator().next();
                 assertEquals("Message 1", new String(record.value()));
@@ -2249,7 +2249,7 @@ public class ShareConsumerTest {
                 produceAbortedTransaction(transactionalProducer, "Message 2");
 
                 // We will not receive any records since the transaction was aborted.
-                records = shareConsumer.poll(Duration.ofMillis(5000));
+                records = waitedPoll(shareConsumer, 2500L, 0);
                 assertEquals(0, records.count());
 
                 // Third transaction is committed.
@@ -2257,7 +2257,7 @@ public class ShareConsumerTest {
                 // Fourth transaction is aborted.
                 produceAbortedTransaction(transactionalProducer, "Message 4");
 
-                records = shareConsumer.poll(Duration.ofMillis(5000));
+                records = waitedPoll(shareConsumer, 2500L, 1);
                 // Message 3 would be returned by this poll.
                 assertEquals(1, records.count());
                 record = records.iterator().next();
@@ -2321,7 +2321,7 @@ public class ShareConsumerTest {
                 // First transaction is committed.
                 produceCommittedTransaction(transactionalProducer, "Message 1");
 
-                ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
+                ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
                 assertEquals(1, records.count());
                 ConsumerRecord<byte[], byte[]> record = records.iterator().next();
                 assertEquals("Message 1", new String(record.value()));
@@ -2334,7 +2334,7 @@ public class ShareConsumerTest {
                 produceAbortedTransaction(transactionalProducer, "Message 2");
 
                 // We will not receive any records since the transaction was aborted.
-                records = shareConsumer.poll(Duration.ofMillis(5000));
+                records = waitedPoll(shareConsumer, 2500L, 0);
                 assertEquals(0, records.count());
 
                 // Third transaction is committed.
@@ -2342,7 +2342,7 @@ public class ShareConsumerTest {
                 // Fourth transaction is aborted.
                 produceAbortedTransaction(transactionalProducer, "Message 4");
 
-                records = shareConsumer.poll(Duration.ofMillis(5000));
+                records = waitedPoll(shareConsumer, 2500L, 1);
                 // Message 3 would be returned by this poll.
                 assertEquals(1, records.count());
                 record = records.iterator().next();
