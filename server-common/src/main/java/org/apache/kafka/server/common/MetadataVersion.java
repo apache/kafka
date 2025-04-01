@@ -117,6 +117,10 @@ public enum MetadataVersion {
     // Enables share groups. Note, share groups are for preview only in 4.1. (KIP-932).
     IBP_4_1_IV1(27, "4.1", "IV1", false),
 
+    // Insert any additional IBP_4_1_IVx versions above this comment, and bump the feature level of
+    // IBP_4_2_IV0 accordingly. When 4.2 development begins, IBP_4_2_IV0 will cease to be
+    // a placeholder.
+
     // Enables share groups by default for new clusters (KIP-932).
     //
     // *** THIS IS A PLACEHOLDER UNSTABLE VERSION WHICH IS USED TO DEFINE THE POINT AT WHICH   ***
@@ -143,7 +147,7 @@ public enum MetadataVersion {
      * <strong>Think carefully before you update this value. ONCE A METADATA VERSION IS PRODUCTION,
      * IT CANNOT BE CHANGED.</strong>
      */
-    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_1_IV1;
+    public static final MetadataVersion LATEST_PRODUCTION = IBP_4_0_IV3;
     // If you change the value above please also update
     // LATEST_STABLE_METADATA_VERSION version in tests/kafkatest/version.py
 

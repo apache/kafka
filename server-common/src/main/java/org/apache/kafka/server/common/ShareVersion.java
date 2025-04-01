@@ -29,7 +29,7 @@ public enum ShareVersion implements FeatureVersion {
 
     public static final String FEATURE_NAME = "share.version";
 
-    public static final ShareVersion LATEST_PRODUCTION = SV_1;
+    public static final ShareVersion LATEST_PRODUCTION = SV_0;
 
     private final short featureLevel;
     private final MetadataVersion bootstrapMetadataVersion;
@@ -63,6 +63,10 @@ public enum ShareVersion implements FeatureVersion {
     @Override
     public Map<String, Short> dependencies() {
         return dependencies;
+    }
+
+    public boolean supportsShareGroups() {
+        return featureLevel >= SV_1.featureLevel;
     }
 
     public static ShareVersion fromFeatureLevel(short version) {

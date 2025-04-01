@@ -24,14 +24,11 @@ public enum GroupVersion implements FeatureVersion {
     GV_0(0, MetadataVersion.MINIMUM_VERSION, Map.of()),
 
     // Version 1 enables the consumer rebalance protocol (KIP-848).
-    GV_1(1, MetadataVersion.IBP_4_0_IV0, Map.of()),
-
-    // Version 2 enables share groups in the group coordinator (KIP-932).
-    GV_2(2, MetadataVersion.IBP_4_1_IV1, Map.of());
+    GV_1(1, MetadataVersion.IBP_4_0_IV0, Map.of());
 
     public static final String FEATURE_NAME = "group.version";
 
-    public static final GroupVersion LATEST_PRODUCTION = GV_2;
+    public static final GroupVersion LATEST_PRODUCTION = GV_1;
 
     private final short featureLevel;
     private final MetadataVersion bootstrapMetadataVersion;
@@ -77,8 +74,6 @@ public enum GroupVersion implements FeatureVersion {
                 return GV_0;
             case 1:
                 return GV_1;
-            case 2:
-                return GV_2;
             default:
                 throw new RuntimeException("Unknown group feature level: " + (int) version);
         }
