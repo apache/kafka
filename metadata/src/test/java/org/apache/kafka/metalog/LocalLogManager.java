@@ -64,7 +64,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
-import java.util.stream.IntStream;
 
 /**
  * The LocalLogManager is a test implementation that relies on the contents of memory.
@@ -324,62 +323,12 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
         }
 
         /**
-         * Returns the snapshot whose last offset is the committed offset.
-         *
-         * If such snapshot doesn't exist, it waits until it does.
-         */
-        synchronized RawSnapshotReader waitForSnapshot(long committedOffset) throws InterruptedException {
-            while (true) {
-                RawSnapshotReader reader = snapshots.get(committedOffset);
-                if (reader != null) {
-                    return reader;
-                } else {
-                    this.wait();
-                }
-            }
-        }
-
-        /**
-         * Returns the latest snapshot.
-         *
-         * If a snapshot doesn't exists, it waits until it does.
-         */
-        synchronized RawSnapshotReader waitForLatestSnapshot() throws InterruptedException {
-            while (snapshots.isEmpty()) {
-                this.wait();
-            }
-
-            return Objects.requireNonNull(snapshots.lastEntry()).getValue();
-        }
-
-        /**
          * Returns the snapshot id of the latest snapshot if there is one.
          *
          * If a snapshot doesn't exists, it return an empty Optional.
          */
         synchronized Optional<OffsetAndEpoch> latestSnapshotId() {
             return Optional.ofNullable(snapshots.lastEntry()).map(entry -> entry.getValue().snapshotId());
-        }
-
-        synchronized long appendedBytes() {
-            ObjectSerializationCache objectCache = new ObjectSerializationCache();
-
-            return batches
-                .values()
-                .stream()
-                .flatMapToInt(batch -> {
-                    if (batch instanceof LocalRecordBatch localBatch) {
-                        return localBatch.records.stream().mapToInt(record -> messageSize(record, objectCache));
-                    } else {
-                        return IntStream.empty();
-                    }
-                })
-                .sum();
-        }
-
-        public SharedLogData setInitialMaxReadOffset(long initialMaxReadOffset) {
-            this.initialMaxReadOffset = initialMaxReadOffset;
-            return this;
         }
 
         public long initialMaxReadOffset() {
