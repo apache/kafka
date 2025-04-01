@@ -18,12 +18,14 @@
 package org.apache.kafka.controller;
 
 import org.apache.kafka.clients.admin.FeatureUpdate;
+import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.VersionRange;
+import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.Feature;
@@ -50,11 +52,13 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_
 import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
 
+// TODO: broker registration should check the raft version
 public class FeatureControlManager {
     public static class Builder {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private QuorumFeatures quorumFeatures = null;
+        private RaftClient<?> raftClient = null;
         private ClusterFeatureSupportDescriber clusterSupportDescriber = new ClusterFeatureSupportDescriber() {
             @Override
             public Iterator<Entry<Integer, Map<String, VersionRange>>> brokerSupported() {
@@ -87,6 +91,11 @@ public class FeatureControlManager {
             return this;
         }
 
+        Builder setRaftClient(RaftClient<?> raftClient) {
+            this.raftClient = raftClient;
+            return this;
+        }
+
         public FeatureControlManager build() {
             if (logContext == null) logContext = new LogContext();
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
@@ -97,11 +106,16 @@ public class FeatureControlManager {
                         MetadataVersion.latestProduction().featureLevel()));
                 quorumFeatures = new QuorumFeatures(0, localSupportedFeatures, Collections.singletonList(0));
             }
+            if (raftClient == null) {
+                throw new IllegalStateException("Must specify and raft client");
+            }
+
             return new FeatureControlManager(
                 logContext,
                 quorumFeatures,
                 snapshotRegistry,
-                clusterSupportDescriber
+                clusterSupportDescriber,
+                raftClient
             );
         }
     }
@@ -128,23 +142,31 @@ public class FeatureControlManager {
      */
     private final ClusterFeatureSupportDescriber clusterSupportDescriber;
 
+    /**
+     * TODO: document
+     */
+    private final RaftClient<?> raftClient;
+
     private FeatureControlManager(
         LogContext logContext,
         QuorumFeatures quorumFeatures,
         SnapshotRegistry snapshotRegistry,
-        ClusterFeatureSupportDescriber clusterSupportDescriber
+        ClusterFeatureSupportDescriber clusterSupportDescriber,
+        RaftClient<?> raftClient
     ) {
         this.log = logContext.logger(FeatureControlManager.class);
         this.quorumFeatures = quorumFeatures;
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metadataVersion = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.clusterSupportDescriber = clusterSupportDescriber;
+        this.raftClient = raftClient;
     }
 
     ControllerResult<ApiError> updateFeatures(
         Map<String, Short> updates,
         Map<String, FeatureUpdate.UpgradeType> upgradeTypes,
-        boolean validateOnly
+        boolean validateOnly,
+        int currentClaimedEpoch
     ) {
         List<ApiMessageAndVersion> records =
                 BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
@@ -154,8 +176,15 @@ public class FeatureControlManager {
         proposedUpdatedVersions.putAll(updates);
 
         for (Entry<String, Short> entry : updates.entrySet()) {
-            ApiError error = updateFeature(entry.getKey(), entry.getValue(),
-                upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE), records, proposedUpdatedVersions);
+            ApiError error = updateFeature(
+                entry.getKey(),
+                entry.getValue(),
+                upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE),
+                records,
+                proposedUpdatedVersions,
+                validateOnly,
+                currentClaimedEpoch
+            );
             if (!error.error().equals(Errors.NONE)) {
                 return ControllerResult.of(Collections.emptyList(), error);
             }
@@ -186,7 +215,9 @@ public class FeatureControlManager {
         short newVersion,
         FeatureUpdate.UpgradeType upgradeType,
         List<ApiMessageAndVersion> records,
-        Map<String, Short> proposedUpdatedVersions
+        Map<String, Short> proposedUpdatedVersions,
+        boolean validateOnly,
+        int currentClaimedEpoch
     ) {
         if (upgradeType.equals(FeatureUpdate.UpgradeType.UNKNOWN)) {
             return invalidUpdateVersion(featureName, newVersion,
@@ -196,6 +227,8 @@ public class FeatureControlManager {
         final short currentVersion;
         if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
             currentVersion = metadataVersionOrThrow().featureLevel();
+        } else if (featureName.equals(KRaftVersion.FEATURE_NAME)) {
+            currentVersion = raftClient.kraftVersion().featureLevel();
         } else {
             currentVersion = finalizedVersions.getOrDefault(featureName, (short) 0);
         }
@@ -225,6 +258,23 @@ public class FeatureControlManager {
         if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
             // Perform additional checks if we're updating metadata.version
             return updateMetadataVersion(newVersion, upgradeType.equals(FeatureUpdate.UpgradeType.UNSAFE_DOWNGRADE), records::add);
+        } else if (featureName.equals(KRaftVersion.FEATURE_NAME)) {
+            if (upgradeType.equals(FeatureUpdate.UpgradeType.UPGRADE)) {
+                try {
+                    if (!validateOnly) {
+                        raftClient.upgradeKraftVersion(currentClaimedEpoch, KRaftVersion.fromFeatureLevel(newVersion));
+                    }
+                    return ApiError.NONE;
+                } catch (ApiException e) {
+                    return ApiError.fromThrowable(e);
+                }
+            }
+
+            return invalidUpdateVersion(
+                featureName,
+                newVersion,
+                "Can't downgrade the version of this feature."
+            );
         } else {
             // Validate dependencies for features that are not metadata.version
             try {

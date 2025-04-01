@@ -494,7 +494,8 @@ public class ConfigurationControlManagerTest {
                 EligibleLeaderReplicasVersion.ELRV_1.featureLevel()),
             Collections.singletonMap(EligibleLeaderReplicasVersion.FEATURE_NAME,
                 FeatureUpdate.UpgradeType.UPGRADE),
-            false);
+            false,
+            0);
         assertNotNull(result.response());
         assertEquals(Errors.NONE, result.response().error());
         RecordTestUtils.replayAll(manager, result.records());
@@ -545,7 +546,8 @@ public class ConfigurationControlManagerTest {
                 EligibleLeaderReplicasVersion.ELRV_1.featureLevel()),
             Collections.singletonMap(EligibleLeaderReplicasVersion.FEATURE_NAME,
                 FeatureUpdate.UpgradeType.UPGRADE),
-            false);
+            false,
+            0);
         assertNotNull(result.response());
         if (isMetadataVersionElrEnabled) {
             assertEquals(Errors.NONE, result.response().error());

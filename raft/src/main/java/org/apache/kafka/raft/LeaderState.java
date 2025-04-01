@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.InvalidUpdateVersionException;
 import org.apache.kafka.common.message.KRaftVersionRecord;
 import org.apache.kafka.common.message.LeaderChangeMessage;
@@ -37,6 +38,7 @@ import org.apache.kafka.server.common.KRaftVersion;
 
 import org.slf4j.Logger;
 
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -61,11 +63,10 @@ public class LeaderState<T> implements EpochState {
     static final long OBSERVER_SESSION_TIMEOUT_MS = 300_000L;
     static final double CHECK_QUORUM_TIMEOUT_FACTOR = 1.5;
 
-    private final ReplicaKey localReplicaKey;
+    private final VoterSet.VoterNode localVoterNode;
     private final int epoch;
     private final long epochStartOffset;
     private final Set<Integer> grantingVoters;
-    private final Endpoints localListeners;
     private final VoterSet voterSetAtEpochStart;
     // This field is non-empty if the voter set at epoch start came from a snapshot or log segment
     private final OptionalLong offsetOfVotersAtEpochStart;
@@ -100,7 +101,7 @@ public class LeaderState<T> implements EpochState {
 
     protected LeaderState(
         Time time,
-        ReplicaKey localReplicaKey,
+        VoterSet.VoterNode localVoterNode,
         int epoch,
         long epochStartOffset,
         VoterSet voterSetAtEpochStart,
@@ -108,18 +109,16 @@ public class LeaderState<T> implements EpochState {
         KRaftVersion kraftVersionAtEpochStart,
         Set<Integer> grantingVoters,
         BatchAccumulator<T> accumulator,
-        Endpoints localListeners,
         int fetchTimeoutMs,
         LogContext logContext,
         KafkaRaftMetrics kafkaRaftMetrics
     ) {
-        this.localReplicaKey = localReplicaKey;
+        this.localVoterNode = localVoterNode;
         this.epoch = epoch;
         this.epochStartOffset = epochStartOffset;
-        this.localListeners = localListeners;
 
         for (VoterSet.VoterNode voterNode: voterSetAtEpochStart.voterNodes()) {
-            boolean hasAcknowledgedLeader = voterNode.isVoter(localReplicaKey);
+            boolean hasAcknowledgedLeader = voterNode.isVoter(localVoterNode.voterKey());
             this.voterStates.put(
                 voterNode.voterKey().id(),
                 new ReplicaState(voterNode.voterKey(), hasAcknowledgedLeader, voterNode.listeners())
@@ -139,6 +138,12 @@ public class LeaderState<T> implements EpochState {
 
         kafkaRaftMetrics.addLeaderMetrics();
         this.kafkaRaftMetrics = kafkaRaftMetrics;
+
+        if (!kraftVersionAtEpochStart.isReconfigSupported()) {
+            updatedVolatileVoters.set(
+                voterSetAtEpochStart.unsafeUpdateVoter(localVoterNode)
+            );
+        }
     }
 
     public long timeUntilBeginQuorumEpochTimerExpires(long currentTimeMs) {
@@ -196,7 +201,7 @@ public class LeaderState<T> implements EpochState {
         // majority, but the leader will never be a member of the fetchedVoters.
         // If the leader is not in the voter set, it is not in the majority. Then, the
         // majority can only be composed of fetched voters.
-        if (voterStates.containsKey(localReplicaKey.id())) {
+        if (voterStates.containsKey(localVoterNode.voterKey().id())) {
             majority = majority - 1;
         }
 
@@ -208,7 +213,7 @@ public class LeaderState<T> implements EpochState {
     }
 
     private void updateFetchedVoters(ReplicaKey replicaKey) {
-        if (replicaKey.id() == localReplicaKey.id()) {
+        if (replicaKey.id() == localVoterNode.voterKey().id()) {
             throw new IllegalArgumentException("Received a FETCH/FETCH_SNAPSHOT request from the leader itself.");
         }
 
@@ -304,25 +309,32 @@ public class LeaderState<T> implements EpochState {
             .collect(Collectors.toList());
     }
 
-    public void appendStartOfEpochControlRecords(VoterSet.VoterNode localVoterNode, long currentTimeMs) {
-        if (!localReplicaKey.equals(localVoterNode.voterKey())) {
-            throw new IllegalArgumentException(
-                String.format(
-                    "Replica key %s didn't match the local key %s",
-                    localVoterNode.voterKey(),
-                    localReplicaKey
-                )
-            );
-        } else if (!localListeners.equals(localVoterNode.listeners())) {
-            throw new IllegalArgumentException(
-                String.format(
-                    "Listeners %s didn't match the local listeners %s",
-                    localVoterNode.listeners(),
-                    localListeners
-                )
-            );
-        }
+    private static MemoryRecordsBuilder createControlRecordsBuilder(
+        long baseOffset,
+        int epoch,
+        Compression compression,
+        ByteBuffer buffer,
+        long currentTimeMs
+    ) {
+        return new MemoryRecordsBuilder(
+            buffer,
+            RecordBatch.CURRENT_MAGIC_VALUE,
+            compression,
+            TimestampType.CREATE_TIME,
+            baseOffset,
+            currentTimeMs,
+            RecordBatch.NO_PRODUCER_ID,
+            RecordBatch.NO_PRODUCER_EPOCH,
+            RecordBatch.NO_SEQUENCE,
+            false, // isTransactional
+            true,  // isControlBatch
+            epoch,
+            buffer.capacity()
+        );
+    }
 
+
+    public void appendStartOfEpochControlRecords(long currentTimeMs) {
         List<Voter> voters = convertToVoters(voterStates.keySet());
         List<Voter> grantingVoters = convertToVoters(this.grantingVoters());
 
@@ -333,20 +345,12 @@ public class LeaderState<T> implements EpochState {
             .setGrantingVoters(grantingVoters);
 
         accumulator.appendControlMessages((baseOffset, epoch, compression, buffer) -> {
-            try (MemoryRecordsBuilder builder = new MemoryRecordsBuilder(
-                    buffer,
-                    RecordBatch.CURRENT_MAGIC_VALUE,
-                    compression,
-                    TimestampType.CREATE_TIME,
+            try (MemoryRecordsBuilder builder = createControlRecordsBuilder(
                     baseOffset,
-                    currentTimeMs,
-                    RecordBatch.NO_PRODUCER_ID,
-                    RecordBatch.NO_PRODUCER_EPOCH,
-                    RecordBatch.NO_SEQUENCE,
-                    false, // isTransactional
-                    true,  // isControlBatch
                     epoch,
-                    buffer.capacity()
+                    compression,
+                    buffer,
+                    currentTimeMs
                 )
             ) {
                 builder.appendLeaderChangeMessage(currentTimeMs, leaderChangeMessage);
@@ -406,8 +410,8 @@ public class LeaderState<T> implements EpochState {
         );
     }
 
-    public void updateVolatileVoters(VoterSet voters) {
-        updatedVolatileVoters.set(Optional.of(voters));
+    public void updateVolatileVoters(Optional<VoterSet> voters) {
+        updatedVolatileVoters.set(voters);
     }
 
     public Optional<VoterSet> volatileVoters() {
@@ -497,6 +501,7 @@ public class LeaderState<T> implements EpochState {
                     newVersion
                 )
             );
+            // TODO: check that all of the voters have a directory id
         } else if (!requestedVersionUpgrade.compareAndSet(pendingVersion, Optional.of(newVersion))) {
             throw new InvalidUpdateVersionException(
                 String.format(
@@ -508,6 +513,49 @@ public class LeaderState<T> implements EpochState {
         }
     }
 
+    public boolean maybeUpgradeKraftVersion(VoterSet persistedVoters, long currentTimeMs) {
+        var pendingVersion = requestedVersionUpgrade.getAndSet(Optional.empty());
+        if (pendingVersion.isPresent()) {
+            var voterSet = updatedVolatileVoters.get().orElse(persistedVoters);
+            if (voterSet.voterIds().equals(persistedVoters.voterIds()) &&
+                voterSet.supportsVersion(pendingVersion.get())
+            ) {
+                accumulator.appendControlMessages((baseOffset, epoch, compression, buffer) -> {
+                    try (MemoryRecordsBuilder builder = createControlRecordsBuilder(
+                            baseOffset,
+                            epoch,
+                            compression,
+                            buffer,
+                            currentTimeMs
+                        )
+                    ) {
+                        builder.appendKRaftVersionMessage(
+                            currentTimeMs,
+                            new KRaftVersionRecord()
+                                .setVersion(pendingVersion.get().kraftVersionRecordVersion())
+                                .setKRaftVersion(pendingVersion.get().featureLevel())
+                        );
+
+                        if (!voterSet.equals(persistedVoters)) {
+                            builder.appendVotersMessage(
+                                currentTimeMs,
+                                voterSet.toVotersRecord(
+                                    pendingVersion.get().votersRecordVersion()
+                                )
+                            );
+                        }
+
+                        return builder.build();
+                    }
+                });
+
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     @Override
     public Optional<LogOffsetMetadata> highWatermark() {
         return highWatermark;
@@ -515,7 +563,7 @@ public class LeaderState<T> implements EpochState {
 
     @Override
     public ElectionState election() {
-        return ElectionState.withElectedLeader(epoch, localReplicaKey.id(), Optional.empty(), voterStates.keySet());
+        return ElectionState.withElectedLeader(epoch, localVoterNode.voterKey().id(), Optional.empty(), voterStates.keySet());
     }
 
     @Override
@@ -525,7 +573,7 @@ public class LeaderState<T> implements EpochState {
 
     @Override
     public Endpoints leaderEndpoints() {
-        return localListeners;
+        return localVoterNode.listeners();
     }
 
     Map<Integer, ReplicaState> voterStates() {
@@ -649,7 +697,7 @@ public class LeaderState<T> implements EpochState {
         LogOffsetMetadata endOffsetMetadata,
         VoterSet lastVoterSet
     ) {
-        ReplicaState state = getOrCreateReplicaState(localReplicaKey);
+        ReplicaState state = getOrCreateReplicaState(localVoterNode.voterKey());
         state.endOffset.ifPresent(currentEndOffset -> {
             if (currentEndOffset.offset() > endOffsetMetadata.offset()) {
                 throw new IllegalStateException("Detected non-monotonic update of local " +
@@ -680,7 +728,7 @@ public class LeaderState<T> implements EpochState {
         // the fetch is from non-replica. For example, a consumer.
         if (replicaKey.id() < 0) {
             return false;
-        } else if (replicaKey.id() == localReplicaKey.id()) {
+        } else if (replicaKey.id() == localVoterNode.voterKey().id()) {
             throw new IllegalStateException(
                 String.format("Remote replica ID %s matches the local leader ID", replicaKey)
             );
@@ -695,7 +743,7 @@ public class LeaderState<T> implements EpochState {
             }
         });
 
-        Optional<LogOffsetMetadata> leaderEndOffsetOpt = getOrCreateReplicaState(localReplicaKey).endOffset;
+        Optional<LogOffsetMetadata> leaderEndOffsetOpt = getOrCreateReplicaState(localVoterNode.voterKey()).endOffset;
 
         state.updateFollowerState(
             currentTimeMs,
@@ -709,7 +757,7 @@ public class LeaderState<T> implements EpochState {
 
     public List<ReplicaKey> nonLeaderVotersByDescendingFetchOffset() {
         return followersByDescendingFetchOffset()
-            .filter(state -> !state.matchesKey(localReplicaKey))
+            .filter(state -> !state.matchesKey(localVoterNode.voterKey()))
             .map(state -> state.replicaKey)
             .collect(Collectors.toList());
     }
@@ -763,7 +811,7 @@ public class LeaderState<T> implements EpochState {
     private void clearInactiveObservers(final long currentTimeMs) {
         observerStates.entrySet().removeIf(integerReplicaStateEntry ->
             currentTimeMs - integerReplicaStateEntry.getValue().lastFetchTimestamp >= OBSERVER_SESSION_TIMEOUT_MS &&
-            !integerReplicaStateEntry.getKey().equals(localReplicaKey)
+            !integerReplicaStateEntry.getKey().equals(localVoterNode.voterKey())
         );
         kafkaRaftMetrics.updateNumObservers(observerStates.size());
     }
@@ -956,8 +1004,8 @@ public class LeaderState<T> implements EpochState {
     @Override
     public String toString() {
         return String.format(
-            "Leader(localReplicaKey=%s, epoch=%d, epochStartOffset=%d, highWatermark=%s, voterStates=%s)",
-            localReplicaKey,
+            "Leader(localVoterNode=%s, epoch=%d, epochStartOffset=%d, highWatermark=%s, voterStates=%s)",
+            localVoterNode,
             epoch,
             epochStartOffset,
             highWatermark,

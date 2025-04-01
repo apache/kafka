@@ -65,7 +65,11 @@ public class LeaderStateTest {
     ) {
         return new LeaderState<>(
             time,
-            localReplicaKey,
+            voters.voterNodes()
+                .stream()
+                .filter(node -> node.voterKey().equals(localReplicaKey))
+                .findFirst()
+                .get(),
             epoch,
             epochStartOffset,
             voters,
@@ -73,7 +77,6 @@ public class LeaderStateTest {
             kraftVersion,
             voters.voterIds(),
             accumulator,
-            voters.listeners(localReplicaKey.id()),
             fetchTimeoutMs,
             logContext,
             new KafkaRaftMetrics(new Metrics(), "raft")
@@ -111,7 +114,11 @@ public class LeaderStateTest {
             NullPointerException.class,
             () -> new LeaderState<>(
                 new MockTime(),
-                localReplicaKey,
+                voterSet.voterNodes()
+                    .stream()
+                    .filter(node -> node.voterKey().equals(localReplicaKey))
+                    .findFirst()
+                    .get(),
                 epoch,
                 0,
                 voterSet,
@@ -119,7 +126,6 @@ public class LeaderStateTest {
                 kraftVersion,
                 Collections.emptySet(),
                 null,
-                Endpoints.empty(),
                 fetchTimeoutMs,
                 logContext,
                 new KafkaRaftMetrics(new Metrics(), "raft")

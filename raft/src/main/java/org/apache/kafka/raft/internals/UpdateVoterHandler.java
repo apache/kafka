@@ -178,7 +178,7 @@ public final class UpdateVoterHandler {
             );
         }
 
-        storeUpdatedVoters(leaderState, voters.get(), kraftVersion, currentTimeMs);
+        storeUpdatedVoters(leaderState, updatedVoters.get(), kraftVersion, currentTimeMs);
 
         // Reply immediately and don't wait for the change to commit
         return CompletableFuture.completedFuture(
@@ -241,7 +241,7 @@ public final class UpdateVoterHandler {
             leaderState.appendVotersRecord(voters, currentTimeMs);
         } else {
             // Store the new voters set in the leader state since it cannot be written to the log
-            leaderState.updateVolatileVoters(voters);
+            leaderState.updateVolatileVoters(Optional.of(voters));
         }
     }
 }

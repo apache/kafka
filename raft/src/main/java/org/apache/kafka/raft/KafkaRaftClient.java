@@ -654,7 +654,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         // The high watermark can only be advanced once we have written a record
         // from the new leader's epoch. Hence we write a control message immediately
         // to ensure there is no delay committing pending data.
-        state.appendStartOfEpochControlRecords(quorum.localVoterNodeOrThrow(), currentTimeMs);
+        state.appendStartOfEpochControlRecords(currentTimeMs);
 
         resetConnections();
         kafkaRaftMetrics.maybeUpdateElectionLatency(currentTimeMs);
@@ -2948,7 +2948,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
             future.whenComplete((commitTimeMs, exception) -> {
                 if (exception != null) {
-                    logger.debug("Failed to commit {} records up to last offset {}", batch.numRecords, offsetAndEpoch, exception);
+                    logger.debug(
+                        "Failed to commit {} records up to last offset {}",
+                        batch.numRecords,
+                        offsetAndEpoch,
+                        exception
+                    );
                 } else {
                     long elapsedTime = Math.max(0, commitTimeMs - appendTimeMs);
                     double elapsedTimePerRecord = (double) elapsedTime / batch.numRecords;
@@ -2968,6 +2973,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         LeaderState<T> state,
         long currentTimeMs
     ) {
+        var upgradedKraftVersion = state.maybeUpgradeKraftVersion(partitionState.lastVoterSet(), currentTimeMs);
+
         long timeUntilDrain = state.accumulator().timeUntilDrain(currentTimeMs);
         if (timeUntilDrain <= 0) {
             List<BatchAccumulator.CompletedBatch<T>> batches = state.accumulator().drain();
@@ -2984,6 +2991,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 while (iterator.hasNext()) {
                     iterator.next().release();
                 }
+            }
+
+            if (upgradedKraftVersion) {
+                // The kraft version was written to the log. Remove the stored in-memory state
+                state.updateVolatileVoters(Optional.empty());
             }
         }
 
