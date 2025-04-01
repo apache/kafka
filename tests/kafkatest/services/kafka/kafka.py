@@ -203,7 +203,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  controller_num_nodes_override=0,
                  allow_zk_with_kraft=False,
                  quorum_info_provider=None,
-                 use_new_coordinator=None,
                  consumer_group_migration_policy=None,
                  dynamicRaftQuorum=False,
                  use_transactions_v2=False,
@@ -268,7 +267,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param int controller_num_nodes_override: the number of controller nodes to use in the cluster, instead of 5, 3, or 1 based on num_nodes, if positive, not using ZooKeeper, and isolated_kafka is not None; ignored otherwise
         :param bool allow_zk_with_kraft: if True, then allow a KRaft broker or controller to also use ZooKeeper
         :param quorum_info_provider: A function that takes this KafkaService as an argument and returns a ServiceQuorumInfo. If this is None, then the ServiceQuorumInfo is generated from the test context
-        :param use_new_coordinator: When true, use the new implementation of the group coordinator as per KIP-848. If this is None, the default existing group coordinator is used.
         :param consumer_group_migration_policy: The config that enables converting the non-empty classic group using the consumer embedded protocol to the non-empty consumer group using the consumer group protocol and vice versa.
         :param dynamicRaftQuorum: When true, controller_quorum_bootstrap_servers, and bootstraps the first controller using the standalone flag
         :param use_transactions_v2: When true, uses transaction.version=2 which utilizes the new transaction protocol introduced in KIP-890
@@ -286,15 +284,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.isolated_controller_quorum = None # will define below if necessary
         self.dynamicRaftQuorum = False
 
-        # Set use_new_coordinator based on context and arguments.
-        # If not specified, the default config is used.
-        if use_new_coordinator is None:
-            arg_name = 'use_new_coordinator'
-            if context.injected_args is not None:
-                use_new_coordinator = context.injected_args.get(arg_name)
-            if use_new_coordinator is None:
-                use_new_coordinator = context.globals.get(arg_name)
-
         # Set use_share_groups based on context and arguments.
         # If not specified, the default config is used.
         if use_share_groups is None:
@@ -305,7 +294,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 use_share_groups = context.globals.get(arg_name)
         
         # Assign the determined value.
-        self.use_new_coordinator = use_new_coordinator
         self.use_transactions_v2 = use_transactions_v2
         self.use_share_groups = use_share_groups
 
@@ -778,9 +766,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                 override_configs[config_property.ZOOKEEPER_CLIENT_CNXN_SOCKET] = 'org.apache.zookeeper.ClientCnxnSocketNetty'
             else:
                 override_configs[config_property.ZOOKEEPER_SSL_CLIENT_ENABLE] = 'false'
-
-        if self.use_new_coordinator is not None:
-            override_configs[config_property.NEW_GROUP_COORDINATOR_ENABLE] = str(self.use_new_coordinator)
 
         if self.consumer_group_migration_policy is not None:
             override_configs[config_property.CONSUMER_GROUP_MIGRATION_POLICY] = str(self.consumer_group_migration_policy)

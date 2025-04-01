@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.coordinator.group.{CoordinatorLoaderImpl, CoordinatorPartitionWriter, GroupCoordinatorAdapter}
+import kafka.coordinator.group.{CoordinatorLoaderImpl, CoordinatorPartitionWriter}
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.LogManager
 import kafka.log.remote.RemoteLogManager
@@ -113,7 +113,7 @@ class BrokerServer(
 
   var tokenManager: DelegationTokenManager = _
 
-  var dynamicConfigHandlers: Map[String, ConfigHandler] = _
+  var dynamicConfigHandlers: Map[ConfigType, ConfigHandler] = _
 
   @volatile private[this] var _replicaManager: ReplicaManager = _
 
@@ -194,7 +194,10 @@ class BrokerServer(
       info("Starting broker")
 
       val clientMetricsReceiverPlugin = new ClientMetricsReceiverPlugin()
+
       config.dynamicConfig.initialize(Some(clientMetricsReceiverPlugin))
+      quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-")
+      DynamicBrokerConfig.readDynamicBrokerConfigsFromSnapshot(raftManager, config, quotaManagers)
 
       /* start scheduler */
       kafkaScheduler = new KafkaScheduler(config.backgroundThreads)
@@ -202,8 +205,6 @@ class BrokerServer(
 
       /* register broker metrics */
       brokerTopicStats = new BrokerTopicStats(config.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
-
-      quotaManagers = QuotaFactory.instantiate(config, metrics, time, s"broker-${config.nodeId}-")
 
       logDirFailureChannel = new LogDirFailureChannel(config.logDirs.size)
 
@@ -384,7 +385,7 @@ class BrokerServer(
         config, clientToControllerChannelManager, groupCoordinator,
         transactionCoordinator, shareCoordinator)
 
-      dynamicConfigHandlers = Map[String, ConfigHandler](
+      dynamicConfigHandlers = Map[ConfigType, ConfigHandler](
         ConfigType.TOPIC -> new TopicConfigHandler(replicaManager, config, quotaManagers),
         ConfigType.BROKER -> new BrokerConfigHandler(config, quotaManagers),
         ConfigType.CLIENT_METRICS -> new ClientMetricsConfigHandler(clientMetricsManager),
@@ -437,7 +438,6 @@ class BrokerServer(
         config.shareGroupConfig.shareGroupRecordLockDurationMs,
         config.shareGroupConfig.shareGroupDeliveryCountLimit,
         config.shareGroupConfig.shareGroupPartitionMaxRecordLocks,
-        config.shareGroupConfig.shareFetchMaxFetchRecords,
         persister,
         groupConfigManager,
         brokerTopicStats
@@ -465,7 +465,8 @@ class BrokerServer(
         time = time,
         tokenManager = tokenManager,
         apiVersionManager = apiVersionManager,
-        clientMetricsManager = clientMetricsManager)
+        clientMetricsManager = clientMetricsManager,
+        groupConfigManager = groupConfigManager)
 
       dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
@@ -621,41 +622,32 @@ class BrokerServer(
     // Create group coordinator, but don't start it until we've started replica manager.
     // Hardcode Time.SYSTEM for now as some Streams tests fail otherwise, it would be good
     // to fix the underlying issue.
-    if (config.isNewGroupCoordinatorEnabled) {
-      val time = Time.SYSTEM
-      val serde = new GroupCoordinatorRecordSerde
-      val timer = new SystemTimerReaper(
-        "group-coordinator-reaper",
-        new SystemTimer("group-coordinator")
-      )
-      val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
-        time,
-        replicaManager,
-        serde,
-        config.groupCoordinatorConfig.offsetsLoadBufferSize
-      )
-      val writer = new CoordinatorPartitionWriter(
-        replicaManager
-      )
-      new GroupCoordinatorService.Builder(config.brokerId, config.groupCoordinatorConfig)
-        .withTime(time)
-        .withTimer(timer)
-        .withLoader(loader)
-        .withWriter(writer)
-        .withCoordinatorRuntimeMetrics(new GroupCoordinatorRuntimeMetrics(metrics))
-        .withGroupCoordinatorMetrics(new GroupCoordinatorMetrics(KafkaYammerMetrics.defaultRegistry, metrics))
-        .withGroupConfigManager(groupConfigManager)
-        .withPersister(persister)
-        .withAuthorizer(authorizer.toJava)
-        .build()
-    } else {
-      GroupCoordinatorAdapter(
-        config,
-        replicaManager,
-        Time.SYSTEM,
-        metrics
-      )
-    }
+    val time = Time.SYSTEM
+    val serde = new GroupCoordinatorRecordSerde
+    val timer = new SystemTimerReaper(
+      "group-coordinator-reaper",
+      new SystemTimer("group-coordinator")
+    )
+    val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
+      time,
+      replicaManager,
+      serde,
+      config.groupCoordinatorConfig.offsetsLoadBufferSize
+    )
+    val writer = new CoordinatorPartitionWriter(
+      replicaManager
+    )
+    new GroupCoordinatorService.Builder(config.brokerId, config.groupCoordinatorConfig)
+      .withTime(time)
+      .withTimer(timer)
+      .withLoader(loader)
+      .withWriter(writer)
+      .withCoordinatorRuntimeMetrics(new GroupCoordinatorRuntimeMetrics(metrics))
+      .withGroupCoordinatorMetrics(new GroupCoordinatorMetrics(KafkaYammerMetrics.defaultRegistry, metrics))
+      .withGroupConfigManager(groupConfigManager)
+      .withPersister(persister)
+      .withAuthorizer(authorizer.toJava)
+      .build()
   }
 
   private def createShareCoordinator(): Option[ShareCoordinator] = {

@@ -32,7 +32,6 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordValidationStats}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.server.ActionQueue
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, TopicPartitionOperationKey}
 import org.apache.kafka.server.util.timer.{MockTimer, Timer}
@@ -220,7 +219,6 @@ object AbstractCoordinatorConcurrencyTest {
                                delayedProduceLock: Option[Lock] = None,
                                processingStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
                                requestLocal: RequestLocal = RequestLocal.noCaching,
-                               actionQueue: ActionQueue = null,
                                verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
 
       if (entriesPerPartition.isEmpty)
