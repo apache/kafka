@@ -400,7 +400,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param context The request context.
      * @param request The actual StreamsGroupHeartbeat request.
      *
-     * @return A Result containing the StreamsGroupHeartbeat response, a list of internal topics to be created and
+     * @return A result containing the StreamsGroupHeartbeat response, a list of internal topics to be created and
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(

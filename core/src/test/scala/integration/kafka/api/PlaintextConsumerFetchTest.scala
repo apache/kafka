@@ -30,9 +30,9 @@ import scala.jdk.CollectionConverters._
 @Timeout(600)
 class PlaintextConsumerFetchTest extends AbstractConsumerTest {
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testFetchInvalidOffset(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testFetchInvalidOffset(groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none")
     val consumer = createConsumer(configOverrides = this.consumerConfig)
 
@@ -56,9 +56,9 @@ class PlaintextConsumerFetchTest extends AbstractConsumerTest {
     assertEquals(outOfRangePos.toLong, outOfRangePartitions.get(tp))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testFetchOutOfRangeOffsetResetConfigEarliest(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testFetchOutOfRangeOffsetResetConfigEarliest(groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest")
     // ensure no in-flight fetch request so that the offset can be reset immediately
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
@@ -78,9 +78,9 @@ class PlaintextConsumerFetchTest extends AbstractConsumerTest {
   }
 
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testFetchOutOfRangeOffsetResetConfigLatest(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testFetchOutOfRangeOffsetResetConfigLatest(groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "latest")
     // ensure no in-flight fetch request so that the offset can be reset immediately
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
@@ -105,9 +105,9 @@ class PlaintextConsumerFetchTest extends AbstractConsumerTest {
     assertEquals(totalRecords, nextRecord.offset())
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testFetchOutOfRangeOffsetResetConfigByDuration(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testFetchOutOfRangeOffsetResetConfigByDuration(groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "by_duration:PT1H")
     // ensure no in-flight fetch request so that the offset can be reset immediately
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "0")
@@ -151,9 +151,9 @@ class PlaintextConsumerFetchTest extends AbstractConsumerTest {
       timestampIncrement = Duration.ofHours(1).toMillis)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testFetchRecordLargerThanFetchMaxBytes(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testFetchRecordLargerThanFetchMaxBytes(groupProtocol: String): Unit = {
     val maxFetchBytes = 10 * 1024
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, maxFetchBytes.toString)
     checkLargeRecord(maxFetchBytes + 1)
@@ -181,9 +181,9 @@ class PlaintextConsumerFetchTest extends AbstractConsumerTest {
   }
 
   /** We should only return a large record if it's the first record in the first non-empty partition of the fetch request */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testFetchHonoursFetchSizeIfLargeRecordNotFirst(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testFetchHonoursFetchSizeIfLargeRecordNotFirst(groupProtocol: String): Unit = {
     val maxFetchBytes = 10 * 1024
     this.consumerConfig.setProperty(ConsumerConfig.FETCH_MAX_BYTES_CONFIG, maxFetchBytes.toString)
     checkFetchHonoursSizeIfLargeRecordNotFirst(maxFetchBytes)
@@ -214,26 +214,26 @@ class PlaintextConsumerFetchTest extends AbstractConsumerTest {
   }
 
   /** We should only return a large record if it's the first record in the first partition of the fetch request */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testFetchHonoursMaxPartitionFetchBytesIfLargeRecordNotFirst(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testFetchHonoursMaxPartitionFetchBytesIfLargeRecordNotFirst(groupProtocol: String): Unit = {
     val maxPartitionFetchBytes = 10 * 1024
     this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxPartitionFetchBytes.toString)
     checkFetchHonoursSizeIfLargeRecordNotFirst(maxPartitionFetchBytes)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testFetchRecordLargerThanMaxPartitionFetchBytes(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testFetchRecordLargerThanMaxPartitionFetchBytes(groupProtocol: String): Unit = {
     val maxPartitionFetchBytes = 10 * 1024
     this.consumerConfig.setProperty(ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG, maxPartitionFetchBytes.toString)
     checkLargeRecord(maxPartitionFetchBytes + 1)
   }
 
   /** Test that we consume all partitions if fetch max bytes and max.partition.fetch.bytes are low */
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testLowMaxFetchSizeForRequestAndPartition(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testLowMaxFetchSizeForRequestAndPartition(groupProtocol: String): Unit = {
     // one of the effects of this is that there will be some log reads where `0 > remaining limit bytes < message size`
     // and we don't return the message because it's not the first message in the first non-empty partition of the fetch
     // this behaves a little different than when remaining limit bytes is 0 and it's important to test it
