@@ -38,11 +38,15 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.record.DefaultRecord;
+import org.apache.kafka.common.record.EndTransactionMarker;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.MockTime;
@@ -79,6 +83,7 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -6849,6 +6854,214 @@ public class SharePartitionTest {
         assertNull(sharePartition.cachedState().get(50L).offsetState().get(67L).acquisitionLockTimeoutTask());
         assertNotNull(sharePartition.cachedState().get(50L).offsetState().get(68L).acquisitionLockTimeoutTask());
         assertNotNull(sharePartition.cachedState().get(50L).offsetState().get(69L).acquisitionLockTimeoutTask());
+    }
+
+    @Test
+    public void testContainsAbortMarker() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        // Record batch is not a control batch.
+        RecordBatch recordBatch = mock(RecordBatch.class);
+        when(recordBatch.isControlBatch()).thenReturn(false);
+        assertFalse(sharePartition.containsAbortMarker(recordBatch));
+
+        // Record batch is a control batch but doesn't contain any records..
+        recordBatch = mock(RecordBatch.class);
+        Iterator batchIterator = mock(Iterator.class);
+        when(batchIterator.hasNext()).thenReturn(false);
+        when(recordBatch.iterator()).thenReturn(batchIterator);
+        when(recordBatch.isControlBatch()).thenReturn(true);
+        assertFalse(sharePartition.containsAbortMarker(recordBatch));
+
+        // Record batch is a control batch which contains a record of type ControlRecordType.ABORT.
+        recordBatch = mock(RecordBatch.class);
+        batchIterator = mock(Iterator.class);
+        when(batchIterator.hasNext()).thenReturn(true);
+        DefaultRecord record = mock(DefaultRecord.class);
+        ByteBuffer buffer = ByteBuffer.allocate(4096);
+        // Buffer has to be created in a way that ControlRecordType.parse(buffer) returns ControlRecordType.ABORT.
+        buffer.putShort((short) 5);
+        buffer.putShort(ControlRecordType.ABORT.type());
+        buffer.putInt(23432); // some field added in version 5
+        buffer.flip();
+        when(record.key()).thenReturn(buffer);
+        when(batchIterator.next()).thenReturn(record);
+        when(recordBatch.iterator()).thenReturn(batchIterator);
+        when(recordBatch.isControlBatch()).thenReturn(true);
+        assertTrue(sharePartition.containsAbortMarker(recordBatch));
+
+        // Record batch is a control batch which contains a record of type ControlRecordType.COMMIT.
+        recordBatch = mock(RecordBatch.class);
+        batchIterator = mock(Iterator.class);
+        when(batchIterator.hasNext()).thenReturn(true);
+        record = mock(DefaultRecord.class);
+        buffer = ByteBuffer.allocate(4096);
+        // Buffer has to be created in a way that ControlRecordType.parse(buffer) returns ControlRecordType.COMMIT.
+        buffer.putShort((short) 5);
+        buffer.putShort(ControlRecordType.COMMIT.type());
+        buffer.putInt(23432); // some field added in version 5
+        buffer.flip();
+        when(record.key()).thenReturn(buffer);
+        when(batchIterator.next()).thenReturn(record);
+        when(recordBatch.iterator()).thenReturn(batchIterator);
+        when(recordBatch.isControlBatch()).thenReturn(true);
+        assertFalse(sharePartition.containsAbortMarker(recordBatch));
+    }
+
+    @Test
+    public void testFetchAbortedTransactionRecordBatchesForOnlyAbortedTransactions() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        // Case 1 - Creating 10 transactional records in a single batch followed by a ABORT marker record for producerId 1.
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        newTransactionalRecords(buffer, ControlRecordType.ABORT, 10, 1, 0);
+        buffer.flip();
+        Records records = MemoryRecords.readableRecords(buffer);
+
+        List<FetchResponseData.AbortedTransaction> abortedTransactions = List.of(
+            new FetchResponseData.AbortedTransaction().setFirstOffset(0).setProducerId(1)
+        );
+        // records from 0 to 9 should be archived because they are a part of aborted transactions.
+        List<RecordBatch> actual = sharePartition.fetchAbortedTransactionRecordBatches(records.batches(), abortedTransactions);
+        assertEquals(1, actual.size());
+        assertEquals(0, actual.get(0).baseOffset());
+        assertEquals(9, actual.get(0).lastOffset());
+        assertEquals(1, actual.get(0).producerId());
+
+        // Case 2: 3 individual batches each followed by a ABORT marker record for producerId 1.
+        buffer = ByteBuffer.allocate(1024);
+        newTransactionalRecords(buffer, ControlRecordType.ABORT, 1, 1, 0);
+        newTransactionalRecords(buffer, ControlRecordType.ABORT, 1, 1, 2);
+        newTransactionalRecords(buffer, ControlRecordType.ABORT, 1, 1, 4);
+        buffer.flip();
+        records = MemoryRecords.readableRecords(buffer);
+        abortedTransactions = List.of(
+            new FetchResponseData.AbortedTransaction().setFirstOffset(0).setProducerId(1),
+            new FetchResponseData.AbortedTransaction().setFirstOffset(2).setProducerId(1),
+            new FetchResponseData.AbortedTransaction().setFirstOffset(4).setProducerId(1)
+        );
+
+        actual = sharePartition.fetchAbortedTransactionRecordBatches(records.batches(), abortedTransactions);
+        assertEquals(3, actual.size());
+        assertEquals(0, actual.get(0).baseOffset());
+        assertEquals(0, actual.get(0).lastOffset());
+        assertEquals(1, actual.get(0).producerId());
+        assertEquals(2, actual.get(1).baseOffset());
+        assertEquals(2, actual.get(1).lastOffset());
+        assertEquals(1, actual.get(1).producerId());
+        assertEquals(4, actual.get(2).baseOffset());
+        assertEquals(4, actual.get(2).lastOffset());
+        assertEquals(1, actual.get(2).producerId());
+
+        // Case 3: The producer id of records is different, so they should not be archived,
+        buffer = ByteBuffer.allocate(1024);
+        // We are creating 10 transactional records followed by a ABORT marker record for producerId 2.
+        newTransactionalRecords(buffer, ControlRecordType.ABORT, 10, 2, 0);
+        buffer.flip();
+        records = MemoryRecords.readableRecords(buffer);
+        abortedTransactions = List.of(
+            new FetchResponseData.AbortedTransaction().setFirstOffset(0).setProducerId(1)
+        );
+
+        actual = sharePartition.fetchAbortedTransactionRecordBatches(records.batches(), abortedTransactions);
+        assertEquals(0, actual.size());
+    }
+
+    @Test
+    public void testFetchAbortedTransactionRecordBatchesForAbortedAndCommittedTransactions() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        newTransactionalRecords(buffer, ControlRecordType.ABORT, 2, 1, 0);
+        newTransactionalRecords(buffer, ControlRecordType.COMMIT, 2, 2, 3);
+        newTransactionalRecords(buffer, ControlRecordType.ABORT, 2, 2, 6);
+        newTransactionalRecords(buffer, ControlRecordType.ABORT, 2, 1, 9);
+        newTransactionalRecords(buffer, ControlRecordType.COMMIT, 2, 1, 12);
+        newTransactionalRecords(buffer, ControlRecordType.ABORT, 2, 1, 15);
+        buffer.flip();
+        Records records = MemoryRecords.readableRecords(buffer);
+
+        // Case 1 - Aborted transactions does not contain the record batch from 4-5 with producer id 2.
+        List<FetchResponseData.AbortedTransaction> abortedTransactions = List.of(
+            new FetchResponseData.AbortedTransaction().setFirstOffset(0).setProducerId(1),
+            new FetchResponseData.AbortedTransaction().setFirstOffset(6).setProducerId(1),
+            new FetchResponseData.AbortedTransaction().setFirstOffset(9).setProducerId(1),
+            new FetchResponseData.AbortedTransaction().setFirstOffset(15).setProducerId(1)
+        );
+
+        List<RecordBatch> actual = sharePartition.fetchAbortedTransactionRecordBatches(records.batches(), abortedTransactions);
+        assertEquals(3, actual.size());
+        assertEquals(0, actual.get(0).baseOffset());
+        assertEquals(1, actual.get(0).lastOffset());
+        assertEquals(1, actual.get(0).producerId());
+        assertEquals(9, actual.get(1).baseOffset());
+        assertEquals(10, actual.get(1).lastOffset());
+        assertEquals(1, actual.get(1).producerId());
+        assertEquals(15, actual.get(2).baseOffset());
+        assertEquals(16, actual.get(2).lastOffset());
+        assertEquals(1, actual.get(2).producerId());
+
+        // Case 2 - Aborted transactions contains the record batch from 4-5 with producer id 2.
+        abortedTransactions = List.of(
+            new FetchResponseData.AbortedTransaction().setFirstOffset(0).setProducerId(1),
+            new FetchResponseData.AbortedTransaction().setFirstOffset(6).setProducerId(2),
+            new FetchResponseData.AbortedTransaction().setFirstOffset(9).setProducerId(1),
+            new FetchResponseData.AbortedTransaction().setFirstOffset(15).setProducerId(1)
+        );
+
+        actual = sharePartition.fetchAbortedTransactionRecordBatches(records.batches(), abortedTransactions);
+        assertEquals(4, actual.size());
+        assertEquals(0, actual.get(0).baseOffset());
+        assertEquals(1, actual.get(0).lastOffset());
+        assertEquals(1, actual.get(0).producerId());
+        assertEquals(6, actual.get(1).baseOffset());
+        assertEquals(7, actual.get(1).lastOffset());
+        assertEquals(2, actual.get(1).producerId());
+        assertEquals(9, actual.get(2).baseOffset());
+        assertEquals(10, actual.get(2).lastOffset());
+        assertEquals(1, actual.get(2).producerId());
+        assertEquals(15, actual.get(3).baseOffset());
+        assertEquals(16, actual.get(3).lastOffset());
+        assertEquals(1, actual.get(3).producerId());
+    }
+
+    /**
+     * This function produces transactional data of a given no. of records followed by a transactional marker (COMMIT/ABORT).
+     */
+    private void newTransactionalRecords(ByteBuffer buffer, ControlRecordType controlRecordType, int numRecords, long producerId, long baseOffset) {
+        try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer,
+            RecordBatch.CURRENT_MAGIC_VALUE,
+            Compression.NONE,
+            TimestampType.CREATE_TIME,
+            baseOffset,
+            MOCK_TIME.milliseconds(),
+            producerId,
+            (short) 0,
+            0,
+            true,
+            RecordBatch.NO_PARTITION_LEADER_EPOCH)) {
+            for (int i = 0; i < numRecords; i++)
+                builder.append(new SimpleRecord(MOCK_TIME.milliseconds(), "key".getBytes(), "value".getBytes()));
+
+            builder.build();
+        }
+        writeTransactionMarker(buffer, controlRecordType, (int) baseOffset + numRecords, producerId);
+    }
+
+    private void writeTransactionMarker(ByteBuffer buffer, ControlRecordType controlRecordType, int offset, long producerId) {
+        MemoryRecords.writeEndTransactionalMarker(buffer,
+            offset,
+            MOCK_TIME.milliseconds(),
+            0,
+            producerId,
+            (short) 0,
+            new EndTransactionMarker(controlRecordType, 0));
     }
 
     private List<FetchResponseData.AbortedTransaction> newAbortedTransactions() {

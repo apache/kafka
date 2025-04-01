@@ -2660,7 +2660,8 @@ public class SharePartition {
         return batch.isTransactional() && abortedProducerIds.contains(batch.producerId());
     }
 
-    private boolean containsAbortMarker(RecordBatch batch) {
+    // Visible for testing.
+    boolean containsAbortMarker(RecordBatch batch) {
         if (!batch.isControlBatch())
             return false;
 
