@@ -1240,11 +1240,11 @@ public class SharePartition {
                         }
                         inFlightBatch.maybeInitializeOffsetStateUpdate();
                     }
-                    isAnyOffsetArchived = isAnyOffsetArchived || archivePerOffsetBatchRecords(inFlightBatch, startOffset, endOffset - 1);
+                    isAnyOffsetArchived = isAnyOffsetArchived || archivePerOffsetBatchRecords(inFlightBatch, startOffset, endOffset - 1, RecordState.AVAILABLE);
                     continue;
                 }
                 // The in-flight batch is a full match hence change the state of the complete batch.
-                isAnyBatchArchived = isAnyBatchArchived || archiveCompleteBatch(inFlightBatch);
+                isAnyBatchArchived = isAnyBatchArchived || archiveCompleteBatch(inFlightBatch, RecordState.AVAILABLE);
             }
             return isAnyOffsetArchived || isAnyBatchArchived;
         } finally {
@@ -1254,7 +1254,8 @@ public class SharePartition {
 
     private boolean archivePerOffsetBatchRecords(InFlightBatch inFlightBatch,
                                                  long startOffsetToArchive,
-                                                 long endOffsetToArchive) {
+                                                 long endOffsetToArchive,
+                                                 RecordState initialState) {
         lock.writeLock().lock();
         try {
             boolean isAnyOffsetArchived = false;
@@ -1267,11 +1268,14 @@ public class SharePartition {
                     // No further offsets to process.
                     break;
                 }
-                if (offsetState.getValue().state != RecordState.AVAILABLE) {
+                if (offsetState.getValue().state != initialState) {
                     continue;
                 }
 
                 offsetState.getValue().archive(EMPTY_MEMBER_ID);
+                if (initialState == RecordState.ACQUIRED) {
+                    offsetState.getValue().cancelAndClearAcquisitionLockTimeoutTask();
+                }
                 isAnyOffsetArchived = true;
             }
             return isAnyOffsetArchived;
@@ -1280,13 +1284,16 @@ public class SharePartition {
         }
     }
 
-    private boolean archiveCompleteBatch(InFlightBatch inFlightBatch) {
+    private boolean archiveCompleteBatch(InFlightBatch inFlightBatch, RecordState initialState) {
         lock.writeLock().lock();
         try {
             log.trace("Archiving complete batch: {} for the share partition: {}-{}", inFlightBatch, groupId, topicIdPartition);
-            if (inFlightBatch.batchState() == RecordState.AVAILABLE) {
+            if (inFlightBatch.batchState() == initialState) {
                 // Change the state of complete batch since the same state exists for the entire inFlight batch.
                 inFlightBatch.archiveBatch(EMPTY_MEMBER_ID);
+                if (initialState == RecordState.ACQUIRED) {
+                    inFlightBatch.batchState.cancelAndClearAcquisitionLockTimeoutTask();
+                }
                 return true;
             }
         } finally {
@@ -2609,48 +2616,11 @@ public class SharePartition {
                         // the offsets state in the in-flight batch.
                         inFlightBatch.maybeInitializeOffsetStateUpdate();
                     }
-                    archivePerOffsetAcquiredBatchRecords(inFlightBatch, recordBatch.baseOffset(), recordBatch.lastOffset());
+                    archivePerOffsetBatchRecords(inFlightBatch, recordBatch.baseOffset(), recordBatch.lastOffset(), RecordState.ACQUIRED);
                     continue;
                 }
                 // The in-flight batch is a full match hence change the state of the complete batch.
-                archiveCompleteAcquiredBatch(inFlightBatch);
-            }
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-
-    private void archivePerOffsetAcquiredBatchRecords(InFlightBatch inFlightBatch, long startOffsetToArchive, long endOffsetToArchive) {
-        lock.writeLock().lock();
-        try {
-            log.trace("Archiving offset tracked batch: {} for the share partition: {}-{} since it was a part of aborted transaction", inFlightBatch, groupId, topicIdPartition);
-            for (Map.Entry<Long, InFlightState> offsetState : inFlightBatch.offsetState().entrySet()) {
-                if (offsetState.getKey() < startOffsetToArchive) {
-                    continue;
-                }
-                if (offsetState.getKey() > endOffsetToArchive) {
-                    // No further offsets to process.
-                    break;
-                }
-                if (offsetState.getValue().state != RecordState.ACQUIRED) {
-                    continue;
-                }
-                offsetState.getValue().archive(EMPTY_MEMBER_ID);
-                offsetState.getValue().cancelAndClearAcquisitionLockTimeoutTask();
-            }
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-
-    private void archiveCompleteAcquiredBatch(InFlightBatch inFlightBatch) {
-        lock.writeLock().lock();
-        try {
-            log.trace("Archiving complete batch: {} for the share partition: {}-{} since it was a part of aborted transaction", inFlightBatch, groupId, topicIdPartition);
-            if (inFlightBatch.batchState() == RecordState.ACQUIRED) {
-                // Change the state of complete batch since the same state exists for the entire inFlight batch.
-                inFlightBatch.archiveBatch(EMPTY_MEMBER_ID);
-                inFlightBatch.batchState.cancelAndClearAcquisitionLockTimeoutTask();
+                archiveCompleteBatch(inFlightBatch, RecordState.ACQUIRED);
             }
         } finally {
             lock.writeLock().unlock();
