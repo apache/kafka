@@ -29,9 +29,6 @@ import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.common.test.junit.ClusterTestExtensions;
-
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.time.Duration;
 import java.util.ArrayList;
@@ -55,7 +52,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     types = {Type.KRAFT},
     brokers = 3
 )
-@ExtendWith(ClusterTestExtensions.class)
 public class PlaintextConsumerCallbackTest {
 
     private final ClusterInstance cluster;
