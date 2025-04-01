@@ -129,20 +129,6 @@ public final class TopicDelta {
         return new TopicImage(image.name(), image.id(), newPartitions);
     }
 
-    public boolean hasPartitionsWithAssignmentChanges() {
-        for (Entry<Integer, PartitionRegistration> entry : partitionChanges.entrySet()) {
-            int partitionId = entry.getKey();
-            // New Partition.
-            if (!image.partitions().containsKey(partitionId))
-                return true;
-            PartitionRegistration previousPartition = image.partitions().get(partitionId);
-            PartitionRegistration currentPartition = entry.getValue();
-            if (!previousPartition.hasSameAssignment(currentPartition))
-                return true;
-        }
-        return false;
-    }
-
     /**
      * Find the partitions that have change based on the replica given.
      * <p>
