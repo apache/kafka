@@ -2273,25 +2273,27 @@ public class GroupMetadataManager {
                                                 final Topology topology,
                                                 final StreamsGroup group,
                                                 final List<CoordinatorRecord> records) {
-        StreamsTopology updatedTopology;
         if (topology != null) {
-            StreamsGroupTopologyValue recordValue = convertToStreamsGroupTopologyRecord(topology);
-
-            updatedTopology = StreamsTopology.fromHeartbeatRequest(topology);
-
+            StreamsTopology streamsTopologyFromRequest = StreamsTopology.fromHeartbeatRequest(topology);
             if (group.topology().isEmpty()) {
                 log.info("[GroupId {}][MemberId {}] Member initialized the topology with epoch {}", groupId, memberId, topology.epoch());
-
+                StreamsGroupTopologyValue recordValue = convertToStreamsGroupTopologyRecord(topology);
                 records.add(newStreamsGroupTopologyRecord(groupId, recordValue));
-            } else if (!updatedTopology.equals(group.topology().get())) {
+                return streamsTopologyFromRequest;
+            } else if (group.topology().get().topologyEpoch() > topology.epoch()) {
+                log.info("[GroupId {}][MemberId {}] Member joined with stale topology epoch {}", groupId, memberId, topology.epoch());
+                return group.topology().get();
+            } else if (!group.topology().get().equals(streamsTopologyFromRequest)) {
                 throw new InvalidRequestException("Topology updates are not supported yet.");
+            } else {
+                log.debug("[GroupId {}][MemberId {}] Member joined with currently initialized topology {}", groupId, memberId, topology.epoch());
+                return group.topology().get();
             }
         } else if (group.topology().isPresent()) {
-            updatedTopology = group.topology().get();
+            return group.topology().get();
         } else {
             throw new IllegalStateException("The topology is null and the group topology is also null.");
         }
-        return updatedTopology;
     }
 
     private List<StreamsGroupHeartbeatResponseData.TaskIds> createStreamsGroupHeartbeatResponseTaskIds(final Map<String, Set<Integer>> taskIds) {
