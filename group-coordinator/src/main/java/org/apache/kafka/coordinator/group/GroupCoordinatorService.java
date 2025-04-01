@@ -93,7 +93,6 @@ import org.apache.kafka.server.share.persister.InitializeShareGroupStateParamete
 import org.apache.kafka.server.share.persister.InitializeShareGroupStateResult;
 import org.apache.kafka.server.share.persister.PartitionErrorData;
 import org.apache.kafka.server.share.persister.PartitionFactory;
-import org.apache.kafka.server.share.persister.PartitionIdData;
 import org.apache.kafka.server.share.persister.PartitionStateData;
 import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryParameters;
@@ -448,9 +447,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.shareGroupHeartbeat(context, request)
         ).thenCompose(result -> {
-            // This ensures that the previous group write has completed successfully
-            // before we start the persister initialize phase.
             if (result.getValue().isPresent()) {
+                // Adding to timer makes this call async with respect to the heartbeat.
                 timer.add(new TimerTask(0L) {
                     @Override
                     public void run() {
@@ -486,7 +484,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     Map<Uuid, Set<Integer>> topicPartitionMap = new HashMap<>();
                     gtp.topicsData().forEach(topicData -> topicPartitionMap.computeIfAbsent(topicData.topicId(), k -> new HashSet<>())
                         .addAll(topicData.partitions().stream().map(PartitionStateData::partition).collect(Collectors.toSet())));
-                    return cleanupShareGroupInitializingTopics(error, gtp.groupId(), topicPartitionMap);
+                    return uninitializeShareGroupState(error, gtp.groupId(), topicPartitionMap);
                 }
             })
             .thenCompose(resp -> resp);
@@ -521,32 +519,30 @@ public class GroupCoordinatorService implements GroupCoordinator {
             return performShareGroupStateMetadataInitialize(groupId, topicPartitionMap, defaultResponse);
         } else {
             log.error("Received error while calling initialize state for {} on persister {}.", groupId, persisterError.code());
-            return cleanupShareGroupInitializingTopics(persisterError, groupId, topicPartitionMap);
+            return uninitializeShareGroupState(persisterError, groupId, topicPartitionMap);
         }
     }
 
-    CompletableFuture<ShareGroupHeartbeatResponseData> cleanupShareGroupInitializingTopics(
+    private CompletableFuture<ShareGroupHeartbeatResponseData> uninitializeShareGroupState(
         Errors error,
         String groupId,
         Map<Uuid, Set<Integer>> topicPartitionMap
     ) {
         return runtime.scheduleWriteOperation(
-            "cleanup-share-group-initializing-state",
+            "uninitialize-share-group-state",
             topicPartitionFor(groupId),
             Duration.ofMillis(config.offsetCommitTimeoutMs()),
-            coordinator -> coordinator.cleanupShareGroupInitializingTopics(groupId, topicPartitionMap)
-        ).thenApply(
-            __ -> new ShareGroupHeartbeatResponseData()
-                .setErrorCode(error.code())
-                .setErrorMessage(error.message())
+            coordinator -> coordinator.uninitializeShareGroupState(groupId, topicPartitionMap)
+        ).thenApply(__ -> new ShareGroupHeartbeatResponseData()
+            .setErrorCode(error.code())
+            .setErrorMessage(error.message())
         ).exceptionally(exception -> {
-                log.error("Unable to cleanup topic partitions from share group state metadata", exception);
-                Errors err = Errors.forException(new IllegalStateException("Unable to cleanup topic partitions from share group state metadata", exception));
-                return new ShareGroupHeartbeatResponseData()
-                    .setErrorCode(err.code())
-                    .setErrorMessage(err.message());
-            }
-        );
+            log.error("Unable to cleanup topic partitions from share group state metadata", exception);
+            Errors err = Errors.forException(new IllegalStateException("Unable to cleanup topic partitions from share group state metadata", exception));
+            return new ShareGroupHeartbeatResponseData()
+                .setErrorCode(err.code())
+                .setErrorMessage(err.message());
+        });
     }
 
     private CompletableFuture<ShareGroupHeartbeatResponseData> performShareGroupStateMetadataInitialize(
@@ -559,15 +555,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(groupId),
             Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.initializeShareGroupState(groupId, topicPartitionMap)
-        ).thenApply(
-            __ -> defaultResponse
-        ).exceptionally(exception -> {
-            log.error("Unable to initialize share group state partition metadata for {}.", groupId, exception);
-            Errors error = Errors.forException(exception);
-            return new ShareGroupHeartbeatResponseData()
-                .setErrorCode(error.code())
-                .setErrorMessage(error.message());
-        });
+        ).handle((__, exp) -> {
+            if (exp == null) {
+                return CompletableFuture.completedFuture(defaultResponse);
+            }
+            log.error("Unable to initialize share group state partition metadata for {}.", groupId, exp);
+            Errors error = Errors.forException(exp);
+            return uninitializeShareGroupState(error, groupId, topicPartitionMap);
+        }).thenCompose(resp -> resp);
     }
 
     /**

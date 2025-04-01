@@ -450,11 +450,11 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      *
      * @return A Result containing ShareGroupStatePartitionMetadata records and Void response.
      */
-    public CoordinatorResult<Void, CoordinatorRecord> cleanupShareGroupInitializingTopics(
+    public CoordinatorResult<Void, CoordinatorRecord> uninitializeShareGroupState(
         String groupId,
         Map<Uuid, Set<Integer>> topicPartitionMap
     ) {
-        return groupMetadataManager.cleanupShareGroupInitializingTopics(groupId, topicPartitionMap);
+        return groupMetadataManager.uninitializeShareGroupState(groupId, topicPartitionMap);
     }
 
     /**

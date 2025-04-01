@@ -134,6 +134,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -15209,11 +15210,33 @@ public class GroupMetadataManagerTest {
                 mkTopicAssignment(barTopicId, 0, 1, 2)
             )),
             GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochRecord(groupId, 1),
-            GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, expectedMember)
+            GroupCoordinatorRecordHelpers.newShareGroupCurrentAssignmentRecord(groupId, expectedMember),
+            GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(groupId, mkShareGroupStateMap(List.of(
+                    mkShareGroupStateMetadataEntry(fooTopicId, fooTopicName, List.of(0, 1, 2, 3, 4, 5)),
+                    mkShareGroupStateMetadataEntry(barTopicId, barTopicName, List.of(0, 1, 2))
+                )),
+                Map.of(),
+                Map.of()
+            )
         );
 
         assertRecordsEquals(expectedRecords, result.records());
     }
+
+    private Map<Uuid, Map.Entry<String, Set<Integer>>> mkShareGroupStateMap(List<Map.Entry<Uuid, Map.Entry<String, Set<Integer>>>> entries) {
+        Map<Uuid, Map.Entry<String, Set<Integer>>> map = new HashMap<>();
+        for (Map.Entry<Uuid, Map.Entry<String, Set<Integer>>> entry : entries) {
+            map.put(entry.getKey(), entry.getValue());
+        }
+        return map;
+    }
+
+    private Map.Entry<Uuid, Map.Entry<String, Set<Integer>>> mkShareGroupStateMetadataEntry(Uuid topicId, String topicName, List<Integer> partitions) {
+        return Map.entry(
+            topicId,
+            Map.entry(topicName, new LinkedHashSet<>(partitions))
+        );
+    };
 
     @Test
     public void testShareGroupLeavingMemberBumpsGroupEpoch() {
@@ -17873,48 +17896,16 @@ public class GroupMetadataManagerTest {
             .withShareGroupAssignor(assignor)
             .build();
 
-        // Empty on empty metadata image
-        MetadataImage image = MetadataImage.EMPTY;
-        MetadataDelta delta = new MetadataDelta.Builder()
-            .setImage(image)
-            .build();
-        context.groupMetadataManager.onNewMetadataImage(image, delta);
-        assertEquals(
-            Map.of(),
-            context.groupMetadataManager.subscribedTopicsChangeMap(groupId, Map.of(
-                topicName, new TopicMetadata(topicId, topicName, partitions)
-            ))
-        );
-
         // Empty on empty subscription metadata
-        image = new MetadataImageBuilder()
-            .addTopic(topicId, topicName, partitions)
-            .build();
-
-        delta = new MetadataDelta.Builder()
-            .setImage(image)
-            .build();
-        context.groupMetadataManager.onNewMetadataImage(image, delta);
         assertEquals(
             Map.of(),
             context.groupMetadataManager.subscribedTopicsChangeMap(groupId, Map.of())
         );
 
         // No error on empty initialized metadata (no replay of initialized topics)
-        image = new MetadataImageBuilder()
-            .addTopic(topicId, topicName, partitions)
-            .build();
-
-        delta = new MetadataDelta.Builder()
-            .setImage(image)
-            .build();
-        context.groupMetadataManager.onNewMetadataImage(image, delta);
         assertEquals(
             Map.of(
-                topicId, Map.entry(
-                    topicName,
-                    Set.of(0)
-                )
+                topicId, Set.of(0)
             ),
             context.groupMetadataManager.subscribedTopicsChangeMap(groupId, Map.of(
                 topicName, new TopicMetadata(topicId, topicName, partitions)
@@ -17927,15 +17918,6 @@ public class GroupMetadataManagerTest {
         String t2Name = "t2";
         Uuid t2Id = Uuid.randomUuid();
 
-        image = new MetadataImageBuilder()
-            .addTopic(t1Id, t1Name, 2)
-            .addTopic(t2Id, t2Name, 2)
-            .build();
-
-        delta = new MetadataDelta.Builder()
-            .setImage(image)
-            .build();
-        context.groupMetadataManager.onNewMetadataImage(image, delta);
         context.groupMetadataManager.replay(
             new ShareGroupMetadataKey()
                 .setGroupId(groupId),
@@ -17958,10 +17940,7 @@ public class GroupMetadataManagerTest {
         // Since t1 is already initialized due to replay above
         assertEquals(
             Map.of(
-                t2Id, Map.entry(
-                    t2Name,
-                    Set.of(0, 1)
-                )
+                t2Id, Set.of(0, 1)
             ),
             context.groupMetadataManager.subscribedTopicsChangeMap(groupId, Map.of(
                 t1Name, new TopicMetadata(t1Id, t1Name, 2),

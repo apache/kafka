@@ -2460,12 +2460,9 @@ public class GroupMetadataManager {
     }
 
     private void addInitializingTopicsRecords(String groupId, List<CoordinatorRecord> records, Map<Uuid, Set<Integer>> topicPartitionMap) {
-        // Should be present
         if (topicPartitionMap == null || topicPartitionMap.isEmpty()) {
             return;
         }
-
-        TopicsImage topicsImage = metadataImage.topics();
 
         ShareGroupStatePartitionMetadataInfo currentMap = shareGroupPartitionMetadata.get(groupId);
         if (currentMap == null) {
@@ -4184,7 +4181,6 @@ public class GroupMetadataManager {
             return new CoordinatorResult<>(List.of(), null);
         }
         ShareGroup group = (ShareGroup) groups.get(groupId);
-        TopicsImage topicsImage = metadataImage.topics();
 
         ShareGroupStatePartitionMetadataInfo currentMap = shareGroupPartitionMetadata.get(groupId);
         if (currentMap == null) {
@@ -4232,7 +4228,7 @@ public class GroupMetadataManager {
      *
      * @return A Result containing ShareGroupStatePartitionMetadata records and Void response.
      */
-    public CoordinatorResult<Void, CoordinatorRecord> cleanupShareGroupInitializingTopics(
+    public CoordinatorResult<Void, CoordinatorRecord> uninitializeShareGroupState(
         String groupId,
         Map<Uuid, Set<Integer>> topicPartitionMap
     ) {

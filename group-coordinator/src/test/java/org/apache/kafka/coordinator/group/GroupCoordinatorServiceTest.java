@@ -3174,6 +3174,13 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(null));
 
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("uninitialize-share-group-state"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
+
         ShareGroupHeartbeatResponseData defaultResponse = new ShareGroupHeartbeatResponseData();
         InitializeShareGroupStateParameters params = new InitializeShareGroupStateParameters.Builder()
             .setGroupTopicPartitionData(
@@ -3186,6 +3193,12 @@ public class GroupCoordinatorServiceTest {
         assertEquals(Errors.forException(exp).code(), service.persisterInitialize(params, defaultResponse).getNow(null).errorCode());
         verify(runtime, times(0)).scheduleWriteOperation(
             ArgumentMatchers.eq("initialize-share-group-state"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        );
+        verify(runtime, times(1)).scheduleWriteOperation(
+            ArgumentMatchers.eq("uninitialize-share-group-state"),
             ArgumentMatchers.any(),
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
@@ -3223,6 +3236,13 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(null));
 
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("uninitialize-share-group-state"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
+
         ShareGroupHeartbeatResponseData defaultResponse = new ShareGroupHeartbeatResponseData();
         InitializeShareGroupStateParameters params = new InitializeShareGroupStateParameters.Builder()
             .setGroupTopicPartitionData(
@@ -3238,6 +3258,12 @@ public class GroupCoordinatorServiceTest {
         assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), service.persisterInitialize(params, defaultResponse).getNow(null).errorCode());
         verify(runtime, times(0)).scheduleWriteOperation(
             ArgumentMatchers.eq("initialize-share-group-state"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        );
+        verify(runtime, times(1)).scheduleWriteOperation(
+            ArgumentMatchers.eq("uninitialize-share-group-state"),
             ArgumentMatchers.any(),
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
@@ -3280,6 +3306,13 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.failedFuture(exp));
 
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("uninitialize-share-group-state"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
+
         ShareGroupHeartbeatResponseData defaultResponse = new ShareGroupHeartbeatResponseData();
         InitializeShareGroupStateParameters params = new InitializeShareGroupStateParameters.Builder()
             .setGroupTopicPartitionData(
@@ -3299,7 +3332,12 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
         );
-
+        verify(runtime, times(1)).scheduleWriteOperation(
+            ArgumentMatchers.eq("uninitialize-share-group-state"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        );
         verify(mockPersister, times(1)).initializeState(ArgumentMatchers.any());
     }
 
