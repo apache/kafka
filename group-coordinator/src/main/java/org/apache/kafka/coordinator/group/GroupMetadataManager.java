@@ -4935,7 +4935,7 @@ public class GroupMetadataManager {
         // Remove any entries which are already initialized.
         for (Map.Entry<Uuid, Set<Integer>> entry : finalInitializedMap.entrySet()) {
             Uuid topicId = entry.getKey();
-            if (finalInitializedMap.containsKey(topicId)) {
+            if (finalInitializingMap.containsKey(topicId)) {
                 finalInitializingMap.get(topicId).removeAll(entry.getValue());
                 if (finalInitializingMap.get(topicId).isEmpty()) {
                     finalInitializingMap.remove(topicId);
