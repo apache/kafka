@@ -35,8 +35,8 @@ import java.util.Objects;
  */
 public final class ClusterImage {
     public static final ClusterImage EMPTY = new ClusterImage(
-            Collections.emptyMap(),
-            Collections.emptyMap());
+            Map.of(),
+            Map.of());
 
     private final Map<Integer, BrokerRegistration> brokers;
 
@@ -64,10 +64,6 @@ public final class ClusterImage {
 
     public Map<Integer, ControllerRegistration> controllers() {
         return controllers;
-    }
-
-    public boolean containsBroker(int brokerId) {
-        return brokers.containsKey(brokerId);
     }
 
     public long brokerEpoch(int brokerId) {

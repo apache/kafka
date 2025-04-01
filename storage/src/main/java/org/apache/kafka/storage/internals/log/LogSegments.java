@@ -128,8 +128,6 @@ public class LogSegments implements Closeable {
     }
 
     /**
-     * Take care! this is an O(n) operation, where n is the number of segments.
-     *
      * This method is thread-safe.
      *
      * @return The number of segments.

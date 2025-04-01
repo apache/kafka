@@ -345,6 +345,9 @@ public interface Admin extends AutoCloseable {
 
     /**
      * Get information about the nodes in the cluster.
+     * <p>
+     * To obtain broker cluster information, you must configure {@link AdminClientConfig#BOOTSTRAP_SERVERS_CONFIG}.
+     * To obtain controller cluster information, you must configure {@link AdminClientConfig#BOOTSTRAP_CONTROLLERS_CONFIG}.
      *
      * @param options The options to use when getting information about the cluster.
      * @return The DescribeClusterResult.
@@ -472,6 +475,9 @@ public interface Admin extends AutoCloseable {
      *     will throw a {@link org.apache.kafka.common.errors.TimeoutException} exception</li>
      *     <li>{@link ConfigResource.Type#CLIENT_METRICS}: will return empty configs</li>
      * </ul>
+     * <p>
+     * Note that you cannot describe broker configs or broker logger using {@link AdminClientConfig#BOOTSTRAP_CONTROLLERS_CONFIG},
+     * and you cannot describe controller configs or controller logger using {@link AdminClientConfig#BOOTSTRAP_SERVERS_CONFIG}.
      * <p>
      * This operation is supported by brokers with version 0.11.0.0 or higher.
      *

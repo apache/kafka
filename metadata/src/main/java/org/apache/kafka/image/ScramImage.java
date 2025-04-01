@@ -43,7 +43,7 @@ import java.util.Map.Entry;
  * This class is thread-safe.
  */
 public final class ScramImage {
-    public static final ScramImage EMPTY = new ScramImage(Collections.emptyMap());
+    public static final ScramImage EMPTY = new ScramImage(Map.of());
 
     private final Map<ScramMechanism, Map<String, ScramCredentialData>> mechanisms;
 

@@ -509,7 +509,6 @@ public class RemoteIndexCache implements Closeable {
         public Entry(OffsetIndex offsetIndex, TimeIndex timeIndex, TransactionIndex txnIndex) {
             this.offsetIndex = offsetIndex;
             this.timeIndex = timeIndex;
-            // If txn index does not exist on the source, it's an empty file on the index entry
             this.txnIndex = txnIndex;
             this.entrySizeBytes = estimatedEntrySize();
         }
@@ -546,7 +545,7 @@ public class RemoteIndexCache implements Closeable {
         private long estimatedEntrySize() {
             entryLock.readLock().lock();
             try {
-                return offsetIndex.sizeInBytes() + timeIndex.sizeInBytes() + Files.size(txnIndex.path());
+                return offsetIndex.sizeInBytes() + timeIndex.sizeInBytes() + Files.size(txnIndex.file().toPath());
             } catch (IOException e) {
                 log.warn("Error occurred when estimating remote index cache entry bytes size, just set 0 firstly.", e);
                 return 0L;

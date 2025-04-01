@@ -20,10 +20,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.DeleteShareGroupOffsetsRequestData;
 import org.apache.kafka.common.message.DeleteShareGroupOffsetsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.Readable;
 
 public class DeleteShareGroupOffsetsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<DeleteShareGroupOffsetsRequest> {
@@ -74,9 +72,9 @@ public class DeleteShareGroupOffsetsRequest extends AbstractRequest {
         return data;
     }
 
-    public static DeleteShareGroupOffsetsRequest parse(ByteBuffer buffer, short version) {
+    public static DeleteShareGroupOffsetsRequest parse(Readable readable, short version) {
         return new DeleteShareGroupOffsetsRequest(
-            new DeleteShareGroupOffsetsRequestData(new ByteBufferAccessor(buffer), version),
+            new DeleteShareGroupOffsetsRequestData(readable, version),
             version
         );
     }
