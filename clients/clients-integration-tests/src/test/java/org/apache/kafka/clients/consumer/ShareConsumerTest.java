@@ -2096,7 +2096,8 @@ public class ShareConsumerTest {
             @ClusterConfigProperty(key = "group.share.max.size", value = "3") // Setting max group size to 3
         }
     )
-    public void testShareGroupMaxSizeConfigExceeds() {
+    public void testShareGroupMaxSizeConfigExceeded() throws Exception {
+        alterShareAutoOffsetReset("group1", "earliest");
         // creating 3 consumers in the group1
         ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1");
         ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer("group1");
@@ -2106,13 +2107,31 @@ public class ShareConsumerTest {
         shareConsumer2.subscribe(Set.of(tp.topic()));
         shareConsumer3.subscribe(Set.of(tp.topic()));
 
-        shareConsumer1.poll(Duration.ofMillis(5000));
-        shareConsumer2.poll(Duration.ofMillis(5000));
-        shareConsumer3.poll(Duration.ofMillis(5000));
+        produceMessages(1);
+        TestUtils.waitForCondition(
+            () -> shareConsumer1.poll(Duration.ofMillis(5000)).count() == 1, 30000, 200L, () -> "record not received");
+
+        produceMessages(1);
+        TestUtils.waitForCondition(
+            () -> shareConsumer2.poll(Duration.ofMillis(5000)).count() == 1, 30000, 200L, () -> "record not received");
+
+        produceMessages(1);
+        TestUtils.waitForCondition(
+            () -> shareConsumer3.poll(Duration.ofMillis(5000)).count() == 1, 30000, 200L, () -> "record not received");
 
         ShareConsumer<byte[], byte[]> shareConsumer4 = createShareConsumer("group1");
         shareConsumer4.subscribe(Set.of(tp.topic()));
-        assertThrows(GroupMaxSizeReachedException.class, () -> shareConsumer4.poll(Duration.ofMillis(5000)));
+
+        TestUtils.waitForCondition(() -> {
+            try {
+                shareConsumer4.poll(Duration.ofMillis(5000));
+            } catch (GroupMaxSizeReachedException e) {
+                return true;
+            } catch (Exception e) {
+                return false;
+            }
+            return false;
+        }, 30000, 200L, () -> "The 4th consumer was not kicked out of the group");
 
         shareConsumer1.close();
         shareConsumer2.close();

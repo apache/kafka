@@ -2081,7 +2081,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       ),
     )
   )
-  def testShareSessionEvictedONConnectionDrop(): Unit = {
+  def testShareSessionEvictedOnConnectionDrop(): Unit = {
     val groupId: String = "group"
     val memberId1 = Uuid.randomUuid()
     val memberId2 = Uuid.randomUuid()
@@ -2098,27 +2098,33 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     val send: Seq[TopicIdPartition] = Seq(topicIdPartition)
 
     // member1 sends share fetch request to register its share session. Note it does not close the socket connection after.
-    var metadata = new ShareRequestMetadata(memberId1, ShareRequestMetadata.INITIAL_EPOCH)
-    var shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
-    var shareFetchResponse = connectAndReceiveWithoutClosingSocket[ShareFetchResponse](shareFetchRequest)
-    var shareFetchResponseData = shareFetchResponse.data()
-    assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
+    TestUtils.waitUntilTrue(() => {
+      val metadata = new ShareRequestMetadata(memberId1, ShareRequestMetadata.INITIAL_EPOCH)
+      val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
+      val shareFetchResponse = connectAndReceiveWithoutClosingSocket[ShareFetchResponse](shareFetchRequest)
+      val shareFetchResponseData = shareFetchResponse.data()
+      shareFetchResponseData.errorCode == Errors.NONE.code
+    }, "Share fetch request failed", 5000)
 
     // member2 sends share fetch request to register its share session. Note it does not close the socket connection after.
-    metadata = new ShareRequestMetadata(memberId2, ShareRequestMetadata.INITIAL_EPOCH)
-    shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
-    shareFetchResponse = connectAndReceiveWithoutClosingSocket[ShareFetchResponse](shareFetchRequest)
-    shareFetchResponseData = shareFetchResponse.data()
-    assertEquals(Errors.NONE.code, shareFetchResponseData.errorCode)
+    TestUtils.waitUntilTrue(() => {
+      val metadata = new ShareRequestMetadata(memberId2, ShareRequestMetadata.INITIAL_EPOCH)
+      val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
+      val shareFetchResponse = connectAndReceiveWithoutClosingSocket[ShareFetchResponse](shareFetchRequest)
+      val shareFetchResponseData = shareFetchResponse.data()
+      shareFetchResponseData.errorCode == Errors.NONE.code
+    }, "Share fetch request failed", 5000)
 
     // member3 sends share fetch request to register its share session. Since the maximum number of share sessions that could
     // exist in the share session cache is 2 (group.share.max.groups * group.share.max.size), the attempt to register a third
     // share session with the ShareSessionCache would throw SHARE_SESSION_NOT_FOUND
-    metadata = new ShareRequestMetadata(memberId3, ShareRequestMetadata.INITIAL_EPOCH)
-    shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
-    shareFetchResponse = connectAndReceiveWithoutClosingSocket[ShareFetchResponse](shareFetchRequest)
-    shareFetchResponseData = shareFetchResponse.data()
-    assertEquals(Errors.SHARE_SESSION_NOT_FOUND.code, shareFetchResponseData.errorCode)
+    TestUtils.waitUntilTrue(() => {
+      val metadata = new ShareRequestMetadata(memberId3, ShareRequestMetadata.INITIAL_EPOCH)
+      val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
+      val shareFetchResponse = connectAndReceiveWithoutClosingSocket[ShareFetchResponse](shareFetchRequest)
+      val shareFetchResponseData = shareFetchResponse.data()
+      shareFetchResponseData.errorCode == Errors.SHARE_SESSION_NOT_FOUND.code
+    }, "Share fetch request failed", 5000)
 
     // Now we will close the socket connections for the above three members, mimicking a client disconnection
     closeSockets()
@@ -2126,11 +2132,11 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     // Since the socket connections were closed before, the corresponding share sessions were dropped from the ShareSessionCache
     // on the broker. Now, since the cache is empty, new share sessions can be registered
     TestUtils.waitUntilTrue(() => {
-      metadata = new ShareRequestMetadata(memberId3, ShareRequestMetadata.INITIAL_EPOCH)
-      shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
-      shareFetchResponse = connectAndReceiveWithoutClosingSocket[ShareFetchResponse](shareFetchRequest)
-      shareFetchResponseData = shareFetchResponse.data()
-      Errors.NONE.code == shareFetchResponseData.errorCode
+      val metadata = new ShareRequestMetadata(memberId3, ShareRequestMetadata.INITIAL_EPOCH)
+      val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
+      val shareFetchResponse = connectAndReceiveWithoutClosingSocket[ShareFetchResponse](shareFetchRequest)
+      val shareFetchResponseData = shareFetchResponse.data()
+      shareFetchResponseData.errorCode == Errors.NONE.code
     }, "Share fetch request failed", 5000)
   }
 
