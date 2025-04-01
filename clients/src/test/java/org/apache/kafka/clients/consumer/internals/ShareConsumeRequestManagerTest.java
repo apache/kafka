@@ -1083,7 +1083,7 @@ public class ShareConsumeRequestManagerTest {
 
         client.updateMetadata(
             RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 1),
-    tp -> validLeaderEpoch, topicIds, false));
+                tp -> validLeaderEpoch, topicIds, false));
         Node nodeId0 = metadata.fetch().nodeById(0);
         Node nodeId1 = metadata.fetch().nodeById(1);
         LinkedList<Node> nodeList = new LinkedList<>(Arrays.asList(nodeId0, nodeId1));
@@ -1669,7 +1669,7 @@ public class ShareConsumeRequestManagerTest {
 
         client.updateMetadata(
             RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
-                    tp -> validLeaderEpoch, topicIds, false));
+                tp -> validLeaderEpoch, topicIds, false));
         Node nodeId0 = metadata.fetch().nodeById(0);
         Node nodeId1 = metadata.fetch().nodeById(1);
         Node tp0Leader = metadata.fetch().leaderFor(tp0);
@@ -1772,7 +1772,7 @@ public class ShareConsumeRequestManagerTest {
 
         client.updateMetadata(
             RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
-                    tp -> validLeaderEpoch, topicIds, false));
+                tp -> validLeaderEpoch, topicIds, false));
         Node nodeId0 = metadata.fetch().nodeById(0);
         Node nodeId1 = metadata.fetch().nodeById(1);
         Node tp0Leader = metadata.fetch().leaderFor(tp0);
@@ -2242,7 +2242,7 @@ public class ShareConsumeRequestManagerTest {
 
         client.updateMetadata(
             RequestTestUtils.metadataUpdateWithIds(2, Map.of(topicName, 2),
-    tp -> validLeaderEpoch, topicIds, false));
+                tp -> validLeaderEpoch, topicIds, false));
         Node nodeId0 = metadata.fetch().nodeById(0);
         Node nodeId1 = metadata.fetch().nodeById(1);
 
