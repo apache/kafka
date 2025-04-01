@@ -459,7 +459,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * A simple container class to hold all the attributes
      * related to a pending batch.
      */
-    private class CoordinatorBatch {
+    private static class CoordinatorBatch {
         /**
          * The base (or first) offset of the batch. If the batch fails
          * for any reason, the state machines is rolled back to it.
@@ -510,6 +510,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         long nextOffset;
 
         CoordinatorBatch(
+            Logger log,
             long baseOffset,
             long appendTimeMs,
             int maxBatchSize,
@@ -526,7 +527,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
             this.buffer = buffer;
             this.builder = builder;
             this.lingerTimeoutTask = lingerTimeoutTask;
-            this.deferredEvents = new DeferredEventCollection();
+            this.deferredEvents = new DeferredEventCollection(log);
         }
     }
 
@@ -893,6 +894,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 }
 
                 currentBatch = new CoordinatorBatch(
+                    log,
                     prevLastWrittenOffset,
                     currentTimeMs,
                     maxBatchSize,
@@ -1160,8 +1162,20 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
      * A collection of {@link DeferredEvent}. When completed, completes all the events in the collection
      * and logs any exceptions thrown.
      */
-    class DeferredEventCollection implements DeferredEvent {
+    static class DeferredEventCollection implements DeferredEvent {
+        /**
+         * The logger.
+         */
+        private final Logger log;
+
+        /**
+         * The list of events.
+         */
         private final List<DeferredEvent> events = new ArrayList<>();
+
+        public DeferredEventCollection(Logger log) {
+            this.log = log;
+        }
 
         @Override
         public void complete(Throwable t) {
