@@ -1343,13 +1343,16 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         ).toList()
                     ));
             } else {
+                // If the topic does not exist, the start offset is returned as -1 (uninitialized offset).
+                // This is consistent with OffsetFetch for situations in which there is no offset information to fetch.
+                // It's treated as absence of data, rather than an error, unlike TOPIC_AUTHORIZATION_ERROR for example.
                 describeShareGroupOffsetsResponseTopicList.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
                     .setTopicName(topic.topicName())
+                    .setTopicId(Uuid.ZERO_UUID)
                     .setPartitions(topic.partitions().stream().map(
                         partition -> new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
                             .setPartitionIndex(partition)
-                            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                            .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
+                            .setStartOffset(PartitionFactory.UNINITIALIZED_START_OFFSET)
                     ).toList()));
             }
         });
@@ -1439,6 +1442,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     future.completeExceptionally(new IllegalStateException("Result is null for the read state summary"));
                     return;
                 }
+
+                // Return -1 (uninitialized offset) for the situation where the persister returned an error.
+                // This is consistent with OffsetFetch for situations in which there is no offset information to fetch.
+                // It's treated as absence of data, rather than an error.
                 result.topicsData().forEach(topicData ->
                     describeShareGroupOffsetsResponseTopicList.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
                         .setTopicId(topicData.topicId())
@@ -1446,9 +1453,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         .setPartitions(topicData.partitions().stream().map(
                             partitionData -> new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
                                 .setPartitionIndex(partitionData.partition())
-                                .setStartOffset(partitionData.startOffset())
-                                .setErrorMessage(Errors.forCode(partitionData.errorCode()).message())
-                                .setErrorCode(partitionData.errorCode())
+                                .setStartOffset(partitionData.errorCode() == Errors.NONE.code() ? partitionData.startOffset() : PartitionFactory.UNINITIALIZED_START_OFFSET)
                         ).toList())
                     ));
 

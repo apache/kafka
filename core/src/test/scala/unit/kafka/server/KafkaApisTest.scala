@@ -11350,7 +11350,7 @@ class KafkaApisTest extends Logging {
           )),
         new DescribeShareGroupOffsetsResponseTopic()
           .setTopicName(topicName2)
-          .setTopicId(topicId2)
+          .setTopicId(Uuid.ZERO_UUID)
           .setPartitions(util.List.of(
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(10)
@@ -11372,7 +11372,7 @@ class KafkaApisTest extends Logging {
       .setTopics(util.List.of(
         new DescribeShareGroupOffsetsResponseTopic()
           .setTopicName(topicName3)
-          .setTopicId(topicId3)
+          .setTopicId(Uuid.ZERO_UUID)
           .setPartitions(util.List.of(
             new DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(0)

@@ -2846,9 +2846,7 @@ public class GroupCoordinatorServiceTest {
                     .setTopicId(TOPIC_ID)
                     .setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
                         .setPartitionIndex(partition)
-                        .setStartOffset(PartitionFactory.UNINITIALIZED_START_OFFSET)
-                        .setErrorCode(PartitionFactory.DEFAULT_ERROR_CODE)
-                        .setErrorMessage(PartitionFactory.DEFAULT_ERR_MESSAGE))))
+                        .setStartOffset(PartitionFactory.UNINITIALIZED_START_OFFSET))))
             );
 
         CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> future =
@@ -2891,9 +2889,7 @@ public class GroupCoordinatorServiceTest {
                     .setTopicId(TOPIC_ID)
                     .setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
                         .setPartitionIndex(partition)
-                        .setStartOffset(21)
-                        .setErrorCode(Errors.NONE.code())
-                        .setErrorMessage(Errors.NONE.message()))))
+                        .setStartOffset(21))))
             );
 
         ReadShareGroupStateSummaryResponseData readShareGroupStateSummaryResponseData = new ReadShareGroupStateSummaryResponseData()
@@ -2903,9 +2899,7 @@ public class GroupCoordinatorServiceTest {
                     .setPartitions(List.of(new ReadShareGroupStateSummaryResponseData.PartitionResult()
                         .setPartition(partition)
                         .setStartOffset(21)
-                        .setStateEpoch(1)
-                        .setErrorCode(Errors.NONE.code())
-                        .setErrorMessage(Errors.NONE.message())))
+                        .setStateEpoch(1)))
                 )
             );
 
@@ -2945,10 +2939,10 @@ public class GroupCoordinatorServiceTest {
             .setTopics(
                 List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
                     .setTopicName("badtopic")
+                    .setTopicId(Uuid.ZERO_UUID)
                     .setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
                         .setPartitionIndex(partition)
-                        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                        .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message()))))
+                        .setStartOffset(PartitionFactory.UNINITIALIZED_START_OFFSET))))
             );
 
         CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> future =
@@ -3141,9 +3135,7 @@ public class GroupCoordinatorServiceTest {
                     .setTopicId(TOPIC_ID)
                     .setPartitions(List.of(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
                         .setPartitionIndex(partition)
-                        .setStartOffset(21)
-                        .setErrorCode(Errors.NONE.code())
-                        .setErrorMessage(Errors.NONE.message()))))
+                        .setStartOffset(21))))
             );
 
         ReadShareGroupStateSummaryResponseData readShareGroupStateSummaryResponseData = new ReadShareGroupStateSummaryResponseData()
@@ -3153,9 +3145,7 @@ public class GroupCoordinatorServiceTest {
                     .setPartitions(List.of(new ReadShareGroupStateSummaryResponseData.PartitionResult()
                         .setPartition(partition)
                         .setStartOffset(21)
-                        .setStateEpoch(1)
-                        .setErrorCode(Errors.NONE.code())
-                        .setErrorMessage(Errors.NONE.message())))
+                        .setStateEpoch(1)))
                 )
             );
 
