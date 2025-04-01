@@ -79,17 +79,6 @@ public final class ControlRecord {
         return recordType;
     }
 
-    public short version() {
-        return switch (recordType) {
-            case LEADER_CHANGE -> ((LeaderChangeMessage) message).version();
-            case SNAPSHOT_HEADER -> ((SnapshotHeaderRecord) message).version();
-            case SNAPSHOT_FOOTER -> ((SnapshotFooterRecord) message).version();
-            case KRAFT_VERSION -> ((KRaftVersionRecord) message).version();
-            case KRAFT_VOTERS -> ((VotersRecord) message).version();
-            default -> throw new IllegalStateException(String.format("Unknown control record type %s", recordType));
-        };
-    }
-
     public ApiMessage message() {
         return message;
     }
