@@ -11278,6 +11278,7 @@ class KafkaApisTest extends Logging {
 
     val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build)
 
+    // The group coordinator will only be asked for information about topics which are authorized
     val futureGroup1 = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
     when(groupCoordinator.describeShareGroupOffsets(
       requestChannelRequest.context,
@@ -11287,6 +11288,7 @@ class KafkaApisTest extends Logging {
         )
       )
     )).thenReturn(futureGroup1)
+
     val futureGroup2 = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
     when(groupCoordinator.describeShareGroupOffsets(
       requestChannelRequest.context,
@@ -11319,6 +11321,7 @@ class KafkaApisTest extends Logging {
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
+    // These are the responses to the KafkaApis request, complete with authorization errors
     val describeShareGroupOffsetsResponseGroup1 = new DescribeShareGroupOffsetsResponseGroup()
       .setGroupId("group1")
       .setTopics(util.List.of(
@@ -11383,8 +11386,41 @@ class KafkaApisTest extends Logging {
     val describeShareGroupOffsetsResponse = new DescribeShareGroupOffsetsResponseData()
       .setGroups(util.List.of(describeShareGroupOffsetsResponseGroup1, describeShareGroupOffsetsResponseGroup2))
 
-    futureGroup1.complete(describeShareGroupOffsetsResponseGroup1)
-    futureGroup2.complete(describeShareGroupOffsetsResponseGroup2)
+    // And these are the responses to the topics which were authorized
+    val describeShareGroupOffsetsGroupCoordinatorResponseGroup1 = new DescribeShareGroupOffsetsResponseGroup()
+      .setGroupId("group1")
+      .setTopics(util.List.of(
+        new DescribeShareGroupOffsetsResponseTopic()
+          .setTopicName(topicName1)
+          .setTopicId(topicId1)
+          .setPartitions(util.List.of(
+            new DescribeShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(1)
+              .setStartOffset(0)
+              .setLeaderEpoch(1)
+              .setErrorMessage(null)
+              .setErrorCode(0),
+            new DescribeShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(2)
+              .setStartOffset(0)
+              .setLeaderEpoch(1)
+              .setErrorMessage(null)
+              .setErrorCode(0),
+            new DescribeShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(3)
+              .setStartOffset(0)
+              .setLeaderEpoch(1)
+              .setErrorMessage(null)
+              .setErrorCode(0)
+          ))
+      ))
+
+    val describeShareGroupOffsetsGroupCoordinatorResponseGroup2 = new DescribeShareGroupOffsetsResponseGroup()
+      .setGroupId("group2")
+      .setTopics(util.List.of())
+
+    futureGroup1.complete(describeShareGroupOffsetsGroupCoordinatorResponseGroup1)
+    futureGroup2.complete(describeShareGroupOffsetsGroupCoordinatorResponseGroup2)
     val response = verifyNoThrottling[DescribeShareGroupOffsetsResponse](requestChannelRequest)
     assertEquals(describeShareGroupOffsetsResponse, response.data)
   }
@@ -11411,11 +11447,13 @@ class KafkaApisTest extends Logging {
 
     val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build)
 
+    // The group coordinator is being asked for information about all topics, not just those which are authorized
     val futureGroup1 = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
     when(groupCoordinator.describeShareGroupAllOffsets(
       requestChannelRequest.context,
       new DescribeShareGroupOffsetsRequestGroup().setGroupId("group1").setTopics(null)
     )).thenReturn(futureGroup1)
+
     val futureGroup2 = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
     when(groupCoordinator.describeShareGroupAllOffsets(
       requestChannelRequest.context,
@@ -11445,7 +11483,41 @@ class KafkaApisTest extends Logging {
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
+    // These are the responses to the KafkaApis request, with unauthorized topics filtered out
     val describeShareGroupOffsetsResponseGroup1 = new DescribeShareGroupOffsetsResponseGroup()
+      .setGroupId("group1")
+      .setTopics(util.List.of(
+        new DescribeShareGroupOffsetsResponseTopic()
+          .setTopicName(topicName1)
+          .setTopicId(topicId1)
+          .setPartitions(util.List.of(
+            new DescribeShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(1)
+              .setStartOffset(0)
+              .setLeaderEpoch(1)
+              .setErrorMessage(null)
+              .setErrorCode(0),
+            new DescribeShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(2)
+              .setStartOffset(0)
+              .setLeaderEpoch(1)
+              .setErrorMessage(null)
+              .setErrorCode(0),
+            new DescribeShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(3)
+              .setStartOffset(0)
+              .setLeaderEpoch(1)
+              .setErrorMessage(null)
+              .setErrorCode(0)
+          ))
+      ))
+
+    val describeShareGroupOffsetsResponseGroup2 = new DescribeShareGroupOffsetsResponseGroup()
+      .setGroupId("group2")
+      .setTopics(util.List.of())
+
+    // And these are the responses from the group coordinator for all topics, even those which are not authorized
+    val describeShareGroupOffsetsGroupCoordinatorResponseGroup1 = new DescribeShareGroupOffsetsResponseGroup()
       .setGroupId("group1")
       .setTopics(util.List.of(
         new DescribeShareGroupOffsetsResponseTopic()
@@ -11490,7 +11562,7 @@ class KafkaApisTest extends Logging {
           ))
       ))
 
-    val describeShareGroupOffsetsResponseGroup2 = new DescribeShareGroupOffsetsResponseGroup()
+    val describeShareGroupOffsetsGroupCoordinatorResponseGroup2 = new DescribeShareGroupOffsetsResponseGroup()
       .setGroupId("group2")
       .setTopics(util.List.of(
         new DescribeShareGroupOffsetsResponseTopic()
@@ -11509,8 +11581,8 @@ class KafkaApisTest extends Logging {
     val describeShareGroupOffsetsResponse = new DescribeShareGroupOffsetsResponseData()
       .setGroups(util.List.of(describeShareGroupOffsetsResponseGroup1, describeShareGroupOffsetsResponseGroup2))
 
-    futureGroup1.complete(describeShareGroupOffsetsResponseGroup1)
-    futureGroup2.complete(describeShareGroupOffsetsResponseGroup2)
+    futureGroup1.complete(describeShareGroupOffsetsGroupCoordinatorResponseGroup1)
+    futureGroup2.complete(describeShareGroupOffsetsGroupCoordinatorResponseGroup2)
     val response = verifyNoThrottling[DescribeShareGroupOffsetsResponse](requestChannelRequest)
     assertEquals(describeShareGroupOffsetsResponse, response.data)
   }

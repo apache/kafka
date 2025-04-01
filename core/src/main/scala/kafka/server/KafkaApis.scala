@@ -3594,7 +3594,9 @@ class KafkaApis(val requestChannel: RequestChannel,
         )
         topics.addAll(groupDescribeOffsetsResponse.topics)
         unauthorizedTopics.foreach { topic =>
-          val topicResponse = new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic().setTopicName(topic.topicName)
+          val topicResponse = new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
+            .setTopicName(topic.topicName)
+            .setTopicId(metadataCache.getTopicId(topic.topicName))
           topic.partitions().forEach { partitionIndex =>
             topicResponse.partitions.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
               .setPartitionIndex(partitionIndex)
