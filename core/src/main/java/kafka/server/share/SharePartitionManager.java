@@ -30,7 +30,6 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.common.utils.Time;
@@ -52,7 +51,6 @@ import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.session.ShareSession;
 import org.apache.kafka.server.share.session.ShareSessionCache;
 import org.apache.kafka.server.share.session.ShareSessionKey;
-import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.SystemTimer;
@@ -261,8 +259,7 @@ public class SharePartitionManager implements AutoCloseable {
             .rotate(topicIdPartitions, new PartitionRotateMetadata(sessionEpoch));
 
         CompletableFuture<Map<TopicIdPartition, PartitionData>> future = new CompletableFuture<>();
-        FetchParams updatedFetchParams = maybUpdateFetchParams(fetchParams, groupId);
-        processShareFetch(new ShareFetch(updatedFetchParams, groupId, memberId, future, rotatedTopicIdPartitions, batchSize, maxFetchRecords, brokerTopicStats));
+        processShareFetch(new ShareFetch(fetchParams, groupId, memberId, future, rotatedTopicIdPartitions, batchSize, maxFetchRecords, brokerTopicStats));
 
         return future;
     }
@@ -742,21 +739,6 @@ public class SharePartitionManager implements AutoCloseable {
                 brokerTopicStats.topicStats(topic).failedShareAcknowledgementRequestRate().mark();
             });
         };
-    }
-
-    private FetchParams maybUpdateFetchParams(FetchParams fetchParams, String groupId) {
-        if (groupConfigManager.groupConfig(groupId).isEmpty()) {
-            return fetchParams;
-        }
-        return new FetchParams(
-            fetchParams.replicaId,
-            fetchParams.replicaEpoch,
-            fetchParams.maxWaitMs,
-            fetchParams.minBytes,
-            fetchParams.maxBytes,
-            FetchIsolation.of(FetchRequest.CONSUMER_REPLICA_ID, groupConfigManager.groupConfig(groupId).get().shareIsolationLevel()),
-            fetchParams.clientMetadata
-        );
     }
 
     /**
