@@ -4926,18 +4926,20 @@ public class GroupMetadataManager {
             );
         }
 
-        // We must combine the existing information in the record with the topicPartitionMap argument.
+        // We must combine the existing information in the record with the topicPartitionMap argument so that the final
+        // record has up-to-date information.
         Map<Uuid, Set<Integer>> finalInitializedMap = mergeShareGroupInitMaps(currentMap.initializedTopics(), topicPartitionMap);
 
         // Fetch initializing info from state metadata.
         Map<Uuid, Set<Integer>> finalInitializingMap = new HashMap<>(currentMap.initializingTopics());
 
         // Remove any entries which are already initialized.
-        for (Map.Entry<Uuid, Set<Integer>> entry : finalInitializedMap.entrySet()) {
+        for (Map.Entry<Uuid, Set<Integer>> entry : topicPartitionMap.entrySet()) {
             Uuid topicId = entry.getKey();
             if (finalInitializingMap.containsKey(topicId)) {
-                finalInitializingMap.get(topicId).removeAll(entry.getValue());
-                if (finalInitializingMap.get(topicId).isEmpty()) {
+                Set<Integer> partitions = finalInitializingMap.get(topicId);
+                partitions.removeAll(entry.getValue());
+                if (partitions.isEmpty()) {
                     finalInitializingMap.remove(topicId);
                 }
             }
