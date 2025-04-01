@@ -180,26 +180,26 @@ object ConfigCommand extends Logging {
     entityTypeHead match {
       case TopicType | ClientMetricsType | BrokerType | GroupType =>
         entityNames.foreach { entityName =>
-        val configResourceType = entityTypeHead match {
-          case TopicType => ConfigResource.Type.TOPIC
-          case ClientMetricsType => ConfigResource.Type.CLIENT_METRICS
-          case BrokerType => ConfigResource.Type.BROKER
-          case GroupType => ConfigResource.Type.GROUP
-          case _ => throw new IllegalArgumentException(s"$entityName is not a valid entity-type.")
+          val configResourceType = entityTypeHead match {
+            case TopicType => ConfigResource.Type.TOPIC
+            case ClientMetricsType => ConfigResource.Type.CLIENT_METRICS
+            case BrokerType => ConfigResource.Type.BROKER
+            case GroupType => ConfigResource.Type.GROUP
+            case _ => throw new IllegalArgumentException(s"$entityName is not a valid entity-type.")
+          }
+          try {
+            alterResourceConfig(adminClient, entityTypeHead, entityName, configsToBeDeleted, configsToBeAdded, configResourceType)
+          } catch {
+            case e: ExecutionException =>
+              e.getCause match {
+                case _: UnsupportedVersionException =>
+                  throw new UnsupportedVersionException(s"The ${ApiKeys.INCREMENTAL_ALTER_CONFIGS} API is not supported by the cluster. The API is supported starting from version 2.3.0."
+                    + " You may want to use an older version of this tool to interact with your cluster, or upgrade your brokers to version 2.3.0 or newer to avoid this error.")
+                case _ => throw e
+              }
+            case e: Throwable => throw e
+          }
         }
-        try {
-          alterResourceConfig(adminClient, entityTypeHead, entityName, configsToBeDeleted, configsToBeAdded, configResourceType)
-        } catch {
-          case e: ExecutionException =>
-            e.getCause match {
-              case _: UnsupportedVersionException =>
-                throw new UnsupportedVersionException(s"The ${ApiKeys.INCREMENTAL_ALTER_CONFIGS} API is not supported by the cluster. The API is supported starting from version 2.3.0."
-                + " You may want to use an older version of this tool to interact with your cluster, or upgrade your brokers to version 2.3.0 or newer to avoid this error.")
-              case _ => throw e
-            }
-          case e: Throwable => throw e
-        }
-      }
 
       case BrokerLoggerConfigType =>
         entityNames.foreach { entityName =>
