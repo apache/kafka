@@ -152,8 +152,7 @@ class PartitionReassignmentReplicas {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof PartitionReassignmentReplicas)) return false;
-        PartitionReassignmentReplicas other = (PartitionReassignmentReplicas) o;
+        if (!(o instanceof PartitionReassignmentReplicas other)) return false;
         return removing.equals(other.removing) &&
             adding.equals(other.adding) &&
             replicas.equals(other.replicas);

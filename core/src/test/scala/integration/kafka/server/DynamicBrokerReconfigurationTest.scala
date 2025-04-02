@@ -30,7 +30,6 @@ import javax.management.ObjectName
 import com.yammer.metrics.core.MetricName
 import kafka.admin.ConfigCommand
 import kafka.api.SaslSetup
-import kafka.log.UnifiedLog
 import kafka.network.{DataPlaneAcceptor, Processor, RequestChannel}
 import kafka.security.JaasTestUtils
 import kafka.utils._
@@ -61,7 +60,7 @@ import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, Server
 import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.util.ShutdownableThread
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, UnifiedLog}
 import org.apache.kafka.test.TestSslUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
@@ -118,7 +117,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
     (0 until numServers).foreach { brokerId =>
 
-      val props = TestUtils.createBrokerConfig(brokerId, null)
+      val props = TestUtils.createBrokerConfig(brokerId)
       props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, s"$SecureInternal://localhost:0, $SecureExternal://localhost:0")
       props ++= securityProps(sslProperties1, TRUSTSTORE_PROPS)
       // Ensure that we can support multiple listeners per security protocol and multiple security protocols
@@ -128,7 +127,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       props.put(BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG, "requested")
       props.put(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN")
       props.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, kafkaServerSaslMechanisms.mkString(","))
-      props.put(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG, "2000") // low value to test log rolling on config update
+      props.put(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG, "1048576") // low value to test log rolling on config update
       props.put(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG, "2") // greater than one to test reducing threads
       props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, 1680000000.toString)
       props.put(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG, 168.toString)
@@ -484,6 +483,30 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
   @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
+  def testSocketServerConfigTest(quorum: String, groupProtocol: String): Unit = {
+    val updatedMaxConnections = "20"
+    val connectionsIpsOverride = "1.2.3.4:1234,1.2.4.5:2345"
+    val properties = new Properties()
+    properties.setProperty(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG, updatedMaxConnections)
+    properties.setProperty(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, connectionsIpsOverride)
+
+    TestUtils.incrementalAlterConfigs(servers, adminClients.head, properties, true)
+
+    servers.foreach(_.shutdown())
+    servers.foreach(_.awaitShutdown())
+    servers.foreach(_.startup())
+
+    servers.foreach { broker =>
+      assertEquals(updatedMaxConnections, broker.config.originals()
+        .get(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG).toString)
+
+      assertEquals(connectionsIpsOverride, broker.config.originals()
+        .get(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG).toString)
+    }
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
+  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
   def testLogCleanerConfig(quorum: String, groupProtocol: String): Unit = {
     val (producerThread, consumerThread) = startProduceConsume(retries = 0, groupProtocol)
 
@@ -587,7 +610,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     val props = new Properties
     val logIndexSizeMaxBytes = "100000"
     val logRetentionMs = TimeUnit.DAYS.toMillis(1)
-    props.put(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG, "4000")
+    props.put(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG, "1048576")
     props.put(ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG, TimeUnit.HOURS.toMillis(2).toString)
     props.put(ServerLogConfigs.LOG_ROLL_TIME_JITTER_MILLIS_CONFIG, TimeUnit.HOURS.toMillis(1).toString)
     props.put(ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG, logIndexSizeMaxBytes)
@@ -609,12 +632,12 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     props.put(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_TYPE_CONFIG, TimestampType.LOG_APPEND_TIME.toString)
     props.put(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG, "1000")
     props.put(ServerLogConfigs.LOG_MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG, "1000")
-    props.put(ServerLogConfigs.LOG_MESSAGE_DOWNCONVERSION_ENABLE_CONFIG, "false")
-    reconfigureServers(props, perBrokerConfig = false, (ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG, "4000"))
+    reconfigureServers(props, perBrokerConfig = false, (ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG, "1048576"))
 
     // Verify that all broker defaults have been updated
     servers.foreach { server =>
       props.forEach { (k, v) =>
+        TestUtils.waitUntilTrue(() => server.config.originals.get(k) != null, "Configs not present")
         assertEquals(server.config.originals.get(k).toString, v, s"Not reconfigured $k")
       }
     }
@@ -625,7 +648,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       "Config not updated in LogManager")
 
     val log = servers.head.logManager.getLog(new TopicPartition(topic, 0)).getOrElse(throw new IllegalStateException("Log not found"))
-    TestUtils.waitUntilTrue(() => log.config.segmentSize == 4000, "Existing topic config using defaults not updated")
+    TestUtils.waitUntilTrue(() => log.config.segmentSize == 1048576, "Existing topic config using defaults not updated")
     val KafkaConfigToLogConfigName: Map[String, String] =
       ServerTopicConfigSynonyms.TOPIC_CONFIG_SYNONYMS.asScala.map { case (k, v) => (v, k) }
     props.asScala.foreach { case (k, v) =>
@@ -934,8 +957,11 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     // non-default value to trigger a new metric
     val clientId = "test-client-1"
     servers.foreach { server =>
-      server.quotaManagers.produce.updateQuota(None, Some(clientId), Some(clientId),
-        Some(Quota.upperBound(10000000)))
+      server.quotaManagers.produce.updateQuota(
+        None,
+        Some(ClientQuotaManager.ClientIdEntity(clientId)),
+        Some(Quota.upperBound(10000000))
+      )
     }
     val (producerThread, consumerThread) = startProduceConsume(retries = 0, groupProtocol, clientId)
     TestUtils.waitUntilTrue(() => consumerThread.received >= 5, "Messages not sent")
@@ -1350,7 +1376,8 @@ val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new Con
     private var _retries = Int.MaxValue
     private var _acks = -1
     private var _requestTimeoutMs = 30000
-    private var _deliveryTimeoutMs = 30000
+    private val defaultLingerMs = 5;
+    private var _deliveryTimeoutMs = 30000 + defaultLingerMs
 
     def maxRetries(retries: Int): ProducerBuilder = { _retries = retries; this }
     def acks(acks: Int): ProducerBuilder = { _acks = acks; this }

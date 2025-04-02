@@ -106,12 +106,12 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
         idToRemoteLogMetadataCache.remove(topicIdPartition);
     }
 
-    public Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition)
+    Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition)
             throws RemoteStorageException {
         return getRemoteLogMetadataCache(topicIdPartition).listAllRemoteLogSegments();
     }
 
-    public Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition, int leaderEpoch)
+    Iterator<RemoteLogSegmentMetadata> listRemoteLogSegments(TopicIdPartition topicIdPartition, int leaderEpoch)
             throws RemoteStorageException {
         return getRemoteLogMetadataCache(topicIdPartition).listRemoteLogSegments(leaderEpoch);
     }
@@ -130,21 +130,21 @@ public class RemotePartitionMetadataStore extends RemotePartitionMetadataEventHa
         return remoteLogMetadataCache;
     }
 
-    public Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(TopicIdPartition topicIdPartition,
-                                                                       long offset,
-                                                                       int epochForOffset)
+    Optional<RemoteLogSegmentMetadata> remoteLogSegmentMetadata(TopicIdPartition topicIdPartition,
+                                                                long offset,
+                                                                int epochForOffset)
             throws RemoteStorageException {
         return getRemoteLogMetadataCache(topicIdPartition).remoteLogSegmentMetadata(epochForOffset, offset);
     }
 
-    public Optional<RemoteLogSegmentMetadata> nextSegmentWithTxnIndex(TopicIdPartition topicIdPartition,
-                                                                      int epoch,
-                                                                      long offset) throws RemoteStorageException {
+    Optional<RemoteLogSegmentMetadata> nextSegmentWithTxnIndex(TopicIdPartition topicIdPartition,
+                                                               int epoch,
+                                                               long offset) throws RemoteStorageException {
         return getRemoteLogMetadataCache(topicIdPartition).nextSegmentWithTxnIndex(epoch, offset);
     }
 
-    public Optional<Long> highestLogOffset(TopicIdPartition topicIdPartition,
-                                           int leaderEpoch) throws RemoteStorageException {
+    Optional<Long> highestLogOffset(TopicIdPartition topicIdPartition,
+                                    int leaderEpoch) throws RemoteStorageException {
         return getRemoteLogMetadataCache(topicIdPartition).highestOffsetForEpoch(leaderEpoch);
     }
 

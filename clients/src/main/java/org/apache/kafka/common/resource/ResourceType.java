@@ -17,17 +17,12 @@
 
 package org.apache.kafka.common.resource;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.HashMap;
 import java.util.Locale;
 
 /**
  * Represents a type of resource which an ACL can be applied to.
- *
- * The API for this class is still evolving and we may break compatibility in minor releases, if necessary.
  */
-@InterfaceStability.Evolving
 public enum ResourceType {
     /**
      * Represents any ResourceType which this client cannot understand,

@@ -71,10 +71,11 @@ public class VoteRequest extends AbstractRequest {
 
     public static VoteRequestData singletonRequest(TopicPartition topicPartition,
                                                    String clusterId,
-                                                   int candidateEpoch,
-                                                   int candidateId,
+                                                   int replicaEpoch,
+                                                   int replicaId,
                                                    int lastEpoch,
-                                                   long lastEpochEndOffset) {
+                                                   long lastEpochEndOffset,
+                                                   boolean preVote) {
         return new VoteRequestData()
                    .setClusterId(clusterId)
                    .setTopics(Collections.singletonList(
@@ -83,10 +84,11 @@ public class VoteRequest extends AbstractRequest {
                            .setPartitions(Collections.singletonList(
                                new VoteRequestData.PartitionData()
                                    .setPartitionIndex(topicPartition.partition())
-                                   .setCandidateEpoch(candidateEpoch)
-                                   .setCandidateId(candidateId)
+                                   .setReplicaEpoch(replicaEpoch)
+                                   .setReplicaId(replicaId)
                                    .setLastOffsetEpoch(lastEpoch)
-                                   .setLastOffset(lastEpochEndOffset))
+                                   .setLastOffset(lastEpochEndOffset)
+                                   .setPreVote(preVote))
                            )));
     }
 }

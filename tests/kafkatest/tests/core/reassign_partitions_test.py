@@ -47,7 +47,8 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         self.kafka = KafkaService(test_context, num_nodes=4, zk=None,
                                   server_prop_overrides=[
                                       [config_property.LOG_ROLL_TIME_MS, "5000"],
-                                      [config_property.LOG_RETENTION_CHECK_INTERVAL_MS, "5000"]
+                                      [config_property.LOG_RETENTION_CHECK_INTERVAL_MS, "5000"],
+                                      [config_property.LOG_INITIAL_TASK_DELAY, "5000"]
                                   ],
                                   topics={self.topic: {
                                       "partitions": self.num_partitions,
@@ -130,11 +131,11 @@ class ReassignPartitionsTest(ProduceConsumeValidateTest):
         self.logger.info("Seeded topic with %d messages which will be deleted" %\
                          producer.num_acked)
         # Since the configured check interval is 5 seconds, we wait another
-        # 6 seconds to ensure that at least one more cleaning so that the last
-        # segment is deleted. An altenate to using timeouts is to poll each
+        # 12 seconds to ensure that at least one more cleaning so that the last
+        # segment is deleted. An alternate to using timeouts is to poll each
         # partition until the log start offset matches the end offset. The
         # latter is more robust.
-        time.sleep(6)
+        time.sleep(12)
 
     @cluster(num_nodes=8)
     @matrix(

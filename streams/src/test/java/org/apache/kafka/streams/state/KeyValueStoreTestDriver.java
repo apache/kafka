@@ -27,12 +27,13 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.DefaultProductionExceptionHandler;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.StreamPartitioner;
 import org.apache.kafka.streams.processor.TaskId;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorTopology;
@@ -62,7 +63,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 /**
- * A component that provides a {@link #context() ProcessingContext} that can be supplied to a {@link KeyValueStore} so that
+ * A component that provides a {@link #context() StateStoreContext} that can be supplied to a {@link KeyValueStore} so that
  * all entries written to the Kafka topic by the store during {@link KeyValueStore#flush()} are captured for testing purposes.
  * This class simplifies testing of various {@link KeyValueStore} instances, especially those that use
  * {@link MeteredKeyValueStore} to monitor and write its entries to the Kafka topic.
@@ -110,7 +111,7 @@ import static org.mockito.Mockito.when;
  *
  * <h2>Restoring a store</h2>
  * This component can be used to test whether a {@link KeyValueStore} implementation properly
- * {@link ProcessorContext#register(StateStore, StateRestoreCallback) registers itself} with the {@link ProcessorContext}, so that
+ * {@link StateStoreContext#register(StateStore, StateRestoreCallback) registers itself} with the {@link StateStoreContext}, so that
  * the persisted contents of a store are properly restored from the flushed entries when the store instance is started.
  * <p>
  * To do this, create an instance of this driver component, {@link #addEntryToRestoreLog(Object, Object) add entries} that will be
@@ -149,7 +150,7 @@ public class KeyValueStoreTestDriver<K, V> {
 
     /**
      * Create a driver object that will have a {@link #context()} that records messages
-     * {@link ProcessorContext#forward(Object, Object) forwarded} by the store and that provides default serializers and
+     * {@link ProcessorContext#forward(Record) forwarded} by the store and that provides default serializers and
      * deserializers for the given built-in key and value types (e.g., {@code String.class}, {@code Integer.class},
      * {@code Long.class}, and {@code byte[].class}). This can be used when store is created to rely upon the
      * ProcessorContext's default key and value serializers and deserializers.
@@ -167,14 +168,14 @@ public class KeyValueStoreTestDriver<K, V> {
 
     /**
      * Create a driver object that will have a {@link #context()} that records messages
-     * {@link ProcessorContext#forward(Object, Object) forwarded} by the store and that provides the specified serializers and
+     * {@link ProcessorContext#forward(Record) forwarded} by the store and that provides the specified serializers and
      * deserializers. This can be used when store is created to rely upon the ProcessorContext's default key and value serializers
      * and deserializers.
      *
-     * @param keySerializer     the key serializer for the {@link ProcessorContext}; may not be null
-     * @param keyDeserializer   the key deserializer for the {@link ProcessorContext}; may not be null
-     * @param valueSerializer   the value serializer for the {@link ProcessorContext}; may not be null
-     * @param valueDeserializer the value deserializer for the {@link ProcessorContext}; may not be null
+     * @param keySerializer     the key serializer for the {@link StateStoreContext}; may not be null
+     * @param keyDeserializer   the key deserializer for the {@link StateStoreContext}; may not be null
+     * @param valueSerializer   the value serializer for the {@link StateStoreContext}; may not be null
+     * @param valueDeserializer the value deserializer for the {@link StateStoreContext}; may not be null
      * @return the test driver; never null
      */
     public static <K, V> KeyValueStoreTestDriver<K, V> create(final Serializer<K> keySerializer,
@@ -195,6 +196,7 @@ public class KeyValueStoreTestDriver<K, V> {
     private final InternalMockProcessorContext<?, ?> context;
     private final StateSerdes<K, V> stateSerdes;
 
+    @SuppressWarnings("resource")
     private KeyValueStoreTestDriver(final StateSerdes<K, V> serdes) {
         props = new Properties();
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, "application-id");
@@ -213,7 +215,7 @@ public class KeyValueStoreTestDriver<K, V> {
             logContext,
             new TaskId(0, 0),
             new StreamsProducer(
-                new MockProducer<>(null, true, null, null),
+                new MockProducer<>(null, true, null, null, null),
                 AT_LEAST_ONCE,
                 Time.SYSTEM,
                 logContext
@@ -264,7 +266,7 @@ public class KeyValueStoreTestDriver<K, V> {
         stateDir.mkdirs();
         stateSerdes = serdes;
 
-        context = new InternalMockProcessorContext<Object, Object>(stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, null) {
+        context = new InternalMockProcessorContext<>(stateDir, serdes.keySerde(), serdes.valueSerde(), recordCollector, null) {
             final ThreadCache cache = new ThreadCache(new LogContext("testCache "), 1024 * 1024L, metrics());
 
             @Override
@@ -298,7 +300,7 @@ public class KeyValueStoreTestDriver<K, V> {
 
     /**
      * Get the entries that are restored to a KeyValueStore when it is constructed with this driver's {@link #context()
-     * ProcessorContext}.
+     * StateStoreContext}.
      *
      * @return the restore entries; never null but possibly a null iterator
      */
@@ -345,7 +347,7 @@ public class KeyValueStoreTestDriver<K, V> {
      * {@link #flushedEntryRemoved(Object)} methods.
      * <p>
      * If the {@link KeyValueStore}'s are to be restored upon its startup, be sure to {@link #addEntryToRestoreLog(Object, Object)
-     * add the restore entries} before creating the store with the {@link ProcessorContext} returned by this method.
+     * add the restore entries} before creating the store with the {@link StateStoreContext} returned by this method.
      *
      * @return the processing context; never null
      * @see #addEntryToRestoreLog(Object, Object)
@@ -378,7 +380,7 @@ public class KeyValueStoreTestDriver<K, V> {
     /**
      * Utility method to compute the number of entries within the store.
      *
-     * @param store the key value store using this {@link #context()}.
+     * @param store the key value store using this {@link #context() StateStoreContext}.
      * @return the number of entries
      */
     public int sizeOf(final KeyValueStore<K, V> store) {

@@ -17,16 +17,11 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Collection;
 
 /**
  * Options for {@link Admin#createTopics(Collection)}.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class CreateTopicsOptions extends AbstractOptions<CreateTopicsOptions> {
 
     private boolean validateOnly = false;

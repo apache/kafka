@@ -120,12 +120,7 @@ import java.util.Set;
  * The minimum broker version required is 0.10.0.0. Methods with stricter requirements will specify the minimum broker
  * version required.
  * <p>
- * This client was introduced in 0.11.0.0 and the API is still evolving. We will try to evolve the API in a compatible
- * manner, but we reserve the right to make breaking changes in minor releases, if necessary. We will update the
- * {@code InterfaceStability} annotation and this notice once the API is considered stable.
- * <p>
  */
-@InterfaceStability.Evolving
 public interface Admin extends AutoCloseable {
 
     /**
@@ -903,9 +898,7 @@ public interface Admin extends AutoCloseable {
      * @return The ListConsumerGroupOffsetsResult
      */
     default ListConsumerGroupOffsetsResult listConsumerGroupOffsets(String groupId, ListConsumerGroupOffsetsOptions options) {
-        @SuppressWarnings("deprecation")
-        ListConsumerGroupOffsetsSpec groupSpec = new ListConsumerGroupOffsetsSpec()
-            .topicPartitions(options.topicPartitions());
+        ListConsumerGroupOffsetsSpec groupSpec = new ListConsumerGroupOffsetsSpec();
 
         // We can use the provided options with the batched API, which uses topic partitions from
         // the group spec and ignores any topic partitions set in the options.
@@ -948,6 +941,31 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
+     * List the Streams group offsets available in the cluster for the specified Streams groups.
+     *
+     * <em>Note</em>: this method effectively does the same as the corresponding consumer group method {@link Admin#listConsumerGroupOffsets} does.
+     *
+     * @param groupSpecs Map of Streams group ids to a spec that specifies the topic partitions of the group to list offsets for.
+     *
+     * @param options The options to use when listing the Streams group offsets.
+     * @return The ListStreamsGroupOffsetsResult
+     */
+    ListStreamsGroupOffsetsResult listStreamsGroupOffsets(Map<String, ListStreamsGroupOffsetsSpec> groupSpecs, ListStreamsGroupOffsetsOptions options);
+
+    /**
+     * List the Streams group offsets available in the cluster for the specified groups with the default options.
+     * <p>
+     * This is a convenience method for
+     * {@link #listStreamsGroupOffsets(Map, ListStreamsGroupOffsetsOptions)} with default options.
+     *
+     * @param groupSpecs Map of Streams group ids to a spec that specifies the topic partitions of the group to list offsets for.
+     * @return The ListStreamsGroupOffsetsResult.
+     */
+    default ListStreamsGroupOffsetsResult listStreamsGroupOffsets(Map<String, ListStreamsGroupOffsetsSpec> groupSpecs) {
+        return listStreamsGroupOffsets(groupSpecs, new ListStreamsGroupOffsetsOptions());
+    }
+
+    /**
      * Delete consumer groups from the cluster.
      *
      * @param options The options to use when deleting a consumer group.
@@ -962,6 +980,25 @@ public interface Admin extends AutoCloseable {
      */
     default DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds) {
         return deleteConsumerGroups(groupIds, new DeleteConsumerGroupsOptions());
+    }
+
+    /**
+     * Delete Streams groups from the cluster.
+     *
+     * <em>Note</em>: this method effectively does the same as the corresponding consumer group method {@link Admin#deleteConsumerGroups} does.
+     *
+     * @param options The options to use when deleting a Streams group.
+     * @return The DeleteStreamsGroupsResult.
+     */
+    DeleteStreamsGroupsResult deleteStreamsGroups(Collection<String> groupIds, DeleteStreamsGroupsOptions options);
+
+    /**
+     * Delete Streams groups from the cluster with the default options.
+     *
+     * @return The DeleteStreamsGroupResult.
+     */
+    default DeleteStreamsGroupsResult deleteStreamsGroups(Collection<String> groupIds) {
+        return deleteStreamsGroups(groupIds, new DeleteStreamsGroupsOptions());
     }
 
     /**
@@ -985,6 +1022,31 @@ public interface Admin extends AutoCloseable {
      */
     default DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId, Set<TopicPartition> partitions) {
         return deleteConsumerGroupOffsets(groupId, partitions, new DeleteConsumerGroupOffsetsOptions());
+    }
+
+    /**
+     * Delete committed offsets for a set of partitions in a Streams group. This will
+     * succeed at the partition level only if the group is not actively subscribed
+     * to the corresponding topic.
+     *
+     * <em>Note</em>: this method effectively does the same as the corresponding consumer group method {@link Admin#deleteConsumerGroupOffsets} does.
+     *
+     * @param options The options to use when deleting offsets in a Streams group.
+     * @return The DeleteStreamsGroupOffsetsResult.
+     */
+    DeleteStreamsGroupOffsetsResult deleteStreamsGroupOffsets(String groupId,
+                                                                Set<TopicPartition> partitions,
+                                                                DeleteStreamsGroupOffsetsOptions options);
+
+    /**
+     * Delete committed offsets for a set of partitions in a Streams group with the default
+     * options. This will succeed at the partition level only if the group is not actively
+     * subscribed to the corresponding topic.
+     *
+     * @return The DeleteStreamsGroupOffsetsResult.
+     */
+    default DeleteStreamsGroupOffsetsResult deleteStreamsGroupOffsets(String groupId, Set<TopicPartition> partitions) {
+        return deleteStreamsGroupOffsets(groupId, partitions, new DeleteStreamsGroupOffsetsOptions());
     }
 
     /**
@@ -1090,6 +1152,13 @@ public interface Admin extends AutoCloseable {
      *   if the request timed out before the controller could record the new assignments.</li>
      *   <li>{@link org.apache.kafka.common.errors.InvalidReplicaAssignmentException}
      *   If the specified assignment was not valid.</li>
+     *   <li>{@link org.apache.kafka.common.errors.InvalidReplicationFactorException}
+     *   If the replication factor was changed in an invalid way.
+     *   Only thrown when {@link AlterPartitionReassignmentsOptions#allowReplicationFactorChange()} is set to false and
+     *   the request is attempting to alter reassignments (not cancel)</li>
+     *   <li>{@link org.apache.kafka.common.errors.UnsupportedVersionException}
+     *   If {@link AlterPartitionReassignmentsOptions#allowReplicationFactorChange()} was changed outside the default
+     *   and the server does not support the option (e.g due to an old Kafka version).</li>
      *   <li>{@link org.apache.kafka.common.errors.NoReassignmentInProgressException}
      *   If there was an attempt to cancel a reassignment for a partition which was not being reassigned.</li>
      * </ul>
@@ -1212,6 +1281,34 @@ public interface Admin extends AutoCloseable {
      * @return The AlterOffsetsResult.
      */
     AlterConsumerGroupOffsetsResult alterConsumerGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterConsumerGroupOffsetsOptions options);
+
+    /**
+     * <p>Alters offsets for the specified group. In order to succeed, the group must be empty.
+     *
+     * <p>This is a convenience method for {@link #alterStreamsGroupOffsets(String, Map, AlterStreamsGroupOffsetsOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @param groupId The group for which to alter offsets.
+     * @param offsets A map of offsets by partition with associated metadata.
+     * @return The AlterOffsetsResult.
+     */
+    default AlterStreamsGroupOffsetsResult alterStreamsGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets) {
+        return alterStreamsGroupOffsets(groupId, offsets, new AlterStreamsGroupOffsetsOptions());
+    }
+
+    /**
+     * <p>Alters offsets for the specified group. In order to succeed, the group must be empty.
+     *
+     * <p>This operation is not transactional so it may succeed for some partitions while fail for others.
+     *
+     * <em>Note</em>: this method effectively does the same as the corresponding consumer group method {@link Admin#alterConsumerGroupOffsets} does.
+     *
+     * @param groupId The group for which to alter offsets.
+     * @param offsets A map of offsets by partition with associated metadata. Partitions not specified in the map are ignored.
+     * @param options The options to use when altering the offsets.
+     * @return The AlterOffsetsResult.
+     */
+    AlterStreamsGroupOffsetsResult alterStreamsGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterStreamsGroupOffsetsOptions options);
 
     /**
      * <p>List offset for the specified partitions and OffsetSpec. This operation enables to find
@@ -1445,14 +1542,23 @@ public interface Admin extends AutoCloseable {
      * error code for each supplied {@link FeatureUpdate}, and the code indicates if the update
      * succeeded or failed in the controller.
      * <ul>
-     * <li>Downgrade of feature version level is not a regular operation/intent. It is only allowed
-     * in the controller if the {@link FeatureUpdate} has the allowDowngrade flag set. Setting this
-     * flag conveys user intent to attempt downgrade of a feature max version level. Note that
-     * despite the allowDowngrade flag being set, certain downgrades may be rejected by the
-     * controller if it is deemed impossible.</li>
-     * <li>Deletion of a finalized feature version is not a regular operation/intent. It could be
-     * done by setting the allowDowngrade flag to true in the {@link FeatureUpdate}, and, setting
-     * the max version level to a value less than 1.</li>
+     * <li>Downgrading a feature version level is not a common operation and should only be
+     * performed when necessary. It is permitted only if the {@link FeatureUpdate} specifies the
+     * {@code upgradeType} as either {@link FeatureUpdate.UpgradeType#SAFE_DOWNGRADE} or
+     * {@link FeatureUpdate.UpgradeType#UNSAFE_DOWNGRADE}.
+     * <ul>
+     * <li>{@code SAFE_DOWNGRADE}: Allows downgrades that do not lead to metadata loss.</li>
+     * <li>{@code UNSAFE_DOWNGRADE}: Permits downgrades that might result in metadata loss.</li>
+     * </ul>
+     * Note that even with these settings, certain downgrades may still be rejected by the controller
+     * if they are considered unsafe or impossible.</li>
+     * <li>Deleting a finalized feature version is also not a common operation. To delete a feature,
+     * set the {@code maxVersionLevel} to zero and specify the {@code upgradeType} as either
+     * {@link FeatureUpdate.UpgradeType#SAFE_DOWNGRADE} or
+     * {@link FeatureUpdate.UpgradeType#UNSAFE_DOWNGRADE}.</li>
+     * <li>The {@link FeatureUpdate.UpgradeType#UPGRADE} type cannot be used when the
+     * {@code maxVersionLevel} is zero. Attempting to do so will result in an
+     * {@link IllegalArgumentException}.</li>
      * </ul>
      * <p>
      * The following exceptions can be anticipated when calling {@code get()} on the futures
@@ -1513,8 +1619,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Unregister a broker.
      * <p>
-     * This operation does not have any effect on partition assignments. It is supported
-     * only on Kafka clusters which use Raft to store metadata, rather than ZooKeeper.
+     * This operation does not have any effect on partition assignments.
      *
      * This is a convenience method for {@link #unregisterBroker(int, UnregisterBrokerOptions)}
      *
@@ -1530,8 +1635,7 @@ public interface Admin extends AutoCloseable {
     /**
      * Unregister a broker.
      * <p>
-     * This operation does not have any effect on partition assignments. It is supported
-     * only on Kafka clusters which use Raft to store metadata, rather than ZooKeeper.
+     * This operation does not have any effect on partition assignments.
      *
      * The following exceptions can be anticipated when calling {@code get()} on the future from the
      * returned {@link UnregisterBrokerResult}:
@@ -1539,8 +1643,7 @@ public interface Admin extends AutoCloseable {
      *   <li>{@link org.apache.kafka.common.errors.TimeoutException}
      *   If the request timed out before the describe operation could finish.</li>
      *   <li>{@link org.apache.kafka.common.errors.UnsupportedVersionException}
-     *   If the software is too old to support the unregistration API, or if the
-     *   cluster is not using Raft to store metadata.
+     *   If the software is too old to support the unregistration API.
      * </ul>
      * <p>
      *
@@ -1787,6 +1890,96 @@ public interface Admin extends AutoCloseable {
      */
     default DescribeShareGroupsResult describeShareGroups(Collection<String> groupIds) {
         return describeShareGroups(groupIds, new DescribeShareGroupsOptions());
+    }
+
+    /**
+     * Alters offsets for the specified group. In order to succeed, the group must be empty.
+     *
+     * <p>This operation is not transactional, so it may succeed for some partitions while fail for others.
+     *
+     * @param groupId The group for which to alter offsets.
+     * @param offsets A map of offsets by partition. Partitions not specified in the map are ignored.
+     * @param options The options to use when altering the offsets.
+     * @return The AlterShareGroupOffsetsResult.
+     */
+    AlterShareGroupOffsetsResult alterShareGroupOffsets(String groupId, Map<TopicPartition, Long> offsets, AlterShareGroupOffsetsOptions options);
+
+    /**
+     * Alters offsets for the specified group. In order to succeed, the group must be empty.
+     *
+     * <p>This is a convenience method for {@link #alterShareGroupOffsets(String, Map, AlterShareGroupOffsetsOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @param groupId The group for which to alter offsets.
+     * @param offsets A map of offsets by partition.
+     * @return The AlterShareGroupOffsetsResult.
+     */
+    default AlterShareGroupOffsetsResult alterShareGroupOffsets(String groupId, Map<TopicPartition, Long> offsets) {
+        return alterShareGroupOffsets(groupId, offsets, new AlterShareGroupOffsetsOptions());
+    }
+
+    /**
+     * List the share group offsets available in the cluster for the specified share groups.
+     *
+     * @param groupSpecs Map of share group ids to a spec that specifies the topic partitions of the group to list offsets for.
+     * @param options The options to use when listing the share group offsets.
+     * @return The ListShareGroupOffsetsResult
+     */
+    ListShareGroupOffsetsResult listShareGroupOffsets(Map<String, ListShareGroupOffsetsSpec> groupSpecs, ListShareGroupOffsetsOptions options);
+
+    /**
+     * List the share group offsets available in the cluster for the specified share groups with the default options.
+     *
+     * <p>This is a convenience method for {@link #listShareGroupOffsets(Map, ListShareGroupOffsetsOptions)}
+     * to list offsets of all partitions for the specified share groups with default options.
+     *
+     * @param groupSpecs Map of share group ids to a spec that specifies the topic partitions of the group to list offsets for.
+     * @return The ListShareGroupOffsetsResult
+     */
+    default ListShareGroupOffsetsResult listShareGroupOffsets(Map<String, ListShareGroupOffsetsSpec> groupSpecs) {
+        return listShareGroupOffsets(groupSpecs, new ListShareGroupOffsetsOptions());
+    }
+
+    /**
+     * Delete share groups from the cluster with the default options.
+     *
+     * @param groupIds Collection of share group ids which are to be deleted.
+     * @return The DeleteShareGroupsResult.
+     */
+    default DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds) {
+        return deleteShareGroups(groupIds, new DeleteShareGroupsOptions());
+    }
+
+    /**
+     * Delete share groups from the cluster.
+     *
+     * @param groupIds Collection of share group ids which are to be deleted.
+     * @param options The options to use when deleting a share group.
+     * @return The DeleteShareGroupsResult.
+     */
+    DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds, DeleteShareGroupsOptions options);
+
+    /**
+     * Describe streams groups in the cluster.
+     *
+     * @param groupIds The IDs of the groups to describe.
+     * @param options  The options to use when describing the groups.
+     * @return The DescribeStreamsGroupsResult.
+     */
+    DescribeStreamsGroupsResult describeStreamsGroups(Collection<String> groupIds,
+                                                      DescribeStreamsGroupsOptions options);
+
+    /**
+     * Describe streams groups in the cluster, with the default options.
+     * <p>
+     * This is a convenience method for {@link #describeStreamsGroups(Collection, DescribeStreamsGroupsOptions)}
+     * with default options. See the overload for more details.
+     *
+     * @param groupIds The IDs of the groups to describe.
+     * @return The DescribeStreamsGroupsResult.
+     */
+    default DescribeStreamsGroupsResult describeStreamsGroups(Collection<String> groupIds) {
+        return describeStreamsGroups(groupIds, new DescribeStreamsGroupsOptions());
     }
 
     /**

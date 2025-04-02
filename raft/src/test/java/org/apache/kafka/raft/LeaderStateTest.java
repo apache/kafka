@@ -17,9 +17,11 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.raft.internals.BatchAccumulator;
+import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import org.junit.jupiter.api.Test;
@@ -73,7 +75,8 @@ public class LeaderStateTest {
             accumulator,
             voters.listeners(localReplicaKey.id()),
             fetchTimeoutMs,
-            logContext
+            logContext,
+            new KafkaRaftMetrics(new Metrics(), "raft")
         );
     }
 
@@ -118,7 +121,8 @@ public class LeaderStateTest {
                 null,
                 Endpoints.empty(),
                 fetchTimeoutMs,
-                logContext
+                logContext,
+                new KafkaRaftMetrics(new Metrics(), "raft")
             )
         );
     }
@@ -575,15 +579,13 @@ public class LeaderStateTest {
             1
         );
 
-        assertFalse(
-            state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
-        );
-        assertFalse(
-            state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
-        );
-        assertFalse(
-            state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate)
-        );
+        assertFalse(state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, true));
+        assertFalse(state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, true));
+        assertFalse(state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, true));
+
+        assertFalse(state.canGrantVote(ReplicaKey.of(1, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, false));
+        assertFalse(state.canGrantVote(ReplicaKey.of(2, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, false));
+        assertFalse(state.canGrantVote(ReplicaKey.of(3, ReplicaKey.NO_DIRECTORY_ID), isLogUpToDate, false));
     }
 
     @ParameterizedTest

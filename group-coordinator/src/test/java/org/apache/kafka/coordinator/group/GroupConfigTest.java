@@ -61,6 +61,12 @@ public class GroupConfigTest {
                 assertPropertyInvalid(name, "not_a_number", "-0.1", "1.2");
             } else if (GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG.equals(name)) {
                 assertPropertyInvalid(name, "hello", "1.0");
+            } else if (GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG.equals(name)) {
+                assertPropertyInvalid(name, "not_a_number", "1.0");
+            } else if (GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG.equals(name)) {
+                assertPropertyInvalid(name, "not_a_number", "1.0");
+            } else if (GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG.equals(name)) {
+                assertPropertyInvalid(name, "not_a_number", "1.0");
             } else {
                 assertPropertyInvalid(name, "not_a_number", "-0.1");
             }
@@ -87,6 +93,10 @@ public class GroupConfigTest {
 
         // Check for value "earliest"
         props.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "earliest");
+        doTestValidProps(props);
+
+        // Check for value "by_duration"
+        props.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "by_duration:PT10S");
         doTestValidProps(props);
     }
 
@@ -148,6 +158,38 @@ public class GroupConfigTest {
         // Check for invalid shareAutoOffsetReset
         props.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "hello");
         doTestInvalidProps(props, ConfigException.class);
+
+        // Check for invalid shareAutoOffsetReset, by_duration without duration
+        props.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "by_duration");
+        doTestInvalidProps(props, ConfigException.class);
+
+        // Check for invalid shareAutoOffsetReset, by_duration with negative duration
+        props.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "by_duration:-PT10S");
+        doTestInvalidProps(props, ConfigException.class);
+
+        // Check for invalid shareAutoOffsetReset, by_duration with invalid duration
+        props.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "by_duration:invalid");
+        doTestInvalidProps(props, ConfigException.class);
+        props = createValidGroupConfig();
+
+        // Check for invalid streamsSessionTimeoutMs, < MIN
+        props.put(GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, "1");
+        doTestInvalidProps(props, InvalidConfigurationException.class);
+        props = createValidGroupConfig();
+
+        // Check for invalid streamsSessionTimeoutMs, > MAX
+        props.put(GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, "70000");
+        doTestInvalidProps(props, InvalidConfigurationException.class);
+        props = createValidGroupConfig();
+
+        // Check for invalid streamsHeartbeatIntervalMs, < MIN
+        props.put(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, "1000");
+        doTestInvalidProps(props, InvalidConfigurationException.class);
+        props = createValidGroupConfig();
+
+        // Check for invalid streamsHeartbeatIntervalMs, > MAX
+        props.put(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, "70000");
+        doTestInvalidProps(props, InvalidConfigurationException.class);
     }
 
     private void doTestInvalidProps(Properties props, Class<? extends Exception> exceptionClassName) {
@@ -167,6 +209,9 @@ public class GroupConfigTest {
         defaultValue.put(GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, "10");
         defaultValue.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, "2000");
         defaultValue.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "latest");
+        defaultValue.put(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, "10");
+        defaultValue.put(GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, "2000");
+        defaultValue.put(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "1");
 
         Properties props = new Properties();
         props.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "20");
@@ -178,6 +223,9 @@ public class GroupConfigTest {
         assertEquals(10, config.getInt(GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG));
         assertEquals(2000, config.getInt(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG));
         assertEquals("latest", config.getString(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG));
+        assertEquals(10, config.getInt(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG));
+        assertEquals(2000, config.getInt(GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG));
+        assertEquals(1, config.getInt(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG));
     }
 
     @Test
@@ -196,6 +244,9 @@ public class GroupConfigTest {
         props.put(GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, "5000");
         props.put(GroupConfig.SHARE_RECORD_LOCK_DURATION_MS_CONFIG, "30000");
         props.put(GroupConfig.SHARE_AUTO_OFFSET_RESET_CONFIG, "latest");
+        props.put(GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG, "50000");
+        props.put(GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, "6000");
+        props.put(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, "1");
         return props;
     }
 

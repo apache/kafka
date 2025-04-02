@@ -42,8 +42,7 @@ public class ConnectExceptionMapper implements ExceptionMapper<Exception> {
     public Response toResponse(Exception exception) {
         log.debug("Uncaught exception in REST call to /{}", uriInfo.getPath(), exception);
 
-        if (exception instanceof ConnectRestException) {
-            ConnectRestException restException = (ConnectRestException) exception;
+        if (exception instanceof ConnectRestException restException) {
             return Response.status(restException.statusCode())
                     .entity(new ErrorMessage(restException.errorCode(), restException.getMessage()))
                     .build();

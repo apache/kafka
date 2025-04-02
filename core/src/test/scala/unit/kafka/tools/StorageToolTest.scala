@@ -21,7 +21,7 @@ import java.io.{ByteArrayOutputStream, File, PrintStream}
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.util
-import java.util.{Optional, Properties}
+import java.util.Properties
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import net.sourceforge.argparse4j.inf.ArgumentParserException
@@ -31,6 +31,7 @@ import org.apache.kafka.server.common.{Feature, MetadataVersion}
 import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.metadata.properties.{MetaPropertiesEnsemble, PropertiesUtils}
 import org.apache.kafka.metadata.storage.FormatterException
+import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
@@ -50,7 +51,8 @@ class StorageToolTest {
     properties.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
     properties.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
     properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"2@localhost:9092")
-    properties.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "PLAINTEXT")
+    properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    properties.put(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://:9092")
     properties
   }
 
@@ -293,19 +295,6 @@ Found problem:
   }
 
   @Test
-  def testFormatFailsInZkMode(): Unit = {
-    val availableDirs = Seq(TestUtils.tempDir())
-    val properties = new Properties()
-    properties.setProperty("log.dirs", availableDirs.mkString(","))
-    properties.setProperty("zookeeper.connect", "localhost:2181")
-    val stream = new ByteArrayOutputStream()
-    assertEquals("The kafka configuration file appears to be for a legacy cluster. " +
-      "Formatting is only supported for clusters in KRaft mode.",
-        assertThrows(classOf[TerseFailure],
-          () => runFormatCommand(stream, properties)).getMessage)
-  }
-
-  @Test
   def testFormatWithReleaseVersion(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
@@ -369,25 +358,11 @@ Found problem:
   }
 
   @Test
-  def testFormatWithReleaseVersionDefault(): Unit = {
-    val availableDirs = Seq(TestUtils.tempDir())
-    val properties = new Properties()
-    properties.putAll(defaultStaticQuorumProperties)
-    properties.setProperty("log.dirs", availableDirs.mkString(","))
-    properties.setProperty("inter.broker.protocol.version", "3.7")
-    val stream = new ByteArrayOutputStream()
-    assertEquals(0, runFormatCommand(stream, properties))
-    assertTrue(stream.toString().contains("3.7-IV4"),
-      "Failed to find content in output: " + stream.toString())
-  }
-
-  @Test
   def testFormatWithReleaseVersionDefaultAndReleaseVersion(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
     properties.putAll(defaultStaticQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
-    properties.setProperty("inter.broker.protocol.version", "3.7")
     val stream = new ByteArrayOutputStream()
     assertEquals(0, runFormatCommand(stream, properties, Seq(
       "--release-version", "3.6-IV0",
@@ -562,10 +537,10 @@ Found problem:
   def testVersionMappingWithValidReleaseVersion(): Unit = {
     val stream = new ByteArrayOutputStream()
     // Test with a valid release version
-    assertEquals(0, runVersionMappingCommand(stream, "3.3-IV3"))
+    assertEquals(0, runVersionMappingCommand(stream, MetadataVersion.MINIMUM_VERSION.toString))
 
     val output = stream.toString()
-    val metadataVersion = MetadataVersion.IBP_3_3_IV3
+    val metadataVersion = MetadataVersion.MINIMUM_VERSION
     // Check that the metadata version is correctly included in the output
     assertTrue(output.contains(s"metadata.version=${metadataVersion.featureLevel()} (${metadataVersion.version()})"),
       s"Output did not contain expected Metadata Version: $output"
@@ -614,7 +589,7 @@ Found problem:
     })
 
     assertEquals("Unknown release version '2.9-IV2'." +
-      " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version +
+      " Supported versions are: " + MetadataVersion.MINIMUM_VERSION.version +
       " to " + MetadataVersion.LATEST_PRODUCTION.version, exception.getMessage
     )
 
@@ -623,7 +598,7 @@ Found problem:
     })
 
     assertEquals("Unknown release version 'invalid'." +
-      " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version +
+      " Supported versions are: " + MetadataVersion.MINIMUM_VERSION.version +
       " to " + MetadataVersion.LATEST_PRODUCTION.version, exception2.getMessage
     )
   }
@@ -737,7 +712,7 @@ Found problem:
 
     // Not doing full SCRAM record validation since that's covered elsewhere.
     // Just checking that we generate the correct number of records
-    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString, Optional.empty).read
+    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString).read
     val scramRecords = bootstrapMetadata.records().asScala
       .filter(apiMessageAndVersion => apiMessageAndVersion.message().isInstanceOf[UserScramCredentialRecord])
       .map(apiMessageAndVersion => apiMessageAndVersion.message().asInstanceOf[UserScramCredentialRecord])

@@ -472,7 +472,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, brokerCount,
       topicConfig = topicConfig)
 
-    val tsDisabledProps = TestUtils.createBrokerConfigs(1, null).head
+    val tsDisabledProps = TestUtils.createBrokerConfigs(1).head
     instanceConfigs = List(KafkaConfig.fromProps(tsDisabledProps))
 
     recreateBrokers(startup = true)
@@ -490,7 +490,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     TestUtils.createTopicWithAdmin(createAdminClient(), testTopicName, brokers, controllerServers, numPartitions, brokerCount,
       topicConfig = topicConfig)
 
-    val tsDisabledProps = TestUtils.createBrokerConfigs(1, null).head
+    val tsDisabledProps = TestUtils.createBrokerConfigs(1).head
     instanceConfigs = List(KafkaConfig.fromProps(tsDisabledProps))
 
     recreateBrokers(startup = true)

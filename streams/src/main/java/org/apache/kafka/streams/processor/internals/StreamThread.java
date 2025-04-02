@@ -311,6 +311,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     private long lastLogSummaryMs = -1L;
     private long totalRecordsProcessedSinceLastSummary = 0L;
     private long totalPunctuatorsSinceLastSummary = 0L;
+    private long totalPolledSinceLastSummary = 0L;
     private long totalCommittedSinceLastSummary = 0L;
 
     private long now;
@@ -496,6 +497,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             stateUpdater,
             streamsMetrics,
             topologyMetadata,
+            processId,
             threadId,
             logContext,
             referenceContainer.assignmentErrorCode,
@@ -573,6 +575,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                         final StateUpdater stateUpdater,
                         final StreamsMetricsImpl streamsMetrics,
                         final TopologyMetadata topologyMetadata,
+                        final UUID processId,
                         final String threadId,
                         final LogContext logContext,
                         final AtomicInteger assignmentErrorCode,
@@ -617,6 +620,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             time.milliseconds()
         );
         ThreadMetrics.addThreadStateTelemetryMetric(
+            processId.toString(),
             threadId,
             streamsMetrics,
             (metricConfig, now) -> this.state().ordinal());
@@ -960,6 +964,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         final long pollLatency;
         taskManager.resumePollingForPartitionsWithAvailableSpace();
         pollLatency = pollPhase();
+        totalPolledSinceLastSummary += 1;
 
         // Shutdown hook could potentially be triggered and transit the thread state to PENDING_SHUTDOWN during #pollRequests().
         // The task manager internal states could be uninitialized if the state transition happens during #onPartitionsAssigned().
@@ -1075,12 +1080,14 @@ public class StreamThread extends Thread implements ProcessingThread {
         pollRatioSensor.record((double) pollLatency / runOnceLatency, now);
         commitRatioSensor.record((double) totalCommitLatency / runOnceLatency, now);
 
-        if (logSummaryIntervalMs > 0 && now - lastLogSummaryMs > logSummaryIntervalMs) {
-            log.info("Processed {} total records, ran {} punctuators, and committed {} total tasks since the last update",
-                 totalRecordsProcessedSinceLastSummary, totalPunctuatorsSinceLastSummary, totalCommittedSinceLastSummary);
+        final long timeSinceLastLog = now - lastLogSummaryMs;
+        if (logSummaryIntervalMs > 0 && timeSinceLastLog > logSummaryIntervalMs) {
+            log.info("Processed {} total records, ran {} punctuators, polled {} times and committed {} total tasks since the last update {}ms ago",
+                 totalRecordsProcessedSinceLastSummary, totalPunctuatorsSinceLastSummary, totalPolledSinceLastSummary, totalCommittedSinceLastSummary, timeSinceLastLog);
 
             totalRecordsProcessedSinceLastSummary = 0L;
             totalPunctuatorsSinceLastSummary = 0L;
+            totalPolledSinceLastSummary = 0L;
             totalCommittedSinceLastSummary = 0L;
             lastLogSummaryMs = now;
         }
@@ -1299,8 +1306,10 @@ public class StreamThread extends Thread implements ProcessingThread {
         for (final TopicPartition partition : partitions) {
             final Optional<AutoOffsetResetStrategy> offsetResetStrategy = topologyMetadata.offsetResetStrategy(partition.topic());
 
-            // This may be null if the task we are currently processing was apart of a named topology that was just removed.
-            // TODO KAFKA-13713: keep the StreamThreads and TopologyMetadata view of named topologies in sync until final thread has acked
+            // TODO
+            // This may be null if the task we are currently processing was part of a named topology that was just removed.
+            // After named topologies are removed, we can update `topologyMetadata.offsetResetStrateg()` so it
+            // will not return null any longer, and we can remove this check
             if (offsetResetStrategy != null) {
                 if (offsetResetStrategy.isPresent()) {
                     final AutoOffsetResetStrategy resetPolicy = offsetResetStrategy.get();
@@ -1407,11 +1416,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                         }
                     }
                 } catch (final TimeoutException timeoutException) {
-                    for (final TopicPartition partition : seekByDuration.keySet()) {
-                        final Task task = taskManager.getActiveTask(partition);
-                        task.maybeInitTaskTimeoutOrThrow(now, timeoutException);
-                        stateUpdater.add(task);
-                    }
+                    taskManager.maybeInitTaskTimeoutsOrThrow(seekByDuration.keySet(), timeoutException, now);
                     log.debug(
                         String.format(
                             "Could not reset offset for %s due to the following exception; will retry.",

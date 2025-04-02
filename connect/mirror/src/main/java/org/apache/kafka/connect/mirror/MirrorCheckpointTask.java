@@ -46,7 +46,6 @@ import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.function.Function;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
 
 import static org.apache.kafka.connect.mirror.MirrorUtils.adminCall;
 
@@ -89,6 +88,9 @@ public class MirrorCheckpointTask extends SourceTask {
         this.topicFilter = topic -> true;
         this.interval = Duration.ofNanos(1);
         this.pollTimeout = Duration.ofNanos(1);
+        // read __offset-sync-topic
+        // update __checkpoint_topic has consumer group offset on source/destination
+        // admincliuent -> consumergroupX 100 on source and consumergroupX 20 on destination
     }
 
     @Override
@@ -196,7 +198,7 @@ public class MirrorCheckpointTask extends SourceTask {
         return upstreamGroupOffsets.entrySet().stream()
             .filter(x -> shouldCheckpointTopic(x.getKey().topic())) // Only perform relevant checkpoints filtered by "topic filter"
             .map(x -> checkpoint(group, x.getKey(), x.getValue()))
-            .flatMap(o -> o.map(Stream::of).orElseGet(Stream::empty)) // do not emit checkpoints for partitions that don't have offset-syncs
+            .flatMap(o -> o.stream()) // do not emit checkpoints for partitions that don't have offset-syncs
             .filter(x -> x.downstreamOffset() >= 0)  // ignore offsets we cannot translate accurately
             .filter(this::checkpointIsMoreRecent) // do not emit checkpoints for partitions that have a later checkpoint
             .collect(Collectors.toMap(Checkpoint::topicPartition, Function.identity()));
