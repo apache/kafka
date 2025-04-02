@@ -161,7 +161,7 @@ public class ShareFetchRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
-        return ShareFetchResponse.of(error, throttleTimeMs, new LinkedHashMap<>(), List.of());
+        return ShareFetchResponse.of(error, throttleTimeMs, new LinkedHashMap<>(), List.of(), 0);
     }
 
     public static ShareFetchRequest parse(Readable readable, short version) {

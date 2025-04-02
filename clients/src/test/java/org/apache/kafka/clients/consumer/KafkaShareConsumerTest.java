@@ -395,7 +395,7 @@ public class KafkaShareConsumerTest {
             .setAcquiredRecords(List.of(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(count - 1).setDeliveryCount((short) 1)));
         LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> topicIdPartitionToPartition = new LinkedHashMap<>();
         topicIdPartitionToPartition.put(tip, partData);
-        return ShareFetchResponse.of(Errors.NONE, 0, topicIdPartitionToPartition, List.of());
+        return ShareFetchResponse.of(Errors.NONE, 0, topicIdPartitionToPartition, List.of(), 0);
     }
 
     private ShareAcknowledgeResponse shareAcknowledgeResponse() {

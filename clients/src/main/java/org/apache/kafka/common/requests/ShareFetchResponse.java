@@ -116,7 +116,7 @@ public class ShareFetchResponse extends AbstractResponse {
 
     /**
      * Creates a {@link org.apache.kafka.common.requests.ShareFetchResponse} from the given byte buffer.
-     * Unlike {@link org.apache.kafka.common.requests.ShareFetchResponse#of(Errors, int, LinkedHashMap, List)},
+     * Unlike {@link org.apache.kafka.common.requests.ShareFetchResponse#of(Errors, int, LinkedHashMap, List, int)},
      * this method doesn't convert null records to {@link org.apache.kafka.common.record.MemoryRecords#EMPTY}.
      *
      * <p><strong>This method should only be used in client-side.</strong></p>
