@@ -29,6 +29,7 @@ import java.util.Map;
 /**
  * This interface controls the strategy that can be used to control how we emit results in a processor.
  */
+@FunctionalInterface
 public interface EmitStrategy {
 
     Logger log = LoggerFactory.getLogger(EmitStrategy.class);
