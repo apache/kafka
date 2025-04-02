@@ -571,7 +571,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         );
 
         if (requestsStages.isEmpty()) {
-            log.info("Nothing to reconcile for share group initializing state.");
+            log.debug("Nothing to reconcile for share group initializing state.");
             return CompletableFuture.completedFuture(null);
         }
 
@@ -579,7 +579,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         final List<CompletableFuture<ShareGroupHeartbeatResponseData>> persisterResponses = new ArrayList<>();
         allRequestsStage.thenApply(__ -> {
             requestsStages.forEach(requestsStage -> requestsStage.join().forEach(request -> {
-                log.info("Reconciling initializing state - {}", request);
+                log.debug("Reconciling initializing state - {}", request);
                 persisterResponses.add(persisterInitialize(request, new ShareGroupHeartbeatResponseData()));
             }));
             return null;
