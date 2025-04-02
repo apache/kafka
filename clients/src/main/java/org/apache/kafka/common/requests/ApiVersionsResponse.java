@@ -32,7 +32,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
-import java.nio.ByteBuffer;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -152,19 +151,19 @@ public class ApiVersionsResponse extends AbstractResponse {
         return data.zkMigrationReady();
     }
 
-    public static ApiVersionsResponse parse(ByteBuffer buffer, short version) {
+    public static ApiVersionsResponse parse(ByteBufferAccessor readable, short version) {
         // Fallback to version 0 for ApiVersions response. If a client sends an ApiVersionsRequest
         // using a version higher than that supported by the broker, a version 0 response is sent
         // to the client indicating UNSUPPORTED_VERSION. When the client receives the response, it
         // falls back while parsing it which means that the version received by this
         // method is not necessarily the real one. It may be version 0 as well.
-        int prev = buffer.position();
+        int prev = readable.buffer().position();
         try {
-            return new ApiVersionsResponse(new ApiVersionsResponseData(new ByteBufferAccessor(buffer), version));
+            return new ApiVersionsResponse(new ApiVersionsResponseData(readable, version));
         } catch (RuntimeException e) {
-            buffer.position(prev);
+            readable.buffer().position(prev);
             if (version != 0)
-                return new ApiVersionsResponse(new ApiVersionsResponseData(new ByteBufferAccessor(buffer), (short) 0));
+                return new ApiVersionsResponse(new ApiVersionsResponseData(readable, (short) 0));
             else
                 throw e;
         }

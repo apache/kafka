@@ -9104,13 +9104,13 @@ class KafkaApisTest extends Logging {
       any()
     )
     val response = capturedResponse.getValue
-    val buffer = MessageUtil.toByteBufferAccessor(
+    val readable = MessageUtil.toByteBufferAccessor(
       response.data,
       request.context.header.apiVersion
-    ).buffer()
+    )
     AbstractResponse.parseResponse(
       request.context.header.apiKey,
-      buffer,
+      readable,
       request.context.header.apiVersion,
     ).asInstanceOf[T]
   }
@@ -9125,10 +9125,10 @@ class KafkaApisTest extends Logging {
       any()
     )
     val response = capturedResponse.getValue
-    val buffer = MessageUtil.toByteBufferAccessor(
+    val readable = MessageUtil.toByteBufferAccessor(
       response.data,
       request.context.header.apiVersion
-    ).buffer()
+    )
 
     // Create the RequestChannel.Response that is created when sendResponse is called in order to update the metrics.
     val sendResponse = new RequestChannel.SendResponse(
@@ -9141,7 +9141,7 @@ class KafkaApisTest extends Logging {
 
     AbstractResponse.parseResponse(
       request.context.header.apiKey,
-      buffer,
+      readable,
       request.context.header.apiVersion,
     ).asInstanceOf[T]
   }

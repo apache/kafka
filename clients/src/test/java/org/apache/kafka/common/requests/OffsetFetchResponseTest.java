@@ -24,7 +24,6 @@ import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchRespon
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponseTopic;
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponseTopics;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData;
@@ -197,7 +196,7 @@ public class OffsetFetchResponseTest {
 
                 OffsetFetchResponse latestResponse = new OffsetFetchResponse(throttleTimeMs, Errors.NONE, partitionDataMap);
                 OffsetFetchResponseData data = new OffsetFetchResponseData(
-                    new ByteBufferAccessor(latestResponse.serialize(version)), version);
+                    latestResponse.serialize(version), version);
 
                 OffsetFetchResponse oldResponse = new OffsetFetchResponse(data, version);
 
@@ -252,7 +251,7 @@ public class OffsetFetchResponseTest {
                     Collections.singletonMap(groupOne, Errors.NONE),
                     Collections.singletonMap(groupOne, partitionDataMap));
                 OffsetFetchResponseData data = new OffsetFetchResponseData(
-                    new ByteBufferAccessor(latestResponse.serialize(version)), version);
+                    latestResponse.serialize(version), version);
                 OffsetFetchResponse oldResponse = new OffsetFetchResponse(data, version);
                 assertEquals(Errors.NONE.code(), data.groups().get(0).errorCode());
 
