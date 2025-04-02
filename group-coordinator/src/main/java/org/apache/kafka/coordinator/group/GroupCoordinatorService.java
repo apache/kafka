@@ -580,13 +580,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
         CompletableFuture<Void> allRequestsStage = CompletableFuture.allOf(requestsStages.toArray(new CompletableFuture<?>[0]));
         final List<CompletableFuture<ShareGroupHeartbeatResponseData>> persisterResponses = new ArrayList<>();
         allRequestsStage.thenApply(__ -> {
-            requestsStages.forEach(requestsStage -> requestsStage.join().forEach(request -> timer.add(new TimerTask(0L) {
-                @Override
-                public void run() {
-                    log.info("Reconciling initializing state - {}", request);
-                    persisterResponses.add(persisterInitialize(request, new ShareGroupHeartbeatResponseData()));
-                }
-            })));
+            requestsStages.forEach(requestsStage -> requestsStage.join().forEach(request -> {
+                log.info("Reconciling initializing state - {}", request);
+                persisterResponses.add(persisterInitialize(request, new ShareGroupHeartbeatResponseData()));
+            }));
             return null;
         });
         return CompletableFuture.allOf(persisterResponses.toArray(new CompletableFuture<?>[0]));
