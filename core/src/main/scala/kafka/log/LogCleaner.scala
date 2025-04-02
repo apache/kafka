@@ -21,11 +21,11 @@ import java.io.{File, IOException}
 import java.lang.{Long => JLong}
 import java.nio._
 import java.util
-import java.util.Date
+import java.util.{Date, Optional}
 import java.util.concurrent.TimeUnit
 import kafka.log.LogCleaner.{CleanerRecopyPercentMetricName, DeadThreadCountMetricName, MaxBufferUtilizationPercentMetricName, MaxCleanTimeMetricName, MaxCompactionDelayMetricsName}
 import kafka.server.{BrokerReconfigurable, KafkaConfig}
-import kafka.utils.{Logging, Pool}
+import kafka.utils.Logging
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.config.ConfigException
 import org.apache.kafka.common.errors.{CorruptRecordException, KafkaStorageException}
@@ -36,12 +36,13 @@ import org.apache.kafka.common.utils.{BufferSupplier, Time}
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.ShutdownableThread
-import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, LastRecord, LogCleaningAbortedException, LogDirFailureChannel, LogSegment, LogSegmentOffsetOverflowException, OffsetMap, SkimpyOffsetMap, ThreadShutdownException, TransactionIndex, UnifiedLog}
+import org.apache.kafka.storage.internals.log.{AbortedTxn, CleanerConfig, LastRecord, LogCleanerManager, LogCleaningAbortedException, LogCleaningException, LogDirFailureChannel, LogSegment, LogSegmentOffsetOverflowException, LogToClean, OffsetMap, PreCleanStats, SkimpyOffsetMap, ThreadShutdownException, TransactionIndex, UnifiedLog}
 import org.apache.kafka.storage.internals.utils.Throttler
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Iterable, Seq, Set, mutable}
+import scala.jdk.OptionConverters.{RichOption, RichOptional}
 import scala.util.control.ControlThrowable
 
 /**
@@ -93,13 +94,13 @@ import scala.util.control.ControlThrowable
  *
  * @param initialConfig Initial configuration parameters for the cleaner. Actual config may be dynamically updated.
  * @param logDirs The directories where offset checkpoints reside
- * @param logs The pool of logs
+ * @param logs The map of logs
  * @param logDirFailureChannel The channel used to add offline log dirs that may be encountered when cleaning the log
  * @param time A way to control the passage of time
  */
 class LogCleaner(initialConfig: CleanerConfig,
                  val logDirs: Seq[File],
-                 val logs: Pool[TopicPartition, UnifiedLog],
+                 val logs: util.concurrent.ConcurrentMap[TopicPartition, UnifiedLog],
                  val logDirFailureChannel: LogDirFailureChannel,
                  time: Time = Time.SYSTEM) extends Logging with BrokerReconfigurable {
   // Visible for test.
@@ -109,7 +110,7 @@ class LogCleaner(initialConfig: CleanerConfig,
   @volatile private var config = initialConfig
 
   /* for managing the state of partitions being cleaned. package-private to allow access in tests */
-  private[log] val cleanerManager = new LogCleanerManager(logDirs, logs, logDirFailureChannel)
+  private[log] val cleanerManager = new LogCleanerManager(logDirs.asJava, logs, logDirFailureChannel)
 
   /* a throttle used to limit the I/O of all the cleaner threads to a user-specified maximum rate */
   private[log] val throttler = new Throttler(config.maxIoBytesPerSecond, 300, "cleaner-io", "bytes", time)
@@ -249,7 +250,7 @@ class LogCleaner(initialConfig: CleanerConfig,
    * @param partitionToRemove The topicPartition to be removed, default none
    */
   def updateCheckpoints(dataDir: File, partitionToRemove: Option[TopicPartition] = None): Unit = {
-    cleanerManager.updateCheckpoints(dataDir, partitionToRemove = partitionToRemove)
+    cleanerManager.updateCheckpoints(dataDir, Optional.empty(), partitionToRemove.toJava)
   }
 
   /**
@@ -300,7 +301,7 @@ class LogCleaner(initialConfig: CleanerConfig,
    *  @param topicPartitions The collection of topicPartitions to be resumed cleaning
    */
   def resumeCleaning(topicPartitions: Iterable[TopicPartition]): Unit = {
-    cleanerManager.resumeCleaning(topicPartitions)
+    cleanerManager.resumeCleaning(topicPartitions.toList.asJava)
   }
 
   /**
@@ -314,7 +315,7 @@ class LogCleaner(initialConfig: CleanerConfig,
    * @return A boolean indicating whether the work has completed before timeout
    */
   def awaitCleaned(topicPartition: TopicPartition, offset: Long, maxWaitMs: Long = 60000L): Boolean = {
-    def isCleaned = cleanerManager.allCleanerCheckpoints.get(topicPartition).fold(false)(_ >= offset)
+    def isCleaned = Option(cleanerManager.allCleanerCheckpoints.get(topicPartition)).fold(false)(_ >= offset)
     var remainingWaitMs = maxWaitMs
     while (!isCleaned && remainingWaitMs > 0) {
       val sleepTime = math.min(100, remainingWaitMs)
@@ -331,7 +332,7 @@ class LogCleaner(initialConfig: CleanerConfig,
     * @return A list of log partitions that retention threads can safely work on
     */
   def pauseCleaningForNonCompactedPartitions(): Iterable[(TopicPartition, UnifiedLog)] = {
-    cleanerManager.pauseCleaningForNonCompactedPartitions()
+    cleanerManager.pauseCleaningForNonCompactedPartitions().asScala.map(entry => (entry.getKey, entry.getValue))
   }
 
   // Only for testing
@@ -409,7 +410,7 @@ class LogCleaner(initialConfig: CleanerConfig,
     @throws(classOf[LogCleaningException])
     private def cleanFilthiestLog(): Boolean = {
       val preCleanStats = new PreCleanStats()
-      val ltc = cleanerManager.grabFilthiestCompactedLog(time, preCleanStats)
+      val ltc = cleanerManager.grabFilthiestCompactedLog(time, preCleanStats).toScala
       val cleaned = ltc match {
         case None =>
           false
@@ -424,7 +425,7 @@ class LogCleaner(initialConfig: CleanerConfig,
             case e: Exception => throw new LogCleaningException(cleanable.log, e.getMessage, e)
           }
       }
-      val deletable: Iterable[(TopicPartition, UnifiedLog)] = cleanerManager.deletableLogs()
+      val deletable = cleanerManager.deletableLogs().asScala
       try {
         deletable.foreach { case (_, log) =>
           try {
@@ -435,7 +436,7 @@ class LogCleaner(initialConfig: CleanerConfig,
           }
         }
       } finally  {
-        cleanerManager.doneDeleting(deletable.map(_._1))
+        cleanerManager.doneDeleting(deletable.keys.toList.asJava)
       }
 
       cleaned
@@ -1151,25 +1152,6 @@ private[log] class Cleaner(val id: Int,
 }
 
 /**
-  * A simple struct for collecting pre-clean stats
-  */
-private class PreCleanStats {
-  var maxCompactionDelayMs = 0L
-  var delayedPartitions = 0
-  var cleanablePartitions = 0
-
-  def updateMaxCompactionDelay(delayMs: Long): Unit = {
-    maxCompactionDelayMs = Math.max(maxCompactionDelayMs, delayMs)
-    if (delayMs > 0) {
-      delayedPartitions += 1
-    }
-  }
-  def recordCleanablePartitions(numOfCleanables: Int): Unit = {
-    cleanablePartitions = numOfCleanables
-  }
-}
-
-/**
  * A simple struct for collecting stats about log cleaning
  */
 private class CleanerStats(time: Time = Time.SYSTEM) {
@@ -1219,22 +1201,6 @@ private class CleanerStats(time: Time = Time.SYSTEM) {
 
   def elapsedIndexSecs: Double = (mapCompleteTime - startTime) / 1000.0
 
-}
-
-/**
-  * Helper class for a log, its topic/partition, the first cleanable position, the first uncleanable dirty position,
-  * and whether it needs compaction immediately.
-  */
-private case class LogToClean(topicPartition: TopicPartition,
-                              log: UnifiedLog,
-                              firstDirtyOffset: Long,
-                              uncleanableOffset: Long,
-                              needCompactionNow: Boolean = false) extends Ordered[LogToClean] {
-  val cleanBytes: Long = log.logSegments(-1, firstDirtyOffset).asScala.map(_.size.toLong).sum
-  val (firstUncleanableOffset, cleanableBytes) = LogCleanerManager.calculateCleanableBytes(log, firstDirtyOffset, uncleanableOffset)
-  val totalBytes: Long = cleanBytes + cleanableBytes
-  val cleanableRatio: Double = cleanableBytes / totalBytes.toDouble
-  override def compare(that: LogToClean): Int = math.signum(this.cleanableRatio - that.cleanableRatio).toInt
 }
 
 /**

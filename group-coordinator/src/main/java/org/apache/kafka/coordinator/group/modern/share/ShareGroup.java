@@ -287,4 +287,9 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         );
         return describedGroup;
     }
+
+    @Override
+    public boolean shouldExpire() {
+        return false;
+    }
 }

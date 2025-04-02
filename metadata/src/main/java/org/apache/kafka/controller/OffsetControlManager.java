@@ -418,9 +418,4 @@ class OffsetControlManager {
         log.info("Replayed {} at offset {}. Reverted to offset {}.",
                 message, offset, preTransactionOffset);
     }
-
-    // VisibleForTesting
-    void setNextWriteOffset(long newNextWriteOffset) {
-        this.nextWriteOffset = newNextWriteOffset;
-    }
 }

@@ -30,7 +30,9 @@ import org.junit.jupiter.api.Assertions.{assertThrows, assertTrue}
 
 import scala.jdk.CollectionConverters.IterableHasAsScala
 
-@ClusterTestDefaults(types = Array(Type.KRAFT), serverProperties = Array(
+@ClusterTestDefaults(
+  types = Array(Type.KRAFT),
+  serverProperties = Array(
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
     new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
     new ClusterConfigProperty(key = TransactionLogConfig.TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, value = "1"),

@@ -97,7 +97,6 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.RecordTestUtils;
 import org.apache.kafka.metadata.RecordTestUtils.ImageDeltaPair;
 import org.apache.kafka.metadata.RecordTestUtils.TestThroughAllIntermediateImagesLeadingToFinalImageHelper;
-import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.util.BatchFileWriter;
 import org.apache.kafka.metalog.LocalLogManager;
@@ -144,7 +143,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 import static java.util.function.Function.identity;
 import static org.apache.kafka.clients.admin.AlterConfigOp.OpType.SET;
@@ -1409,11 +1407,6 @@ public class QuorumControllerTest {
         }
     }
 
-    private static final Uuid FOO_ID = Uuid.fromString("igRktLOnR8ektWHr79F8mw");
-
-    private static final Map<Integer, Long> ALL_ZERO_BROKER_EPOCHS =
-        IntStream.of(0, 1, 2, 3).boxed().collect(Collectors.toMap(identity(), __ -> 0L));
-
     @Test
     public void testFatalMetadataReplayErrorOnActive() throws Throwable {
         try (
@@ -1473,13 +1466,6 @@ public class QuorumControllerTest {
                 );
                 controlEnv.ignoreFatalFaults();
             }
-        }
-    }
-
-    private static void assertInitialLoadFuturesNotComplete(List<StandardAuthorizer> authorizers) {
-        for (int i = 0; i < authorizers.size(); i++) {
-            assertFalse(authorizers.get(i).initialLoadFuture().isDone(),
-                "authorizer " + i + " should not have completed loading.");
         }
     }
 

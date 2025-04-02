@@ -46,7 +46,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 
 /**
- * The old test framework {@link kafka.api.BaseConsumerTest#getTestQuorumAndGroupProtocolParametersAll} test for the following cases:
+ * The old test framework {@link kafka.api.BaseConsumerTest#getTestGroupProtocolParametersAll} test for the following cases:
  * <ul>
  *     <li>(KRAFT server) with (group.coordinator.new.enable=true) with (classic group protocol) = 1 case</li>
  *     <li>(KRAFT server) with (group.coordinator.new.enable=true) with (consumer group protocol) = 1 case</li>
