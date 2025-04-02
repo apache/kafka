@@ -767,9 +767,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         long startMs = time.milliseconds();
         List<CoordinatorRecord> records = new ArrayList<>();
         groupMetadataManager.groupIds().forEach(groupId -> {
-            boolean allOffsetsExpired = offsetMetadataManager.cleanupExpiredOffsets(groupId, records);
-            if (allOffsetsExpired) {
-                groupMetadataManager.maybeDeleteGroup(groupId, records);
+            Group group = groupMetadataManager.group(groupId);
+            if (group.shouldExpire()) {
+                boolean allOffsetsExpired = offsetMetadataManager.cleanupExpiredOffsets(groupId, records);
+                if (allOffsetsExpired) {
+                    groupMetadataManager.maybeDeleteGroup(groupId, records);
+                }
             }
         });
 
