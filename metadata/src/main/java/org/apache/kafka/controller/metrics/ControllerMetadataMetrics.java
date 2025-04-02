@@ -24,7 +24,9 @@ import com.yammer.metrics.core.Meter;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -43,6 +45,10 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         "KafkaController", "FencedBrokerCount");
     private static final MetricName ACTIVE_BROKER_COUNT = getMetricName(
         "KafkaController", "ActiveBrokerCount");
+    private static final MetricName CONTROLLED_SHUTDOWN_BROKER_COUNT = getMetricName(
+        "KafkaController", "ControlledShutdownBrokerCount"
+    );
+    private static final String BROKER_REGISTRATION_STATE_PREFIX = "BrokerRegistrationState.kafka-";
     private static final MetricName GLOBAL_TOPIC_COUNT = getMetricName(
         "KafkaController", "GlobalTopicCount");
     private static final MetricName GLOBAL_PARTITION_COUNT = getMetricName(
@@ -63,6 +69,8 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     private final Optional<MetricsRegistry> registry;
     private final AtomicInteger fencedBrokerCount = new AtomicInteger(0);
     private final AtomicInteger activeBrokerCount = new AtomicInteger(0);
+    private final AtomicInteger controllerShutdownBrokerCount = new AtomicInteger(0);
+    private final Map<Integer, AtomicInteger> brokerRegistrationStates = new HashMap<>();
     private final AtomicInteger globalTopicCount = new AtomicInteger(0);
     private final AtomicInteger globalPartitionCount = new AtomicInteger(0);
     private final AtomicInteger offlinePartitionCount = new AtomicInteger(0);
@@ -89,6 +97,12 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
             @Override
             public Integer value() {
                 return activeBrokerCount();
+            }
+        }));
+        registry.ifPresent(r -> r.newGauge(CONTROLLED_SHUTDOWN_BROKER_COUNT, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return controlledShutdownBrokerCount();
             }
         }));
         registry.ifPresent(r -> r.newGauge(GLOBAL_TOPIC_COUNT, new Gauge<Integer>() {
@@ -134,6 +148,28 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         }));
     }
 
+    public void addBrokerRegistrationStateMetric(int brokerId) {
+        registry.ifPresent(r -> r.newGauge(
+            getMetricName("KafkaController", BROKER_REGISTRATION_STATE_PREFIX + brokerId),
+            new Gauge<Integer>() {
+                @Override
+                public Integer value() {
+                    return brokerRegistrationState(brokerId);
+                }
+            }
+        ));
+    }
+
+    public void removeBrokerRegistrationStateMetric(int brokerId) {
+        registry.ifPresent(r -> r.removeMetric(
+            getMetricName("KafkaController", BROKER_REGISTRATION_STATE_PREFIX + brokerId)
+        ));
+    }
+
+    public Optional<MetricsRegistry> registry() {
+        return registry;
+    }
+
     public void setFencedBrokerCount(int brokerCount) {
         this.fencedBrokerCount.set(brokerCount);
     }
@@ -156,6 +192,30 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
 
     public int activeBrokerCount() {
         return this.activeBrokerCount.get();
+    }
+
+    public void setControlledShutdownBrokerCount(int brokerCount) {
+        this.controllerShutdownBrokerCount.set(brokerCount);
+    }
+
+    public void addToControlledShutdownBrokerCount(int brokerCountDelta) {
+        this.controllerShutdownBrokerCount.addAndGet(brokerCountDelta);
+    }
+
+    public int controlledShutdownBrokerCount() {
+        return this.controllerShutdownBrokerCount.get();
+    }
+
+    public void setBrokerRegistrationState(int brokerId, int brokerState) {
+        if (brokerRegistrationStates.containsKey(brokerId)) {
+            brokerRegistrationStates.get(brokerId).set(brokerState);
+        } else {
+            brokerRegistrationStates.put(brokerId, new AtomicInteger(brokerState));
+        }
+    }
+
+    public int brokerRegistrationState(int brokerId) {
+        return this.brokerRegistrationStates.getOrDefault(brokerId, new AtomicInteger(-1)).get();
     }
     
     public void setGlobalTopicCount(int topicCount) {
@@ -235,6 +295,7 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         registry.ifPresent(r -> List.of(
             FENCED_BROKER_COUNT,
             ACTIVE_BROKER_COUNT,
+            CONTROLLED_SHUTDOWN_BROKER_COUNT,
             GLOBAL_TOPIC_COUNT,
             GLOBAL_PARTITION_COUNT,
             OFFLINE_PARTITION_COUNT,
@@ -244,9 +305,12 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
             ELECTION_FROM_ELIGIBLE_LEADER_REPLICAS_PER_SEC,
             IGNORED_STATIC_VOTERS
         ).forEach(r::removeMetric));
+        for (int brokerId : brokerRegistrationStates.keySet()) {
+            removeBrokerRegistrationStateMetric(brokerId);
+        }
     }
 
-    private static MetricName getMetricName(String type, String name) {
+    public static MetricName getMetricName(String type, String name) {
         return KafkaYammerMetrics.getMetricName("kafka.controller", type, name);
     }
 }

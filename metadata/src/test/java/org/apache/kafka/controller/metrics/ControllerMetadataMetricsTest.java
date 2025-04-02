@@ -43,6 +43,7 @@ public class ControllerMetadataMetricsTest {
                     new HashSet<>(List.of(
                         "kafka.controller:type=KafkaController,name=ActiveBrokerCount",
                         "kafka.controller:type=KafkaController,name=FencedBrokerCount",
+                        "kafka.controller:type=KafkaController,name=ControlledShutdownBrokerCount",
                         "kafka.controller:type=KafkaController,name=GlobalPartitionCount",
                         "kafka.controller:type=KafkaController,name=GlobalTopicCount",
                         "kafka.controller:type=KafkaController,name=MetadataErrorCount",
@@ -127,6 +128,34 @@ public class ControllerMetadataMetricsTest {
             (m, v) -> m.setActiveBrokerCount(v),
             (m, v) -> m.addToActiveBrokerCount(v)
         );
+    }
+
+    @SuppressWarnings("unchecked") // suppress warning about Gauge typecast
+    @Test
+    public void testControlledShutdownCountMetric() {
+        testIntGaugeMetric(
+            m -> m.controlledShutdownBrokerCount(),
+            registry -> ((Gauge<Integer>) registry.allMetrics().
+                    get(metricName("KafkaController", "ControlledShutdownBrokerCount"))).value(),
+            (m, v) -> m.setControlledShutdownBrokerCount(v),
+            (m, v) -> m.addToControlledShutdownBrokerCount(v)
+        );
+    }
+
+    @Test
+    public void testBrokerRegistrationStateMetrics() {
+        MetricsRegistry registry = new MetricsRegistry();
+        try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
+            int brokerId = 1;
+            metrics.addBrokerRegistrationStateMetric(brokerId);
+            metrics.setBrokerRegistrationState(1, 0);
+            Gauge<Integer> registrationState = (Gauge<Integer>) registry.allMetrics().get(metricName("KafkaController", "BrokerRegistrationState.kafka-1"));
+            assertEquals(0, registrationState.value());
+            metrics.setBrokerRegistrationState(1, 2);
+            assertEquals(2, registrationState.value());
+        } finally {
+            registry.shutdown();
+        }
     }
 
     @SuppressWarnings("unchecked") // suppress warning about Gauge typecast

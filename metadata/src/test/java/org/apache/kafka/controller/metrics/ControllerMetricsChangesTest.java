@@ -17,6 +17,7 @@
 
 package org.apache.kafka.controller.metrics;
 
+import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
@@ -31,6 +32,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.FakePartitionRegistrationType.NON_PREFERRED_LEADER;
 import static org.apache.kafka.controller.metrics.ControllerMetricsTestUtils.FakePartitionRegistrationType.NORMAL;
@@ -51,12 +53,21 @@ public class ControllerMetricsChangesTest {
         int brokerId,
         boolean fenced
     ) {
+        return brokerRegistration(brokerId, fenced, false);
+    }
+
+    private static BrokerRegistration brokerRegistration(
+        int brokerId,
+        boolean fenced,
+        boolean controlledShutdown
+    ) {
         return new BrokerRegistration.Builder().
             setId(brokerId).
             setEpoch(100L).
             setIncarnationId(Uuid.fromString("Pxi6QwS2RFuN8VSKjqJZyQ")).
             setFenced(fenced).
-            setInControlledShutdown(false).build();
+            setInControlledShutdown(controlledShutdown).
+            build();
     }
 
     @Test
@@ -73,33 +84,69 @@ public class ControllerMetricsChangesTest {
     @Test
     public void testHandleNewUnfencedBroker() {
         ControllerMetricsChanges changes = new ControllerMetricsChanges();
-        changes.handleBrokerChange(null, brokerRegistration(1, false));
+        ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(new MetricsRegistry()));
+        int brokerId = 1;
+        changes.handleBrokerChange(null, brokerRegistration(brokerId, false), metrics);
         assertEquals(0, changes.fencedBrokersChange());
         assertEquals(1, changes.activeBrokersChange());
+        assertEquals(0, metrics.brokerRegistrationState(brokerId));
     }
 
     @Test
     public void testHandleNewFencedBroker() {
         ControllerMetricsChanges changes = new ControllerMetricsChanges();
-        changes.handleBrokerChange(null, brokerRegistration(1, true));
+        ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(new MetricsRegistry()));
+        int brokerId = 1;
+        changes.handleBrokerChange(null, brokerRegistration(brokerId, true), metrics);
         assertEquals(1, changes.fencedBrokersChange());
         assertEquals(0, changes.activeBrokersChange());
+        assertEquals(1, metrics.brokerRegistrationState(brokerId));
     }
 
     @Test
     public void testHandleBrokerFencing() {
         ControllerMetricsChanges changes = new ControllerMetricsChanges();
-        changes.handleBrokerChange(brokerRegistration(1, false), brokerRegistration(1, true));
+        ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(new MetricsRegistry()));
+        int brokerId = 1;
+        changes.handleBrokerChange(brokerRegistration(brokerId, false), brokerRegistration(brokerId, true), metrics);
         assertEquals(1, changes.fencedBrokersChange());
         assertEquals(-1, changes.activeBrokersChange());
+        assertEquals(1, metrics.brokerRegistrationState(brokerId));
     }
 
     @Test
     public void testHandleBrokerUnfencing() {
         ControllerMetricsChanges changes = new ControllerMetricsChanges();
-        changes.handleBrokerChange(brokerRegistration(1, true), brokerRegistration(1, false));
+        ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(new MetricsRegistry()));
+        int brokerId = 1;
+        changes.handleBrokerChange(brokerRegistration(brokerId, true), brokerRegistration(brokerId, false), metrics);
         assertEquals(-1, changes.fencedBrokersChange());
         assertEquals(1, changes.activeBrokersChange());
+        assertEquals(0, metrics.brokerRegistrationState(brokerId));
+    }
+
+    @Test
+    public void testHandleBrokerControlledShutdown() {
+        ControllerMetricsChanges changes = new ControllerMetricsChanges();
+        ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(new MetricsRegistry()));
+        int brokerId = 1;
+        changes.handleBrokerChange(brokerRegistration(brokerId, false), brokerRegistration(brokerId, false, true), metrics);
+        assertEquals(0, changes.fencedBrokersChange());
+        assertEquals(0, changes.activeBrokersChange());
+        assertEquals(1, changes.controlledShutdownBrokersChange());
+        assertEquals(2, metrics.brokerRegistrationState(brokerId));
+    }
+
+    @Test
+    public void testHandleBrokerShutdown() {
+        ControllerMetricsChanges changes = new ControllerMetricsChanges();
+        ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(new MetricsRegistry()));
+        int brokerId = 1;
+        changes.handleBrokerChange(brokerRegistration(brokerId, true, true), null, metrics);
+        assertEquals(-1, changes.fencedBrokersChange());
+        assertEquals(0, changes.activeBrokersChange());
+        assertEquals(-1, changes.controlledShutdownBrokersChange());
+        assertEquals(-1, metrics.brokerRegistrationState(brokerId));
     }
 
     @Test

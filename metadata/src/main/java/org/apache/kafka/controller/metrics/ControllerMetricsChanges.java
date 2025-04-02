@@ -29,6 +29,7 @@ import java.util.Map.Entry;
  * The ControllerMetricsChanges class is used inside ControllerMetricsPublisher to track the
  * metrics changes triggered by a series of deltas.
  */
+@SuppressWarnings("NPathComplexity")
 class ControllerMetricsChanges {
     /**
      * Calculates the change between two boolean values, expressed as an integer.
@@ -43,6 +44,7 @@ class ControllerMetricsChanges {
 
     private int fencedBrokersChange = 0;
     private int activeBrokersChange = 0;
+    private int controlledShutdownBrokersChange = 0;
     private int globalTopicsChange = 0;
     private int globalPartitionsChange = 0;
     private int offlinePartitionsChange = 0;
@@ -56,6 +58,10 @@ class ControllerMetricsChanges {
 
     public int activeBrokersChange() {
         return activeBrokersChange;
+    }
+
+    public int controlledShutdownBrokersChange() {
+        return controlledShutdownBrokersChange;
     }
 
     public int globalTopicsChange() {
@@ -74,21 +80,42 @@ class ControllerMetricsChanges {
         return partitionsWithoutPreferredLeaderChange;
     }
 
-    void handleBrokerChange(BrokerRegistration prev, BrokerRegistration next) {
+    void handleBrokerChange(BrokerRegistration prev, BrokerRegistration next, ControllerMetadataMetrics metrics) {
         boolean wasFenced = false;
         boolean wasActive = false;
+        boolean wasInControlledShutdown = false;
         if (prev != null) {
             wasFenced = prev.fenced();
             wasActive = !prev.fenced();
+            wasInControlledShutdown = prev.inControlledShutdown();
         }
         boolean isFenced = false;
         boolean isActive = false;
+        boolean isInControlledShutdown = false;
         if (next != null) {
             isFenced = next.fenced();
             isActive = !next.fenced();
+            isInControlledShutdown = next.inControlledShutdown();
+            if (isActive) {
+                metrics.setBrokerRegistrationState(next.id(), 0);
+            } else {
+                metrics.setBrokerRegistrationState(next.id(), 1);
+            }
+            if (isInControlledShutdown) {
+                metrics.setBrokerRegistrationState(next.id(), 2);
+            }
         }
         fencedBrokersChange += delta(wasFenced, isFenced);
         activeBrokersChange += delta(wasActive, isActive);
+        controlledShutdownBrokersChange += delta(wasInControlledShutdown, isInControlledShutdown);
+
+        if (prev == null) {
+            metrics.addBrokerRegistrationStateMetric(next.id());
+        } else if (next == null) {
+            // TODO: should we remove? Or track unregistered brokers as -1?
+            metrics.removeBrokerRegistrationStateMetric(prev.id());
+            metrics.setBrokerRegistrationState(prev.id(), -1);
+        }
     }
 
     void handleDeletedTopic(TopicImage deletedTopic) {
@@ -151,6 +178,9 @@ class ControllerMetricsChanges {
         }
         if (activeBrokersChange != 0) {
             metrics.addToActiveBrokerCount(activeBrokersChange);
+        }
+        if (controlledShutdownBrokersChange != 0) {
+            metrics.addToControlledShutdownBrokerCount(controlledShutdownBrokersChange);
         }
         if (globalTopicsChange != 0) {
             metrics.addToGlobalTopicCount(globalTopicsChange);
