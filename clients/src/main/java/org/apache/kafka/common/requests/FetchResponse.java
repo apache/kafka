@@ -87,7 +87,7 @@ public class FetchResponse extends AbstractResponse {
      * We may also return INCONSISTENT_TOPIC_ID error as a partition-level error when a partition in the session has a topic ID
      * inconsistent with the log.
      */
-    private FetchResponse(FetchResponseData fetchResponseData) {
+    FetchResponse(FetchResponseData fetchResponseData) {
         super(ApiKeys.FETCH);
         this.data = fetchResponseData;
     }
