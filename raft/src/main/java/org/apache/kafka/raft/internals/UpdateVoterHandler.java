@@ -21,7 +21,6 @@ import org.apache.kafka.common.message.UpdateRaftVoterRequestData;
 import org.apache.kafka.common.message.UpdateRaftVoterResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.Endpoints;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.LeaderState;
@@ -55,21 +54,15 @@ public final class UpdateVoterHandler {
     private final OptionalInt localId;
     private final KRaftControlRecordStateMachine partitionState;
     private final ListenerName defaultListenerName;
-    private final Time time;
-    private final long requestTimeoutMs;
 
     public UpdateVoterHandler(
         OptionalInt localId,
         KRaftControlRecordStateMachine partitionState,
-        ListenerName defaultListenerName,
-        Time time,
-        long requestTimeoutMs
+        ListenerName defaultListenerName
     ) {
         this.localId = localId;
         this.partitionState = partitionState;
         this.defaultListenerName = defaultListenerName;
-        this.time = time;
-        this.requestTimeoutMs = requestTimeoutMs;
     }
 
     public CompletableFuture<UpdateRaftVoterResponseData> handleUpdateVoterRequest(
@@ -159,7 +152,7 @@ public final class UpdateVoterHandler {
             );
         }
 
-        // Check that endpoinds includes the default listener
+        // Check that endpoints includes the default listener
         if (voterEndpoints.address(defaultListenerName).isEmpty()) {
             return CompletableFuture.completedFuture(
                 RaftUtil.updateVoterResponse(
