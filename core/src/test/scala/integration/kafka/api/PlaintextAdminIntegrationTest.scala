@@ -1573,9 +1573,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
     client = createAdminClient
 
-    val consumer = createConsumer()
-    subscribeAndWaitForAssignment(topic, consumer)
-
     val producer = createProducer()
     def sendRecords(begin: Int, end: Int) = {
       val futures = (begin until end).map( i => {
@@ -1608,16 +1605,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     newContent.flip()
     Files.write(logFilePath, newContent.array(), StandardOpenOption.TRUNCATE_EXISTING)
 
-    TestUtils.waitUntilTrue(() => {
-      try {
-        consumer.seekToBeginning(Collections.singletonList(topicPartition))
-        consumer.poll(JDuration.ofMillis(1000L))
-        false
-      } catch {
-        case e: KafkaException =>
-          e.getMessage.contains("Encountered corrupt message when fetching offset 0 for topic-partition topic-0")
-      }
-    }, "Consumer should encounter corrupt message")
+    val consumer = createConsumer()
+    consumer.subscribe(Seq(topic).asJava)
+    assertEquals("Encountered corrupt message when fetching offset 0 for topic-partition topic-0",
+      assertThrows(classOf[KafkaException], () => consumer.poll(JDuration.ofMillis(DEFAULT_MAX_WAIT_MS))).getMessage)
 
     val partitionFollowerId = brokers.map(b => b.config.nodeId).filter(id => id != partitionLeaderId).head
     val newAssignment = Map(topicPartition -> Optional.of(new NewPartitionReassignment(
