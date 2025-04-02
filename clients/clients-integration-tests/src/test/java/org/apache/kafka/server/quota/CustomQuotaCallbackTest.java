@@ -84,7 +84,7 @@ public class CustomQuotaCallbackTest {
     public void testMonitorableCustomQuotaCallbackWithControllerServer(ClusterInstance cluster) {
         assertEquals(1, MonitorableCustomQuotaCallback.metricNames.size());
         MetricName metricName = MonitorableCustomQuotaCallback.metricNames.get(0);
-        assertionMetric(metricName, ProcessRole.ControllerRole);
+        assertMetric(metricName, ProcessRole.ControllerRole);
         MonitorableCustomQuotaCallback.clearMetrics();
     }
 
@@ -97,7 +97,7 @@ public class CustomQuotaCallbackTest {
     public void testMonitorableCustomQuotaCallbackWithBrokerServer(ClusterInstance cluster) {
         assertEquals(1, MonitorableCustomQuotaCallback.metricNames.size());
         MetricName metricName = MonitorableCustomQuotaCallback.metricNames.get(0);
-        assertionMetric(metricName, ProcessRole.BrokerRole);
+        assertMetric(metricName, ProcessRole.BrokerRole);
         MonitorableCustomQuotaCallback.clearMetrics();
     }
 
@@ -112,16 +112,16 @@ public class CustomQuotaCallbackTest {
         MetricName metricName1 = MonitorableCustomQuotaCallback.metricNames.get(0);
         MetricName metricName2 = MonitorableCustomQuotaCallback.metricNames.get(1);
         if (metricName1.tags().get("role").equals(ProcessRole.ControllerRole.toString())) {
-            assertionMetric(metricName1, ProcessRole.ControllerRole);
-            assertionMetric(metricName2, ProcessRole.BrokerRole);
+            assertMetric(metricName1, ProcessRole.ControllerRole);
+            assertMetric(metricName2, ProcessRole.BrokerRole);
         } else {
-            assertionMetric(metricName1, ProcessRole.BrokerRole);
-            assertionMetric(metricName2, ProcessRole.ControllerRole);
+            assertMetric(metricName1, ProcessRole.BrokerRole);
+            assertMetric(metricName2, ProcessRole.ControllerRole);
         }
         MonitorableCustomQuotaCallback.clearMetrics();
     }
 
-    private void assertionMetric(MetricName metricName, ProcessRole processRole) {
+    private void assertMetric(MetricName metricName, ProcessRole processRole) {
         assertEquals(QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, metricName.tags().get("config"));
         assertEquals(MonitorableCustomQuotaCallback.class.getSimpleName(), metricName.tags().get("class"));
         assertEquals(processRole.toString(), metricName.tags().get("role"));
