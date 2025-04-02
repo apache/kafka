@@ -16,32 +16,21 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import com.google.common.collect.Maps;
+import com.nexla.connect.common.connector.SinkAgentConnector;
+import com.nexla.sinkagent.SinkAgentLocal;
+import com.nexla.sinkagent.SinkAgentTaskReceiver;
 import org.apache.kafka.clients.GroupRebalanceConfig;
-import org.apache.kafka.clients.consumer.CommitFailedException;
-import org.apache.kafka.clients.consumer.ConsumerConfig;
-import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
-import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor;
+import org.apache.kafka.clients.consumer.*;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.RebalanceProtocol;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Subscription;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.consumer.OffsetCommitCallback;
-import org.apache.kafka.clients.consumer.RetriableCommitFailedException;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.FencedInstanceIdException;
-import org.apache.kafka.common.errors.GroupAuthorizationException;
-import org.apache.kafka.common.errors.InterruptException;
-import org.apache.kafka.common.errors.UnstableOffsetCommitException;
-import org.apache.kafka.common.errors.RebalanceInProgressException;
-import org.apache.kafka.common.errors.RetriableException;
-import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.common.errors.TopicAuthorizationException;
-import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.errors.*;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
@@ -54,11 +43,7 @@ import org.apache.kafka.common.metrics.stats.Max;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.requests.JoinGroupRequest;
-import org.apache.kafka.common.requests.OffsetCommitRequest;
-import org.apache.kafka.common.requests.OffsetCommitResponse;
-import org.apache.kafka.common.requests.OffsetFetchRequest;
-import org.apache.kafka.common.requests.OffsetFetchResponse;
+import org.apache.kafka.common.requests.*;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -66,15 +51,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.HashSet;
-import java.util.List;
-import java.util.Map;
-import java.util.Objects;
-import java.util.Optional;
-import java.util.Set;
+import java.util.*;
 import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -430,6 +407,8 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         firstException.compareAndSet(null, invokePartitionsAssigned(addedPartitions));
 
         if (firstException.get() != null) {
+            List<String> topics = topicFromAssignment(assignment);
+            initiateRestartOfConnector(topics);
             if (firstException.get() instanceof KafkaException) {
                 throw (KafkaException) firstException.get();
             } else {
@@ -682,7 +661,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         // and in that case we should only change the assignment AFTER the revoke callback is triggered
         // so that users can still access the previously owned partitions to commit offsets etc.
         Exception exception = null;
-        final Set<TopicPartition> revokedPartitions;
+        Set<TopicPartition> revokedPartitions = null;
         if (generation == Generation.NO_GENERATION.generationId &&
             memberId.equals(Generation.NO_GENERATION.memberId)) {
             revokedPartitions = new HashSet<>(subscriptions.assignedPartitions());
@@ -727,6 +706,14 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         subscriptions.resetGroupSubscription();
 
         if (exception != null) {
+            if (revokedPartitions != null) {
+                List<String> topicNames = revokedPartitions
+                    .stream()
+                    .map(TopicPartition::topic)
+                    .filter(x -> x.contains("dataset"))
+                    .collect(Collectors.toList());
+                initiateRestartOfConnector(topicNames);
+            }
             throw new KafkaException("User rebalance callback throws an error", exception);
         }
     }
@@ -753,6 +740,12 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             subscriptions.assignFromSubscribed(Collections.emptySet());
 
             if (e != null) {
+                List<String> topicNames = subscriptions.assignedPartitions()
+                    .stream()
+                    .map(TopicPartition::topic)
+                    .filter(x -> x.contains("dataset"))
+                    .collect(Collectors.toList());
+                initiateRestartOfConnector(topicNames);
                 throw new KafkaException("User rebalance callback throws an error", e);
             }
         }
@@ -797,10 +790,23 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     public boolean refreshCommittedOffsetsIfNeeded(Timer timer) {
         final Set<TopicPartition> initializingPartitions = subscriptions.initializingPartitions();
 
-        final Map<TopicPartition, OffsetAndMetadata> offsets = fetchCommittedOffsets(initializingPartitions, timer);
-        if (offsets == null) return false;
+        final Map<TopicPartition, OffsetAndMetadata> offsetsFirst = fetchCommittedOffsets(initializingPartitions, timer);
+        if (offsetsFirst == null) return false;
 
-        for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : offsets.entrySet()) {
+        Map<TopicPartition, Long> listingOffsets = getListingOffsets(offsetsFirst);
+        Map<TopicPartition, OffsetAndMetadata> result = Maps.newHashMap();
+
+        offsetsFirst.forEach((tp, offsetAndMetadata) -> {
+            OffsetAndMetadata newV = Optional.ofNullable(offsetAndMetadata)
+                .map(vv -> {
+                    long offset = Optional.ofNullable(listingOffsets.get(tp)).orElse(offsetAndMetadata.offset());
+                    return new OffsetAndMetadata(offset, offsetAndMetadata.leaderEpoch(), offsetAndMetadata.metadata());
+                }).orElse(offsetAndMetadata);
+            result.put(tp, newV);
+        });
+
+
+        for (final Map.Entry<TopicPartition, OffsetAndMetadata> entry : result.entrySet()) {
             final TopicPartition tp = entry.getKey();
             final OffsetAndMetadata offsetAndMetadata = entry.getValue();
             if (offsetAndMetadata != null) {
@@ -825,6 +831,34 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             }
         }
         return true;
+    }
+
+    public Map<TopicPartition, Long> getListingOffsets(Map<TopicPartition, OffsetAndMetadata> offsetsFirst) {
+        try {
+            return Optional
+                .ofNullable(SinkAgentLocal.instance())
+                .map(sinkApp -> sinkApp.sinkOffsetsByTopic().getOffsets(offsetsFirst.keySet()))
+                .orElse(Collections.emptyMap());
+        } catch (Throwable e) {
+            return Collections.emptyMap();
+        }
+    }
+
+    private void initiateRestartOfConnector(List<String> topicNames) {
+        log.error("Nexla: initiating restart of sink with topic " + String.join(",", topicNames));
+        try {
+            SinkAgentTaskReceiver sinkAgentTaskReceiver = SinkAgentConnector.SINK_AGENT_LINK.get();
+            sinkAgentTaskReceiver.taskReceiver().forceRestartTopics().addAll(topicNames);
+        } catch (Throwable e) {
+        }
+    }
+
+    private List<String> topicFromAssignment(Assignment assignment) {
+        return assignment.partitions()
+            .stream()
+            .map(TopicPartition::topic)
+            .filter(x -> x.contains("dataset"))
+            .collect(Collectors.toList());
     }
 
     /**
