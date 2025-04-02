@@ -1587,11 +1587,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     sendRecords(0, 10)
     sendRecords(10, 20)
 
-    TestUtils.waitUntilTrue(() => {
-      val records = consumer.poll(JDuration.ofMillis(100L))
-      !records.isEmpty
-    }, "Consumer should be able to consume records")
-
     val topicDesc = client.describeTopics(Collections.singletonList(topic)).allTopicNames().get().get(topic)
     assertEquals(1, topicDesc.partitions().size())
     val partitionLeaderId = topicDesc.partitions().get(0).leader().id()
@@ -1613,9 +1608,16 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     newContent.flip()
     Files.write(logFilePath, newContent.array(), StandardOpenOption.TRUNCATE_EXISTING)
 
-    consumer.seekToBeginning(Collections.singletonList(topicPartition))
-    assertEquals("Encountered corrupt message when fetching offset 0 for topic-partition topic-0",
-      assertThrows(classOf[KafkaException], () => consumer.poll(JDuration.ofMillis(DEFAULT_MAX_WAIT_MS))).getMessage)
+    TestUtils.waitUntilTrue(() => {
+      try {
+        consumer.seekToBeginning(Collections.singletonList(topicPartition))
+        consumer.poll(JDuration.ofMillis(1000L))
+        false
+      } catch {
+        case e: KafkaException =>
+          e.getMessage.contains("Encountered corrupt message when fetching offset 0 for topic-partition topic-0")
+      }
+    }, "Consumer should encounter corrupt message")
 
     val partitionFollowerId = brokers.map(b => b.config.nodeId).filter(id => id != partitionLeaderId).head
     val newAssignment = Map(topicPartition -> Optional.of(new NewPartitionReassignment(
