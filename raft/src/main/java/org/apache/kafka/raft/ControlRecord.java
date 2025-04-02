@@ -40,7 +40,16 @@ public final class ControlRecord {
         );
     }
 
-    public ControlRecord(ControlRecordType recordType, ApiMessage message) {
+    public static ControlRecord build(ControlRecordType recordType, ApiMessage message) {
+        validate(recordType, message);
+        return buildValidated(recordType, message);
+    }
+
+    public static ControlRecord buildValidated(ControlRecordType recordType, ApiMessage message) {
+        return new ControlRecord(recordType, message);
+    }
+
+    private static void validate(ControlRecordType recordType, ApiMessage message) {
         switch (recordType) {
             case LEADER_CHANGE:
                 if (!(message instanceof LeaderChangeMessage)) {
@@ -70,7 +79,9 @@ public final class ControlRecord {
             default:
                 throw new IllegalArgumentException(String.format("Unknown control record type %s", recordType));
         }
+    }
 
+    public ControlRecord(ControlRecordType recordType, ApiMessage message) {
         this.recordType = recordType;
         this.message = message;
     }

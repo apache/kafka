@@ -380,7 +380,6 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
             default:
                 throw new IllegalArgumentException(String.format("Unknown control record type %s", type));
         }
-
-        return new ControlRecord(type, message);
+        return ControlRecord.buildValidated(type, message);
     }
 }
