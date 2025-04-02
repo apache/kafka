@@ -1506,6 +1506,8 @@ public class GroupCoordinatorShardTest {
         assertNull(result.appendFuture());
 
         verify(groupMetadataManager, times(1)).groupIds();
+        verify(offsetMetadataManager, times(0)).cleanupExpiredOffsets(eq("group-id"), any());
+        verify(groupMetadataManager, times(0)).maybeDeleteGroup(eq("group-id"), any());
     }
 
     @Test

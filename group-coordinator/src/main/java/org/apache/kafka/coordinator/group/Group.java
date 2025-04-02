@@ -202,9 +202,9 @@ public interface Group {
     void requestMetadataRefresh();
 
     /**
-     * Returns whether this group should be expired or not
+     * Returns whether this group should be expired or not.
      *
-     * @return whether the group should be expired
+     * @return whether the group should be expired.
      */
     default boolean shouldExpire() {
         return true;
