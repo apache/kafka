@@ -2150,7 +2150,7 @@ class KafkaApisTest extends Logging {
       } else {
         produceData.setName(tp.topic)
       }
-      val produceRequest = ProduceRequest.builder(new ProduceReque
+      val produceRequest = ProduceRequest.builder(new ProduceRequestData()
         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
           Collections.singletonList(produceData).iterator))
         .setAcks(1.toShort)
@@ -2322,11 +2322,11 @@ class KafkaApisTest extends Logging {
       when(metadataCache.getLeaderAndIsr(tp.topic(), tp.partition())).thenAnswer(_ => Optional.empty())
       when(metadataCache.getAliveBrokerNode(any(), any())).thenReturn(Optional.empty())
       if (version >= 13) {
-        when(metadataCache.getTopicName(tp.topicId())).thenReturn(Some(tp.topic()))
+        when(metadataCache.getTopicName(tp.topicId())).thenReturn(Optional.of(tp.topic()))
       } else {
         when(metadataCache.getTopicId(tp.topic())).thenReturn(tp.topicId())
       }
-          aApis = createKafkaApis()
+      val kafkaApis = createKafkaApis()
       kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
 
       val response = verifyNoThrottling[ProduceResponse](request)

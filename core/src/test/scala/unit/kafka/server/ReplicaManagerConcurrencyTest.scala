@@ -24,6 +24,7 @@ import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.TestUtils.waitUntilTrue
 import kafka.utils.{CoreUtils, Logging, TestUtils}
+import org.apache.kafka.common
 import org.apache.kafka.common.metadata.{FeatureLevelRecord, PartitionChangeRecord, PartitionRecord, RegisterBrokerRecord, TopicRecord}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
@@ -292,9 +293,9 @@ class ReplicaManagerConcurrencyTest extends Logging {
       }
 
       val future = new CompletableFuture[ProduceResponse.PartitionResponse]()
-      val topicIdPartition = replicaManager.topicIdPartition(topicPartition)
+      val topicIdPartition: common.TopicIdPartition = replicaManager.topicIdPartition(topicPartition)
 
-      def produceCallback(results: collection.Map[TopicIdPartition, ProduceResponse.PartitionResponse]): Unit = {
+      def produceCallback(results: collection.Map[common.TopicIdPartition, ProduceResponse.PartitionResponse]): Unit = {
         try {
           assertEquals(1, results.size)
           val (topicPartition, result) = results.head

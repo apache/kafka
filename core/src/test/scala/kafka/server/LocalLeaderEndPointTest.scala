@@ -20,7 +20,7 @@ package kafka.server
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.{CoreUtils, Logging, TestUtils}
-import org.apache.kafka.common.{Node, TopicIdPartition, Uuid}
+import org.apache.kafka.common.{TopicIdPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset

@@ -115,7 +115,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       time)
 
     val transactionStateTopicId = Uuid.randomUuid()
-    when(replicaManager.metadataCache.getTopicName(transactionStateTopicId)).thenReturn(Some(Topic.TRANSACTION_STATE_TOPIC_NAME))
+    when(replicaManager.metadataCache.getTopicName(transactionStateTopicId)).thenReturn(Optional.of(Topic.TRANSACTION_STATE_TOPIC_NAME))
     when(replicaManager.metadataCache.getTopicId(Topic.TRANSACTION_STATE_TOPIC_NAME)).thenReturn(transactionStateTopicId)
 
     transactionCoordinator = new TransactionCoordinator(

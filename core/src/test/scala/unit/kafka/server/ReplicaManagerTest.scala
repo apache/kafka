@@ -122,8 +122,7 @@ class ReplicaManagerTest {
   private var mockRemoteLogManager: RemoteLogManager = _
   private var addPartitionsToTxnManager: AddPartitionsToTxnManager = _
   private var brokerTopicStats: BrokerTopicStats = _
-  private val transactionSupportedOperation = genericErrorSupported
-  private val metadataCache: MetadataCache = mock(classOf[MetadataCache])
+  private val metadataCache: KRaftMetadataCache = mock(classOf[KRaftMetadataCache])
   private val quotaExceededThrottleTime = 1000
   private val quotaAvailableThrottleTime = 0
 
@@ -161,11 +160,14 @@ class ReplicaManagerTest {
     setupMetadataCacheWithTopicIds(topicIds, metadataCache)
   }
 
-  private def setupMetadataCacheWithTopicIds(topicIds: Map[String, Uuid], metadataCache: MetadataCache): Unit = {
+  private def setupMetadataCacheWithTopicIds(topicIds: Map[String, Uuid], metadataCache: KRaftMetadataCache): Unit = {
     val topicNames = topicIds.map(_.swap)
-    when(metadataCache.topicNamesToIds()).thenReturn(topicIds.asJava)
+    topicNames.foreach {
+      case (id, name) =>
+        when(metadataCache.getTopicName(id)).thenReturn(Optional.of(name))
+        when(metadataCache.getTopicId(name)).thenReturn(id)
+    }
     when(metadataCache.topicIdsToNames()).thenReturn(topicNames.asJava)
-    when(metadataCache.topicIdInfo()).thenReturn((topicIds.asJava, topicNames.asJava))
 
     topicIds.foreach { case (topicName, topicId) =>
       when(metadataCache.getTopicId(topicName)).thenReturn(topicId)
@@ -6183,8 +6185,8 @@ class ReplicaManagerTest {
         internalTopicsAllowed = true,
         origin = AppendOrigin.CLIENT,
         entriesPerPartition = Map(
-          foo.topicPartition -> records,
-          bar.topicPartition -> records
+          foo -> records,
+          bar -> records
         ),
         requestLocal = RequestLocal.noCaching
       )
@@ -6192,13 +6194,13 @@ class ReplicaManagerTest {
       assertNotNull(result)
       assertEquals(2, result.size)
 
-      val fooResult = result(foo.topicPartition)
+      val fooResult = result(foo)
       assertEquals(Errors.NONE, fooResult.error)
       assertEquals(0, fooResult.info.logStartOffset)
       assertEquals(0, fooResult.info.firstOffset)
       assertEquals(0, fooResult.info.lastOffset)
 
-      val barResult = result(bar.topicPartition)
+      val barResult = result(bar)
       assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, barResult.error)
       assertEquals(LogAppendInfo.UNKNOWN_LOG_APPEND_INFO, barResult.info)
     } finally {

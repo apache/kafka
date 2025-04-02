@@ -139,7 +139,7 @@ class CoordinatorPartitionWriter(
     records: MemoryRecords
   ): Long = {
     // We write synchronously to the leader replica without waiting on replication.
-    val topicIdPartition = replicaManager.topicIdPartition(tp)
+    val topicIdPartition: TopicIdPartition = replicaManager.topicIdPartition(tp)
     val appendResults = replicaManager.appendRecordsToLeader(
       requiredAcks = 1,
       internalTopicsAllowed = true,

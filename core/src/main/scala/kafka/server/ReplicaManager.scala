@@ -51,7 +51,7 @@ import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.{ActionQueue, DelayedActionQueue, ListOffsetsPartitionStatus, common}
-import org.apache.kafka.server.common.{DirectoryEventHandler, RequestLocal, StopPartition, TopicOptionalIdPartition}
+import org.apache.kafka.server.common.{DirectoryEventHandler, RequestLocal, StopPartition}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, TopicPartitionOperationKey}
@@ -676,7 +676,7 @@ class ReplicaManager(val config: KafkaConfig,
     requestLocal: RequestLocal = RequestLocal.noCaching,
     actionQueue: ActionQueue = this.defaultActionQueue,
     verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty
-  ): Map[TopicPartition, LogAppendResult] = {
+  ): Map[TopicIdPartition, LogAppendResult] = {
     val startTimeMs = time.milliseconds
     val localProduceResultsWithTopicId = appendToLocalLog(
       internalTopicsAllowed = internalTopicsAllowed,
@@ -690,9 +690,7 @@ class ReplicaManager(val config: KafkaConfig,
 
     addCompletePurgatoryAction(actionQueue, localProduceResultsWithTopicId)
 
-    localProduceResultsWithTopicId.map {
-      case (k, v) => (k.topicPartition, v)
-    }
+    localProduceResultsWithTopicId
   }
 
   /**

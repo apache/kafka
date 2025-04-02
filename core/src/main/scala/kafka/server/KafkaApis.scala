@@ -401,7 +401,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         val (topicName, topicId) = if (topic.topicId().equals(Uuid.ZERO_UUID)) {
           (topic.name(), metadataCache.getTopicId(topic.name()))
         } else {
-          (metadataCache.getTopicName(topic.topicId).getOrElse(topic.name), topic.topicId())
+          (metadataCache.getTopicName(topic.topicId).orElse(topic.name), topic.topicId())
         }
 
         val topicPartition = new TopicPartition(topicName, partition.index())

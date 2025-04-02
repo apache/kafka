@@ -2470,6 +2470,7 @@ public class RequestResponseTest {
     }
 
     private ProduceRequest createProduceRequest(short version) {
+        TopicIdPartition topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, "test");
         MemoryRecords records = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2, Compression.NONE,
                 new SimpleRecord("woot".getBytes()));
         return ProduceRequest.builder(

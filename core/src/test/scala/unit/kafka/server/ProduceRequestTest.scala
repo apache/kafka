@@ -21,7 +21,7 @@ import java.nio.ByteBuffer
 import java.util.{Collections, Properties}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, TopicDescription}
-import org.apache.kafka.common.{TopicIdPartition, TopicPartition}
+import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.message.ProduceRequestData
@@ -53,13 +53,14 @@ class ProduceRequestTest extends BaseRequestTest {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
 
     def sendAndCheck(memoryRecords: MemoryRecords, expectedOffset: Long): Unit = {
-      val topicPartition = new TopicPartition("topic", partition)
+      val topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), partition, "topic")
       val produceRequest = ProduceRequest.builder(new ProduceRequestData()
         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
           new ProduceRequestData.TopicProduceData()
-            .setName(topicPartition.topic())
+            .setName(topicIdPartition.topic())
+            .setTopicId(topicIdPartition.topicId())
             .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
-              .setIndex(topicPartition.partition())
+              .setIndex(topicIdPartition.partition())
               .setRecords(memoryRecords)))).iterator))
         .setAcks((-1).toShort)
         .setTimeoutMs(3000)
@@ -71,7 +72,7 @@ class ProduceRequestTest extends BaseRequestTest {
       assertEquals(1, topicProduceResponse.partitionResponses.size)   
       val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
       val tp = new TopicPartition(topicProduceResponse.name, partitionProduceResponse.index)
-      assertEquals(topicPartition, tp)
+      assertEquals(topicIdPartition, tp)
       assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse.errorCode))
       assertEquals(expectedOffset, partitionProduceResponse.baseOffset)
       assertEquals(-1, partitionProduceResponse.logAppendTimeMs)

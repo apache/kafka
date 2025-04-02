@@ -138,7 +138,7 @@ class CoordinatorPartitionWriterTest {
     ))
     assertEquals(
       batch,
-      recordsCapture.getValue.getOrElse(topicIdPartition, throw new AssertionError(s"No records for $tp"))
+      recordsCapture.getValue.getOrElse(new TopicIdPartition(topicId, tp), throw new AssertionError(s"No records for $tp"))
     )
   }
 
