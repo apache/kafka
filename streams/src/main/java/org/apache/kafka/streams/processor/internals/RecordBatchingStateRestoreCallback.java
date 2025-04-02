@@ -22,7 +22,6 @@ import org.apache.kafka.streams.processor.BatchingStateRestoreCallback;
 
 import java.util.Collection;
 
-@FunctionalInterface
 public interface RecordBatchingStateRestoreCallback extends BatchingStateRestoreCallback {
     void restoreBatch(final Collection<ConsumerRecord<byte[], byte[]>> records);
 
