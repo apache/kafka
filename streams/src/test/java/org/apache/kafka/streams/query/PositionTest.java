@@ -242,11 +242,10 @@ public class PositionTest {
         final int maxPartitions = 50;
         final int maxOffset = 1000;
         final CountDownLatch startLatch = new CountDownLatch(threadCount);
-        final CountDownLatch endLatch = new CountDownLatch(threadCount);
-        ExecutorService executorService = null;
         final Position mergePosition = Position.emptyPosition();
         final Position withComponentPosition = Position.emptyPosition();
         final List<Future<?>> futures = new ArrayList<>();
+        ExecutorService executorService = null;
 
         try {
             executorService = Executors.newFixedThreadPool(threadCount);
@@ -256,6 +255,7 @@ public class PositionTest {
                     final Position threadPosition = Position.emptyPosition();
                     final int topicCount = RANDOM.nextInt(maxTopics) + 1;
 
+                    // build the thread's position
                     for (int topicNum = 0; topicNum < topicCount; topicNum++) {
                         final String topic = "topic-" + topicNum;
                         final int partitionCount = RANDOM.nextInt(maxPartitions) + 1;
@@ -275,6 +275,7 @@ public class PositionTest {
 
                     // merge with the shared position
                     mergePosition.merge(threadPosition);
+                    // duplicate the shared position to get a snapshot of its state
                     final Position threadMergePositionState = mergePosition.copy();
 
                     // update the shared position using withComponent
@@ -285,6 +286,7 @@ public class PositionTest {
                             withComponentPosition.withComponent(topic, partitionOffset.getKey(), partitionOffset.getValue());
                         }
                     }
+                    // duplicate the shared position to get a snapshot of its state
                     final Position threadWithComponentPositionState = withComponentPosition.copy();
 
                     // validate that any offsets in the merged position and the withComponent position are >= the thread position
@@ -332,7 +334,6 @@ public class PositionTest {
                             );
                         }
                     }
-                    endLatch.countDown();
                 }));
             }
 
