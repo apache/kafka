@@ -224,7 +224,7 @@ public class ConsumerConfig extends AbstractConfig {
             "batch will still be returned to ensure that the consumer can make progress. The maximum record batch size " +
             "accepted by the broker is defined via <code>message.max.bytes</code> (broker config) or " +
             "<code>max.message.bytes</code> (topic config). See " + FETCH_MAX_BYTES_CONFIG + " for limiting the consumer request size. " +
-            "Consider increasing this limit especially in the cases of remote storage reads (KIP-405), because currently only " +
+            "Consider increasing <code>max.partition.fetch.bytes</code> especially in the cases of remote storage reads (KIP-405), because currently only " +
             "one partition per fetch request is served from the remote store (KAFKA-14915).";
     public static final int DEFAULT_MAX_PARTITION_FETCH_BYTES = 1 * 1024 * 1024;
 
