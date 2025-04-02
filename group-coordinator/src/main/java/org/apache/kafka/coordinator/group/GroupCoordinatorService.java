@@ -477,15 +477,14 @@ public class GroupCoordinatorService implements GroupCoordinator {
             .handle((response, exp) -> {
                 if (exp == null) {
                     return handlePersisterInitializeResponse(request.groupTopicPartitionData().groupId(), response, defaultResponse);
-                } else {
-                    GroupTopicPartitionData<PartitionStateData> gtp = request.groupTopicPartitionData();
-                    log.error("Unable to initialize share group state {}, {}", gtp.groupId(), gtp.topicsData(), exp);
-                    Errors error = Errors.forException(exp);
-                    Map<Uuid, Set<Integer>> topicPartitionMap = new HashMap<>();
-                    gtp.topicsData().forEach(topicData -> topicPartitionMap.computeIfAbsent(topicData.topicId(), k -> new HashSet<>())
-                        .addAll(topicData.partitions().stream().map(PartitionStateData::partition).collect(Collectors.toSet())));
-                    return uninitializeShareGroupState(error, gtp.groupId(), topicPartitionMap);
                 }
+                GroupTopicPartitionData<PartitionStateData> gtp = request.groupTopicPartitionData();
+                log.error("Unable to initialize share group state {}, {}", gtp.groupId(), gtp.topicsData(), exp);
+                Errors error = Errors.forException(exp);
+                Map<Uuid, Set<Integer>> topicPartitionMap = new HashMap<>();
+                gtp.topicsData().forEach(topicData -> topicPartitionMap.computeIfAbsent(topicData.topicId(), k -> new HashSet<>())
+                    .addAll(topicData.partitions().stream().map(PartitionStateData::partition).collect(Collectors.toSet())));
+                return uninitializeShareGroupState(error, gtp.groupId(), topicPartitionMap);
             })
             .thenCompose(resp -> resp);
     }
@@ -517,10 +516,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 return CompletableFuture.completedFuture(defaultResponse);
             }
             return performShareGroupStateMetadataInitialize(groupId, topicPartitionMap, defaultResponse);
-        } else {
-            log.error("Received error while calling initialize state for {} on persister {}.", groupId, persisterError.code());
-            return uninitializeShareGroupState(persisterError, groupId, topicPartitionMap);
         }
+        log.error("Received error while calling initialize state for {} on persister {}.", groupId, persisterError.code());
+        return uninitializeShareGroupState(persisterError, groupId, topicPartitionMap);
     }
 
     private CompletableFuture<ShareGroupHeartbeatResponseData> uninitializeShareGroupState(
