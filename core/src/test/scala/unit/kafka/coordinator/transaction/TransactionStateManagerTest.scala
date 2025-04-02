@@ -108,11 +108,16 @@ class TransactionStateManagerTest {
 
   @Test
   def testValidateTransactionTimeout(): Unit = {
-    assertTrue(transactionManager.validateTransactionTimeoutMs(1))
-    assertFalse(transactionManager.validateTransactionTimeoutMs(-1))
-    assertFalse(transactionManager.validateTransactionTimeoutMs(0))
-    assertTrue(transactionManager.validateTransactionTimeoutMs(txnConfig.transactionMaxTimeoutMs))
-    assertFalse(transactionManager.validateTransactionTimeoutMs(txnConfig.transactionMaxTimeoutMs + 1))
+    assertTrue(transactionManager.validateTransactionTimeoutMs(enableTwoPC = false, 1))
+    assertFalse(transactionManager.validateTransactionTimeoutMs(enableTwoPC = false, -1))
+    assertFalse(transactionManager.validateTransactionTimeoutMs(enableTwoPC = false, 0))
+    assertTrue(transactionManager.validateTransactionTimeoutMs(enableTwoPC = false, txnConfig.transactionMaxTimeoutMs))
+    assertFalse(transactionManager.validateTransactionTimeoutMs(enableTwoPC = false, txnConfig.transactionMaxTimeoutMs + 1))
+    // KIP-939 Always return true when two phase commit is enabled on transaction. Two phase commit is enabled in case of
+    // externally coordinated distributed transactions.
+    assertTrue(transactionManager.validateTransactionTimeoutMs(enableTwoPC = true, -1))
+    assertTrue(transactionManager.validateTransactionTimeoutMs(enableTwoPC = true, 10))
+    assertTrue(transactionManager.validateTransactionTimeoutMs(enableTwoPC = true, txnConfig.transactionMaxTimeoutMs + 1))
   }
 
   @Test
@@ -740,7 +745,6 @@ class TransactionStateManagerTest {
       any[Option[ReentrantLock]],
       any(),
       any(),
-      any(),
       any()
     )
 
@@ -786,7 +790,6 @@ class TransactionStateManagerTest {
       any[Option[ReentrantLock]],
       any(),
       any(),
-      any(),
       any()
     )
 
@@ -829,7 +832,6 @@ class TransactionStateManagerTest {
       any(),
       any(),
       any[Option[ReentrantLock]],
-      any(),
       any(),
       any(),
       any())
@@ -884,7 +886,6 @@ class TransactionStateManagerTest {
       any(),
       any(),
       any[Option[ReentrantLock]],
-      any(),
       any(),
       any(),
       any()
@@ -1104,7 +1105,6 @@ class TransactionStateManagerTest {
       any[Option[ReentrantLock]],
       any(),
       any(),
-      any(),
       any()
     )).thenAnswer(_ => callbackCapture.getValue.apply(
       recordsCapture.getValue.map { case (topicPartition, records) =>
@@ -1256,7 +1256,6 @@ class TransactionStateManagerTest {
       any[Map[TopicIdPartition, MemoryRecords]],
       capturedArgument.capture(),
       any[Option[ReentrantLock]],
-      any(),
       any(),
       any(),
       any()

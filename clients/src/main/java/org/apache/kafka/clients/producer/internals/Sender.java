@@ -867,6 +867,8 @@ public class Sender implements Runnable {
             return;
 
         final Map<TopicPartition, ProducerBatch> recordsByPartition = new HashMap<>(batches.size());
+        Map<String, Uuid> topicIds = topicIdsForBatches(batches);
+
         ProduceRequestData.TopicProduceDataCollection tpd = new ProduceRequestData.TopicProduceDataCollection();
         for (ProducerBatch batch : batches) {
             TopicPartition tp = batch.topicPartition;

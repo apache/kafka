@@ -16,16 +16,15 @@
  */
 package kafka.coordinator.group
 
-import kafka.server.ReplicaManager
+import kafka.server.{LogAppendResult, ReplicaManager}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
-import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, SimpleRecord}
-import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
+import org.apache.kafka.common.record.{CompressionType, MemoryRecords, RecordBatch, RecordValidationStats, SimpleRecord}
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogAppendInfo, LogConfig, VerificationGuard}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
@@ -35,7 +34,7 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{mock, verify, when}
 
 import java.nio.charset.Charset
-import java.util.Collections
+import java.util.Optional
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 
@@ -94,36 +93,34 @@ class CoordinatorPartitionWriterTest {
     val partitionRecordWriter = new CoordinatorPartitionWriter(
         replicaManager
     )
+
     val recordsCapture: ArgumentCaptor[Map[TopicIdPartition, MemoryRecords]] =
       ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, MemoryRecords]])
-    val callbackCapture: ArgumentCaptor[Map[TopicIdPartition, PartitionResponse] => Unit] =
-      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, PartitionResponse] => Unit])
 
-    when(replicaManager.appendRecords(
-      ArgumentMatchers.eq(0L),
+    when(replicaManager.appendRecordsToLeader(
       ArgumentMatchers.eq(1.toShort),
       ArgumentMatchers.eq(true),
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       recordsCapture.capture(),
-      callbackCapture.capture(),
-      ArgumentMatchers.any(),
-      ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
-    )).thenAnswer( _ => {
-      callbackCapture.getValue.apply(Map(
-        new TopicIdPartition(topicId, tp) -> new PartitionResponse(
-          Errors.NONE,
-          5,
-          10,
-          RecordBatch.NO_TIMESTAMP,
-          -1,
-          Collections.emptyList(),
-          ""
-        )
-      ))
-    })
+    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> LogAppendResult(
+      new LogAppendInfo(
+        5L,
+        10L,
+        Optional.empty,
+        RecordBatch.NO_TIMESTAMP,
+        0L,
+        0L,
+        RecordValidationStats.EMPTY,
+        CompressionType.NONE,
+        100,
+        10L
+      ),
+      Option.empty,
+      false
+    )))
 
     val batch = MemoryRecords.withRecords(
       Compression.NONE,
@@ -141,8 +138,7 @@ class CoordinatorPartitionWriterTest {
     ))
     assertEquals(
       batch,
-      recordsCapture.getValue.find { case (topicIdPartition, _) => topicIdPartition == new TopicIdPartition(topicId, tp) }.getOrElse(
-        throw new AssertionError(s"No records for $tp"))._2
+      recordsCapture.getValue.getOrElse(topicIdPartition, throw new AssertionError(s"No records for $tp"))
     )
   }
 
@@ -207,26 +203,20 @@ class CoordinatorPartitionWriterTest {
 
     val recordsCapture: ArgumentCaptor[Map[TopicIdPartition, MemoryRecords]] =
       ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, MemoryRecords]])
-    val callbackCapture: ArgumentCaptor[Map[TopicIdPartition, PartitionResponse] => Unit] =
-      ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, PartitionResponse] => Unit])
 
-    when(replicaManager.appendRecords(
-      ArgumentMatchers.eq(0L),
+    when(replicaManager.appendRecordsToLeader(
       ArgumentMatchers.eq(1.toShort),
       ArgumentMatchers.eq(true),
       ArgumentMatchers.eq(AppendOrigin.COORDINATOR),
       recordsCapture.capture(),
-      callbackCapture.capture(),
-      ArgumentMatchers.any(),
-      ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.any(),
       ArgumentMatchers.eq(Map(tp -> VerificationGuard.SENTINEL)),
-    )).thenAnswer(_ => {
-      callbackCapture.getValue.apply(Map(
-        new TopicIdPartition(topicId, tp) -> new PartitionResponse(Errors.NOT_LEADER_OR_FOLLOWER)
-      ))
-    })
+    )).thenReturn(Map(new TopicIdPartition(topicId, tp) -> LogAppendResult(
+      LogAppendInfo.UNKNOWN_LOG_APPEND_INFO,
+      Some(Errors.NOT_LEADER_OR_FOLLOWER.exception),
+      false
+    )))
 
     val batch = MemoryRecords.withRecords(
       Compression.NONE,

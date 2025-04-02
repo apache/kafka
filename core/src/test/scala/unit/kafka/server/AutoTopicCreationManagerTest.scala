@@ -31,7 +31,7 @@ import org.apache.kafka.common.message.{ApiVersionsResponseData, CreateTopicsReq
 import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, CreatableTopicConfig, CreatableTopicConfigCollection}
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.network.{ClientInformation, ListenerName}
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.{ApiKeys, ByteBufferAccessor, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.{SecurityUtils, Utils}
@@ -252,7 +252,8 @@ class AutoTopicCreationManagerTest {
 
     val forwardedRequestBuffer = capturedRequest.requestData().duplicate()
     assertEquals(requestHeader, RequestHeader.parse(forwardedRequestBuffer));
-    assertEquals(requestBody.data(), CreateTopicsRequest.parse(forwardedRequestBuffer, ApiKeys.CREATE_TOPICS.latestVersion()).data())
+    assertEquals(requestBody.data(), CreateTopicsRequest.parse(new ByteBufferAccessor(forwardedRequestBuffer),
+      ApiKeys.CREATE_TOPICS.latestVersion()).data())
   }
 
   @Test
@@ -307,7 +308,8 @@ class AutoTopicCreationManagerTest {
       .build(ApiKeys.CREATE_TOPICS.latestVersion())
     val forwardedRequestBuffer = capturedRequest.requestData().duplicate()
     assertEquals(requestHeader, RequestHeader.parse(forwardedRequestBuffer));
-    assertEquals(requestBody.data(), CreateTopicsRequest.parse(forwardedRequestBuffer, ApiKeys.CREATE_TOPICS.latestVersion()).data())
+    assertEquals(requestBody.data(), CreateTopicsRequest.parse(new ByteBufferAccessor(forwardedRequestBuffer),
+      ApiKeys.CREATE_TOPICS.latestVersion()).data())
   }
 
   @Test

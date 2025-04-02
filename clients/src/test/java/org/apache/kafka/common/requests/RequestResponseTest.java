@@ -694,7 +694,7 @@ public class RequestResponseTest {
         assertEquals(requestHeader, parsedHeader);
 
         RequestAndSize parsedRequest = AbstractRequest.parseRequest(
-            CREATE_TOPICS, requestVersion, serializedRequest);
+            CREATE_TOPICS, requestVersion, new ByteBufferAccessor(serializedRequest));
 
         assertEquals(createTopicsRequest.data(), parsedRequest.request.data());
     }
@@ -1936,11 +1936,11 @@ public class RequestResponseTest {
         // Check for equality of the ByteBuffer only if indicated (it is likely to fail if any of the fields
         // in the request is a HashMap with multiple elements since ordering of the elements may vary)
         try {
-            ByteBuffer serializedBytes = req.serialize();
+            ByteBufferAccessor serializedBytes = req.serialize();
             AbstractRequest deserialized = AbstractRequest.parseRequest(req.apiKey(), req.version(), serializedBytes).request;
-            ByteBuffer serializedBytes2 = deserialized.serialize();
-            serializedBytes.rewind();
-            assertEquals(serializedBytes, serializedBytes2, "Request " + req + "failed equality test");
+            ByteBufferAccessor serializedBytes2 = deserialized.serialize();
+            serializedBytes.buffer().rewind();
+            assertEquals(serializedBytes.buffer(), serializedBytes2.buffer(), "Request " + req + "failed equality test");
         } catch (Exception e) {
             throw new RuntimeException("Failed to deserialize request " + req + " with type " + req.getClass(), e);
         }
@@ -3831,9 +3831,9 @@ public class RequestResponseTest {
     public void testInvalidSaslHandShakeRequest() {
         AbstractRequest request = new SaslHandshakeRequest.Builder(
                 new SaslHandshakeRequestData().setMechanism("PLAIN")).build();
-        ByteBuffer serializedBytes = request.serialize();
+        ByteBufferAccessor serializedBytes = request.serialize();
         // corrupt the length of the sasl mechanism string
-        serializedBytes.putShort(0, Short.MAX_VALUE);
+        serializedBytes.buffer().putShort(0, Short.MAX_VALUE);
 
         String msg = assertThrows(RuntimeException.class, () -> AbstractRequest.
             parseRequest(request.apiKey(), request.version(), serializedBytes)).getMessage();
@@ -3852,10 +3852,10 @@ public class RequestResponseTest {
         };
         SaslAuthenticateRequestData data = new SaslAuthenticateRequestData().setAuthBytes(b);
         AbstractRequest request = new SaslAuthenticateRequest(data, version);
-        ByteBuffer serializedBytes = request.serialize();
+        ByteBufferAccessor serializedBytes = request.serialize();
 
         // corrupt the length of the bytes array
-        serializedBytes.putInt(0, Integer.MAX_VALUE);
+        serializedBytes.buffer().putInt(0, Integer.MAX_VALUE);
 
         String msg = assertThrows(RuntimeException.class, () -> AbstractRequest.
                 parseRequest(request.apiKey(), request.version(), serializedBytes)).getMessage();
@@ -3884,7 +3884,7 @@ public class RequestResponseTest {
         accessor.flip();
 
         SaslAuthenticateRequest saslAuthenticateRequest = (SaslAuthenticateRequest) AbstractRequest.
-                parseRequest(SASL_AUTHENTICATE, SASL_AUTHENTICATE.latestVersion(), accessor.buffer()).request;
+                parseRequest(SASL_AUTHENTICATE, SASL_AUTHENTICATE.latestVersion(), accessor).request;
         Assertions.assertArrayEquals(authBytes, saslAuthenticateRequest.data().authBytes());
         assertEquals(1, saslAuthenticateRequest.data().unknownTaggedFields().size());
         assertEquals(taggedField, saslAuthenticateRequest.data().unknownTaggedFields().get(0));
@@ -3912,7 +3912,7 @@ public class RequestResponseTest {
         accessor.flip();
 
         String msg = assertThrows(RuntimeException.class, () -> AbstractRequest.
-                parseRequest(SASL_AUTHENTICATE, SASL_AUTHENTICATE.latestVersion(), accessor.buffer())).getMessage();
+                parseRequest(SASL_AUTHENTICATE, SASL_AUTHENTICATE.latestVersion(), accessor)).getMessage();
         assertEquals("Error reading byte array of 32767 byte(s): only 3 byte(s) available", msg);
     }
 }

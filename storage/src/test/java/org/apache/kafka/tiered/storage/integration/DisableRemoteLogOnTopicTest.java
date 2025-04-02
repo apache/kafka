@@ -41,11 +41,11 @@ public final class DisableRemoteLogOnTopicTest extends TieredStorageTestHarness 
         return 2;
     }
 
-    @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
-    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
+    @ParameterizedTest(name = "{displayName}.groupProtocol={0}")
+    @MethodSource("getTestGroupProtocolParametersAll")
     @Override
-    public void executeTieredStorageTest(String quorum, String groupProtocol) {
-        super.executeTieredStorageTest(quorum, groupProtocol);
+    public void executeTieredStorageTest(String groupProtocol) {
+        super.executeTieredStorageTest(groupProtocol);
     }
 
     @Override

@@ -26,7 +26,6 @@ import org.slf4j.Logger;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -92,7 +91,7 @@ public class EndpointReadyFutures {
             if (authorizer.isPresent()) {
                 return build(authorizer.get().start(info), info);
             } else {
-                return build(Collections.emptyMap(), info);
+                return build(Map.of(), info);
             }
         }
 
@@ -205,7 +204,7 @@ public class EndpointReadyFutures {
                 }
             }));
         });
-        this.futures = Collections.unmodifiableMap(newFutures);
+        this.futures = newFutures;
     }
 
     public Map<Endpoint, CompletableFuture<Void>> futures() {
