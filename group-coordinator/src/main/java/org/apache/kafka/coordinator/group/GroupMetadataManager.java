@@ -187,6 +187,7 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -4947,15 +4948,13 @@ public class GroupMetadataManager {
             }
         }
 
-        return new CoordinatorResult<>(
-            List.of(
-                newShareGroupStatePartitionMetadataRecord(
-                    group.groupId(),
-                    attachTopicName(finalInitializingMap),
-                    attachTopicName(finalInitializedMap),
-                    Map.of()
-                )
-            ),
+        return new CoordinatorResult<>(List.of(
+            newShareGroupStatePartitionMetadataRecord(
+                group.groupId(),
+                attachTopicName(finalInitializingMap),
+                attachTopicName(finalInitializedMap),
+                Map.of()
+            )),
             null
         );
     }
@@ -4972,14 +4971,12 @@ public class GroupMetadataManager {
         String groupId,
         Map<Uuid, Set<Integer>> topicPartitionMap
     ) {
-        if (shareGroupPartitionMetadata.get(groupId) == null ||
-            shareGroupPartitionMetadata.get(groupId).initializingTopics().isEmpty() ||
-            topicPartitionMap.isEmpty()
-        ) {
+        ShareGroupStatePartitionMetadataInfo info = shareGroupPartitionMetadata.get(groupId);
+        if (info == null || info.initializingTopics().isEmpty() || topicPartitionMap.isEmpty()) {
             return new CoordinatorResult<>(List.of(), null);
         }
 
-        Map<Uuid, Set<Integer>> initializingTopics = shareGroupPartitionMetadata.get(groupId).initializingTopics();
+        Map<Uuid, Set<Integer>> initializingTopics = info.initializingTopics();
         Map<Uuid, Set<Integer>> finalInitializingTopics = new HashMap<>();
 
         for (Map.Entry<Uuid, Set<Integer>> entry : initializingTopics.entrySet()) {
@@ -5001,12 +4998,37 @@ public class GroupMetadataManager {
                 newShareGroupStatePartitionMetadataRecord(
                     groupId,
                     attachTopicName(finalInitializingTopics),
-                    attachTopicName(shareGroupPartitionMetadata.get(groupId).initializedTopics()),
+                    attachTopicName(info.initializedTopics()),
                     Map.of()
                 )
             ),
             null
         );
+    }
+
+    /**
+     * Iterates over all share groups and returns persister initialize requests corresponding to any initializing
+     * topic partitions found in the group associated {@link ShareGroupStatePartitionMetadataInfo}.
+     * @param offset The last committed offset for the {@link ShareGroupStatePartitionMetadataInfo} timeline hashmap.
+     *
+     * @return A list containing {@link InitializeShareGroupStateParameters} requests, could be empty.
+     */
+    public List<InitializeShareGroupStateParameters> reconcileShareGroupStateInitializingState(long offset) {
+        List<InitializeShareGroupStateParameters> requests = new LinkedList<>();
+        for (Group group : groups.values()) {
+            if (!(group instanceof ShareGroup shareGroup)) {
+                continue;
+            }
+            if (!(shareGroupPartitionMetadata.containsKey(shareGroup.groupId()))) {
+                continue;
+            }
+            Map<Uuid, Set<Integer>> initializing = shareGroupPartitionMetadata.get(shareGroup.groupId(), offset).initializingTopics();
+            if (initializing == null || initializing.isEmpty()) {
+                continue;
+            }
+            requests.add(buildInitializeShareGroupStateRequest(shareGroup.groupId(), shareGroup.groupEpoch(), initializing));
+        }
+        return requests;
     }
 
     private Map<Uuid, Map.Entry<String, Set<Integer>>> attachTopicName(Map<Uuid, Set<Integer>> initMap) {
@@ -5018,24 +5040,6 @@ public class GroupMetadataManager {
             finalMap.put(topicId, Map.entry(topicName, entry.getValue()));
         }
         return Collections.unmodifiableMap(finalMap);
-    }
-
-    public List<InitializeShareGroupStateParameters> reconcileShareGroupStateInitializingState(long offset) {
-        List<InitializeShareGroupStateParameters> requests = new ArrayList<>();
-        for (Group group : groups.values()) {
-            if (!(group instanceof ShareGroup shareGroup)) {
-                continue;
-            }
-            if (!(shareGroupPartitionMetadata.containsKey(group.groupId()))) {
-                continue;
-            }
-            Map<Uuid, Set<Integer>> initializing = shareGroupPartitionMetadata.get(shareGroup.groupId(), offset).initializingTopics();
-            if (initializing == null || initializing.isEmpty()) {
-                continue;
-            }
-            requests.add(buildInitializeShareGroupStateRequest(shareGroup.groupId(), shareGroup.groupEpoch(), initializing));
-        }
-        return requests;
     }
 
     /**

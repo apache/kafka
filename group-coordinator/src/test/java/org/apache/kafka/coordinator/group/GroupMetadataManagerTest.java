@@ -20582,6 +20582,69 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testShareGroupHeartbeatNoPersisterRequestWithInitializing() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        Uuid t1Uuid = Uuid.randomUuid();
+        String t1Name = "t1";
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(t1Uuid, t1Name, 2)
+            .build();
+
+        String groupId = "share-group";
+
+        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
+        context.groupMetadataManager.replay(
+            new ShareGroupMetadataKey()
+                .setGroupId(groupId),
+            new ShareGroupMetadataValue()
+                .setEpoch(0)
+        );
+        context.groupMetadataManager.replay(
+            new ShareGroupStatePartitionMetadataKey()
+                .setGroupId(groupId),
+            new ShareGroupStatePartitionMetadataValue()
+                .setInitializingTopics(List.of(
+                    new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                        .setTopicId(t1Uuid)
+                        .setTopicName(t1Name)
+                        .setPartitions(List.of(0, 1))
+                ))
+                .setInitializedTopics(List.of())
+                .setDeletingTopics(List.of())
+        );
+
+        Uuid memberId = Uuid.randomUuid();
+        CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> result = context.shareGroupHeartbeat(
+            new ShareGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId.toString())
+                .setMemberEpoch(0)
+                .setSubscribedTopicNames(List.of(t1Name)));
+
+        assertFalse(result.records().contains(
+            newShareGroupStatePartitionMetadataRecord(groupId, mkShareGroupStateMap(List.of(
+                    mkShareGroupStateMetadataEntry(t1Uuid, t1Name, List.of(0, 1))
+                )),
+                Map.of(),
+                Map.of()
+            ))
+        );
+
+        verifyShareGroupHeartbeatInitializeRequest(
+            result.response().getValue(),
+            Map.of(),
+            groupId,
+            0,
+            false
+        );
+    }
+
+    @Test
     public void testShareGroupInitializeSuccess() {
         String groupId = "groupId";
         Uuid topicId = Uuid.randomUuid();

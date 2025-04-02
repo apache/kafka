@@ -3344,6 +3344,42 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
+    public void testReconcileShareGroupInitializingStateNoRequests() {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        Persister mockPersister = mock(Persister.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .setPersister(mockPersister)
+            .build(true);
+
+        when(runtime.scheduleReadAllOperation(
+            eq("reconcile-share-group-initializing-state"),
+            ArgumentMatchers.any()
+        )).thenReturn(List.of());
+
+        when(runtime.scheduleWriteOperation(
+            eq("initialize-share-group-state"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
+
+        service.reconcileShareGroupStateInitializingState().join();
+        verify(runtime, times(1)).scheduleReadAllOperation(
+            eq("reconcile-share-group-initializing-state"),
+            ArgumentMatchers.any()
+        );
+        verify(mockPersister, times(0)).initializeState(ArgumentMatchers.any());
+        verify(runtime, times(0)).scheduleWriteOperation(
+            eq("initialize-share-group-state"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        );
+    }
+
+    @Test
     public void testReconcileShareGroupInitializingState() {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister mockPersister = mock(Persister.class);
