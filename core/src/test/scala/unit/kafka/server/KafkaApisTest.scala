@@ -9375,7 +9375,7 @@ class KafkaApisTest extends Logging {
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
 
-    when(txnCoordinator.handleListTransactions(Set.empty[Long], Set.empty[String], -1L))
+    when(txnCoordinator.handleListTransactions(Set.empty[Long], Set.empty[String], -1L, ""))
       .thenReturn(new ListTransactionsResponseData()
         .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code))
     kafkaApis = createKafkaApis()
@@ -9389,7 +9389,7 @@ class KafkaApisTest extends Logging {
   @Test
   def testListTransactionsAuthorization(): Unit = {
     val authorizer: Authorizer = mock(classOf[Authorizer])
-    val data = new ListTransactionsRequestData()
+    val data = new ListTransactionsRequestData().setTransactionalIdPrefixFilter("my")
     val listTransactionsRequest = new ListTransactionsRequest.Builder(data).build()
     val request = buildRequest(listTransactionsRequest)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
@@ -9397,15 +9397,15 @@ class KafkaApisTest extends Logging {
 
     val transactionStates = new util.ArrayList[ListTransactionsResponseData.TransactionState]()
     transactionStates.add(new ListTransactionsResponseData.TransactionState()
-      .setTransactionalId("foo")
+      .setTransactionalId("myFoo")
       .setProducerId(12345L)
       .setTransactionState("Ongoing"))
     transactionStates.add(new ListTransactionsResponseData.TransactionState()
-      .setTransactionalId("bar")
+      .setTransactionalId("myBar")
       .setProducerId(98765)
       .setTransactionState("PrepareAbort"))
 
-    when(txnCoordinator.handleListTransactions(Set.empty[Long], Set.empty[String], -1L))
+    when(txnCoordinator.handleListTransactions(Set.empty[Long], Set.empty[String], -1L, "my"))
       .thenReturn(new ListTransactionsResponseData()
         .setErrorCode(Errors.NONE.code)
         .setTransactionStates(transactionStates))
@@ -9416,10 +9416,10 @@ class KafkaApisTest extends Logging {
       Collections.singletonList(action)
     }
 
-    when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(buildExpectedActions("foo"))))
+    when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(buildExpectedActions("myFoo"))))
       .thenReturn(Seq(AuthorizationResult.ALLOWED).asJava)
 
-    when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(buildExpectedActions("bar"))))
+    when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(buildExpectedActions("myBar"))))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
     kafkaApis.handleListTransactionsRequest(request)
@@ -9427,7 +9427,7 @@ class KafkaApisTest extends Logging {
     val response = verifyNoThrottling[ListTransactionsResponse](request)
     assertEquals(1, response.data.transactionStates.size())
     val transactionState = response.data.transactionStates.get(0)
-    assertEquals("foo", transactionState.transactionalId)
+    assertEquals("myFoo", transactionState.transactionalId)
     assertEquals(12345L, transactionState.producerId)
     assertEquals("Ongoing", transactionState.transactionState)
   }

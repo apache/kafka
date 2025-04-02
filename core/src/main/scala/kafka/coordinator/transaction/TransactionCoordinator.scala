@@ -292,12 +292,13 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
   def handleListTransactions(
     filteredProducerIds: Set[Long],
     filteredStates: Set[String],
-    filteredDuration: Long = -1L
+    filteredDuration: Long = -1L,
+    filteredTransactionalIdPrefix: String = ""
   ): ListTransactionsResponseData = {
     if (!isActive.get()) {
       new ListTransactionsResponseData().setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code)
     } else {
-      txnManager.listTransactionStates(filteredProducerIds, filteredStates, filteredDuration)
+      txnManager.listTransactionStates(filteredProducerIds, filteredStates, filteredDuration, filteredTransactionalIdPrefix)
     }
   }
 

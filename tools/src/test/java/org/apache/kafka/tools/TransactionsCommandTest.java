@@ -304,6 +304,42 @@ public class TransactionsCommandTest {
         assertEquals(expectedRow, table.get(1));
     }
 
+        @Test
+    public void testListTransactionsWithTransactionalIdPrefix() throws Exception {
+        String[] args = new String[] {
+            "--bootstrap-server",
+            "localhost:9092",
+            "list",
+            "--transactional-id-prefix-filter",
+            "ba"
+        };
+
+        Map<Integer, Collection<TransactionListing>> transactions = new HashMap<>();
+        transactions.put(0, asList(
+            new TransactionListing("bar", 98765L, TransactionState.PREPARE_ABORT)
+        ));
+        transactions.put(1, singletonList(
+            new TransactionListing("baz", 13579L, TransactionState.COMPLETE_COMMIT)
+        ));
+
+        expectListTransactions(new ListTransactionsOptions().filterOnTransactionalIdPrefix("ba"), transactions);
+
+        execute(args);
+        assertNormalExit();
+
+        List<List<String>> table = readOutputAsTable();
+        assertEquals(3, table.size());
+
+        // Assert expected headers
+        List<String> expectedHeaders = TransactionsCommand.ListTransactionsCommand.HEADERS;
+        assertEquals(expectedHeaders, table.get(0));
+        Set<List<String>> expectedRows = Set.of(
+            asList("bar", "0", "98765", "PrepareAbort"),
+            asList("baz", "1", "13579", "CompleteCommit")
+        );
+        assertEquals(expectedRows, new HashSet<>(table.subList(1, table.size())));
+    }
+
     @Test
     public void testDescribeTransactionsStartOffsetOrProducerIdRequired() throws Exception {
         assertCommandFailure(new String[]{

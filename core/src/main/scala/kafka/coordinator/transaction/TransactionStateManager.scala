@@ -315,7 +315,8 @@ class TransactionStateManager(brokerId: Int,
   def listTransactionStates(
     filterProducerIds: Set[Long],
     filterStateNames: Set[String],
-    filterDurationMs: Long
+    filterDurationMs: Long,
+    filteredTransactionalIdPrefix: String
   ): ListTransactionsResponseData = {
     inReadLock(stateLock) {
       val response = new ListTransactionsResponseData()
@@ -342,6 +343,8 @@ class TransactionStateManager(brokerId: Int,
           } else if (filterStateNames.nonEmpty && !filterStates.contains(txnMetadata.state)) {
             false
           } else if (filterDurationMs >= 0 && (now - txnMetadata.txnStartTimestamp) <= filterDurationMs) {
+            false
+          } else if (!filteredTransactionalIdPrefix.isEmpty && !txnMetadata.transactionalId.startsWith(filteredTransactionalIdPrefix)) {
             false
           } else {
             true
