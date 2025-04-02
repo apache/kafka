@@ -54,7 +54,7 @@ public class FinalContext extends ShareFetchContext {
     public ShareFetchResponse updateAndGenerateResponseData(String groupId, Uuid memberId,
                                                      LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates) {
         log.debug("Final context returning {}", partitionsToLogString(updates.keySet()));
-        return ShareFetchResponse.of(Errors.NONE, 0, updates, List.of());
+        return ShareFetchResponse.of(Errors.NONE, 0, updates, List.of(), 0);
     }
 
     @Override

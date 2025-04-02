@@ -46,8 +46,8 @@ public class ShareFetchRequest extends AbstractRequest {
         }
 
         public static Builder forConsumer(String groupId, ShareRequestMetadata metadata,
-                                          int maxWait, int minBytes, int maxBytes, int batchSize,
-                                          List<TopicIdPartition> send, List<TopicIdPartition> forget,
+                                          int maxWait, int minBytes, int maxBytes, int maxRecords,
+                                          int batchSize, List<TopicIdPartition> send, List<TopicIdPartition> forget,
                                           Map<TopicIdPartition, List<ShareFetchRequestData.AcknowledgementBatch>> acknowledgementsMap) {
             ShareFetchRequestData data = new ShareFetchRequestData();
             data.setGroupId(groupId);
@@ -62,6 +62,7 @@ public class ShareFetchRequest extends AbstractRequest {
             data.setMaxWaitMs(maxWait);
             data.setMinBytes(minBytes);
             data.setMaxBytes(maxBytes);
+            data.setMaxRecords(maxRecords);
             data.setBatchSize(batchSize);
 
             // Build a map of topics to fetch keyed by topic ID, and within each a map of partitions keyed by index

@@ -49,7 +49,8 @@ public abstract class ShareFetchContext {
      * @return - An empty throttled response.
      */
     public ShareFetchResponse throttleResponse(int throttleTimeMs) {
-        return ShareFetchResponse.of(Errors.NONE, throttleTimeMs, new LinkedHashMap<>(), List.of());
+        return ShareFetchResponse.of(Errors.NONE, throttleTimeMs,
+                new LinkedHashMap<>(), List.of(), 0);
     }
 
     /**
