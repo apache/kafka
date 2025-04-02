@@ -330,29 +330,61 @@ public class StreamsGroup implements Group {
     }
 
     /**
-     * Gets or creates a new member but without adding it to the group. Adding a member is done via the
-     * {@link StreamsGroup#updateMember(StreamsGroupMember)} method.
+     * Gets a new member or throws an exception, if the member does not exist.
      *
-     * @param memberId          The member ID.
-     * @param createIfNotExists Booleans indicating whether the member must be created if it does not exist.
+     * @param memberId The member ID.
+     * @throws UnknownMemberIdException If the member is not found.
      * @return A StreamsGroupMember.
      */
-    public StreamsGroupMember getOrMaybeCreateMember(
-        String memberId,
-        boolean createIfNotExists
+    public StreamsGroupMember getMemberOrThrow(
+        String memberId
     ) throws UnknownMemberIdException {
         StreamsGroupMember member = members.get(memberId);
         if (member != null) {
             return member;
         }
 
-        if (!createIfNotExists) {
-            throw new UnknownMemberIdException(
-                String.format("Member %s is not a member of group %s.", memberId, groupId)
-            );
+        throw new UnknownMemberIdException(
+            String.format("Member %s is not a member of group %s.", memberId, groupId)
+        );
+    }
+
+    /**
+     * Gets or creates a new member, but keeping its fields uninitialized. This is used on the replay-path.
+     * The member is not added to the group, adding a member is done via the
+     * {@link StreamsGroup#updateMember(StreamsGroupMember)} method.
+     *
+     * @param memberId          The member ID.
+     * @return A StreamsGroupMember.
+     */
+    public StreamsGroupMember getOrCreateUninitializedMember(
+        String memberId
+    ) throws UnknownMemberIdException {
+        StreamsGroupMember member = members.get(memberId);
+        if (member != null) {
+            return member;
         }
 
         return new StreamsGroupMember.Builder(memberId).build();
+    }
+
+    /**
+     * Gets or creates a new member, setting default values on the fields. This is used on the replay-path.
+     * The member is not added to the group, adding a member is done via the
+     * {@link StreamsGroup#updateMember(StreamsGroupMember)} method.
+     *
+     * @param memberId          The member ID.
+     * @return A StreamsGroupMember.
+     */
+    public StreamsGroupMember getOrCreateDefaultMember(
+        String memberId
+    ) throws UnknownMemberIdException {
+        StreamsGroupMember member = members.get(memberId);
+        if (member != null) {
+            return member;
+        }
+
+        return StreamsGroupMember.Builder.withDefaults(memberId).build();
     }
 
     /**
@@ -363,7 +395,7 @@ public class StreamsGroup implements Group {
      */
     public StreamsGroupMember staticMember(String instanceId) {
         String existingMemberId = staticMemberId(instanceId);
-        return existingMemberId == null ? null : getOrMaybeCreateMember(existingMemberId, false);
+        return existingMemberId == null ? null : getMemberOrThrow(existingMemberId);
     }
 
     /**
@@ -656,7 +688,7 @@ public class StreamsGroup implements Group {
             memberId.equals(JoinGroupRequest.UNKNOWN_MEMBER_ID) && groupInstanceId == null)
             return;
 
-        final StreamsGroupMember member = getOrMaybeCreateMember(memberId, false);
+        final StreamsGroupMember member = getMemberOrThrow(memberId);
 
         // If the commit is not transactional and the member uses the new streams protocol (KIP-1071),
         // the member should be using the OffsetCommit API version >= 9.
