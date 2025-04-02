@@ -1605,7 +1605,9 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     newContent.flip()
     Files.write(logFilePath, newContent.array(), StandardOpenOption.TRUNCATE_EXISTING)
 
-    val consumer = createConsumer()
+    val overrideConfig = new Properties
+    overrideConfig.setProperty("auto.offset.reset", "earliest")
+    val consumer = createConsumer(configOverrides = overrideConfig)
     consumer.subscribe(Seq(topic).asJava)
     assertEquals("Encountered corrupt message when fetching offset 0 for topic-partition topic-0",
       assertThrows(classOf[KafkaException], () => consumer.poll(JDuration.ofMillis(DEFAULT_MAX_WAIT_MS))).getMessage)
