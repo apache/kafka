@@ -409,30 +409,6 @@ public class StoreChangelogReaderTest {
 
     @ParameterizedTest
     @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
-    public void shouldPollWithRightTimeoutWithStateUpdater(final Task.TaskType type) {
-        setupStateManagerMock(type);
-        setupStoreMetadata();
-        setupStore();
-        shouldPollWithRightTimeout(true, type);
-    }
-
-    @ParameterizedTest
-    @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
-    public void shouldPollWithRightTimeoutWithoutStateUpdater(final Task.TaskType type) {
-        setupStateManagerMock(type);
-        setupStoreMetadata();
-        setupStore();
-        shouldPollWithRightTimeout(false, type);
-    }
-
-    private void shouldPollWithRightTimeout(final boolean stateUpdaterEnabled, final Task.TaskType type) {
-        final Properties properties = new Properties();
-        properties.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
-        shouldPollWithRightTimeout(properties, type);
-    }
-
-    @ParameterizedTest
-    @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
     public void shouldPollWithRightTimeoutWithStateUpdaterDefault(final Task.TaskType type) {
         setupStateManagerMock(type);
         setupStoreMetadata();
@@ -462,16 +438,7 @@ public class StoreChangelogReaderTest {
         }
 
         changelogReader.restore(Collections.singletonMap(taskId, mock(Task.class)));
-        if (type == ACTIVE) {
-            assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
-        } else {
-            if (!properties.containsKey(InternalConfig.STATE_UPDATER_ENABLED)
-                    || (boolean) properties.get(InternalConfig.STATE_UPDATER_ENABLED)) {
-                assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
-            } else {
-                assertEquals(Duration.ZERO, consumer.lastPollTimeout());
-            }
-        }
+        assertEquals(Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG)), consumer.lastPollTimeout());
     }
 
     @ParameterizedTest
