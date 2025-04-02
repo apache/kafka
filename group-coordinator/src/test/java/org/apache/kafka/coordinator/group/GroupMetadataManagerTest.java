@@ -20852,6 +20852,27 @@ public class GroupMetadataManagerTest {
         );
     }
 
+    @Test
+    public void testMergeShareGroupInitMaps() {
+        Map<Uuid, Set<Integer>> m1 = new HashMap<>();
+        Map<Uuid, Set<Integer>> m2 = new HashMap<>();
+
+        Uuid t1 = Uuid.randomUuid();
+        Uuid t2 = Uuid.randomUuid();
+        Uuid t3 = Uuid.randomUuid();
+
+        m1.put(t1, new HashSet<>(List.of(1, 2)));
+        m1.put(t2, new HashSet<>(List.of(3, 4)));
+        m2.put(t1, new HashSet<>(List.of(3, 4)));
+        m2.put(t3, new HashSet<>(List.of(5, 6)));
+
+        Map<Uuid, Set<Integer>> m3 = GroupMetadataManager.mergeShareGroupInitMaps(m1, m2);
+        // The arg maps should not be overridden.
+        assertEquals(Map.of(t1, Set.of(1, 2), t2, Set.of(3, 4)), m1);
+        assertEquals(Map.of(t1, Set.of(3, 4), t3, Set.of(5, 6)), m2);
+        assertEquals(Map.of(t1, Set.of(1, 2, 3, 4), t2, Set.of(3, 4), t3, Set.of(5, 6)), m3);
+    }
+
     private static void checkJoinGroupResponse(
         JoinGroupResponseData expectedResponse,
         JoinGroupResponseData actualResponse,

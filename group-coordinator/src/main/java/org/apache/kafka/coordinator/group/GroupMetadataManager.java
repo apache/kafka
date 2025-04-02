@@ -2877,12 +2877,7 @@ public class GroupMetadataManager {
 
         Map<Uuid, Set<Integer>> topicPartitionChangeMap = new HashMap<>();
         ShareGroupStatePartitionMetadataInfo info = shareGroupPartitionMetadata.get(groupId);
-        Map<Uuid, Set<Integer>> alreadyInitialized = new HashMap<>();
-        if (info != null) {
-            alreadyInitialized.putAll(info.initializedTopics());
-            // We do not want to re-initialize tps which are in middle of initialization.
-            alreadyInitialized.putAll(info.initializingTopics());
-        }
+        Map<Uuid, Set<Integer>> alreadyInitialized = info == null ? new HashMap<>() : mergeShareGroupInitMaps(info.initializedTopics(), info.initializingTopics());
 
         subscriptionMetadata.forEach((topicName, topicMetadata) -> {
             Set<Integer> alreadyInitializedPartSet = alreadyInitialized.getOrDefault(topicMetadata.id(), Set.of());
@@ -2962,7 +2957,8 @@ public class GroupMetadataManager {
         );
     }
 
-    private static Map<Uuid, Set<Integer>> mergeShareGroupInitMaps(
+    // Visibility for tests
+    static Map<Uuid, Set<Integer>> mergeShareGroupInitMaps(
         Map<Uuid, Set<Integer>> existingShareGroupInitMap,
         Map<Uuid, Set<Integer>> newShareGroupInitMap
     ) {
