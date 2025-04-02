@@ -553,7 +553,7 @@ public class GroupCoordinatorConfig {
     public Map<String, Integer> extractGroupConfigMap(ShareGroupConfig shareGroupConfig) {
         Map<String, Integer> defaultConfigs = new HashMap<>();
         defaultConfigs.putAll(extractConsumerGroupConfigMap());
-        defaultConfigs.putAll(shareGroupConfig.extractShareGroupConfigMap());
+        defaultConfigs.putAll(shareGroupConfig.extractShareGroupConfigMap(this));
         return Collections.unmodifiableMap(defaultConfigs);
     }
 
