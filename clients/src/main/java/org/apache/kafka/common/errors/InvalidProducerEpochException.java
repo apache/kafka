@@ -22,7 +22,7 @@ package org.apache.kafka.common.errors;
  * by calling KafkaProducer#abortTransaction which would try to send initPidRequest and reinitialize the producer
  * under the hood.
  */
-public class InvalidProducerEpochException extends ApiException {
+public class InvalidProducerEpochException extends ApplicationRecoverableException {
 
     private static final long serialVersionUID = 1L;
 
