@@ -21,7 +21,7 @@ Configuration:
 
   Appenders:
     Console:
-      name: A1
+      name: STDOUT
       PatternLayout:
         pattern: "${logPattern}"
 
@@ -29,4 +29,4 @@ Configuration:
     Root:
       level: INFO
       AppenderRef:
-        - ref: A1
+        - ref: STDOUT
