@@ -64,6 +64,7 @@ class ActiveTaskCreator {
     private final StreamsProducer streamsProducer;
     private final boolean stateUpdaterEnabled;
     private final boolean processingThreadsEnabled;
+    private boolean isClosed = false;
 
     ActiveTaskCreator(final TopologyMetadata topologyMetadata,
                       final StreamsConfig applicationConfig,
@@ -118,14 +119,25 @@ class ActiveTaskCreator {
         return clientSupplier.getProducer(producerConfig);
     }
 
+
+    /**
+     * When {@link org.apache.kafka.streams.processor.internals.StreamThread} is shutting down,
+     * subsequent calls to reInitializeProducer() will not recreate
+     * the producer instance, avoiding resource leak.
+     */
     public void reInitializeProducer() {
-        if (!streamsProducer.isResetDisabled()) {
+        if (!isClosed) {
             streamsProducer.resetProducer(producer());
         }
     }
 
     StreamsProducer streamsProducer() {
         return streamsProducer;
+    }
+
+    // visible for test
+    boolean isClosed() {
+        return isClosed;
     }
 
     // TODO: convert to StreamTask when we remove TaskManager#StateMachineTask with mocks
@@ -257,8 +269,8 @@ class ActiveTaskCreator {
 
     void close() {
         try {
+            isClosed = true;
             streamsProducer.close();
-            streamsProducer.disableReset();
         } catch (final RuntimeException e) {
             throw new StreamsException("Thread producer encounter error trying to close.", e);
         }

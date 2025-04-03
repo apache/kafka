@@ -190,7 +190,7 @@ public class ActiveTaskCreatorTest {
 
         activeTaskCreator.close();
 
-        assertThat(activeTaskCreator.streamsProducer().isResetDisabled(), is(true));
+        assertThat(activeTaskCreator.isClosed(), is(true));
         assertThat(mockClientSupplier.producers.get(0).closed(), is(true));
     }
 
@@ -201,7 +201,7 @@ public class ActiveTaskCreatorTest {
         createTasks();
         assertThat(mockClientSupplier.producers.size(), is(1));
 
-        activeTaskCreator.streamsProducer().disableReset();
+        activeTaskCreator.close();
         activeTaskCreator.reInitializeProducer();
         // Verifies that disableReset() prevents reInitializeProducer() from creating a new producer instance
         // Without disabling reset, the producers collection would contain more than one producer
