@@ -2529,19 +2529,14 @@ public class SharePartition {
         List<AcquiredRecords> acquiredRecords,
         List<FetchResponseData.AbortedTransaction> abortedTransactions
     ) {
-        lock.writeLock().lock();
-        try {
-            // The record batches that need to be archived in cachedState because they were a part of aborted transactions.
-            List<RecordBatch> recordsToArchive = fetchAbortedTransactionRecordBatches(batches, abortedTransactions);
-            for (RecordBatch recordBatch : recordsToArchive) {
-                // Archive the offsets/batches in the cached state.
-                NavigableMap<Long, InFlightBatch> subMap = fetchSubMap(recordBatch);
-                archiveRecords(recordBatch.baseOffset(), recordBatch.lastOffset() + 1, subMap, RecordState.ACQUIRED);
-            }
-            return filterRecordBatchesFromAcquiredRecords(acquiredRecords, recordsToArchive);
-        } finally {
-            lock.writeLock().unlock();
+        // The record batches that need to be archived in cachedState because they were a part of aborted transactions.
+        List<RecordBatch> recordsToArchive = fetchAbortedTransactionRecordBatches(batches, abortedTransactions);
+        for (RecordBatch recordBatch : recordsToArchive) {
+            // Archive the offsets/batches in the cached state.
+            NavigableMap<Long, InFlightBatch> subMap = fetchSubMap(recordBatch);
+            archiveRecords(recordBatch.baseOffset(), recordBatch.lastOffset() + 1, subMap, RecordState.ACQUIRED);
         }
+        return filterRecordBatchesFromAcquiredRecords(acquiredRecords, recordsToArchive);
     }
 
     /**
@@ -2554,47 +2549,41 @@ public class SharePartition {
         List<AcquiredRecords> acquiredRecordsList,
         List<RecordBatch> batchesToArchive
     ) {
-        lock.writeLock().lock();
-        try {
-            List<AcquiredRecords> result = new ArrayList<>();
-
-            for (AcquiredRecords acquiredRecords : acquiredRecordsList) {
-                List<AcquiredRecords> tempAcquiredRecords = new ArrayList<>();
-                tempAcquiredRecords.add(acquiredRecords);
-                for (RecordBatch batchToArchive : batchesToArchive) {
-                    List<AcquiredRecords> newAcquiredRecords = new ArrayList<>();
-                    for (AcquiredRecords temp : tempAcquiredRecords) {
-                        // Check if record batch overlaps with the acquired records. We need to filter out the overlapping
-                        // offsets in such a scenario.
-                        if (temp.firstOffset() <= batchToArchive.lastOffset() && temp.lastOffset() >= batchToArchive.baseOffset()) {
-                            // Split the acquired record into parts before, inside, and after the overlapping record batch.
-                            if (temp.firstOffset() < batchToArchive.baseOffset()) {
-                                // The offsets in temp that are present before batchToArchive's baseOffset should not get filtered out.
-                                newAcquiredRecords.add(new AcquiredRecords()
-                                    .setFirstOffset(temp.firstOffset())
-                                    .setLastOffset(batchToArchive.baseOffset() - 1)
-                                    .setDeliveryCount(temp.deliveryCount()));
-                            }
-                            if (temp.lastOffset() > batchToArchive.lastOffset()) {
-                                // The offsets in temp that are present after batchToArchive's lastOffset should not get filtered out.
-                                newAcquiredRecords.add(new AcquiredRecords()
-                                    .setFirstOffset(batchToArchive.lastOffset() + 1)
-                                    .setLastOffset(temp.lastOffset())
-                                    .setDeliveryCount(temp.deliveryCount()));
-                            }
-                        } else {
-                            // Offsets in temp do not overlap with batchToArchive, hence it should not get filtered out.
-                            newAcquiredRecords.add(temp);
+        List<AcquiredRecords> result = new ArrayList<>();
+        for (AcquiredRecords acquiredRecords : acquiredRecordsList) {
+            List<AcquiredRecords> tempAcquiredRecords = new ArrayList<>();
+            tempAcquiredRecords.add(acquiredRecords);
+            for (RecordBatch batchToArchive : batchesToArchive) {
+                List<AcquiredRecords> newAcquiredRecords = new ArrayList<>();
+                for (AcquiredRecords temp : tempAcquiredRecords) {
+                    // Check if record batch overlaps with the acquired records. We need to filter out the overlapping
+                    // offsets in such a scenario.
+                    if (temp.firstOffset() <= batchToArchive.lastOffset() && temp.lastOffset() >= batchToArchive.baseOffset()) {
+                        // Split the acquired record into parts before, inside, and after the overlapping record batch.
+                        if (temp.firstOffset() < batchToArchive.baseOffset()) {
+                            // The offsets in temp that are present before batchToArchive's baseOffset should not get filtered out.
+                            newAcquiredRecords.add(new AcquiredRecords()
+                                .setFirstOffset(temp.firstOffset())
+                                .setLastOffset(batchToArchive.baseOffset() - 1)
+                                .setDeliveryCount(temp.deliveryCount()));
                         }
+                        if (temp.lastOffset() > batchToArchive.lastOffset()) {
+                            // The offsets in temp that are present after batchToArchive's lastOffset should not get filtered out.
+                            newAcquiredRecords.add(new AcquiredRecords()
+                                .setFirstOffset(batchToArchive.lastOffset() + 1)
+                                .setLastOffset(temp.lastOffset())
+                                .setDeliveryCount(temp.deliveryCount()));
+                        }
+                    } else {
+                        // Offsets in temp do not overlap with batchToArchive, hence it should not get filtered out.
+                        newAcquiredRecords.add(temp);
                     }
-                    tempAcquiredRecords = newAcquiredRecords;
                 }
-                result.addAll(tempAcquiredRecords);
+                tempAcquiredRecords = newAcquiredRecords;
             }
-            return result;
-        } finally {
-            lock.writeLock().unlock();
+            result.addAll(tempAcquiredRecords);
         }
+        return result;
     }
 
     /**
