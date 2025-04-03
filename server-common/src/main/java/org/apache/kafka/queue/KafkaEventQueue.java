@@ -444,7 +444,7 @@ public final class KafkaEventQueue implements EventQueue {
         LogContext logContext,
         String threadNamePrefix
     ) {
-        this(time, logContext, threadNamePrefix, VoidEvent::new);
+        this(time, logContext, threadNamePrefix, VoidEvent.INSTANCE);
     }
 
     public KafkaEventQueue(
