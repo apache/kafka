@@ -28,7 +28,7 @@ import java.util.List;
  * called the snapshot is validated and marked as immutable. After freeze is called any
  * append will fail with an exception.
  *
- * It is assumed that the content of the snapshot represents all of the records for the
+ * It is assumed that the content of the snapshot represents all the records for the
  * topic partition from offset 0 up to but not including the end offset in the snapshot
  * id.
  *
