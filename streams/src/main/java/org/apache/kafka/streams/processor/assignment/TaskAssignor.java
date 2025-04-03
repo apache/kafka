@@ -31,7 +31,6 @@ import java.util.Map;
  * The implementation may also override the {@code onAssignmentComputed} callback for insight into
  * the result of the assignment result.
  */
-@FunctionalInterface
 public interface TaskAssignor extends Configurable {
 
     /**
