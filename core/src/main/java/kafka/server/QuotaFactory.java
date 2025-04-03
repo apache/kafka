@@ -30,6 +30,7 @@ import java.util.Map;
 import java.util.Optional;
 
 import scala.Option;
+import scala.jdk.javaapi.OptionConverters;
 
 public class QuotaFactory {
 
@@ -123,7 +124,7 @@ public class QuotaFactory {
         String role
     ) {
         Optional<Plugin<ClientQuotaCallback>> clientQuotaCallbackPlugin = createClientQuotaCallback(cfg, metrics, role);
-        Option<Plugin<ClientQuotaCallback>> clientQuotaCallbackPluginOption = clientQuotaCallbackPlugin.map(Option::apply).orElse(Option.empty());
+        Option<Plugin<ClientQuotaCallback>> clientQuotaCallbackPluginOption = OptionConverters.toScala(clientQuotaCallbackPlugin);
 
         return new QuotaManagers(
             new ClientQuotaManager(clientConfig(cfg), metrics, QuotaType.FETCH, time, threadNamePrefix, clientQuotaCallbackPluginOption),
