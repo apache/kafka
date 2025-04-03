@@ -1212,11 +1212,12 @@ public class SharePartition {
     }
 
     /**
-     * The method archive the available records in the given map that are before the end offset.
+     * The method archive the records in a given state in the map that are before the end offset.
      *
-     * @param startOffset The offset from which the available records should be archived.
-     * @param endOffset The offset before which the available records should be archived.
+     * @param startOffset The offset from which the records should be archived.
+     * @param endOffset The offset before which the records should be archived.
      * @param map The map containing the in-flight records.
+     * @param initialState The initial state of the records to be archived.
      * @return A boolean which indicates whether any record is archived or not.
      */
     private boolean archiveRecords(long startOffset, long endOffset, NavigableMap<Long, InFlightBatch> map, RecordState initialState) {
@@ -1260,8 +1261,7 @@ public class SharePartition {
     private boolean archivePerOffsetBatchRecords(InFlightBatch inFlightBatch,
                                                  long startOffsetToArchive,
                                                  long endOffsetToArchive,
-                                                 RecordState initialState
-    ) {
+                                                 RecordState initialState) {
         lock.writeLock().lock();
         try {
             boolean isAnyOffsetArchived = false;
@@ -2512,6 +2512,7 @@ public class SharePartition {
     ) {
         if (isolationLevel != FetchIsolation.TXN_COMMITTED || fetchPartitionData.abortedTransactions.isEmpty() || fetchPartitionData.abortedTransactions.get().isEmpty())
             return shareAcquiredRecords;
+
         // When FetchIsolation.TXN_COMMITTED is used as isolation level by the share group, we need to filter any
         // transactions that were aborted/did not commit due to timeout.
         List<AcquiredRecords> result = filterAbortedTransactionalAcquiredRecords(fetchPartitionData.records.batches(),
@@ -2534,8 +2535,8 @@ public class SharePartition {
             List<RecordBatch> recordsToArchive = fetchAbortedTransactionRecordBatches(batches, abortedTransactions);
             for (RecordBatch recordBatch : recordsToArchive) {
                 // Archive the offsets/batches in the cached state.
-                NavigableMap<Long, InFlightBatch> subMap = fetchSubMapOrException(recordBatch);
-                archiveAcquiredBatchRecords(subMap, recordBatch);
+                NavigableMap<Long, InFlightBatch> subMap = fetchSubMap(recordBatch);
+                archiveRecords(recordBatch.baseOffset(), recordBatch.lastOffset() + 1, subMap, RecordState.ACQUIRED);
             }
             return filterRecordBatchesFromAcquiredRecords(acquiredRecords, recordsToArchive);
         } finally {
@@ -2545,33 +2546,33 @@ public class SharePartition {
 
     // Visible for testing.
     List<AcquiredRecords> filterRecordBatchesFromAcquiredRecords(
-        List<AcquiredRecords> acquiredRecords,
-        List<RecordBatch> recordsToArchive
+        List<AcquiredRecords> acquiredRecordsList,
+        List<RecordBatch> batchesToArchive
     ) {
         lock.writeLock().lock();
         try {
             List<AcquiredRecords> result = new ArrayList<>();
 
-            for (AcquiredRecords acquiredRecord : acquiredRecords) {
+            for (AcquiredRecords acquiredRecords : acquiredRecordsList) {
                 List<AcquiredRecords> tempAcquiredRecords = new ArrayList<>();
-                tempAcquiredRecords.add(acquiredRecord);
-                for (RecordBatch recordBatch : recordsToArchive) {
+                tempAcquiredRecords.add(acquiredRecords);
+                for (RecordBatch batchToArchive : batchesToArchive) {
                     List<AcquiredRecords> newAcquiredRecords = new ArrayList<>();
                     for (AcquiredRecords temp : tempAcquiredRecords) {
                         // Check if record batch overlaps with the acquired records.
-                        if (temp.firstOffset() <= recordBatch.lastOffset() && temp.lastOffset() >= recordBatch.baseOffset()) {
+                        if (temp.firstOffset() <= batchToArchive.lastOffset() && temp.lastOffset() >= batchToArchive.baseOffset()) {
                             // Split the acquired record into parts before, inside, and after the overlapping record batch.
-                            if (temp.firstOffset() < recordBatch.baseOffset()) {
+                            if (temp.firstOffset() < batchToArchive.baseOffset()) {
                                 newAcquiredRecords.add(new AcquiredRecords()
                                     .setFirstOffset(temp.firstOffset())
-                                    .setLastOffset(recordBatch.baseOffset() - 1)
-                                    .setDeliveryCount((short) 1));
+                                    .setLastOffset(batchToArchive.baseOffset() - 1)
+                                    .setDeliveryCount(temp.deliveryCount()));
                             }
-                            if (temp.lastOffset() > recordBatch.lastOffset()) {
+                            if (temp.lastOffset() > batchToArchive.lastOffset()) {
                                 newAcquiredRecords.add(new AcquiredRecords()
-                                    .setFirstOffset(recordBatch.lastOffset() + 1)
+                                    .setFirstOffset(batchToArchive.lastOffset() + 1)
                                     .setLastOffset(temp.lastOffset())
-                                    .setDeliveryCount((short) 1));
+                                    .setDeliveryCount(temp.deliveryCount()));
                             }
                         } else {
                             newAcquiredRecords.add(temp);
@@ -2587,22 +2588,13 @@ public class SharePartition {
         }
     }
 
-    private void archiveAcquiredBatchRecords(NavigableMap<Long, InFlightBatch> subMap, RecordBatch recordBatch) {
-        lock.writeLock().lock();
-        try {
-            archiveRecords(recordBatch.baseOffset(), recordBatch.lastOffset() + 1, subMap, RecordState.ACQUIRED);
-        } finally {
-            lock.writeLock().unlock();
-        }
-    }
-
     /**
      * This function fetches the sub map from cachedState where all the offset details present in the recordBatch can be referred to
      * OR it gives an exception if those offsets are not present in cachedState.
      * @param recordBatch The record batch for which we want to find the sub map.
      * @return the sub map containing all the offset details.
      */
-    private NavigableMap<Long, InFlightBatch> fetchSubMapOrException(RecordBatch recordBatch) {
+    private NavigableMap<Long, InFlightBatch> fetchSubMap(RecordBatch recordBatch) {
         lock.readLock().lock();
         try {
             Map.Entry<Long, InFlightBatch> floorEntry = cachedState.floorEntry(recordBatch.baseOffset());

@@ -3199,21 +3199,13 @@ class KafkaApis(val requestChannel: RequestChannel,
           request.context.principal,
           request.context.listenerName.value))
 
-      def fetchIsolation(): FetchIsolation = {
-        if (groupConfigManager.groupConfig(groupId).isPresent) {
-          FetchIsolation.of(FetchRequest.CONSUMER_REPLICA_ID, groupConfigManager.groupConfig(groupId).get().shareIsolationLevel())
-        } else {
-          FetchIsolation.of(FetchRequest.CONSUMER_REPLICA_ID, GroupConfig.defaultShareIsolationLevel)
-        }
-      }
-
       val params = new FetchParams(
         FetchRequest.CONSUMER_REPLICA_ID,
         -1,
         shareFetchRequest.maxWait,
         fetchMinBytes,
         fetchMaxBytes,
-        fetchIsolation(),
+        FetchIsolation.of(FetchRequest.CONSUMER_REPLICA_ID, groupConfigManager.groupConfig(groupId).map(_.shareIsolationLevel()).orElse(GroupConfig.defaultShareIsolationLevel)),
         clientMetadata,
         true
       )

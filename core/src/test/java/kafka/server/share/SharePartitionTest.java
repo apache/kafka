@@ -124,7 +124,7 @@ public class SharePartitionTest {
     private static final int DEFAULT_FETCH_OFFSET = 0;
     private static final int MAX_FETCH_RECORDS = Integer.MAX_VALUE;
     private static final byte ACKNOWLEDGE_TYPE_GAP_ID = 0;
-    private static final FetchIsolation FETCH_ISOLATION = FetchIsolation.HIGH_WATERMARK;
+    private static final FetchIsolation FETCH_ISOLATION_HWM = FetchIsolation.HIGH_WATERMARK;
     private static Timer mockTimer;
     private SharePartitionMetrics sharePartitionMetrics;
 
@@ -1164,7 +1164,7 @@ public class SharePartitionTest {
             10,
             DEFAULT_FETCH_OFFSET,
             fetchPartitionData(records),
-            FETCH_ISOLATION),
+                FETCH_ISOLATION_HWM),
             5);
 
         assertArrayEquals(expectedAcquiredRecord(0, 4, 1).toArray(), acquiredRecordsList.toArray());
@@ -1186,7 +1186,7 @@ public class SharePartitionTest {
             10,
             DEFAULT_FETCH_OFFSET,
             fetchPartitionData(records),
-            FETCH_ISOLATION),
+                FETCH_ISOLATION_HWM),
             20);
 
         assertArrayEquals(expectedAcquiredRecord(5, 24, 1).toArray(), acquiredRecordsList.toArray());
@@ -1224,7 +1224,7 @@ public class SharePartitionTest {
             10,
             DEFAULT_FETCH_OFFSET,
             fetchPartitionData(records, 10),
-            FETCH_ISOLATION),
+                FETCH_ISOLATION_HWM),
             20);
 
         // Validate 2 batches are fetched one with 5 records and other till end of batch, third batch
@@ -1302,7 +1302,7 @@ public class SharePartitionTest {
                 MAX_FETCH_RECORDS,
                 DEFAULT_FETCH_OFFSET,
                 fetchPartitionData(MemoryRecords.EMPTY),
-                FETCH_ISOLATION),
+                FETCH_ISOLATION_HWM),
             0
         );
 
@@ -1322,7 +1322,7 @@ public class SharePartitionTest {
             10,
             DEFAULT_FETCH_OFFSET,
             fetchPartitionData(records),
-            FETCH_ISOLATION),
+                FETCH_ISOLATION_HWM),
             5);
 
         assertArrayEquals(expectedAcquiredRecord(0, 4, 1).toArray(), acquiredRecordsList.toArray());
@@ -1354,7 +1354,7 @@ public class SharePartitionTest {
             100,
             DEFAULT_FETCH_OFFSET,
             fetchPartitionData(records),
-            FETCH_ISOLATION),
+                FETCH_ISOLATION_HWM),
             26 /* Gap of 3 records will also be added to first batch */);
 
         // Fetch expected records from 4 batches, but change the first expected record to include gap offsets.
@@ -1403,7 +1403,7 @@ public class SharePartitionTest {
                 10,
                 DEFAULT_FETCH_OFFSET,
                 fetchPartitionData(records),
-                FETCH_ISOLATION),
+                FETCH_ISOLATION_HWM),
             20);
 
         List<AcquiredRecords> expectedAcquiredRecords = expectedAcquiredRecords(records, 1);
@@ -1439,7 +1439,7 @@ public class SharePartitionTest {
                 100,
                 DEFAULT_FETCH_OFFSET,
                 fetchPartitionData(records),
-                FETCH_ISOLATION),
+                FETCH_ISOLATION_HWM),
             7 /* Acquisition of records starts post endOffset */);
 
         // Fetch expected single batch, but change the first offset as per endOffset.
@@ -1471,7 +1471,7 @@ public class SharePartitionTest {
                 100,
                 DEFAULT_FETCH_OFFSET,
                 fetchPartitionData(records),
-                FETCH_ISOLATION),
+                FETCH_ISOLATION_HWM),
             13 /* Acquisition of records starts post endOffset */);
 
         // Fetch expected records from 2 batches, but change the first batch's first offset as per endOffset.
@@ -1513,7 +1513,7 @@ public class SharePartitionTest {
                 100,
                 DEFAULT_FETCH_OFFSET,
                 fetchPartitionData(records),
-                FETCH_ISOLATION),
+                FETCH_ISOLATION_HWM),
             5 /* Acquisition of records starts post endOffset */);
 
         // First batch should be skipped and fetch should result a single batch (second batch), but
@@ -2546,7 +2546,7 @@ public class SharePartitionTest {
                 6, // maxFetchRecords is less than the number of records fetched
                 DEFAULT_FETCH_OFFSET,
                 fetchPartitionData(records),
-                FETCH_ISOLATION),
+                FETCH_ISOLATION_HWM),
             6);
 
         // Since max fetch records (6) is less than the number of records fetched (8), only 6 records will be acquired
@@ -2596,7 +2596,7 @@ public class SharePartitionTest {
                 8, // maxFetchRecords is less than the number of records fetched
                 DEFAULT_FETCH_OFFSET,
                 fetchPartitionData(records),
-            FETCH_ISOLATION),
+                FETCH_ISOLATION_HWM),
             10);
 
         assertArrayEquals(expectedAcquiredRecord(11, 20, 1).toArray(), acquiredRecordsList.toArray());
@@ -2645,7 +2645,7 @@ public class SharePartitionTest {
                 8, // maxFetchRecords is less than the number of records fetched
                 DEFAULT_FETCH_OFFSET,
                 fetchPartitionData(records),
-                FETCH_ISOLATION),
+                FETCH_ISOLATION_HWM),
             10);
 
         assertArrayEquals(expectedAcquiredRecord(11, 20, 3).toArray(), acquiredRecordsList.toArray());
@@ -3766,8 +3766,8 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 5, fetchPartitionData(records1), FETCH_ISOLATION);
-        sharePartition.acquire(MEMBER_ID, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(records2), FETCH_ISOLATION);
+        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 5, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
+        sharePartition.acquire(MEMBER_ID, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(records2), FETCH_ISOLATION_HWM);
 
         // Acknowledging over subset of second batch with subset of gap offsets.
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(new ShareAcknowledgementBatch(10, 18, Arrays.asList(
@@ -3836,8 +3836,8 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 5, fetchPartitionData(records1), FETCH_ISOLATION);
-        sharePartition.acquire(MEMBER_ID, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(records2), FETCH_ISOLATION);
+        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 5, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
+        sharePartition.acquire(MEMBER_ID, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(records2), FETCH_ISOLATION_HWM);
 
         // Acknowledging over subset of second batch with subset of gap offsets.
         sharePartition.acknowledge(MEMBER_ID, Collections.singletonList(new ShareAcknowledgementBatch(10, 18, Arrays.asList(
@@ -4769,7 +4769,7 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 5), 5);
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 10), 5);
 
-        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 15, fetchPartitionData(memoryRecords(5, 15)), FETCH_ISOLATION);
+        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 15, fetchPartitionData(memoryRecords(5, 15)), FETCH_ISOLATION_HWM);
 
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 20), 5);
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 25), 5);
@@ -4907,7 +4907,7 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 5), 5);
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 10), 5);
 
-        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 15, fetchPartitionData(memoryRecords(5, 15)), FETCH_ISOLATION);
+        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 15, fetchPartitionData(memoryRecords(5, 15)), FETCH_ISOLATION_HWM);
 
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 20), 5);
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 25), 5);
@@ -5985,7 +5985,7 @@ public class SharePartitionTest {
 
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 5), 5);
 
-        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(memoryRecords(5, 10)), FETCH_ISOLATION);
+        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(memoryRecords(5, 10)), FETCH_ISOLATION_HWM);
 
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 15), 5);
 
@@ -6016,7 +6016,7 @@ public class SharePartitionTest {
 
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 5), 5);
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 10), 5);
-        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 15, fetchPartitionData(memoryRecords(5, 15)), FETCH_ISOLATION);
+        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 15, fetchPartitionData(memoryRecords(5, 15)), FETCH_ISOLATION_HWM);
 
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(MEMBER_ID, Arrays.asList(
                 new ShareAcknowledgementBatch(5, 9, Collections.singletonList((byte) 2)),
@@ -6133,12 +6133,12 @@ public class SharePartitionTest {
         String memberId1 = "memberId-1";
         String memberId2 = "memberId-2";
 
-        sharePartition.acquire(memberId1, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1), FETCH_ISOLATION);
+        sharePartition.acquire(memberId1, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
 
         assertFalse(sharePartition.findNextFetchOffset());
         assertEquals(10, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(memberId2, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(memoryRecords(10, 10)), FETCH_ISOLATION);
+        sharePartition.acquire(memberId2, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(memoryRecords(10, 10)), FETCH_ISOLATION_HWM);
 
         assertFalse(sharePartition.findNextFetchOffset());
         assertEquals(20, sharePartition.nextFetchOffset());
@@ -6149,7 +6149,7 @@ public class SharePartitionTest {
         assertTrue(sharePartition.findNextFetchOffset());
         assertEquals(5, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(memberId1, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1), FETCH_ISOLATION);
+        sharePartition.acquire(memberId1, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
 
         assertTrue(sharePartition.findNextFetchOffset());
         assertEquals(20, sharePartition.nextFetchOffset());
@@ -6166,17 +6166,17 @@ public class SharePartitionTest {
         String memberId1 = MEMBER_ID;
         String memberId2 = "member-2";
 
-        sharePartition.acquire(memberId1, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1), FETCH_ISOLATION);
+        sharePartition.acquire(memberId1, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
         assertEquals(3, sharePartition.nextFetchOffset());
 
         sharePartition.acknowledge(memberId1, Collections.singletonList(
                 new ShareAcknowledgementBatch(0, 2, Collections.singletonList((byte) 2))));
         assertEquals(0, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(memberId2, BATCH_SIZE, MAX_FETCH_RECORDS, 3, fetchPartitionData(memoryRecords(2, 3)), FETCH_ISOLATION);
+        sharePartition.acquire(memberId2, BATCH_SIZE, MAX_FETCH_RECORDS, 3, fetchPartitionData(memoryRecords(2, 3)), FETCH_ISOLATION_HWM);
         assertEquals(0, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(memberId1, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1), FETCH_ISOLATION);
+        sharePartition.acquire(memberId1, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
         assertEquals(5, sharePartition.nextFetchOffset());
 
         sharePartition.acknowledge(memberId2, Collections.singletonList(
@@ -6217,11 +6217,11 @@ public class SharePartitionTest {
                 new ShareAcknowledgementBatch(17, 20, Collections.singletonList((byte) 2))));
 
         // Reacquire with another member.
-        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 5, fetchPartitionData(records1), FETCH_ISOLATION);
+        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 5, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
         assertEquals(10, sharePartition.nextFetchOffset());
 
         // Reacquire with another member.
-        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(memoryRecords(7, 10)), FETCH_ISOLATION);
+        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(memoryRecords(7, 10)), FETCH_ISOLATION_HWM);
         assertEquals(17, sharePartition.nextFetchOffset());
 
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).batchState());
@@ -7122,7 +7122,7 @@ public class SharePartitionTest {
             MAX_FETCH_RECORDS,
             fetchOffset,
             fetchPartitionData(records, logStartOffset),
-            FETCH_ISOLATION);
+            FETCH_ISOLATION_HWM);
         return fetchAcquiredRecords(shareAcquiredRecords, expectedOffsetCount);
     }
 
@@ -7133,7 +7133,7 @@ public class SharePartitionTest {
             MAX_FETCH_RECORDS,
             records.batches().iterator().next().baseOffset(),
             fetchPartitionData(records),
-            FETCH_ISOLATION);
+            FETCH_ISOLATION_HWM);
         return fetchAcquiredRecords(shareAcquiredRecords, expectedOffsetCount);
     }
 

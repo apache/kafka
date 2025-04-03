@@ -132,6 +132,12 @@ public final class GroupConfig extends AbstractConfig {
             new ShareGroupAutoOffsetResetStrategy.Validator(),
             MEDIUM,
             SHARE_AUTO_OFFSET_RESET_DOC)
+        .define(SHARE_ISOLATION_LEVEL_CONFIG,
+            STRING,
+            SHARE_ISOLATION_LEVEL_DEFAULT,
+            in(IsolationLevel.READ_COMMITTED.toString(), IsolationLevel.READ_UNCOMMITTED.toString()),
+            MEDIUM,
+            SHARE_ISOLATION_LEVEL_DOC)
         .define(STREAMS_SESSION_TIMEOUT_MS_CONFIG,
             INT,
             GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT,
@@ -149,13 +155,7 @@ public final class GroupConfig extends AbstractConfig {
             GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT,
             atLeast(0),
             MEDIUM,
-            GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DOC)
-        .define(SHARE_ISOLATION_LEVEL_CONFIG,
-            STRING,
-            SHARE_ISOLATION_LEVEL_DEFAULT,
-            in(IsolationLevel.READ_COMMITTED.toString(), IsolationLevel.READ_UNCOMMITTED.toString()),
-            MEDIUM,
-            SHARE_ISOLATION_LEVEL_DOC);
+            GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DOC);
 
     public GroupConfig(Map<?, ?> props) {
         super(CONFIG, props, false);
