@@ -1700,12 +1700,12 @@ public class StreamThreadTest {
 
         // the third actually polls, processes the record, and throws the corruption exception
         TestUtils.waitForCondition(
-                () -> thread.taskManager().checkStateUpdater(
-                    mockTime.milliseconds(),
-                    topicPartitions -> mockConsumer.seekToBeginning(singleton(t1p1))
-                ),
-                10 * 1000,
-                "State updater never returned tasks.");
+            () -> thread.taskManager().checkStateUpdater(
+                mockTime.milliseconds(),
+                topicPartitions -> mockConsumer.seekToBeginning(singleton(t1p1))
+            ),
+            10 * 1000,
+            "State updater never returned tasks.");
 
         addRecord(mockConsumer, 0L);
         shouldThrow.set(true);
@@ -1719,12 +1719,12 @@ public class StreamThreadTest {
         // Now, we can handle the corruption
         thread.taskManager().handleCorruption(taskCorruptedException.corruptedTasks());
         TestUtils.waitForCondition(
-                () -> thread.taskManager().checkStateUpdater(
-                    mockTime.milliseconds(),
-                    topicPartitions -> mockConsumer.seekToBeginning(singleton(t1p1))
-                ),
-                10 * 1000,
-                "State updater never returned tasks.");
+            () -> thread.taskManager().checkStateUpdater(
+                mockTime.milliseconds(),
+                topicPartitions -> mockConsumer.seekToBeginning(singleton(t1p1))
+            ),
+            10 * 1000,
+            "State updater never returned tasks.");
 
         // again, complete the restoration
         runOnce(processingThreadsEnabled);
@@ -2468,8 +2468,8 @@ public class StreamThreadTest {
             "V2".getBytes()));
 
         TestUtils.waitForCondition(
-                () -> mockRestoreConsumer.assignment().size() == 0,
-                "Never get the assignment");
+            () -> mockRestoreConsumer.assignment().size() == 0,
+            "Never got the assignment");
     }
 
     @ParameterizedTest

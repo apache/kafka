@@ -408,15 +408,12 @@ public class StoreChangelogReaderTest {
 
     @ParameterizedTest
     @EnumSource(value = Task.TaskType.class, names = {"ACTIVE", "STANDBY"})
-    public void shouldPollWithRightTimeoutWithStateUpdaterDefault(final Task.TaskType type) {
+    public void shouldPollWithRightTimeout(final Task.TaskType type) {
         setupStateManagerMock(type);
         setupStoreMetadata();
         setupStore();
         final Properties properties = new Properties();
-        shouldPollWithRightTimeout(properties, type);
-    }
 
-    private void shouldPollWithRightTimeout(final Properties properties, final Task.TaskType type) {
         final TaskId taskId = new TaskId(0, 0);
 
         when(storeMetadata.offset()).thenReturn(null).thenReturn(9L);
