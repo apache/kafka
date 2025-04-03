@@ -686,7 +686,6 @@ public class StreamThreadTest {
     public void shouldProcessWhenStarting(final boolean processingThreadsEnabled) {
         assumeFalse(processingThreadsEnabled);
         final Properties props = configProps(false, processingThreadsEnabled);
-        props.setProperty(InternalConfig.STATE_UPDATER_ENABLED, Boolean.toString(true));
 
         final StreamsConfig config = new StreamsConfig(props);
         when(mainConsumer.poll(Mockito.any())).thenReturn(ConsumerRecords.empty());

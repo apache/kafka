@@ -146,10 +146,6 @@ public class RestoreIntegrationTest {
         CLUSTER.createTopic(inputStream, 2, 1);
     }
 
-    private Properties props(final boolean stateUpdaterEnabled) {
-        return props(mkObjectProperties(mkMap(mkEntry(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled))));
-    }
-
     private Properties props(final Properties extraProperties) {
         final Properties streamsConfiguration = new Properties();
 
@@ -161,7 +157,10 @@ public class RestoreIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsConfiguration.putAll(extraProperties);
+
+        if (extraProperties != null) {
+            streamsConfiguration.putAll(extraProperties);
+        }
 
         streamsConfigurations.add(streamsConfiguration);
 
@@ -245,11 +244,11 @@ public class RestoreIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldRestoreStateFromSourceTopicForReadOnlyStore(final boolean stateUpdaterEnabled) throws Exception {
+    public void shouldRestoreStateFromSourceTopicForReadOnlyStore() throws Exception {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final Topology topology = new Topology();
 
-        final Properties props = props(stateUpdaterEnabled);
+        final Properties props = props(null);
 
         // restoring from 1000 to 4000 (committed), and then process from 4000 to 5000 on each of the two partitions
         final int offsetLimitDelta = 1000;
@@ -301,11 +300,11 @@ public class RestoreIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldRestoreStateFromSourceTopicForGlobalTable(final boolean stateUpdaterEnabled) throws Exception {
+    public void shouldRestoreStateFromSourceTopicForGlobalTable() throws Exception {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Properties props = props(stateUpdaterEnabled);
+        final Properties props = props(null);
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
         // restoring from 1000 to 4000 (committed), and then process from 4000 to 5000 on each of the two partitions
@@ -352,14 +351,14 @@ public class RestoreIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldRestoreStateFromChangelogTopic(final boolean stateUpdaterEnabled) throws Exception {
+    public void shouldRestoreStateFromChangelogTopic() throws Exception {
         final String changelog = appId + "-store-changelog";
         CLUSTER.createTopic(changelog, 2, 1);
 
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Properties props = props(stateUpdaterEnabled);
+        final Properties props = props(null);
 
         // restoring from 1000 to 5000, and then process from 5000 to 10000 on each of the two partitions
         final int offsetCheckpointed = 1000;
@@ -404,7 +403,7 @@ public class RestoreIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldSuccessfullyStartWhenLoggingDisabled(final boolean stateUpdaterEnabled) throws InterruptedException {
+    public void shouldSuccessfullyStartWhenLoggingDisabled() throws InterruptedException {
         final StreamsBuilder builder = new StreamsBuilder();
 
         final KStream<Integer, Integer> stream = builder.stream(inputStream);
@@ -416,7 +415,7 @@ public class RestoreIntegrationTest {
             );
 
         final CountDownLatch startupLatch = new CountDownLatch(1);
-        kafkaStreams = new KafkaStreams(builder.build(), props(stateUpdaterEnabled));
+        kafkaStreams = new KafkaStreams(builder.build(), props(null));
         kafkaStreams.setStateListener((newState, oldState) -> {
             if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
                 startupLatch.countDown();
@@ -430,7 +429,7 @@ public class RestoreIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldProcessDataFromStoresWithLoggingDisabled(final boolean stateUpdaterEnabled) throws InterruptedException {
+    public void shouldProcessDataFromStoresWithLoggingDisabled() throws InterruptedException {
         IntegrationTestUtils.produceKeyValuesSynchronously(inputStream,
                 asList(KeyValue.pair(1, 1),
                         KeyValue.pair(2, 2),
@@ -458,7 +457,7 @@ public class RestoreIntegrationTest {
 
         final Topology topology = streamsBuilder.build();
 
-        kafkaStreams = new KafkaStreams(topology, props(stateUpdaterEnabled));
+        kafkaStreams = new KafkaStreams(topology, props(null));
 
         final CountDownLatch latch = new CountDownLatch(1);
         kafkaStreams.setStateListener((newState, oldState) -> {
@@ -475,7 +474,7 @@ public class RestoreIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldRecycleStateFromStandbyTaskPromotedToActiveTaskAndNotRestore(final boolean stateUpdaterEnabled) throws Exception {
+    public void shouldRecycleStateFromStandbyTaskPromotedToActiveTaskAndNotRestore() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table(
                 inputStream,
@@ -483,13 +482,13 @@ public class RestoreIntegrationTest {
         );
         createStateForRestoration(inputStream, 0);
 
-        final Properties props1 = props(stateUpdaterEnabled);
+        final Properties props1 = props(null);
         props1.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         props1.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-1").getPath());
         purgeLocalStreamsState(props1);
         final KafkaStreams streams1 = new KafkaStreams(builder.build(), props1);
 
-        final Properties props2 = props(stateUpdaterEnabled);
+        final Properties props2 = props(null);
         props2.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         props2.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-2").getPath());
         purgeLocalStreamsState(props2);

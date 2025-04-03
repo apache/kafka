@@ -150,7 +150,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @ValueSource(strings = {"INFO", "DEBUG", "TRACE"})
     public void shouldPushMetricsToBroker(final String recordingLevel) throws Exception {
         // End-to-end test validating metrics pushed to broker
-        streamsApplicationProperties  = props(true);
+        streamsApplicationProperties  = props(null);
         streamsApplicationProperties.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel);
         final Topology topology = simpleTopology();
         subscribeForStreamsMetrics();
@@ -212,9 +212,9 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("singleAndMultiTaskParameters")
-    public void shouldPassMetrics(final String topologyType, final boolean stateUpdaterEnabled) throws Exception {
+    public void shouldPassMetrics(final String topologyType) throws Exception {
         // Streams metrics should get passed to Admin and Consumer
-        streamsApplicationProperties = props(stateUpdaterEnabled);
+        streamsApplicationProperties = props(null);
         final Topology topology = topologyType.equals("simple") ? simpleTopology() : complexTopology();
        
         try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
@@ -242,14 +242,14 @@ public class KafkaStreamsTelemetryIntegrationTest {
 
     @ParameterizedTest
     @MethodSource("multiTaskParameters")
-    public void shouldPassCorrectMetricsDynamicInstances(final boolean stateUpdaterEnabled) throws Exception {
+    public void shouldPassCorrectMetricsDynamicInstances() throws Exception {
         // Correct streams metrics should get passed with dynamic membership
-        streamsApplicationProperties = props(stateUpdaterEnabled);
+        streamsApplicationProperties = props(null);
         streamsApplicationProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1");
         streamsApplicationProperties.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks1");
 
 
-        streamsSecondApplicationProperties = props(stateUpdaterEnabled);
+        streamsSecondApplicationProperties = props(null);
         streamsSecondApplicationProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2");
         streamsSecondApplicationProperties.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2");
         
@@ -343,7 +343,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @Test
     public void passedMetricsShouldNotLeakIntoClientMetrics() throws Exception {
         // Streams metrics should not be visible in client metrics
-        streamsApplicationProperties = props(true);
+        streamsApplicationProperties = props(null);
         final Topology topology =  complexTopology();
 
         try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
@@ -391,10 +391,6 @@ public class KafkaStreamsTelemetryIntegrationTest {
                 Arguments.of(false));
     }
 
-    private Properties props(final boolean stateUpdaterEnabled) {
-        return props(mkObjectProperties(mkMap(mkEntry(StreamsConfig.InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled))));
-    }
-
     private Properties props(final Properties extraProperties) {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
@@ -405,7 +401,11 @@ public class KafkaStreamsTelemetryIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfiguration.put(StreamsConfig.DEFAULT_CLIENT_SUPPLIER_CONFIG, TestClientSupplier.class);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-        streamsConfiguration.putAll(extraProperties);
+
+        if (extraProperties != null) {
+            streamsConfiguration.putAll(extraProperties);
+        }
+
         return streamsConfiguration;
     }
 
