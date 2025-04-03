@@ -2541,6 +2541,7 @@ public class SharePartition {
 
     /**
      * This function filters out the offsets present in the acquired records list that are also a part of batches that need to be archived.
+     * It follows an iterative refinement of acquired records to eliminate batches to be archived.
      * @param acquiredRecordsList The list containing acquired records. This list is sorted by the firstOffset of the acquired batch.
      * @param batchesToArchive The list containing record batches to archive. This list is sorted by the baseOffset of the record batch.
      * @return The list containing filtered acquired records offsets.

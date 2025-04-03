@@ -1186,7 +1186,7 @@ public class SharePartitionTest {
             10,
             DEFAULT_FETCH_OFFSET,
             fetchPartitionData(records),
-                FETCH_ISOLATION_HWM),
+            FETCH_ISOLATION_HWM),
             20);
 
         assertArrayEquals(expectedAcquiredRecord(5, 24, 1).toArray(), acquiredRecordsList.toArray());
@@ -1224,7 +1224,7 @@ public class SharePartitionTest {
             10,
             DEFAULT_FETCH_OFFSET,
             fetchPartitionData(records, 10),
-                FETCH_ISOLATION_HWM),
+            FETCH_ISOLATION_HWM),
             20);
 
         // Validate 2 batches are fetched one with 5 records and other till end of batch, third batch
@@ -1322,7 +1322,7 @@ public class SharePartitionTest {
             10,
             DEFAULT_FETCH_OFFSET,
             fetchPartitionData(records),
-                FETCH_ISOLATION_HWM),
+            FETCH_ISOLATION_HWM),
             5);
 
         assertArrayEquals(expectedAcquiredRecord(0, 4, 1).toArray(), acquiredRecordsList.toArray());
@@ -1354,7 +1354,7 @@ public class SharePartitionTest {
             100,
             DEFAULT_FETCH_OFFSET,
             fetchPartitionData(records),
-                FETCH_ISOLATION_HWM),
+            FETCH_ISOLATION_HWM),
             26 /* Gap of 3 records will also be added to first batch */);
 
         // Fetch expected records from 4 batches, but change the first expected record to include gap offsets.
@@ -6701,7 +6701,7 @@ public class SharePartitionTest {
 
         List<AcquiredRecords> acquiredRecords1 = List.of(
             new AcquiredRecords().setFirstOffset(1).setLastOffset(5).setDeliveryCount((short) 1),
-            new AcquiredRecords().setFirstOffset(10).setLastOffset(15).setDeliveryCount((short) 1),
+            new AcquiredRecords().setFirstOffset(10).setLastOffset(15).setDeliveryCount((short) 2),
             new AcquiredRecords().setFirstOffset(20).setLastOffset(25).setDeliveryCount((short) 1)
         );
         List<RecordBatch> recordBatches1 = List.of(
@@ -6712,16 +6712,16 @@ public class SharePartitionTest {
             List.of(
                 new AcquiredRecords().setFirstOffset(1).setLastOffset(1).setDeliveryCount((short) 1),
                 new AcquiredRecords().setFirstOffset(5).setLastOffset(5).setDeliveryCount((short) 1),
-                new AcquiredRecords().setFirstOffset(10).setLastOffset(11).setDeliveryCount((short) 1),
-                new AcquiredRecords().setFirstOffset(15).setLastOffset(15).setDeliveryCount((short) 1),
+                new AcquiredRecords().setFirstOffset(10).setLastOffset(11).setDeliveryCount((short) 2),
+                new AcquiredRecords().setFirstOffset(15).setLastOffset(15).setDeliveryCount((short) 2),
                 new AcquiredRecords().setFirstOffset(20).setLastOffset(25).setDeliveryCount((short) 1)),
             sharePartition.filterRecordBatchesFromAcquiredRecords(acquiredRecords1, recordBatches1));
 
         List<AcquiredRecords> acquiredRecords2 = List.of(
-            new AcquiredRecords().setFirstOffset(1).setLastOffset(4).setDeliveryCount((short) 1),
-            new AcquiredRecords().setFirstOffset(5).setLastOffset(8).setDeliveryCount((short) 1),
-            new AcquiredRecords().setFirstOffset(9).setLastOffset(30).setDeliveryCount((short) 1),
-            new AcquiredRecords().setFirstOffset(31).setLastOffset(40).setDeliveryCount((short) 1)
+            new AcquiredRecords().setFirstOffset(1).setLastOffset(4).setDeliveryCount((short) 3),
+            new AcquiredRecords().setFirstOffset(5).setLastOffset(8).setDeliveryCount((short) 3),
+            new AcquiredRecords().setFirstOffset(9).setLastOffset(30).setDeliveryCount((short) 2),
+            new AcquiredRecords().setFirstOffset(31).setLastOffset(40).setDeliveryCount((short) 3)
         );
         List<RecordBatch> recordBatches2 = List.of(
             memoryRecordsBuilder(21, 5).build().batches().iterator().next(),
@@ -6729,9 +6729,9 @@ public class SharePartitionTest {
         );
         assertEquals(
             List.of(
-                new AcquiredRecords().setFirstOffset(1).setLastOffset(4).setDeliveryCount((short) 1),
-                new AcquiredRecords().setFirstOffset(26).setLastOffset(30).setDeliveryCount((short) 1),
-                new AcquiredRecords().setFirstOffset(36).setLastOffset(40).setDeliveryCount((short) 1)
+                new AcquiredRecords().setFirstOffset(1).setLastOffset(4).setDeliveryCount((short) 3),
+                new AcquiredRecords().setFirstOffset(26).setLastOffset(30).setDeliveryCount((short) 2),
+                new AcquiredRecords().setFirstOffset(36).setLastOffset(40).setDeliveryCount((short) 3)
 
             ), sharePartition.filterRecordBatchesFromAcquiredRecords(acquiredRecords2, recordBatches2)
         );
