@@ -34,7 +34,6 @@ import java.util.Set;
  * The callback may be executed in any thread calling {@link ShareConsumer#poll(java.time.Duration)}.
  */
 @InterfaceStability.Evolving
-@FunctionalInterface
 public interface AcknowledgementCommitCallback {
 
     /**
