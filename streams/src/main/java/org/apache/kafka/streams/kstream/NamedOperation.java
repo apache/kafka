@@ -19,7 +19,6 @@ package org.apache.kafka.streams.kstream;
 /**
  * Default interface which can be used to customize the name of operations, internal topics or stores.
  */
-@FunctionalInterface
 interface NamedOperation<T extends NamedOperation<T>> {
 
     /**

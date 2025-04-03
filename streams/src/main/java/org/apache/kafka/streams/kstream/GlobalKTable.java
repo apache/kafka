@@ -73,7 +73,6 @@ import org.apache.kafka.streams.state.StoreBuilder;
  *
  * @see StreamsBuilder#addGlobalStore(StoreBuilder, String, Consumed, ProcessorSupplier)
  */
-@FunctionalInterface
 public interface GlobalKTable<K, V> {
     /**
      * Get the name of the local state store that can be used to query this {@code GlobalKTable}.

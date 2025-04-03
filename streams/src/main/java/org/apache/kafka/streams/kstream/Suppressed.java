@@ -25,7 +25,6 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.Map;
 
-@FunctionalInterface
 public interface Suppressed<K> extends NamedOperation<Suppressed<K>> {
 
     /**
