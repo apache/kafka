@@ -824,9 +824,17 @@ public class GroupCoordinatorRecordHelpers {
      */
     public static CoordinatorRecord newShareGroupStatePartitionMetadataRecord(
         String groupId,
+        Map<Uuid, Map.Entry<String, Set<Integer>>> initializingTopics,
         Map<Uuid, Map.Entry<String, Set<Integer>>> initializedTopics,
         Map<Uuid, String> deletingTopics
     ) {
+        List<ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo> initializingTopicPartitionInfo = initializingTopics.entrySet().stream()
+            .map(entry -> new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                .setTopicId(entry.getKey())
+                .setTopicName(entry.getValue().getKey())
+                .setPartitions(entry.getValue().getValue().stream().toList()))
+            .toList();
+
         List<ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo> initializedTopicPartitionInfo = initializedTopics.entrySet().stream()
             .map(entry -> new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
                 .setTopicId(entry.getKey())
@@ -845,6 +853,7 @@ public class GroupCoordinatorRecordHelpers {
                 .setGroupId(groupId),
             new ApiMessageAndVersion(
                 new ShareGroupStatePartitionMetadataValue()
+                    .setInitializingTopics(initializingTopicPartitionInfo)
                     .setInitializedTopics(initializedTopicPartitionInfo)
                     .setDeletingTopics(deletingTopicsInfo),
                 (short) 0
