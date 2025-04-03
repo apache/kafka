@@ -1106,4 +1106,36 @@ public class StreamsGroupTest {
         assertTrue(streamsGroup.isSubscribedToTopic("test-topic2"));
         assertFalse(streamsGroup.isSubscribedToTopic("non-existent-topic"));
     }
+
+    @Test
+    public void testShutdownRequestedMethods() {
+        String memberId1 = "test-member-id1";
+        String memberId2 = "test-member-id2";
+        LogContext logContext = new LogContext();
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
+        GroupCoordinatorMetricsShard metricsShard = mock(GroupCoordinatorMetricsShard.class);
+        StreamsGroup streamsGroup = new StreamsGroup(logContext, snapshotRegistry, "test-group", metricsShard);
+
+        streamsGroup.updateMember(streamsGroup.getOrCreateDefaultMember(memberId1));
+        streamsGroup.updateMember(streamsGroup.getOrCreateDefaultMember(memberId2));
+
+        // Initially, shutdown should not be requested
+        assertFalse(streamsGroup.isShutdownRequested(memberId1));
+        assertFalse(streamsGroup.isShutdownRequested(memberId2));
+
+        // Set shutdown requested
+        streamsGroup.maybeSetShutdownRequestedOnAllMembers(memberId1, true);
+        assertTrue(streamsGroup.isShutdownRequested(memberId1));
+        assertTrue(streamsGroup.isShutdownRequested(memberId2));
+
+        // Removing a member should clear it from shutdown requested state only if it is the last member in the group.
+        streamsGroup.removeMember(memberId1);
+        assertFalse(streamsGroup.isShutdownRequested(memberId1));
+        assertTrue(streamsGroup.isShutdownRequested(memberId2));
+
+        // Now remove the second member, which should clear the shutdown requested state for both members.
+        streamsGroup.removeMember(memberId2);
+        assertFalse(streamsGroup.isShutdownRequested(memberId1));
+        assertFalse(streamsGroup.isShutdownRequested(memberId2));
+    }
 }

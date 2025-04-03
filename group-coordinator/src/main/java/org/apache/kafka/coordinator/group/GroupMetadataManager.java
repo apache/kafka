@@ -61,7 +61,6 @@ import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.Endpoint;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.KeyValue;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.TaskIds;
-import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.TaskOffset;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.Topology;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData.Status;
@@ -2049,8 +2048,6 @@ public class GroupMetadataManager {
      * @param ownedWarmupTasks    The list of owned warmup tasks from the request or null.
      * @param userEndpoint        User-defined endpoint for Interactive Queries, or null.
      * @param clientTags          Used for rack-aware assignment algorithm, or null.
-     * @param taskEndOffsets      Cumulative changelog offsets for tasks, or null.
-     * @param taskOffsets         Cumulative changelog end-offsets for tasks, or null.
      * @param shutdownApplication Whether all Streams clients in the group should shut down.
      * @return A result containing the StreamsGroupHeartbeat response and a list of records to update the state machine.
      */
@@ -2070,8 +2067,6 @@ public class GroupMetadataManager {
         String processId,
         Endpoint userEndpoint,
         List<KeyValue> clientTags,
-        List<TaskOffset> taskOffsets,
-        List<TaskOffset> taskEndOffsets,
         boolean shutdownApplication
     ) throws ApiException {
         final long currentTimeMs = time.milliseconds();
@@ -2199,6 +2194,7 @@ public class GroupMetadataManager {
         );
 
         scheduleStreamsGroupSessionTimeout(groupId, memberId);
+        group.maybeSetShutdownRequestedOnAllMembers(memberId, shutdownApplication);
 
         // Prepare the response.
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
@@ -2223,6 +2219,16 @@ public class GroupMetadataManager {
                 new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(exception.status().code())
                     .setStatusDetail(exception.getMessage())
+            );
+        }
+
+        if (group.isShutdownRequested(memberId)) {
+            returnedStatus.add(
+                new StreamsGroupHeartbeatResponseData.Status()
+                    .setStatusCode(StreamsGroupHeartbeatResponse.Status.SHUTDOWN_APPLICATION.code())
+                    .setStatusDetail(
+                        "A KafkaStreams instance encountered a fatal error and requested a shutdown for the entire application."
+                    )
             );
         }
 
@@ -3037,7 +3043,7 @@ public class GroupMetadataManager {
         }
         return member;
     }
-    
+
     /**
      * Gets or subscribes a static consumer group member. This method also replaces the
      * previous static member if allowed.
@@ -4817,8 +4823,6 @@ public class GroupMetadataManager {
                 request.processId(),
                 request.userEndpoint(),
                 request.clientTags(),
-                request.taskOffsets(),
-                request.taskEndOffsets(),
                 request.shutdownApplication()
             );
         }
