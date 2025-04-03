@@ -425,7 +425,7 @@ public class StoreChangelogReaderTest {
         final StreamsConfig config = new StreamsConfig(StreamsTestUtils.getStreamsConfig("test-reader", properties));
 
         final StoreChangelogReader changelogReader =
-                new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback, standbyListener);
+            new StoreChangelogReader(time, config, logContext, adminClient, consumer, callback, standbyListener);
 
         changelogReader.register(tp, stateManager);
 
