@@ -61,7 +61,7 @@ String mockitoVersion
 if (scalaVersion == "2.12")
   mockitoVersion = "4.9.0"
 else if (JavaVersion.current().isCompatibleWith(JavaVersion.VERSION_11))
-  mockitoVersion = "5.10.0"
+  mockitoVersion = "5.14.2"
 else
   mockitoVersion = "4.11.0"
 
