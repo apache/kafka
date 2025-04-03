@@ -323,6 +323,7 @@ public class GroupCoordinatorRecordHelpersTest {
 
         CoordinatorRecord record = GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
             groupId,
+            Map.of(),
             Map.of(
                 topicId1,
                 Map.entry(topicName1, partitions)

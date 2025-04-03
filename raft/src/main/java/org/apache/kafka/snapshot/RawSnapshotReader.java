@@ -44,9 +44,9 @@ public interface RawSnapshotReader {
     UnalignedRecords slice(long position, int size);
 
     /**
-     * Returns all of the records backing this snapshot reader.
+     * Returns all the records backing this snapshot reader.
      *
-     * @return all of the records for this snapshot
+     * @return all the records for this snapshot
      */
     Records records();
 }
