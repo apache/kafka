@@ -907,8 +907,8 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   }
 
   protected def connectAndReceiveWithoutClosingSocket[T <: AbstractResponse](
-                                                                              request: AbstractRequest
-                                                                            )(implicit classTag: ClassTag[T]): T = {
+    request: AbstractRequest
+  )(implicit classTag: ClassTag[T]): T = {
     val socket = IntegrationTestUtils.connect(cluster.anyBrokerSocketServer(), cluster.clientListener())
     openSockets += socket
     IntegrationTestUtils.sendAndReceive[T](request, socket)

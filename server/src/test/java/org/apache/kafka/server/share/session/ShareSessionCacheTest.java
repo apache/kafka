@@ -164,6 +164,10 @@ public class ShareSessionCacheTest {
         // Simulating the disconnection of client with connection id conn-1
         cache.connectionDisconnectListener().onDisconnect("conn-1");
         assertShareCacheContains(cache, List.of(key2, key3));
+
+        // Since one client got disconnected, we can add another one now
+        ShareSessionKey key4 = cache.maybeCreateSession("grp", Uuid.randomUuid(), 50, mockedSharePartitionMap(30), "conn-6");
+        assertShareCacheContains(cache, List.of(key2, key3, key4));
     }
 
     private ImplicitLinkedHashCollection<CachedSharePartition> mockedSharePartitionMap(int size) {

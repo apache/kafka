@@ -176,6 +176,7 @@ public class ShareSessionCache {
      * @param memberId - The member id in the share fetch request.
      * @param now - The current time in milliseconds.
      * @param partitionMap - The topic partitions to be added to the session.
+     * @param clientConnectionId - The client connection id.
      * @return - The session key if the session was created, or null if the session was not created.
      */
     public synchronized ShareSessionKey maybeCreateSession(
@@ -207,7 +208,7 @@ public class ShareSessionCache {
 
     private final class ClientConnectionDisconnectListener implements ConnectionDisconnectListener {
 
-        // When the client disconnect, the corresponding session should be removed from the cache.
+        // When the client disconnects, the corresponding session should be removed from the cache.
         @Override
         public void onDisconnect(String connectionId) {
             ShareSessionKey shareSessionKey = sessionClientIdMapping.getShareSessionKey(connectionId);
