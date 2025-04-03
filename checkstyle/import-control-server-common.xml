@@ -97,6 +97,7 @@
         <subpackage name="purgatory">
             <allow pkg="org.apache.kafka.server.metrics" />
             <allow pkg="org.apache.kafka.server.util" />
+            <allow pkg="com.yammer.metrics.core" />
         </subpackage>
 
         <subpackage name="share">

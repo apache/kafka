@@ -19,10 +19,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.DescribeTransactionsRequestData;
 import org.apache.kafka.common.message.DescribeTransactionsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.Readable;
 
 public class DescribeTransactionsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<DescribeTransactionsRequest> {
@@ -72,9 +70,9 @@ public class DescribeTransactionsRequest extends AbstractRequest {
         return new DescribeTransactionsResponse(response);
     }
 
-    public static DescribeTransactionsRequest parse(ByteBuffer buffer, short version) {
+    public static DescribeTransactionsRequest parse(Readable readable, short version) {
         return new DescribeTransactionsRequest(new DescribeTransactionsRequestData(
-            new ByteBufferAccessor(buffer), version), version);
+            readable, version), version);
     }
 
     @Override

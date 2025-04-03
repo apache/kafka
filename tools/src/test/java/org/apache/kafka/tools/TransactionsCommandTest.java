@@ -29,6 +29,7 @@ import org.apache.kafka.clients.admin.ListTopicsResult;
 import org.apache.kafka.clients.admin.ListTransactionsOptions;
 import org.apache.kafka.clients.admin.ListTransactionsResult;
 import org.apache.kafka.clients.admin.ProducerState;
+import org.apache.kafka.clients.admin.TerminateTransactionResult;
 import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.admin.TransactionDescription;
 import org.apache.kafka.clients.admin.TransactionListing;
@@ -237,6 +238,35 @@ public class TransactionsCommandTest {
             asList("baz", "1", "13579", "CompleteCommit")
         );
         assertEquals(expectedRows, new HashSet<>(table.subList(1, table.size())));
+    }
+
+    @Test
+    public void testForceTerminateTransaction() throws Exception {
+        String transactionalId = "foo";
+        String[] args = new String[] {
+            "--bootstrap-server",
+            "localhost:9092",
+            "forceTerminateTransaction",
+            "--transactionalId",
+            transactionalId
+        };
+
+        TerminateTransactionResult terminateTransactionResult = Mockito.mock(TerminateTransactionResult.class);
+        KafkaFuture<Void> future = KafkaFuture.completedFuture(null);
+        Mockito.when(terminateTransactionResult.result()).thenReturn(future);
+        Mockito.when(admin.forceTerminateTransaction(transactionalId)).thenReturn(terminateTransactionResult);
+
+        execute(args);
+        assertNormalExit();
+    }
+
+    @Test
+    public void testForceTerminateTransactionTransactionalIdRequired() throws Exception {
+        assertCommandFailure(new String[]{
+            "--bootstrap-server",
+            "localhost:9092",
+            "force-terminate"
+        });
     }
 
     @Test
@@ -1066,5 +1096,4 @@ public class TransactionsCommandTest {
         assertTrue(exitProcedure.hasExited());
         assertEquals(1, exitProcedure.statusCode());
     }
-
 }
