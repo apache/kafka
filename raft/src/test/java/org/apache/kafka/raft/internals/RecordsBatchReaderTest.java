@@ -92,7 +92,7 @@ class RecordsBatchReaderTest {
             )
         ) {
             assertTrue(reader.hasNext());
-            assertEquals(Collections.singletonList(expectedRecord), reader.next().controlRecords());
+            assertEquals(List.of(expectedRecord), reader.next().controlRecords());
             assertFalse(reader.hasNext());
         }
     }
@@ -143,6 +143,6 @@ class RecordsBatchReaderTest {
         }
 
         Mockito.verify(closeListener).onClose(reader);
-        assertEquals(Collections.emptySet(), allocatedBuffers);
+        assertEquals(Set.of(), allocatedBuffers);
     }
 }
