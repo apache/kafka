@@ -6738,6 +6738,23 @@ public class SharePartitionTest {
 
         // Record batches is empty.
         assertEquals(acquiredRecords2, sharePartition.filterRecordBatchesFromAcquiredRecords(acquiredRecords2, List.of()));
+
+        List<AcquiredRecords> acquiredRecords3 = List.of(
+            new AcquiredRecords().setFirstOffset(0).setLastOffset(19).setDeliveryCount((short) 1)
+        );
+        List<RecordBatch> recordBatches3 = List.of(
+            memoryRecordsBuilder(1, 8).build().batches().iterator().next(),
+            memoryRecordsBuilder(1, 18).build().batches().iterator().next()
+        );
+
+        assertEquals(
+            List.of(
+                new AcquiredRecords().setFirstOffset(0).setLastOffset(7).setDeliveryCount((short) 1),
+                new AcquiredRecords().setFirstOffset(9).setLastOffset(17).setDeliveryCount((short) 1),
+                new AcquiredRecords().setFirstOffset(19).setLastOffset(19).setDeliveryCount((short) 1)
+
+            ), sharePartition.filterRecordBatchesFromAcquiredRecords(acquiredRecords3, recordBatches3)
+        );
     }
 
     @Test
