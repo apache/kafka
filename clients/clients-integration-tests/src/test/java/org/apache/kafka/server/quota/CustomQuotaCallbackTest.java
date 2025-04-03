@@ -74,37 +74,10 @@ public class CustomQuotaCallbackTest {
         }
     }
 
-
     @ClusterTest(
-        types = {Type.KRAFT},
+        types = {Type.CO_KRAFT, Type.KRAFT},
         serverProperties = {
-            @ClusterConfigProperty(id = 3000, key = QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, value = "org.apache.kafka.server.quota.CustomQuotaCallbackTest$MonitorableCustomQuotaCallback"),
-        }
-    )
-    public void testMonitorableCustomQuotaCallbackWithControllerServer(ClusterInstance cluster) {
-        assertEquals(1, MonitorableCustomQuotaCallback.metricNames.size());
-        MetricName metricName = MonitorableCustomQuotaCallback.metricNames.get(0);
-        assertMetric(metricName, ProcessRole.ControllerRole);
-        MonitorableCustomQuotaCallback.clearMetrics();
-    }
-
-    @ClusterTest(
-        types = {Type.KRAFT},
-        serverProperties = {
-            @ClusterConfigProperty(id = 0, key = QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, value = "org.apache.kafka.server.quota.CustomQuotaCallbackTest$MonitorableCustomQuotaCallback"),
-        }
-    )
-    public void testMonitorableCustomQuotaCallbackWithBrokerServer(ClusterInstance cluster) {
-        assertEquals(1, MonitorableCustomQuotaCallback.metricNames.size());
-        MetricName metricName = MonitorableCustomQuotaCallback.metricNames.get(0);
-        assertMetric(metricName, ProcessRole.BrokerRole);
-        MonitorableCustomQuotaCallback.clearMetrics();
-    }
-
-    @ClusterTest(
-        types = {Type.CO_KRAFT},
-        serverProperties = {
-            @ClusterConfigProperty(id = 0, key = QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, value = "org.apache.kafka.server.quota.CustomQuotaCallbackTest$MonitorableCustomQuotaCallback"),
+            @ClusterConfigProperty(key = QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, value = "org.apache.kafka.server.quota.CustomQuotaCallbackTest$MonitorableCustomQuotaCallback"),
         }
     )
     public void testMonitorableCustomQuotaCallbackWithCombinedMode(ClusterInstance cluster) {
