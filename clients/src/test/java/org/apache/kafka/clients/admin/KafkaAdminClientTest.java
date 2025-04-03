@@ -72,6 +72,7 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TopicDeletionDisabledException;
 import org.apache.kafka.common.errors.TopicExistsException;
+import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicIdException;
@@ -9743,6 +9744,92 @@ public class KafkaAdminClientTest {
 
             AbortTransactionResult result = env.adminClient().abortTransaction(abortSpec);
             assertNull(result.all().get());
+        }
+    }
+
+    @Test
+    public void testForceTerminateTransaction() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            String transactionalId = "testForceTerminate";
+            Node transactionCoordinator = env.cluster().nodes().iterator().next();
+
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(
+                Errors.NONE,
+                transactionalId,
+                transactionCoordinator
+            ));
+
+            // Complete the init PID request successfully
+            InitProducerIdResponseData initProducerIdResponseData = new InitProducerIdResponseData()
+                .setProducerId(5678)
+                .setProducerEpoch((short) 123);
+
+            env.kafkaClient().prepareResponseFrom(request ->
+                request instanceof InitProducerIdRequest,
+                new InitProducerIdResponse(initProducerIdResponseData),
+                transactionCoordinator
+            );
+
+            // Call force terminate and verify results
+            TerminateTransactionResult result = env.adminClient().forceTerminateTransaction(transactionalId);
+            assertNull(result.result().get());
+        }
+    }
+
+    @Test
+    public void testForceTerminateTransactionWithError() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            String transactionalId = "testForceTerminateError";
+            Node transactionCoordinator = env.cluster().nodes().iterator().next();
+
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(
+                Errors.NONE,
+                transactionalId,
+                transactionCoordinator
+            ));
+
+            // Return an error from the InitProducerId request
+            env.kafkaClient().prepareResponseFrom(request ->
+                request instanceof InitProducerIdRequest,
+                new InitProducerIdResponse(new InitProducerIdResponseData()
+                    .setErrorCode(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.code())),
+                transactionCoordinator
+            );
+
+            // Call force terminate and verify error is propagated
+            TerminateTransactionResult result = env.adminClient().forceTerminateTransaction(transactionalId);
+            ExecutionException exception = assertThrows(ExecutionException.class, () -> result.result().get());
+            assertTrue(exception.getCause() instanceof TransactionalIdAuthorizationException);
+        }
+    }
+
+    @Test
+    public void testForceTerminateTransactionWithCustomTimeout() throws Exception {
+        try (AdminClientUnitTestEnv env = mockClientEnv()) {
+            String transactionalId = "testForceTerminateTimeout";
+            Node transactionCoordinator = env.cluster().nodes().iterator().next();
+
+            env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(
+                Errors.NONE,
+                transactionalId,
+                transactionCoordinator
+            ));
+
+            // Complete the init PID request
+            InitProducerIdResponseData initProducerIdResponseData = new InitProducerIdResponseData()
+                .setProducerId(9012)
+                .setProducerEpoch((short) 456);
+
+            env.kafkaClient().prepareResponseFrom(request ->
+                request instanceof InitProducerIdRequest,
+                new InitProducerIdResponse(initProducerIdResponseData),
+                transactionCoordinator
+            );
+
+            // Use custom timeout
+            TerminateTransactionOptions options = new TerminateTransactionOptions().timeoutMs(10000);
+            TerminateTransactionResult result = env.adminClient().forceTerminateTransaction(transactionalId, options);
+            assertNull(result.result().get());
         }
     }
 

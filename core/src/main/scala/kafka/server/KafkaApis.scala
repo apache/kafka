@@ -2649,7 +2649,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               ++ (subtopology.repartitionSinkTopics().iterator().asScala:Iterator[String])
               ++ (subtopology.repartitionSourceTopics().iterator().asScala.map(_.name()):Iterator[String])
               ++ (subtopology.stateChangelogTopics().iterator().asScala.map(_.name()):Iterator[String])
-          ).toSeq
+          ).distinct.toSeq
 
         // While correctness of the heartbeat request is checked inside the group coordinator,
         // we are checking early that topics in the topology have valid names and are not internal

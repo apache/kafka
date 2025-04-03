@@ -463,8 +463,7 @@ public final class LocalTieredStorageTest {
          * @param expected The expected content.
          */
         public void verifyFetchedLogSegment(final RemoteLogSegmentId id, final int startPosition, final byte[] expected) {
-            try {
-                final InputStream in = remoteStorage.fetchLogSegment(newMetadata(id), startPosition);
+            try (final InputStream in = remoteStorage.fetchLogSegment(newMetadata(id), startPosition)) {
                 final ByteBuffer buffer = ByteBuffer.wrap(readFully(in));
                 Iterator<Record> records = MemoryRecords.readableRecords(buffer).records().iterator();
 
@@ -529,8 +528,7 @@ public final class LocalTieredStorageTest {
         private void verifyFileContents(final Function<RemoteLogSegmentMetadata, InputStream> actual,
                                         final RemoteLogSegmentId id,
                                         final byte[] expected) {
-            try {
-                final InputStream in = actual.apply(newMetadata(id));
+            try (final InputStream in = actual.apply(newMetadata(id))) {
                 assertArrayEquals(expected, readFully(in));
             } catch (RemoteStorageException | IOException e) {
                 throw new AssertionError(e);
