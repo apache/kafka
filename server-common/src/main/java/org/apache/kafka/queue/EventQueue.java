@@ -21,7 +21,7 @@ import org.slf4j.Logger;
 
 import java.util.OptionalLong;
 import java.util.concurrent.RejectedExecutionException;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 
 public interface EventQueue extends AutoCloseable {
@@ -66,8 +66,12 @@ public interface EventQueue extends AutoCloseable {
         }
     }
 
-    class NoDeadlineFunction implements Function<OptionalLong, OptionalLong> {
+    class NoDeadlineFunction implements UnaryOperator<OptionalLong> {
         public static final NoDeadlineFunction INSTANCE = new NoDeadlineFunction();
+        
+        private NoDeadlineFunction() {
+            
+        }
 
         @Override
         public OptionalLong apply(OptionalLong ignored) {
@@ -75,7 +79,7 @@ public interface EventQueue extends AutoCloseable {
         }
     }
 
-    class DeadlineFunction implements Function<OptionalLong, OptionalLong> {
+    class DeadlineFunction implements UnaryOperator<OptionalLong> {
         private final long deadlineNs;
 
         public DeadlineFunction(long deadlineNs) {
@@ -88,7 +92,7 @@ public interface EventQueue extends AutoCloseable {
         }
     }
 
-    class EarliestDeadlineFunction implements Function<OptionalLong, OptionalLong> {
+    class EarliestDeadlineFunction implements UnaryOperator<OptionalLong> {
         private final long newDeadlineNs;
 
         public EarliestDeadlineFunction(long newDeadlineNs) {
@@ -107,7 +111,7 @@ public interface EventQueue extends AutoCloseable {
         }
     }
 
-    class LatestDeadlineFunction implements Function<OptionalLong, OptionalLong> {
+    class LatestDeadlineFunction implements UnaryOperator<OptionalLong> {
         private final long newDeadlineNs;
 
         public LatestDeadlineFunction(long newDeadlineNs) {
@@ -186,7 +190,7 @@ public interface EventQueue extends AutoCloseable {
      * @param event                 The event to schedule.
      */
     default void scheduleDeferred(String tag,
-                                  Function<OptionalLong, OptionalLong> deadlineNsCalculator,
+                                  UnaryOperator<OptionalLong> deadlineNsCalculator,
                                   Event event) {
         enqueue(EventInsertionType.DEFERRED, tag, deadlineNsCalculator, event);
     }
@@ -228,7 +232,7 @@ public interface EventQueue extends AutoCloseable {
      */
     void enqueue(EventInsertionType insertionType,
                  String tag,
-                 Function<OptionalLong, OptionalLong> deadlineNsCalculator,
+                 UnaryOperator<OptionalLong> deadlineNsCalculator,
                  Event event);
 
     /**
