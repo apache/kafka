@@ -25,7 +25,7 @@ import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.cluster.Partition
 import kafka.log.LogManager
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.{KafkaConfig, _}
+import kafka.server._
 import kafka.utils._
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
@@ -33,7 +33,7 @@ import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordValidat
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.server.common.RequestLocal
-import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, TopicPartitionOperationKey}
+import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, TopicPartitionOperationKey}
 import org.apache.kafka.server.util.timer.{MockTimer, Timer}
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, UnifiedLog, VerificationGuard}

@@ -51,7 +51,7 @@ public abstract class ShareFetchContext {
      */
     public ShareFetchResponse throttleResponse(int throttleTimeMs) {
         return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, throttleTimeMs,
-                Collections.emptyIterator(), List.of()));
+                Collections.emptyIterator(), List.of(), 0));
     }
 
     /**

@@ -68,11 +68,10 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.util.Collections;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Stream;
 
-import static java.util.Collections.singletonList;
-import static java.util.Collections.singletonMap;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -399,7 +398,7 @@ public class RaftUtilTest {
                         .setSnapshotId(new FetchResponseData.SnapshotId())
                         .setErrorCode(Errors.NONE.code())
                         .setCurrentLeader(new FetchResponseData.LeaderIdAndEpoch())
-                        .setAbortedTransactions(singletonList(
+                        .setAbortedTransactions(List.of(
                                 new FetchResponseData.AbortedTransaction()
                                         .setProducerId(producerId)
                                         .setFirstOffset(firstOffset)
@@ -446,7 +445,7 @@ public class RaftUtilTest {
                 leaderEpoch,
                 leaderId,
                 true,
-                Endpoints.fromInetSocketAddresses(singletonMap(listenerName, address))
+                Endpoints.fromInetSocketAddresses(Map.of(listenerName, address))
         );
         JsonNode json = VoteResponseDataJsonConverter.write(voteResponseData, version);
         assertEquals(expectedJson, json.toString());
@@ -513,7 +512,7 @@ public class RaftUtilTest {
                 version,
                 topicPartition,
                 leaderId,
-                Endpoints.fromInetSocketAddresses(singletonMap(listenerName, address)),
+                Endpoints.fromInetSocketAddresses(Map.of(listenerName, address)),
                 responsePartitionSnapshot -> responsePartitionSnapshot
         );
 
@@ -532,7 +531,7 @@ public class RaftUtilTest {
                 clusterId,
                 leaderEpoch,
                 leaderId,
-                Endpoints.fromInetSocketAddresses(singletonMap(listenerName, address)),
+                Endpoints.fromInetSocketAddresses(Map.of(listenerName, address)),
                 ReplicaKey.of(1, Uuid.ONE_UUID)
         );
         JsonNode json = BeginQuorumEpochRequestDataJsonConverter.write(beginQuorumEpochRequestData, version);
@@ -553,7 +552,7 @@ public class RaftUtilTest {
                 Errors.NONE,
                 leaderEpoch,
                 leaderId,
-                Endpoints.fromInetSocketAddresses(singletonMap(listenerName, address))
+                Endpoints.fromInetSocketAddresses(Map.of(listenerName, address))
         );
         JsonNode json = BeginQuorumEpochResponseDataJsonConverter.write(beginQuorumEpochResponseData, version);
         assertEquals(expectedJson, json.toString());
@@ -570,7 +569,7 @@ public class RaftUtilTest {
                 clusterId,
                 leaderEpoch,
                 leaderId,
-                singletonList(ReplicaKey.of(1, Uuid.ONE_UUID))
+                List.of(ReplicaKey.of(1, Uuid.ONE_UUID))
         );
         JsonNode json = EndQuorumEpochRequestDataJsonConverter.write(endQuorumEpochRequestData, version);
         assertEquals(expectedJson, json.toString());
@@ -590,7 +589,7 @@ public class RaftUtilTest {
                 Errors.NONE,
                 leaderEpoch,
                 leaderId,
-                Endpoints.fromInetSocketAddresses(singletonMap(listenerName, address))
+                Endpoints.fromInetSocketAddresses(Map.of(listenerName, address))
         );
         JsonNode json = EndQuorumEpochResponseDataJsonConverter.write(endQuorumEpochResponseData, version);
         assertEquals(expectedJson, json.toString());
@@ -620,8 +619,8 @@ public class RaftUtilTest {
                 leaderId,
                 leaderEpoch,
                 highWatermark,
-                Collections.singletonList(replicaState),
-                Collections.singletonList(replicaState),
+                List.of(replicaState),
+                List.of(replicaState),
                 0
         );
         JsonNode json = DescribeQuorumResponseDataJsonConverter.write(describeQuorumResponseData, version);
