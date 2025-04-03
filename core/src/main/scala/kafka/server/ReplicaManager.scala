@@ -19,13 +19,14 @@ package kafka.server
 import com.yammer.metrics.core.Meter
 import kafka.cluster.{Partition, PartitionListener}
 import kafka.controller.StateChangeLogger
-import kafka.log.remote.RemoteLogManager
 import kafka.log.LogManager
+import kafka.log.remote.RemoteLogManager
 import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.ReplicaManager.{AtMinIsrPartitionCountMetricName, FailedIsrUpdatesPerSecMetricName, IsrExpandsPerSecMetricName, IsrShrinksPerSecMetricName, LeaderCountMetricName, OfflineReplicaCountMetricName, PartitionCountMetricName, PartitionsWithLateTransactionsCountMetricName, ProducerIdCountMetricName, ReassigningPartitionsMetricName, UnderMinIsrPartitionCountMetricName, UnderReplicatedPartitionsMetricName, createLogReadResult, isListOffsetsTimestampUnsupported}
 import kafka.server.share.DelayedShareFetch
 import kafka.utils._
+import org.apache.kafka.common.{IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.{Plugin, Topic}
 import org.apache.kafka.common.message.DeleteRecordsResponseData.DeleteRecordsPartitionResult
@@ -46,21 +47,19 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{Exit, Time, Utils}
-import org.apache.kafka.common.{IsolationLevel, Node, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.MetadataCache
-import org.apache.kafka.server.{ActionQueue, DelayedActionQueue, ListOffsetsPartitionStatus, common}
 import org.apache.kafka.server.common.{DirectoryEventHandler, RequestLocal, StopPartition}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.network.BrokerEndPoint
-import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, TopicPartitionOperationKey}
+import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DeleteRecordsPartitionStatus, TopicPartitionOperationKey}
 import org.apache.kafka.server.share.fetch.{DelayedShareFetchKey, DelayedShareFetchPartitionKey}
 import org.apache.kafka.server.storage.log.{FetchParams, FetchPartitionData}
 import org.apache.kafka.server.util.{Scheduler, ShutdownableThread}
+import org.apache.kafka.server.{ActionQueue, DelayedActionQueue, ListOffsetsPartitionStatus, common}
 import org.apache.kafka.storage.internals.checkpoint.{LazyOffsetCheckpoints, OffsetCheckpointFile, OffsetCheckpoints}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LeaderHwChange, LogAppendInfo, LogConfig, LogDirFailureChannel, LogOffsetMetadata, LogReadInfo, OffsetResultHolder, RecordValidationException, RemoteLogReadResult, RemoteStorageFetchInfo, UnifiedLog => UnifiedLog, VerificationGuard}
-
+import org.apache.kafka.storage.internals.log._
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.io.File
@@ -660,9 +659,9 @@ class ReplicaManager(val config: KafkaConfig,
    *                                      required acks.
    * @param internalTopicsAllowed         boolean indicating whether internal topics can be appended to
    * @param origin                        source of the append request (ie, client, replication, coordinator)
-   * @param entriesPerPartition the records per topic partition to be appended.
-   *                            If topic partition contains Uuid.ZERO_UUID as topicId the method
-   *                            will fall back to the old behaviour and rely on topic name.
+   * @param entriesPerPartition           the records per topic partition to be appended.
+   *                                      If topic partition contains Uuid.ZERO_UUID as topicId the method
+   *                                      will fall back to the old behaviour and rely on topic name.
    * @param requestLocal                  container for the stateful instances scoped to this request -- this must correspond to the
    *                                      thread calling this method
    * @param actionQueue                   the action queue to use. ReplicaManager#defaultActionQueue is used by default.
@@ -1344,7 +1343,7 @@ class ReplicaManager(val config: KafkaConfig,
 
     val deleteRecordsStatus = localDeleteRecordsResults.map { case (topicPartition, result) =>
       topicPartition ->
-        DeleteRecordsPartitionStatus(
+        new DeleteRecordsPartitionStatus(
           result.requestedOffset, // requested offset
           new DeleteRecordsPartitionResult()
             .setLowWatermark(result.lowWatermark)
@@ -1353,8 +1352,31 @@ class ReplicaManager(val config: KafkaConfig,
     }
 
     if (delayedDeleteRecordsRequired(localDeleteRecordsResults)) {
+      def onAcks(topicPartition: TopicPartition, status: DeleteRecordsPartitionStatus): Unit = {
+        val (lowWatermarkReached, error, lw) = getPartition(topicPartition) match {
+          case HostedPartition.Online(partition) =>
+            partition.leaderLogIfLocal match {
+              case Some(_) =>
+                val leaderLW = partition.lowWatermarkIfLeader
+                (leaderLW >= status.requiredOffset, Errors.NONE, leaderLW)
+              case None =>
+                (false, Errors.NOT_LEADER_OR_FOLLOWER, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
+            }
+
+          case HostedPartition.Offline(_) =>
+            (false, Errors.KAFKA_STORAGE_ERROR, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
+
+          case HostedPartition.None =>
+            (false, Errors.UNKNOWN_TOPIC_OR_PARTITION, DeleteRecordsResponse.INVALID_LOW_WATERMARK)
+        }
+        if (error != Errors.NONE || lowWatermarkReached) {
+          status.setAcksPending(false)
+          status.responseStatus.setErrorCode(error.code)
+          status.responseStatus.setLowWatermark(lw)
+        }
+      }
       // create delayed delete records operation
-      val delayedDeleteRecords = new DelayedDeleteRecords(timeout, deleteRecordsStatus, this, responseCallback)
+      val delayedDeleteRecords = new DelayedDeleteRecords(timeout, deleteRecordsStatus.asJava, onAcks,  response => responseCallback(response.asScala))
 
       // create a list of (topic, partition) pairs to use as keys for this delayed delete records operation
       val deleteRecordsRequestKeys = offsetPerPartition.keys.map(new TopicPartitionOperationKey(_)).toList
