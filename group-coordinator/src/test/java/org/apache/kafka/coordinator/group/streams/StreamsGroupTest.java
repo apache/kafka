@@ -1120,22 +1120,18 @@ public class StreamsGroupTest {
         streamsGroup.updateMember(streamsGroup.getOrCreateDefaultMember(memberId2));
 
         // Initially, shutdown should not be requested
-        assertFalse(streamsGroup.isShutdownRequested(memberId1));
-        assertFalse(streamsGroup.isShutdownRequested(memberId2));
+        assertFalse(streamsGroup.isShutdownRequested());
 
         // Set shutdown requested
-        streamsGroup.maybeSetShutdownRequestedOnAllMembers(memberId1, true);
-        assertTrue(streamsGroup.isShutdownRequested(memberId1));
-        assertTrue(streamsGroup.isShutdownRequested(memberId2));
+        streamsGroup.maybeSetShutdownRequested(memberId1, true);
+        assertTrue(streamsGroup.isShutdownRequested());
 
-        // Removing a member should clear it from shutdown requested state only if it is the last member in the group.
+        // As long as group not empty, remain in shutdown requested state
         streamsGroup.removeMember(memberId1);
-        assertFalse(streamsGroup.isShutdownRequested(memberId1));
-        assertTrue(streamsGroup.isShutdownRequested(memberId2));
+        assertTrue(streamsGroup.isShutdownRequested());
 
-        // Now remove the second member, which should clear the shutdown requested state for both members.
+        // As soon as the group is empty, clear the shutdown requested state
         streamsGroup.removeMember(memberId2);
-        assertFalse(streamsGroup.isShutdownRequested(memberId1));
-        assertFalse(streamsGroup.isShutdownRequested(memberId2));
+        assertFalse(streamsGroup.isShutdownRequested());
     }
 }

@@ -198,11 +198,11 @@ public class StreamsGroup implements Group {
     private DeadlineAndEpoch metadataRefreshDeadline = DeadlineAndEpoch.EMPTY;
 
     /**
-     * A map to indicate member IDs which are expected to shutdown.
-     * This has no direct effect inside the group coordinator, but is propagated to the member in the group.
+     * A flag to indicate whether a shutdown has been requested for this group.
+     * This has no direct effect inside the group coordinator, but is propagated to all members of the group.
      * This is not persisted in the log.
      */
-    private Set<String> shutdownRequestedMemberIds = new HashSet<>();
+    private boolean shutdownRequested = false;
 
     public StreamsGroup(
         LogContext logContext,
@@ -441,7 +441,6 @@ public class StreamsGroup implements Group {
         maybeRemoveTaskProcessId(oldMember);
         removeStaticMember(oldMember);
         maybeUpdateGroupState();
-        clearShutdownRequested(memberId);
     }
 
     /**
@@ -832,6 +831,7 @@ public class StreamsGroup implements Group {
         StreamsGroupState newState = STABLE;
         if (members.isEmpty()) {
             newState = EMPTY;
+            clearShutdownRequested();
         } else if (topology().isEmpty() || configuredTopology().isEmpty() || !configuredTopology().get().isReady()) {
             newState = NOT_READY;
         } else if (groupEpoch.get() > targetAssignmentEpoch.get()) {
@@ -1057,21 +1057,21 @@ public class StreamsGroup implements Group {
         return describedGroup;
     }
 
-    public void maybeSetShutdownRequestedOnAllMembers(final String memberId, final boolean shutdownApplication) {
+    public void maybeSetShutdownRequested(final String memberId, final boolean shutdownApplication) {
         if (shutdownApplication) {
             log.info("[GroupId {}][MemberId {}] Shutdown requested for the streams application.", groupId, memberId);
-            shutdownRequestedMemberIds.addAll(members.keySet());
-            shutdownRequestedMemberIds.add(memberId); // ensure the current member is also added to the shutdown requested list
+            shutdownRequested = true;
         }
     }
 
-    public boolean isShutdownRequested(final String memberId) {
-        return shutdownRequestedMemberIds.contains(memberId);
+    public boolean isShutdownRequested() {
+        return shutdownRequested;
     }
 
-    private void clearShutdownRequested(final String memberId) {
-        if (shutdownRequestedMemberIds.remove(memberId)) {
-            log.info("[GroupId {}] Clearing shutdown requested flag for member {}.", groupId, memberId);
+    private void clearShutdownRequested() {
+        if (shutdownRequested) {
+            log.info("[GroupId {}] Clearing shutdown requested for the streams application.", groupId);
+            shutdownRequested = false;
         }
     }
 }

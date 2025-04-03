@@ -2194,7 +2194,7 @@ public class GroupMetadataManager {
         );
 
         scheduleStreamsGroupSessionTimeout(groupId, memberId);
-        group.maybeSetShutdownRequestedOnAllMembers(memberId, shutdownApplication);
+        group.maybeSetShutdownRequested(memberId, shutdownApplication);
 
         // Prepare the response.
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
@@ -2222,7 +2222,7 @@ public class GroupMetadataManager {
             );
         }
 
-        if (group.isShutdownRequested(memberId)) {
+        if (group.isShutdownRequested()) {
             returnedStatus.add(
                 new StreamsGroupHeartbeatResponseData.Status()
                     .setStatusCode(StreamsGroupHeartbeatResponse.Status.SHUTDOWN_APPLICATION.code())
