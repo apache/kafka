@@ -86,7 +86,7 @@ public final class ScramCredentialData {
                 setIterations(iterations);
     }
 
-    public ScramCredential toCredential(ScramMechanism mechanism) {
+    public ScramCredential toCredential() {
         return new ScramCredential(salt, storedKey, serverKey, iterations);
     }
 
