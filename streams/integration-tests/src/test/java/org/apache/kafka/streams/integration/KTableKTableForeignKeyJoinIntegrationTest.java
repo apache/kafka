@@ -226,8 +226,8 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                 }
                 if (materialized) {
                     assertThat(
-                        makeList(store),
-                        is(expected)
+                        asMap(store),
+                        is(expected.stream().collect(Collectors.toMap(kv -> kv.key, kv -> kv.value)))
                     );
                 }
             }
@@ -251,11 +251,11 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                 }
                 if (materialized) {
                     assertThat(
-                        makeList(store),
-                        is(List.of(
-                            new KeyValue<>("lhs1", "(lhsValue1|rhs1,rhsValue1)"),
-                            new KeyValue<>("lhs2", "(lhsValue2|rhs2,rhsValue2)"),
-                            new KeyValue<>("lhs3", "(lhsValue3|rhs1,rhsValue1)")
+                        asMap(store),
+                        is(mkMap(
+                            mkEntry("lhs1", "(lhsValue1|rhs1,rhsValue1)"),
+                            mkEntry("lhs2", "(lhsValue2|rhs2,rhsValue2)"),
+                            mkEntry("lhs3", "(lhsValue3|rhs1,rhsValue1)")
                         ))
                     );
                 }
@@ -279,26 +279,24 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
             }
             if (materialized) {
                 assertThat(
-                    makeList(store),
-                    is(List.of(
-                        new KeyValue<>("lhs2", "(lhsValue2|rhs2,rhsValue2)"),
-                        new KeyValue<>("lhs3", "(lhsValue3|rhs1,rhsValue1)")
+                    asMap(store),
+                    is(mkMap(
+                        mkEntry("lhs2", "(lhsValue2|rhs2,rhsValue2)"),
+                        mkEntry("lhs3", "(lhsValue3|rhs1,rhsValue1)")
                     ))
                 );
             }
         }
-
     }
-
 
     @ParameterizedTest
     @MethodSource("testCases")
     public void doJoinFromLeftThenUpdateFkThenRevertBack(final boolean leftJoin,
-        final String optimization,
-        final boolean materialized,
-        final boolean rejoin,
-        final boolean leftVersioned,
-        final boolean rightVersioned) {
+                                                         final String optimization,
+                                                         final boolean materialized,
+                                                         final boolean rejoin,
+                                                         final boolean leftVersioned,
+                                                         final boolean rightVersioned) {
         final Properties streamsConfig = getStreamsProperties(optimization);
         final Topology topology = getTopology(streamsConfig, materialized ? "store" : null, leftJoin, rejoin, leftVersioned, rightVersioned);
         try (final TopologyTestDriver driver = new TopologyTestDriver(topology, streamsConfig)) {
@@ -361,9 +359,7 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                     new KeyValue<>("lhs1", "(lhsValue1|rhs1,rhsValue1)")
                 ))
             );
-
         }
-
     }
 
     @ParameterizedTest
