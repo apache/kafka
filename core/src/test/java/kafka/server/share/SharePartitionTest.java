@@ -6660,12 +6660,12 @@ public class SharePartitionTest {
                 for (Long offset : entry.getValue()) {
                     errorMessage.append(String.format("\toffset: %d, offset state: %s, offset acquisition lock timeout task present: %b\n",
                         offset, sharePartition.cachedState().get(entry.getKey()).offsetState().get(offset).state().id(),
-                        sharePartition.cachedState().get(entry.getKey()).offsetState().get(offset).acquisitionLockTimeoutTask() == null));
+                        sharePartition.cachedState().get(entry.getKey()).offsetState().get(offset).acquisitionLockTimeoutTask() != null));
                 }
             } else {
                 errorMessage.append(String.format("batch start offset: %d, batch state: %s, batch acquisition lock timeout task present: %b\n",
                     entry.getKey(), sharePartition.cachedState().get(entry.getKey()).batchState().id(),
-                    sharePartition.cachedState().get(entry.getKey()).batchAcquisitionLockTimeoutTask() == null));
+                    sharePartition.cachedState().get(entry.getKey()).batchAcquisitionLockTimeoutTask() != null));
             }
         }
         return errorMessage.toString();

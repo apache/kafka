@@ -82,6 +82,8 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignment
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyKey;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
+import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.image.MetadataImage;
@@ -1411,7 +1413,7 @@ public class GroupCoordinatorShardTest {
     }
 
     @Test
-    public void testCleanupGroupMetadata() {
+    public void testCleanupGroupMetadataForConsumerGroup() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
         Time mockTime = new MockTime();
@@ -1433,7 +1435,15 @@ public class GroupCoordinatorShardTest {
         @SuppressWarnings("unchecked")
         ArgumentCaptor<List<CoordinatorRecord>> recordsCapture = ArgumentCaptor.forClass(List.class);
 
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        GroupCoordinatorMetricsShard metricsShard = mock(GroupCoordinatorMetricsShard.class);
+
+        ConsumerGroup group1 = new ConsumerGroup(snapshotRegistry, "group-id", metricsShard);
+        ConsumerGroup group2 = new ConsumerGroup(snapshotRegistry, "other-group-id", metricsShard);
+
         when(groupMetadataManager.groupIds()).thenReturn(Set.of("group-id", "other-group-id"));
+        when(groupMetadataManager.group("group-id")).thenReturn(group1);
+        when(groupMetadataManager.group("other-group-id")).thenReturn(group2);
         when(offsetMetadataManager.cleanupExpiredOffsets(eq("group-id"), recordsCapture.capture()))
             .thenAnswer(invocation -> {
                 List<CoordinatorRecord> records = recordsCapture.getValue();
@@ -1461,6 +1471,43 @@ public class GroupCoordinatorShardTest {
         verify(offsetMetadataManager, times(1)).cleanupExpiredOffsets(eq("other-group-id"), any());
         verify(groupMetadataManager, times(1)).maybeDeleteGroup(eq("group-id"), any());
         verify(groupMetadataManager, times(0)).maybeDeleteGroup(eq("other-group-id"), any());
+    }
+
+    @Test
+    public void testCleanupGroupMetadataForShareGroup() {
+        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
+        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
+        Time mockTime = new MockTime();
+        MockCoordinatorTimer<Void, CoordinatorRecord> timer = new MockCoordinatorTimer<>(mockTime);
+        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
+            new LogContext(),
+            groupMetadataManager,
+            offsetMetadataManager,
+            mockTime,
+            timer,
+            mock(GroupCoordinatorConfig.class),
+            mock(CoordinatorMetrics.class),
+            mock(CoordinatorMetricsShard.class)
+        );
+
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
+        ShareGroup group = new ShareGroup(snapshotRegistry, "group-id");
+
+        when(groupMetadataManager.groupIds()).thenReturn(Set.of("group-id"));
+        when(groupMetadataManager.group("group-id")).thenReturn(group);
+
+        assertFalse(timer.contains(GROUP_EXPIRATION_KEY));
+        CoordinatorResult<Void, CoordinatorRecord> result = coordinator.cleanupGroupMetadata();
+        assertTrue(timer.contains(GROUP_EXPIRATION_KEY));
+
+        List<CoordinatorRecord> expectedRecords = List.of();
+        assertEquals(expectedRecords, result.records());
+        assertNull(result.response());
+        assertNull(result.appendFuture());
+
+        verify(groupMetadataManager, times(1)).groupIds();
+        verify(offsetMetadataManager, times(0)).cleanupExpiredOffsets(eq("group-id"), any());
+        verify(groupMetadataManager, times(0)).maybeDeleteGroup(eq("group-id"), any());
     }
 
     @Test

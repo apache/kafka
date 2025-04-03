@@ -50,6 +50,7 @@ import org.apache.kafka.common.requests.RequestHeader;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.group.GroupConfigManager;
 import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
@@ -119,6 +120,7 @@ public class KRaftMetadataRequestBenchmark {
     private final FetchManager fetchManager = Mockito.mock(FetchManager.class);
     private final SharePartitionManager sharePartitionManager = Mockito.mock(SharePartitionManager.class);
     private final ClientMetricsManager clientMetricsManager = Mockito.mock(ClientMetricsManager.class);
+    private final GroupConfigManager groupConfigManager = Mockito.mock(GroupConfigManager.class);
     private final BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
     private final KafkaPrincipal principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "test-user");
     @Param({"500", "1000",  "5000"})
@@ -206,6 +208,7 @@ public class KRaftMetadataRequestBenchmark {
                         ApiMessageType.ListenerType.BROKER,
                         false,
                         () -> FinalizedFeatures.fromKRaftVersion(MetadataVersion.latestTesting()))).
+                setGroupConfigManager(groupConfigManager).
                 build();
     }
 

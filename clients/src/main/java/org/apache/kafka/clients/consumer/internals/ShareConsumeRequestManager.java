@@ -256,13 +256,19 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         return new PollResult(requests);
     }
 
-    public void fetch(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
+    public void fetch(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap,
+                      Map<TopicIdPartition, NodeAcknowledgements> controlRecordAcknowledgements) {
         if (!fetchMoreRecords) {
             log.debug("Fetch more data");
             fetchMoreRecords = true;
         }
 
-        // The acknowledgements sent via ShareFetch are stored in this map.
+        // Process both acknowledgement maps and sends them in the next ShareFetch.
+        processAcknowledgementsMap(acknowledgementsMap);
+        processAcknowledgementsMap(controlRecordAcknowledgements);
+    }
+
+    private void processAcknowledgementsMap(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
         acknowledgementsMap.forEach((tip, nodeAcks) -> {
             int nodeId = nodeAcks.nodeId();
             Map<TopicIdPartition, Acknowledgements> currentNodeAcknowledgementsMap = fetchAcknowledgementsToSend.get(nodeId);
@@ -1473,5 +1479,9 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         public String toString() {
             return super.toString().toLowerCase(Locale.ROOT);
         }
+    }
+
+    Map<TopicIdPartition, Acknowledgements> getFetchAcknowledgementsToSend(Integer nodeId) {
+        return fetchAcknowledgementsToSend.get(nodeId);
     }
 }
