@@ -68,12 +68,12 @@ import static java.util.Arrays.asList;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.Mockito.mock;
 
-@SuppressWarnings("unchecked")
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class KTableImplTest {
@@ -247,103 +247,103 @@ public class KTableImplTest {
             };
 
         assertEquals(
-            ((AbstractStream<String, String>) table1.filter((key, value) -> false)).keySerde(),
+            ((AbstractStream<?, ?>) table1.filter((key, value) -> false)).keySerde(),
             consumedInternal.keySerde());
         assertEquals(
-            ((AbstractStream<String, String>) table1.filter((key, value) -> false)).valueSerde(),
+            ((AbstractStream<?, ?>) table1.filter((key, value) -> false)).valueSerde(),
             consumedInternal.valueSerde());
         assertEquals(
-            ((AbstractStream<String, String>) table1.filter((key, value) -> false, Materialized.with(mySerde, mySerde))).keySerde(),
+            ((AbstractStream<?, ?>) table1.filter((key, value) -> false, Materialized.with(mySerde, mySerde))).keySerde(),
             mySerde);
         assertEquals(
-            ((AbstractStream<String, String>) table1.filter((key, value) -> false, Materialized.with(mySerde, mySerde))).valueSerde(),
+            ((AbstractStream<?, ?>) table1.filter((key, value) -> false, Materialized.with(mySerde, mySerde))).valueSerde(),
             mySerde);
 
         assertEquals(
-            ((AbstractStream<String, String>) table1.filterNot((key, value) -> false)).keySerde(),
+            ((AbstractStream<?, ?>) table1.filterNot((key, value) -> false)).keySerde(),
             consumedInternal.keySerde());
         assertEquals(
-            ((AbstractStream<String, String>) table1.filterNot((key, value) -> false)).valueSerde(),
+            ((AbstractStream<?, ?>) table1.filterNot((key, value) -> false)).valueSerde(),
             consumedInternal.valueSerde());
         assertEquals(
-            ((AbstractStream<String, String>) table1.filterNot((key, value) -> false, Materialized.with(mySerde, mySerde))).keySerde(),
+            ((AbstractStream<?, ?>) table1.filterNot((key, value) -> false, Materialized.with(mySerde, mySerde))).keySerde(),
             mySerde);
         assertEquals(
-            ((AbstractStream<String, String>) table1.filterNot((key, value) -> false, Materialized.with(mySerde, mySerde))).valueSerde(),
-            mySerde);
-
-        assertEquals(
-            ((AbstractStream<String, String>) table1.mapValues(mapper)).keySerde(),
-            consumedInternal.keySerde());
-        assertNull(((AbstractStream<String, String>) table1.mapValues(mapper)).valueSerde());
-        assertEquals(
-            ((AbstractStream<String, String>) table1.mapValues(mapper, Materialized.with(mySerde, mySerde))).keySerde(),
-            mySerde);
-        assertEquals(
-            ((AbstractStream<String, String>) table1.mapValues(mapper, Materialized.with(mySerde, mySerde))).valueSerde(),
+            ((AbstractStream<?, ?>) table1.filterNot((key, value) -> false, Materialized.with(mySerde, mySerde))).valueSerde(),
             mySerde);
 
         assertEquals(
-            ((AbstractStream<String, String>) table1.toStream()).keySerde(),
+            ((AbstractStream<?, ?>) table1.mapValues(mapper)).keySerde(),
+            consumedInternal.keySerde());
+        assertNull(((AbstractStream<?, ?>) table1.mapValues(mapper)).valueSerde());
+        assertEquals(
+            ((AbstractStream<?, ?>) table1.mapValues(mapper, Materialized.with(mySerde, mySerde))).keySerde(),
+            mySerde);
+        assertEquals(
+            ((AbstractStream<?, ?>) table1.mapValues(mapper, Materialized.with(mySerde, mySerde))).valueSerde(),
+            mySerde);
+
+        assertEquals(
+            ((AbstractStream<?, ?>) table1.toStream()).keySerde(),
             consumedInternal.keySerde());
         assertEquals(
-            ((AbstractStream<String, String>) table1.toStream()).valueSerde(),
+            ((AbstractStream<?, ?>) table1.toStream()).valueSerde(),
             consumedInternal.valueSerde());
-        assertNull(((AbstractStream<String, String>) table1.toStream(selector)).keySerde());
+        assertNull(((AbstractStream<?, ?>) table1.toStream(selector)).keySerde());
         assertEquals(
-            ((AbstractStream<String, String>) table1.toStream(selector)).valueSerde(),
+            ((AbstractStream<?, ?>) table1.toStream(selector)).valueSerde(),
             consumedInternal.valueSerde());
 
         assertEquals(
-            ((AbstractStream<String, String>) table1.transformValues(valueTransformerWithKeySupplier)).keySerde(),
+            ((AbstractStream<?, ?>) table1.transformValues(valueTransformerWithKeySupplier)).keySerde(),
             consumedInternal.keySerde());
-        assertNull(((AbstractStream<String, String>) table1.transformValues(valueTransformerWithKeySupplier)).valueSerde());
+        assertNull(((AbstractStream<?, ?>) table1.transformValues(valueTransformerWithKeySupplier)).valueSerde());
         assertEquals(
-            ((AbstractStream<String, String>) table1.transformValues(valueTransformerWithKeySupplier, Materialized.with(mySerde, mySerde))).keySerde(),
+            ((AbstractStream<?, ?>) table1.transformValues(valueTransformerWithKeySupplier, Materialized.with(mySerde, mySerde))).keySerde(),
             mySerde);
-        assertEquals(((AbstractStream<String, String>) table1.transformValues(valueTransformerWithKeySupplier, Materialized.with(mySerde, mySerde))).valueSerde(),
+        assertEquals(((AbstractStream<?, ?>) table1.transformValues(valueTransformerWithKeySupplier, Materialized.with(mySerde, mySerde))).valueSerde(),
             mySerde);
 
-        assertNull(((AbstractStream<String, String>) table1.groupBy(KeyValue::new)).keySerde());
-        assertNull(((AbstractStream<String, String>) table1.groupBy(KeyValue::new)).valueSerde());
+        assertNull(((AbstractStream<?, ?>) table1.groupBy(KeyValue::new)).keySerde());
+        assertNull(((AbstractStream<?, ?>) table1.groupBy(KeyValue::new)).valueSerde());
         assertEquals(
-            ((AbstractStream<String, String>) table1.groupBy(KeyValue::new, Grouped.with(mySerde, mySerde))).keySerde(),
+            ((AbstractStream<?, ?>) table1.groupBy(KeyValue::new, Grouped.with(mySerde, mySerde))).keySerde(),
             mySerde);
         assertEquals(
-            ((AbstractStream<String, String>) table1.groupBy(KeyValue::new, Grouped.with(mySerde, mySerde))).valueSerde(),
-            mySerde);
-
-        assertEquals(
-            ((AbstractStream<String, String>) table1.join(table1, joiner)).keySerde(),
-            consumedInternal.keySerde());
-        assertNull(((AbstractStream<String, String>) table1.join(table1, joiner)).valueSerde());
-        assertEquals(
-            ((AbstractStream<String, String>) table1.join(table1, joiner, Materialized.with(mySerde, mySerde))).keySerde(),
-            mySerde);
-        assertEquals(
-            ((AbstractStream<String, String>) table1.join(table1, joiner, Materialized.with(mySerde, mySerde))).valueSerde(),
+            ((AbstractStream<?, ?>) table1.groupBy(KeyValue::new, Grouped.with(mySerde, mySerde))).valueSerde(),
             mySerde);
 
         assertEquals(
-            ((AbstractStream<String, String>) table1.leftJoin(table1, joiner)).keySerde(),
+            ((AbstractStream<?, ?>) table1.join(table1, joiner)).keySerde(),
             consumedInternal.keySerde());
-        assertNull(((AbstractStream<String, String>) table1.leftJoin(table1, joiner)).valueSerde());
+        assertNull(((AbstractStream<?, ?>) table1.join(table1, joiner)).valueSerde());
         assertEquals(
-            ((AbstractStream<String, String>) table1.leftJoin(table1, joiner, Materialized.with(mySerde, mySerde))).keySerde(),
+            ((AbstractStream<?, ?>) table1.join(table1, joiner, Materialized.with(mySerde, mySerde))).keySerde(),
             mySerde);
         assertEquals(
-            ((AbstractStream<String, String>) table1.leftJoin(table1, joiner, Materialized.with(mySerde, mySerde))).valueSerde(),
+            ((AbstractStream<?, ?>) table1.join(table1, joiner, Materialized.with(mySerde, mySerde))).valueSerde(),
             mySerde);
 
         assertEquals(
-            ((AbstractStream<String, String>) table1.outerJoin(table1, joiner)).keySerde(),
+            ((AbstractStream<?, ?>) table1.leftJoin(table1, joiner)).keySerde(),
             consumedInternal.keySerde());
-        assertNull(((AbstractStream<String, String>) table1.outerJoin(table1, joiner)).valueSerde());
+        assertNull(((AbstractStream<?, ?>) table1.leftJoin(table1, joiner)).valueSerde());
         assertEquals(
-            ((AbstractStream<String, String>) table1.outerJoin(table1, joiner, Materialized.with(mySerde, mySerde))).keySerde(),
+            ((AbstractStream<?, ?>) table1.leftJoin(table1, joiner, Materialized.with(mySerde, mySerde))).keySerde(),
             mySerde);
         assertEquals(
-            ((AbstractStream<String, String>) table1.outerJoin(table1, joiner, Materialized.with(mySerde, mySerde))).valueSerde(),
+            ((AbstractStream<?, ?>) table1.leftJoin(table1, joiner, Materialized.with(mySerde, mySerde))).valueSerde(),
+            mySerde);
+
+        assertEquals(
+            ((AbstractStream<?, ?>) table1.outerJoin(table1, joiner)).keySerde(),
+            consumedInternal.keySerde());
+        assertNull(((AbstractStream<?, ?>) table1.outerJoin(table1, joiner)).valueSerde());
+        assertEquals(
+            ((AbstractStream<?, ?>) table1.outerJoin(table1, joiner, Materialized.with(mySerde, mySerde))).keySerde(),
+            mySerde);
+        assertEquals(
+            ((AbstractStream<?, ?>) table1.outerJoin(table1, joiner, Materialized.with(mySerde, mySerde))).valueSerde(),
             mySerde);
     }
 
@@ -353,12 +353,10 @@ public class KTableImplTest {
         final String topic1 = "topic1";
         final String topic2 = "topic2";
 
-        final KTableImpl<String, String, String> table1 =
-            (KTableImpl<String, String, String>) builder.table(topic1, consumed);
+        final var table1 = builder.table(topic1, consumed);
         builder.table(topic2, consumed);
 
-        final KTableImpl<String, String, Integer> table1Mapped =
-            (KTableImpl<String, String, Integer>) table1.mapValues(s -> Integer.valueOf(s));
+        final var table1Mapped = table1.mapValues(s -> Integer.valueOf(s));
         table1Mapped.filter((key, value) -> (value % 2) == 0);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -372,15 +370,11 @@ public class KTableImplTest {
         final String topic1 = "topic1";
         final String topic2 = "topic2";
 
-        final KTableImpl<String, String, String> table1 =
-            (KTableImpl<String, String, String>) builder.table(topic1, consumed);
-        final KTableImpl<String, String, String> table2 =
-            (KTableImpl<String, String, String>) builder.table(topic2, consumed);
+        final var table1 = builder.table(topic1, consumed);
+        final var table2 = builder.table(topic2, consumed);
 
-        final KTableImpl<String, String, Integer> table1Mapped =
-            (KTableImpl<String, String, Integer>) table1.mapValues(s -> Integer.valueOf(s));
-        final KTableImpl<String, Integer, Integer> table1MappedFiltered =
-            (KTableImpl<String, Integer, Integer>) table1Mapped.filter((key, value) -> (value % 2) == 0);
+        final var table1Mapped = table1.mapValues(s -> Integer.valueOf(s));
+        final var table1MappedFiltered = table1Mapped.filter((key, value) -> (value % 2) == 0);
         table2.join(table1MappedFiltered, (v1, v2) -> v1 + v2);
 
         try (final TopologyTestDriver driver = new TopologyTestDriver(builder.build(), props)) {
@@ -392,9 +386,7 @@ public class KTableImplTest {
     public void shouldNotEnableSendingOldValuesIfNotMaterializedAlreadyAndNotForcedToMaterialize() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTableImpl<String, String, String> table =
-            (KTableImpl<String, String, String>) builder.table("topic1", consumed);
-
+        final var table = assertInstanceOf(KTableImpl.class, builder.table("topic1", consumed));
         table.enableSendingOldValues(false);
 
         assertThat(table.sendingOldValueEnabled(), is(false));
@@ -404,9 +396,7 @@ public class KTableImplTest {
     public void shouldEnableSendingOldValuesIfNotMaterializedAlreadyButForcedToMaterialize() {
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final KTableImpl<String, String, String> table =
-            (KTableImpl<String, String, String>) builder.table("topic1", consumed);
-
+        final var table = assertInstanceOf(KTableImpl.class, builder.table("topic1", consumed));
         table.enableSendingOldValues(true);
 
         assertThat(table.sendingOldValueEnabled(), is(true));
@@ -430,8 +420,7 @@ public class KTableImplTest {
         final String topic1 = "topic1";
         final String storeName1 = "storeName1";
 
-        final KTableImpl<String, String, String> table1 =
-            (KTableImpl<String, String, String>) builder.table(
+        final var table1 = builder.table(
                 topic1,
                 consumed,
                 Materialized.<String, String, KeyValueStore<Bytes, byte[]>>as(storeName1)
@@ -590,15 +579,12 @@ public class KTableImplTest {
 
     @Test
     public void shouldThrowNullPointerOnTransformValuesWithKeyWhenMaterializedIsNull() {
-        final ValueTransformerWithKeySupplier<String, String, ?> valueTransformerSupplier =
-            mock(ValueTransformerWithKeySupplier.class);
-        assertThrows(NullPointerException.class, () -> table.transformValues(valueTransformerSupplier, (Materialized<String, Object, KeyValueStore<Bytes, byte[]>>) null));
+        assertThrows(NullPointerException.class, () -> table.transformValues(mock(), (Materialized<String, Object, KeyValueStore<Bytes, byte[]>>) null));
     }
+
 
     @Test
     public void shouldThrowNullPointerOnTransformValuesWithKeyWhenStoreNamesNull() {
-        final ValueTransformerWithKeySupplier<String, String, ?> valueTransformerSupplier =
-            mock(ValueTransformerWithKeySupplier.class);
-        assertThrows(NullPointerException.class, () -> table.transformValues(valueTransformerSupplier, (String[]) null));
+        assertThrows(NullPointerException.class, () -> table.transformValues(mock(), (String[]) null));
     }
 }

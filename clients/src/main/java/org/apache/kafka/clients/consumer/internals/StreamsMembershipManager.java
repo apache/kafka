@@ -591,7 +591,7 @@ public class StreamsMembershipManager implements RequestManager {
      * @return True if the member should send heartbeat to the coordinator without waiting for
      * the interval.
      */
-    public boolean shouldHeartbeatNow() {
+    public boolean shouldNotWaitForHeartbeatInterval() {
         return state == MemberState.ACKNOWLEDGING || state == MemberState.LEAVING || state == MemberState.JOINING;
     }
 
@@ -702,14 +702,21 @@ public class StreamsMembershipManager implements RequestManager {
     }
 
     /**
-     * Notify the member that an error heartbeat response was received.
-     *
-     * @param retriable True if the request failed with a retriable error.
+     * Notify the member that a retriable error heartbeat response was received.
      */
-    public void onHeartbeatFailure(boolean retriable) {
-        if (!retriable) {
-            metricsManager.maybeRecordRebalanceFailed();
-        }
+    public void onRetriableHeartbeatFailure() {
+        onHeartbeatFailure();
+    }
+
+    /**
+     * Notify the member that a fatal error heartbeat response was received.
+     */
+    public void onFatalHeartbeatFailure() {
+        metricsManager.maybeRecordRebalanceFailed();
+        onHeartbeatFailure();
+    }
+
+    private void onHeartbeatFailure() {
         // The leave group request is sent out once (not retried), so we should complete the leave
         // operation once the request completes, regardless of the response.
         if (state == MemberState.UNSUBSCRIBED && maybeCompleteLeaveInProgress()) {

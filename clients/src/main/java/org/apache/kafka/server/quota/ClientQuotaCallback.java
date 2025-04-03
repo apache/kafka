@@ -23,7 +23,7 @@ import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import java.util.Map;
 
 /**
- * Quota callback interface for brokers that enables customization of client quota computation.
+ * Quota callback interface for brokers and controllers that enables customization of client quota computation.
  */
 public interface ClientQuotaCallback extends Configurable {
 
@@ -89,8 +89,9 @@ public interface ClientQuotaCallback extends Configurable {
     boolean quotaResetRequired(ClientQuotaType quotaType);
 
     /**
-     * Metadata update callback that is invoked whenever UpdateMetadata request is received from
-     * the controller. This is useful if quota computation takes partitions into account.
+     * This callback is invoked whenever there are changes in the cluster metadata, such as 
+     * brokers being added or removed, topics being created or deleted, or partition leadership updates.
+     * This is useful if quota computation takes partitions into account.
      * Topics that are being deleted will not be included in `cluster`.
      *
      * @param cluster Cluster metadata including partitions and their leaders if known

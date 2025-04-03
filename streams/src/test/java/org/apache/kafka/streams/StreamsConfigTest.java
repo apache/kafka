@@ -50,6 +50,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.io.File;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -65,9 +67,9 @@ import static java.util.Collections.nCopies;
 import static org.apache.kafka.common.IsolationLevel.READ_COMMITTED;
 import static org.apache.kafka.common.IsolationLevel.READ_UNCOMMITTED;
 import static org.apache.kafka.streams.StreamsConfig.AT_LEAST_ONCE;
-import static org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.ENABLE_METRICS_PUSH_CONFIG;
+import static org.apache.kafka.streams.StreamsConfig.ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
 import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH;
 import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH;
@@ -113,6 +115,53 @@ public class StreamsConfigTest {
         props.put("key.deserializer.encoding", StandardCharsets.UTF_8.name());
         props.put("value.deserializer.encoding", StandardCharsets.UTF_16.name());
         streamsConfig = new StreamsConfig(props);
+    }
+
+    @Test
+    public void shouldNotLeakInternalDocMembers() {
+        final Class<StreamsConfig> clazz = StreamsConfig.class;
+
+        for (final Field f : clazz.getDeclaredFields()) {
+            final String name = f.getName();
+
+            if (name.endsWith("_DOC")) {
+                switch (name) {
+                    // package private for `TopologyConfig` -- ok
+                    case "DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC":
+                    case "DSL_STORE_SUPPLIERS_CLASS_DOC":
+                    case "PROCESSOR_WRAPPER_CLASS_DOC":
+                    case "ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_DOC":
+                        continue;
+
+                    // check for leaking, but already deprecated members
+                    // if we make any of them private in the future, this test will fail, and we should remove them
+                    // from this exception list
+                    // (this part of the test is only added to clean up the test in the future)
+                    case "BUFFERED_RECORDS_PER_PARTITION_DOC":
+                    case "CACHE_MAX_BYTES_BUFFERING_DOC":
+                    case "DEFAULT_CLIENT_SUPPLIER_DOC":
+                    case "DEFAULT_DESERIALIZATION_EXCEPTION_HANDLER_CLASS_DOC":
+                    case "DEFAULT_DSL_STORE_DOC":
+                    case "DEFAULT_TIMESTAMP_EXTRACTOR_CLASS_DOC":
+                    case "ENABLE_METRICS_PUSH_DOC":
+                    case "MAX_TASK_IDLE_MS_DOC":
+                    case "PROCESSING_EXCEPTION_HANDLER_CLASS_DOC":
+                    case "RACK_AWARE_ASSIGNMENT_NON_OVERLAP_COST_DOC":
+                    case "RACK_AWARE_ASSIGNMENT_STRATEGY_DOC":
+                    case "RACK_AWARE_ASSIGNMENT_TRAFFIC_COST_DOC":
+                    case "STATESTORE_CACHE_MAX_BYTES_DOC":
+                    case "TASK_TIMEOUT_MS_DOC":
+                        if (Modifier.isPrivate(f.getModifiers())) {
+                            fail(name + " was public, but is private now and should be remove from the exception list above");
+                        }
+                        continue;
+                }
+
+                if (!Modifier.isPrivate(f.getModifiers())) {
+                    fail("StreamsConfig should not contain any public documentation strings as members. Found: " + f.getName());
+                }
+            }
+        }
     }
 
     @Test
@@ -234,6 +283,7 @@ public class StreamsConfigTest {
         assertNull(returnedProps.get(ConsumerConfig.GROUP_ID_CONFIG));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void defaultSerdeShouldBeConfigured() {
         final Map<String, Object> serializerConfigs = new HashMap<>();
@@ -738,6 +788,7 @@ public class StreamsConfigTest {
         assertThrows(ConfigException.class, config::defaultValueSerde);
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldSpecifyCorrectKeySerdeClassOnError() {
         final Properties props = getStreamsConfig();
@@ -754,6 +805,7 @@ public class StreamsConfigTest {
         }
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldSpecifyCorrectValueSerdeClassOnError() {
         final Properties props = getStreamsConfig();
@@ -841,28 +893,28 @@ public class StreamsConfigTest {
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
-    @SuppressWarnings("deprecation")
+    @Deprecated
     @Test
     public void shouldSpecifyRocksdbWhenNotExplicitlyAddedToConfigs() {
         final String expectedDefaultStoreType = StreamsConfig.ROCKS_DB;
-        final String actualDefaultStoreType = streamsConfig.getString(DEFAULT_DSL_STORE_CONFIG);
+        final String actualDefaultStoreType = streamsConfig.getString(org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG);
         assertEquals(expectedDefaultStoreType, actualDefaultStoreType, "default.dsl.store should be \"rocksDB\"");
     }
 
-    @SuppressWarnings("deprecation")
+    @Deprecated
     @Test
     public void shouldSpecifyInMemoryWhenExplicitlyAddedToConfigs() {
         final String expectedDefaultStoreType = StreamsConfig.IN_MEMORY;
-        props.put(DEFAULT_DSL_STORE_CONFIG, expectedDefaultStoreType);
+        props.put(org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG, expectedDefaultStoreType);
         final StreamsConfig config = new StreamsConfig(props);
-        final String actualDefaultStoreType = config.getString(DEFAULT_DSL_STORE_CONFIG);
+        final String actualDefaultStoreType = config.getString(org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG);
         assertEquals(expectedDefaultStoreType, actualDefaultStoreType, "default.dsl.store should be \"in_memory\"");
     }
 
-    @SuppressWarnings("deprecation")
+    @Deprecated
     @Test
     public void shouldThrowConfigExceptionWhenStoreTypeConfigNotValueInRange() {
-        props.put(DEFAULT_DSL_STORE_CONFIG, "bad_config");
+        props.put(org.apache.kafka.streams.StreamsConfig.DEFAULT_DSL_STORE_CONFIG, "bad_config");
         assertThrows(ConfigException.class, () -> new StreamsConfig(props));
     }
 
@@ -1002,9 +1054,9 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.clientTagPrefix("cluster"), "cluster-1");
         final StreamsConfig config = new StreamsConfig(props);
         final Map<String, String> clientTags = config.getClientTags();
-        assertEquals(clientTags.size(), 2);
-        assertEquals(clientTags.get("zone"), "eu-central-1a");
-        assertEquals(clientTags.get("cluster"), "cluster-1");
+        assertEquals(2, clientTags.size());
+        assertEquals("eu-central-1a", clientTags.get("zone"));
+        assertEquals("cluster-1", clientTags.get("cluster"));
     }
 
     @Test
@@ -1037,34 +1089,34 @@ public class StreamsConfigTest {
         );
     }
 
-    @Test
     @SuppressWarnings("deprecation")
+    @Test
     public void shouldUseStateStoreCacheMaxBytesWhenBothOldAndNewConfigsAreSet() {
         props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 100);
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10);
         final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(totalCacheSize(config), 100);
+        assertEquals(100, totalCacheSize(config));
     }
 
+    @Deprecated
     @Test
-    @SuppressWarnings("deprecation")
     public void shouldUseCacheMaxBytesBufferingConfigWhenOnlyDeprecatedConfigIsSet() {
         props.put(StreamsConfig.CACHE_MAX_BYTES_BUFFERING_CONFIG, 10);
         final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(totalCacheSize(config), 10);
+        assertEquals(10, totalCacheSize(config));
     }
 
     @Test
     public void shouldUseStateStoreCacheMaxBytesWhenNewConfigIsSet() {
         props.put(StreamsConfig.STATESTORE_CACHE_MAX_BYTES_CONFIG, 10);
         final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(totalCacheSize(config), 10);
+        assertEquals(10, totalCacheSize(config));
     }
 
     @Test
     public void shouldUseDefaultStateStoreCacheMaxBytesConfigWhenNoConfigIsSet() {
         final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(totalCacheSize(config), 10 * 1024 * 1024);
+        assertEquals(10 * 1024 * 1024, totalCacheSize(config));
     }
 
     @Test
@@ -1123,7 +1175,7 @@ public class StreamsConfigTest {
         final String value = StreamsConfig.SINGLE_STORE_SELF_JOIN;
         props.put(TOPOLOGY_OPTIMIZATION_CONFIG, value);
         final StreamsConfig config = new StreamsConfig(props);
-        assertEquals(config.getString(TOPOLOGY_OPTIMIZATION_CONFIG), StreamsConfig.SINGLE_STORE_SELF_JOIN);
+        assertEquals(StreamsConfig.SINGLE_STORE_SELF_JOIN, config.getString(TOPOLOGY_OPTIMIZATION_CONFIG));
     }
 
     @Test
@@ -1530,6 +1582,18 @@ public class StreamsConfigTest {
         props.put(StreamsConfig.DEFAULT_PRODUCTION_EXCEPTION_HANDLER_CLASS_CONFIG, RecordCollectorTest.ProductionExceptionHandlerMock.class);
         streamsConfig = new StreamsConfig(props);
         assertEquals(RecordCollectorTest.ProductionExceptionHandlerMock.class, streamsConfig.productionExceptionHandler().getClass());
+    }
+
+    @Test
+    public void shouldGetDefaultEnsureExplicitInternalResourceNaming() {
+        assertFalse(streamsConfig.getBoolean(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG));
+    }
+
+    @Test
+    public void shouldEnsureExplicitInternalResourceNaming() {
+        props.put(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG, true);
+        streamsConfig = new StreamsConfig(props);
+        assertTrue(streamsConfig.getBoolean(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG));
     }
 
     static class MisconfiguredSerde implements Serde<Object> {

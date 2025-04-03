@@ -140,6 +140,8 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *     thrown by a failure to commit the acknowledgements.</li>
  *     <li>The application calls {@link #close()}  which releases any acquired records without acknowledgement.</li>
  * </ul>
+ * <p>The consumer can optionally use the {@code internal.share.acknowledgement.mode} configuration property to choose
+ * between implicit and explicit acknowledgement, specifying <code>"implicit"</code> or <code>"explicit"</code> as required.
  * <p>
  * The consumer guarantees that the records returned in the {@code ConsumerRecords} object for a specific topic-partition
  * are in order of increasing offset. For each topic-partition, Kafka guarantees that acknowledgements for the records
@@ -403,11 +405,11 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
     public KafkaShareConsumer(Map<String, Object> configs,
                               Deserializer<K> keyDeserializer,
                               Deserializer<V> valueDeserializer) {
-        this(new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
+        this(new ShareConsumerConfig(ShareConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
                 keyDeserializer, valueDeserializer);
     }
 
-    KafkaShareConsumer(ConsumerConfig config,
+    KafkaShareConsumer(ShareConsumerConfig config,
                               Deserializer<K> keyDeserializer,
                               Deserializer<V> valueDeserializer) {
         delegate = CREATOR.create(config, keyDeserializer, valueDeserializer);
@@ -416,7 +418,7 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
     KafkaShareConsumer(final LogContext logContext,
                        final String clientId,
                        final String groupId,
-                       final ConsumerConfig config,
+                       final ShareConsumerConfig config,
                        final Deserializer<K> keyDeserializer,
                        final Deserializer<V> valueDeserializer,
                        final Time time,
@@ -701,6 +703,12 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      * If the consumer is unable to complete acknowledgements and gracefully leave the group
      * before the timeout expires, the consumer is force closed. Note that {@link #wakeup()} cannot be
      * used to interrupt close.
+     * <p>
+     * The actual maximum wait time is bounded by the {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} setting, which
+     * only applies to operations performed with the broker (coordinator-related requests).
+     * Even if a larger timeout is specified, the consumer will not wait longer than
+     * {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} for these requests to complete during the close operation.
+     * Note that the execution time of callbacks (such as {@link AcknowledgementCommitCallback}) do not consume time from the close timeout.
      *
      * @param timeout The maximum time to wait for consumer to close gracefully. The value must be
      *                non-negative. Specifying a timeout of zero means do not wait for pending requests to complete.

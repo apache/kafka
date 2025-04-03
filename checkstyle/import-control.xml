@@ -334,9 +334,11 @@
     <allow pkg="org.apache.kafka.tools.api" />
     <allow pkg="org.apache.kafka.tools.filter" />
     <allow pkg="org.apache.kafka.image" />
+    <allow pkg="org.apache.kafka.security" />
 
     <subpackage name="consumer">
       <allow pkg="org.apache.kafka.tools"/>
+      <allow pkg="org.apache.kafka.coordinator.common.runtime" />
       <subpackage name="group">
         <allow pkg="org.apache.kafka.coordinator.group"/>
         <allow pkg="kafka.api"/>
@@ -487,6 +489,7 @@
     <allow pkg="org.apache.kafka.common.requests" />
     <allow pkg="org.apache.kafka.server.common" />
     <allow pkg="org.apache.kafka.server.common.serialization" />
+    <allow pkg="org.apache.kafka.server.config" />
     <allow pkg="org.apache.kafka.server.fault"/>
     <allow pkg="org.apache.kafka.server.util" />
     <allow pkg="org.apache.kafka.test"/>

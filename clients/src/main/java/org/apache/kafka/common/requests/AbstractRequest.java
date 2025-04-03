@@ -19,9 +19,11 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.network.Send;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.SendBuilder;
 
 import java.nio.ByteBuffer;
@@ -122,8 +124,8 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
     }
 
     // Visible for testing
-    public final ByteBuffer serialize() {
-        return MessageUtil.toByteBuffer(data(), version);
+    public final ByteBufferAccessor serialize() {
+        return MessageUtil.toByteBufferAccessor(data(), version);
     }
 
     // Visible for testing
@@ -167,187 +169,191 @@ public abstract class AbstractRequest implements AbstractRequestResponse {
     /**
      * Factory method for getting a request object based on ApiKey ID and a version
      */
-    public static RequestAndSize parseRequest(ApiKeys apiKey, short apiVersion, ByteBuffer buffer) {
-        int bufferSize = buffer.remaining();
-        return new RequestAndSize(doParseRequest(apiKey, apiVersion, buffer), bufferSize);
+    public static RequestAndSize parseRequest(ApiKeys apiKey, short apiVersion, Readable readable) {
+        int bufferSize = readable.remaining();
+        return new RequestAndSize(doParseRequest(apiKey, apiVersion, readable), bufferSize);
     }
 
-    private static AbstractRequest doParseRequest(ApiKeys apiKey, short apiVersion, ByteBuffer buffer) {
+    private static AbstractRequest doParseRequest(ApiKeys apiKey, short apiVersion, Readable readable) {
         switch (apiKey) {
             case PRODUCE:
-                return ProduceRequest.parse(buffer, apiVersion);
+                return ProduceRequest.parse(readable, apiVersion);
             case FETCH:
-                return FetchRequest.parse(buffer, apiVersion);
+                return FetchRequest.parse(readable, apiVersion);
             case LIST_OFFSETS:
-                return ListOffsetsRequest.parse(buffer, apiVersion);
+                return ListOffsetsRequest.parse(readable, apiVersion);
             case METADATA:
-                return MetadataRequest.parse(buffer, apiVersion);
+                return MetadataRequest.parse(readable, apiVersion);
             case OFFSET_COMMIT:
-                return OffsetCommitRequest.parse(buffer, apiVersion);
+                return OffsetCommitRequest.parse(readable, apiVersion);
             case OFFSET_FETCH:
-                return OffsetFetchRequest.parse(buffer, apiVersion);
+                return OffsetFetchRequest.parse(readable, apiVersion);
             case FIND_COORDINATOR:
-                return FindCoordinatorRequest.parse(buffer, apiVersion);
+                return FindCoordinatorRequest.parse(readable, apiVersion);
             case JOIN_GROUP:
-                return JoinGroupRequest.parse(buffer, apiVersion);
+                return JoinGroupRequest.parse(readable, apiVersion);
             case HEARTBEAT:
-                return HeartbeatRequest.parse(buffer, apiVersion);
+                return HeartbeatRequest.parse(readable, apiVersion);
             case LEAVE_GROUP:
-                return LeaveGroupRequest.parse(buffer, apiVersion);
+                return LeaveGroupRequest.parse(readable, apiVersion);
             case SYNC_GROUP:
-                return SyncGroupRequest.parse(buffer, apiVersion);
+                return SyncGroupRequest.parse(readable, apiVersion);
             case DESCRIBE_GROUPS:
-                return DescribeGroupsRequest.parse(buffer, apiVersion);
+                return DescribeGroupsRequest.parse(readable, apiVersion);
             case LIST_GROUPS:
-                return ListGroupsRequest.parse(buffer, apiVersion);
+                return ListGroupsRequest.parse(readable, apiVersion);
             case SASL_HANDSHAKE:
-                return SaslHandshakeRequest.parse(buffer, apiVersion);
+                return SaslHandshakeRequest.parse(readable, apiVersion);
             case API_VERSIONS:
-                return ApiVersionsRequest.parse(buffer, apiVersion);
+                return ApiVersionsRequest.parse(readable, apiVersion);
             case CREATE_TOPICS:
-                return CreateTopicsRequest.parse(buffer, apiVersion);
+                return CreateTopicsRequest.parse(readable, apiVersion);
             case DELETE_TOPICS:
-                return DeleteTopicsRequest.parse(buffer, apiVersion);
+                return DeleteTopicsRequest.parse(readable, apiVersion);
             case DELETE_RECORDS:
-                return DeleteRecordsRequest.parse(buffer, apiVersion);
+                return DeleteRecordsRequest.parse(readable, apiVersion);
             case INIT_PRODUCER_ID:
-                return InitProducerIdRequest.parse(buffer, apiVersion);
+                return InitProducerIdRequest.parse(readable, apiVersion);
             case OFFSET_FOR_LEADER_EPOCH:
-                return OffsetsForLeaderEpochRequest.parse(buffer, apiVersion);
+                return OffsetsForLeaderEpochRequest.parse(readable, apiVersion);
             case ADD_PARTITIONS_TO_TXN:
-                return AddPartitionsToTxnRequest.parse(buffer, apiVersion);
+                return AddPartitionsToTxnRequest.parse(readable, apiVersion);
             case ADD_OFFSETS_TO_TXN:
-                return AddOffsetsToTxnRequest.parse(buffer, apiVersion);
+                return AddOffsetsToTxnRequest.parse(readable, apiVersion);
             case END_TXN:
-                return EndTxnRequest.parse(buffer, apiVersion);
+                return EndTxnRequest.parse(readable, apiVersion);
             case WRITE_TXN_MARKERS:
-                return WriteTxnMarkersRequest.parse(buffer, apiVersion);
+                return WriteTxnMarkersRequest.parse(readable, apiVersion);
             case TXN_OFFSET_COMMIT:
-                return TxnOffsetCommitRequest.parse(buffer, apiVersion);
+                return TxnOffsetCommitRequest.parse(readable, apiVersion);
             case DESCRIBE_ACLS:
-                return DescribeAclsRequest.parse(buffer, apiVersion);
+                return DescribeAclsRequest.parse(readable, apiVersion);
             case CREATE_ACLS:
-                return CreateAclsRequest.parse(buffer, apiVersion);
+                return CreateAclsRequest.parse(readable, apiVersion);
             case DELETE_ACLS:
-                return DeleteAclsRequest.parse(buffer, apiVersion);
+                return DeleteAclsRequest.parse(readable, apiVersion);
             case DESCRIBE_CONFIGS:
-                return DescribeConfigsRequest.parse(buffer, apiVersion);
+                return DescribeConfigsRequest.parse(readable, apiVersion);
             case ALTER_CONFIGS:
-                return AlterConfigsRequest.parse(buffer, apiVersion);
+                return AlterConfigsRequest.parse(readable, apiVersion);
             case ALTER_REPLICA_LOG_DIRS:
-                return AlterReplicaLogDirsRequest.parse(buffer, apiVersion);
+                return AlterReplicaLogDirsRequest.parse(readable, apiVersion);
             case DESCRIBE_LOG_DIRS:
-                return DescribeLogDirsRequest.parse(buffer, apiVersion);
+                return DescribeLogDirsRequest.parse(readable, apiVersion);
             case SASL_AUTHENTICATE:
-                return SaslAuthenticateRequest.parse(buffer, apiVersion);
+                return SaslAuthenticateRequest.parse(readable, apiVersion);
             case CREATE_PARTITIONS:
-                return CreatePartitionsRequest.parse(buffer, apiVersion);
+                return CreatePartitionsRequest.parse(readable, apiVersion);
             case CREATE_DELEGATION_TOKEN:
-                return CreateDelegationTokenRequest.parse(buffer, apiVersion);
+                return CreateDelegationTokenRequest.parse(readable, apiVersion);
             case RENEW_DELEGATION_TOKEN:
-                return RenewDelegationTokenRequest.parse(buffer, apiVersion);
+                return RenewDelegationTokenRequest.parse(readable, apiVersion);
             case EXPIRE_DELEGATION_TOKEN:
-                return ExpireDelegationTokenRequest.parse(buffer, apiVersion);
+                return ExpireDelegationTokenRequest.parse(readable, apiVersion);
             case DESCRIBE_DELEGATION_TOKEN:
-                return DescribeDelegationTokenRequest.parse(buffer, apiVersion);
+                return DescribeDelegationTokenRequest.parse(readable, apiVersion);
             case DELETE_GROUPS:
-                return DeleteGroupsRequest.parse(buffer, apiVersion);
+                return DeleteGroupsRequest.parse(readable, apiVersion);
             case ELECT_LEADERS:
-                return ElectLeadersRequest.parse(buffer, apiVersion);
+                return ElectLeadersRequest.parse(readable, apiVersion);
             case INCREMENTAL_ALTER_CONFIGS:
-                return IncrementalAlterConfigsRequest.parse(buffer, apiVersion);
+                return IncrementalAlterConfigsRequest.parse(readable, apiVersion);
             case ALTER_PARTITION_REASSIGNMENTS:
-                return AlterPartitionReassignmentsRequest.parse(buffer, apiVersion);
+                return AlterPartitionReassignmentsRequest.parse(readable, apiVersion);
             case LIST_PARTITION_REASSIGNMENTS:
-                return ListPartitionReassignmentsRequest.parse(buffer, apiVersion);
+                return ListPartitionReassignmentsRequest.parse(readable, apiVersion);
             case OFFSET_DELETE:
-                return OffsetDeleteRequest.parse(buffer, apiVersion);
+                return OffsetDeleteRequest.parse(readable, apiVersion);
             case DESCRIBE_CLIENT_QUOTAS:
-                return DescribeClientQuotasRequest.parse(buffer, apiVersion);
+                return DescribeClientQuotasRequest.parse(readable, apiVersion);
             case ALTER_CLIENT_QUOTAS:
-                return AlterClientQuotasRequest.parse(buffer, apiVersion);
+                return AlterClientQuotasRequest.parse(readable, apiVersion);
             case DESCRIBE_USER_SCRAM_CREDENTIALS:
-                return DescribeUserScramCredentialsRequest.parse(buffer, apiVersion);
+                return DescribeUserScramCredentialsRequest.parse(readable, apiVersion);
             case ALTER_USER_SCRAM_CREDENTIALS:
-                return AlterUserScramCredentialsRequest.parse(buffer, apiVersion);
+                return AlterUserScramCredentialsRequest.parse(readable, apiVersion);
             case VOTE:
-                return VoteRequest.parse(buffer, apiVersion);
+                return VoteRequest.parse(readable, apiVersion);
             case BEGIN_QUORUM_EPOCH:
-                return BeginQuorumEpochRequest.parse(buffer, apiVersion);
+                return BeginQuorumEpochRequest.parse(readable, apiVersion);
             case END_QUORUM_EPOCH:
-                return EndQuorumEpochRequest.parse(buffer, apiVersion);
+                return EndQuorumEpochRequest.parse(readable, apiVersion);
             case DESCRIBE_QUORUM:
-                return DescribeQuorumRequest.parse(buffer, apiVersion);
+                return DescribeQuorumRequest.parse(readable, apiVersion);
             case ALTER_PARTITION:
-                return AlterPartitionRequest.parse(buffer, apiVersion);
+                return AlterPartitionRequest.parse(readable, apiVersion);
             case UPDATE_FEATURES:
-                return UpdateFeaturesRequest.parse(buffer, apiVersion);
+                return UpdateFeaturesRequest.parse(readable, apiVersion);
             case ENVELOPE:
-                return EnvelopeRequest.parse(buffer, apiVersion);
+                return EnvelopeRequest.parse(readable, apiVersion);
             case FETCH_SNAPSHOT:
-                return FetchSnapshotRequest.parse(buffer, apiVersion);
+                return FetchSnapshotRequest.parse(readable, apiVersion);
             case DESCRIBE_CLUSTER:
-                return DescribeClusterRequest.parse(buffer, apiVersion);
+                return DescribeClusterRequest.parse(readable, apiVersion);
             case DESCRIBE_PRODUCERS:
-                return DescribeProducersRequest.parse(buffer, apiVersion);
+                return DescribeProducersRequest.parse(readable, apiVersion);
             case BROKER_REGISTRATION:
-                return BrokerRegistrationRequest.parse(buffer, apiVersion);
+                return BrokerRegistrationRequest.parse(readable, apiVersion);
             case BROKER_HEARTBEAT:
-                return BrokerHeartbeatRequest.parse(buffer, apiVersion);
+                return BrokerHeartbeatRequest.parse(readable, apiVersion);
             case UNREGISTER_BROKER:
-                return UnregisterBrokerRequest.parse(buffer, apiVersion);
+                return UnregisterBrokerRequest.parse(readable, apiVersion);
             case DESCRIBE_TRANSACTIONS:
-                return DescribeTransactionsRequest.parse(buffer, apiVersion);
+                return DescribeTransactionsRequest.parse(readable, apiVersion);
             case LIST_TRANSACTIONS:
-                return ListTransactionsRequest.parse(buffer, apiVersion);
+                return ListTransactionsRequest.parse(readable, apiVersion);
             case ALLOCATE_PRODUCER_IDS:
-                return AllocateProducerIdsRequest.parse(buffer, apiVersion);
+                return AllocateProducerIdsRequest.parse(readable, apiVersion);
             case CONSUMER_GROUP_HEARTBEAT:
-                return ConsumerGroupHeartbeatRequest.parse(buffer, apiVersion);
+                return ConsumerGroupHeartbeatRequest.parse(readable, apiVersion);
             case CONSUMER_GROUP_DESCRIBE:
-                return ConsumerGroupDescribeRequest.parse(buffer, apiVersion);
+                return ConsumerGroupDescribeRequest.parse(readable, apiVersion);
             case CONTROLLER_REGISTRATION:
-                return ControllerRegistrationRequest.parse(buffer, apiVersion);
+                return ControllerRegistrationRequest.parse(readable, apiVersion);
             case GET_TELEMETRY_SUBSCRIPTIONS:
-                return GetTelemetrySubscriptionsRequest.parse(buffer, apiVersion);
+                return GetTelemetrySubscriptionsRequest.parse(readable, apiVersion);
             case PUSH_TELEMETRY:
-                return PushTelemetryRequest.parse(buffer, apiVersion);
+                return PushTelemetryRequest.parse(readable, apiVersion);
             case ASSIGN_REPLICAS_TO_DIRS:
-                return AssignReplicasToDirsRequest.parse(buffer, apiVersion);
+                return AssignReplicasToDirsRequest.parse(readable, apiVersion);
             case LIST_CLIENT_METRICS_RESOURCES:
-                return ListClientMetricsResourcesRequest.parse(buffer, apiVersion);
+                return ListClientMetricsResourcesRequest.parse(readable, apiVersion);
             case DESCRIBE_TOPIC_PARTITIONS:
-                return DescribeTopicPartitionsRequest.parse(buffer, apiVersion);
+                return DescribeTopicPartitionsRequest.parse(readable, apiVersion);
             case SHARE_GROUP_HEARTBEAT:
-                return ShareGroupHeartbeatRequest.parse(buffer, apiVersion);
+                return ShareGroupHeartbeatRequest.parse(readable, apiVersion);
             case SHARE_GROUP_DESCRIBE:
-                return ShareGroupDescribeRequest.parse(buffer, apiVersion);
+                return ShareGroupDescribeRequest.parse(readable, apiVersion);
             case SHARE_FETCH:
-                return ShareFetchRequest.parse(buffer, apiVersion);
+                return ShareFetchRequest.parse(readable, apiVersion);
             case SHARE_ACKNOWLEDGE:
-                return ShareAcknowledgeRequest.parse(buffer, apiVersion);
+                return ShareAcknowledgeRequest.parse(readable, apiVersion);
             case ADD_RAFT_VOTER:
-                return AddRaftVoterRequest.parse(buffer, apiVersion);
+                return AddRaftVoterRequest.parse(readable, apiVersion);
             case REMOVE_RAFT_VOTER:
-                return RemoveRaftVoterRequest.parse(buffer, apiVersion);
+                return RemoveRaftVoterRequest.parse(readable, apiVersion);
             case UPDATE_RAFT_VOTER:
-                return UpdateRaftVoterRequest.parse(buffer, apiVersion);
+                return UpdateRaftVoterRequest.parse(readable, apiVersion);
             case INITIALIZE_SHARE_GROUP_STATE:
-                return InitializeShareGroupStateRequest.parse(buffer, apiVersion);
+                return InitializeShareGroupStateRequest.parse(readable, apiVersion);
             case READ_SHARE_GROUP_STATE:
-                return ReadShareGroupStateRequest.parse(buffer, apiVersion);
+                return ReadShareGroupStateRequest.parse(readable, apiVersion);
             case WRITE_SHARE_GROUP_STATE:
-                return WriteShareGroupStateRequest.parse(buffer, apiVersion);
+                return WriteShareGroupStateRequest.parse(readable, apiVersion);
             case DELETE_SHARE_GROUP_STATE:
-                return DeleteShareGroupStateRequest.parse(buffer, apiVersion);
+                return DeleteShareGroupStateRequest.parse(readable, apiVersion);
             case READ_SHARE_GROUP_STATE_SUMMARY:
-                return ReadShareGroupStateSummaryRequest.parse(buffer, apiVersion);
+                return ReadShareGroupStateSummaryRequest.parse(readable, apiVersion);
             case STREAMS_GROUP_HEARTBEAT:
-                return StreamsGroupHeartbeatRequest.parse(buffer, apiVersion);
+                return StreamsGroupHeartbeatRequest.parse(readable, apiVersion);
             case STREAMS_GROUP_DESCRIBE:
-                return StreamsGroupDescribeRequest.parse(buffer, apiVersion);
+                return StreamsGroupDescribeRequest.parse(readable, apiVersion);
             case DESCRIBE_SHARE_GROUP_OFFSETS:
-                return DescribeShareGroupOffsetsRequest.parse(buffer, apiVersion);
+                return DescribeShareGroupOffsetsRequest.parse(readable, apiVersion);
+            case ALTER_SHARE_GROUP_OFFSETS:
+                return AlterShareGroupOffsetsRequest.parse(readable, apiVersion);
+            case DELETE_SHARE_GROUP_OFFSETS:
+                return DeleteShareGroupOffsetsRequest.parse(readable, apiVersion);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseRequest`, the " +
                         "code should be updated to do so.", apiKey));

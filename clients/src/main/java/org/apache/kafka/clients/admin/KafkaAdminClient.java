@@ -45,14 +45,17 @@ import org.apache.kafka.clients.admin.internals.AdminFetchMetricsManager;
 import org.apache.kafka.clients.admin.internals.AdminMetadataManager;
 import org.apache.kafka.clients.admin.internals.AllBrokersStrategy;
 import org.apache.kafka.clients.admin.internals.AlterConsumerGroupOffsetsHandler;
+import org.apache.kafka.clients.admin.internals.AlterShareGroupOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.admin.internals.DeleteConsumerGroupOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.DeleteConsumerGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DeleteRecordsHandler;
+import org.apache.kafka.clients.admin.internals.DeleteShareGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeClassicGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeConsumerGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeProducersHandler;
 import org.apache.kafka.clients.admin.internals.DescribeShareGroupsHandler;
+import org.apache.kafka.clients.admin.internals.DescribeStreamsGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeTransactionsHandler;
 import org.apache.kafka.clients.admin.internals.FenceProducersHandler;
 import org.apache.kafka.clients.admin.internals.ListConsumerGroupOffsetsHandler;
@@ -83,7 +86,6 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclBindingFilter;
 import org.apache.kafka.common.acl.AclOperation;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.errors.ApiException;
@@ -311,9 +313,7 @@ import static org.apache.kafka.common.utils.Utils.closeQuietly;
  * <p>
  * This class is thread-safe.
  * </p>
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class KafkaAdminClient extends AdminClient {
 
     /**
@@ -2503,7 +2503,7 @@ public class KafkaAdminClient extends AdminClient {
             private boolean useMetadataRequest = false;
 
             @Override
-            AbstractRequest.Builder createRequest(int timeoutMs) {
+            AbstractRequest.Builder<?> createRequest(int timeoutMs) {
                 if (!useMetadataRequest) {
                     if (metadataManager.usingBootstrapControllers() && options.includeFencedBrokers()) {
                         throw new IllegalArgumentException("Cannot request fenced brokers from controller endpoint");
@@ -3768,6 +3768,17 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
+    public ListStreamsGroupOffsetsResult listStreamsGroupOffsets(Map<String, ListStreamsGroupOffsetsSpec> groupSpecs,
+                                                                   ListStreamsGroupOffsetsOptions options) {
+        Map<String, ListConsumerGroupOffsetsSpec> consumerGroupSpecs = groupSpecs.entrySet().stream()
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                entry -> new ListConsumerGroupOffsetsSpec().topicPartitions(entry.getValue().topicPartitions())
+            ));
+        return new ListStreamsGroupOffsetsResult(listConsumerGroupOffsets(consumerGroupSpecs, new ListConsumerGroupOffsetsOptions()));
+    }
+
+    @Override
     public DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, Void> future =
                 DeleteConsumerGroupsHandler.newFuture(groupIds);
@@ -3775,6 +3786,11 @@ public class KafkaAdminClient extends AdminClient {
         invokeDriver(handler, future, options.timeoutMs);
         return new DeleteConsumerGroupsResult(future.all().entrySet().stream()
                 .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
+    }
+
+    @Override
+    public DeleteStreamsGroupsResult deleteStreamsGroups(Collection<String> groupIds, DeleteStreamsGroupsOptions options) {
+        return new DeleteStreamsGroupsResult(deleteConsumerGroups(groupIds, new DeleteConsumerGroupsOptions()));
     }
 
     @Override
@@ -3790,6 +3806,14 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
+    public DeleteStreamsGroupOffsetsResult deleteStreamsGroupOffsets(
+        String groupId,
+        Set<TopicPartition> partitions,
+        DeleteStreamsGroupOffsetsOptions options) {
+        return new DeleteStreamsGroupOffsetsResult(deleteConsumerGroupOffsets(groupId, partitions, new DeleteConsumerGroupOffsetsOptions()));
+    }
+
+    @Override
     public DescribeShareGroupsResult describeShareGroups(final Collection<String> groupIds,
                                                          final DescribeShareGroupsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, ShareGroupDescription> future =
@@ -3798,6 +3822,14 @@ public class KafkaAdminClient extends AdminClient {
         invokeDriver(handler, future, options.timeoutMs);
         return new DescribeShareGroupsResult(future.all().entrySet().stream()
                 .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
+    }
+
+    @Override
+    public AlterShareGroupOffsetsResult alterShareGroupOffsets(String groupId, Map<TopicPartition, Long> offsets, AlterShareGroupOffsetsOptions options) {
+        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, Errors>> future = AlterShareGroupOffsetsHandler.newFuture(groupId);
+        AlterShareGroupOffsetsHandler handler = new AlterShareGroupOffsetsHandler(groupId, offsets, logContext);
+        invokeDriver(handler, future, options.timeoutMs);
+        return new AlterShareGroupOffsetsResult(future.get(CoordinatorKey.byGroupId(groupId)));
     }
 
     @Override
@@ -3810,6 +3842,17 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
+    public DescribeStreamsGroupsResult describeStreamsGroups(final Collection<String> groupIds,
+                                                             final DescribeStreamsGroupsOptions options) {
+        SimpleAdminApiFuture<CoordinatorKey, StreamsGroupDescription> future =
+            DescribeStreamsGroupsHandler.newFuture(groupIds);
+        DescribeStreamsGroupsHandler handler = new DescribeStreamsGroupsHandler(options.includeAuthorizedOperations(), logContext);
+        invokeDriver(handler, future, options.timeoutMs);
+        return new DescribeStreamsGroupsResult(future.all().entrySet().stream()
+            .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
+    }
+    
+    @Override
     public DescribeClassicGroupsResult describeClassicGroups(final Collection<String> groupIds,
                                                              final DescribeClassicGroupsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, ClassicGroupDescription> future =
@@ -3817,6 +3860,16 @@ public class KafkaAdminClient extends AdminClient {
         DescribeClassicGroupsHandler handler = new DescribeClassicGroupsHandler(options.includeAuthorizedOperations(), logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new DescribeClassicGroupsResult(future.all().entrySet().stream()
+            .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
+    }
+
+    @Override
+    public DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds, DeleteShareGroupsOptions options) {
+        SimpleAdminApiFuture<CoordinatorKey, Void> future =
+            DeleteShareGroupsHandler.newFuture(groupIds);
+        DeleteShareGroupsHandler handler = new DeleteShareGroupsHandler(logContext);
+        invokeDriver(handler, future, options.timeoutMs);
+        return new DeleteShareGroupsResult(future.all().entrySet().stream()
             .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
     }
 
@@ -3927,6 +3980,7 @@ public class KafkaAdminClient extends AdminClient {
                     data.topics().add(reassignableTopic);
                 }
                 data.setTimeoutMs(timeoutMs);
+                data.setAllowReplicationFactorChange(options.allowReplicationFactorChange());
                 return new AlterPartitionReassignmentsRequest.Builder(data);
             }
 
@@ -4199,6 +4253,15 @@ public class KafkaAdminClient extends AdminClient {
         AlterConsumerGroupOffsetsHandler handler = new AlterConsumerGroupOffsetsHandler(groupId, offsets, logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new AlterConsumerGroupOffsetsResult(future.get(CoordinatorKey.byGroupId(groupId)));
+    }
+
+    @Override
+    public AlterStreamsGroupOffsetsResult alterStreamsGroupOffsets(
+        String groupId,
+        Map<TopicPartition, OffsetAndMetadata> offsets,
+        AlterStreamsGroupOffsetsOptions options
+    ) {
+        return new AlterStreamsGroupOffsetsResult(alterConsumerGroupOffsets(groupId, offsets, new AlterConsumerGroupOffsetsOptions()));
     }
 
     @Override
@@ -4712,7 +4775,7 @@ public class KafkaAdminClient extends AdminClient {
         final KafkaFutureImpl<Void> future = new KafkaFutureImpl<>();
         final long now = time.milliseconds();
         final Call call = new Call("unregisterBroker", calcDeadlineMs(now, options.timeoutMs()),
-                new LeastLoadedNodeProvider()) {
+                new LeastLoadedBrokerOrActiveKController()) {
 
             @Override
             UnregisterBrokerRequest.Builder createRequest(int timeoutMs) {
@@ -4731,11 +4794,11 @@ public class KafkaAdminClient extends AdminClient {
                         future.complete(null);
                         break;
                     case REQUEST_TIMED_OUT:
-                        throw error.exception();
+                        throw error.exception(response.data().errorMessage());
                     default:
                         log.error("Unregister broker request for broker ID {} failed: {}",
-                            brokerId, error.message());
-                        future.completeExceptionally(error.exception());
+                            brokerId, response.data().errorMessage());
+                        future.completeExceptionally(error.exception(response.data().errorMessage()));
                         break;
                 }
             }
@@ -4774,6 +4837,35 @@ public class KafkaAdminClient extends AdminClient {
         AbortTransactionHandler handler = new AbortTransactionHandler(spec, logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new AbortTransactionResult(future.all());
+    }
+
+    /**
+     * Forcefully terminates an ongoing transaction for a given transactional ID.
+     * <p>
+     * This API is intended for well-formed but long-running transactions that are known to the
+     * transaction coordinator. It is primarily designed for supporting 2PC (two-phase commit) workflows,
+     * where a coordinator may need to unilaterally terminate a participant transaction that hasn't completed.
+     * </p>
+     *
+     * @param transactionalId       The transactional ID whose active transaction should be forcefully terminated.
+     * @return a {@link TerminateTransactionResult} that can be used to await the operation result.
+     */
+    @Override
+    public TerminateTransactionResult forceTerminateTransaction(String transactionalId, TerminateTransactionOptions options) {
+        // Simply leverage the existing fenceProducers implementation with a single transactional ID
+        FenceProducersOptions fenceOptions = new FenceProducersOptions();
+        if (options.timeoutMs() != null) {
+            fenceOptions.timeoutMs(options.timeoutMs());
+        }
+
+        FenceProducersResult fenceResult = fenceProducers(
+            Collections.singleton(transactionalId),
+            fenceOptions
+        );
+
+        // Convert the result to a TerminateTransactionResult
+        KafkaFuture<Void> future = fenceResult.fencedProducers().get(transactionalId);
+        return new TerminateTransactionResult(future);
     }
 
     @Override

@@ -16,16 +16,15 @@
  */
 package org.apache.kafka.server.common;
 
-import java.util.Collections;
 import java.util.Map;
 
 public enum GroupVersion implements FeatureVersion {
 
     // Version 0 is the original group coordinator prior to KIP-848.
-    GV_0(0, MetadataVersion.MINIMUM_KRAFT_VERSION, Collections.emptyMap()),
+    GV_0(0, MetadataVersion.MINIMUM_VERSION, Map.of()),
 
     // Version 1 enables the consumer rebalance protocol (KIP-848).
-    GV_1(1, MetadataVersion.IBP_4_0_IV0, Collections.emptyMap());
+    GV_1(1, MetadataVersion.IBP_4_0_IV0, Map.of());
 
     public static final String FEATURE_NAME = "group.version";
 

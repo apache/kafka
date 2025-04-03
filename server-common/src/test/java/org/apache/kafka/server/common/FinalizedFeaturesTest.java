@@ -19,21 +19,39 @@ package org.apache.kafka.server.common;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.Map;
 
 import static org.apache.kafka.server.common.MetadataVersion.FEATURE_NAME;
-import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_KRAFT_VERSION;
+import static org.apache.kafka.server.common.MetadataVersion.MINIMUM_VERSION;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 
 class FinalizedFeaturesTest {
     @Test
     public void testKRaftModeFeatures() {
-        FinalizedFeatures finalizedFeatures = new FinalizedFeatures(MINIMUM_KRAFT_VERSION,
-                Collections.singletonMap("foo", (short) 2), 123);
-        assertEquals(MINIMUM_KRAFT_VERSION.featureLevel(),
+        FinalizedFeatures finalizedFeatures = new FinalizedFeatures(MINIMUM_VERSION,
+                Map.of("foo", (short) 2), 123);
+        assertEquals(MINIMUM_VERSION.featureLevel(),
                 finalizedFeatures.finalizedFeatures().get(FEATURE_NAME));
         assertEquals((short) 2,
                 finalizedFeatures.finalizedFeatures().get("foo"));
         assertEquals(2, finalizedFeatures.finalizedFeatures().size());
+    }
+
+    @Test
+    public void testSetFinalizedLevel() {
+        FinalizedFeatures finalizedFeatures = new FinalizedFeatures(
+            MINIMUM_VERSION,
+            Map.of("foo", (short) 2),
+            123
+        );
+
+        // Override an existing finalized feature version to 0
+        FinalizedFeatures removedFeatures = finalizedFeatures.setFinalizedLevel("foo", (short) 0);
+        assertNull(removedFeatures.finalizedFeatures().get("foo"));
+
+        // Override a missing finalized feature version to 0
+        FinalizedFeatures sameFeatures = removedFeatures.setFinalizedLevel("foo", (short) 0);
+        assertEquals(sameFeatures.finalizedFeatures(), removedFeatures.finalizedFeatures());
     }
 }

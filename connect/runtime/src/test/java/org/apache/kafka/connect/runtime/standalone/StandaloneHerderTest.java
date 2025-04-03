@@ -30,6 +30,7 @@ import org.apache.kafka.connect.runtime.ConnectorConfig;
 import org.apache.kafka.connect.runtime.ConnectorStatus;
 import org.apache.kafka.connect.runtime.Herder;
 import org.apache.kafka.connect.runtime.HerderConnectorContext;
+import org.apache.kafka.connect.runtime.MockConnectMetrics;
 import org.apache.kafka.connect.runtime.RestartPlan;
 import org.apache.kafka.connect.runtime.RestartRequest;
 import org.apache.kafka.connect.runtime.SinkConnectorConfig;
@@ -149,6 +150,7 @@ public class StandaloneHerderTest {
 
     public void initialize(boolean mockTransform) {
         when(worker.getPlugins()).thenReturn(plugins);
+        when(worker.metrics()).thenReturn(new MockConnectMetrics());
         herder = mock(StandaloneHerder.class, withSettings()
             .useConstructor(worker, WORKER_ID, KAFKA_CLUSTER_ID, statusBackingStore, new MemoryConfigBackingStore(transformer), noneConnectorClientConfigOverridePolicy, new MockTime())
             .defaultAnswer(CALLS_REAL_METHODS));

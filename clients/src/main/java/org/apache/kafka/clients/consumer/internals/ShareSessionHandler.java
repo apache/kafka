@@ -107,6 +107,10 @@ public class ShareSessionHandler {
         nextAcknowledgements.put(topicIdPartition, partitionAcknowledgements);
     }
 
+    public boolean isNewSession() {
+        return nextMetadata.isNewSession();
+    }
+
     public ShareFetchRequest.Builder newShareFetchBuilder(String groupId, FetchConfig fetchConfig) {
         List<TopicIdPartition> added = new ArrayList<>();
         List<TopicIdPartition> removed = new ArrayList<>();
@@ -175,8 +179,8 @@ public class ShareSessionHandler {
 
         return ShareFetchRequest.Builder.forConsumer(
                 groupId, nextMetadata, fetchConfig.maxWaitMs,
-                fetchConfig.minBytes, fetchConfig.maxBytes, fetchConfig.fetchSize, fetchConfig.maxPollRecords,
-                added, removed, acknowledgementBatches);
+                fetchConfig.minBytes, fetchConfig.maxBytes, fetchConfig.maxPollRecords,
+                fetchConfig.maxPollRecords, added, removed, acknowledgementBatches);
     }
 
     public ShareAcknowledgeRequest.Builder newShareAcknowledgeBuilder(String groupId, FetchConfig fetchConfig) {

@@ -26,6 +26,7 @@ import org.apache.kafka.common.requests.AbstractRequest;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -98,15 +99,13 @@ public class CoordinatorRequestManagerTest {
      *
      * @see CoordinatorRequestManager#markCoordinatorUnknown(String, long)
      */
+    @Flaky("KAFKA-18776")
     @Test
     public void testMarkCoordinatorUnknownLoggingAccuracy() {
         long oneMinute = 60000;
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister()) {
-            // You'd be forgiven for assuming that a warning message would be logged at WARN, but
-            // markCoordinatorUnknown logs the warning at DEBUG. This is partly for historical parity with the
-            // ClassicKafkaConsumer.
-            appender.setClassLogger(CoordinatorRequestManager.class, Level.DEBUG);
+            appender.setClassLogger(CoordinatorRequestManager.class, Level.WARN);
             CoordinatorRequestManager coordinatorRequestManager = setupCoordinatorManager(GROUP_ID);
             assertFalse(coordinatorRequestManager.coordinator().isPresent());
 
@@ -133,7 +132,7 @@ public class CoordinatorRequestManagerTest {
     }
 
     private Optional<Long> millisecondsFromLog(LogCaptureAppender appender) {
-        Pattern pattern = Pattern.compile("\\s+(?<millis>\\d+)+ms");
+        Pattern pattern = Pattern.compile("^Consumer has been disconnected from the group coordinator for (?<millis>\\d+)+ms$");
         List<Long> milliseconds = appender.getMessages().stream()
             .map(pattern::matcher)
             .filter(Matcher::find)

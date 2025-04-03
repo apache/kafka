@@ -18,7 +18,6 @@ package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.protocol.Errors;
 
@@ -27,10 +26,7 @@ import java.util.Set;
 
 /**
  * The result of the {@link Admin#deleteConsumerGroupOffsets(String, Set)} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DeleteConsumerGroupOffsetsResult {
     private final KafkaFuture<Map<TopicPartition, Errors>> future;
     private final Set<TopicPartition> partitions;

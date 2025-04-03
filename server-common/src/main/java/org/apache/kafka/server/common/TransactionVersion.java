@@ -19,17 +19,16 @@ package org.apache.kafka.server.common;
 import org.apache.kafka.common.requests.AddPartitionsToTxnRequest;
 import org.apache.kafka.common.requests.EndTxnRequest;
 
-import java.util.Collections;
 import java.util.Map;
 
 public enum TransactionVersion implements FeatureVersion {
 
     // Version 0 is the original transaction coordinator with no extra features enabled.
-    TV_0(0, MetadataVersion.MINIMUM_KRAFT_VERSION, Collections.emptyMap()),
+    TV_0(0, MetadataVersion.MINIMUM_VERSION, Map.of()),
     // Version 1 enables flexible transactional state records. (KIP-890)
-    TV_1(1, MetadataVersion.IBP_4_0_IV2, Collections.emptyMap()),
+    TV_1(1, MetadataVersion.IBP_4_0_IV2, Map.of()),
     // Version 2 enables epoch bump per transaction and optimizations. (KIP-890)
-    TV_2(2, MetadataVersion.IBP_4_0_IV2, Collections.emptyMap());
+    TV_2(2, MetadataVersion.IBP_4_0_IV2, Map.of());
 
     public static final String FEATURE_NAME = "transaction.version";
 

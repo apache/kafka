@@ -20,7 +20,6 @@ package kafka.server
 import java.util
 import java.util.concurrent.TimeUnit
 import java.util.Properties
-import kafka.cluster.EndPoint
 import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.Reconfigurable
@@ -33,11 +32,12 @@ import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.Utils
+import org.apache.kafka.network.EndPoint
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
-import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
+import org.apache.kafka.coordinator.transaction.{AddPartitionsToTxnConfig, TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AuthorizerUtils
@@ -204,10 +204,11 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   private val _shareCoordinatorConfig = new ShareCoordinatorConfig(this)
   def shareCoordinatorConfig: ShareCoordinatorConfig = _shareCoordinatorConfig
 
-  private val _transactionLogConfig = new TransactionLogConfig(this)
+  override val transactionLogConfig = new TransactionLogConfig(this)
   private val _transactionStateManagerConfig = new TransactionStateManagerConfig(this)
-  def transactionLogConfig: TransactionLogConfig = _transactionLogConfig
+  private val _addPartitionsToTxnConfig = new AddPartitionsToTxnConfig(this)
   def transactionStateManagerConfig: TransactionStateManagerConfig = _transactionStateManagerConfig
+  def addPartitionsToTxnConfig: AddPartitionsToTxnConfig = _addPartitionsToTxnConfig
 
   private val _quotaConfig = new QuotaConfig(this)
   def quotaConfig: QuotaConfig = _quotaConfig
@@ -257,8 +258,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   def metadataLogSegmentMinBytes = getInt(KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG)
   val serverMaxStartupTimeMs = getLong(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG)
 
-  def backgroundThreads = getInt(ServerConfigs.BACKGROUND_THREADS_CONFIG)
-  def numIoThreads = getInt(ServerConfigs.NUM_IO_THREADS_CONFIG)
   def messageMaxBytes = getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG)
   val requestTimeoutMs = getInt(ServerConfigs.REQUEST_TIMEOUT_MS_CONFIG)
   val connectionSetupTimeoutMs = getLong(ServerConfigs.SOCKET_CONNECTION_SETUP_TIMEOUT_MS_CONFIG)
@@ -309,8 +308,8 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val socketReceiveBufferBytes = getInt(SocketServerConfigs.SOCKET_RECEIVE_BUFFER_BYTES_CONFIG)
   val socketRequestMaxBytes = getInt(SocketServerConfigs.SOCKET_REQUEST_MAX_BYTES_CONFIG)
   val socketListenBacklogSize = getInt(SocketServerConfigs.SOCKET_LISTEN_BACKLOG_SIZE_CONFIG)
-  val maxConnectionsPerIp = getInt(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG)
-  val maxConnectionsPerIpOverrides: Map[String, Int] =
+  def maxConnectionsPerIp = getInt(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG)
+  def maxConnectionsPerIpOverrides: Map[String, Int] =
     getMap(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, getString(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG)).map { case (k, v) => (k, v.toInt)}
   def maxConnections = getInt(SocketServerConfigs.MAX_CONNECTIONS_CONFIG)
   def maxConnectionCreationRate = getInt(SocketServerConfigs.MAX_CONNECTION_CREATION_RATE_CONFIG)
@@ -331,7 +330,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   def logSegmentBytes = getInt(ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG)
   def logFlushIntervalMessages = getLong(ServerLogConfigs.LOG_FLUSH_INTERVAL_MESSAGES_CONFIG)
   def logCleanerThreads = getInt(CleanerConfig.LOG_CLEANER_THREADS_PROP)
-  def numRecoveryThreadsPerDataDir = getInt(ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG)
   val logFlushSchedulerIntervalMs = getLong(ServerLogConfigs.LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG)
   val logFlushOffsetCheckpointIntervalMs = getInt(ServerLogConfigs.LOG_FLUSH_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG).toLong
   val logFlushStartOffsetCheckpointIntervalMs = getInt(ServerLogConfigs.LOG_FLUSH_START_OFFSET_CHECKPOINT_INTERVAL_MS_CONFIG).toLong
@@ -378,40 +376,32 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   val replicaFetchMinBytes = getInt(ReplicationConfigs.REPLICA_FETCH_MIN_BYTES_CONFIG)
   val replicaFetchResponseMaxBytes = getInt(ReplicationConfigs.REPLICA_FETCH_RESPONSE_MAX_BYTES_CONFIG)
   val replicaFetchBackoffMs = getInt(ReplicationConfigs.REPLICA_FETCH_BACKOFF_MS_CONFIG)
-  def numReplicaFetchers = getInt(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG)
   val replicaHighWatermarkCheckpointIntervalMs = getLong(ReplicationConfigs.REPLICA_HIGH_WATERMARK_CHECKPOINT_INTERVAL_MS_CONFIG)
   val fetchPurgatoryPurgeIntervalRequests = getInt(ReplicationConfigs.FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG)
   val producerPurgatoryPurgeIntervalRequests = getInt(ReplicationConfigs.PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG)
   val deleteRecordsPurgatoryPurgeIntervalRequests = getInt(ReplicationConfigs.DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG)
   val autoLeaderRebalanceEnable = getBoolean(ReplicationConfigs.AUTO_LEADER_REBALANCE_ENABLE_CONFIG)
-  val leaderImbalancePerBrokerPercentage = getInt(ReplicationConfigs.LEADER_IMBALANCE_PER_BROKER_PERCENTAGE_CONFIG)
   val leaderImbalanceCheckIntervalSeconds: Long = getLong(ReplicationConfigs.LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG)
   val uncleanLeaderElectionCheckIntervalMs: Long = getLong(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_INTERVAL_MS_CONFIG)
   def uncleanLeaderElectionEnable: java.lang.Boolean = getBoolean(ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG)
 
-  // This will be removed soon. See KAFKA-18366.
-  val interBrokerProtocolVersion = MetadataVersion.MINIMUM_KRAFT_VERSION
-
   /** ********* Controlled shutdown configuration ***********/
   val controlledShutdownEnable = getBoolean(ServerConfigs.CONTROLLED_SHUTDOWN_ENABLE_CONFIG)
 
-  /** New group coordinator configs */
-  val isNewGroupCoordinatorEnabled = getBoolean(GroupCoordinatorConfig.NEW_GROUP_COORDINATOR_ENABLE_CONFIG)
+  /** Group coordinator configs */
   val groupCoordinatorRebalanceProtocols = {
     val protocols = getList(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG)
       .asScala.map(_.toUpperCase).map(GroupType.valueOf).toSet
     if (!protocols.contains(GroupType.CLASSIC)) {
       throw new ConfigException(s"Disabling the '${GroupType.CLASSIC}' protocol is not supported.")
     }
-    if (protocols.contains(GroupType.CONSUMER) && !isNewGroupCoordinatorEnabled) {
-      warn(s"The new '${GroupType.CONSUMER}' rebalance protocol is only supported with the new group coordinator.")
-    }
     if (protocols.contains(GroupType.SHARE)) {
-      if (!isNewGroupCoordinatorEnabled) {
-        warn(s"The new '${GroupType.SHARE}' rebalance protocol is only supported with the new group coordinator.")
-      }
       warn(s"Share groups and the new '${GroupType.SHARE}' rebalance protocol are enabled. " +
         "This is part of the early access of KIP-932 and MUST NOT be used in production.")
+    }
+    if (protocols.contains(GroupType.STREAMS)) {
+      warn(s"Streams groups and the new '${GroupType.STREAMS}' rebalance protocol are enabled. " +
+        "This is part of the early access of KIP-1071 and MUST NOT be used in production.")
     }
     protocols
   }
@@ -521,29 +511,44 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   }
 
   def effectiveAdvertisedControllerListeners: Seq[EndPoint] = {
-    val controllerAdvertisedListeners = advertisedListeners.filter(l => controllerListenerNames.contains(l.listenerName.value()))
+    val advertisedListenersProp = getString(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
+    val controllerAdvertisedListeners = if (advertisedListenersProp != null) {
+      CoreUtils.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
+        .filter(l => controllerListenerNames.contains(l.listenerName.value()))
+    } else {
+      Seq.empty
+    }
     val controllerListenersValue = controllerListeners
 
     controllerListenerNames.flatMap { name =>
       controllerAdvertisedListeners
         .find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name)))
-        .orElse(controllerListenersValue.find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name))))
+        .orElse(
+          // If users don't define advertised.listeners, the advertised controller listeners inherit from listeners configuration
+          // which match listener names in controller.listener.names.
+          // Removing "0.0.0.0" host to avoid validation errors. This is to be compatible with the old behavior before 3.9.
+          // The null or "" host does a reverse lookup in ListenerInfo#withWildcardHostnamesResolved.
+          controllerListenersValue
+            .find(endpoint => endpoint.listenerName.equals(ListenerName.normalised(name)))
+            .map(endpoint => if (endpoint.host == "0.0.0.0") {
+              new EndPoint(null, endpoint.port, endpoint.listenerName, endpoint.securityProtocol)
+            } else {
+              endpoint
+            })
+        )
     }
   }
 
   def effectiveAdvertisedBrokerListeners: Seq[EndPoint] = {
-    // Only expose broker listeners
-    advertisedListeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
-  }
-
-  // Use advertised listeners if defined, fallback to listeners otherwise
-  private def advertisedListeners: Seq[EndPoint] = {
+    // Use advertised listeners if defined, fallback to listeners otherwise
     val advertisedListenersProp = getString(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
-    if (advertisedListenersProp != null) {
+    val advertisedListeners = if (advertisedListenersProp != null) {
       CoreUtils.listenerListToEndPoints(advertisedListenersProp, effectiveListenerSecurityProtocolMap, requireDistinctPorts=false)
     } else {
       listeners
     }
+    // Only expose broker listeners
+    advertisedListeners.filterNot(l => controllerListenerNames.contains(l.listenerName.value()))
   }
 
   private def getInterBrokerListenerNameAndSecurityProtocol: (ListenerName, SecurityProtocol) = {
@@ -645,6 +650,11 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
         "There must be at least one broker advertised listener." + (
           if (processRoles.contains(ProcessRole.BrokerRole)) s" Perhaps all listeners appear in ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG}?" else ""))
     }
+    def warnIfConfigDefinedInWrongRole(expectedRole: ProcessRole, configName: String): Unit = {
+      if (originals.containsKey(configName)) {
+        warn(s"$configName is defined in ${processRoles.mkString(", ")}. It should be defined in the $expectedRole role.")
+      }
+    }
     if (processRoles == Set(ProcessRole.BrokerRole)) {
       // KRaft broker-only
       validateQuorumVotersAndQuorumBootstrapServerForKRaft()
@@ -669,6 +679,9 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       if (controllerListenerNames.size > 1) {
         warn(s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} has multiple entries; only the first will be used since ${KRaftConfigs.PROCESS_ROLES_CONFIG}=broker: ${controllerListenerNames.asJava}")
       }
+      // warn if create.topic.policy.class.name or alter.config.policy.class.name is defined in the broker role
+      warnIfConfigDefinedInWrongRole(ProcessRole.ControllerRole, ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG)
+      warnIfConfigDefinedInWrongRole(ProcessRole.ControllerRole, ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG)
     } else if (processRoles == Set(ProcessRole.ControllerRole)) {
       // KRaft controller-only
       validateQuorumVotersAndQuorumBootstrapServerForKRaft()

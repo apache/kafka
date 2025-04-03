@@ -410,29 +410,24 @@ object QuorumTestHarness {
         s"${unexpected.mkString("`", ",", "`")}")
   }
 
-  // We want to test the following combinations:
-  // * KRaft and the classic group protocol
-  // * KRaft and the consumer group protocol
-  def getTestQuorumAndGroupProtocolParametersAll: java.util.stream.Stream[Arguments] = {
+  def getTestGroupProtocolParametersAll: java.util.stream.Stream[Arguments] = {
     stream.Stream.of(
-      Arguments.of("kraft", GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT)),
-      Arguments.of("kraft", GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT))
+      Arguments.of(GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT)),
+      Arguments.of(GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT))
     )
   }
 
-  // For tests that only work with the classic group protocol, we want to test the following combinations:
-  // * KRaft and the classic group protocol
-  def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly: java.util.stream.Stream[Arguments] = {
+  // For tests that only work with the classic group protocol
+  def getTestGroupProtocolParametersClassicGroupProtocolOnly: java.util.stream.Stream[Arguments] = {
     stream.Stream.of(
-      Arguments.of("kraft", GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT))
+      Arguments.of(GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT))
     )
   }
 
-  // For tests that only work with the consumer group protocol, we want to test the following combination:
-  // * KRaft and the consumer group protocol
-  def getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly: stream.Stream[Arguments] = {
+  // For tests that only work with the consumer group protocol
+  def getTestGroupProtocolParametersConsumerGroupProtocolOnly: java.util.stream.Stream[Arguments] = {
     stream.Stream.of(
-      Arguments.of("kraft", GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT))
+      Arguments.of(GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT))
     )
   }
 }

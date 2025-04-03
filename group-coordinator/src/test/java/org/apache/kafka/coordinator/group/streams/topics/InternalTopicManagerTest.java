@@ -29,8 +29,8 @@ import org.apache.kafka.coordinator.group.streams.TopicMetadata;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -55,7 +55,7 @@ class InternalTopicManagerTest {
     @Test
     void testConfigureTopicsSetsConfigurationExceptionWhenSourceTopicIsMissing() {
         Map<String, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(SOURCE_TOPIC_1, new TopicMetadata(Uuid.randomUuid(), SOURCE_TOPIC_1, 2, Collections.emptyMap()));
+        topicMetadata.put(SOURCE_TOPIC_1, new TopicMetadata(Uuid.randomUuid(), SOURCE_TOPIC_1, 2));
         // SOURCE_TOPIC_2 is missing from topicMetadata
         StreamsTopology topology = makeTestTopology();
 
@@ -70,10 +70,10 @@ class InternalTopicManagerTest {
     @Test
     void testConfigureTopics() {
         Map<String, TopicMetadata> topicMetadata = new HashMap<>();
-        topicMetadata.put(SOURCE_TOPIC_1, new TopicMetadata(Uuid.randomUuid(), SOURCE_TOPIC_1, 2, Collections.emptyMap()));
-        topicMetadata.put(SOURCE_TOPIC_2, new TopicMetadata(Uuid.randomUuid(), SOURCE_TOPIC_2, 2, Collections.emptyMap()));
+        topicMetadata.put(SOURCE_TOPIC_1, new TopicMetadata(Uuid.randomUuid(), SOURCE_TOPIC_1, 2));
+        topicMetadata.put(SOURCE_TOPIC_2, new TopicMetadata(Uuid.randomUuid(), SOURCE_TOPIC_2, 2));
         topicMetadata.put(STATE_CHANGELOG_TOPIC_2,
-            new TopicMetadata(Uuid.randomUuid(), STATE_CHANGELOG_TOPIC_2, 2, Collections.emptyMap()));
+            new TopicMetadata(Uuid.randomUuid(), STATE_CHANGELOG_TOPIC_2, 2));
         StreamsTopology topology = makeTestTopology();
 
         ConfiguredTopology configuredTopology = InternalTopicManager.configureTopics(new LogContext(), topology, topicMetadata);
@@ -94,7 +94,7 @@ class InternalTopicManagerTest {
                 .setReplicationFactor((short) -1)
                 .setConfigs(
                     new CreatableTopicConfigCollection(
-                        Collections.singletonList(new CreatableTopicConfig().setName(CONFIG_KEY).setValue(CONFIG_VALUE)).iterator())
+                        List.of(new CreatableTopicConfig().setName(CONFIG_KEY).setValue(CONFIG_VALUE)).iterator())
                 ),
             internalTopicsToBeCreated.get(STATE_CHANGELOG_TOPIC_1));
 
@@ -125,7 +125,7 @@ class InternalTopicManagerTest {
                         new ConfiguredInternalTopic(REPARTITION_TOPIC,
                             2,
                             Optional.of((short) 3),
-                            Collections.emptyMap()
+                            Map.of()
                         )
                     ),
                     Set.of(),
@@ -133,7 +133,7 @@ class InternalTopicManagerTest {
                         new ConfiguredInternalTopic(STATE_CHANGELOG_TOPIC_2,
                             2,
                             Optional.empty(),
-                            Collections.emptyMap()
+                            Map.of()
                         )))
             )
         );
@@ -143,12 +143,12 @@ class InternalTopicManagerTest {
         // Create a subtopology source -> repartition
         Subtopology subtopology1 = new Subtopology()
             .setSubtopologyId(SUBTOPOLOGY_1)
-            .setSourceTopics(Collections.singletonList(SOURCE_TOPIC_1))
-            .setRepartitionSinkTopics(Collections.singletonList(REPARTITION_TOPIC))
-            .setStateChangelogTopics(Collections.singletonList(
+            .setSourceTopics(List.of(SOURCE_TOPIC_1))
+            .setRepartitionSinkTopics(List.of(REPARTITION_TOPIC))
+            .setStateChangelogTopics(List.of(
                 new StreamsGroupTopologyValue.TopicInfo()
                     .setName(STATE_CHANGELOG_TOPIC_1)
-                    .setTopicConfigs(Collections.singletonList(
+                    .setTopicConfigs(List.of(
                         new StreamsGroupTopologyValue.TopicConfig()
                             .setKey(CONFIG_KEY)
                             .setValue(CONFIG_VALUE)
@@ -157,20 +157,20 @@ class InternalTopicManagerTest {
         // Create a subtopology repartition/source2 -> sink (copartitioned)
         Subtopology subtopology2 = new Subtopology()
             .setSubtopologyId(SUBTOPOLOGY_2)
-            .setSourceTopics(Collections.singletonList(SOURCE_TOPIC_2))
-            .setRepartitionSourceTopics(Collections.singletonList(
+            .setSourceTopics(List.of(SOURCE_TOPIC_2))
+            .setRepartitionSourceTopics(List.of(
                 new StreamsGroupTopologyValue.TopicInfo()
                     .setName(REPARTITION_TOPIC)
                     .setReplicationFactor((short) 3)
             ))
-            .setStateChangelogTopics(Collections.singletonList(
+            .setStateChangelogTopics(List.of(
                 new StreamsGroupTopologyValue.TopicInfo()
                     .setName(STATE_CHANGELOG_TOPIC_2)
             ))
-            .setCopartitionGroups(Collections.singletonList(
+            .setCopartitionGroups(List.of(
                 new StreamsGroupTopologyValue.CopartitionGroup()
-                    .setSourceTopics(Collections.singletonList((short) 0))
-                    .setRepartitionSourceTopics(Collections.singletonList((short) 0))
+                    .setSourceTopics(List.of((short) 0))
+                    .setRepartitionSourceTopics(List.of((short) 0))
             ));
 
         return new StreamsTopology(3, Map.of(SUBTOPOLOGY_1, subtopology1, SUBTOPOLOGY_2, subtopology2));

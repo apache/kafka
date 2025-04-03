@@ -94,16 +94,15 @@ public final class QueryableStoreTypes {
 
     private abstract static class QueryableStoreTypeMatcher<T> implements QueryableStoreType<T> {
 
-        private final Set<Class> matchTo;
+        private final Set<Class<?>> matchTo;
 
-        QueryableStoreTypeMatcher(final Set<Class> matchTo) {
+        QueryableStoreTypeMatcher(final Set<Class<?>> matchTo) {
             this.matchTo = matchTo;
         }
 
-        @SuppressWarnings("unchecked")
         @Override
         public boolean accepts(final StateStore stateStore) {
-            for (final Class matchToClass : matchTo) {
+            for (final Class<?> matchToClass : matchTo) {
                 if (!matchToClass.isAssignableFrom(stateStore.getClass())) {
                     return false;
                 }

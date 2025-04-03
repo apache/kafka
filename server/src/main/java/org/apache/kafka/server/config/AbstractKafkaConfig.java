@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig;
+import org.apache.kafka.coordinator.transaction.AddPartitionsToTxnConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfig;
 import org.apache.kafka.network.SocketServerConfigs;
@@ -48,11 +49,7 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         KRaftConfigs.CONFIG_DEF,
         SocketServerConfigs.CONFIG_DEF,
         ReplicationConfigs.CONFIG_DEF,
-        GroupCoordinatorConfig.GROUP_COORDINATOR_CONFIG_DEF,
-        GroupCoordinatorConfig.NEW_GROUP_CONFIG_DEF,
-        GroupCoordinatorConfig.OFFSET_MANAGEMENT_CONFIG_DEF,
-        GroupCoordinatorConfig.CONSUMER_GROUP_CONFIG_DEF,
-        GroupCoordinatorConfig.SHARE_GROUP_CONFIG_DEF,
+        GroupCoordinatorConfig.CONFIG_DEF,
         CleanerConfig.CONFIG_DEF,
         LogConfig.SERVER_CONFIG_DEF,
         ShareGroupConfig.CONFIG_DEF,
@@ -63,10 +60,29 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         MetricConfigs.CONFIG_DEF,
         QuotaConfig.CONFIG_DEF,
         BrokerSecurityConfigs.CONFIG_DEF,
-        DelegationTokenManagerConfigs.CONFIG_DEF
+        DelegationTokenManagerConfigs.CONFIG_DEF,
+        AddPartitionsToTxnConfig.CONFIG_DEF
     ));
 
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
         super(definition, originals, configProviderProps, doLog);
     }
+
+    public int numIoThreads() {
+        return getInt(ServerConfigs.NUM_IO_THREADS_CONFIG);
+    }
+
+    public int numReplicaFetchers() {
+        return getInt(ReplicationConfigs.NUM_REPLICA_FETCHERS_CONFIG);
+    }
+
+    public int numRecoveryThreadsPerDataDir() {
+        return getInt(ServerLogConfigs.NUM_RECOVERY_THREADS_PER_DATA_DIR_CONFIG);
+    }
+
+    public int backgroundThreads() {
+        return getInt(ServerConfigs.BACKGROUND_THREADS_CONFIG);
+    }
+
+    public abstract TransactionLogConfig transactionLogConfig();
 }
