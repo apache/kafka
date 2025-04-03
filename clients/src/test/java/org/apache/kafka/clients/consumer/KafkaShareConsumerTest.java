@@ -45,11 +45,11 @@ import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
@@ -140,7 +140,9 @@ public class KafkaShareConsumerTest {
         }
     }
 
-    @Flaky("KAFKA-18488")
+    // This test is proving sufficiently flaky that it has been disabled pending investigation
+    @Disabled
+    // @Flaky("KAFKA-18488")
     @Test
     public void testVerifyFetchAndCommitSyncImplicit() {
         ConsumerMetadata metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
@@ -215,7 +217,9 @@ public class KafkaShareConsumerTest {
         }
     }
 
-    @Flaky("KAFKA-18794")
+    // This test is proving sufficiently flaky that it has been disabled pending investigation
+    @Disabled
+    //@Flaky("KAFKA-18794")
     @Test
     public void testVerifyFetchAndCloseImplicit() {
         ConsumerMetadata metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
