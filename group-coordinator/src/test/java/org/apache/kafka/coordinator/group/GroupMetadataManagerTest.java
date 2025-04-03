@@ -99,7 +99,6 @@ import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.coordinator.group.modern.MemberState;
-import org.apache.kafka.coordinator.group.modern.SubscriptionCount;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupBuilder;
@@ -147,7 +146,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
@@ -206,7 +204,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.spy;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -15427,7 +15424,8 @@ public class GroupMetadataManagerTest {
         List<CoordinatorRecord> expectedRecords = List.of(
             GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochTombstoneRecord(groupId),
             GroupCoordinatorRecordHelpers.newShareGroupSubscriptionMetadataTombstoneRecord(groupId),
-            GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord(groupId)
+            GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord(groupId),
+            GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataTombstoneRecord(groupId)
         );
         List<CoordinatorRecord> records = new ArrayList<>();
         context.groupMetadataManager.createGroupTombstoneRecords("share-group-id", records);
@@ -20416,7 +20414,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testSharePartitionDeleteRequest() {
+    public void testShareGroupDeleteRequest() {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -20425,38 +20423,57 @@ public class GroupMetadataManagerTest {
 
         Uuid t1Uuid = Uuid.randomUuid();
         Uuid t2Uuid = Uuid.randomUuid();
-        MetadataImage image = spy(new MetadataImageBuilder()
-            .addTopic(t1Uuid, "t1", 2)
-            .addTopic(t2Uuid, "t2", 2)
-            .build());
+        String t1Name = "t1";
+        String t2Name = "t2";
 
-        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
-
+        String groupId = "share-group";
         ShareGroup shareGroup = mock(ShareGroup.class);
-        Map<String, SubscriptionCount> topicMap = new LinkedHashMap<>();
-        topicMap.put("t1", mock(SubscriptionCount.class));
-        topicMap.put("t2", mock(SubscriptionCount.class));
-        when(shareGroup.subscribedTopicNames()).thenReturn(topicMap);
-        when(shareGroup.groupId()).thenReturn("share-group");
+        when(shareGroup.groupId()).thenReturn(groupId);
         when(shareGroup.isEmpty()).thenReturn(false);
 
-        DeleteShareGroupStateParameters expectedParameters = new DeleteShareGroupStateParameters.Builder()
-            .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdData>()
-                .setGroupId("share-group")
-                .setTopicsData(List.of(
-                    new TopicData<>(t1Uuid, List.of(PartitionFactory.newPartitionIdData(0), PartitionFactory.newPartitionIdData(1))),
-                    new TopicData<>(t2Uuid, List.of(PartitionFactory.newPartitionIdData(0), PartitionFactory.newPartitionIdData(1)))
-                ))
-                .build()
-            )
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(t1Uuid, t1Name, 2)
+            .addTopic(t2Uuid, t2Name, 2)
             .build();
-        Optional<DeleteShareGroupStateParameters> params = context.groupMetadataManager.shareGroupBuildPartitionDeleteRequest(shareGroup);
-        assertTrue(params.isPresent());
-        assertEquals(expectedParameters.groupTopicPartitionData(), params.get().groupTopicPartitionData());
 
-        verify(image, times(1)).topics();
-        verify(shareGroup, times(1)).subscribedTopicNames();
-        verify(shareGroup, times(1)).groupId();
+        MetadataDelta delta = new MetadataDelta(image);
+        context.groupMetadataManager.onNewMetadataImage(image, delta);
+
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0));
+
+        context.replay(
+            GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(t1Uuid, Map.entry(t1Name, Set.of(0, 1))),
+                Map.of(t2Uuid, Map.entry(t2Name, Set.of(0, 1))),
+                Map.of()
+            )
+        );
+
+        context.commit();
+
+        List<TopicData<PartitionIdData>> expectedTopicData = List.of(
+            new TopicData<>(t1Uuid, List.of(PartitionFactory.newPartitionIdData(0), PartitionFactory.newPartitionIdData(1))),
+            new TopicData<>(t2Uuid, List.of(PartitionFactory.newPartitionIdData(0), PartitionFactory.newPartitionIdData(1)))
+        );
+
+        List<CoordinatorRecord> expectedRecords = List.of(
+            newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(),
+                Map.of(),
+                Map.of(t1Uuid, t1Name, t2Uuid, t2Name)
+            )
+        );
+
+        List<CoordinatorRecord> records = new ArrayList<>();
+        Optional<DeleteShareGroupStateParameters> params = context.groupMetadataManager.shareGroupBuildPartitionDeleteRequest(groupId, records);
+        assertTrue(params.isPresent());
+        GroupTopicPartitionData<PartitionIdData> gtpData = params.get().groupTopicPartitionData();
+        assertEquals(2, gtpData.topicsData().size());
+        assertEquals(groupId, gtpData.groupId());
+        expectedTopicData.forEach(topicData -> assertTrue(gtpData.topicsData().contains(topicData)));
+        assertTrue(expectedRecords.containsAll(records) && records.containsAll(expectedRecords));
     }
 
     @Test
@@ -20515,6 +20532,7 @@ public class GroupMetadataManagerTest {
             new ShareGroupStatePartitionMetadataKey()
                 .setGroupId(groupId),
             new ShareGroupStatePartitionMetadataValue()
+                .setInitializingTopics(List.of())
                 .setInitializedTopics(List.of(
                     new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
                         .setTopicId(t1Uuid)

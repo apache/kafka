@@ -1067,25 +1067,27 @@ public class GroupCoordinatorService implements GroupCoordinator {
         });
 
         groupsByTopicPartition.forEach((topicPartition, groupList) -> {
-            CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future = deleteShareGroups(topicPartition, groupList).thenCompose(groupErrMap -> {
-                DeleteGroupsResponseData.DeletableGroupResultCollection collection = new DeleteGroupsResponseData.DeletableGroupResultCollection();
-                List<String> retainedGroupIds = deleteCandidateGroupIds(groupErrMap, groupList, collection);
-                if (retainedGroupIds.isEmpty()) {
-                    return CompletableFuture.completedFuture(collection);
-                }
+            CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future = deleteShareGroups(topicPartition, groupList)
+                .thenCompose(groupErrMap -> {
+                    DeleteGroupsResponseData.DeletableGroupResultCollection collection = new DeleteGroupsResponseData.DeletableGroupResultCollection();
+                    List<String> retainedGroupIds = deleteCandidateGroupIds(groupErrMap, groupList, collection);
+                    if (retainedGroupIds.isEmpty()) {
+                        return CompletableFuture.completedFuture(collection);
+                    }
 
-                return handleDeleteGroups(context, topicPartition, retainedGroupIds)
-                    .whenComplete((resp, __) -> resp.forEach(result -> collection.add(result.duplicate())))
-                    .thenApply(__ -> collection);
-            });
+                    return handleDeleteGroups(context, topicPartition, retainedGroupIds)
+                        .whenComplete((resp, __) -> resp.forEach(result -> collection.add(result.duplicate())))
+                        .thenApply(__ -> collection);
+                });
             // deleteShareGroups has its own exceptionally block, so we don't need one here.
 
             // This future object has the following stages:
             // - First it invokes the share group delete flow where the shard sharePartitionDeleteRequests
             // method is invoked, and it returns request objects for each valid share group passed to it.
+            // All initialized and initializing share partitions are moved to deleting.
             // - Then the requests are passed to the persister.deleteState method one at a time. The results
             // are collated as a Map of groupId -> persister errors
-            // - The above map is then used to decide whether to invoke the group coordinator delete groups logic
+            // - The above map can be used to decide whether to invoke the group coordinator delete groups logic
             // - Share groups with failed persister delete are NOT CONSIDERED for group coordinator delete.
             // TLDR: DeleteShareGroups -> filter erroneous persister deletes -> general delete groups logic
             futures.add(future);
@@ -1148,7 +1150,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         TopicPartition topicPartition,
         List<String> groupList
     ) {
-        // topicPartition refers to internal topic __consumer_offsets
+        // topicPartition refers to internal topic __consumer_offsets.
         return runtime.scheduleWriteOperation(
             "delete-share-groups",
             topicPartition,
