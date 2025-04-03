@@ -3757,7 +3757,6 @@ public class RemoteLogManagerTest {
             assertInstanceOf(MonitorableNoOpRemoteStorageManager.class, remoteLogManager.storageManager());
             assertInstanceOf(MonitorableNoOpRemoteLogMetadataManager.class, remoteLogManager.remoteLogMetadataManager());
 
-            // We need to call startup for call config() and call withPluginMetrics()
             assertEquals(true, ((MonitorableNoOpRemoteStorageManager) remoteLogManager.storageManager()).pluginMetrics);
             assertEquals(true, ((MonitorableNoOpRemoteLogMetadataManager) remoteLogManager.remoteLogMetadataManager()).pluginMetrics);
         }
@@ -3818,6 +3817,7 @@ public class RemoteLogManagerTest {
 
     public static class MonitorableNoOpRemoteLogMetadataManager extends NoOpRemoteLogMetadataManager implements Monitorable {
         public boolean pluginMetrics = false;
+
         @Override
         public void withPluginMetrics(PluginMetrics metrics) {
             pluginMetrics = true;
