@@ -246,12 +246,10 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                                 .setKRaftVersion(kraftVersion.featureLevel())
                         );
 
-                        if (voterSet.isPresent()) {
-                            builder.appendVotersMessage(
-                                now,
-                                voterSet.get().toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)
-                            );
-                        }
+                        voterSet.ifPresent(set -> builder.appendVotersMessage(
+                            now,
+                            set.toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)
+                        ));
                     }
 
                     return builder.build();
