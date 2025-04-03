@@ -430,6 +430,7 @@ public class RemoteLogManagerTest {
             }
         }) {
             ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);
+            // One is called from setup, the other is from this function.
             verify(remoteLogMetadataManager, times(2)).configure(capture.capture());
             assertEquals(host + ":" + port, capture.getValue().get(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "bootstrap.servers"));
             // should be overridden as SSL
@@ -440,7 +441,7 @@ public class RemoteLogManagerTest {
     }
 
     @Test
-    void testStartup() {
+    void testConfigure() {
         ArgumentCaptor<Map<String, Object>> capture = ArgumentCaptor.forClass(Map.class);
         verify(remoteStorageManager, times(1)).configure(capture.capture());
         assertEquals(brokerId, capture.getValue().get("broker.id"));
@@ -2845,7 +2846,6 @@ public class RemoteLogManagerTest {
         );
         checkpoint.write(epochEntries);
         LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
-        int currentLeaderEpoch = epochEntries.get(epochEntries.size() - 1).epoch;
 
         long localLogSegmentsSize = 512L;
         long retentionSize = ((long) segmentCount - deletableSegmentCount) * segmentSize + localLogSegmentsSize;
@@ -2865,7 +2865,7 @@ public class RemoteLogManagerTest {
 
         List<RemoteLogSegmentMetadata> segmentMetadataList = listRemoteLogSegmentMetadata(
                 leaderTopicIdPartition, segmentCount, recordsPerSegment, segmentSize, epochEntries, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
-        verifyDeleteLogSegment(segmentMetadataList, deletableSegmentCount, currentLeaderEpoch);
+        verifyDeleteLogSegment(segmentMetadataList, deletableSegmentCount);
     }
 
     @ParameterizedTest(name = "testDeleteLogSegmentDueToRetentionTimeBreach segmentCount={0} deletableSegmentCount={1}")
@@ -2883,7 +2883,6 @@ public class RemoteLogManagerTest {
         );
         checkpoint.write(epochEntries);
         LeaderEpochFileCache cache = new LeaderEpochFileCache(tp, checkpoint, scheduler);
-        int currentLeaderEpoch = epochEntries.get(epochEntries.size() - 1).epoch;
 
         long localLogSegmentsSize = 512L;
         long retentionSize = -1L;
@@ -2903,7 +2902,7 @@ public class RemoteLogManagerTest {
 
         List<RemoteLogSegmentMetadata> segmentMetadataList = listRemoteLogSegmentMetadataByTime(
                 leaderTopicIdPartition, segmentCount, deletableSegmentCount, recordsPerSegment, segmentSize, epochEntries, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
-        verifyDeleteLogSegment(segmentMetadataList, deletableSegmentCount, currentLeaderEpoch);
+        verifyDeleteLogSegment(segmentMetadataList, deletableSegmentCount);
     }
 
     private void verifyRemoteDeleteMetrics(long remoteDeleteLagBytes, long remoteDeleteLagSegments) {
@@ -2922,8 +2921,7 @@ public class RemoteLogManagerTest {
     }
 
     private void verifyDeleteLogSegment(List<RemoteLogSegmentMetadata> segmentMetadataList,
-                                        int deletableSegmentCount,
-                                        int currentLeaderEpoch)
+                                        int deletableSegmentCount)
             throws RemoteStorageException, ExecutionException, InterruptedException {
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition))
                 .thenReturn(segmentMetadataList.iterator());
@@ -2954,13 +2952,16 @@ public class RemoteLogManagerTest {
     @Test
     public void testDeleteRetentionMsOnExpiredSegment() throws RemoteStorageException, IOException {
         AtomicLong logStartOffset = new AtomicLong(0);
+
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> logStartOffset.set(offset),
                 brokerTopicStats, metrics, endPoint) {
+            @Override
             public RemoteStorageManager createRemoteStorageManager() {
                 return remoteStorageManager;
             }
+            @Override
             public RemoteLogMetadataManager createRemoteLogMetadataManager() {
                 return remoteLogMetadataManager;
             }
@@ -2995,7 +2996,8 @@ public class RemoteLogManagerTest {
                     .thenAnswer(answer -> CompletableFuture.runAsync(() -> { }));
 
             task.cleanupExpiredRemoteLogSegments();
-
+            // One is called from setup, the other is from this function.
+            verify(remoteStorageManager, times(2)).configure(any());
             assertEquals(0L, logStartOffset.get());
         } catch (ExecutionException | InterruptedException e) {
             throw new RuntimeException(e);
