@@ -141,6 +141,8 @@ import org.apache.kafka.clients.admin.RemoveRaftVoterOptions;
 import org.apache.kafka.clients.admin.RemoveRaftVoterResult;
 import org.apache.kafka.clients.admin.RenewDelegationTokenOptions;
 import org.apache.kafka.clients.admin.RenewDelegationTokenResult;
+import org.apache.kafka.clients.admin.TerminateTransactionOptions;
+import org.apache.kafka.clients.admin.TerminateTransactionResult;
 import org.apache.kafka.clients.admin.UnregisterBrokerOptions;
 import org.apache.kafka.clients.admin.UnregisterBrokerResult;
 import org.apache.kafka.clients.admin.UpdateFeaturesOptions;
@@ -414,6 +416,11 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     @Override
     public AbortTransactionResult abortTransaction(final AbortTransactionSpec spec, final AbortTransactionOptions options) {
         return adminDelegate.abortTransaction(spec, options);
+    }
+
+    @Override
+    public TerminateTransactionResult forceTerminateTransaction(final String transactionalId, final TerminateTransactionOptions options) {
+        return adminDelegate.forceTerminateTransaction(transactionalId, options);
     }
 
     @Override

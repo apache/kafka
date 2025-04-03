@@ -53,10 +53,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class QuorumControllerIntegrationTestUtils {
     private static final Logger log = LoggerFactory.getLogger(QuorumControllerIntegrationTestUtils.class);
 
-    BrokerRegistrationRequestData.FeatureCollection brokerFeatures() {
-        return brokerFeatures(MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestTesting());
-    }
-
     /**
      * Create a broker features collection for use in a registration request. We only set MV. here.
      *

@@ -400,7 +400,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param context The request context.
      * @param request The actual StreamsGroupHeartbeat request.
      *
-     * @return A Result containing the StreamsGroupHeartbeat response, a list of internal topics to be created and
+     * @return A result containing the StreamsGroupHeartbeat response, a list of internal topics to be created and
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
@@ -767,9 +767,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         long startMs = time.milliseconds();
         List<CoordinatorRecord> records = new ArrayList<>();
         groupMetadataManager.groupIds().forEach(groupId -> {
-            boolean allOffsetsExpired = offsetMetadataManager.cleanupExpiredOffsets(groupId, records);
-            if (allOffsetsExpired) {
-                groupMetadataManager.maybeDeleteGroup(groupId, records);
+            Group group = groupMetadataManager.group(groupId);
+            if (group.shouldExpire()) {
+                boolean allOffsetsExpired = offsetMetadataManager.cleanupExpiredOffsets(groupId, records);
+                if (allOffsetsExpired) {
+                    groupMetadataManager.maybeDeleteGroup(groupId, records);
+                }
             }
         });
 
