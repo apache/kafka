@@ -2544,7 +2544,12 @@ public class SharePartition {
         }
     }
 
-    // Visible for testing.
+    /**
+     * This function filters out the offsets present in the acquired records list that are also a part of batches that need to be archived.
+     * @param acquiredRecordsList The list containing acquired records. This list is sorted by the firstOffset of the acquired batch.
+     * @param batchesToArchive The list containing record batches to archive. This list is sorted by the baseOffset of the record batch.
+     * @return The list containing filtered acquired records offsets.
+     */
     List<AcquiredRecords> filterRecordBatchesFromAcquiredRecords(
         List<AcquiredRecords> acquiredRecordsList,
         List<RecordBatch> batchesToArchive
@@ -2559,22 +2564,26 @@ public class SharePartition {
                 for (RecordBatch batchToArchive : batchesToArchive) {
                     List<AcquiredRecords> newAcquiredRecords = new ArrayList<>();
                     for (AcquiredRecords temp : tempAcquiredRecords) {
-                        // Check if record batch overlaps with the acquired records.
+                        // Check if record batch overlaps with the acquired records. We need to filter out the overlapping
+                        // offsets in such a scenario.
                         if (temp.firstOffset() <= batchToArchive.lastOffset() && temp.lastOffset() >= batchToArchive.baseOffset()) {
                             // Split the acquired record into parts before, inside, and after the overlapping record batch.
                             if (temp.firstOffset() < batchToArchive.baseOffset()) {
+                                // The offsets in temp that are present before batchToArchive's baseOffset should not get filtered out.
                                 newAcquiredRecords.add(new AcquiredRecords()
                                     .setFirstOffset(temp.firstOffset())
                                     .setLastOffset(batchToArchive.baseOffset() - 1)
                                     .setDeliveryCount(temp.deliveryCount()));
                             }
                             if (temp.lastOffset() > batchToArchive.lastOffset()) {
+                                // The offsets in temp that are present after batchToArchive's lastOffset should not get filtered out.
                                 newAcquiredRecords.add(new AcquiredRecords()
                                     .setFirstOffset(batchToArchive.lastOffset() + 1)
                                     .setLastOffset(temp.lastOffset())
                                     .setDeliveryCount(temp.deliveryCount()));
                             }
                         } else {
+                            // Offsets in temp do not overlap with batchToArchive, hence it should not get filtered out.
                             newAcquiredRecords.add(temp);
                         }
                     }
