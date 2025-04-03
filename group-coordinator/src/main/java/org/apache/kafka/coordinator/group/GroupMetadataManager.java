@@ -8126,16 +8126,12 @@ public class GroupMetadataManager {
             ));
         }
 
-        // Build final delete map. There might be some topics already in deleting state.
-        Set<Uuid> deleteSet = new HashSet<>(shareGroupPartitionMetadata.get(shareGroupId).deletingTopics());
-        deleteSet.addAll(deleteCandidates.keySet());
-
         // Remove all initializing and initialized topic info from record and add deleting.
         records.add(GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
             shareGroupId,
             Map.of(),
             Map.of(),
-            attachTopicName(deleteSet)
+            attachTopicName(deleteCandidates.keySet())
         ));
 
         return Optional.of(new DeleteShareGroupStateParameters.Builder()

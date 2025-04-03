@@ -127,9 +127,7 @@ import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
-import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
 import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
-import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.PartitionIdData;
 import org.apache.kafka.server.share.persister.PartitionStateData;
 import org.apache.kafka.server.share.persister.TopicData;
@@ -15415,7 +15413,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testShareGroupDelete() {
+    public void testShareGroupDeleteTombstones() {
         String groupId = "share-group-id";
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
             .withShareGroup(new ShareGroupBuilder(groupId, 10))
@@ -15424,8 +15422,8 @@ public class GroupMetadataManagerTest {
         List<CoordinatorRecord> expectedRecords = List.of(
             GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentEpochTombstoneRecord(groupId),
             GroupCoordinatorRecordHelpers.newShareGroupSubscriptionMetadataTombstoneRecord(groupId),
-            GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord(groupId),
-            GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataTombstoneRecord(groupId)
+            GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataTombstoneRecord(groupId),
+            GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord(groupId)
         );
         List<CoordinatorRecord> records = new ArrayList<>();
         context.groupMetadataManager.createGroupTombstoneRecords("share-group-id", records);
@@ -20452,9 +20450,9 @@ public class GroupMetadataManagerTest {
 
         context.commit();
 
-        List<TopicData<PartitionIdData>> expectedTopicData = List.of(
-            new TopicData<>(t1Uuid, List.of(PartitionFactory.newPartitionIdData(0), PartitionFactory.newPartitionIdData(1))),
-            new TopicData<>(t2Uuid, List.of(PartitionFactory.newPartitionIdData(0), PartitionFactory.newPartitionIdData(1)))
+        Map<Uuid, Set<Integer>> expectedTopicPartitionMap = Map.of(
+            t1Uuid, Set.of(0, 1),
+            t2Uuid, Set.of(0, 1)
         );
 
         List<CoordinatorRecord> expectedRecords = List.of(
@@ -20468,12 +20466,13 @@ public class GroupMetadataManagerTest {
 
         List<CoordinatorRecord> records = new ArrayList<>();
         Optional<DeleteShareGroupStateParameters> params = context.groupMetadataManager.shareGroupBuildPartitionDeleteRequest(groupId, records);
-        assertTrue(params.isPresent());
-        GroupTopicPartitionData<PartitionIdData> gtpData = params.get().groupTopicPartitionData();
-        assertEquals(2, gtpData.topicsData().size());
-        assertEquals(groupId, gtpData.groupId());
-        expectedTopicData.forEach(topicData -> assertTrue(gtpData.topicsData().contains(topicData)));
-        assertTrue(expectedRecords.containsAll(records) && records.containsAll(expectedRecords));
+        verifyShareGroupDeleteRequest(
+            params,
+            expectedTopicPartitionMap,
+            groupId,
+            true
+        );
+        assertRecordsEquals(expectedRecords, records);
     }
 
     @Test
@@ -20536,11 +20535,11 @@ public class GroupMetadataManagerTest {
                 .setInitializedTopics(List.of(
                     new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
                         .setTopicId(t1Uuid)
-                        .setTopicName("t1")
+                        .setTopicName(t1Name)
                         .setPartitions(List.of(0, 1)),
                     new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
                         .setTopicId(t2Uuid)
-                        .setTopicName("t2")
+                        .setTopicName(t2Name)
                         .setPartitions(List.of(0, 1))
                 ))
                 .setDeletingTopics(List.of())
@@ -20973,6 +20972,27 @@ public class GroupMetadataManagerTest {
             assertEquals(expectedTopicPartitionsMap, actualTopicPartitionsMap);
         } else {
             assertTrue(initRequest.isEmpty());
+        }
+    }
+
+    private void verifyShareGroupDeleteRequest(
+        Optional<DeleteShareGroupStateParameters> deleteRequest,
+        Map<Uuid, Set<Integer>> expectedTopicPartitionsMap,
+        String groupId,
+        boolean shouldExist
+    ) {
+        if (shouldExist) {
+            assertTrue(deleteRequest.isPresent());
+            DeleteShareGroupStateParameters request = deleteRequest.get();
+            assertEquals(groupId, request.groupTopicPartitionData().groupId());
+            Map<Uuid, Set<Integer>> actualTopicPartitionsMap = new HashMap<>();
+            for (TopicData<PartitionIdData> topicData : request.groupTopicPartitionData().topicsData()) {
+                actualTopicPartitionsMap.computeIfAbsent(topicData.topicId(), k -> new HashSet<>())
+                    .addAll(topicData.partitions().stream().map(PartitionIdData::partition).toList());
+            }
+            assertEquals(expectedTopicPartitionsMap, actualTopicPartitionsMap);
+        } else {
+            assertTrue(deleteRequest.isEmpty());
         }
     }
 }
