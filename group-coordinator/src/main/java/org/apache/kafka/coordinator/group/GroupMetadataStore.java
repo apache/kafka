@@ -40,18 +40,6 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.Assignment;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
@@ -59,7 +47,6 @@ import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
-import org.apache.kafka.coordinator.group.modern.share.ShareGroupMember;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
@@ -149,7 +136,7 @@ public class GroupMetadataStore {
      */
     public Set<String> groupsSubscribedToTopic(String topicName) {
         Set<String> groups = groupsByTopics.get(topicName);
-        return groups != null ? groups : Collections.emptySet();
+        return groups != null ? groups : Set.of();
     }
 
     /**
@@ -329,7 +316,7 @@ public class GroupMetadataStore {
             });
             group.setSubscriptionMetadata(subscriptionMetadata);
         } else {
-            group.setSubscriptionMetadata(Collections.emptyMap());
+            group.setSubscriptionMetadata(Map.of());
         }
     }
 
@@ -436,8 +423,8 @@ public class GroupMetadataStore {
             ConsumerGroupMember newMember = new ConsumerGroupMember.Builder(oldMember)
                 .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
                 .setPreviousMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
-                .setAssignedPartitions(Collections.emptyMap())
-                .setPartitionsPendingRevocation(Collections.emptyMap())
+                .setAssignedPartitions(Map.of())
+                .setPartitionsPendingRevocation(Map.of())
                 .build();
             group.updateMember(newMember);
         }
@@ -457,9 +444,18 @@ public class GroupMetadataStore {
         String groupId = key.groupId();
         String regex = key.regularExpression();
 
+        ConsumerGroup consumerGroup;
+        try {
+            consumerGroup = getOrMaybeCreatePersistedConsumerGroup(groupId, value != null);
+        } catch (GroupIdNotFoundException ex) {
+            // If the group does not exist and a tombstone is replayed, we can ignore it.
+            return;
+        }
+
+        Set<String> oldSubscribedTopicNames = new HashSet<>(consumerGroup.subscribedTopicNames().keySet());
+
         if (value != null) {
-            ConsumerGroup group = getOrMaybeCreatePersistedConsumerGroup(groupId, true);
-            group.updateResolvedRegularExpression(
+            consumerGroup.updateResolvedRegularExpression(
                 regex,
                 new ResolvedRegularExpression(
                     new HashSet<>(value.topics()),
@@ -468,195 +464,10 @@ public class GroupMetadataStore {
                 )
             );
         } else {
-            try {
-                ConsumerGroup group = getOrMaybeCreatePersistedConsumerGroup(groupId, false);
-                group.removeResolvedRegularExpression(regex);
-            } catch (GroupIdNotFoundException ex) {
-                // If the group does not exist, we can ignore the tombstone.
-            }
-        }
-    }
-
-    /**
-     * Replays ShareGroupMemberMetadataKey/Value to update the hard state of
-     * the share group. It updates the subscription part of the member or
-     * delete the member.
-     *
-     * @param key   A ShareGroupMemberMetadataKey key.
-     * @param value A ShareGroupMemberMetadataValue record.
-     */
-    public void replay(
-        ShareGroupMemberMetadataKey key,
-        ShareGroupMemberMetadataValue value
-    ) {
-        String groupId = key.groupId();
-        String memberId = key.memberId();
-
-        ShareGroup shareGroup = getOrMaybeCreatePersistedShareGroup(groupId, value != null);
-        Set<String> oldSubscribedTopicNames = new HashSet<>(shareGroup.subscribedTopicNames().keySet());
-
-        if (value != null) {
-            ShareGroupMember oldMember = shareGroup.getOrMaybeCreateMember(memberId, true);
-            shareGroup.updateMember(new ShareGroupMember.Builder(oldMember)
-                .updateWith(value)
-                .build());
-        } else {
-            ShareGroupMember oldMember = shareGroup.getOrMaybeCreateMember(memberId, false);
-            if (oldMember.memberEpoch() != LEAVE_GROUP_MEMBER_EPOCH) {
-                throw new IllegalStateException("Received a tombstone record to delete member " + memberId
-                    + " with invalid leave group epoch.");
-            }
-            if (shareGroup.targetAssignment().containsKey(memberId)) {
-                throw new IllegalStateException("Received a tombstone record to delete member " + memberId
-                    + " but member exists in target assignment.");
-            }
-            shareGroup.removeMember(memberId);
+            consumerGroup.removeResolvedRegularExpression(regex);
         }
 
-        updateGroupsByTopics(groupId, oldSubscribedTopicNames, shareGroup.subscribedTopicNames().keySet());
-    }
-
-    /**
-     * Replays ShareGroupMetadataKey/Value to update the hard state of
-     * the share group. It updates the group epoch of the share
-     * group or deletes the share group.
-     *
-     * @param key   A ShareGroupMetadataKey key.
-     * @param value A ShareGroupMetadataValue record.
-     */
-    public void replay(
-        ShareGroupMetadataKey key,
-        ShareGroupMetadataValue value
-    ) {
-        String groupId = key.groupId();
-
-        if (value != null) {
-            ShareGroup shareGroup = getOrMaybeCreatePersistedShareGroup(groupId, true);
-            shareGroup.setGroupEpoch(value.epoch());
-        } else {
-            ShareGroup shareGroup = getOrMaybeCreatePersistedShareGroup(groupId, false);
-            if (!shareGroup.members().isEmpty()) {
-                throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but the group still has " + shareGroup.members().size() + " members.");
-            }
-            if (!shareGroup.targetAssignment().isEmpty()) {
-                throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but the target assignment still has " + shareGroup.targetAssignment().size()
-                    + " members.");
-            }
-            if (shareGroup.assignmentEpoch() != -1) {
-                throw new IllegalStateException("Received a tombstone record to delete group " + groupId
-                    + " but target assignment epoch in invalid.");
-            }
-            removeGroup(groupId);
-        }
-
-    }
-
-    /**
-     * Replays ShareGroupPartitionMetadataKey/Value to update the hard state of
-     * the share group. It updates the subscription metadata of the share
-     * group.
-     *
-     * @param key   A ShareGroupPartitionMetadataKey key.
-     * @param value A ShareGroupPartitionMetadataValue record.
-     */
-    public void replay(
-        ShareGroupPartitionMetadataKey key,
-        ShareGroupPartitionMetadataValue value
-    ) {
-        String groupId = key.groupId();
-        ShareGroup group = getOrMaybeCreatePersistedShareGroup(groupId, false);
-
-        if (value != null) {
-            Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
-            value.topics().forEach(topicMetadata ->
-                subscriptionMetadata.put(topicMetadata.topicName(), TopicMetadata.fromRecord(topicMetadata))
-            );
-            group.setSubscriptionMetadata(subscriptionMetadata);
-        } else {
-            group.setSubscriptionMetadata(Collections.emptyMap());
-        }
-    }
-
-    /**
-     * Replays ShareGroupTargetAssignmentMemberKey/Value to update the hard state of
-     * the share group. It updates the target assignment of the member or deletes it.
-     *
-     * @param key   A ShareGroupTargetAssignmentMemberKey key.
-     * @param value A ShareGroupTargetAssignmentMemberValue record.
-     */
-    public void replay(
-        ShareGroupTargetAssignmentMemberKey key,
-        ShareGroupTargetAssignmentMemberValue value
-    ) {
-        String groupId = key.groupId();
-        String memberId = key.memberId();
-        ShareGroup group = getOrMaybeCreatePersistedShareGroup(groupId, false);
-
-        if (value != null) {
-            group.updateTargetAssignment(memberId, Assignment.fromRecord(value));
-        } else {
-            group.removeTargetAssignment(memberId);
-        }
-    }
-
-    /**
-     * Replays ShareGroupTargetAssignmentMetadataKey/Value to update the hard state of
-     * the share group. It updates the target assignment epoch or set it to -1 to signal
-     * that it has been deleted.
-     *
-     * @param key   A ShareGroupTargetAssignmentMetadataKey key.
-     * @param value A ShareGroupTargetAssignmentMetadataValue record.
-     */
-    public void replay(
-        ShareGroupTargetAssignmentMetadataKey key,
-        ShareGroupTargetAssignmentMetadataValue value
-    ) {
-        String groupId = key.groupId();
-        ShareGroup group = getOrMaybeCreatePersistedShareGroup(groupId, false);
-
-        if (value != null) {
-            group.setTargetAssignmentEpoch(value.assignmentEpoch());
-        } else {
-            if (!group.targetAssignment().isEmpty()) {
-                throw new IllegalStateException("Received a tombstone record to delete target assignment of " + groupId
-                    + " but the assignment still has " + group.targetAssignment().size() + " members.");
-            }
-            group.setTargetAssignmentEpoch(-1);
-        }
-    }
-
-    /**
-     * Replays ShareGroupCurrentMemberAssignmentKey/Value to update the hard state of
-     * the share group. It updates the assignment of a member or deletes it.
-     *
-     * @param key   A ShareGroupCurrentMemberAssignmentKey key.
-     * @param value A ShareGroupCurrentMemberAssignmentValue record.
-     */
-    public void replay(
-        ShareGroupCurrentMemberAssignmentKey key,
-        ShareGroupCurrentMemberAssignmentValue value
-    ) {
-        String groupId = key.groupId();
-        String memberId = key.memberId();
-
-        ShareGroup group = getOrMaybeCreatePersistedShareGroup(groupId, false);
-        ShareGroupMember oldMember = group.getOrMaybeCreateMember(memberId, false);
-
-        if (value != null) {
-            ShareGroupMember newMember = new ShareGroupMember.Builder(oldMember)
-                .updateWith(value)
-                .build();
-            group.updateMember(newMember);
-        } else {
-            ShareGroupMember newMember = new ShareGroupMember.Builder(oldMember)
-                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
-                .setPreviousMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH)
-                .setAssignedPartitions(Collections.emptyMap())
-                .build();
-            group.updateMember(newMember);
-        }
+        updateGroupsByTopics(groupId, oldSubscribedTopicNames, consumerGroup.subscribedTopicNames().keySet());
     }
 
     /**
@@ -874,5 +685,4 @@ public class GroupMetadataStore {
             });
         }
     }
-
 }

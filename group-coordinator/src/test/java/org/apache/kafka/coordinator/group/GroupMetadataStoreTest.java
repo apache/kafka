@@ -45,18 +45,6 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
-import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
-import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
@@ -64,7 +52,6 @@ import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroup;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.BeforeEach;
@@ -73,7 +60,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -103,9 +89,9 @@ public class GroupMetadataStoreTest {
         String groupId1 = "group1";
         String groupId2 = "group2";
 
-        assertEquals(Collections.emptySet(), groupMetadataStore.groupsSubscribedToTopic("foo"));
-        assertEquals(Collections.emptySet(), groupMetadataStore.groupsSubscribedToTopic("bar"));
-        assertEquals(Collections.emptySet(), groupMetadataStore.groupsSubscribedToTopic("zar"));
+        assertEquals(Set.of(), groupMetadataStore.groupsSubscribedToTopic("foo"));
+        assertEquals(Set.of(), groupMetadataStore.groupsSubscribedToTopic("bar"));
+        assertEquals(Set.of(), groupMetadataStore.groupsSubscribedToTopic("zar"));
 
         // M1 in group 1 subscribes to foo and bar.
         replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId1,
@@ -115,7 +101,7 @@ public class GroupMetadataStoreTest {
 
         assertEquals(Set.of(groupId1), groupMetadataStore.groupsSubscribedToTopic("foo"));
         assertEquals(Set.of(groupId1), groupMetadataStore.groupsSubscribedToTopic("bar"));
-        assertEquals(Collections.emptySet(), groupMetadataStore.groupsSubscribedToTopic("zar"));
+        assertEquals(Set.of(), groupMetadataStore.groupsSubscribedToTopic("zar"));
 
         // M1 in group 2 subscribes to foo, bar and zar.
         replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId2,
@@ -158,7 +144,7 @@ public class GroupMetadataStoreTest {
         // M1 in group 2 subscribes to nothing.
         replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId2,
             new ConsumerGroupMember.Builder("group2-m1")
-                .setSubscribedTopicNames(Collections.emptyList())
+                .setSubscribedTopicNames(List.of())
                 .build()));
 
         assertEquals(Set.of(groupId2), groupMetadataStore.groupsSubscribedToTopic("foo"));
@@ -168,7 +154,7 @@ public class GroupMetadataStoreTest {
         // M2 in group 2 subscribes to foo.
         replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId2,
             new ConsumerGroupMember.Builder("group2-m2")
-                .setSubscribedTopicNames(Collections.singletonList("foo"))
+                .setSubscribedTopicNames(List.of("foo"))
                 .build()));
 
         assertEquals(Set.of(groupId2), groupMetadataStore.groupsSubscribedToTopic("foo"));
@@ -178,30 +164,29 @@ public class GroupMetadataStoreTest {
         // M2 in group 2 subscribes to nothing.
         replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId2,
             new ConsumerGroupMember.Builder("group2-m2")
-                .setSubscribedTopicNames(Collections.emptyList())
+                .setSubscribedTopicNames(List.of())
                 .build()));
 
-        assertEquals(Collections.emptySet(), groupMetadataStore.groupsSubscribedToTopic("foo"));
+        assertEquals(Set.of(), groupMetadataStore.groupsSubscribedToTopic("foo"));
         assertEquals(Set.of(groupId1), groupMetadataStore.groupsSubscribedToTopic("bar"));
         assertEquals(Set.of(groupId1), groupMetadataStore.groupsSubscribedToTopic("zar"));
 
         // M2 in group 1 subscribes to nothing.
         replay(GroupCoordinatorRecordHelpers.newConsumerGroupMemberSubscriptionRecord(groupId1,
             new ConsumerGroupMember.Builder("group1-m2")
-                .setSubscribedTopicNames(Collections.emptyList())
+                .setSubscribedTopicNames(List.of())
                 .build()));
 
-        assertEquals(Collections.emptySet(), groupMetadataStore.groupsSubscribedToTopic("foo"));
-        assertEquals(Collections.emptySet(), groupMetadataStore.groupsSubscribedToTopic("bar"));
-        assertEquals(Collections.emptySet(), groupMetadataStore.groupsSubscribedToTopic("zar"));
+        assertEquals(Set.of(), groupMetadataStore.groupsSubscribedToTopic("foo"));
+        assertEquals(Set.of(), groupMetadataStore.groupsSubscribedToTopic("bar"));
+        assertEquals(Set.of(), groupMetadataStore.groupsSubscribedToTopic("zar"));
     }
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
     public void testReplayGroupMetadataRecords(boolean useDefaultRebalanceTimeout) {
 
-        byte[] subscription = ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(
-            Collections.singletonList("foo"))).array();
+        byte[] subscription = ConsumerProtocol.serializeSubscription(new ConsumerPartitionAssignor.Subscription(List.of("foo"))).array();
         List<GroupMetadataValue.MemberMetadata> members = new ArrayList<>();
         List<ClassicGroupMember> expectedMembers = new ArrayList<>();
         JoinGroupRequestData.JoinGroupRequestProtocolCollection expectedProtocols = new JoinGroupRequestData.JoinGroupRequestProtocolCollection(0);
@@ -275,7 +260,7 @@ public class GroupMetadataStoreTest {
             .setClientHost("clienthost")
             .setServerAssignorName("range")
             .setRackId("rackid")
-            .setSubscribedTopicNames(Collections.singletonList("foo"))
+            .setSubscribedTopicNames(List.of("foo"))
             .build();
 
         // The group and the member are created if they do not exist.
@@ -314,7 +299,7 @@ public class GroupMetadataStoreTest {
 
     @Test
     public void testReplayConsumerGroupPartitionMetadata() {
-        Map<String, TopicMetadata> metadata = Collections.singletonMap(
+        Map<String, TopicMetadata> metadata = Map.of(
             "bar",
             new TopicMetadata(Uuid.randomUuid(), "bar", 10)
         );
@@ -413,6 +398,11 @@ public class GroupMetadataStoreTest {
             Optional.of(resolvedRegularExpression),
             consumerGroup("foo").resolvedRegularExpression("abc*")
         );
+
+        assertEquals(
+            Set.of("foo"),
+            groupMetadataStore.groupsSubscribedToTopic("abc")
+        );
     }
 
     @Test
@@ -435,6 +425,11 @@ public class GroupMetadataStoreTest {
             resolvedRegularExpression
         ));
 
+        assertEquals(
+            Set.of("foo"),
+            groupMetadataStore.groupsSubscribedToTopic("abc")
+        );
+
         replay(GroupCoordinatorRecordHelpers.newConsumerGroupRegularExpressionTombstone(
             "foo",
             "abc*"
@@ -443,6 +438,11 @@ public class GroupMetadataStoreTest {
         assertEquals(
             Optional.empty(),
             consumerGroup("foo").resolvedRegularExpression("abc*")
+        );
+
+        assertEquals(
+            Set.of(),
+            groupMetadataStore.groupsSubscribedToTopic("abc")
         );
     }
 
@@ -491,7 +491,7 @@ public class GroupMetadataStoreTest {
                 );
                 break;
 
-            case CONSUMER_GROUP_TARGET_ASSIGNMENT_METADATA:
+            case CONSUMER_GROUP_TARGET_ASSIGNMENT_METADATA://7
                 groupMetadataStore.replay(
                     (ConsumerGroupTargetAssignmentMetadataKey) key,
                     (ConsumerGroupTargetAssignmentMetadataValue) messageOrNull(value)
@@ -502,48 +502,6 @@ public class GroupMetadataStoreTest {
                 groupMetadataStore.replay(
                     (ConsumerGroupCurrentMemberAssignmentKey) key,
                     (ConsumerGroupCurrentMemberAssignmentValue) messageOrNull(value)
-                );
-                break;
-
-            case SHARE_GROUP_MEMBER_METADATA:
-                groupMetadataStore.replay(
-                    (ShareGroupMemberMetadataKey) key,
-                    (ShareGroupMemberMetadataValue) messageOrNull(value)
-                );
-                break;
-
-            case SHARE_GROUP_METADATA:
-                groupMetadataStore.replay(
-                    (ShareGroupMetadataKey) key,
-                    (ShareGroupMetadataValue) messageOrNull(value)
-                );
-                break;
-
-            case SHARE_GROUP_PARTITION_METADATA:
-                groupMetadataStore.replay(
-                    (ShareGroupPartitionMetadataKey) key,
-                    (ShareGroupPartitionMetadataValue) messageOrNull(value)
-                );
-                break;
-
-            case SHARE_GROUP_TARGET_ASSIGNMENT_MEMBER:
-                groupMetadataStore.replay(
-                    (ShareGroupTargetAssignmentMemberKey) key,
-                    (ShareGroupTargetAssignmentMemberValue) messageOrNull(value)
-                );
-                break;
-
-            case SHARE_GROUP_TARGET_ASSIGNMENT_METADATA:
-                groupMetadataStore.replay(
-                    (ShareGroupTargetAssignmentMetadataKey) key,
-                    (ShareGroupTargetAssignmentMetadataValue) messageOrNull(value)
-                );
-                break;
-
-            case SHARE_GROUP_CURRENT_MEMBER_ASSIGNMENT:
-                groupMetadataStore.replay(
-                    (ShareGroupCurrentMemberAssignmentKey) key,
-                    (ShareGroupCurrentMemberAssignmentValue) messageOrNull(value)
                 );
                 break;
 
