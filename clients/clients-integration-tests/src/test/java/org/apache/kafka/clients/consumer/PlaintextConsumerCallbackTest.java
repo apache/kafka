@@ -14,12 +14,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.clients.callback;
+package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.clients.consumer.Consumer;
-import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
-import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
@@ -315,8 +311,8 @@ public class PlaintextConsumerCallbackTest {
 
     private void sendRecords(int numRecords, long startingTimestamp) {
         try (Producer<byte[], byte[]> producer = cluster.producer()) {
-            for (int i = 0; i < numRecords; i++) {
-                long timestamp = startingTimestamp + i;
+            for (var i = 0; i < numRecords; i++) {
+                var timestamp = startingTimestamp + i;
                 var record = new ProducerRecord<>(
                     tp.topic(),
                     tp.partition(),
