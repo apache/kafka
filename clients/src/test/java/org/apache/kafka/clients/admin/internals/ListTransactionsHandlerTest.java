@@ -88,10 +88,10 @@ public class ListTransactionsHandlerTest {
 
 
     @Test
-    public void testBuildRequestWithFilteredTransactionalIdPrefix() {
+    public void testBuildRequestWithFilteredTransactionalIdPattern() {
         int brokerId = 1;
         BrokerKey brokerKey = new BrokerKey(OptionalInt.of(brokerId));
-        String filteredTransactionalIdPattern = "^special-";
+        String filteredTransactionalIdPattern = "^special-.*";
         ListTransactionsOptions options = new ListTransactionsOptions()
             .filterOnTransactionalIdPattern(filteredTransactionalIdPattern);
         ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
