@@ -26,7 +26,6 @@ import org.apache.kafka.server.log.remote.storage.RemoteResourceNotFoundExceptio
 import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
@@ -47,7 +46,7 @@ class RemoteLogLeaderEpochStateTest {
 
     @Test
     void testListAllRemoteLogSegmentsOnEmpty() throws RemoteResourceNotFoundException {
-        assertFalse(epochState.listAllRemoteLogSegments(Collections.emptyMap()).hasNext());
+        assertFalse(epochState.listAllRemoteLogSegments(Map.of()).hasNext());
     }
 
     @Test
@@ -84,7 +83,7 @@ class RemoteLogLeaderEpochStateTest {
         segmentIdToMetadataMap.put(segmentId4, createRemoteLogSegmentMetadata(segmentId4, 9L));
 
         // segments should be sorted by start-offset
-        List<RemoteLogSegmentId> expectedList = Arrays.asList(segmentId1, segmentId2, segmentId4, segmentId3);
+        List<RemoteLogSegmentId> expectedList = List.of(segmentId1, segmentId2, segmentId4, segmentId3);
         List<RemoteLogSegmentId> actualList = new ArrayList<>();
         epochState.listAllRemoteLogSegments(segmentIdToMetadataMap)
                 .forEachRemaining(metadata -> actualList.add(metadata.remoteLogSegmentId()));
@@ -142,7 +141,7 @@ class RemoteLogLeaderEpochStateTest {
         assertEquals(1, epochState.referencedSegmentIds().size());
         assertEquals(segmentId4, epochState.floorEntry(11L));
         assertEquals(3, epochState.unreferencedSegmentIds().size());
-        assertTrue(epochState.unreferencedSegmentIds().containsAll(Arrays.asList(segmentId1, segmentId2, segmentId3)));
+        assertTrue(epochState.unreferencedSegmentIds().containsAll(List.of(segmentId1, segmentId2, segmentId3)));
         assertEquals(200L, epochState.highestLogOffset());
     }
 
@@ -184,7 +183,7 @@ class RemoteLogLeaderEpochStateTest {
         epochState.handleSegmentWithDeleteSegmentStartedState(101L, segmentId2);
         assertTrue(epochState.referencedSegmentIds().isEmpty());
         assertEquals(2, epochState.unreferencedSegmentIds().size());
-        assertTrue(epochState.unreferencedSegmentIds().containsAll(Arrays.asList(segmentId1, segmentId2)));
+        assertTrue(epochState.unreferencedSegmentIds().containsAll(List.of(segmentId1, segmentId2)));
     }
 
     @Test
