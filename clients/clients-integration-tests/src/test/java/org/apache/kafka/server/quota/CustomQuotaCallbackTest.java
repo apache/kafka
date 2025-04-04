@@ -114,7 +114,7 @@ public class CustomQuotaCallbackTest {
     private static Map<String, String> expectedTags(Map<String, String> extraTags) {
         Map<String, String> tags = new LinkedHashMap<>();
         tags.put("config", QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG);
-        tags.put("class", "MonitorableCustomQuotaCallback");
+        tags.put("class", MonitorableCustomQuotaCallback.class.getSimpleName());
         tags.putAll(extraTags);
         return tags;
     }
