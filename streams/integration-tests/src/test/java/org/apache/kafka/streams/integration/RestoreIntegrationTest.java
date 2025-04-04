@@ -241,8 +241,7 @@ public class RestoreIntegrationTest {
         streams.close();
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @Test
     public void shouldRestoreStateFromSourceTopicForReadOnlyStore() throws Exception {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final Topology topology = new Topology();
@@ -297,8 +296,7 @@ public class RestoreIntegrationTest {
         assertThat(numReceived.get(), equalTo(offsetLimitDelta * 2));
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @Test
     public void shouldRestoreStateFromSourceTopicForGlobalTable() throws Exception {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
@@ -348,8 +346,7 @@ public class RestoreIntegrationTest {
         assertThat(numReceived.get(), equalTo(offsetLimitDelta * 2));
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @Test
     public void shouldRestoreStateFromChangelogTopic() throws Exception {
         final String changelog = appId + "-store-changelog";
         CLUSTER.createTopic(changelog, 2, 1);
@@ -400,8 +397,7 @@ public class RestoreIntegrationTest {
         assertThat(numReceived.get(), equalTo(numberOfKeys));
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @Test
     public void shouldSuccessfullyStartWhenLoggingDisabled() throws InterruptedException {
         final StreamsBuilder builder = new StreamsBuilder();
 
@@ -426,8 +422,7 @@ public class RestoreIntegrationTest {
         assertTrue(startupLatch.await(30, TimeUnit.SECONDS));
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @Test
     public void shouldProcessDataFromStoresWithLoggingDisabled() throws InterruptedException {
         IntegrationTestUtils.produceKeyValuesSynchronously(inputStream,
                 asList(KeyValue.pair(1, 1),
@@ -471,8 +466,7 @@ public class RestoreIntegrationTest {
         assertTrue(processorLatch.await(30, TimeUnit.SECONDS));
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @Test
     public void shouldRecycleStateFromStandbyTaskPromotedToActiveTaskAndNotRestore() throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         builder.table(

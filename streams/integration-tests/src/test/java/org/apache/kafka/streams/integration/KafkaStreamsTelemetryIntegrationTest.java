@@ -289,8 +289,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
         }
     }
 
-    @ParameterizedTest
-    @MethodSource("multiTaskParameters")
+    @Test
     public void shouldPassCorrectMetricsDynamicInstances() throws Exception {
         // Correct streams metrics should get passed with dynamic membership
         streamsApplicationProperties = props(null);
@@ -429,15 +428,8 @@ public class KafkaStreamsTelemetryIntegrationTest {
     }
 
     private static Stream<Arguments> singleAndMultiTaskParameters() {
-        return Stream.of(Arguments.of("simple", true),
-                Arguments.of("simple", false),
-                Arguments.of("complex", true),
-                Arguments.of("complex", false));
-    }
-
-    private static Stream<Arguments> multiTaskParameters() {
-        return Stream.of(Arguments.of(true),
-                Arguments.of(false));
+        return Stream.of(Arguments.of("simple"),
+                Arguments.of("complex"));
     }
 
     private Properties props(final Properties extraProperties) {

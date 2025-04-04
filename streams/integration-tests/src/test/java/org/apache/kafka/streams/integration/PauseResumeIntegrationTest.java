@@ -38,12 +38,7 @@ import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.test.TestUtils;
 
 import org.hamcrest.CoreMatchers;
-import org.junit.jupiter.api.AfterAll;
-import org.junit.jupiter.api.AfterEach;
-import org.junit.jupiter.api.BeforeAll;
-import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.Tag;
-import org.junit.jupiter.api.TestInfo;
+import org.junit.jupiter.api.*;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
@@ -150,8 +145,7 @@ public class PauseResumeIntegrationTest {
         IntegrationTestUtils.produceKeyValuesSynchronously(topic, records, producerConfig, CLUSTER.time);
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @Test
     public void shouldPauseAndResumeKafkaStreams() throws Exception {
         kafkaStreams = buildKafkaStreams(OUTPUT_STREAM_1);
         kafkaStreams.start();
@@ -175,8 +169,7 @@ public class PauseResumeIntegrationTest {
         assertTopicSize(OUTPUT_STREAM_1, 10);
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @Test
     public void shouldAllowForTopologiesToStartPaused() throws Exception {
         kafkaStreams = buildKafkaStreams(OUTPUT_STREAM_1);
         kafkaStreams.pause();
@@ -196,8 +189,7 @@ public class PauseResumeIntegrationTest {
         assertTopicSize(OUTPUT_STREAM_1, 5);
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @Test
     @SuppressWarnings("deprecation")
     public void shouldPauseAndResumeKafkaStreamsWithNamedTopologies() throws Exception {
         streamsNamedTopologyWrapper = new KafkaStreamsNamedTopologyWrapper(props());
@@ -232,8 +224,7 @@ public class PauseResumeIntegrationTest {
         awaitOutput(OUTPUT_STREAM_1, 5, COUNT_OUTPUT_DATA2);
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @Test
     @SuppressWarnings("deprecation")
     public void shouldPauseAndResumeAllKafkaStreamsWithNamedTopologies() throws Exception {
         streamsNamedTopologyWrapper = new KafkaStreamsNamedTopologyWrapper(props());
@@ -269,8 +260,7 @@ public class PauseResumeIntegrationTest {
         assertTopicSize(OUTPUT_STREAM_2, 5);
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @Test
     @SuppressWarnings("deprecation")
     public void shouldAllowForNamedTopologiesToStartPaused() throws Exception {
         streamsNamedTopologyWrapper = new KafkaStreamsNamedTopologyWrapper(props());
@@ -300,8 +290,7 @@ public class PauseResumeIntegrationTest {
         awaitOutput(OUTPUT_STREAM_2, 5, COUNT_OUTPUT_DATA);
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @Test
     public void pauseResumeShouldWorkAcrossInstances() throws Exception {
         produceToInputTopics(INPUT_STREAM_1, STANDARD_INPUT_DATA);
 
@@ -330,8 +319,7 @@ public class PauseResumeIntegrationTest {
         awaitOutput(OUTPUT_STREAM_1, 5, COUNT_OUTPUT_DATA);
     }
 
-    @ParameterizedTest
-    @ValueSource(booleans = {true, false})
+    @Test
     public void pausedTopologyShouldNotRestoreStateStores() throws Exception {
         final Properties properties1 = props();
         properties1.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
