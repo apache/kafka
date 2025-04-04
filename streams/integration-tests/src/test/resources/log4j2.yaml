@@ -43,6 +43,9 @@ Configuration:
       - name: org.apache.kafka.clients
         level: ERROR
 
+      - name: org.apache.kafka.clients.NetworkClient
+        level: DEBUG
+
       - name: org.apache.kafka.clients.consumer
         level: DEBUG
 

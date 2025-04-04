@@ -496,7 +496,6 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     }
 
     private NetworkClientDelegate.UnsentRequest makeHeartbeatRequest(final long currentTimeMs) {
-        logger.info(this.heartbeatState.buildRequestData().toString());
         NetworkClientDelegate.UnsentRequest request = new NetworkClientDelegate.UnsentRequest(
             new StreamsGroupHeartbeatRequest.Builder(this.heartbeatState.buildRequestData(), true),
             coordinatorRequestManager.coordinator()
