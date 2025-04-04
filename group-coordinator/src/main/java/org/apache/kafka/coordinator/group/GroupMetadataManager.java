@@ -1817,17 +1817,15 @@ public class GroupMetadataManager {
      * max group size defined.
      *
      * @param group     The streams group.
-     * @param memberId  The member id.
      *
      * @throws GroupMaxSizeReachedException if the maximum capacity has been reached.
      */
     private void throwIfStreamsGroupIsFull(
-        StreamsGroup group,
-        String memberId
+        StreamsGroup group
     ) throws GroupMaxSizeReachedException {
         // If the streams group has reached its maximum capacity, the member is rejected if it is not
         // already a member of the streams group.
-        if (group.numMembers() >= config.streamsGroupMaxSize() && (memberId.isEmpty() || !group.hasMember(memberId))) {
+        if (group.numMembers() >= config.streamsGroupMaxSize()) {
             throw new GroupMaxSizeReachedException("The streams group has reached its maximum capacity of "
                 + config.streamsGroupMaxSize() + " members.");
         }
@@ -2099,8 +2097,13 @@ public class GroupMetadataManager {
 
         // Get or create the streams group.
         boolean isJoining = memberEpoch == 0;
-        final StreamsGroup group = isJoining ? getOrCreateStreamsGroup(groupId) : getStreamsGroupOrThrow(groupId);
-        throwIfStreamsGroupIsFull(group, memberId);
+        StreamsGroup group;
+        if (isJoining) {
+            group = getOrCreateStreamsGroup(groupId);
+            throwIfStreamsGroupIsFull(group);
+        } else {
+            group = getStreamsGroupOrThrow(groupId);
+        }
 
         // Get or create the member.
         StreamsGroupMember member;

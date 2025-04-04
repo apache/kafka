@@ -15785,52 +15785,24 @@ public class GroupMetadataManagerTest {
         String memberId1 = Uuid.randomUuid().toString();
         String memberId2 = Uuid.randomUuid().toString();
         String memberId3 = Uuid.randomUuid().toString();
-
-        String subtopology1 = "subtopology1";
-        String fooTopicName = "foo";
-        Uuid fooTopicId = Uuid.randomUuid();
-        String subtopology2 = "subtopology2";
-        String barTopicName = "bar";
-        Uuid barTopicId = Uuid.randomUuid();
-        Topology topology = new Topology().setSubtopologies(List.of(
-            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName)),
-            new Subtopology().setSubtopologyId(subtopology2).setSourceTopics(List.of(barTopicName))
-        ));
+        Topology topology = new Topology().setSubtopologies(List.of());
 
         // Create a context with one streams group containing two members.
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withMetadataImage(new MetadataImageBuilder()
-                .addTopic(fooTopicId, fooTopicName, 6)
-                .addTopic(barTopicId, barTopicName, 3)
-                .build())
+            .withMetadataImage(new MetadataImageBuilder().build())
             .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_MAX_SIZE_CONFIG, 2)
             .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
                 .withMember(streamsGroupMemberBuilderWithDefaults(memberId1)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
-                    .setAssignedTasks(TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
-                        TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2),
-                        TaskAssignmentTestUtil.mkTasks(subtopology2, 0, 1)))
                     .build())
                 .withMember(streamsGroupMemberBuilderWithDefaults(memberId2)
                     .setMemberEpoch(10)
                     .setPreviousMemberEpoch(9)
-                    .setAssignedTasks(TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
-                        TaskAssignmentTestUtil.mkTasks(subtopology1, 3, 4, 5),
-                        TaskAssignmentTestUtil.mkTasks(subtopology2, 2)))
                     .build())
-                .withTargetAssignment(memberId1, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
-                    TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2),
-                    TaskAssignmentTestUtil.mkTasks(subtopology2, 0, 1)))
-                .withTargetAssignment(memberId2, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
-                    TaskAssignmentTestUtil.mkTasks(subtopology1, 3, 4, 5),
-                    TaskAssignmentTestUtil.mkTasks(subtopology2, 2)))
                 .withTargetAssignmentEpoch(10)
                 .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
-                .withPartitionMetadata(Map.of(
-                    fooTopicName, new org.apache.kafka.coordinator.group.streams.TopicMetadata(fooTopicId, fooTopicName, 6),
-                    barTopicName, new org.apache.kafka.coordinator.group.streams.TopicMetadata(barTopicId, barTopicName, 3)
-                ))
+                .withPartitionMetadata(Map.of())
             )
             .build();
 
@@ -18281,10 +18253,10 @@ public class GroupMetadataManagerTest {
         assertEquals(Map.of("num.standby.replicas", "0"), assignor.lastPassedAssignmentConfigs());
 
         // Verify heartbeat interval
-        assertEquals(5000, result.response().data().heartbeatIntervalMs());
+        assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT, result.response().data().heartbeatIntervalMs());
 
         // Verify that there is a session time.
-        context.assertSessionTimeout(groupId, memberId, 45000);
+        context.assertSessionTimeout(groupId, memberId, GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT);
 
         // Advance time.
         assertEquals(
@@ -18306,7 +18278,6 @@ public class GroupMetadataManagerTest {
                 .setMemberId(memberId)
                 .setMemberEpoch(result.response().data().memberEpoch())
                 .setRackId("bla"));
-        assertEquals(2, result.response().data().memberEpoch());
 
         // Verify heartbeat interval
         assertEquals(10000, result.response().data().heartbeatIntervalMs());
