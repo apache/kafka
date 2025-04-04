@@ -16,7 +16,6 @@
  */
 package kafka.security;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
@@ -62,7 +61,7 @@ public class JaasModule {
     }
 
     public static JaasModule plainLoginModule(String username, String password) {
-        return plainLoginModule(username, password, false, Collections.emptyMap());
+        return plainLoginModule(username, password, false, Map.of());
     }
 
     public static JaasModule plainLoginModule(String username, String password, boolean debug, Map<String, String> validUsers) {
@@ -81,7 +80,7 @@ public class JaasModule {
     }
 
     public static JaasModule scramLoginModule(String username, String password) {
-        return scramLoginModule(username, password, false, Collections.emptyMap());
+        return scramLoginModule(username, password, false, Map.of());
     }
 
     public static JaasModule scramLoginModule(String username, String password, boolean debug, Map<String, String> tokenProps) {

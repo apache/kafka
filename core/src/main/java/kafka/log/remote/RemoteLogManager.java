@@ -1707,7 +1707,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             RecordBatch firstBatch = enrichedRecordBatch.batch;
             if (firstBatch == null)
                 return new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY, false,
-                        includeAbortedTxns ? Optional.of(Collections.emptyList()) : Optional.empty());
+                        includeAbortedTxns ? Optional.of(List.of()) : Optional.empty());
 
             int firstBatchSize = firstBatch.sizeInBytes();
             // An empty record is sent instead of an incomplete batch when
@@ -1783,7 +1783,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         return new FetchDataInfo(fetchInfo.fetchOffsetMetadata,
                 fetchInfo.records,
                 fetchInfo.firstEntryIncomplete,
-                Optional.of(abortedTransactions.isEmpty() ? Collections.emptyList() : new ArrayList<>(abortedTransactions)));
+                Optional.of(abortedTransactions.isEmpty() ? List.of() : new ArrayList<>(abortedTransactions)));
     }
 
     /**
