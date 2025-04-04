@@ -33,7 +33,7 @@ public class DeleteShareGroupStateRequest extends AbstractRequest {
         private final DeleteShareGroupStateRequestData data;
 
         public Builder(DeleteShareGroupStateRequestData data) {
-            this(data, true);
+            this(data, false);
         }
 
         public Builder(DeleteShareGroupStateRequestData data, boolean enableUnstableLastVersion) {

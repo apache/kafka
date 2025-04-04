@@ -20,7 +20,6 @@
   "name": "DescribeShareGroupOffsetsRequest",
   "validVersions": "0",
   "flexibleVersions": "0+",
-  "latestVersionUnstable": true,
   "fields": [
     { "name": "Groups", "type": "[]DescribeShareGroupOffsetsRequestGroup", "versions": "0+",
       "about": "The groups to describe offsets for.", "fields": [

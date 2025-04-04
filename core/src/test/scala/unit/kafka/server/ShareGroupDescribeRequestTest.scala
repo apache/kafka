@@ -42,15 +42,10 @@ import scala.jdk.CollectionConverters._
 ))
 class ShareGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, value = "true")
-    )
-  )
+  @ClusterTest
   def testShareGroupDescribeIsInAccessibleWhenConfigsDisabled(): Unit = {
     val shareGroupDescribeRequest = new ShareGroupDescribeRequest.Builder(
-      new ShareGroupDescribeRequestData().setGroupIds(List("grp-1", "grp-2").asJava),
-      true
+      new ShareGroupDescribeRequestData().setGroupIds(List("grp-1", "grp-2").asJava)
     ).build(ApiKeys.SHARE_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled))
 
     val shareGroupDescribeResponse = connectAndReceive[ShareGroupDescribeResponse](shareGroupDescribeRequest)

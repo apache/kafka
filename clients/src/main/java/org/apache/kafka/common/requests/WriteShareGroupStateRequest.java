@@ -33,7 +33,7 @@ public class WriteShareGroupStateRequest extends AbstractRequest {
         private final WriteShareGroupStateRequestData data;
 
         public Builder(WriteShareGroupStateRequestData data) {
-            this(data, true);
+            this(data, false);
         }
 
         public Builder(WriteShareGroupStateRequestData data, boolean enableUnstableLastVersion) {

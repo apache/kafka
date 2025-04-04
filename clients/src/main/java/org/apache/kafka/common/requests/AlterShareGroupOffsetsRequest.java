@@ -41,7 +41,7 @@ public class AlterShareGroupOffsetsRequest extends AbstractRequest {
         private final AlterShareGroupOffsetsRequestData data;
 
         public Builder(AlterShareGroupOffsetsRequestData data) {
-            this(data, true);
+            this(data, false);
         }
 
         public Builder(AlterShareGroupOffsetsRequestData data, boolean enableUnstableLastVersion) {

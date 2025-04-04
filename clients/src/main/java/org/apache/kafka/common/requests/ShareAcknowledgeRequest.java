@@ -79,7 +79,7 @@ public class ShareAcknowledgeRequest extends AbstractRequest {
                 partMap.forEach((index, ackPartition) -> ackTopic.partitions().add(ackPartition));
             });
 
-            return new ShareAcknowledgeRequest.Builder(data, true);
+            return new ShareAcknowledgeRequest.Builder(data);
         }
 
         public ShareAcknowledgeRequestData data() {
