@@ -3663,7 +3663,7 @@ public class FetcherTest {
         assertEquals(topicNames.size(), responseData.size());
         responseData.forEach((topicPartition, partitionData) -> assertEquals(records, partitionData.records()));
         LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> nonResponseData = fetchResponse.responseData(emptyMap(), version);
-        assertEquals(emptyMap().size(), nonResponseData.size());
+        assertEquals(0, nonResponseData.size());
     }
 
     private OffsetsForLeaderEpochResponse prepareOffsetsForLeaderEpochResponse(
