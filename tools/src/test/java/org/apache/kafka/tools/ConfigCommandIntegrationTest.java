@@ -431,6 +431,38 @@ public class ConfigCommandIntegrationTest {
         }
     }
 
+    @ClusterTest(
+        serverProperties = {@ClusterConfigProperty(key = "log.segment.bytes", value = "1048577")}
+    )
+    public void testAlterInvalidLogSegmentBytes() throws Exception {
+        try (Admin client = cluster.admin()) {
+            cluster.createTopic("test", 1, (short) 1);
+            TestUtils.waitForCondition(
+                () -> cluster.brokerSocketServers()
+                    .stream()
+                    .allMatch(broker -> broker.config().getInt("log.segment.bytes") == 1048577),
+                "Timeout waiting for topic config propagating to broker"
+            );
+            
+            ConfigCommand.ConfigCommandOptions command = new ConfigCommand.ConfigCommandOptions(
+                toArray(asList("--bootstrap-server", cluster.bootstrapServers(),
+                    "--alter",
+                    "--topic", "test",
+                    "--add-config", "segment.bytes=1000"
+                ))
+            );
+
+            Throwable exception = 
+                assertThrows(ExecutionException.class, () -> ConfigCommand.alterConfig(client, command)).getCause();
+
+            assertInstanceOf(InvalidConfigurationException.class, exception);
+            assertEquals(
+                "Invalid value 1000 for configuration segment.bytes: Value must be at least 1048576", 
+                exception.getMessage()
+            );
+        }
+    }
+
     private void assertNonZeroStatusExit(Stream<String> args, Consumer<String> checkErrOut) {
         AtomicReference<Integer> exitStatus = new AtomicReference<>();
         Exit.setExitProcedure((status, __) -> {
