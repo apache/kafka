@@ -175,14 +175,6 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         return clusterId;
     }
 
-    AtomicReference<String> firstError() {
-        return firstError;
-    }
-
-    File dir() {
-        return dir;
-    }
-
     LeaderAndEpoch waitForLeader() throws InterruptedException {
         AtomicReference<LeaderAndEpoch> value = new AtomicReference<>(null);
         TestUtils.retryOnExceptionWithTimeout(20000, 3, () -> {
@@ -217,18 +209,6 @@ public class LocalLogManagerTestEnv implements AutoCloseable {
         } else {
             return Optional.empty();
         }
-    }
-
-    public RawSnapshotReader waitForSnapshot(long committedOffset) throws InterruptedException {
-        return shared.waitForSnapshot(committedOffset);
-    }
-
-    public RawSnapshotReader waitForLatestSnapshot() throws InterruptedException {
-        return shared.waitForLatestSnapshot();
-    }
-
-    public long appendedBytes() {
-        return shared.appendedBytes();
     }
 
     public LeaderAndEpoch leaderAndEpoch() {

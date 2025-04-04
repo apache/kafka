@@ -74,6 +74,7 @@ import static org.apache.kafka.coordinator.group.streams.TaskAssignmentTestUtil.
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -100,23 +101,53 @@ public class StreamsGroupTest {
     }
 
     @Test
-    public void testGetOrCreateMember() {
+    public void testGetOrCreateUninitializedMember() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        StreamsGroupMember uninitializedMember = new StreamsGroupMember.Builder("member-id").build();
+        StreamsGroupMember member = streamsGroup.getOrCreateUninitializedMember("member-id");
+
+        assertEquals(uninitializedMember, member);
+
+        StreamsGroupMember updatedMember = new StreamsGroupMember.Builder(member).setInstanceId("unique-new-id").build();
+        streamsGroup.updateMember(updatedMember);
+
+        assertEquals(updatedMember, streamsGroup.getOrCreateUninitializedMember("member-id"));
+        assertNotEquals(uninitializedMember, streamsGroup.getOrCreateUninitializedMember("member-id"));
+    }
+
+    @Test
+    public void testGetOrCreateDefaultMember() {
+        StreamsGroup streamsGroup = createStreamsGroup("foo");
+        StreamsGroupMember defaultMember = StreamsGroupMember.Builder.withDefaults("member-id").build();
+        StreamsGroupMember member = streamsGroup.getOrCreateDefaultMember("member-id");
+
+        assertEquals(defaultMember, member);
+
+        StreamsGroupMember updatedMember = new StreamsGroupMember.Builder(member).setInstanceId("unique-new-id").build();
+        streamsGroup.updateMember(updatedMember);
+
+        assertEquals(updatedMember, streamsGroup.getOrCreateDefaultMember("member-id"));
+        assertNotEquals(defaultMember, streamsGroup.getOrCreateDefaultMember("member-id"));
+    }
+
+    @Test
+    public void testGetMemberOrThrow() {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
         StreamsGroupMember member;
 
         // Create a member.
-        member = streamsGroup.getOrMaybeCreateMember("member-id", true);
+        member = streamsGroup.getOrCreateDefaultMember("member-id");
         assertEquals("member-id", member.memberId());
 
         // Add member to the group.
         streamsGroup.updateMember(member);
 
         // Get that member back.
-        member = streamsGroup.getOrMaybeCreateMember("member-id", false);
+        member = streamsGroup.getMemberOrThrow("member-id");
         assertEquals("member-id", member.memberId());
 
         assertThrows(UnknownMemberIdException.class, () ->
-            streamsGroup.getOrMaybeCreateMember("does-not-exist", false));
+            streamsGroup.getMemberOrThrow("does-not-exist"));
     }
 
     @Test
@@ -124,13 +155,13 @@ public class StreamsGroupTest {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
         StreamsGroupMember member;
 
-        member = streamsGroup.getOrMaybeCreateMember("member", true);
+        member = streamsGroup.getOrCreateDefaultMember("member");
 
         member = new StreamsGroupMember.Builder(member).build();
 
         streamsGroup.updateMember(member);
 
-        assertEquals(member, streamsGroup.getOrMaybeCreateMember("member", false));
+        assertEquals(member, streamsGroup.getMemberOrThrow("member"));
     }
 
     @Test
@@ -138,7 +169,7 @@ public class StreamsGroupTest {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
 
         // Create a new member which is not static
-        streamsGroup.getOrMaybeCreateMember("member", true);
+        streamsGroup.getOrCreateDefaultMember("member");
         assertNull(streamsGroup.staticMember("instance-id"));
     }
 
@@ -147,7 +178,7 @@ public class StreamsGroupTest {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
         StreamsGroupMember member;
 
-        member = streamsGroup.getOrMaybeCreateMember("member", true);
+        member = streamsGroup.getOrCreateDefaultMember("member");
 
         member = new StreamsGroupMember.Builder(member)
             .setInstanceId("instance")
@@ -156,7 +187,7 @@ public class StreamsGroupTest {
         streamsGroup.updateMember(member);
 
         assertEquals(member, streamsGroup.staticMember("instance"));
-        assertEquals(member, streamsGroup.getOrMaybeCreateMember("member", false));
+        assertEquals(member, streamsGroup.getMemberOrThrow("member"));
         assertEquals(member.memberId(), streamsGroup.staticMemberId("instance"));
     }
 
@@ -164,13 +195,12 @@ public class StreamsGroupTest {
     public void testRemoveMember() {
         StreamsGroup streamsGroup = createStreamsGroup("foo");
 
-        StreamsGroupMember member = streamsGroup.getOrMaybeCreateMember("member", true);
+        StreamsGroupMember member = streamsGroup.getOrCreateDefaultMember("member");
         streamsGroup.updateMember(member);
         assertTrue(streamsGroup.hasMember("member"));
 
         streamsGroup.removeMember("member");
         assertFalse(streamsGroup.hasMember("member"));
-
     }
 
     @Test

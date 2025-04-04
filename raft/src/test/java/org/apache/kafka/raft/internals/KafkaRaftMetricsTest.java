@@ -37,7 +37,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 import org.mockito.Mockito;
 
-import java.util.Collections;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -101,7 +100,7 @@ public class KafkaRaftMetricsTest {
     private VoterSet localStandaloneVoterSet(KRaftVersion kraftVersion) {
         boolean withDirectoryId = kraftVersion.featureLevel() > 0;
         return VoterSetTest.voterSet(
-            Collections.singletonMap(
+            Map.of(
                 localId,
                 VoterSetTest.voterNode(
                     ReplicaKey.of(
