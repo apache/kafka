@@ -136,7 +136,10 @@ class LogManagerTest {
     assertEquals(1, logManager.liveLogDirs.size)
     val logFile = new File(logDir, name + "-0")
     assertTrue(logFile.exists)
-    assertFalse(logManager.directoryId(logFile.getParent).equals(DirectoryId.UNASSIGNED))
+    logManager.directoryId(logFile.getParent) match {
+      case Some(directoryId) => assertFalse(directoryId.equals(DirectoryId.UNASSIGNED))
+      case None =>
+    }
     log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), 0)
   }
 
@@ -147,7 +150,10 @@ class LogManagerTest {
     assertEquals(1, logManager.liveLogDirs.size)
     val logFile = new File(logDir, name + "-0")
     assertTrue(logFile.exists)
-    assertFalse(logManager.directoryId(logFile.getParent).equals(DirectoryId.random()))
+    logManager.directoryId(logFile.getParent) match {
+      case Some(directoryId) => assertFalse(directoryId.equals(DirectoryId.random()))
+      case None =>
+    }
     log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), 0)
   }
 
@@ -868,8 +874,7 @@ class LogManagerTest {
     logMetrics.foreach { gauge => assertEquals(0, gauge.value()) }
   }
 
-  private def verifyRemainingSegmentsToRecoverMetric(spyLogManager: LogManager,
-                                                     logDirs: Seq[File],
+  private def verifyRemainingSegmentsToRecoverMetric(logDirs: Seq[File],
                                                      recoveryThreadsPerDataDir: Int,
                                                      mockMap: ConcurrentHashMap[String, Integer],
                                                      expectedParams: Map[String, Int]): Unit = {
@@ -994,7 +999,7 @@ class LogManagerTest {
 
     val expectedRemainingSegmentsParams = Map[String, Int](
       logDir1.getAbsolutePath -> expectedSegmentsPerLog, logDir2.getAbsolutePath -> expectedSegmentsPerLog)
-    verifyRemainingSegmentsToRecoverMetric(spyLogManager, logDirs, recoveryThreadsPerDataDir, mockMap, expectedRemainingSegmentsParams)
+    verifyRemainingSegmentsToRecoverMetric(logDirs, recoveryThreadsPerDataDir, mockMap, expectedRemainingSegmentsParams)
   }
 
   @Test

@@ -2242,7 +2242,7 @@ class UnifiedLogTest {
 
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 200, indexIntervalBytes = 1,
       remoteLogStorageEnable = true)
-    val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true, remoteLogManager = Some(remoteLogManager))
+    val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
     // Note that the log is empty, so remote offset read won't happen
     assertEquals(new OffsetResultHolder(Optional.empty[FileRecords.TimestampAndOffset]()), log.fetchOffsetByTimestamp(0L, Optional.of(remoteLogManager)))
 
@@ -2339,7 +2339,7 @@ class UnifiedLogTest {
 
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 200, indexIntervalBytes = 1,
       remoteLogStorageEnable = true)
-    val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true, remoteLogManager = Some(remoteLogManager))
+    val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
     // Note that the log is empty, so remote offset read won't happen
     assertEquals(new OffsetResultHolder(Optional.empty[FileRecords.TimestampAndOffset]()), log.fetchOffsetByTimestamp(0L, Optional.of(remoteLogManager)))
     assertEquals(new OffsetResultHolder(new TimestampAndOffset(ListOffsetsResponse.UNKNOWN_TIMESTAMP, 0, Optional.empty())),
@@ -4676,12 +4676,11 @@ class UnifiedLogTest {
                         lastShutdownClean: Boolean = true,
                         topicId: Option[Uuid] = None,
                         remoteStorageSystemEnable: Boolean = false,
-                        remoteLogManager: Option[RemoteLogManager] = None,
                         logOffsetsListener: LogOffsetsListener = LogOffsetsListener.NO_OP_OFFSETS_LISTENER): UnifiedLog = {
     val log = LogTestUtils.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
       maxTransactionTimeoutMs, producerStateManagerConfig, producerIdExpirationCheckIntervalMs,
       lastShutdownClean, topicId, new ConcurrentHashMap[String, Integer],
-      remoteStorageSystemEnable, remoteLogManager, logOffsetsListener)
+      remoteStorageSystemEnable, logOffsetsListener)
     logsToClose = logsToClose :+ log
     log
   }
