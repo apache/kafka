@@ -849,8 +849,8 @@ class MetadataCacheTest {
     val partitionIndex = 0
     val leader = 0
     val leaderEpoch = 0
-    val isr = asList[Integer](2, 3, 0)
-    val replicas = asList[Integer](2, 3, 0, 1, 4)
+    val isr = util.List.of[Integer](2, 3, 0)
+    val replicas = util.List.of[Integer](2, 3, 0, 1, 4)
 
     val topicRecords = Seq(new TopicRecord().setName(topic).setTopicId(topicId))
 
@@ -937,26 +937,26 @@ class MetadataCacheTest {
     setTopicId(fooTopicId).
     setPartitionId(0).
     setLeader(4).
-    setIsr(java.util.Arrays.util.List.of(4, 5, 6)).
-    setReplicas(java.util.Arrays.util.List.of(4, 5, 6))
+    setIsr(util.List.of(4, 5, 6)).
+    setReplicas(util.List.of(4, 5, 6))
   val newFooPart0 = new PartitionRecord().
     setTopicId(fooTopicId).
     setPartitionId(0).
     setLeader(5).
-    setIsr(java.util.Arrays.util.List.of(4, 5, 6)).
-    setReplicas(java.util.Arrays.util.List.of(4, 5, 6))
+    setIsr(util.List.of(4, 5, 6)).
+    setReplicas(util.List.of(4, 5, 6))
   val oldFooPart1 = new PartitionRecord().
     setTopicId(fooTopicId).
     setPartitionId(1).
     setLeader(5).
-    setIsr(java.util.Arrays.util.List.of(4, 5, 6)).
-    setReplicas(java.util.Arrays.util.List.of(4, 5, 6))
+    setIsr(util.List.of(4, 5, 6)).
+    setReplicas(util.List.of(4, 5, 6))
   val newFooPart1 = new PartitionRecord().
     setTopicId(fooTopicId).
     setPartitionId(1).
     setLeader(5).
-    setIsr(java.util.Arrays.util.List.of(4, 5)).
-    setReplicas(java.util.Arrays.util.List.of(4, 5, 6))
+    setIsr(util.List.of(4, 5)).
+    setReplicas(util.List.of(4, 5, 6))
   val barTopicName: String = "bar"
   val barTopicId: Uuid = Uuid.fromString("97FBD1g4QyyNNZNY94bkRA")
   val recreatedBarTopicId: Uuid = Uuid.fromString("lZokxuaPRty7c5P4dNdTYA")
@@ -964,57 +964,57 @@ class MetadataCacheTest {
     setTopicId(fooTopicId).
     setPartitionId(0).
     setLeader(7).
-    setIsr(java.util.Arrays.util.List.of(7, 8)).
-    setReplicas(java.util.Arrays.util.List.of(7, 8, 9))
+    setIsr(util.List.of(7, 8)).
+    setReplicas(util.List.of(7, 8, 9))
   val newBarPart0 = new PartitionRecord().
     setTopicId(barTopicId).
     setPartitionId(0).
     setLeader(7).
-    setIsr(java.util.Arrays.util.List.of(7, 8)).
-    setReplicas(java.util.Arrays.util.List.of(7, 8, 9))
+    setIsr(util.List.of(7, 8)).
+    setReplicas(util.List.of(7, 8, 9))
   val deletedBarPart0 = new PartitionRecord().
     setTopicId(barTopicId).
     setPartitionId(0).
     setLeader(-2).
-    setIsr(java.util.Arrays.util.List.of(7, 8)).
-    setReplicas(java.util.Arrays.util.List.of(7, 8, 9))
+    setIsr(util.List.of(7, 8)).
+    setReplicas(util.List.of(7, 8, 9))
   val oldBarPart1 = new PartitionRecord().
     setTopicId(barTopicId).
     setPartitionId(1).
     setLeader(5).
-    setIsr(java.util.Arrays.util.List.of(4, 5, 6)).
-    setReplicas(java.util.Arrays.util.List.of(4, 5, 6))
+    setIsr(util.List.of(4, 5, 6)).
+    setReplicas(util.List.of(4, 5, 6))
   val newBarPart1 = new PartitionRecord().
     setTopicId(barTopicId).
     setPartitionId(1).
     setLeader(5).
-    setIsr(java.util.Arrays.util.List.of(4, 5, 6)).
-    setReplicas(java.util.Arrays.util.List.of(4, 5, 6))
+    setIsr(util.List.of(4, 5, 6)).
+    setReplicas(util.List.of(4, 5, 6))
   val deletedBarPart1 = new PartitionRecord().
     setTopicId(barTopicId).
     setPartitionId(1).
     setLeader(-2).
-    setIsr(java.util.Arrays.util.List.of(4, 5, 6)).
-    setReplicas(java.util.Arrays.util.List.of(4, 5, 6))
+    setIsr(util.List.of(4, 5, 6)).
+    setReplicas(util.List.of(4, 5, 6))
 
   val oldBarPart2 = new PartitionRecord().
     setTopicId(barTopicId).
     setPartitionId(2).
     setLeader(9).
-    setIsr(java.util.Arrays.util.List.of(7, 8, 9)).
-    setReplicas(java.util.Arrays.util.List.of(7, 8, 9))
+    setIsr(util.List.of(7, 8, 9)).
+    setReplicas(util.List.of(7, 8, 9))
 
   val newBarPart2 = new PartitionRecord().
     setTopicId(barTopicId).
     setPartitionId(2).
     setLeader(8).
-    setIsr(java.util.Arrays.util.List.of(7, 8)).
-    setReplicas(java.util.Arrays.util.List.of(7, 8, 9))
+    setIsr(util.List.of(7, 8)).
+    setReplicas(util.List.of(7, 8, 9))
 
   val deletedBarPart2 = new PartitionRecord().
     setTopicId(barTopicId).
     setPartitionId(2).
     setLeader(-2).
-    setIsr(java.util.Arrays.util.List.of(7, 8, 9)).
-    setReplicas(java.util.Arrays.util.List.of(7, 8, 9))
+    setIsr(util.List.of(7, 8, 9)).
+    setReplicas(util.List.of(7, 8, 9))
 }

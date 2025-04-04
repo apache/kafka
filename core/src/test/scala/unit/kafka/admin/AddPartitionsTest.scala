@@ -67,7 +67,7 @@ class AddPartitionsTest extends BaseRequestTest {
   def testWrongReplicaCount(quorum: String): Unit = {
     assertEquals(classOf[InvalidReplicaAssignmentException], assertThrows(classOf[ExecutionException], () => {
         admin.createPartitions(util.Map.of(topic1,
-          NewPartitions.increaseTo(2, util.List.of(util.List.of(0, 1, 2))))).all().get()
+          NewPartitions.increaseTo(2, util.List.of(util.List.of[Integer](0, 1, 2))))).all().get()
       }).getCause.getClass)
   }
 
@@ -106,7 +106,7 @@ class AddPartitionsTest extends BaseRequestTest {
   def testMissingPartitionsInCreatePartitions(quorum: String): Unit = {
     val cause = assertThrows(classOf[ExecutionException], () =>
       admin.createPartitions(util.Map.of(topic1,
-        NewPartitions.increaseTo(3, util.List.of(util.List.of(0, 1, 2))))).all().get()).getCause
+        NewPartitions.increaseTo(3, util.List.of(util.List.of[Integer](0, 1, 2))))).all().get()).getCause
     assertEquals(classOf[InvalidReplicaAssignmentException], cause.getClass)
     assertTrue(cause.getMessage.contains("Attempted to add 2 additional partition(s), but only 1 assignment(s) " +
       "were specified."), "Unexpected error message: " + cause.getMessage)
@@ -146,7 +146,7 @@ class AddPartitionsTest extends BaseRequestTest {
   def testManualAssignmentOfReplicas(quorum: String): Unit = {
     // Add 2 partitions
     admin.createPartitions(util.Map.of(topic2, NewPartitions.increaseTo(3,
-      util.List.of(util.List.of(0, 1), util.List.of(2, 3))))).all().get()
+      util.List.of(util.List.of[Integer](0, 1), util.List.of[Integer](2, 3))))).all().get()
     // wait until leader is elected
     val leader1 = waitUntilLeaderIsElectedOrChangedWithAdmin(admin, topic2, 1)
     val leader2 = waitUntilLeaderIsElectedOrChangedWithAdmin(admin, topic2, 2)
