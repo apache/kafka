@@ -38,7 +38,6 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
@@ -71,7 +70,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
 
     @Override
     public Seq<Properties> kraftControllerConfigs(TestInfo testInfo) {
-        return CollectionConverters.asScala(Collections.singletonList(overridingProps())).toSeq();
+        return CollectionConverters.asScala(List.of(overridingProps())).toSeq();
     }
 
     protected int numRemoteLogMetadataPartitions() {
@@ -105,10 +104,10 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         context = new TieredStorageTestContext(this);
     }
 
-    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedQuorumName() in the ParameterizedTest name.
-    @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
-    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
-    public void executeTieredStorageTest(String quorum, String groupProtocol) {
+    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedGroupProtocolNames() in the ParameterizedTest name.
+    @ParameterizedTest(name = "{displayName}.groupProtocol={0}")
+    @MethodSource("getTestGroupProtocolParametersAll")
+    public void executeTieredStorageTest(String groupProtocol) {
         TieredStorageTestBuilder builder = new TieredStorageTestBuilder();
         writeTestSpecifications(builder);
         try {

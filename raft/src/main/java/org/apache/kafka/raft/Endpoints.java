@@ -31,7 +31,6 @@ import org.apache.kafka.common.network.ListenerName;
 
 import java.net.InetSocketAddress;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -147,7 +146,7 @@ public final class Endpoints {
         return listeners;
     }
 
-    private static final Endpoints EMPTY = new Endpoints(Collections.emptyMap());
+    private static final Endpoints EMPTY = new Endpoints(Map.of());
     public static Endpoints empty() {
         return EMPTY;
     }
@@ -188,7 +187,7 @@ public final class Endpoints {
         return Optional.ofNullable(endpoints.find(leaderId))
             .map(endpoint ->
                 new Endpoints(
-                    Collections.singletonMap(
+                    Map.of(
                         listenerName,
                         InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
                     )
@@ -217,7 +216,7 @@ public final class Endpoints {
         return Optional.ofNullable(endpoints.find(leaderId))
             .map(endpoint ->
                 new Endpoints(
-                    Collections.singletonMap(
+                    Map.of(
                         listenerName,
                         InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
                     )
@@ -234,7 +233,7 @@ public final class Endpoints {
         return Optional.ofNullable(endpoints.find(leaderId))
             .map(endpoint ->
                 new Endpoints(
-                    Collections.singletonMap(
+                    Map.of(
                         listenerName,
                         InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
                     )
@@ -251,7 +250,7 @@ public final class Endpoints {
         return Optional.ofNullable(endpoints.find(leaderId))
             .map(endpoint ->
                 new Endpoints(
-                    Collections.singletonMap(
+                    Map.of(
                         listenerName,
                         InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
                     )
@@ -268,7 +267,7 @@ public final class Endpoints {
         return Optional.ofNullable(endpoints.find(leaderId))
             .map(endpoint ->
                 new Endpoints(
-                    Collections.singletonMap(
+                    Map.of(
                         listenerName,
                         InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
                     )

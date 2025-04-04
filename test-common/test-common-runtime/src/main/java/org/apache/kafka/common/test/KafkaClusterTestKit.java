@@ -391,16 +391,12 @@ public class KafkaClusterTestKit implements AutoCloseable {
         List<Future<?>> futures = new ArrayList<>();
         try {
             for (ControllerServer controller : controllers.values()) {
-                futures.add(executorService.submit(() -> {
-                    formatNode(controller.sharedServer().metaPropsEnsemble(), true);
-                }));
+                futures.add(executorService.submit(() -> formatNode(controller.sharedServer().metaPropsEnsemble(), true)));
             }
             for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
                 BrokerServer broker = entry.getValue();
-                futures.add(executorService.submit(() -> {
-                    formatNode(broker.sharedServer().metaPropsEnsemble(),
-                        !nodes.isCombined(nodes().brokerNodes().get(entry.getKey()).id()));
-                }));
+                futures.add(executorService.submit(() -> formatNode(broker.sharedServer().metaPropsEnsemble(),
+                    !nodes.isCombined(nodes().brokerNodes().get(entry.getKey()).id()))));
             }
             for (Future<?> future: futures) {
                 future.get();
@@ -502,7 +498,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
     }
 
     public class ClientPropertiesBuilder {
-        private Properties properties;
+        private final Properties properties;
         private boolean usingBootstrapControllers = false;
 
         public ClientPropertiesBuilder() {

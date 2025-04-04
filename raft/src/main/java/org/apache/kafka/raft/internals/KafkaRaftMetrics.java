@@ -30,7 +30,7 @@ import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.QuorumState;
 import org.apache.kafka.raft.ReplicaKey;
 
-import java.util.Arrays;
+import java.util.List;
 import java.util.OptionalLong;
 import java.util.concurrent.TimeUnit;
 
@@ -262,7 +262,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
 
     @Override
     public void close() {
-        Arrays.asList(
+        List.of(
             currentLeaderIdMetricName,
             currentVotedIdMetricName,
             currentVotedDirectoryIdMetricName,
@@ -277,7 +277,7 @@ public class KafkaRaftMetrics implements AutoCloseable {
             uncommittedVoterChangeMetricName
         ).forEach(metrics::removeMetric);
 
-        Arrays.asList(
+        List.of(
             commitTimeSensor.name(),
             electionTimeSensor.name(),
             fetchRecordsSensor.name(),

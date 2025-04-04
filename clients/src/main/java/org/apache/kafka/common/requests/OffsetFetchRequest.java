@@ -23,13 +23,12 @@ import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequest
 import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestTopic;
 import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestTopics;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -329,8 +328,8 @@ public class OffsetFetchRequest extends AbstractRequest {
         return getErrorResponse(throttleTimeMs, Errors.forException(e));
     }
 
-    public static OffsetFetchRequest parse(ByteBuffer buffer, short version) {
-        return new OffsetFetchRequest(new OffsetFetchRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static OffsetFetchRequest parse(Readable readable, short version) {
+        return new OffsetFetchRequest(new OffsetFetchRequestData(readable, version), version);
     }
 
     public boolean isAllPartitions() {
