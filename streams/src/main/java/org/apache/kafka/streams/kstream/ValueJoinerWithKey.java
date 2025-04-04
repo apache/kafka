@@ -44,6 +44,7 @@ package org.apache.kafka.streams.kstream;
  * @see KStream#leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithKey)
  * @see KStream#leftJoin(GlobalKTable, KeyValueMapper, ValueJoinerWithKey, Named)
  */
+@FunctionalInterface
 public interface ValueJoinerWithKey<K1, V1, V2, VR> {
 
     /**
