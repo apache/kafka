@@ -2049,4 +2049,30 @@ public interface Admin extends AutoCloseable {
      * Get the metrics kept by the adminClient
      */
     Map<MetricName, ? extends Metric> metrics();
+
+    /**
+     * Force terminate a transaction for the given transactional ID with the default options.
+     * <p>
+     * This is a convenience method for {@link #forceTerminateTransaction(String, TerminateTransactionOptions)}
+     * with default options.
+     *
+     * @param transactionalId           The ID of the transaction to terminate.
+     * @return The TerminateTransactionResult.
+     */
+    default TerminateTransactionResult forceTerminateTransaction(String transactionalId) {
+        return forceTerminateTransaction(transactionalId, new TerminateTransactionOptions());
+    }
+
+    /**
+     * Force terminate a transaction for the given transactional ID.
+     * This operation aborts any ongoing transaction associated with the transactional ID.
+     * It's similar to fenceProducers but only targets a single transactional ID to handle
+     * long-running transactions when 2PC is enabled.
+     *
+     * @param transactionalId       The ID of the transaction to terminate.
+     * @param options               The options to use when terminating the transaction.
+     * @return The TerminateTransactionResult.
+     */
+    TerminateTransactionResult forceTerminateTransaction(String transactionalId, 
+                                                        TerminateTransactionOptions options);
 }

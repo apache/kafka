@@ -703,6 +703,12 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      * If the consumer is unable to complete acknowledgements and gracefully leave the group
      * before the timeout expires, the consumer is force closed. Note that {@link #wakeup()} cannot be
      * used to interrupt close.
+     * <p>
+     * The actual maximum wait time is bounded by the {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} setting, which
+     * only applies to operations performed with the broker (coordinator-related requests).
+     * Even if a larger timeout is specified, the consumer will not wait longer than
+     * {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} for these requests to complete during the close operation.
+     * Note that the execution time of callbacks (such as {@link AcknowledgementCommitCallback}) do not consume time from the close timeout.
      *
      * @param timeout The maximum time to wait for consumer to close gracefully. The value must be
      *                non-negative. Specifying a timeout of zero means do not wait for pending requests to complete.
