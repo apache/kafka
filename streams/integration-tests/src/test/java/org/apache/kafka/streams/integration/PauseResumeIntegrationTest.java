@@ -39,8 +39,6 @@ import org.apache.kafka.test.TestUtils;
 
 import org.hamcrest.CoreMatchers;
 import org.junit.jupiter.api.*;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.util.ArrayList;
