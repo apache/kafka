@@ -89,7 +89,6 @@ public class ShareFetchTest {
 
         LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> nonResponseData = shareFetch.responseData(Map.of());
         assertEquals(0, nonResponseData.size());
-        nonResponseData.forEach((topicIdPartition, partitionData) -> assertEquals(MemoryRecords.EMPTY, partitionData.records()));
     }
 
     @Test
