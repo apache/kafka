@@ -97,6 +97,7 @@ import org.apache.kafka.server.share.persister.InitializeShareGroupStateResult;
 import org.apache.kafka.server.share.persister.NoOpStatePersister;
 import org.apache.kafka.server.share.persister.PartitionFactory;
 import org.apache.kafka.server.share.persister.PartitionIdData;
+import org.apache.kafka.server.share.persister.PartitionStateData;
 import org.apache.kafka.server.share.persister.Persister;
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryParameters;
 import org.apache.kafka.server.share.persister.ReadShareGroupStateSummaryResult;
@@ -139,7 +140,6 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -1943,7 +1943,7 @@ public class GroupCoordinatorServiceTest {
             Map.of("share-group-id-1", Map.entry(createDeleteShareRequest("share-group-id-1", shareGroupTopicId, List.of(0, 1)), Errors.NONE))
         )).thenReturn(CompletableFuture.completedFuture(Map.of()));   // non-share group
 
-        when(persister.deleteState(any())).thenReturn(CompletableFuture.completedFuture(
+        when(persister.deleteState(ArgumentMatchers.any())).thenReturn(CompletableFuture.completedFuture(
             new DeleteShareGroupStateResult.Builder()
                 .setTopicsData(List.of(
                     new TopicData<>(
@@ -1978,7 +1978,7 @@ public class GroupCoordinatorServiceTest {
 
         future.getNow(null);
         assertEquals(expectedResultCollection, future.get());
-        verify(persister, times(1)).deleteState(any());
+        verify(persister, times(1)).deleteState(ArgumentMatchers.any());
     }
 
     @Test
@@ -2027,7 +2027,7 @@ public class GroupCoordinatorServiceTest {
             Map.of("share-group-id-2", Map.entry(createDeleteShareRequest("share-group-id-2", shareGroupTopicId2, List.of(0, 1)), Errors.NONE))
         ));
 
-        when(persister.deleteState(any())).thenReturn(CompletableFuture.completedFuture(
+        when(persister.deleteState(ArgumentMatchers.any())).thenReturn(CompletableFuture.completedFuture(
             new DeleteShareGroupStateResult.Builder()
                 .setTopicsData(List.of(
                     new TopicData<>(
@@ -2073,7 +2073,7 @@ public class GroupCoordinatorServiceTest {
 
         future.getNow(null);
         assertEquals(expectedResultCollection, future.get());
-        verify(persister, times(2)).deleteState(any());
+        verify(persister, times(2)).deleteState(ArgumentMatchers.any());
     }
 
     @Test
@@ -2125,7 +2125,7 @@ public class GroupCoordinatorServiceTest {
 
         future.getNow(null);
         assertEquals(expectedResultCollection, future.get());
-        verify(persister, times(0)).deleteState(any());
+        verify(persister, times(0)).deleteState(ArgumentMatchers.any());
     }
 
     @Test
@@ -2171,7 +2171,7 @@ public class GroupCoordinatorServiceTest {
         assertEquals(expectedResultCollection, future.get());
         // If there is error creating share group delete req
         // neither persister call nor general delete groups call is made.
-        verify(persister, times(0)).deleteState(any());
+        verify(persister, times(0)).deleteState(ArgumentMatchers.any());
         verify(runtime, times(0)).scheduleWriteOperation(
             ArgumentMatchers.eq("delete-groups"),
             ArgumentMatchers.any(),
@@ -2224,7 +2224,7 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.failedFuture(Errors.CLUSTER_AUTHORIZATION_FAILED.exception()));
 
-        when(persister.deleteState(any())).thenReturn(CompletableFuture.completedFuture(new DeleteShareGroupStateResult.Builder()
+        when(persister.deleteState(ArgumentMatchers.any())).thenReturn(CompletableFuture.completedFuture(new DeleteShareGroupStateResult.Builder()
             .setTopicsData(List.of(
                 new TopicData<>(
                     shareGroupTopicId,
@@ -2242,7 +2242,7 @@ public class GroupCoordinatorServiceTest {
 
         future.getNow(null);
         assertEquals(expectedResultCollection, future.get());
-        verify(persister, times(1)).deleteState(any());
+        verify(persister, times(1)).deleteState(ArgumentMatchers.any());
     }
 
     @ParameterizedTest
@@ -3115,7 +3115,7 @@ public class GroupCoordinatorServiceTest {
 
         service.onNewMetadataImage(image, null);
 
-        when(mockPersister.initializeState(any())).thenReturn(CompletableFuture.completedFuture(
+        when(mockPersister.initializeState(ArgumentMatchers.any())).thenReturn(CompletableFuture.completedFuture(
             new InitializeShareGroupStateResult.Builder()
                 .setTopicsData(List.of(
                     new TopicData<>(topicId, List.of(
@@ -3165,10 +3165,17 @@ public class GroupCoordinatorServiceTest {
         Uuid topicId = Uuid.randomUuid();
         Exception exp = new NotCoordinatorException("bad stuff");
 
-        when(mockPersister.initializeState(any())).thenReturn(CompletableFuture.failedFuture(exp));
+        when(mockPersister.initializeState(ArgumentMatchers.any())).thenReturn(CompletableFuture.failedFuture(exp));
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initialize-share-group-state"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("uninitialize-share-group-state"),
             ArgumentMatchers.any(),
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
@@ -3190,6 +3197,12 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
         );
+        verify(runtime, times(1)).scheduleWriteOperation(
+            ArgumentMatchers.eq("uninitialize-share-group-state"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        );
         verify(mockPersister, times(1)).initializeState(ArgumentMatchers.any());
     }
 
@@ -3206,7 +3219,7 @@ public class GroupCoordinatorServiceTest {
         String groupId = "share-group";
         Uuid topicId = Uuid.randomUuid();
 
-        when(mockPersister.initializeState(any())).thenReturn(CompletableFuture.completedFuture(
+        when(mockPersister.initializeState(ArgumentMatchers.any())).thenReturn(CompletableFuture.completedFuture(
             new InitializeShareGroupStateResult.Builder()
                 .setTopicsData(List.of(
                     new TopicData<>(topicId, List.of(
@@ -3218,6 +3231,13 @@ public class GroupCoordinatorServiceTest {
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("initialize-share-group-state"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("uninitialize-share-group-state"),
             ArgumentMatchers.any(),
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
@@ -3238,6 +3258,12 @@ public class GroupCoordinatorServiceTest {
         assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), service.persisterInitialize(params, defaultResponse).getNow(null).errorCode());
         verify(runtime, times(0)).scheduleWriteOperation(
             ArgumentMatchers.eq("initialize-share-group-state"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        );
+        verify(runtime, times(1)).scheduleWriteOperation(
+            ArgumentMatchers.eq("uninitialize-share-group-state"),
             ArgumentMatchers.any(),
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
@@ -3264,7 +3290,7 @@ public class GroupCoordinatorServiceTest {
 
         service.onNewMetadataImage(image, null);
 
-        when(mockPersister.initializeState(any())).thenReturn(CompletableFuture.completedFuture(
+        when(mockPersister.initializeState(ArgumentMatchers.any())).thenReturn(CompletableFuture.completedFuture(
             new InitializeShareGroupStateResult.Builder()
                 .setTopicsData(List.of(
                     new TopicData<>(topicId, List.of(
@@ -3279,6 +3305,13 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.failedFuture(exp));
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("uninitialize-share-group-state"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
 
         ShareGroupHeartbeatResponseData defaultResponse = new ShareGroupHeartbeatResponseData();
         InitializeShareGroupStateParameters params = new InitializeShareGroupStateParameters.Builder()
@@ -3299,8 +3332,114 @@ public class GroupCoordinatorServiceTest {
             ArgumentMatchers.any(),
             ArgumentMatchers.any()
         );
-
+        verify(runtime, times(1)).scheduleWriteOperation(
+            ArgumentMatchers.eq("uninitialize-share-group-state"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        );
         verify(mockPersister, times(1)).initializeState(ArgumentMatchers.any());
+    }
+
+    @Test
+    public void testReconcileShareGroupInitializingStateNoRequests() {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        Persister mockPersister = mock(Persister.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .setPersister(mockPersister)
+            .build(true);
+
+        when(runtime.scheduleReadAllOperation(
+            ArgumentMatchers.eq("reconcile-share-group-initializing-state"),
+            ArgumentMatchers.any()
+        )).thenReturn(List.of());
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("initialize-share-group-state"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
+
+        service.reconcileShareGroupStateInitializingState().join();
+        verify(runtime, times(1)).scheduleReadAllOperation(
+            ArgumentMatchers.eq("reconcile-share-group-initializing-state"),
+            ArgumentMatchers.any()
+        );
+        verify(mockPersister, times(0)).initializeState(ArgumentMatchers.any());
+        verify(runtime, times(0)).scheduleWriteOperation(
+            ArgumentMatchers.eq("initialize-share-group-state"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        );
+    }
+
+    @Test
+    public void testReconcileShareGroupInitializingState() {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        Persister mockPersister = mock(Persister.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .setPersister(mockPersister)
+            .build(true);
+
+        String groupId1 = "groupId1";
+        String groupId2 = "groupId2";
+
+        Uuid topicId1 = Uuid.randomUuid();
+        Uuid topicId2 = Uuid.randomUuid();
+
+        InitializeShareGroupStateParameters req1 = new InitializeShareGroupStateParameters.Builder()
+            .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionStateData>()
+                .setGroupId(groupId1)
+                .setTopicsData(List.of(new TopicData<>(topicId1, List.of(PartitionFactory.newPartitionStateData(0, 1, 0)))))
+                .build())
+            .build();
+
+        InitializeShareGroupStateParameters req2 = new InitializeShareGroupStateParameters.Builder()
+            .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionStateData>()
+                .setGroupId(groupId2)
+                .setTopicsData(List.of(new TopicData<>(topicId2, List.of(PartitionFactory.newPartitionStateData(0, 2, 10)))))
+                .build())
+            .build();
+
+        when(runtime.scheduleReadAllOperation(
+            ArgumentMatchers.eq("reconcile-share-group-initializing-state"),
+            ArgumentMatchers.any()
+        )).thenReturn(List.of(
+            CompletableFuture.completedFuture(List.of(req1)),
+            CompletableFuture.completedFuture(List.of(req2))
+        ));
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("initialize-share-group-state"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(null));
+
+        when(mockPersister.initializeState(ArgumentMatchers.eq(req1))).thenReturn(CompletableFuture.completedFuture(new InitializeShareGroupStateResult.Builder()
+            .setTopicsData(List.of(new TopicData<>(topicId1, List.of(PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))))
+            .build())
+        );
+
+        when(mockPersister.initializeState(ArgumentMatchers.eq(req2))).thenReturn(CompletableFuture.completedFuture(new InitializeShareGroupStateResult.Builder()
+            .setTopicsData(List.of(new TopicData<>(topicId2, List.of(PartitionFactory.newPartitionErrorData(0, Errors.NONE.code(), Errors.NONE.message())))))
+            .build())
+        );
+
+        service.reconcileShareGroupStateInitializingState().join();
+        verify(mockPersister, times(2)).initializeState(ArgumentMatchers.any());
+        verify(runtime, times(2)).scheduleWriteOperation(
+            ArgumentMatchers.eq("initialize-share-group-state"),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any(),
+            ArgumentMatchers.any()
+        );
     }
 
     @FunctionalInterface
