@@ -340,7 +340,6 @@ object RequestChannel extends Logging {
 }
 
 class RequestChannel(val queueSize: Int,
-                     val metricNamePrefix: String,
                      time: Time,
                      val metrics: RequestChannelMetrics) {
   import RequestChannel._
@@ -349,8 +348,8 @@ class RequestChannel(val queueSize: Int,
 
   private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
   private val processors = new ConcurrentHashMap[Int, Processor]()
-  private val requestQueueSizeMetricName = metricNamePrefix.concat(RequestQueueSizeMetric)
-  private val responseQueueSizeMetricName = metricNamePrefix.concat(ResponseQueueSizeMetric)
+  private val requestQueueSizeMetricName = RequestQueueSizeMetric
+  private val responseQueueSizeMetricName = ResponseQueueSizeMetric
   private val callbackQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
 
   metricsGroup.newGauge(requestQueueSizeMetricName, () => requestQueue.size)
