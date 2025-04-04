@@ -52,15 +52,11 @@ public class ShareFetchTest {
     private static final String MEMBER_ID = "memberId";
     private static final int BATCH_SIZE = 500;
 
-    private final TopicIdPartition tidp0 = new TopicIdPartition(Uuid.randomUuid(), 0, "topic");
-    private MemoryRecords records;
-
     private BrokerTopicStats brokerTopicStats;
 
     @BeforeEach
     public void setUp() {
         brokerTopicStats = new BrokerTopicStats();
-        records = buildRecords(1L, 3, 1);
     }
 
     @AfterEach
@@ -81,9 +77,12 @@ public class ShareFetchTest {
 
     @Test
     public void testDontCacheAnyData() {
-        ShareFetchResponse shareFetch = shareFetchResponse(tidp0, records, Errors.NONE, "", (short) 0,
+        final TopicIdPartition tidp = new TopicIdPartition(Uuid.randomUuid(), 0, "topic");
+        MemoryRecords records = buildRecords(1L, 3, 1);;
+
+        ShareFetchResponse shareFetch = shareFetchResponse(tidp, records, Errors.NONE, "", (short) 0,
                 "", List.of(), 0);
-        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData = shareFetch.responseData(Map.of(tidp0.topicId(), tidp0.topic()));
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData = shareFetch.responseData(Map.of(tidp.topicId(), tidp.topic()));
         assertEquals(1, responseData.size());
         responseData.forEach((topicIdPartition, partitionData) -> assertEquals(records, partitionData.records()));
 
