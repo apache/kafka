@@ -86,9 +86,6 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import static org.apache.kafka.common.utils.Utils.mkEntry;
-import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkObjectProperties;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -163,7 +160,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @ParameterizedTest
     @ValueSource(strings = {"INFO", "DEBUG", "TRACE"})
     public void shouldPushGlobalThreadMetricsToBroker(final String recordingLevel) throws Exception {
-        streamsApplicationProperties = props(true);
+        streamsApplicationProperties = props(null);
         streamsApplicationProperties.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel);
         final Topology topology = simpleTopology(true);
         subscribeForStreamsMetrics();
@@ -266,7 +263,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @MethodSource("singleAndMultiTaskParameters")
     public void shouldPassMetrics(final String topologyType) throws Exception {
         // Streams metrics should get passed to Admin and Consumer
-        streamsApplicationProperties = props(stateUpdaterEnabled);
+        streamsApplicationProperties = props(null);
         final Topology topology = topologyType.equals("simple") ? simpleTopology(false) : complexTopology();
        
         try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
