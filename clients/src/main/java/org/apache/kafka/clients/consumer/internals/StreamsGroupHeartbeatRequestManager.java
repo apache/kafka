@@ -74,13 +74,13 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         // Fields of StreamsGroupHeartbeatRequest sent in the most recent request
         static class LastSentFields {
 
-            private StreamsRebalanceData.Assignment assignment = StreamsRebalanceData.Assignment.EMPTY;
+            private StreamsRebalanceData.Assignment assignment = null;
 
             LastSentFields() {
             }
 
             void reset() {
-                assignment = StreamsRebalanceData.Assignment.EMPTY;
+                assignment = null;
             }
         }
 
