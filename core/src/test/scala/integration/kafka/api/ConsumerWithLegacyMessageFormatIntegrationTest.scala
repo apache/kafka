@@ -82,9 +82,9 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
     producer.close()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testOffsetsForTimes(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testOffsetsForTimes(groupProtocol: String): Unit = {
     setupTopics()
     val consumer = createConsumer()
 
@@ -129,9 +129,9 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
     assertNull(timestampOffsets.get(t3p1))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testEarliestOrLatestOffsets(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testEarliestOrLatestOffsets(groupProtocol: String): Unit = {
     setupTopics()
 
     val partitions = Set(t1p0, t1p1, t2p0, t2p1, t3p0, t3p1).asJava

@@ -92,7 +92,7 @@ class LogCleanerLagIntegrationTest extends AbstractLogCleanerIntegrationTest wit
 
     val compactedSize = log.logSegments(0L, activeSegAtT0.baseOffset).asScala.map(_.size).sum
     debug(s"after cleaning the compacted size up to active segment at T0: $compactedSize")
-    val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints(new TopicPartition("log", 0))
+    val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints.get(new TopicPartition("log", 0))
     assertTrue(lastCleaned >= firstBlock1SegmentBaseOffset, s"log cleaner should have processed up to offset $firstBlock1SegmentBaseOffset, but lastCleaned=$lastCleaned")
     assertTrue(sizeUpToActiveSegmentAtT0 > compactedSize, s"log should have been compacted: size up to offset of active segment at T0=$sizeUpToActiveSegmentAtT0 compacted size=$compactedSize")
   }
