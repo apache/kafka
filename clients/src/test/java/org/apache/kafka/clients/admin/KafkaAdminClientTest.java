@@ -10559,9 +10559,7 @@ public class KafkaAdminClientTest {
             TopicPartition myTopicPartition4 = new TopicPartition("my_topic_1", 4);
             TopicPartition myTopicPartition5 = new TopicPartition("my_topic_2", 6);
 
-            ListShareGroupOffsetsSpec groupSpec = new ListShareGroupOffsetsSpec().topicPartitions(
-                List.of(myTopicPartition0, myTopicPartition1, myTopicPartition2, myTopicPartition3, myTopicPartition4, myTopicPartition5)
-            );
+            ListShareGroupOffsetsSpec groupSpec = new ListShareGroupOffsetsSpec();
             Map<String, ListShareGroupOffsetsSpec> groupSpecs = new HashMap<>();
             groupSpecs.put(GROUP_ID, groupSpec);
 
