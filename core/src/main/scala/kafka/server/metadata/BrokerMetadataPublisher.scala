@@ -17,7 +17,7 @@
 
 package kafka.server.metadata
 
-import java.util.{OptionalInt, Properties}
+import java.util.OptionalInt
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.LogManager
 import kafka.server.{KafkaConfig, ReplicaManager}
@@ -30,6 +30,7 @@ import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta}
+import org.apache.kafka.metadata.publisher.AclPublisher
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.fault.FaultHandler
 
@@ -71,6 +72,7 @@ class BrokerMetadataPublisher(
   shareCoordinator: Option[ShareCoordinator],
   var dynamicConfigPublisher: DynamicConfigPublisher,
   dynamicClientQuotaPublisher: DynamicClientQuotaPublisher,
+  dynamicTopicClusterQuotaPublisher: DynamicTopicClusterQuotaPublisher,
   scramPublisher: ScramPublisher,
   delegationTokenPublisher: DelegationTokenPublisher,
   aclPublisher: AclPublisher,
@@ -118,7 +120,7 @@ class BrokerMetadataPublisher(
       // Publish the new metadata image to the metadata cache.
       metadataCache.setImage(newImage)
 
-      val metadataVersionLogMsg = s"metadata.version ${newImage.features().metadataVersion()}"
+      def metadataVersionLogMsg = s"metadata.version ${newImage.features().metadataVersion()}"
 
       if (_firstPublish) {
         info(s"Publishing initial metadata at offset $highestOffsetAndEpoch with $metadataVersionLogMsg.")
@@ -199,6 +201,9 @@ class BrokerMetadataPublisher(
       // Apply client quotas delta.
       dynamicClientQuotaPublisher.onMetadataUpdate(delta, newImage)
 
+      // Apply topic or cluster quotas delta.
+      dynamicTopicClusterQuotaPublisher.onMetadataUpdate(delta, newImage)
+
       // Apply SCRAM delta.
       scramPublisher.onMetadataUpdate(delta, newImage)
 
@@ -241,10 +246,6 @@ class BrokerMetadataPublisher(
       case Some(leaderEpoch) => OptionalInt.of(leaderEpoch)
       case None => OptionalInt.empty
     }
-  }
-
-  def reloadUpdatedFilesWithoutConfigChange(props: Properties): Unit = {
-    config.dynamicConfig.reloadUpdatedFilesWithoutConfigChange(props)
   }
 
   /**
@@ -297,7 +298,7 @@ class BrokerMetadataPublisher(
       // Start log manager, which will perform (potentially lengthy)
       // recovery-from-unclean-shutdown if required.
       logManager.startup(
-        metadataCache.getAllTopics(),
+        metadataCache.getAllTopics().asScala,
         isStray = log => LogManager.isStrayKraftReplica(brokerId, newImage.topics(), log)
       )
 
@@ -325,14 +326,14 @@ class BrokerMetadataPublisher(
     try {
       // Start the group coordinator.
       groupCoordinator.startup(() => metadataCache.numPartitions(Topic.GROUP_METADATA_TOPIC_NAME)
-        .getOrElse(config.groupCoordinatorConfig.offsetsTopicPartitions))
+        .orElse(config.groupCoordinatorConfig.offsetsTopicPartitions))
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting GroupCoordinator", t)
     }
     try {
       // Start the transaction coordinator.
       txnCoordinator.startup(() => metadataCache.numPartitions(
-        Topic.TRANSACTION_STATE_TOPIC_NAME).getOrElse(config.transactionLogConfig.transactionTopicPartitions))
+        Topic.TRANSACTION_STATE_TOPIC_NAME).orElse(config.transactionLogConfig.transactionTopicPartitions))
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting TransactionCoordinator", t)
     }
@@ -340,7 +341,7 @@ class BrokerMetadataPublisher(
       try {
         // Start the share coordinator.
         shareCoordinator.get.startup(() => metadataCache.numPartitions(
-          Topic.SHARE_GROUP_STATE_TOPIC_NAME).getOrElse(config.shareCoordinatorConfig.shareCoordinatorStateTopicNumPartitions()))
+          Topic.SHARE_GROUP_STATE_TOPIC_NAME).orElse(config.shareCoordinatorConfig.shareCoordinatorStateTopicNumPartitions()))
       } catch {
         case t: Throwable => fatalFaultHandler.handleFault("Error starting Share coordinator", t)
       }

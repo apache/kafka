@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.runtime;
 
+import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.connector.Connector;
 import org.apache.kafka.connect.connector.ConnectorContext;
@@ -86,7 +87,7 @@ public class WorkerConnector implements Runnable {
                            Connector connector,
                            ConnectorConfig connectorConfig,
                            CloseableConnectorContext ctx,
-                           ConnectMetrics metrics,
+                           ConnectMetrics connectMetrics,
                            ConnectorStatus.Listener statusListener,
                            CloseableOffsetStorageReader offsetStorageReader,
                            ConnectorOffsetBackingStore offsetStore,
@@ -97,7 +98,7 @@ public class WorkerConnector implements Runnable {
         this.ctx = ctx;
         this.connector = connector;
         this.state = State.INIT;
-        this.metrics = new ConnectorMetricsGroup(metrics, AbstractStatus.State.UNASSIGNED, statusListener);
+        this.metrics = new ConnectorMetricsGroup(connectMetrics, AbstractStatus.State.UNASSIGNED, statusListener);
         this.statusListener = this.metrics;
         this.offsetStorageReader = offsetStorageReader;
         this.offsetStore = offsetStore;
@@ -581,6 +582,11 @@ public class WorkerConnector implements Runnable {
             log.error("{} Connector raised an error", WorkerConnector.this, e);
             onFailure(e);
             WorkerConnector.this.ctx.raiseError(e);
+        }
+
+        @Override
+        public PluginMetrics pluginMetrics() {
+            return WorkerConnector.this.ctx.pluginMetrics();
         }
     }
 

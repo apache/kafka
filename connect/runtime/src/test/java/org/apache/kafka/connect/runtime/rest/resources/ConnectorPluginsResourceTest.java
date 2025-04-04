@@ -84,7 +84,7 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-import javax.ws.rs.BadRequestException;
+import jakarta.ws.rs.BadRequestException;
 
 import static java.util.Arrays.asList;
 import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_HEALTH_CHECK_TIMEOUT_MS;
@@ -428,14 +428,14 @@ public class ConnectorPluginsResourceTest {
     @Test
     public void testGetConnectorConfigDef() {
         String connName = ConnectorPluginsResourceTestConnector.class.getName();
-        when(herder.connectorPluginConfig(eq(connName))).thenAnswer(answer -> {
+        when(herder.connectorPluginConfig(eq(connName), eq(null))).thenAnswer(answer -> {
             List<ConfigKeyInfo> results = new ArrayList<>();
             for (ConfigDef.ConfigKey configKey : ConnectorPluginsResourceTestConnector.CONFIG_DEF.configKeys().values()) {
                 results.add(AbstractHerder.convertConfigKey(configKey));
             }
             return results;
         });
-        List<ConfigKeyInfo> connectorConfigDef = connectorPluginsResource.getConnectorConfigDef(connName);
+        List<ConfigKeyInfo> connectorConfigDef = connectorPluginsResource.getConnectorConfigDef(connName, null);
         assertEquals(ConnectorPluginsResourceTestConnector.CONFIG_DEF.names().size(), connectorConfigDef.size());
         for (String config : ConnectorPluginsResourceTestConnector.CONFIG_DEF.names()) {
             Optional<ConfigKeyInfo> cki = connectorConfigDef.stream().filter(c -> c.name().equals(config)).findFirst();

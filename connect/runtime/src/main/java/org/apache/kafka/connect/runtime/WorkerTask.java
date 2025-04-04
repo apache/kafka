@@ -19,7 +19,9 @@ package org.apache.kafka.connect.runtime;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.metrics.Gauge;
+import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.metrics.internals.PluginMetricsImpl;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Frequencies;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -31,6 +33,7 @@ import org.apache.kafka.connect.runtime.ConnectMetrics.MetricGroup;
 import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.storage.StatusBackingStore;
 import org.apache.kafka.connect.util.ConnectorTaskId;
 import org.apache.kafka.connect.util.LoggingContext;
@@ -42,6 +45,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 /**
@@ -76,6 +80,8 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
     protected final RetryWithToleranceOperator<T> retryWithToleranceOperator;
     protected final TransformationChain<T, R> transformationChain;
     private final Supplier<List<ErrorReporter<T>>> errorReportersSupplier;
+    protected final Function<ClassLoader, LoaderSwap> pluginLoaderSwapper;
+    protected final PluginMetricsImpl pluginMetrics;
 
     public WorkerTask(ConnectorTaskId id,
                       TaskStatus.Listener statusListener,
@@ -87,7 +93,8 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
                       TransformationChain<T, R> transformationChain,
                       Supplier<List<ErrorReporter<T>>> errorReportersSupplier,
                       Time time,
-                      StatusBackingStore statusBackingStore) {
+                      StatusBackingStore statusBackingStore,
+                      Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
         this.id = id;
         this.taskMetricsGroup = new TaskMetricsGroup(this.id, connectMetrics, statusListener);
         this.errorMetrics = errorMetrics;
@@ -103,6 +110,8 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
         this.errorReportersSupplier = errorReportersSupplier;
         this.time = time;
         this.statusBackingStore = statusBackingStore;
+        this.pluginLoaderSwapper = pluginLoaderSwapper;
+        this.pluginMetrics = connectMetrics.taskPluginMetrics(id);
     }
 
     public ConnectorTaskId id() {
@@ -111,6 +120,10 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
 
     public ClassLoader loader() {
         return loader;
+    }
+
+    public PluginMetrics pluginMetrics() {
+        return pluginMetrics;
     }
 
     /**
@@ -356,17 +369,16 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
      * @param duration the length of time in milliseconds for the commit attempt to complete
      */
     protected void recordCommitSuccess(long duration) {
-        taskMetricsGroup.recordCommit(duration, true, null);
+        taskMetricsGroup.recordCommit(duration, true);
     }
 
     /**
      * Record that offsets have been committed.
      *
      * @param duration the length of time in milliseconds for the commit attempt to complete
-     * @param error the unexpected error that occurred; may be null in the case of timeouts or interruptions
      */
-    protected void recordCommitFailure(long duration, Throwable error) {
-        taskMetricsGroup.recordCommit(duration, false, error);
+    protected void recordCommitFailure(long duration) {
+        taskMetricsGroup.recordCommit(duration, false);
     }
 
     /**
@@ -434,7 +446,7 @@ abstract class WorkerTask<T, R extends ConnectRecord<R>> implements Runnable {
             metricGroup.close();
         }
 
-        void recordCommit(long duration, boolean success, Throwable error) {
+        void recordCommit(long duration, boolean success) {
             if (success) {
                 commitTime.record(duration);
                 commitAttempts.record(1.0d);

@@ -213,4 +213,13 @@ public class HdrHistogramTest {
         }
         ThreadUtils.shutdownExecutorServiceQuietly(countExecutor, 500, TimeUnit.MILLISECONDS);
     }
+
+    @Test
+    public void testRecordLimit() {
+        long highestTrackableValue = 10L;
+        HdrHistogram hdrHistogram = new HdrHistogram(10L, highestTrackableValue, 3);
+
+        hdrHistogram.record(highestTrackableValue + 1000L);
+        assertEquals(highestTrackableValue, hdrHistogram.max(System.currentTimeMillis()));
+    }
 }

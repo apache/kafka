@@ -105,10 +105,10 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         context = new TieredStorageTestContext(this);
     }
 
-    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedQuorumName() in the ParameterizedTest name.
-    @ParameterizedTest(name = "{displayName}.quorum={0}.groupProtocol={1}")
-    @MethodSource("getTestQuorumAndGroupProtocolParametersAll")
-    public void executeTieredStorageTest(String quorum, String groupProtocol) {
+    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedGroupProtocolNames() in the ParameterizedTest name.
+    @ParameterizedTest(name = "{displayName}.groupProtocol={0}")
+    @MethodSource("getTestGroupProtocolParametersAll")
+    public void executeTieredStorageTest(String groupProtocol) {
         TieredStorageTestBuilder builder = new TieredStorageTestBuilder();
         writeTestSpecifications(builder);
         try {
@@ -138,9 +138,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
             if (broker.remoteLogManagerOpt().isDefined()) {
                 RemoteLogManager remoteLogManager = broker.remoteLogManagerOpt().get();
                 RemoteStorageManager storageManager = remoteLogManager.storageManager();
-                if (storageManager instanceof ClassLoaderAwareRemoteStorageManager) {
-                    ClassLoaderAwareRemoteStorageManager loaderAwareRSM =
-                            (ClassLoaderAwareRemoteStorageManager) storageManager;
+                if (storageManager instanceof ClassLoaderAwareRemoteStorageManager loaderAwareRSM) {
                     if (loaderAwareRSM.delegate() instanceof LocalTieredStorage) {
                         storages.add((LocalTieredStorage) loaderAwareRSM.delegate());
                     }

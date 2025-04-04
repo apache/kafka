@@ -18,6 +18,7 @@ package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.connect.errors.IllegalWorkerStateException;
 import org.apache.kafka.connect.sink.ErrantRecordReporter;
 import org.apache.kafka.connect.sink.SinkTaskContext;
@@ -163,6 +164,11 @@ public class WorkerSinkTaskContext implements SinkTaskContext {
     @Override
     public ErrantRecordReporter errantRecordReporter() {
         return sinkTask.workerErrantRecordReporter();
+    }
+
+    @Override
+    public PluginMetrics pluginMetrics() {
+        return sinkTask.pluginMetrics();
     }
 
     @Override

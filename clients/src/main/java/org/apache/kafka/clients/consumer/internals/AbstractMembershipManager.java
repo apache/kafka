@@ -144,7 +144,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
     /**
      * If there is a reconciliation running (triggering commit, callbacks) for the
-     * assignmentReadyToReconcile. This will be true if {@link #maybeReconcile()} has been triggered
+     * assignmentReadyToReconcile. This will be true if {@link #maybeReconcile(boolean)} has been triggered
      * after receiving a heartbeat response, or a metadata update.
      */
     private boolean reconciliationInProgress;
@@ -159,7 +159,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     /**
      * If the member is currently leaving the group after a call to {@link #leaveGroup()} or
      * {@link #leaveGroupOnClose()}, this will have a future that will complete when the ongoing leave operation
-     * completes (callbacks executed and heartbeat request to leave is sent out). This will be empty is the
+     * completes (callbacks executed and heartbeat request to leave is sent out). This will be empty if the
      * member is not leaving.
      */
     private Optional<CompletableFuture<Void>> leaveGroupInProgress = Optional.empty();
@@ -199,12 +199,15 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      */
     private boolean isPollTimerExpired;
 
+    private final boolean autoCommitEnabled;
+
     AbstractMembershipManager(String groupId,
                               SubscriptionState subscriptions,
                               ConsumerMetadata metadata,
                               Logger log,
                               Time time,
-                              RebalanceMetricsManager metricsManager) {
+                              RebalanceMetricsManager metricsManager,
+                              boolean autoCommitEnabled) {
         this.groupId = groupId;
         this.state = MemberState.UNSUBSCRIBED;
         this.subscriptions = subscriptions;
@@ -216,6 +219,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         this.stateUpdatesListeners = new ArrayList<>();
         this.time = time;
         this.metricsManager = metricsManager;
+        this.autoCommitEnabled = autoCommitEnabled;
     }
 
     /**
@@ -791,8 +795,16 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      *  - Another reconciliation is already in progress.
      *  - There are topics that haven't been added to the current assignment yet, but all their topic IDs
      *    are missing from the target assignment.
+     *
+     * @param canCommit Controls whether reconciliation can proceed when auto-commit is enabled.
+     *                  Set to true only when the current offset positions are safe to commit.
+     *                  If false and auto-commit enabled, the reconciliation will be skipped.
      */
-    void maybeReconcile() {
+    public void maybeReconcile(boolean canCommit) {
+        if (state != MemberState.RECONCILING) {
+            return;
+        }
+
         if (targetAssignmentReconciled()) {
             log.trace("Ignoring reconciliation attempt. Target assignment is equal to the " +
                     "current assignment.");
@@ -818,6 +830,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             return;
         }
 
+        if (autoCommitEnabled && !canCommit) return;
         markReconciliationInProgress();
 
         // Keep copy of assigned TopicPartitions created from the TopicIdPartitions that are
@@ -1175,10 +1188,16 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
         // Invoke user call back.
         CompletableFuture<Void> result = signalPartitionsAssigned(addedPartitions);
+        // Enable newly added partitions to start fetching and updating positions for them.
         result.whenComplete((__, exception) -> {
             if (exception == null) {
-                // Enable newly added partitions to start fetching and updating positions for them.
-                subscriptions.enablePartitionsAwaitingCallback(addedPartitions);
+                // Enable assigned partitions to start fetching and updating positions for them.
+                // We use assignedPartitions here instead of addedPartitions because there's a chance that the callback
+                // might throw an exception, leaving addedPartitions empty. This would result in the poll operation
+                // returning no records, as no topic partitions are marked as fetchable. In contrast, with the classic consumer,
+                // if the first callback fails but the next one succeeds, polling can still retrieve data. To align with
+                // this behavior, we rely on assignedPartitions to avoid such scenarios.
+                subscriptions.enablePartitionsAwaitingCallback(toTopicPartitionSet(assignedPartitions));
             } else {
                 // Keeping newly added partitions as non-fetchable after the callback failure.
                 // They will be retried on the next reconciliation loop, until it succeeds or the
@@ -1341,7 +1360,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
     /**
      * @return If there is a reconciliation in process now. Note that reconciliation is triggered
-     * by a call to {@link #maybeReconcile()}. Visible for testing.
+     * by a call to {@link #maybeReconcile(boolean)}. Visible for testing.
      */
     boolean reconciliationInProgress() {
         return reconciliationInProgress;
@@ -1377,9 +1396,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      *                      time-sensitive operations should be performed
      */
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
-        if (state == MemberState.RECONCILING) {
-            maybeReconcile();
-        }
+        maybeReconcile(false);
         return NetworkClientDelegate.PollResult.EMPTY;
     }
 

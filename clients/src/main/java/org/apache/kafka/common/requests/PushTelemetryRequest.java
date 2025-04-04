@@ -19,8 +19,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.PushTelemetryRequestData;
 import org.apache.kafka.common.message.PushTelemetryResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 
@@ -91,8 +91,8 @@ public class PushTelemetryRequest extends AbstractRequest {
             this.data.metrics() : ClientTelemetryUtils.decompress(this.data.metrics(), cType);
     }
 
-    public static PushTelemetryRequest parse(ByteBuffer buffer, short version) {
+    public static PushTelemetryRequest parse(Readable readable, short version) {
         return new PushTelemetryRequest(new PushTelemetryRequestData(
-                new ByteBufferAccessor(buffer), version), version);
+                readable, version), version);
     }
 }

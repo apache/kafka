@@ -50,7 +50,7 @@ class TransactionsWithMaxInFlightOneTest extends KafkaServerTestHarness {
   val transactionalConsumers = mutable.Buffer[Consumer[Array[Byte], Array[Byte]]]()
 
   override def generateConfigs: Seq[KafkaConfig] = {
-    TestUtils.createBrokerConfigs(numBrokers, zkConnectOrNull).map(KafkaConfig.fromProps(_, serverProps()))
+    TestUtils.createBrokerConfigs(numBrokers).map(KafkaConfig.fromProps(_, serverProps()))
   }
 
   @BeforeEach
@@ -72,9 +72,9 @@ class TransactionsWithMaxInFlightOneTest extends KafkaServerTestHarness {
     super.tearDown()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testTransactionalProducerSingleBrokerMaxInFlightOne(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testTransactionalProducerSingleBrokerMaxInFlightOne(groupProtocol: String): Unit = {
     // We want to test with one broker to verify multiple requests queued on a connection
     assertEquals(1, brokers.size)
 

@@ -20,6 +20,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.errors.InvalidProducerEpochException;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.metrics.stats.Max;
@@ -31,6 +32,7 @@ import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ErrorReporter;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperator;
+import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.source.SourceRecord;
 import org.apache.kafka.connect.source.SourceTask;
 import org.apache.kafka.connect.source.SourceTask.TransactionBoundary;
@@ -56,6 +58,7 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.concurrent.Executor;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Function;
 import java.util.function.Supplier;
 
 
@@ -78,9 +81,9 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                                        SourceTask task,
                                        TaskStatus.Listener statusListener,
                                        TargetState initialState,
-                                       Converter keyConverter,
-                                       Converter valueConverter,
-                                       HeaderConverter headerConverter,
+                                       Plugin<Converter> keyConverterPlugin,
+                                       Plugin<Converter> valueConverterPlugin,
+                                       Plugin<HeaderConverter> headerConverterPlugin,
                                        TransformationChain<SourceRecord, SourceRecord> transformationChain,
                                        Producer<byte[], byte[]> producer,
                                        TopicAdmin admin,
@@ -100,11 +103,12 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
                                        Executor closeExecutor,
                                        Runnable preProducerCheck,
                                        Runnable postProducerCheck,
-                                       Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier) {
-        super(id, task, statusListener, initialState, keyConverter, valueConverter, headerConverter, transformationChain,
-                new WorkerSourceTaskContext(offsetReader, id, configState, buildTransactionContext(sourceConfig)),
+                                       Supplier<List<ErrorReporter<SourceRecord>>> errorReportersSupplier,
+                                       Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
+        super(id, task, statusListener, initialState, configState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, transformationChain,
+                buildTransactionContext(sourceConfig),
                 producer, admin, topicGroups, offsetReader, offsetWriter, offsetStore, workerConfig, connectMetrics, errorMetrics,
-                loader, time, retryWithToleranceOperator, statusBackingStore, closeExecutor, errorReportersSupplier);
+                loader, time, retryWithToleranceOperator, statusBackingStore, closeExecutor, errorReportersSupplier, pluginLoaderSwapper);
 
         this.transactionOpen = false;
         this.committableRecords = new LinkedHashMap<>();
@@ -321,7 +325,7 @@ class ExactlyOnceWorkerSourceTask extends AbstractWorkerSourceTask {
 
         error = flushError.get();
         if (error != null) {
-            recordCommitFailure(time.milliseconds() - started, null);
+            recordCommitFailure(time.milliseconds() - started);
             offsetWriter.cancelFlush();
             throw maybeWrapProducerSendException(
                     "Failed to flush offsets and/or records for task " + id,

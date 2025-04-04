@@ -64,12 +64,12 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import javax.ws.rs.BadRequestException;
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.MultivaluedHashMap;
-import javax.ws.rs.core.MultivaluedMap;
-import javax.ws.rs.core.Response;
-import javax.ws.rs.core.UriInfo;
+import jakarta.ws.rs.BadRequestException;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.MultivaluedHashMap;
+import jakarta.ws.rs.core.MultivaluedMap;
+import jakarta.ws.rs.core.Response;
+import jakarta.ws.rs.core.UriInfo;
 
 import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_HEALTH_CHECK_TIMEOUT_MS;
 import static org.apache.kafka.connect.runtime.rest.RestServer.DEFAULT_REST_REQUEST_TIMEOUT_MS;
@@ -970,11 +970,6 @@ public class ConnectorsResourceTest {
 
     private <T> Stubber expectAndCallbackNotLeaderException(final ArgumentCaptor<Callback<T>> cb) {
         return expectAndCallbackException(cb, new NotLeaderException("not leader test", LEADER_URL));
-    }
-
-    @FunctionalInterface
-    public interface RunnableWithThrowable<T> {
-        T run() throws Throwable;
     }
 
 }

@@ -52,14 +52,14 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testClusterIdIsValid(quorum: String): Unit = {
-    val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(2.toShort))
+    val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(4.toShort))
     isValidClusterId(metadataResponse.clusterId)
   }
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testRack(quorum: String): Unit = {
-    val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
+    val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(4.toShort))
     // Validate rack matches what's set in generateConfigs() above
     metadataResponse.brokers.forEach { broker =>
       assertEquals(s"rack/${broker.id}", broker.rack, "Rack information should match config")
@@ -75,7 +75,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     createTopic(internalTopic, 3, 2)
     createTopic(notInternalTopic, 3, 2)
 
-    val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(1.toShort))
+    val metadataResponse = sendMetadataRequest(MetadataRequest.Builder.allTopics.build(4.toShort))
     assertTrue(metadataResponse.errors.isEmpty, "Response should have no errors")
 
     val topicMetadata = metadataResponse.topicMetadata.asScala
@@ -95,9 +95,7 @@ class MetadataRequestTest extends AbstractMetadataRequestTest {
     createTopic("t1", 3, 2)
     createTopic("t2", 3, 2)
 
-    // v0, Doesn't support a "no topics" request
-    // v1, Empty list represents "no topics"
-    val metadataResponse = sendMetadataRequest(new MetadataRequest.Builder(List[String]().asJava, true, 1.toShort).build)
+    val metadataResponse = sendMetadataRequest(new MetadataRequest.Builder(List[String]().asJava, true, 4.toShort).build)
     assertTrue(metadataResponse.errors.isEmpty, "Response should have no errors")
     assertTrue(metadataResponse.topicMetadata.isEmpty, "Response should have no topics")
   }

@@ -44,7 +44,8 @@ public class ReconfigurableQuorumIntegrationTest {
     static void checkKRaftVersions(Admin admin, short finalized) throws Exception {
         FeatureMetadata featureMetadata = admin.describeFeatures().featureMetadata().get();
         if (finalized > 0) {
-            assertTrue(featureMetadata.finalizedFeatures().containsKey(KRaftVersion.FEATURE_NAME));
+            assertTrue(featureMetadata.finalizedFeatures().containsKey(KRaftVersion.FEATURE_NAME),
+                "finalizedFeatures does not contain " + KRaftVersion.FEATURE_NAME + ", finalizedFeatures: " + featureMetadata.finalizedFeatures());
             assertEquals(finalized, featureMetadata.finalizedFeatures().
                     get(KRaftVersion.FEATURE_NAME).minVersionLevel());
             assertEquals(finalized, featureMetadata.finalizedFeatures().
@@ -64,13 +65,13 @@ public class ReconfigurableQuorumIntegrationTest {
             new TestKitNodes.Builder().
                 setNumBrokerNodes(1).
                 setNumControllerNodes(1).
-                    build()).build()
-        ) {
+                build()
+        ).build()) {
             cluster.format();
             cluster.startup();
             try (Admin admin = Admin.create(cluster.clientProperties())) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
-                    checkKRaftVersions(admin, (short) 0);
+                    checkKRaftVersions(admin, KRaftVersion.KRAFT_VERSION_0.featureLevel());
                 });
             }
         }
@@ -82,14 +83,14 @@ public class ReconfigurableQuorumIntegrationTest {
             new TestKitNodes.Builder().
                 setNumBrokerNodes(1).
                 setNumControllerNodes(1).
-                setFeature(KRaftVersion.FEATURE_NAME, (short) 1).
-                    build()).build()
-        ) {
+                setFeature(KRaftVersion.FEATURE_NAME, KRaftVersion.KRAFT_VERSION_1.featureLevel()).
+                build()
+        ).build()) {
             cluster.format();
             cluster.startup();
             try (Admin admin = Admin.create(cluster.clientProperties())) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
-                    checkKRaftVersions(admin, (short) 1);
+                    checkKRaftVersions(admin, KRaftVersion.KRAFT_VERSION_1.featureLevel());
                 });
             }
         }
@@ -110,9 +111,9 @@ public class ReconfigurableQuorumIntegrationTest {
             new TestKitNodes.Builder().
                 setNumBrokerNodes(1).
                 setNumControllerNodes(3).
-                setFeature(KRaftVersion.FEATURE_NAME, (short) 1).
-                    build()).build()
-        ) {
+                setFeature(KRaftVersion.FEATURE_NAME, KRaftVersion.KRAFT_VERSION_1.featureLevel()).
+                build()
+        ).build()) {
             cluster.format();
             cluster.startup();
             try (Admin admin = Admin.create(cluster.clientProperties())) {
@@ -135,7 +136,7 @@ public class ReconfigurableQuorumIntegrationTest {
             new TestKitNodes.Builder().
                 setNumBrokerNodes(1).
                 setNumControllerNodes(4).
-                setFeature(KRaftVersion.FEATURE_NAME, (short) 1).
+                setFeature(KRaftVersion.FEATURE_NAME, KRaftVersion.KRAFT_VERSION_1.featureLevel()).
                 build()).build()
         ) {
             cluster.format();

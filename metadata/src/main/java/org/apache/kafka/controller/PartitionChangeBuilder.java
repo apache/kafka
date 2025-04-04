@@ -33,7 +33,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -332,7 +331,7 @@ public class PartitionChangeBuilder {
             // so only log clean elections at TRACE level; log unclean elections at INFO level
             // to ensure the message is emitted since an unclean election can lead to data loss;
             if (targetElr.contains(electionResult.node)) {
-                targetIsr = Collections.singletonList(electionResult.node);
+                targetIsr = List.of(electionResult.node);
                 targetElr = targetElr.stream().filter(replica -> replica != electionResult.node)
                     .collect(Collectors.toList());
                 log.trace("Setting new leader for topicId {}, partition {} to {} using ELR",
@@ -348,9 +347,8 @@ public class PartitionChangeBuilder {
             if (electionResult.unclean) {
                 // If the election was unclean, we have to forcibly set the ISR to just the
                 // new leader. This can result in data loss!
-                record.setIsr(Collections.singletonList(electionResult.node));
-                if (partition.leaderRecoveryState != LeaderRecoveryState.RECOVERING &&
-                    metadataVersion.isLeaderRecoverySupported()) {
+                record.setIsr(List.of(electionResult.node));
+                if (partition.leaderRecoveryState != LeaderRecoveryState.RECOVERING) {
                     // And mark the leader recovery state as RECOVERING
                     record.setLeaderRecoveryState(LeaderRecoveryState.RECOVERING.value());
                 }
@@ -424,8 +422,8 @@ public class PartitionChangeBuilder {
 
         targetIsr = completedReassignment.isr;
         targetReplicas = completedReassignment.replicas;
-        targetRemoving = Collections.emptyList();
-        targetAdding = Collections.emptyList();
+        targetRemoving = List.of();
+        targetAdding = List.of();
     }
 
     public Optional<ApiMessageAndVersion> build() {
@@ -477,7 +475,7 @@ public class PartitionChangeBuilder {
                 for (int replica : targetReplicas) {
                     directories.add(this.targetDirectories.getOrDefault(replica, defaultDirProvider.defaultDir(replica)));
                 }
-                if (!directories.equals(Arrays.asList(partition.directories))) {
+                if (!directories.equals(List.of(partition.directories))) {
                     record.setDirectories(directories);
                 }
             }
@@ -498,11 +496,11 @@ public class PartitionChangeBuilder {
         if (record.isr() != null && record.isr().isEmpty() && (partition.lastKnownElr.length != 1 ||
             partition.lastKnownElr[0] != partition.leader)) {
             // Only update the last known leader when the first time the partition becomes leaderless.
-            record.setLastKnownElr(Collections.singletonList(partition.leader));
+            record.setLastKnownElr(List.of(partition.leader));
         } else if ((record.leader() >= 0 || (partition.leader != NO_LEADER && record.leader() != NO_LEADER))
             && partition.lastKnownElr.length > 0) {
             // Clear the LastKnownElr field if the partition will have or continues to have a valid leader.
-            record.setLastKnownElr(Collections.emptyList());
+            record.setLastKnownElr(List.of());
         }
     }
 
@@ -512,8 +510,8 @@ public class PartitionChangeBuilder {
 
         // Clean the ELR related fields if it is an unclean election or ELR is disabled.
         if (!isCleanLeaderElection || !eligibleLeaderReplicasEnabled) {
-            targetElr = Collections.emptyList();
-            targetLastKnownElr = Collections.emptyList();
+            targetElr = List.of();
+            targetLastKnownElr = List.of();
         }
 
         if (!targetElr.equals(Replicas.toList(partition.elr))) {
@@ -541,8 +539,8 @@ public class PartitionChangeBuilder {
 
         // If the ISR is larger or equal to the min ISR, clear the ELR and LastKnownElr.
         if (targetIsr.size() >= minISR) {
-            targetElr = Collections.emptyList();
-            targetLastKnownElr = Collections.emptyList();
+            targetElr = List.of();
+            targetLastKnownElr = List.of();
             return;
         }
 

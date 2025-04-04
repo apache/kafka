@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackRegistrationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
 import org.apache.kafka.common.KafkaException;
@@ -34,6 +35,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.StringDeserializer;
@@ -52,13 +54,16 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Predicate;
 
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
@@ -122,7 +127,7 @@ public class ShareConsumerImplTest {
                 new StringDeserializer(),
                 new StringDeserializer(),
                 time,
-                (a, b, c, d, e, f, g) -> applicationEventHandler,
+                (a, b, c, d, e, f, g, h) -> applicationEventHandler,
                 a -> backgroundEventReaper,
                 (a, b, c, d, e) -> fetchCollector,
                 backgroundEventQueue
@@ -146,6 +151,7 @@ public class ShareConsumerImplTest {
             String clientId
     ) {
         final int defaultApiTimeoutMs = 1000;
+        final int requestTimeoutMs = 30000;
 
         return new ShareConsumerImpl<>(
                 new LogContext(),
@@ -161,6 +167,7 @@ public class ShareConsumerImplTest {
                 new Metrics(),
                 subscriptions,
                 metadata,
+                requestTimeoutMs,
                 defaultApiTimeoutMs,
                 groupId
         );
@@ -214,6 +221,48 @@ public class ShareConsumerImplTest {
     }
 
     @Test
+    public void testControlRecordsOnEmptyFetch() {
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
+        // Setup subscription
+        final String topicName = "foo";
+        final List<String> subscriptionTopic = Collections.singletonList(topicName);
+        completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, subscriptionTopic);
+        consumer.subscribe(subscriptionTopic);
+
+        // Create a fetch with only GAP (no records)
+        final TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), 0, topicName);
+        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip);
+        // Add GAP without adding any records
+        batch.addGap(1);
+        
+        final ShareFetch<String, String> fetchWithOnlyGap = ShareFetch.empty();
+        fetchWithOnlyGap.add(tip, batch);
+        doReturn(fetchWithOnlyGap).when(fetchCollector).collect(any(ShareFetchBuffer.class));
+
+        consumer.poll(Duration.ZERO);
+
+        // Verify that next ShareFetchEvent was sent with the acknowledgement GAP for offset 1
+        verify(applicationEventHandler).add(argThat(event -> {
+            if (!(event instanceof ShareFetchEvent)) {
+                return false;
+            }
+            ShareFetchEvent fetchEvent = (ShareFetchEvent) event;
+            
+            // Regular acknowledgements map should be empty
+            if (!fetchEvent.acknowledgementsMap().isEmpty()) {
+                return false;
+            }
+            
+            // Control record acknowledgements map should contain the GAP for offset 1
+            Map<TopicIdPartition, NodeAcknowledgements> controlRecordAcks = fetchEvent.controlRecordAcknowledgements();
+            return controlRecordAcks.containsKey(tip) &&
+                   controlRecordAcks.get(tip).acknowledgements().get(1L) == null; // Null indicates GAP
+        }));
+    }
+
+    @Test
     public void testWakeupAfterEmptyFetch() {
         SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         consumer = newConsumer(subscriptions);
@@ -240,7 +289,7 @@ public class ShareConsumerImplTest {
         final String topicName = "foo";
         final int partition = 3;
         final TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), partition, topicName);
-        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(tip);
+        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip);
         batch.addRecord(new ConsumerRecord<>(topicName, partition, 2, "key1", "value1"));
         doAnswer(invocation -> {
             consumer.wakeup();
@@ -269,6 +318,26 @@ public class ShareConsumerImplTest {
         consumer.close();
         final IllegalStateException res = assertThrows(IllegalStateException.class, consumer::subscription);
         assertEquals("This consumer has already been closed.", res.getMessage());
+    }
+
+    @Test
+    public void testUnsubscribeWithTopicAuthorizationException() {
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
+        backgroundEventQueue.add(new ErrorEvent(new TopicAuthorizationException(Set.of("test-topic"))));
+        completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
+        assertDoesNotThrow(() -> consumer.unsubscribe());
+        assertDoesNotThrow(() -> consumer.close());
+    }
+
+    @Test
+    public void testCloseWithTopicAuthorizationException() {
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
+        completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
+        assertDoesNotThrow(() -> consumer.close());
     }
 
     @Test
@@ -465,7 +534,7 @@ public class ShareConsumerImplTest {
 
         final TopicPartition tp = new TopicPartition("topic", 0);
         final TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), tp);
-        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(tip);
+        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip);
         batch.addRecord(new ConsumerRecord<>("topic", 0, 2, "key1", "value1"));
         final ShareFetch<String, String> fetch = ShareFetch.empty();
         fetch.add(tip, batch);
@@ -502,7 +571,7 @@ public class ShareConsumerImplTest {
     }
 
     /**
-     * Tests {@link ShareConsumerImpl#processBackgroundEvents(Future, Timer) processBackgroundEvents}
+     * Tests {@link ShareConsumerImpl#processBackgroundEvents(Future, Timer, Predicate) processBackgroundEvents}
      * handles the case where the {@link Future} takes a bit of time to complete, but does within the timeout.
      */
     @Test
@@ -529,14 +598,14 @@ public class ShareConsumerImplTest {
             return null;
         }).when(future).get(any(Long.class), any(TimeUnit.class));
 
-        consumer.processBackgroundEvents(future, timer);
+        consumer.processBackgroundEvents(future, timer, e -> false);
 
         // 800 is the 1000 ms timeout (above) minus the 200 ms delay for the two incremental timeouts/retries.
         assertEquals(800, timer.remainingMs());
     }
 
     /**
-     * Tests {@link ShareConsumerImpl#processBackgroundEvents(Future, Timer) processBackgroundEvents}
+     * Tests {@link ShareConsumerImpl#processBackgroundEvents(Future, Timer, Predicate) processBackgroundEvents}
      * handles the case where the {@link Future} is already complete when invoked, so it doesn't have to wait.
      */
     @Test
@@ -548,7 +617,7 @@ public class ShareConsumerImplTest {
         // Create a future that is already completed.
         CompletableFuture<?> future = CompletableFuture.completedFuture(null);
 
-        consumer.processBackgroundEvents(future, timer);
+        consumer.processBackgroundEvents(future, timer, e -> false);
 
         // Because we didn't need to perform a timed get, we should still have every last millisecond
         // of our initial timeout.
@@ -556,7 +625,7 @@ public class ShareConsumerImplTest {
     }
 
     /**
-     * Tests {@link ShareConsumerImpl#processBackgroundEvents(Future, Timer) processBackgroundEvents}
+     * Tests {@link ShareConsumerImpl#processBackgroundEvents(Future, Timer, Predicate) processBackgroundEvents}
      * handles the case where the {@link Future} does not complete within the timeout.
      */
     @Test
@@ -572,7 +641,7 @@ public class ShareConsumerImplTest {
             throw new java.util.concurrent.TimeoutException("Intentional timeout");
         }).when(future).get(any(Long.class), any(TimeUnit.class));
 
-        assertThrows(TimeoutException.class, () -> consumer.processBackgroundEvents(future, timer));
+        assertThrows(TimeoutException.class, () -> consumer.processBackgroundEvents(future, timer, e -> false));
 
         // Because we forced our mocked future to continuously time out, we should have no time remaining.
         assertEquals(0, timer.remainingMs());

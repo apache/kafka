@@ -24,7 +24,7 @@ import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.internals.Murmur3;
-import org.apache.kafka.test.MockInternalNewProcessorContext;
+import org.apache.kafka.test.MockInternalProcessorContext;
 
 import org.junit.jupiter.api.Test;
 
@@ -44,8 +44,8 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 public class SubscriptionSendProcessorSupplierTest {
 
     private final Processor<String, Change<LeftValue>, String, SubscriptionWrapper<String>> leftJoinProcessor =
-        new SubscriptionSendProcessorSupplier<String, String, LeftValue>(
-            LeftValue::getForeignKey,
+        new SubscriptionSendProcessorSupplier<String, LeftValue, String>(
+            ForeignKeyExtractor.fromFunction(LeftValue::getForeignKey),
             () -> "subscription-topic-fk",
             () -> "value-serde-topic",
             Serdes.String(),
@@ -54,8 +54,8 @@ public class SubscriptionSendProcessorSupplierTest {
         ).get();
 
     private final Processor<String, Change<LeftValue>, String, SubscriptionWrapper<String>> innerJoinProcessor =
-        new SubscriptionSendProcessorSupplier<String, String, LeftValue>(
-            LeftValue::getForeignKey,
+        new SubscriptionSendProcessorSupplier<String, LeftValue, String>(
+            ForeignKeyExtractor.fromFunction(LeftValue::getForeignKey),
             () -> "subscription-topic-fk",
             () -> "value-serde-topic",
             Serdes.String(),
@@ -70,7 +70,7 @@ public class SubscriptionSendProcessorSupplierTest {
     // Left join tests
     @Test
     public void leftJoinShouldPropagateNewPrimaryKeyWithNonNullFK() {
-        final MockInternalNewProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
         leftJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -87,7 +87,7 @@ public class SubscriptionSendProcessorSupplierTest {
 
     @Test
     public void leftJoinShouldPropagateNewPrimaryKeyWithNullFK() {
-        final MockInternalNewProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
         leftJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -104,7 +104,7 @@ public class SubscriptionSendProcessorSupplierTest {
 
     @Test
     public void leftJoinShouldPropagateChangeOfFKFromNonNullToNonNullValue() {
-        final MockInternalNewProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
         leftJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -121,7 +121,7 @@ public class SubscriptionSendProcessorSupplierTest {
 
     @Test
     public void leftJoinShouldPropagateNewRecordOfUnchangedFK() {
-        final MockInternalNewProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
         leftJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -138,7 +138,7 @@ public class SubscriptionSendProcessorSupplierTest {
 
     @Test
     public void leftJoinShouldPropagateChangeOfFKFromNonNullToNullValue() {
-        final MockInternalNewProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
         leftJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -155,7 +155,7 @@ public class SubscriptionSendProcessorSupplierTest {
 
     @Test
     public void leftJoinShouldPropagateChangeFromNullFKToNonNullFKValue() {
-        final MockInternalNewProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
         leftJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -172,7 +172,7 @@ public class SubscriptionSendProcessorSupplierTest {
 
     @Test
     public void leftJoinShouldPropagateChangeFromNullFKToNullFKValue() {
-        final MockInternalNewProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
         leftJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -189,7 +189,7 @@ public class SubscriptionSendProcessorSupplierTest {
 
     @Test
     public void leftJoinShouldPropagateDeletionOfAPrimaryKey() {
-        final MockInternalNewProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
         leftJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -204,7 +204,7 @@ public class SubscriptionSendProcessorSupplierTest {
 
     @Test
     public void leftJoinShouldPropagateDeletionOfAPrimaryKeyThatHadNullFK() {
-        final MockInternalNewProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
         leftJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -219,7 +219,7 @@ public class SubscriptionSendProcessorSupplierTest {
 
     @Test
     public void leftJoinShouldPropagateNothingWhenOldAndNewLeftValueIsNull() {
-        final MockInternalNewProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
         leftJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -231,7 +231,7 @@ public class SubscriptionSendProcessorSupplierTest {
     // Inner join tests
     @Test
     public void innerJoinShouldPropagateNewPrimaryKey() {
-        final MockInternalNewProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
         innerJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -248,7 +248,7 @@ public class SubscriptionSendProcessorSupplierTest {
 
     @Test
     public void innerJoinShouldNotPropagateNewPrimaryKeyWithNullFK() {
-        final MockInternalNewProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
         innerJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -265,7 +265,7 @@ public class SubscriptionSendProcessorSupplierTest {
 
     @Test
     public void innerJoinShouldDeleteOldAndPropagateNewFK() {
-        final MockInternalNewProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
         innerJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -286,7 +286,7 @@ public class SubscriptionSendProcessorSupplierTest {
 
     @Test
     public void innerJoinShouldPropagateNothingWhenOldAndNewFKIsNull() {
-        final MockInternalNewProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
         innerJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -303,7 +303,7 @@ public class SubscriptionSendProcessorSupplierTest {
 
     @Test
     public void innerJoinShouldPropagateDeletionOfPrimaryKey() {
-        final MockInternalNewProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
         innerJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -318,7 +318,7 @@ public class SubscriptionSendProcessorSupplierTest {
 
     @Test
     public void innerJoinShouldPropagateNothingWhenOldAndNewLeftValueIsNull() {
-        final MockInternalNewProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalNewProcessorContext<>();
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
         innerJoinProcessor.init(context);
         context.setRecordMetadata("topic", 0, 0);
 
@@ -327,7 +327,308 @@ public class SubscriptionSendProcessorSupplierTest {
         assertThat(context.forwarded(), empty());
     }
 
+    // Bi-function tests: inner join, left join
+    private final Processor<String, Change<LeftValue>, String, SubscriptionWrapper<String>> biFunctionLeftJoinProcessor =
+        new SubscriptionSendProcessorSupplier<String, LeftValue, String>(
+            ForeignKeyExtractor.fromBiFunction((key, value) -> value.getForeignKey() == null ? null : key + value.getForeignKey()),
+            () -> "subscription-topic-fk",
+            () -> "value-serde-topic",
+            Serdes.String(),
+            new LeftValueSerializer(),
+            true
+        ).get();
+
+    private final Processor<String, Change<LeftValue>, String, SubscriptionWrapper<String>> biFunctionInnerJoinProcessor =
+        new SubscriptionSendProcessorSupplier<String, LeftValue, String>(
+            ForeignKeyExtractor.fromBiFunction((key, value) -> value.getForeignKey() == null ? null : key + value.getForeignKey()),
+            () -> "subscription-topic-fk",
+            () -> "value-serde-topic",
+            Serdes.String(),
+            new LeftValueSerializer(),
+            false
+        ).get();
+
+    // Bi-function tests: left join
+    @Test
+    public void biFunctionLeftJoinShouldPropagateNewPrimaryKeyWithNonNullFK() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        biFunctionLeftJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        final LeftValue leftRecordValue = new LeftValue(fk1);
+
+        biFunctionLeftJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, null), 0));
+
+        final String compositeKey = pk + fk1;
+
+        assertThat(context.forwarded().size(), is(1));
+        assertThat(
+            context.forwarded().get(0).record(),
+            is(new Record<>(compositeKey, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
+        );
+    }
+
+    @Test
+    public void biFunctionLeftJoinShouldPropagateNewPrimaryKeyWithNullFK() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        biFunctionLeftJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        final LeftValue leftRecordValue = new LeftValue(null);
+
+        biFunctionLeftJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, null), 0));
+
+        assertThat(context.forwarded().size(), is(1));
+        assertThat(
+            context.forwarded().get(0).record(),
+            is(new Record<>(null, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
+        );
+    }
+
+    @Test
+    public void biFunctionLeftJoinShouldPropagateChangeOfFKFromNonNullToNonNullValue() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        biFunctionLeftJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        final LeftValue leftRecordValue = new LeftValue(fk2);
+
+        biFunctionLeftJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, new LeftValue(fk1)), 0));
+
+        final String compositeKey = pk + fk2;
+
+        assertThat(context.forwarded().size(), is(2));
+        assertThat(
+            context.forwarded().get(1).record(),
+            is(new Record<>(compositeKey, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
+        );
+    }
+
+    @Test
+    public void biFunctionLeftJoinShouldPropagateNewRecordOfUnchangedFK() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        biFunctionLeftJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        final LeftValue leftRecordValue = new LeftValue(fk1);
+
+        biFunctionLeftJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, leftRecordValue), 0));
+
+        final String compositeKey = pk + fk1;
+
+        assertThat(context.forwarded().size(), is(1));
+        assertThat(
+            context.forwarded().get(0).record(),
+            is(new Record<>(compositeKey, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
+        );
+    }
+
+    @Test
+    public void biFunctionLeftJoinShouldPropagateChangeOfFKFromNonNullToNullValue() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        biFunctionLeftJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        final LeftValue leftRecordValue = new LeftValue(null);
+
+        biFunctionLeftJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, new LeftValue(fk1)), 0));
+
+        final String compositeKey = pk + fk1;
+
+        assertThat(context.forwarded().size(), greaterThan(0));
+        assertThat(
+            context.forwarded().get(0).record(),
+            is(new Record<>(compositeKey, new SubscriptionWrapper<>(hash(leftRecordValue), DELETE_KEY_AND_PROPAGATE, pk, 0), 0))
+        );
+    }
+
+    @Test
+    public void biFunctionLeftJoinShouldPropagateChangeFromNullFKToNonNullFKValue() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        biFunctionLeftJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        final LeftValue leftRecordValue = new LeftValue(fk1);
+
+        final String compositeKey = pk + fk1;
+
+        biFunctionLeftJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, new LeftValue(null)), 0));
+
+        assertThat(context.forwarded().size(), is(1));
+        assertThat(
+            context.forwarded().get(0).record(),
+            is(new Record<>(compositeKey, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
+        );
+    }
+
+    @Test
+    public void biFunctionLeftJoinShouldPropagateChangeFromNullFKToNullFKValue() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        biFunctionLeftJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        final LeftValue leftRecordValue = new LeftValue(null);
+
+        biFunctionLeftJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, leftRecordValue), 0));
+
+        assertThat(context.forwarded().size(), is(1));
+        assertThat(
+            context.forwarded().get(0).record(),
+            is(new Record<>(null, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
+        );
+    }
+
+    @Test
+    public void biFunctionLeftJoinShouldPropagateDeletionOfAPrimaryKey() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        biFunctionLeftJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        biFunctionLeftJoinProcessor.process(new Record<>(pk, new Change<>(null, new LeftValue(fk1)), 0));
+
+        final String compositeKey = pk + fk1;
+
+        assertThat(context.forwarded().size(), greaterThan(0));
+        assertThat(
+            context.forwarded().get(0).record(),
+            is(new Record<>(compositeKey, new SubscriptionWrapper<>(null, DELETE_KEY_AND_PROPAGATE, pk, 0), 0))
+        );
+    }
+
+    @Test
+    public void biFunctionLeftJoinShouldPropagateDeletionOfAPrimaryKeyThatHadNullFK() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        biFunctionLeftJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        biFunctionLeftJoinProcessor.process(new Record<>(pk, new Change<>(null, new LeftValue(null)), 0));
+
+        assertThat(context.forwarded().size(), is(1));
+        assertThat(
+            context.forwarded().get(0).record(),
+            is(new Record<>(null, new SubscriptionWrapper<>(null, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
+        );
+    }
+
+    @Test
+    public void biFunctionLeftJoinShouldPropagateNothingWhenOldAndNewLeftValueIsNull() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        biFunctionLeftJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        biFunctionLeftJoinProcessor.process(new Record<>(pk, new Change<>(null, null), 0));
+
+        assertThat(context.forwarded(), empty());
+    }
+
+    // Bi-function tests: inner join
+    @Test
+    public void biFunctionInnerJoinShouldPropagateNewPrimaryKey() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        biFunctionInnerJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        final LeftValue leftRecordValue = new LeftValue(fk1);
+
+        biFunctionInnerJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, null), 0));
+
+        final String compositeKey = pk + fk1;
+
+        assertThat(context.forwarded().size(), is(1));
+        assertThat(
+            context.forwarded().get(0).record(),
+            is(new Record<>(compositeKey, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_ONLY_IF_FK_VAL_AVAILABLE, pk, 0), 0))
+        );
+    }
+
+    @Test
+    public void biFunctionInnerJoinShouldNotPropagateNewPrimaryKeyWithNullFK() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        biFunctionInnerJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        final LeftValue leftRecordValue = new LeftValue(null);
+
+        biFunctionInnerJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, null), 0));
+
+        assertThat(context.forwarded(), empty());
+
+        // test dropped-records sensors
+        assertEquals(1.0, getDroppedRecordsTotalMetric(context));
+        assertNotEquals(0.0, getDroppedRecordsRateMetric(context));
+    }
+
+    @Test
+    public void biFunctionInnerJoinShouldDeleteOldAndPropagateNewFK() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        biFunctionInnerJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        final LeftValue leftRecordValue = new LeftValue(fk2);
+
+        biFunctionInnerJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, new LeftValue(fk1)), 0));
+
+        final String compositeKey1 = pk + fk1;
+        final String compositeKey2 = pk + fk2;
+
+        assertThat(context.forwarded().size(), is(2));
+        assertThat(
+            context.forwarded().get(0).record(),
+            is(new Record<>(compositeKey1, new SubscriptionWrapper<>(hash(leftRecordValue), DELETE_KEY_NO_PROPAGATE, pk, 0), 0))
+        );
+        assertThat(
+            context.forwarded().get(1).record(),
+            is(new Record<>(compositeKey2, new SubscriptionWrapper<>(hash(leftRecordValue), PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE, pk, 0), 0))
+        );
+    }
+
+    @Test
+    public void biFunctionInnerJoinShouldPropagateNothingWhenOldAndNewFKIsNull() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        biFunctionInnerJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        final LeftValue leftRecordValue = new LeftValue(null);
+
+        biFunctionInnerJoinProcessor.process(new Record<>(pk, new Change<>(leftRecordValue, leftRecordValue), 0));
+
+        assertThat(context.forwarded(), empty());
+
+        // test dropped-records sensors
+        assertEquals(1.0, getDroppedRecordsTotalMetric(context));
+        assertNotEquals(0.0, getDroppedRecordsRateMetric(context));
+    }
+
+    @Test
+    public void biFunctionInnerJoinShouldPropagateDeletionOfPrimaryKey() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        biFunctionInnerJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        biFunctionInnerJoinProcessor.process(new Record<>(pk, new Change<>(null, new LeftValue(fk1)), 0));
+
+        final String compositeKey = pk + fk1;
+
+        assertThat(context.forwarded().size(), is(1));
+        assertThat(
+            context.forwarded().get(0).record(),
+            is(new Record<>(compositeKey, new SubscriptionWrapper<>(null, DELETE_KEY_AND_PROPAGATE, pk, 0), 0))
+        );
+    }
+
+    @Test
+    public void biFunctionInnerJoinShouldPropagateNothingWhenOldAndNewLeftValueIsNull() {
+        final MockInternalProcessorContext<String, SubscriptionWrapper<String>> context = new MockInternalProcessorContext<>();
+        biFunctionInnerJoinProcessor.init(context);
+        context.setRecordMetadata("topic", 0, 0);
+
+        biFunctionInnerJoinProcessor.process(new Record<>(pk, new Change<>(null, null), 0));
+
+        assertThat(context.forwarded(), empty());
+    }
+
     private static class LeftValueSerializer implements Serializer<LeftValue> {
+        @SuppressWarnings("resource")
         @Override
         public byte[] serialize(final String topic, final LeftValue data) {
             if (data == null) return null;
@@ -348,6 +649,7 @@ public class SubscriptionSendProcessorSupplierTest {
         }
     }
 
+    @SuppressWarnings("resource")
     private static long[] hash(final LeftValue value) {
         return Murmur3.hash128(new LeftValueSerializer().serialize("value-serde-topic", value));
     }

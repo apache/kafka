@@ -16,19 +16,16 @@
  */
 package kafka.utils
 
-import java.util.Properties
+import java.util.{Optional, Properties}
 import java.util.concurrent.atomic._
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, Executors, TimeUnit}
-import kafka.log.UnifiedLog
 import kafka.utils.TestUtils.retry
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.{LocalLog, LogConfig, LogDirFailureChannel, LogLoader, LogSegments, ProducerStateManager, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{LocalLog, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetsListener, LogSegments, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, Timeout}
-
-import scala.jdk.OptionConverters.RichOption
 
 
 class SchedulerTest {
@@ -140,10 +137,11 @@ class SchedulerTest {
     val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = UnifiedLog.maybeCreateLeaderEpochCache(
-      logDir, topicPartition, logDirFailureChannel, logConfig.recordVersion, "", None, mockTime.scheduler)
+    val leaderEpochCache = UnifiedLog.createLeaderEpochCache(
+      logDir, topicPartition, logDirFailureChannel, Optional.empty, mockTime.scheduler)
+    val producerStateManagerConfig = new ProducerStateManagerConfig(maxProducerIdExpirationMs, false)
     val producerStateManager = new ProducerStateManager(topicPartition, logDir,
-      maxTransactionTimeoutMs, new ProducerStateManagerConfig(maxProducerIdExpirationMs, false), mockTime)
+      maxTransactionTimeoutMs, producerStateManagerConfig, mockTime)
     val offsets = new LogLoader(
       logDir,
       topicPartition,
@@ -155,18 +153,22 @@ class SchedulerTest {
       segments,
       0L,
       0L,
-      leaderEpochCache.toJava,
+      leaderEpochCache,
       producerStateManager,
       new ConcurrentHashMap[String, Integer],
       false
     ).load()
     val localLog = new LocalLog(logDir, logConfig, segments, offsets.recoveryPoint,
       offsets.nextOffsetMetadata, scheduler, mockTime, topicPartition, logDirFailureChannel)
-    val log = new UnifiedLog(logStartOffset = offsets.logStartOffset,
-      localLog = localLog,
-      brokerTopicStats, producerIdExpirationCheckIntervalMs,
-      leaderEpochCache, producerStateManager,
-      _topicId = None, keepPartitionMetadataFile = true)
+    val log = new UnifiedLog(offsets.logStartOffset,
+      localLog,
+      brokerTopicStats,
+      producerIdExpirationCheckIntervalMs,
+      leaderEpochCache,
+      producerStateManager,
+      Optional.empty,
+      false,
+      LogOffsetsListener.NO_OP_OFFSETS_LISTENER)
     assertTrue(scheduler.taskRunning(log.producerExpireCheck))
     log.close()
     assertFalse(scheduler.taskRunning(log.producerExpireCheck))

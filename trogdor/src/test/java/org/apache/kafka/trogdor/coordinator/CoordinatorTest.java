@@ -62,7 +62,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Optional;
 
-import javax.ws.rs.NotFoundException;
+import jakarta.ws.rs.NotFoundException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

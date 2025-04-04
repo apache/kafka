@@ -29,13 +29,10 @@ import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfig;
-import org.apache.kafka.common.test.api.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTemplate;
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.test.TestUtils;
-
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.BufferedWriter;
 import java.io.File;
@@ -92,7 +89,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * - scope=topics+partitions, scenario=to-earliest
  * - export/import
  */
-@ExtendWith(value = ClusterTestExtensions.class)
 public class ResetConsumerGroupOffsetTest {
 
     private static final String TOPIC_PREFIX = "foo-";
@@ -136,10 +132,6 @@ public class ResetConsumerGroupOffsetTest {
         String[] args = buildArgsForGroup(cluster, group, "--all-topics", "--to-current", "--execute");
 
         try (ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(args)) {
-            // Make sure we got a coordinator
-            TestUtils.waitForCondition(
-                    () -> "localhost".equals(service.collectGroupState(group).coordinator.host()),
-                    "Can't find a coordinator");
             Map<TopicPartition, OffsetAndMetadata> resetOffsets = service.resetOffsets().get(group);
             assertTrue(resetOffsets.isEmpty());
             assertTrue(committedOffsets(cluster, topic, group).isEmpty());
@@ -800,9 +792,11 @@ public class ResetConsumerGroupOffsetTest {
         configs.put(GROUP_PROTOCOL_CONFIG, groupProtocol.name);
         configs.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         configs.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-        configs.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
         configs.put(AUTO_COMMIT_INTERVAL_MS_CONFIG, 1000);
         configs.put(GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, 1000);
+        if (GroupProtocol.CLASSIC == groupProtocol) {
+            configs.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
+        }
         return configs;
     }
 

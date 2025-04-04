@@ -441,7 +441,7 @@ public class SubscriptionState {
             log.debug("Skipping reset of partition {} since it is no longer assigned", tp);
         } else if (!state.awaitingReset()) {
             log.debug("Skipping reset of partition {} since reset is no longer needed", tp);
-        } else if (requestedResetStrategy != state.resetStrategy) {
+        } else if (requestedResetStrategy != null && !requestedResetStrategy.equals(state.resetStrategy)) {
             log.debug("Skipping reset of partition {} since an alternative reset has been requested", tp);
         } else {
             log.info("Resetting offset for partition {} to position {}.", tp, position);
@@ -488,6 +488,20 @@ public class SubscriptionState {
     public synchronized boolean hasAutoAssignedPartitions() {
         return this.subscriptionType == SubscriptionType.AUTO_TOPICS || this.subscriptionType == SubscriptionType.AUTO_PATTERN
                 || this.subscriptionType == SubscriptionType.AUTO_TOPICS_SHARE || this.subscriptionType == SubscriptionType.AUTO_PATTERN_RE2J;
+    }
+
+    public synchronized boolean isAssignedFromRe2j(String topic) {
+        if (!hasRe2JPatternSubscription()) {
+            return false;
+        }
+
+        for (TopicPartition topicPartition : assignment.partitionSet()) {
+            if (topicPartition.topic().equals(topic)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     public synchronized void position(TopicPartition tp, FetchPosition position) {
@@ -898,8 +912,8 @@ public class SubscriptionState {
     }
 
     /**
-     * Enable fetching and updating positions for the given partitions that were added to the
-     * assignment, but waiting for the onPartitionsAssigned callback to complete. This is
+     * Enable fetching and updating positions for the given partitions that were assigned to the
+     * consumer, but waiting for the onPartitionsAssigned callback to complete. This is
      * expected to be used by the async consumer.
      */
     public synchronized void enablePartitionsAwaitingCallback(Collection<TopicPartition> partitions) {

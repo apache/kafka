@@ -49,11 +49,11 @@ public class ConsumerGroupListing {
      * @param groupId                   Group Id.
      * @param isSimpleConsumerGroup     If consumer group is simple or not.
      * @param state                     The state of the consumer group.
-     * @deprecated Since 4.0. Use {@link #ConsumerGroupListing(String, Optional, boolean)}.
+     * @deprecated Since 4.0. Use {@link #ConsumerGroupListing(String, Optional, boolean)} instead.
      */
     @Deprecated
     public ConsumerGroupListing(String groupId, boolean isSimpleConsumerGroup, Optional<ConsumerGroupState> state) {
-        this(groupId, Objects.requireNonNull(state).map(state0 -> GroupState.parse(state0.name())), Optional.empty(), isSimpleConsumerGroup);
+        this(groupId, Objects.requireNonNull(state).map(state0 -> GroupState.parse(state0.toString())), Optional.empty(), isSimpleConsumerGroup);
     }
 
     /**
@@ -63,7 +63,7 @@ public class ConsumerGroupListing {
      * @param isSimpleConsumerGroup     If consumer group is simple or not.
      * @param state                     The state of the consumer group.
      * @param type                      The type of the consumer group.
-     * @deprecated Since 4.0. Use {@link #ConsumerGroupListing(String, Optional, Optional, boolean)}.
+     * @deprecated Since 4.0. Use {@link #ConsumerGroupListing(String, Optional, Optional, boolean)} instead.
      */
     @Deprecated
     public ConsumerGroupListing(
@@ -72,7 +72,7 @@ public class ConsumerGroupListing {
         Optional<ConsumerGroupState> state,
         Optional<GroupType> type
     ) {
-        this(groupId, Objects.requireNonNull(state).map(state0 -> GroupState.parse(state0.name())), type, isSimpleConsumerGroup);
+        this(groupId, Objects.requireNonNull(state).map(state0 -> GroupState.parse(state0.toString())), type, isSimpleConsumerGroup);
     }
 
     /**
@@ -133,11 +133,11 @@ public class ConsumerGroupListing {
 
     /**
      * Consumer Group state
-     * @deprecated Since 4.0. Use {@link #groupState()}.
+     * @deprecated Since 4.0. Use {@link #groupState()} instead.
      */
     @Deprecated
     public Optional<ConsumerGroupState> state() {
-        return groupState.map(state0 -> ConsumerGroupState.parse(state0.name()));
+        return groupState.map(state0 -> ConsumerGroupState.parse(state0.toString()));
     }
 
     /**

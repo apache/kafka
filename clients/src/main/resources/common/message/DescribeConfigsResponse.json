@@ -17,10 +17,11 @@
   "apiKey": 32,
   "type": "response",
   "name": "DescribeConfigsResponse",
+  // Version 0 was removed in Apache Kafka 4.0, Version 1 is the new baseline.
   // Version 1 adds ConfigSource and the synonyms.
   // Starting in version 2, on quota violation, brokers send out responses before throttling.
   // Version 4 enables flexible versions.
-  "validVersions": "0-4",
+  "validVersions": "1-4",
   "flexibleVersions": "4+",
   "fields": [
     { "name": "ThrottleTimeMs", "type": "int32", "versions": "0+",
@@ -43,11 +44,6 @@
           "about": "The configuration value." },
         { "name": "ReadOnly", "type": "bool", "versions": "0+",
           "about": "True if the configuration is read-only." },
-        { "name": "IsDefault", "type": "bool", "versions": "0",
-          "about": "True if the configuration is not set." },
-        // Note: the v0 default for this field that should be exposed to callers is
-        // context-dependent. For example, if the resource is a broker, this should default to 4.
-        // -1 is just a placeholder value.
         { "name": "ConfigSource", "type": "int8", "versions": "1+", "default": "-1", "ignorable": true,
           "about": "The configuration source." },
         { "name": "IsSensitive", "type": "bool", "versions": "0+",
@@ -62,7 +58,7 @@
             "about": "The synonym source." }
         ]},
         { "name": "ConfigType", "type": "int8", "versions": "3+", "default": "0", "ignorable": true,
-          "about": "The configuration data type. Type can be one of the following values - BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS, PASSWORD" },
+          "about": "The configuration data type. Type can be one of the following values - BOOLEAN, STRING, INT, SHORT, LONG, DOUBLE, LIST, CLASS, PASSWORD." },
         { "name": "Documentation", "type": "string", "versions": "3+", "nullableVersions": "0+", "ignorable": true,
           "about": "The configuration documentation." }
       ]}

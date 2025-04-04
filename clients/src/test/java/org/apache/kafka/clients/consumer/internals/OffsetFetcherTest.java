@@ -65,6 +65,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -93,6 +94,8 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 public class OffsetFetcherTest {
 
@@ -178,6 +181,26 @@ public class OffsetFetcherTest {
         client.updateMetadata(initialUpdateResponse);
 
         client.prepareResponse(listOffsetRequestMatcher(ListOffsetsRequest.LATEST_TIMESTAMP),
+                listOffsetResponse(Errors.NONE, 1L, 5L));
+        offsetFetcher.resetPositionsIfNeeded();
+        consumerClient.pollNoWakeup();
+        assertFalse(subscriptions.isOffsetResetNeeded(tp0));
+        assertTrue(subscriptions.isFetchable(tp0));
+        assertEquals(5, subscriptions.position(tp0).offset);
+    }
+
+    @Test
+    public void testUpdateFetchPositionResetToDurationOffset() {
+        long timestamp = Instant.now().toEpochMilli();
+        AutoOffsetResetStrategy durationStrategy = mock(AutoOffsetResetStrategy.class);
+        when(durationStrategy.timestamp()).thenReturn(Optional.of(timestamp));
+        buildFetcher(durationStrategy);
+        assignFromUser(singleton(tp0));
+        subscriptions.requestOffsetReset(tp0, durationStrategy);
+
+        client.updateMetadata(initialUpdateResponse);
+
+        client.prepareResponse(listOffsetRequestMatcher(timestamp),
                 listOffsetResponse(Errors.NONE, 1L, 5L));
         offsetFetcher.resetPositionsIfNeeded();
         consumerClient.pollNoWakeup();
@@ -1091,43 +1114,6 @@ public class OffsetFetcherTest {
     }
 
     @Test
-    public void testGetOffsetsForTimesWithUnknownOffsetV0() {
-        buildFetcher();
-        // Empty map
-        assertTrue(offsetFetcher.offsetsForTimes(new HashMap<>(), time.timer(100L)).isEmpty());
-        // Unknown Offset
-        client.reset();
-        // Ensure metadata has both partition.
-        MetadataResponse initialMetadataUpdate = RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName, 1), topicIds);
-        client.updateMetadata(initialMetadataUpdate);
-        // Force LIST_OFFSETS version 0
-        Node node = metadata.fetch().nodes().get(0);
-        apiVersions.update(node.idString(), NodeApiVersions.create(
-            ApiKeys.LIST_OFFSETS.id, (short) 0, (short) 0));
-
-        ListOffsetsResponseData data = new ListOffsetsResponseData()
-                .setThrottleTimeMs(0)
-                .setTopics(Collections.singletonList(new ListOffsetsTopicResponse()
-                        .setName(tp0.topic())
-                        .setPartitions(Collections.singletonList(new ListOffsetsPartitionResponse()
-                                .setPartitionIndex(tp0.partition())
-                                .setErrorCode(Errors.NONE.code())
-                                .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP)
-                                .setOldStyleOffsets(Collections.emptyList())))));
-
-        client.prepareResponseFrom(new ListOffsetsResponse(data),
-                metadata.fetch().leaderFor(tp0));
-
-        Map<TopicPartition, Long> timestampToSearch = new HashMap<>();
-        timestampToSearch.put(tp0, 0L);
-        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap =
-                offsetFetcher.offsetsForTimes(timestampToSearch, time.timer(Long.MAX_VALUE));
-
-        assertTrue(offsetAndTimestampMap.containsKey(tp0));
-        assertNull(offsetAndTimestampMap.get(tp0));
-    }
-
-    @Test
     public void testOffsetValidationRequestGrouping() {
         buildFetcher();
         assignFromUser(Set.of(tp0, tp1, tp2, tp3));
@@ -1263,7 +1249,7 @@ public class OffsetFetcherTest {
                 metadata,
                 subscriptions,
                 fetchConfig,
-                new Deserializers<>(new ByteArrayDeserializer(), new ByteArrayDeserializer()),
+                new Deserializers<>(new ByteArrayDeserializer(), new ByteArrayDeserializer(), metrics),
                 new FetchMetricsManager(metrics, metricsRegistry),
                 time,
                 apiVersions);

@@ -59,7 +59,7 @@ public class MockProducerTest {
     private final String groupId = "group";
 
     private void buildMockProducer(boolean autoComplete) {
-        this.producer = new MockProducer<>(autoComplete, new MockSerializer(), new MockSerializer());
+        this.producer = new MockProducer<>(Cluster.empty(), autoComplete, null, new MockSerializer(), new MockSerializer());
     }
 
     @AfterEach
@@ -87,10 +87,16 @@ public class MockProducerTest {
         PartitionInfo partitionInfo1 = new PartitionInfo(topic, 1, null, null, null);
         Cluster cluster = new Cluster(null, new ArrayList<>(0), asList(partitionInfo0, partitionInfo1),
                 Collections.emptySet(), Collections.emptySet());
-        MockProducer<String, String> producer = new MockProducer<>(cluster, true, new StringSerializer(), new StringSerializer());
+        MockProducer<String, String> producer = new MockProducer<>(
+            cluster,
+            true,
+            new org.apache.kafka.clients.producer.RoundRobinPartitioner(),
+            new StringSerializer(),
+            new StringSerializer()
+        );
         ProducerRecord<String, String> record = new ProducerRecord<>(topic, "key", "value");
         Future<RecordMetadata> metadata = producer.send(record);
-        assertEquals(1, metadata.get().partition(), "Partition should be correct");
+        assertEquals(0, metadata.get().partition(), "Partition should be correct");
         producer.clear();
         assertEquals(0, producer.history().size(), "Clear should erase our history");
         producer.close();
@@ -680,7 +686,7 @@ public class MockProducerTest {
     @Test
     @SuppressWarnings("unchecked")
     public void shouldThrowClassCastException() {
-        try (MockProducer<Integer, String> customProducer = new MockProducer<>(true, new IntegerSerializer(), new StringSerializer())) {
+        try (MockProducer<Integer, String> customProducer = new MockProducer<>(Cluster.empty(), true, null, new IntegerSerializer(), new StringSerializer())) {
             assertThrows(ClassCastException.class, () -> customProducer.send(new ProducerRecord(topic, "key1", "value1")));
         }
     }

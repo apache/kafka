@@ -29,10 +29,10 @@ import org.apache.kafka.server.util.MockScheduler
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
+import org.mockito.ArgumentMatchers.{any, anyBoolean, anyInt}
+import org.mockito.Mockito._
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
-import org.mockito.ArgumentMatchers.{any, anyInt}
-import org.mockito.Mockito.{mock, times, verify, when}
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -82,7 +82,7 @@ class TransactionCoordinatorTest {
 
   private def initPidGenericMocks(transactionalId: String): Unit = {
     mockPidGenerator()
-    when(transactionManager.validateTransactionTimeoutMs(anyInt()))
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
       .thenReturn(true)
   }
 
@@ -90,9 +90,29 @@ class TransactionCoordinatorTest {
   def shouldReturnInvalidRequestWhenTransactionalIdIsEmpty(): Unit = {
     mockPidGenerator()
 
-    coordinator.handleInitProducerId("", txnTimeoutMs, None, initProducerIdMockCallback)
+    coordinator.handleInitProducerId("", txnTimeoutMs, enableTwoPCFlag = false,
+      keepPreparedTxn = false, None, initProducerIdMockCallback)
     assertEquals(InitProducerIdResult(-1L, -1, Errors.INVALID_REQUEST), result)
-    coordinator.handleInitProducerId("", txnTimeoutMs, None, initProducerIdMockCallback)
+    coordinator.handleInitProducerId("", txnTimeoutMs, enableTwoPCFlag = false,
+      keepPreparedTxn = false, None, initProducerIdMockCallback)
+    assertEquals(InitProducerIdResult(-1L, -1, Errors.INVALID_REQUEST), result)
+  }
+
+  @Test
+  def shouldReturnInvalidRequestWhenKeepPreparedIsTrue(): Unit = {
+    mockPidGenerator()
+
+    coordinator.handleInitProducerId("", txnTimeoutMs, enableTwoPCFlag = false,
+      keepPreparedTxn = true, None, initProducerIdMockCallback)
+    assertEquals(InitProducerIdResult(-1L, -1, Errors.INVALID_REQUEST), result)
+  }
+
+  @Test
+  def shouldReturnInvalidRequestWhen2PCEnabledButBroker2PCConfigFalse(): Unit = {
+    mockPidGenerator()
+
+    coordinator.handleInitProducerId("", txnTimeoutMs, enableTwoPCFlag = true,
+      keepPreparedTxn = false, None, initProducerIdMockCallback)
     assertEquals(InitProducerIdResult(-1L, -1, Errors.INVALID_REQUEST), result)
   }
 
@@ -100,9 +120,11 @@ class TransactionCoordinatorTest {
   def shouldAcceptInitPidAndReturnNextPidWhenTransactionalIdIsNull(): Unit = {
     mockPidGenerator()
 
-    coordinator.handleInitProducerId(null, txnTimeoutMs, None, initProducerIdMockCallback)
+    coordinator.handleInitProducerId(null, txnTimeoutMs, enableTwoPCFlag = false,
+      keepPreparedTxn = false, None, initProducerIdMockCallback)
     assertEquals(InitProducerIdResult(0L, 0, Errors.NONE), result)
-    coordinator.handleInitProducerId(null, txnTimeoutMs, None, initProducerIdMockCallback)
+    coordinator.handleInitProducerId(null, txnTimeoutMs, enableTwoPCFlag = false,
+      keepPreparedTxn = false, None, initProducerIdMockCallback)
     assertEquals(InitProducerIdResult(1L, 0, Errors.NONE), result)
   }
 
@@ -127,7 +149,14 @@ class TransactionCoordinatorTest {
       any())
     ).thenAnswer(_ => capturedErrorsCallback.getValue.apply(Errors.NONE))
 
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, None, initProducerIdMockCallback)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      None,
+      initProducerIdMockCallback
+    )
     assertEquals(InitProducerIdResult(nextPid - 1, 0, Errors.NONE), result)
   }
 
@@ -152,8 +181,14 @@ class TransactionCoordinatorTest {
       any())
     ).thenAnswer(_ => capturedErrorsCallback.getValue.apply(Errors.NONE))
 
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, Some(new ProducerIdAndEpoch(producerId, producerEpoch)),
-      initProducerIdMockCallback)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      Some(new ProducerIdAndEpoch(producerId, producerEpoch)),
+      initProducerIdMockCallback
+    )
     assertEquals(InitProducerIdResult(nextPid - 1, 0, Errors.NONE), result)
   }
 
@@ -176,31 +211,86 @@ class TransactionCoordinatorTest {
       any()
     )).thenAnswer(_ => capturedErrorsCallback.getValue.apply(Errors.NONE))
 
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, None, initProducerIdMockCallback)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      None,
+      initProducerIdMockCallback
+    )
     assertNotEquals(producerId, result.producerId)
     assertEquals(0, result.producerEpoch)
     assertEquals(Errors.NONE, result.error)
   }
 
   @Test
+  def shouldGenerateNewProducerIdIfEpochsExhaustedV2(): Unit = {
+    initPidGenericMocks(transactionalId)
+
+    val txnMetadata1 = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID, (Short.MaxValue - 1).toShort,
+      (Short.MaxValue - 2).toShort, txnTimeoutMs, Ongoing, mutable.Set.empty, time.milliseconds(), time.milliseconds(), TV_2)
+    // We start with txnMetadata1 so we can transform the metadata to PrepareCommit.
+    val txnMetadata2 = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID, (Short.MaxValue - 1).toShort,
+      (Short.MaxValue - 2).toShort, txnTimeoutMs, Ongoing, mutable.Set.empty, time.milliseconds(), time.milliseconds(), TV_2)
+    val transitMetadata = txnMetadata2.prepareAbortOrCommit(PrepareCommit, TV_2, producerId2, time.milliseconds(), false)
+    txnMetadata2.completeTransitionTo(transitMetadata)
+
+    assertEquals(producerId, txnMetadata2.producerId)
+    assertEquals(Short.MaxValue, txnMetadata2.producerEpoch)
+
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1))))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata2))))
+
+    when(transactionManager.appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      any[TxnTransitMetadata],
+      capturedErrorsCallback.capture(),
+      any(),
+      any()
+    )).thenAnswer(_ => capturedErrorsCallback.getValue.apply(Errors.NONE))
+
+    coordinator.handleEndTransaction(transactionalId, producerId, (Short.MaxValue - 1).toShort, TransactionResult.COMMIT, TV_2, endTxnCallback)
+    assertEquals(producerId2, newProducerId)
+    assertEquals(0, newEpoch)
+    assertEquals(Errors.NONE, error)
+  }
+
+  @Test
   def shouldRespondWithNotCoordinatorOnInitPidWhenNotCoordinator(): Unit = {
-    when(transactionManager.validateTransactionTimeoutMs(anyInt()))
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
       .thenReturn(true)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Left(Errors.NOT_COORDINATOR))
 
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, None, initProducerIdMockCallback)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      None,
+      initProducerIdMockCallback
+    )
     assertEquals(InitProducerIdResult(-1, -1, Errors.NOT_COORDINATOR), result)
   }
 
   @Test
   def shouldRespondWithCoordinatorLoadInProgressOnInitPidWhenCoordinatorLoading(): Unit = {
-    when(transactionManager.validateTransactionTimeoutMs(anyInt()))
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
       .thenReturn(true)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Left(Errors.COORDINATOR_LOAD_IN_PROGRESS))
 
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, None, initProducerIdMockCallback)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      None,
+      initProducerIdMockCallback
+    )
     assertEquals(InitProducerIdResult(-1, -1, Errors.COORDINATOR_LOAD_IN_PROGRESS), result)
   }
 
@@ -209,19 +299,19 @@ class TransactionCoordinatorTest {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(None))
 
-    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 1, partitions, errorsCallback)
+    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 1, partitions, errorsCallback, TV_0)
     assertEquals(Errors.INVALID_PRODUCER_ID_MAPPING, error)
   }
 
   @Test
   def shouldRespondWithInvalidRequestAddPartitionsToTransactionWhenTransactionalIdIsEmpty(): Unit = {
-    coordinator.handleAddPartitionsToTransaction("", 0L, 1, partitions, errorsCallback)
+    coordinator.handleAddPartitionsToTransaction("", 0L, 1, partitions, errorsCallback, TV_0)
     assertEquals(Errors.INVALID_REQUEST, error)
   }
 
   @Test
   def shouldRespondWithInvalidRequestAddPartitionsToTransactionWhenTransactionalIdIsNull(): Unit = {
-    coordinator.handleAddPartitionsToTransaction(null, 0L, 1, partitions, errorsCallback)
+    coordinator.handleAddPartitionsToTransaction(null, 0L, 1, partitions, errorsCallback, TV_0)
     assertEquals(Errors.INVALID_REQUEST, error)
   }
 
@@ -230,7 +320,7 @@ class TransactionCoordinatorTest {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Left(Errors.NOT_COORDINATOR))
 
-    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 1, partitions, errorsCallback)
+    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 1, partitions, errorsCallback, TV_0)
     assertEquals(Errors.NOT_COORDINATOR, error)
   }
 
@@ -239,7 +329,7 @@ class TransactionCoordinatorTest {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Left(Errors.COORDINATOR_LOAD_IN_PROGRESS))
 
-    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 1, partitions, errorsCallback)
+    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 1, partitions, errorsCallback, TV_0)
     assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, error)
   }
  
@@ -313,7 +403,7 @@ class TransactionCoordinatorTest {
         new TransactionMetadata(transactionalId, 0, 0, RecordBatch.NO_PRODUCER_ID,
           0, RecordBatch.NO_PRODUCER_EPOCH, 0, state, mutable.Set.empty, 0, 0, TV_2)))))
 
-    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 0, partitions, errorsCallback)
+    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 0, partitions, errorsCallback, TV_2)
     assertEquals(Errors.CONCURRENT_TRANSACTIONS, error)
   }
 
@@ -325,7 +415,7 @@ class TransactionCoordinatorTest {
         new TransactionMetadata(transactionalId, 0, 0, RecordBatch.NO_PRODUCER_ID,
           10, 9, 0, PrepareCommit, mutable.Set.empty, 0, 0, TV_2)))))
 
-    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 0, partitions, errorsCallback)
+    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 0, partitions, errorsCallback, TV_2)
     assertEquals(Errors.PRODUCER_FENCED, error)
   }
 
@@ -359,7 +449,7 @@ class TransactionCoordinatorTest {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
 
-    coordinator.handleAddPartitionsToTransaction(transactionalId, producerId, producerEpoch, partitions, errorsCallback)
+    coordinator.handleAddPartitionsToTransaction(transactionalId, producerId, producerEpoch, partitions, errorsCallback, clientTransactionVersion)
 
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
     verify(transactionManager).appendTransactionToLog(
@@ -379,7 +469,7 @@ class TransactionCoordinatorTest {
         new TransactionMetadata(transactionalId, 0, 0, RecordBatch.NO_PRODUCER_ID,
           0, RecordBatch.NO_PRODUCER_EPOCH, 0, Empty, partitions, 0, 0, TV_0)))))
 
-    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 0, partitions, errorsCallback)
+    coordinator.handleAddPartitionsToTransaction(transactionalId, 0L, 0, partitions, errorsCallback, TV_0)
     assertEquals(Errors.NONE, error)
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
@@ -437,7 +527,7 @@ class TransactionCoordinatorTest {
 
   @ParameterizedTest
   @ValueSource(shorts = Array(0, 2))
-  def shouldReplyWithInvalidPidMappingOnEndTxnWhenPidDosentMatchMapped(transactionVersion: Short): Unit = {
+  def shouldReplyWithInvalidPidMappingOnEndTxnWhenPidDoesntMatchMapped(transactionVersion: Short): Unit = {
     val clientTransactionVersion = TransactionVersion.fromFeatureLevel(transactionVersion)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch,
@@ -464,30 +554,104 @@ class TransactionCoordinatorTest {
   }
 
   @ParameterizedTest
-  @ValueSource(shorts = Array(0, 2))
-  def shouldReturnOkOnEndTxnWhenStatusIsCompleteCommitAndResultIsCommit(transactionVersion: Short): Unit = {
-    val clientTransactionVersion = TransactionVersion.fromFeatureLevel(transactionVersion)
+  @ValueSource(booleans = Array(false, true))
+  def testEndTxnWhenStatusIsCompleteCommitAndResultIsCommitInV1(isRetry: Boolean): Unit = {
+    val clientTransactionVersion = TransactionVersion.fromFeatureLevel(0)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch,
         new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID, producerEpoch,
           (producerEpoch - 1).toShort, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), clientTransactionVersion)))))
 
-    coordinator.handleEndTransaction(transactionalId, producerId, requestEpoch(clientTransactionVersion), TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
-    assertEquals(Errors.NONE, error)
+    val epoch = if (isRetry) producerEpoch - 1 else producerEpoch
+    coordinator.handleEndTransaction(transactionalId, producerId, epoch.toShort, TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
+    if (isRetry) {
+      assertEquals(Errors.PRODUCER_FENCED, error)
+    } else {
+      assertEquals(Errors.NONE, error)
+      verify(transactionManager, never()).appendTransactionToLog(
+        ArgumentMatchers.eq(transactionalId),
+        ArgumentMatchers.any(),
+        ArgumentMatchers.any(),
+        ArgumentMatchers.any(),
+        ArgumentMatchers.any(),
+        ArgumentMatchers.any()
+      )
+    }
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
   @ParameterizedTest
-  @ValueSource(shorts = Array(0, 2))
-  def shouldReturnOkOnEndTxnWhenStatusIsCompleteAbortAndResultIsAbort(transactionVersion: Short): Unit = {
-    val clientTransactionVersion = TransactionVersion.fromFeatureLevel(transactionVersion)
+  @ValueSource(booleans = Array(false, true))
+  def testEndTxnWhenStatusIsCompleteCommitAndResultIsCommitInV2(isRetry: Boolean): Unit = {
+    val clientTransactionVersion = TransactionVersion.fromFeatureLevel(2)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch,
+        new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID, producerEpoch,
+          (producerEpoch - 1).toShort, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), clientTransactionVersion)))))
+
+    val epoch = if (isRetry) producerEpoch - 1 else producerEpoch
+    coordinator.handleEndTransaction(transactionalId, producerId, epoch.toShort, TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
+    if (isRetry) {
+      assertEquals(Errors.NONE, error)
+    } else {
+      assertEquals(Errors.INVALID_TXN_STATE, error)
+    }
+    verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testEndTxnWhenStatusIsCompleteAbortAndResultIsAbortInV1(isRetry: Boolean): Unit = {
+    val clientTransactionVersion = TransactionVersion.fromFeatureLevel(0)
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
       producerEpoch, (producerEpoch - 1).toShort, 1, CompleteAbort, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), clientTransactionVersion)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
 
-    coordinator.handleEndTransaction(transactionalId, producerId, requestEpoch(clientTransactionVersion), TransactionResult.ABORT, clientTransactionVersion, endTxnCallback)
+    val nextProducerEpoch = if (isRetry) producerEpoch - 1 else producerEpoch
+    coordinator.handleEndTransaction(transactionalId, producerId, nextProducerEpoch.toShort, TransactionResult.ABORT, clientTransactionVersion, endTxnCallback)
+    if (isRetry) {
+      assertEquals(Errors.PRODUCER_FENCED, error)
+    } else {
+      assertEquals(Errors.NONE, error)
+    }
+    verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def shouldReturnOkOnEndTxnWhenStatusIsCompleteAbortAndResultIsAbortInV2(isRetry: Boolean): Unit = {
+    val clientTransactionVersion = TransactionVersion.fromFeatureLevel(2)
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
+      producerEpoch, (producerEpoch - 1).toShort, 1, CompleteAbort, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), clientTransactionVersion)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+
+    val nextProducerEpoch = if (isRetry) producerEpoch - 1 else producerEpoch
+    coordinator.handleEndTransaction(transactionalId, producerId, nextProducerEpoch.toShort , TransactionResult.ABORT, clientTransactionVersion, endTxnCallback)
     assertEquals(Errors.NONE, error)
+    if (isRetry) {
+      verify(transactionManager, never()).appendTransactionToLog(
+        ArgumentMatchers.eq(transactionalId),
+        ArgumentMatchers.any(),
+        ArgumentMatchers.any(),
+        ArgumentMatchers.any(),
+        ArgumentMatchers.any(),
+        ArgumentMatchers.any()
+      )
+    } else {
+      val newMetadata = ArgumentCaptor.forClass(classOf[TxnTransitMetadata]);
+        verify(transactionManager).appendTransactionToLog(
+          ArgumentMatchers.eq(transactionalId),
+          ArgumentMatchers.any(),
+          newMetadata.capture(),
+          ArgumentMatchers.any(),
+          ArgumentMatchers.any(),
+          ArgumentMatchers.any()
+        )
+      assertEquals(producerEpoch + 1, newMetadata.getValue.asInstanceOf[TxnTransitMetadata].producerEpoch, newMetadata.getValue.asInstanceOf[TxnTransitMetadata].toString)
+      assertEquals(time.milliseconds(), newMetadata.getValue.asInstanceOf[TxnTransitMetadata].txnStartTimestamp, newMetadata.getValue.asInstanceOf[TxnTransitMetadata].toString)
+    }
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
@@ -505,17 +669,65 @@ class TransactionCoordinatorTest {
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
-  @ParameterizedTest
-  @ValueSource(shorts = Array(0, 2))
-  def shouldReturnInvalidTxnRequestOnEndTxnRequestWhenStatusIsCompleteCommitAndResultIsNotCommit(transactionVersion: Short): Unit = {
-    val clientTransactionVersion = TransactionVersion.fromFeatureLevel(transactionVersion)
+  @Test
+  def shouldReturnInvalidTxnRequestOnEndTxnRequestWhenStatusIsCompleteCommitAndResultIsNotCommit(): Unit = {
+    val clientTransactionVersion = TransactionVersion.fromFeatureLevel(0)
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
       producerEpoch, (producerEpoch - 1).toShort,1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), clientTransactionVersion)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
 
-    coordinator.handleEndTransaction(transactionalId, producerId, requestEpoch(clientTransactionVersion), TransactionResult.ABORT, clientTransactionVersion, endTxnCallback)
+    coordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.ABORT, clientTransactionVersion, endTxnCallback)
     assertEquals(Errors.INVALID_TXN_STATE, error)
+    verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testEndTxnRequestWhenStatusIsCompleteCommitAndResultIsAbortInV1(isRetry: Boolean): Unit = {
+    val clientTransactionVersion = TransactionVersion.fromFeatureLevel(0)
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
+      producerEpoch, (producerEpoch - 1).toShort, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), clientTransactionVersion)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+
+    val epoch = if (isRetry) producerEpoch - 1 else producerEpoch
+    coordinator.handleEndTransaction(transactionalId, producerId, epoch.toShort, TransactionResult.ABORT, clientTransactionVersion, endTxnCallback)
+    if (isRetry) {
+      assertEquals(Errors.PRODUCER_FENCED, error)
+    } else {
+      assertEquals(Errors.INVALID_TXN_STATE, error)
+    }
+    verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
+  }
+
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def testEndTxnRequestWhenStatusIsCompleteCommitAndResultIsAbortInV2(isRetry: Boolean): Unit = {
+    val clientTransactionVersion = TransactionVersion.fromFeatureLevel(2)
+    val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
+      producerEpoch, (producerEpoch - 1).toShort, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), clientTransactionVersion)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
+
+    val epoch = if (isRetry) producerEpoch - 1 else producerEpoch
+    coordinator.handleEndTransaction(transactionalId, producerId, epoch.toShort, TransactionResult.ABORT, clientTransactionVersion, endTxnCallback)
+    if (isRetry) {
+      assertEquals(Errors.INVALID_TXN_STATE, error)
+    } else {
+      assertEquals(Errors.NONE, error)
+      val newMetadata = ArgumentCaptor.forClass(classOf[TxnTransitMetadata]);
+      verify(transactionManager).appendTransactionToLog(
+        ArgumentMatchers.eq(transactionalId),
+        ArgumentMatchers.any(),
+        newMetadata.capture(),
+        ArgumentMatchers.any(),
+        ArgumentMatchers.any(),
+        ArgumentMatchers.any()
+      )
+      assertEquals(producerEpoch + 1, newMetadata.getValue.asInstanceOf[TxnTransitMetadata].producerEpoch, newMetadata.getValue.asInstanceOf[TxnTransitMetadata].toString)
+      assertEquals(time.milliseconds(), newMetadata.getValue.asInstanceOf[TxnTransitMetadata].txnStartTimestamp, newMetadata.getValue.asInstanceOf[TxnTransitMetadata].toString)
+    }
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
@@ -546,51 +758,62 @@ class TransactionCoordinatorTest {
   }
 
   @Test
-  def shouldReturnWhenTransactionVersionDowngraded(): Unit = {
-    // State was written when transactions V2
+  def TestEndTxnRequestWhenEmptyTransactionStateForAbortInV1(): Unit = {
+    val clientTransactionVersion = TransactionVersion.fromFeatureLevel(0)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, new TransactionMetadata(transactionalId, producerId, producerId,
-        RecordBatch.NO_PRODUCER_ID, (producerEpoch + 1).toShort, RecordBatch.NO_PRODUCER_EPOCH, 1, PrepareCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), TV_2)))))
+        RecordBatch.NO_PRODUCER_ID, producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, 1, Empty, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), clientTransactionVersion)))))
 
-    // Return CONCURRENT_TRANSACTIONS as the transaction is still completing
-    coordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.COMMIT, TV_0, endTxnCallback)
-    assertEquals(Errors.CONCURRENT_TRANSACTIONS, error)
-    assertEquals(RecordBatch.NO_PRODUCER_ID, newProducerId)
-    assertEquals(RecordBatch.NO_PRODUCER_EPOCH, newEpoch)
+    coordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.ABORT, clientTransactionVersion, endTxnCallback)
+    assertEquals(Errors.INVALID_TXN_STATE, error)
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
-
-    // Recognize the retry and return NONE
-    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
-      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, new TransactionMetadata(transactionalId, producerId, producerId,
-        RecordBatch.NO_PRODUCER_ID, (producerEpoch + 1).toShort, RecordBatch.NO_PRODUCER_EPOCH, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), TV_2)))))
-    coordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.COMMIT, TV_0, endTxnCallback)
-    assertEquals(Errors.NONE, error)
-    assertEquals(producerId, newProducerId)
-    assertEquals((producerEpoch + 1).toShort, newEpoch) // epoch is bumped since we started as V2
-    verify(transactionManager, times(2)).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
-  @Test
-  def shouldReturnCorrectlyWhenTransactionVersionUpgraded(): Unit = {
-    // State was written when transactions V0
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def TestEndTxnRequestWhenEmptyTransactionStateForAbortInV2(isRetry: Boolean): Unit = {
+    val clientTransactionVersion = TransactionVersion.fromFeatureLevel(2)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, new TransactionMetadata(transactionalId, producerId, producerId,
-        RecordBatch.NO_PRODUCER_ID, producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, 1, PrepareCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), TV_0)))))
+        RecordBatch.NO_PRODUCER_ID, producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, 1, Empty, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), clientTransactionVersion)))))
 
-    // Transactions V0 throws the concurrent transactions error here.
-    coordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.COMMIT, TV_2, endTxnCallback)
-    assertEquals(Errors.CONCURRENT_TRANSACTIONS, error)
+    val epoch = if (isRetry) producerEpoch - 1 else producerEpoch
+    coordinator.handleEndTransaction(transactionalId, producerId, epoch.toShort, TransactionResult.ABORT, clientTransactionVersion, endTxnCallback)
+    if (isRetry) {
+      assertEquals(Errors.PRODUCER_FENCED, error)
+    } else {
+      assertEquals(Errors.NONE, error)
+      val newMetadata = ArgumentCaptor.forClass(classOf[TxnTransitMetadata]);
+      verify(transactionManager).appendTransactionToLog(
+        ArgumentMatchers.eq(transactionalId),
+        ArgumentMatchers.any(),
+        newMetadata.capture(),
+        ArgumentMatchers.any(),
+        ArgumentMatchers.any(),
+        ArgumentMatchers.any()
+      )
+      assertEquals(producerEpoch + 1, newMetadata.getValue.asInstanceOf[TxnTransitMetadata].producerEpoch, newMetadata.getValue.asInstanceOf[TxnTransitMetadata].toString)
+      assertEquals(time.milliseconds(), newMetadata.getValue.asInstanceOf[TxnTransitMetadata].txnStartTimestamp, newMetadata.getValue.asInstanceOf[TxnTransitMetadata].toString)
+    }
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
+  }
 
-    // When the transaction is completed, return and do not throw an error.
+  @ParameterizedTest
+  @ValueSource(booleans = Array(false, true))
+  def TestEndTxnRequestWhenEmptyTransactionStateForCommitInV2(isRetry: Boolean): Unit = {
+    val clientTransactionVersion = TransactionVersion.fromFeatureLevel(2)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, new TransactionMetadata(transactionalId, producerId, producerId,
-        RecordBatch.NO_PRODUCER_ID, producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), TV_0)))))
-    coordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.COMMIT, TV_2, endTxnCallback)
-    assertEquals(Errors.NONE, error)
-    assertEquals(producerId, newProducerId)
-    assertEquals(producerEpoch, newEpoch) // epoch is not bumped since this started as V1
-    verify(transactionManager, times(2)).getTransactionState(ArgumentMatchers.eq(transactionalId))
+        RecordBatch.NO_PRODUCER_ID, producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, 1, Empty, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), clientTransactionVersion)))))
+
+    val epoch = if (isRetry) producerEpoch - 1 else producerEpoch
+    coordinator.handleEndTransaction(transactionalId, producerId, epoch.toShort, TransactionResult.COMMIT, clientTransactionVersion, endTxnCallback)
+    if (isRetry) {
+      assertEquals(Errors.PRODUCER_FENCED, error)
+    } else {
+      assertEquals(Errors.INVALID_TXN_STATE, error)
+    }
+    verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
   @Test
@@ -608,9 +831,9 @@ class TransactionCoordinatorTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, new TransactionMetadata(transactionalId, producerId, producerId,
         RecordBatch.NO_PRODUCER_ID, producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, 1, CompleteCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), TV_2)))))
 
-    // If producerEpoch is the same, this is not a retry of the EndTxnRequest, but the next EndTxnRequest. Return PRODUCER_FENCED.
+    // If producerEpoch is the same, this is not a retry of the EndTxnRequest, but the next EndTxnRequest. Return INVALID_TXN_STATE.
     coordinator.handleEndTransaction(transactionalId, producerId, producerEpoch, TransactionResult.COMMIT, TV_2, endTxnCallback)
-    assertEquals(Errors.PRODUCER_FENCED, error)
+    assertEquals(Errors.INVALID_TXN_STATE, error)
     verify(transactionManager, times(2)).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
@@ -634,6 +857,39 @@ class TransactionCoordinatorTest {
     assertNotEquals(RecordBatch.NO_PRODUCER_ID, newProducerId)
     assertNotEquals(producerId, newProducerId)
     assertEquals(0, newEpoch)
+    verify(transactionManager, times(2)).getTransactionState(ArgumentMatchers.eq(transactionalId))
+  }
+
+  @Test
+  def shouldReturnConcurrentTxnOnAddPartitionsIfEndTxnV2EpochOverflowAndNotComplete(): Unit = {
+    val prepareWithPending = new TransactionMetadata(transactionalId, producerId, producerId,
+      producerId2, Short.MaxValue, (Short.MaxValue - 1).toShort, 1, PrepareCommit, collection.mutable.Set.empty[TopicPartition], 0, time.milliseconds(), TV_2)
+    val txnTransitMetadata = prepareWithPending.prepareComplete(time.milliseconds())
+
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, prepareWithPending))))
+
+    // Return CONCURRENT_TRANSACTIONS while transaction is still completing
+    coordinator.handleAddPartitionsToTransaction(transactionalId, producerId2, 0, partitions, errorsCallback, TV_2)
+    assertEquals(Errors.CONCURRENT_TRANSACTIONS, error)
+    verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
+
+    prepareWithPending.completeTransitionTo(txnTransitMetadata)
+    assertEquals(CompleteCommit, prepareWithPending.state)
+    when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
+      .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, prepareWithPending))))
+    when(transactionManager.appendTransactionToLog(
+      ArgumentMatchers.eq(transactionalId),
+      ArgumentMatchers.eq(coordinatorEpoch),
+      any[TxnTransitMetadata],
+      capturedErrorsCallback.capture(),
+      any(),
+      any())
+    ).thenAnswer(_ => capturedErrorsCallback.getValue.apply(Errors.NONE))
+
+    coordinator.handleAddPartitionsToTransaction(transactionalId, producerId2, 0, partitions, errorsCallback, TV_2)
+
+    assertEquals(Errors.NONE, error)
     verify(transactionManager, times(2)).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
@@ -767,12 +1023,16 @@ class TransactionCoordinatorTest {
     validateRespondsWithConcurrentTransactionsOnInitPidWhenInPrepareState(PrepareAbort)
   }
 
-  @Test
-  def shouldAbortTransactionOnHandleInitPidWhenExistingTransactionInOngoingState(): Unit = {
+  @ParameterizedTest(name = "enableTwoPCFlag={0}, keepPreparedTxn={1}")
+  @CsvSource(Array("false, false"))
+  def shouldAbortTransactionOnHandleInitPidWhenExistingTransactionInOngoingState(
+    enableTwoPCFlag: Boolean,
+    keepPreparedTxn:  Boolean
+  ): Unit = {
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
       producerEpoch, (producerEpoch - 1).toShort, txnTimeoutMs, Ongoing, partitions, time.milliseconds(), time.milliseconds(), TV_0)
 
-    when(transactionManager.validateTransactionTimeoutMs(anyInt()))
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
       .thenReturn(true)
 
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
@@ -791,15 +1051,22 @@ class TransactionCoordinatorTest {
       any())
     ).thenAnswer(_ => capturedErrorsCallback.getValue.apply(Errors.NONE))
 
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, None, initProducerIdMockCallback)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag,
+      keepPreparedTxn,
+      None,
+      initProducerIdMockCallback
+    )
 
     assertEquals(InitProducerIdResult(-1, -1, Errors.CONCURRENT_TRANSACTIONS), result)
-    verify(transactionManager).validateTransactionTimeoutMs(anyInt())
+    verify(transactionManager).validateTransactionTimeoutMs(anyBoolean(), anyInt())
     verify(transactionManager, times(3)).getTransactionState(ArgumentMatchers.eq(transactionalId))
     verify(transactionManager).appendTransactionToLog(
       ArgumentMatchers.eq(transactionalId),
       ArgumentMatchers.eq(coordinatorEpoch),
-      ArgumentMatchers.eq(originalMetadata.prepareAbortOrCommit(PrepareAbort, TV_0, RecordBatch.NO_PRODUCER_ID, time.milliseconds())),
+      ArgumentMatchers.eq(originalMetadata.prepareAbortOrCommit(PrepareAbort, TV_0, RecordBatch.NO_PRODUCER_ID, time.milliseconds(), false)),
       any(),
       any(),
       any())
@@ -810,7 +1077,7 @@ class TransactionCoordinatorTest {
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
       producerEpoch, (producerEpoch - 1).toShort, txnTimeoutMs, Ongoing, partitions, time.milliseconds(), time.milliseconds(), TV_0)
 
-    when(transactionManager.validateTransactionTimeoutMs(anyInt()))
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
       .thenReturn(true)
 
     val bumpedTxnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
@@ -820,11 +1087,19 @@ class TransactionCoordinatorTest {
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, bumpedTxnMetadata))))
 
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, None, initProducerIdMockCallback)
+    when(transactionManager.transactionVersionLevel()).thenReturn(TV_0)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      None,
+      initProducerIdMockCallback
+    )
 
     assertEquals(InitProducerIdResult(-1, -1, Errors.PRODUCER_FENCED), result)
 
-    verify(transactionManager).validateTransactionTimeoutMs(anyInt())
+    verify(transactionManager).validateTransactionTimeoutMs(anyBoolean(), anyInt())
     verify(transactionManager, times(2)).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
@@ -833,7 +1108,7 @@ class TransactionCoordinatorTest {
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
       producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Ongoing, partitions, time.milliseconds(), time.milliseconds(), TV_0)
 
-    when(transactionManager.validateTransactionTimeoutMs(anyInt()))
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
       .thenReturn(true)
 
     when(transactionManager.putTransactionStateIfNotExists(any[TransactionMetadata]()))
@@ -846,7 +1121,7 @@ class TransactionCoordinatorTest {
 
     val originalMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
       (producerEpoch + 1).toShort, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Ongoing, partitions, time.milliseconds(), time.milliseconds(), TV_0)
-    val txnTransitMetadata = originalMetadata.prepareAbortOrCommit(PrepareAbort, TV_0, RecordBatch.NO_PRODUCER_ID, time.milliseconds())
+    val txnTransitMetadata = originalMetadata.prepareAbortOrCommit(PrepareAbort, TV_0, RecordBatch.NO_PRODUCER_ID, time.milliseconds(), false)
     when(transactionManager.appendTransactionToLog(
       ArgumentMatchers.eq(transactionalId),
       ArgumentMatchers.eq(coordinatorEpoch),
@@ -869,26 +1144,47 @@ class TransactionCoordinatorTest {
     })
 
     // For the first two calls, verify that the epoch was only bumped once
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, None, initProducerIdMockCallback)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      None,
+      initProducerIdMockCallback
+    )
     assertEquals(InitProducerIdResult(-1, -1, Errors.NOT_ENOUGH_REPLICAS), result)
 
     assertEquals((producerEpoch + 1).toShort, txnMetadata.producerEpoch)
     assertTrue(txnMetadata.hasFailedEpochFence)
 
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, None, initProducerIdMockCallback)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      None,
+      initProducerIdMockCallback
+    )
     assertEquals(InitProducerIdResult(-1, -1, Errors.NOT_ENOUGH_REPLICAS), result)
 
     assertEquals((producerEpoch + 1).toShort, txnMetadata.producerEpoch)
     assertTrue(txnMetadata.hasFailedEpochFence)
 
     // For the last, successful call, verify that the epoch was not bumped further
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, None, initProducerIdMockCallback)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      None,
+      initProducerIdMockCallback
+    )
     assertEquals(InitProducerIdResult(-1, -1, Errors.CONCURRENT_TRANSACTIONS), result)
 
     assertEquals((producerEpoch + 1).toShort, txnMetadata.producerEpoch)
     assertFalse(txnMetadata.hasFailedEpochFence)
 
-    verify(transactionManager, times(3)).validateTransactionTimeoutMs(anyInt())
+    verify(transactionManager, times(3)).validateTransactionTimeoutMs(anyBoolean(), anyInt())
     verify(transactionManager, times(9)).getTransactionState(ArgumentMatchers.eq(transactionalId))
     verify(transactionManager, times(3)).appendTransactionToLog(
       ArgumentMatchers.eq(transactionalId),
@@ -905,7 +1201,7 @@ class TransactionCoordinatorTest {
       (Short.MaxValue - 1).toShort, (Short.MaxValue - 2).toShort, txnTimeoutMs, Ongoing, partitions, time.milliseconds(), time.milliseconds(), TV_0)
     assertTrue(txnMetadata.isProducerEpochExhausted)
 
-    when(transactionManager.validateTransactionTimeoutMs(anyInt()))
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
       .thenReturn(true)
 
     val postFenceTxnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_ID,
@@ -929,7 +1225,7 @@ class TransactionCoordinatorTest {
         lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
         txnTimeoutMs = txnTimeoutMs,
         txnState = PrepareAbort,
-        topicPartitions = partitions.toSet,
+        topicPartitions = partitions.clone,
         txnStartTimestamp = time.milliseconds(),
         txnLastUpdateTimestamp = time.milliseconds(),
         clientTransactionVersion = TV_0)),
@@ -938,11 +1234,18 @@ class TransactionCoordinatorTest {
       any())
     ).thenAnswer(_ => capturedErrorsCallback.getValue.apply(Errors.NONE))
 
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, None, initProducerIdMockCallback)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      None,
+      initProducerIdMockCallback
+    )
     assertEquals(Short.MaxValue, txnMetadata.producerEpoch)
 
     assertEquals(InitProducerIdResult(-1, -1, Errors.CONCURRENT_TRANSACTIONS), result)
-    verify(transactionManager).validateTransactionTimeoutMs(anyInt())
+    verify(transactionManager).validateTransactionTimeoutMs(anyBoolean(), anyInt())
     verify(transactionManager, times(3)).getTransactionState(ArgumentMatchers.eq(transactionalId))
     verify(transactionManager).appendTransactionToLog(
       ArgumentMatchers.eq(transactionalId),
@@ -955,7 +1258,7 @@ class TransactionCoordinatorTest {
         lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
         txnTimeoutMs = txnTimeoutMs,
         txnState = PrepareAbort,
-        topicPartitions = partitions.toSet,
+        topicPartitions = partitions.clone,
         txnStartTimestamp = time.milliseconds(),
         txnLastUpdateTimestamp = time.milliseconds(),
         clientTransactionVersion = TV_0)),
@@ -971,14 +1274,20 @@ class TransactionCoordinatorTest {
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, RecordBatch.NO_PRODUCER_ID,
       RecordBatch.NO_PRODUCER_EPOCH, (producerEpoch + 1).toShort, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Empty, partitions, time.milliseconds, time.milliseconds, TV_0)
 
-    when(transactionManager.validateTransactionTimeoutMs(anyInt()))
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
       .thenReturn(true)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
 
     // Simulate producer trying to continue after new producer has already been initialized
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, Some(new ProducerIdAndEpoch(producerId, producerEpoch)),
-      initProducerIdMockCallback)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      Some(new ProducerIdAndEpoch(producerId, producerEpoch)),
+      initProducerIdMockCallback
+    )
     assertEquals(InitProducerIdResult(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Errors.PRODUCER_FENCED), result)
   }
 
@@ -988,14 +1297,20 @@ class TransactionCoordinatorTest {
     val txnMetadata = new TransactionMetadata(transactionalId, producerId + 1, producerId,
       RecordBatch.NO_PRODUCER_EPOCH, producerEpoch, (producerEpoch - 1).toShort, txnTimeoutMs, Empty, partitions, time.milliseconds, time.milliseconds, TV_0)
 
-    when(transactionManager.validateTransactionTimeoutMs(anyInt()))
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
       .thenReturn(true)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
 
     // Simulate producer trying to continue after new producer has already been initialized
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, Some(new ProducerIdAndEpoch(producerId, producerEpoch)),
-      initProducerIdMockCallback)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      Some(new ProducerIdAndEpoch(producerId, producerEpoch)),
+      initProducerIdMockCallback
+    )
     assertEquals(InitProducerIdResult(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Errors.PRODUCER_FENCED), result)
   }
 
@@ -1006,7 +1321,7 @@ class TransactionCoordinatorTest {
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId,
       RecordBatch.NO_PRODUCER_EPOCH, 10, 9, txnTimeoutMs, Empty, partitions, time.milliseconds, time.milliseconds, TV_0)
 
-    when(transactionManager.validateTransactionTimeoutMs(anyInt()))
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
       .thenReturn(true)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
@@ -1024,13 +1339,25 @@ class TransactionCoordinatorTest {
     })
 
     // Re-initialization should succeed and bump the producer epoch
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, Some(new ProducerIdAndEpoch(producerId, 10)),
-      initProducerIdMockCallback)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      Some(new ProducerIdAndEpoch(producerId, 10)),
+      initProducerIdMockCallback
+    )
     assertEquals(InitProducerIdResult(producerId, 11, Errors.NONE), result)
 
     // Simulate producer retrying after successfully re-initializing but failing to receive the response
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, Some(new ProducerIdAndEpoch(producerId, 10)),
-      initProducerIdMockCallback)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      Some(new ProducerIdAndEpoch(producerId, 10)),
+      initProducerIdMockCallback
+    )
     assertEquals(InitProducerIdResult(producerId, 11, Errors.NONE), result)
   }
 
@@ -1041,7 +1368,7 @@ class TransactionCoordinatorTest {
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId,
       RecordBatch.NO_PRODUCER_EPOCH, 10, 9, txnTimeoutMs, Empty, partitions, time.milliseconds, time.milliseconds, TV_0)
 
-    when(transactionManager.validateTransactionTimeoutMs(anyInt()))
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
       .thenReturn(true)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
@@ -1062,12 +1389,25 @@ class TransactionCoordinatorTest {
     })
 
     // With producer epoch at 10, new producer calls InitProducerId and should get epoch 11
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, None, initProducerIdMockCallback)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      None,
+      initProducerIdMockCallback
+    )
     assertEquals(InitProducerIdResult(producerId, 11, Errors.NONE), result)
 
     // Simulate old producer trying to continue from epoch 10
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, Some(new ProducerIdAndEpoch(producerId, 10)),
-      initProducerIdMockCallback)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      Some(new ProducerIdAndEpoch(producerId, 10)),
+      initProducerIdMockCallback
+    )
     assertEquals(InitProducerIdResult(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Errors.PRODUCER_FENCED), result)
   }
 
@@ -1080,7 +1420,7 @@ class TransactionCoordinatorTest {
     when(pidGenerator.generateProducerId())
       .thenReturn(producerId + 1)
 
-    when(transactionManager.validateTransactionTimeoutMs(anyInt()))
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
       .thenReturn(true)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
@@ -1096,19 +1436,31 @@ class TransactionCoordinatorTest {
       capturedErrorsCallback.getValue.apply(Errors.NONE)
       txnMetadata.pendingState = None
       txnMetadata.producerId = capturedTxnTransitMetadata.getValue.producerId
-      txnMetadata.previousProducerId = capturedTxnTransitMetadata.getValue.prevProducerId
+      txnMetadata.prevProducerId = capturedTxnTransitMetadata.getValue.prevProducerId
       txnMetadata.producerEpoch = capturedTxnTransitMetadata.getValue.producerEpoch
       txnMetadata.lastProducerEpoch = capturedTxnTransitMetadata.getValue.lastProducerEpoch
     })
 
     // Bump epoch and cause producer ID to be rotated
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, Some(new ProducerIdAndEpoch(producerId,
-      (Short.MaxValue - 1).toShort)), initProducerIdMockCallback)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      Some(new ProducerIdAndEpoch(producerId, (Short.MaxValue - 1).toShort)),
+      initProducerIdMockCallback
+    )
     assertEquals(InitProducerIdResult(producerId + 1, 0, Errors.NONE), result)
 
     // Simulate producer retrying old request after producer bump
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, Some(new ProducerIdAndEpoch(producerId,
-      (Short.MaxValue - 1).toShort)), initProducerIdMockCallback)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      Some(new ProducerIdAndEpoch(producerId, (Short.MaxValue - 1).toShort)),
+      initProducerIdMockCallback
+    )
     assertEquals(InitProducerIdResult(producerId + 1, 0, Errors.NONE), result)
   }
 
@@ -1121,7 +1473,7 @@ class TransactionCoordinatorTest {
     when(pidGenerator.generateProducerId())
       .thenReturn(producerId + 1)
 
-    when(transactionManager.validateTransactionTimeoutMs(anyInt()))
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
       .thenReturn(true)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
@@ -1137,19 +1489,31 @@ class TransactionCoordinatorTest {
       capturedErrorsCallback.getValue.apply(Errors.NONE)
       txnMetadata.pendingState = None
       txnMetadata.producerId = capturedTxnTransitMetadata.getValue.producerId
-      txnMetadata.previousProducerId = capturedTxnTransitMetadata.getValue.prevProducerId
+      txnMetadata.prevProducerId = capturedTxnTransitMetadata.getValue.prevProducerId
       txnMetadata.producerEpoch = capturedTxnTransitMetadata.getValue.producerEpoch
       txnMetadata.lastProducerEpoch = capturedTxnTransitMetadata.getValue.lastProducerEpoch
     })
 
     // Bump epoch and cause producer ID to be rotated
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, Some(new ProducerIdAndEpoch(producerId,
-      (Short.MaxValue - 1).toShort)), initProducerIdMockCallback)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      Some(new ProducerIdAndEpoch(producerId, (Short.MaxValue - 1).toShort)),
+      initProducerIdMockCallback
+    )
     assertEquals(InitProducerIdResult(producerId + 1, 0, Errors.NONE), result)
 
     // Validate that producer with old producer ID and stale epoch is fenced
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, Some(new ProducerIdAndEpoch(producerId,
-      (Short.MaxValue - 2).toShort)), initProducerIdMockCallback)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      Some(new ProducerIdAndEpoch(producerId, (Short.MaxValue - 2).toShort)),
+      initProducerIdMockCallback
+    )
     assertEquals(InitProducerIdResult(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Errors.PRODUCER_FENCED), result)
   }
 
@@ -1173,7 +1537,7 @@ class TransactionCoordinatorTest {
 
     // Transaction timeouts use FenceProducerEpoch so clientTransactionVersion is 0.
     val expectedTransition = TxnTransitMetadata(producerId, producerId, RecordBatch.NO_PRODUCER_EPOCH, (producerEpoch + 1).toShort,
-      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, PrepareAbort, partitions.toSet, now,
+      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, PrepareAbort, partitions.clone, now,
       now + TransactionStateManagerConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT, TV_0)
 
     when(transactionManager.transactionVersionLevel()).thenReturn(TV_0)
@@ -1230,7 +1594,7 @@ class TransactionCoordinatorTest {
   def shouldNotAbortExpiredTransactionsThatHaveAPendingStateTransition(): Unit = {
     val metadata = new TransactionMetadata(transactionalId, producerId, producerId,
       RecordBatch.NO_PRODUCER_EPOCH, producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Ongoing, partitions, time.milliseconds(), time.milliseconds(), TV_0)
-    metadata.prepareAbortOrCommit(PrepareCommit, TV_0, RecordBatch.NO_PRODUCER_ID, time.milliseconds())
+    metadata.prepareAbortOrCommit(PrepareCommit, TV_0, RecordBatch.NO_PRODUCER_ID, time.milliseconds(), false)
 
     when(transactionManager.timedOutTransactions())
       .thenReturn(List(TransactionalIdAndProducerIdEpoch(transactionalId, producerId, producerEpoch)))
@@ -1263,7 +1627,7 @@ class TransactionCoordinatorTest {
     // Transaction timeouts use FenceProducerEpoch so clientTransactionVersion is 0.
     val bumpedEpoch = (producerEpoch + 1).toShort
     val expectedTransition = TxnTransitMetadata(producerId, producerId, RecordBatch.NO_PRODUCER_EPOCH, bumpedEpoch,
-      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, PrepareAbort, partitions.toSet, now,
+      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, PrepareAbort, partitions.clone, now,
       now + TransactionStateManagerConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT, TV_0)
 
     when(transactionManager.transactionVersionLevel()).thenReturn(TV_0)
@@ -1297,18 +1661,24 @@ class TransactionCoordinatorTest {
   def shouldNotBumpEpochWithPendingTransaction(): Unit = {
     val txnMetadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_EPOCH, producerEpoch,
       RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Ongoing, partitions, time.milliseconds(), time.milliseconds(), TV_0)
-    txnMetadata.prepareAbortOrCommit(PrepareCommit, TV_0, RecordBatch.NO_PRODUCER_ID, time.milliseconds())
+    txnMetadata.prepareAbortOrCommit(PrepareCommit, TV_0, RecordBatch.NO_PRODUCER_ID, time.milliseconds(), false)
 
-    when(transactionManager.validateTransactionTimeoutMs(anyInt()))
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
       .thenReturn(true)
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata))))
 
-    coordinator.handleInitProducerId(transactionalId, txnTimeoutMs, Some(new ProducerIdAndEpoch(producerId, 10)),
-      initProducerIdMockCallback)
+    coordinator.handleInitProducerId(
+      transactionalId,
+      txnTimeoutMs,
+      enableTwoPCFlag = false,
+      keepPreparedTxn = false,
+      Some(new ProducerIdAndEpoch(producerId, 10)),
+      initProducerIdMockCallback
+    )
     assertEquals(InitProducerIdResult(RecordBatch.NO_PRODUCER_ID, RecordBatch.NO_PRODUCER_EPOCH, Errors.CONCURRENT_TRANSACTIONS), result)
 
-    verify(transactionManager).validateTransactionTimeoutMs(anyInt())
+    verify(transactionManager).validateTransactionTimeoutMs(anyBoolean(), anyInt())
     verify(transactionManager).getTransactionState(ArgumentMatchers.eq(transactionalId))
   }
 
@@ -1374,7 +1744,7 @@ class TransactionCoordinatorTest {
   }
 
   private def validateRespondsWithConcurrentTransactionsOnInitPidWhenInPrepareState(state: TransactionState): Unit = {
-    when(transactionManager.validateTransactionTimeoutMs(anyInt()))
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
       .thenReturn(true)
 
     // Since the clientTransactionVersion doesn't matter, use 2 since the states are PrepareCommit and PrepareAbort.
@@ -1383,7 +1753,8 @@ class TransactionCoordinatorTest {
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, metadata))))
 
-    coordinator.handleInitProducerId(transactionalId, 10, None, initProducerIdMockCallback)
+    coordinator.handleInitProducerId(transactionalId, 10, enableTwoPCFlag = false,
+      keepPreparedTxn = false, None, initProducerIdMockCallback)
 
     assertEquals(InitProducerIdResult(-1, -1, Errors.CONCURRENT_TRANSACTIONS), result)
   }
@@ -1393,7 +1764,7 @@ class TransactionCoordinatorTest {
     when(pidGenerator.generateProducerId())
       .thenReturn(producerId)
 
-    when(transactionManager.validateTransactionTimeoutMs(anyInt()))
+    when(transactionManager.validateTransactionTimeoutMs(anyBoolean(), anyInt()))
       .thenReturn(true)
 
     val metadata = new TransactionMetadata(transactionalId, producerId, producerId, RecordBatch.NO_PRODUCER_EPOCH,
@@ -1415,7 +1786,8 @@ class TransactionCoordinatorTest {
     })
 
     val newTxnTimeoutMs = 10
-    coordinator.handleInitProducerId(transactionalId, newTxnTimeoutMs, None, initProducerIdMockCallback)
+    coordinator.handleInitProducerId(transactionalId, newTxnTimeoutMs, enableTwoPCFlag = false,
+      keepPreparedTxn = false, None, initProducerIdMockCallback)
 
     assertEquals(InitProducerIdResult(producerId, (producerEpoch + 1).toShort, Errors.NONE), result)
     assertEquals(newTxnTimeoutMs, metadata.txnTimeoutMs)
@@ -1430,7 +1802,7 @@ class TransactionCoordinatorTest {
       producerEpoch, RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, Ongoing, partitions, now, now, TV_0)
 
     val transition = TxnTransitMetadata(producerId, producerId, RecordBatch.NO_PRODUCER_EPOCH, producerEpoch,
-      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, transactionState, partitions.toSet, now, now, clientTransactionVersion)
+      RecordBatch.NO_PRODUCER_EPOCH, txnTimeoutMs, transactionState, partitions.clone, now, now, clientTransactionVersion)
 
     when(transactionManager.getTransactionState(ArgumentMatchers.eq(transactionalId)))
       .thenReturn(Right(Some(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, originalMetadata))))
