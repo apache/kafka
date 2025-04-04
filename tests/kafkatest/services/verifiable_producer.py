@@ -154,8 +154,8 @@ class VerifiableProducer(KafkaPathResolverMixin, VerifiableClientMixin, Backgrou
         elif self.enable_idempotence:
             self.logger.info("Setting up an idempotent producer")
             producer_prop_file += "\nmax.in.flight.requests.per.connection=5\n"
-            producer_prop_file += "\nenable.idempotence=true\n"
             producer_prop_file += "\nretries=1000000\n"
+            producer_prop_file += "\nenable.idempotence=true\n"
         elif self.retries is not None:
             self.logger.info("VerifiableProducer (index = %d) will use retries = %s", idx, self.retries)
             producer_prop_file += "\nretries=%s\n" % self.retries
