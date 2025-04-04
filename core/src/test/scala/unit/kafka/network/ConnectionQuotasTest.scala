@@ -20,7 +20,7 @@ package kafka.network
 import java.net.InetAddress
 import java.util
 import java.util.concurrent.{Callable, ExecutorService, Executors, TimeUnit}
-import java.util.{Collections, Properties}
+import java.util.Properties
 import com.yammer.metrics.core.Meter
 import kafka.network.Processor.ListenerMetricTag
 import kafka.server.KafkaConfig
@@ -96,7 +96,7 @@ class ConnectionQuotasTest {
     // use system time, because ConnectionQuota causes the current thread to wait with timeout, which waits based on
     // system time; so using mock time will likely result in test flakiness due to a mixed use of mock and system time
     time = Time.SYSTEM
-    metrics = new Metrics(new MetricConfig(), Collections.emptyList(), time)
+    metrics = new Metrics(new MetricConfig(), util.List.of, time)
     executor = Executors.newFixedThreadPool(listeners.size)
   }
 
@@ -829,7 +829,7 @@ class ConnectionQuotasTest {
     val metricName = metrics.metricName(
       "connection-accept-throttle-time",
       SocketServer.MetricsGroup,
-      Collections.singletonMap(Processor.ListenerMetricTag, listener))
+      util.Map.of(Processor.ListenerMetricTag, listener))
     metrics.metric(metricName)
   }
 
@@ -837,7 +837,7 @@ class ConnectionQuotasTest {
     val metricName = metrics.metricName(
       "ip-connection-accept-throttle-time",
       SocketServer.MetricsGroup,
-      Collections.singletonMap(Processor.ListenerMetricTag, listener))
+      util.Map.of(Processor.ListenerMetricTag, listener))
     metrics.metric(metricName)
   }
 
@@ -845,7 +845,7 @@ class ConnectionQuotasTest {
     val metricName = metrics.metricName(
       "connection-accept-rate",
       SocketServer.MetricsGroup,
-      Collections.singletonMap(Processor.ListenerMetricTag, listener))
+      util.Map.of(Processor.ListenerMetricTag, listener))
     metrics.metric(metricName)
   }
 
@@ -860,7 +860,7 @@ class ConnectionQuotasTest {
     val metricName = metrics.metricName(
       s"connection-accept-rate",
       SocketServer.MetricsGroup,
-      Collections.singletonMap("ip", ip))
+      util.Map.of("ip", ip))
     metrics.metric(metricName)
   }
 

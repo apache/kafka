@@ -18,7 +18,7 @@
 
 package kafka.server
 
-import java.util.{Collections, Objects, Optional, Properties}
+import java.util.{Objects, Optional, Properties}
 import java.util.concurrent.TimeUnit
 import kafka.api.SaslSetup
 import kafka.security.JaasTestUtils
@@ -188,7 +188,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
       producerRecords.map(producer.send).map(_.get(10, TimeUnit.SECONDS))
 
       val consumer = consumers(clientMetadata)
-      consumer.subscribe(Collections.singleton(clientMetadata.topic))
+      consumer.subscribe(java.util.Set.of(clientMetadata.topic))
       TestUtils.consumeRecords(consumer, producerRecords.size)
     }
   }

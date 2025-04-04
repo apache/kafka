@@ -129,7 +129,7 @@ class TransactionLogTest {
   def testDeserializeHighestSupportedTransactionLogValue(): Unit = {
     val txnPartitions = new TransactionLogValue.PartitionsSchema()
       .setTopic("topic")
-      .setPartitionIds(java.util.Collections.singletonList(0))
+      .setPartitionIds(java.util.List.of(0))
 
     val txnLogValue = new TransactionLogValue()
       .setProducerId(100)
@@ -138,7 +138,7 @@ class TransactionLogTest {
       .setTransactionStartTimestampMs(750L)
       .setTransactionLastUpdateTimestampMs(1000L)
       .setTransactionTimeoutMs(500)
-      .setTransactionPartitions(java.util.Collections.singletonList(txnPartitions))
+      .setTransactionPartitions(java.util.List.of(txnPartitions))
 
     val serialized = MessageUtil.toVersionPrefixedByteBuffer(1, txnLogValue)
     val deserialized = TransactionLog.readTxnRecordValue("transactionId", serialized).get

@@ -92,7 +92,7 @@ import java.util.concurrent.atomic.{AtomicBoolean, AtomicLong, AtomicReference}
 import java.util.concurrent.{Callable, CompletableFuture, ConcurrentHashMap, CountDownLatch, TimeUnit}
 import java.util.function.BiConsumer
 import java.util.stream.IntStream
-import java.util.{Collections, Optional, OptionalLong, Properties}
+import java.util.{Optional, OptionalLong, Properties}
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.{RichOption, RichOptional}
@@ -306,7 +306,7 @@ class ReplicaManagerTest {
           .setPartitionEpoch(0)
           .setReplicas(Seq[Integer](0).asJava)
           .setIsNew(false)).asJava,
-        Collections.singletonMap(topic, Uuid.randomUuid()),
+        util.Map.of(topic, Uuid.randomUuid()),
         Set(new Node(0, "host1", 0)).asJava).build(), (_, _) => ())
       appendRecords(rm, new TopicPartition(topic, 0),
         MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("first message".getBytes()), new SimpleRecord("second message".getBytes())))
@@ -370,7 +370,7 @@ class ReplicaManagerTest {
           .setPartitionEpoch(0)
           .setReplicas(Seq[Integer](0).asJava)
           .setIsNew(false)).asJava,
-        Collections.singletonMap(topic, uuid),
+        util.Map.of(topic, uuid),
         Set(new Node(0, "host1", 0)).asJava).build(), (_, _) => ())
       // expect the errorCounts only has 1 entry with Errors.NONE
       val errorCounts = response.errorCounts()
@@ -427,7 +427,7 @@ class ReplicaManagerTest {
 
     try {
       val brokerList = Seq[Integer](0, 1).asJava
-      val topicIds = Collections.singletonMap(topic, Uuid.randomUuid())
+      val topicIds = util.Map.of(topic, Uuid.randomUuid())
 
       val partition = rm.createPartition(new TopicPartition(topic, 0))
       partition.createLogIfNotExists(isNew = false, isFutureReplica = false,
@@ -604,7 +604,7 @@ class ReplicaManagerTest {
           .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(true)).asJava,
-        Collections.singletonMap(topic, Uuid.randomUuid()),
+        util.Map.of(topic, Uuid.randomUuid()),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest1, (_, _) => ())
       replicaManager.getPartitionOrException(new TopicPartition(topic, 0))
@@ -669,7 +669,7 @@ class ReplicaManagerTest {
             .setPartitionEpoch(0)
             .setReplicas(brokerList)
             .setIsNew(true)).asJava,
-          Collections.singletonMap(topic, Uuid.randomUuid()),
+          util.Map.of(topic, Uuid.randomUuid()),
           Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava,
           LeaderAndIsrRequest.Type.UNKNOWN
         ).build()
@@ -849,7 +849,7 @@ class ReplicaManagerTest {
       assertEquals(Errors.NONE, fetchData.error)
       assertTrue(fetchData.records.batches.asScala.isEmpty)
       assertEquals(OptionalLong.of(0), fetchData.lastStableOffset)
-      assertEquals(Optional.of(Collections.emptyList()), fetchData.abortedTransactions)
+      assertEquals(Optional.of(util.List.of()), fetchData.abortedTransactions)
 
       // delayed fetch should timeout and return nothing
       consumerFetchResult = fetchPartitionAsConsumer(
@@ -867,7 +867,7 @@ class ReplicaManagerTest {
       assertEquals(Errors.NONE, fetchData.error)
       assertTrue(fetchData.records.batches.asScala.isEmpty)
       assertEquals(OptionalLong.of(0), fetchData.lastStableOffset)
-      assertEquals(Optional.of(Collections.emptyList()), fetchData.abortedTransactions)
+      assertEquals(Optional.of(util.List.of()), fetchData.abortedTransactions)
 
       // now commit the transaction
       val endTxnMarker = new EndTransactionMarker(ControlRecordType.COMMIT, 0)
@@ -905,7 +905,7 @@ class ReplicaManagerTest {
       fetchData = consumerFetchResult.assertFired
       assertEquals(Errors.NONE, fetchData.error)
       assertEquals(OptionalLong.of(numRecords + 1), fetchData.lastStableOffset)
-      assertEquals(Optional.of(Collections.emptyList()), fetchData.abortedTransactions)
+      assertEquals(Optional.of(util.List.of()), fetchData.abortedTransactions)
       assertEquals(numRecords + 1, fetchData.records.batches.asScala.size)
     } finally {
       replicaManager.shutdown(checkpointHW = false)
@@ -1083,7 +1083,7 @@ class ReplicaManagerTest {
         .setIsNew(true)
       val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
         Seq(leaderAndIsrPartitionState).asJava,
-        Collections.singletonMap(topic, topicId),
+        util.Map.of(topic, topicId),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       val leaderAndIsrResponse = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
       assertEquals(Errors.NONE, leaderAndIsrResponse.error)
@@ -1182,7 +1182,7 @@ class ReplicaManagerTest {
         .setIsNew(true)
       val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
         Seq(leaderAndIsrPartitionState).asJava,
-        Collections.singletonMap(topic, topicId),
+        util.Map.of(topic, topicId),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       val leaderAndIsrResponse = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
       assertEquals(Errors.NONE, leaderAndIsrResponse.error)
@@ -1243,7 +1243,7 @@ class ReplicaManagerTest {
         .setIsNew(true)
       val leaderAndIsrRequest2 = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
         Seq(leaderAndIsrPartitionState2).asJava,
-        Collections.emptyMap(),
+        util.Map.of(),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       val leaderAndIsrResponse2 = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest2, (_, _) => ())
       assertEquals(Errors.NONE, leaderAndIsrResponse2.error)
@@ -1429,7 +1429,7 @@ class ReplicaManagerTest {
       val leaderAndIsrRequest0 = new LeaderAndIsrRequest.Builder(
         controllerId, controllerEpoch, brokerEpoch,
         Seq(leaderAndIsrPartitionState(tp, leaderEpoch, leaderBrokerId, aliveBrokerIds)).asJava,
-        Collections.singletonMap(topic, topicId),
+        util.Map.of(topic, topicId),
         Set(new Node(followerBrokerId, "host1", 0),
           new Node(leaderBrokerId, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(correlationId, leaderAndIsrRequest0,
@@ -1518,7 +1518,7 @@ class ReplicaManagerTest {
           .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(false)).asJava,
-        Collections.singletonMap(topic, topicId),
+        util.Map.of(topic, topicId),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest, (_, _) => ())
 
@@ -1572,7 +1572,7 @@ class ReplicaManagerTest {
           .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(false)).asJava,
-        Collections.singletonMap(topic, topicId),
+        util.Map.of(topic, topicId),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest, (_, _) => ())
 
@@ -1631,7 +1631,7 @@ class ReplicaManagerTest {
           .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(false)).asJava,
-        Collections.singletonMap(topic, topicId),
+        util.Map.of(topic, topicId),
         Set(leaderNode, followerNode).asJava).build()
 
       replicaManager.becomeLeaderOrFollower(2, leaderAndIsrRequest, (_, _) => ())
@@ -1696,7 +1696,7 @@ class ReplicaManagerTest {
           .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(false)).asJava,
-        Collections.singletonMap(topic, topicId),
+        util.Map.of(topic, topicId),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest, (_, _) => ())
 
@@ -1755,7 +1755,7 @@ class ReplicaManagerTest {
           .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(false)).asJava,
-        Collections.singletonMap(topic, topicId),
+        util.Map.of(topic, topicId),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest, (_, _) => ())
 
@@ -1822,7 +1822,7 @@ class ReplicaManagerTest {
           .setPartitionEpoch(0)
           .setReplicas(brokerList)
           .setIsNew(false)).asJava,
-        Collections.singletonMap(topic, topicId),
+        util.Map.of(topic, topicId),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       replicaManager.becomeLeaderOrFollower(1, leaderAndIsrRequest2, (_, _) => ())
 
@@ -4231,7 +4231,7 @@ class ReplicaManagerTest {
     try {
       val brokerList = Seq[Integer](0, 1).asJava
       val topicPartition = new TopicPartition(topic, 0)
-      val topicIds = Collections.singletonMap(topic, Uuid.randomUuid())
+      val topicIds = util.Map.of(topic, Uuid.randomUuid())
       val topicNames = topicIds.asScala.map(_.swap).asJava
 
       def leaderAndIsrRequest(epoch: Int, topicIds: java.util.Map[String, Uuid]): LeaderAndIsrRequest =
@@ -4271,10 +4271,10 @@ class ReplicaManagerTest {
     try {
       val brokerList = Seq[Integer](0, 1).asJava
       val topicPartition = new TopicPartition(topic, 0)
-      val topicIds = Collections.singletonMap(topic, Uuid.randomUuid())
+      val topicIds = util.Map.of(topic, Uuid.randomUuid())
       val topicNames = topicIds.asScala.map(_.swap).asJava
 
-      val invalidTopicIds = Collections.singletonMap(topic, Uuid.randomUuid())
+      val invalidTopicIds = util.Map.of(topic, Uuid.randomUuid())
       val invalidTopicNames = invalidTopicIds.asScala.map(_.swap).asJava
 
       def leaderAndIsrRequest(epoch: Int, topicIds: java.util.Map[String, Uuid]): LeaderAndIsrRequest =
@@ -4706,7 +4706,7 @@ class ReplicaManagerTest {
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
 
       if (enableRemoteStorage) {
-        verifyRLMOnLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
+        verifyRLMOnLeadershipChange(util.Set.of(leaderPartition), util.Set.of())
         reset(mockRemoteLogManager)
       }
 
@@ -4735,7 +4735,7 @@ class ReplicaManagerTest {
       assertEquals(1, followerPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(util.Set.of(), util.Set.of(followerPartition))
       }
 
       val fetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
@@ -4767,7 +4767,7 @@ class ReplicaManagerTest {
       assertEquals(0, followerPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(util.Set.of(), util.Set.of(followerPartition))
         reset(mockRemoteLogManager)
       }
 
@@ -4801,7 +4801,7 @@ class ReplicaManagerTest {
       assertEquals(Set(localId, otherId), leaderPartition.inSyncReplicaIds)
       assertEquals(1, leaderPartition.getLeaderEpoch)
       if (enableRemoteStorage) {
-        verifyRLMOnLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
+        verifyRLMOnLeadershipChange(util.Set.of(leaderPartition), util.Set.of())
       }
 
       assertEquals(None, replicaManager.replicaFetcherManager.getFetcher(topicPartition))
@@ -4830,7 +4830,7 @@ class ReplicaManagerTest {
       assertEquals(0, followerPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(util.Set.of(), util.Set.of(followerPartition))
         reset(mockRemoteLogManager)
       }
 
@@ -4847,7 +4847,7 @@ class ReplicaManagerTest {
       assertEquals(0, noChangePartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(util.Set.of(), util.Set.of(followerPartition))
       }
 
       val noChangeFetcher = replicaManager.replicaFetcherManager.getFetcher(topicPartition)
@@ -4877,7 +4877,7 @@ class ReplicaManagerTest {
       assertEquals(0, followerPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(util.Set.of(), util.Set.of(followerPartition))
         reset(mockRemoteLogManager)
       }
 
@@ -4893,7 +4893,7 @@ class ReplicaManagerTest {
       if (enableRemoteStorage) {
         verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet(), anyMap())
         verify(mockRemoteLogManager, times(1))
-          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicPartition, true, false, false))), any())
+          .stopPartitions(ArgumentMatchers.eq(util.Set.of(new StopPartition(topicPartition, true, false, false))), any())
       }
 
       // Check that the partition was removed
@@ -4925,7 +4925,7 @@ class ReplicaManagerTest {
       assertEquals(0, followerPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(util.Set.of(), util.Set.of(followerPartition))
         reset(mockRemoteLogManager)
       }
 
@@ -4941,7 +4941,7 @@ class ReplicaManagerTest {
       if (enableRemoteStorage) {
         verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet(), anyMap())
         verify(mockRemoteLogManager, times(1))
-          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicPartition, true, false, false))), any())
+          .stopPartitions(ArgumentMatchers.eq(util.Set.of(new StopPartition(topicPartition, true, false, false))), any())
       }
 
       // Check that the partition was removed
@@ -4974,7 +4974,7 @@ class ReplicaManagerTest {
       assertEquals(0, leaderPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMOnLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
+        verifyRLMOnLeadershipChange(util.Set.of(leaderPartition), util.Set.of())
         reset(mockRemoteLogManager)
       }
 
@@ -4988,7 +4988,7 @@ class ReplicaManagerTest {
       if (enableRemoteStorage) {
         verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet(), anyMap())
         verify(mockRemoteLogManager, times(1))
-          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicPartition, true, false, false))), any())
+          .stopPartitions(ArgumentMatchers.eq(util.Set.of(new StopPartition(topicPartition, true, false, false))), any())
       }
 
       // Check that the partition was removed
@@ -5021,7 +5021,7 @@ class ReplicaManagerTest {
       assertEquals(0, leaderPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMOnLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
+        verifyRLMOnLeadershipChange(util.Set.of(leaderPartition), util.Set.of())
         reset(mockRemoteLogManager)
       }
 
@@ -5035,7 +5035,7 @@ class ReplicaManagerTest {
       if (enableRemoteStorage) {
         verify(mockRemoteLogManager, never()).onLeadershipChange(anySet(), anySet(), anyMap())
         verify(mockRemoteLogManager, times(1))
-          .stopPartitions(ArgumentMatchers.eq(Collections.singleton(new StopPartition(topicPartition, true, true, false))), any())
+          .stopPartitions(ArgumentMatchers.eq(util.Set.of(new StopPartition(topicPartition, true, true, false))), any())
       }
 
       // Check that the partition was removed
@@ -5069,7 +5069,7 @@ class ReplicaManagerTest {
       assertEquals(0, leaderPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMOnLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
+        verifyRLMOnLeadershipChange(util.Set.of(leaderPartition), util.Set.of())
         reset(mockRemoteLogManager)
       }
 
@@ -5088,7 +5088,7 @@ class ReplicaManagerTest {
       assertEquals(1, followerPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(util.Set.of(), util.Set.of(followerPartition))
         reset(mockRemoteLogManager)
       }
 
@@ -5122,7 +5122,7 @@ class ReplicaManagerTest {
       assertEquals(0, leaderPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMOnLeadershipChange(Collections.singleton(leaderPartition), Collections.emptySet())
+        verifyRLMOnLeadershipChange(util.Set.of(leaderPartition), util.Set.of())
         reset(mockRemoteLogManager)
       }
 
@@ -5149,7 +5149,7 @@ class ReplicaManagerTest {
       assertEquals(1, followerPartition.getLeaderEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(util.Set.of(), util.Set.of(followerPartition))
         reset(mockRemoteLogManager)
       }
 
@@ -5181,7 +5181,7 @@ class ReplicaManagerTest {
       val topicsDelta = topicsCreateDelta(localId, isStartIdLeader)
       val leaderMetadataImage = imageFromTopics(topicsDelta.apply())
       replicaManager.applyDelta(topicsDelta, leaderMetadataImage)
-      verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.emptySet())
+      verifyRLMOnLeadershipChange(util.Set.of(), util.Set.of())
 
       val hostedPartition = replicaManager.getPartition(topicPartition)
       assertEquals(
@@ -5229,7 +5229,7 @@ class ReplicaManagerTest {
       assertEquals(0, followerPartition.getLeaderEpoch)
       assertEquals(0, followerPartition.localLogOrException.logEndOffset)
       if (enableRemoteStorage) {
-        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(util.Set.of(), util.Set.of(followerPartition))
         reset(mockRemoteLogManager)
       }
 
@@ -5278,7 +5278,7 @@ class ReplicaManagerTest {
       assertEquals(1, followerPartition.localLogOrException.logEndOffset)
 
       if (enableRemoteStorage) {
-        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(util.Set.of(), util.Set.of(followerPartition))
       }
 
       // Verify that addFetcherForPartitions was called with the correct
@@ -5330,7 +5330,7 @@ class ReplicaManagerTest {
       assertEquals(0, followerPartition.getPartitionEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(util.Set.of(), util.Set.of(followerPartition))
         reset(mockRemoteLogManager)
       }
 
@@ -5363,7 +5363,7 @@ class ReplicaManagerTest {
       assertEquals(1, followerPartition.getPartitionEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(util.Set.of(), util.Set.of(followerPartition))
         reset(mockRemoteLogManager)
       }
 
@@ -5391,7 +5391,7 @@ class ReplicaManagerTest {
       assertEquals(2, followerPartition.getPartitionEpoch)
 
       if (enableRemoteStorage) {
-        verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(followerPartition))
+        verifyRLMOnLeadershipChange(util.Set.of(), util.Set.of(followerPartition))
         reset(mockRemoteLogManager)
       }
 
@@ -5495,7 +5495,7 @@ class ReplicaManagerTest {
         val followers: util.Set[Partition] = new util.HashSet[Partition]()
         followers.add(fooPartition0)
         followers.add(fooPartition2)
-        verifyRLMOnLeadershipChange(Collections.singleton(fooPartition1), followers)
+        verifyRLMOnLeadershipChange(util.Set.of(fooPartition1), followers)
         reset(mockRemoteLogManager)
       }
 
@@ -5548,7 +5548,7 @@ class ReplicaManagerTest {
         val followers: util.Set[Partition] = new util.HashSet[Partition]()
         followers.add(fooPartition0)
         followers.add(fooPartition1)
-        verifyRLMOnLeadershipChange(Collections.emptySet(), followers)
+        verifyRLMOnLeadershipChange(util.Set.of(), followers)
         reset(mockRemoteLogManager)
       }
 
@@ -5592,7 +5592,7 @@ class ReplicaManagerTest {
         .setIsNew(true)
       val leaderAndIsrRequest = new LeaderAndIsrRequest.Builder(0, 0, brokerEpoch,
         Seq(leaderAndIsrPartitionState).asJava,
-        Collections.singletonMap(topic, topicId),
+        util.Map.of(topic, topicId),
         Set(new Node(0, "host1", 0), new Node(1, "host2", 1)).asJava).build()
       val leaderAndIsrResponse = replicaManager.becomeLeaderOrFollower(0, leaderAndIsrRequest, (_, _) => ())
       assertEquals(Errors.NONE, leaderAndIsrResponse.error)
@@ -5668,8 +5668,8 @@ class ReplicaManagerTest {
       .setTopicId(FOO_UUID)
       .setReplicas(util.Arrays.asList(startId, startId + 1))
       .setIsr(util.Arrays.asList(startId, startId + 1))
-      .setRemovingReplicas(Collections.emptyList())
-      .setAddingReplicas(Collections.emptyList())
+      .setRemovingReplicas(util.List.of())
+      .setAddingReplicas(util.List.of())
       .setLeader(leader)
       .setLeaderEpoch(0)
       .setPartitionEpoch(0)
@@ -5700,7 +5700,7 @@ class ReplicaManagerTest {
 
   private def imageFromTopics(topicsImage: TopicsImage): MetadataImage = {
     val featuresImageLatest = new FeaturesImage(
-      Collections.emptyMap(),
+      util.Map.of(),
       MetadataVersion.latestProduction())
     new MetadataImage(
       new MetadataProvenance(100L, 10, 1000L, true),
@@ -5877,7 +5877,7 @@ class ReplicaManagerTest {
       assertEquals(Set(localId, otherId), partition.inSyncReplicaIds)
       assertEquals(0, partition.getLeaderEpoch)
 
-      verifyRLMOnLeadershipChange(Collections.singleton(partition), Collections.emptySet())
+      verifyRLMOnLeadershipChange(util.Set.of(partition), util.Set.of())
       reset(mockRemoteLogManager)
 
       // Change the local replica to follower.
@@ -5885,7 +5885,7 @@ class ReplicaManagerTest {
       val followerMetadataImage = imageFromTopics(followerTopicsDelta.apply())
       replicaManager.applyDelta(followerTopicsDelta, followerMetadataImage)
 
-      verifyRLMOnLeadershipChange(Collections.emptySet(), Collections.singleton(partition))
+      verifyRLMOnLeadershipChange(util.Set.of(), util.Set.of(partition))
       verify(mockRemoteLogManager, times(0)).stopPartitions(any(), any())
     } finally {
       replicaManager.shutdown(checkpointHW = false)

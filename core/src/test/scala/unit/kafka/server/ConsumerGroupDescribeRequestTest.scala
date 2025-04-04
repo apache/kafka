@@ -34,7 +34,6 @@ import org.apache.kafka.server.common.Feature
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse}
 
 import java.lang.{Byte => JByte}
-import java.util.Collections
 import scala.jdk.CollectionConverters._
 
 @ClusterTestDefaults(
@@ -233,7 +232,7 @@ class ConsumerGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCo
       groupId = groupId,
       metadata = ConsumerProtocol.serializeSubscription(
         new ConsumerPartitionAssignor.Subscription(
-          Collections.singletonList(topicName),
+          java.util.List.of(topicName),
           null,
           List().asJava
         )

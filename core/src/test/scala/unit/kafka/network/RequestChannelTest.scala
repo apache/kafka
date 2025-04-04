@@ -47,7 +47,6 @@ import org.mockito.Mockito.mock
 import java.io.IOException
 import java.net.InetAddress
 import java.nio.ByteBuffer
-import java.util.Collections
 import java.util.concurrent.atomic.AtomicReference
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
@@ -66,7 +65,7 @@ class RequestChannelTest {
     val sensitiveValue = "secret"
     def verifyConfig(resource: ConfigResource, entries: Seq[ConfigEntry], expectedValues: Map[String, String]): Unit = {
       val alterConfigs = request(new AlterConfigsRequest.Builder(
-          Collections.singletonMap(resource, new Config(entries.asJavaCollection)), true).build())
+          java.util.Map.of(resource, new Config(entries.asJavaCollection)), true).build())
 
       val loggableAlterConfigs = alterConfigs.loggableRequest.asInstanceOf[AlterConfigsRequest]
       val loggedConfig = loggableAlterConfigs.configs.get(resource)
@@ -106,8 +105,8 @@ class RequestChannelTest {
 
     // Verify empty request
     val alterConfigs = request(new AlterConfigsRequest.Builder(
-        Collections.emptyMap[ConfigResource, Config], true).build())
-    assertEquals(Collections.emptyMap, alterConfigs.loggableRequest.asInstanceOf[AlterConfigsRequest].configs)
+        java.util.Map.of[ConfigResource, Config], true).build())
+    assertEquals(java.util.Map.of, alterConfigs.loggableRequest.asInstanceOf[AlterConfigsRequest].configs)
   }
 
   @Test
@@ -190,7 +189,7 @@ class RequestChannelTest {
     val keystorePassword = new ConfigEntry(SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG, sensitiveValue)
     val entries = Seq(keystorePassword)
 
-    val alterConfigs = request(new AlterConfigsRequest.Builder(Collections.singletonMap(resource,
+    val alterConfigs = request(new AlterConfigsRequest.Builder(java.util.Map.of(resource,
       new Config(entries.asJavaCollection)), true).build())
 
     assertTrue(isValidJson(RequestConvertToJson.request(alterConfigs.loggableRequest).toString))

@@ -23,7 +23,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 
-import java.util.Collections
+import java.util
 import scala.jdk.CollectionConverters._
 
 final class ForwardingManagerMetricsTest {
@@ -33,11 +33,11 @@ final class ForwardingManagerMetricsTest {
     val expectedGroup = "ForwardingManager"
 
     val expectedMetrics = Set(
-      new MetricName("QueueTimeMs.p99", expectedGroup, "", Collections.emptyMap()),
-      new MetricName("QueueTimeMs.p999", expectedGroup, "", Collections.emptyMap()),
-      new MetricName("QueueLength", expectedGroup, "", Collections.emptyMap()),
-      new MetricName("RemoteTimeMs.p99", expectedGroup, "", Collections.emptyMap()),
-      new MetricName("RemoteTimeMs.p999", expectedGroup, "", Collections.emptyMap())
+      new MetricName("QueueTimeMs.p99", expectedGroup, "", util.Map.of()),
+      new MetricName("QueueTimeMs.p999", expectedGroup, "", util.Map.of()),
+      new MetricName("QueueLength", expectedGroup, "", util.Map.of()),
+      new MetricName("RemoteTimeMs.p99", expectedGroup, "", util.Map.of()),
+      new MetricName("RemoteTimeMs.p999", expectedGroup, "", util.Map.of())
     )
 
     var metricsMap = metrics.metrics().asScala.filter { case (name, _) => name.group == expectedGroup }

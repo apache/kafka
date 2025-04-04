@@ -32,7 +32,7 @@ import org.junit.jupiter.params.provider.{Arguments, MethodSource, ValueSource}
 
 import scala.jdk.CollectionConverters._
 import java.util
-import java.util.{Collections, Optional}
+import java.util.Optional
 import scala.collection.mutable.ArrayBuffer
 
 @Timeout(120)
@@ -139,7 +139,7 @@ class FetchSessionTest {
     assertEquals(3, cacheShard.totalPartitions)
   }
 
-  private val EMPTY_PART_LIST = Collections.unmodifiableList(new util.ArrayList[TopicIdPartition]())
+  private val EMPTY_PART_LIST = util.List.of[TopicIdPartition]
 
   def createRequest(metadata: JFetchMetadata,
                     fetchData: util.Map[TopicPartition, FetchRequest.PartitionData],

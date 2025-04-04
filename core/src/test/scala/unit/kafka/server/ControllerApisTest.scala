@@ -71,10 +71,9 @@ import org.slf4j.LoggerFactory
 
 import java.net.InetAddress
 import java.util
-import java.util.Collections.{singleton, singletonList, singletonMap}
 import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit}
 import java.util.concurrent.atomic.AtomicReference
-import java.util.{Collections, Optional, Properties}
+import java.util.{Optional, Properties}
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
@@ -205,7 +204,7 @@ class ControllerApisTest {
       any(classOf[AuthorizableRequestContext]),
       any(classOf[java.util.List[Action]])
     )).thenReturn(
-      singletonList(AuthorizationResult.DENIED)
+      util.List.of(AuthorizationResult.DENIED)
     )
     authorizer
   }
@@ -750,7 +749,7 @@ class ControllerApisTest {
     controllerApis = createControllerApis(None, controller, new Properties(), throttle)
     val topicName = "foo"
     val requestData = new CreateTopicsRequestData().setTopics(new CreatableTopicCollection(
-      util.Collections.singletonList(new CreatableTopic().setName(topicName).setNumPartitions(1).setReplicationFactor(1)).iterator()))
+      util.List.of(new CreatableTopic().setName(topicName).setNumPartitions(1).setReplicationFactor(1)).iterator()))
     val request = new CreateTopicsRequest.Builder(requestData).build()
     val expectedResponseDataUnthrottled = Set(new CreatableTopicResult().setName(topicName).
       setErrorCode(NONE.code()).
@@ -981,10 +980,10 @@ class ControllerApisTest {
     when(controller.createPartitions(
       any(),
       ArgumentMatchers.eq(
-        Collections.singletonList(
+        util.List.of(
           new CreatePartitionsTopic().setName("foo").setAssignments(null).setCount(5))),
       ArgumentMatchers.eq(validateOnly))).thenReturn(CompletableFuture
-      .completedFuture(Collections.singletonList(
+      .completedFuture(util.List.of(
         new CreatePartitionsTopicResult().setName("foo").
           setErrorCode(NONE.code()).
           setErrorMessage(null)
@@ -1077,12 +1076,12 @@ class ControllerApisTest {
     ).build()
 
     val resource = new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL)
-    val actions = singletonList(new Action(AclOperation.ALTER, resource, 1, true, true))
+    val actions = util.List.of(new Action(AclOperation.ALTER, resource, 1, true, true))
 
     when(authorizer.authorize(
       any[RequestContext],
       ArgumentMatchers.eq(actions)
-    )).thenReturn(singletonList(AuthorizationResult.DENIED))
+    )).thenReturn(util.List.of(AuthorizationResult.DENIED))
 
     val response = handleRequest[ElectLeadersResponse](request, controllerApis)
     assertEquals(Errors.CLUSTER_AUTHORIZATION_FAILED, Errors.forCode(response.data.errorCode))
@@ -1116,30 +1115,30 @@ class ControllerApisTest {
     val controller = mock(classOf[Controller])
     controllerApis = createControllerApis(None, controller)
     val findNamesFuture = CompletableFuture.completedFuture(
-      singletonMap(topicId, new ResultOrError(topicName))
+      util.Map.of(topicId, new ResultOrError(topicName))
     )
     when(controller.findTopicNames(
       any[ControllerRequestContext],
-      ArgumentMatchers.eq(singleton(topicId))
+      ArgumentMatchers.eq(util.Set.of(topicId))
     )).thenReturn(findNamesFuture)
 
     val findIdsFuture = CompletableFuture.completedFuture(
-      Collections.emptyMap[String, ResultOrError[Uuid]]()
+      util.Map.of[String, ResultOrError[Uuid]]()
     )
     when(controller.findTopicIds(
       any[ControllerRequestContext],
-      ArgumentMatchers.eq(Collections.emptySet())
+      ArgumentMatchers.eq(util.Set.of())
     )).thenReturn(findIdsFuture)
 
     val deleteFuture = new CompletableFuture[util.Map[Uuid, ApiError]]()
     deleteFuture.completeExceptionally(new NotControllerException("Controller has moved"))
     when(controller.deleteTopics(
       any[ControllerRequestContext],
-      ArgumentMatchers.eq(singleton(topicId))
+      ArgumentMatchers.eq(util.Set.of(topicId))
     )).thenReturn(deleteFuture)
 
     val request = new DeleteTopicsRequest.Builder(
-      new DeleteTopicsRequestData().setTopics(singletonList(
+      new DeleteTopicsRequestData().setTopics(util.List.of(
         new DeleteTopicState().setTopicId(topicId)
       ))
     ).build()
@@ -1158,7 +1157,7 @@ class ControllerApisTest {
       .newInitialTopic(topicName, topicId, 1)
       .build()
     controllerApis = createControllerApis(None, controller, new Properties(), throttle)
-    val requestData = new DeleteTopicsRequestData().setTopics(singletonList(
+    val requestData = new DeleteTopicsRequestData().setTopics(util.List.of(
       new DeleteTopicState().setTopicId(topicId)))
     val request = new DeleteTopicsRequest.Builder(requestData).build()
     val expectedResponseDataUnthrottled = Set(new DeletableTopicResult().setName(topicName).
@@ -1215,12 +1214,12 @@ class ControllerApisTest {
     controllerApis = createControllerApis(Some(authorizer), controller)
     val request = new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData()).build()
 
-    when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(Collections.singletonList(new Action(
+    when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(util.List.of(new Action(
       AclOperation.CLUSTER_ACTION,
       new ResourcePattern(ResourceType.CLUSTER, Resource.CLUSTER_NAME, PatternType.LITERAL),
       1, true, true
     )))))
-      .thenReturn(Collections.singletonList(AuthorizationResult.ALLOWED))
+      .thenReturn(util.List.of(AuthorizationResult.ALLOWED))
     when(controller.assignReplicasToDirs(any[ControllerRequestContext], ArgumentMatchers.eq(request.data)))
       .thenReturn(FutureUtils.failedFuture[AssignReplicasToDirsResponseData](Errors.UNKNOWN_TOPIC_OR_PARTITION.exception()))
 

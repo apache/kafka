@@ -60,7 +60,7 @@ import java.nio.file.{FileSystems, Files, Path, Paths}
 import java.{lang, util}
 import java.util.concurrent.{CompletableFuture, CompletionStage, ExecutionException, TimeUnit}
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.{Collections, Optional, OptionalLong, Properties}
+import java.util.{Optional, OptionalLong, Properties}
 import scala.collection.{Seq, mutable}
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, SECONDS}
 import scala.jdk.CollectionConverters._
@@ -172,13 +172,13 @@ class KRaftClusterTest {
       val admin = Admin.create(cluster.clientProperties())
       try {
         // Create a test topic
-        val newTopic = Collections.singletonList(new NewTopic("test-topic", 1, 3.toShort))
+        val newTopic = util.List.of(new NewTopic("test-topic", 1, 3.toShort))
         val createTopicResult = admin.createTopics(newTopic)
         createTopicResult.all().get()
         waitForTopicListing(admin, Seq("test-topic"), Seq())
 
         // Delete topic
-        val deleteResult = admin.deleteTopics(Collections.singletonList("test-topic"))
+        val deleteResult = admin.deleteTopics(util.List.of("test-topic"))
         deleteResult.all().get()
 
         // List again
@@ -262,7 +262,7 @@ class KRaftClusterTest {
           }
 
           val (describeResult, ok) = TestUtils.computeUntilTrue(describeOrFail(filter)) {
-            results => results.getOrDefault(entity, util.Collections.emptyMap[String, lang.Double]()).size() == expectCount
+            results => results.getOrDefault(entity, util.Map.of[String, lang.Double]()).size() == expectCount
           }
           assertTrue(ok, "Broker never saw new client quotas")
           describeResult
@@ -329,14 +329,14 @@ class KRaftClusterTest {
     entity: ClientQuotaEntity,
     value: Long
   ): Unit = {
-    admin.alterClientQuotas(Collections.singletonList(
-      new ClientQuotaAlteration(entity, Collections.singletonList(
+    admin.alterClientQuotas(util.List.of(
+      new ClientQuotaAlteration(entity, util.List.of(
         new Op("consumer_byte_rate", value.doubleValue()))))).
         all().get()
   }
 
   def getConsumerByteRates(admin: Admin): Map[ClientQuotaEntity, Long] = {
-    val allFilter = ClientQuotaFilter.contains(Collections.emptyList())
+    val allFilter = ClientQuotaFilter.contains(util.List.of())
     val results = new util.HashMap[ClientQuotaEntity, Long]
     admin.describeClientQuotas(allFilter).entities().get().forEach {
       case (entity, entityMap) =>
@@ -358,8 +358,8 @@ class KRaftClusterTest {
         "Broker never made it to RUNNING state.")
       val admin = Admin.create(cluster.clientProperties())
       try {
-        val defaultUser = new ClientQuotaEntity(Collections.singletonMap[String, String]("user", null))
-        val bobUser = new ClientQuotaEntity(Collections.singletonMap[String, String]("user", "bob"))
+        val defaultUser = new ClientQuotaEntity(util.Map.of[String, String]("user", null))
+        val bobUser = new ClientQuotaEntity(util.Map.of[String, String]("user", "bob"))
         TestUtils.retry(30000) {
           assertEquals(Map(), getConsumerByteRates(admin))
         }
@@ -516,13 +516,13 @@ class KRaftClusterTest {
         assignments.put(1, util.Arrays.asList(1, 2, 3))
         assignments.put(2, util.Arrays.asList(2, 3, 0))
         assignments.put(3, util.Arrays.asList(3, 2, 1))
-        val createTopicResult = admin.createTopics(Collections.singletonList(
+        val createTopicResult = admin.createTopics(util.List.of(
           new NewTopic("foo", assignments)))
         createTopicResult.all().get()
         waitForTopicListing(admin, Seq("foo"), Seq())
 
         // Start some reassignments.
-        assertEquals(Collections.emptyMap(), admin.listPartitionReassignments().reassignments().get())
+        assertEquals(util.Map.of(), admin.listPartitionReassignments().reassignments().get())
         val reassignments = new util.HashMap[TopicPartition, Optional[NewPartitionReassignment]]
         reassignments.put(new TopicPartition("foo", 0),
           Optional.of(new NewPartitionReassignment(util.Arrays.asList(2, 1, 0))))
@@ -539,7 +539,7 @@ class KRaftClusterTest {
         var currentMapping: Seq[Seq[Int]] = Seq()
         val expectedMapping = Seq(Seq(2, 1, 0), Seq(0, 1, 2), Seq(2, 3), Seq(3, 2, 0, 1))
         TestUtils.waitUntilTrue( () => {
-          val topicInfoMap = admin.describeTopics(Collections.singleton("foo")).allTopicNames().get()
+          val topicInfoMap = admin.describeTopics(util.Set.of("foo")).allTopicNames().get()
           if (topicInfoMap.containsKey("foo")) {
             currentMapping = translatePartitionInfoToSeq(topicInfoMap.get("foo").partitions())
             expectedMapping.equals(currentMapping)
@@ -1083,13 +1083,13 @@ class KRaftClusterTest {
       val admin = Admin.create(cluster.clientProperties())
       try {
         // Create a test topic
-        val newTopic = Collections.singletonList(new NewTopic("test-topic", 1, 1.toShort))
+        val newTopic = util.List.of(new NewTopic("test-topic", 1, 1.toShort))
         val createTopicResult = admin.createTopics(newTopic)
         createTopicResult.all().get()
         waitForTopicListing(admin, Seq("test-topic"), Seq())
 
         // Delete topic
-        val deleteResult = admin.deleteTopics(Collections.singletonList("test-topic"))
+        val deleteResult = admin.deleteTopics(util.List.of("test-topic"))
         deleteResult.all().get()
 
         // List again
@@ -1202,8 +1202,8 @@ class KRaftClusterTest {
       val admin = Admin.create(cluster.clientProperties())
       try {
         admin.incrementalAlterConfigs(
-          Collections.singletonMap(new ConfigResource(Type.BROKER, ""),
-            Collections.singletonList(new AlterConfigOp(
+          util.Map.of(new ConfigResource(Type.BROKER, ""),
+            util.List.of(new AlterConfigOp(
               new ConfigEntry(DummyClientQuotaCallback.dummyClientQuotaCallbackValueConfigKey, "1"), OpType.SET)))).
           all().get()
       } finally {
@@ -1243,8 +1243,8 @@ class KRaftClusterTest {
       val admin = Admin.create(cluster.clientProperties())
       try {
         admin.incrementalAlterConfigs(
-          Collections.singletonMap(new ConfigResource(Type.BROKER, ""),
-            Collections.singletonList(new AlterConfigOp(
+          util.Map.of(new ConfigResource(Type.BROKER, ""),
+            util.List.of(new AlterConfigOp(
               new ConfigEntry(FakeConfigurableAuthorizer.foobarConfigKey, "123"), OpType.SET)))).
           all().get()
       } finally {
@@ -1599,7 +1599,7 @@ class KRaftClusterTest {
       val admin = Admin.create(cluster.clientProperties())
       try {
         // Create a test topic
-        admin.createTopics(Collections.singletonList(
+        admin.createTopics(util.List.of(
           new NewTopic("test-topic", 1, 1.toShort))).all().get()
         waitForTopicListing(admin, Seq("test-topic"), Seq())
 
@@ -1608,7 +1608,7 @@ class KRaftClusterTest {
         cluster.raftManagers().get(active.asInstanceOf[QuorumController].nodeId()).shutdown()
 
         // Create a test topic on the new active controller
-        admin.createTopics(Collections.singletonList(
+        admin.createTopics(util.List.of(
           new NewTopic("test-topic2", 1, 1.toShort))).all().get()
         waitForTopicListing(admin, Seq("test-topic2"), Seq())
       } finally {
@@ -1634,10 +1634,10 @@ class KRaftClusterTest {
       val admin = Admin.create(cluster.clientProperties())
       try {
         admin.incrementalAlterConfigs(
-          Collections.singletonMap(new ConfigResource(Type.BROKER, ""),
-            Collections.singletonList(new AlterConfigOp(
+          util.Map.of(new ConfigResource(Type.BROKER, ""),
+            util.List.of(new AlterConfigOp(
               new ConfigEntry(ServerConfigs.NUM_IO_THREADS_CONFIG, "8"), OpType.SET)))).all().get()
-        val newTopic = Collections.singletonList(new NewTopic("test-topic", 1, 1.toShort))
+        val newTopic = util.List.of(new NewTopic("test-topic", 1, 1.toShort))
         val createTopicResult = admin.createTopics(newTopic)
         createTopicResult.all().get()
         waitForTopicListing(admin, Seq("test-topic"), Seq())
@@ -1675,7 +1675,7 @@ object DummyClientQuotaCallback {
 
 class DummyClientQuotaCallback extends ClientQuotaCallback with Reconfigurable {
   var value = 0
-  override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): util.Map[String, String] = Collections.emptyMap()
+  override def quotaMetricTags(quotaType: ClientQuotaType, principal: KafkaPrincipal, clientId: String): util.Map[String, String] = util.Map.of()
 
   override def quotaLimit(quotaType: ClientQuotaType, metricTags: util.Map[String, String]): lang.Double = 1.0
 
@@ -1761,13 +1761,13 @@ class FakeConfigurableAuthorizer extends Authorizer with Reconfigurable {
     requestContext: AuthorizableRequestContext,
     aclBindings: util.List[AclBinding]
   ): util.List[_ <: CompletionStage[AclCreateResult]] = {
-    Collections.emptyList()
+    util.List.of()
   }
 
   override def deleteAcls(
     requestContext: AuthorizableRequestContext,
     aclBindingFilters: util.List[AclBindingFilter]
   ): util.List[_ <: CompletionStage[AclDeleteResult]] = {
-    Collections.emptyList()
+    util.List.of()
   }
 }

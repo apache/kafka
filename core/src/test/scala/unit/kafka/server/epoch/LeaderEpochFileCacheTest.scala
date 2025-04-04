@@ -28,7 +28,8 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 
 import java.io.File
-import java.util.{Collections, Optional, OptionalInt}
+import java.util
+import java.util.{Optional, OptionalInt}
 import scala.jdk.CollectionConverters._
 
 /**
@@ -457,7 +458,7 @@ class LeaderEpochFileCacheTest {
     cache.truncateFromStartAsyncFlush(11)
 
     //Then retain the last
-    assertEquals(Collections.singletonList(new EpochEntry(4, 11)), cache.epochEntries)
+    assertEquals(util.List.of(new EpochEntry(4, 11)), cache.epochEntries)
   }
 
   @Test
@@ -500,7 +501,7 @@ class LeaderEpochFileCacheTest {
     cache.truncateFromStartAsyncFlush(15)
 
     //Then update the last
-    assertEquals(Collections.singletonList(new EpochEntry(4, 15)), cache.epochEntries)
+    assertEquals(util.List.of(new EpochEntry(4, 15)), cache.epochEntries)
   }
 
   @Test

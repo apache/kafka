@@ -19,7 +19,7 @@ package kafka.server
 
 import java.net.InetSocketAddress
 import java.util
-import java.util.{Arrays, Collections, Properties}
+import java.util.{Arrays, Properties}
 import kafka.utils.TestUtils.assertBadConfigContainingMessage
 import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.Node
@@ -1394,7 +1394,7 @@ class KafkaConfigTest {
 
   @Test
   def testControllerQuorumVoterStringsToNodes(): Unit = {
-    assertThrows(classOf[ConfigException], () => QuorumConfig.quorumVoterStringsToNodes(Collections.singletonList("")))
+    assertThrows(classOf[ConfigException], () => QuorumConfig.quorumVoterStringsToNodes(util.List.of("")))
     assertEquals(Seq(new Node(3000, "example.com", 9093)),
       QuorumConfig.quorumVoterStringsToNodes(util.Arrays.asList("3000@example.com:9093")).asScala.toSeq)
     assertEquals(Seq(new Node(3000, "example.com", 9093),
@@ -1532,7 +1532,7 @@ class KafkaConfigTest {
 
   @Test
   def testPopulateSynonymsOnEmptyMap(): Unit = {
-    assertEquals(Collections.emptyMap(), KafkaConfig.populateSynonyms(Collections.emptyMap()))
+    assertEquals(util.Map.of(), KafkaConfig.populateSynonyms(util.Map.of()))
   }
 
   @Test

@@ -21,7 +21,7 @@ import java.net.InetAddress
 import java.nio.ByteBuffer
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
-import java.util.{Collections, Optional, Properties}
+import java.util.{Optional, Properties}
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.{ClientResponse, NodeApiVersions, RequestCompletionHandler}
@@ -362,7 +362,7 @@ class AutoTopicCreationManagerTest {
       .setMinVersion(ApiKeys.CREATE_TOPICS.oldestVersion())
       .setMaxVersion(ApiKeys.CREATE_TOPICS.latestVersion())
     Mockito.when(brokerToController.controllerApiVersions())
-      .thenReturn(Optional.of(NodeApiVersions.create(Collections.singleton(createTopicApiVersion))))
+      .thenReturn(Optional.of(NodeApiVersions.create(util.Set.of(createTopicApiVersion))))
 
     val requestHeader = new RequestHeader(ApiKeys.METADATA, ApiKeys.METADATA.latestVersion,
       "clientId", 0)
