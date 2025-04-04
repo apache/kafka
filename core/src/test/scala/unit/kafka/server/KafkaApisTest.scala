@@ -3397,7 +3397,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.anyInt(), // correlationId
       ArgumentMatchers.anyShort(), // version
       ArgumentMatchers.any[(Errors, ListOffsetsPartition) => ListOffsetsPartitionResponse](),
-      ArgumentMatchers.any[Consumer[util.List[ListOffsetsTopicResponse]]],
+      ArgumentMatchers.any[Consumer[util.Collection[ListOffsetsTopicResponse]]],
       ArgumentMatchers.anyInt() // timeoutMs
     )).thenAnswer(ans => {
       val callback = ans.getArgument[Consumer[util.List[ListOffsetsTopicResponse]]](8)
@@ -8858,7 +8858,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.anyInt(), // correlationId
       ArgumentMatchers.anyShort(), // version
       ArgumentMatchers.any[(Errors, ListOffsetsPartition) => ListOffsetsPartitionResponse](),
-      ArgumentMatchers.any[Consumer[util.List[ListOffsetsTopicResponse]]],
+      ArgumentMatchers.any[Consumer[util.Collection[ListOffsetsTopicResponse]]],
       ArgumentMatchers.anyInt() // timeoutMs
     )).thenAnswer(ans => {
       val version = ans.getArgument[Short](6)
@@ -8910,7 +8910,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.anyInt(), // correlationId
       ArgumentMatchers.anyShort(), // version
       ArgumentMatchers.any[(Errors, ListOffsetsPartition) => ListOffsetsPartitionResponse](),
-      ArgumentMatchers.any[Consumer[util.List[ListOffsetsTopicResponse]]],
+      ArgumentMatchers.any[Consumer[util.Collection[ListOffsetsTopicResponse]]],
       ArgumentMatchers.anyInt() // timeoutMs
     )).thenAnswer(ans => {
       val callback = ans.getArgument[Consumer[util.List[ListOffsetsTopicResponse]]](8)

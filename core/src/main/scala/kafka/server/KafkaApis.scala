@@ -769,14 +769,15 @@ class KafkaApis(val requestChannel: RequestChannel,
         .setName(topic.name)
         .setPartitions(topic.partitions.asScala.map(partition =>
           buildErrorResponse(Errors.TOPIC_AUTHORIZATION_FAILED, partition)).asJava)
-    )
+    ).asJava
 
-    def sendResponseCallback(response: util.List[ListOffsetsTopicResponse]): Void = {
-      val mergedResponses = response.asScala ++ unauthorizedResponseStatus
+    def sendResponseCallback(response: util.Collection[ListOffsetsTopicResponse]): Void = {
+      val mergedResponses = new util.ArrayList(response)
+      mergedResponses.addAll(unauthorizedResponseStatus)
       requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
         new ListOffsetsResponse(new ListOffsetsResponseData()
           .setThrottleTimeMs(requestThrottleMs)
-          .setTopics(mergedResponses.asJava)))
+          .setTopics(mergedResponses)))
       null
     }
 

@@ -30,9 +30,8 @@ import com.yammer.metrics.core.Meter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.ArrayList;
+import java.util.Collection;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
@@ -40,6 +39,9 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.Consumer;
+
+import static org.apache.kafka.common.utils.Utils.mkEntry;
+import static org.apache.kafka.common.utils.Utils.mkMap;
 
 public class DelayedRemoteListOffsets extends DelayedOperation {
 
@@ -53,13 +55,13 @@ public class DelayedRemoteListOffsets extends DelayedOperation {
     private final int version;
     private final Map<TopicPartition, ListOffsetsPartitionStatus> statusByPartition;
     private final Consumer<TopicPartition> partitionOrException;
-    private final Consumer<List<ListOffsetsResponseData.ListOffsetsTopicResponse>> responseCallback;
+    private final Consumer<Collection<ListOffsetsResponseData.ListOffsetsTopicResponse>> responseCallback;
 
     public DelayedRemoteListOffsets(long delayMs,
                                     int version,
                                     Map<TopicPartition, ListOffsetsPartitionStatus> statusByPartition,
                                     Consumer<TopicPartition> partitionOrException,
-                                    Consumer<List<ListOffsetsResponseData.ListOffsetsTopicResponse>> responseCallback) {
+                                    Consumer<Collection<ListOffsetsResponseData.ListOffsetsTopicResponse>> responseCallback) {
         super(delayMs);
         this.version = version;
         this.statusByPartition = statusByPartition;
@@ -96,21 +98,13 @@ public class DelayedRemoteListOffsets extends DelayedOperation {
      */
     @Override
     public void onComplete() {
-        Map<String, List<ListOffsetsResponseData.ListOffsetsPartitionResponse>> groupedByTopic = new HashMap<>();
-        for (Map.Entry<TopicPartition, ListOffsetsPartitionStatus> entry : statusByPartition.entrySet()) {
-            List<ListOffsetsResponseData.ListOffsetsPartitionResponse> partitions =
-                    groupedByTopic.computeIfAbsent(entry.getKey().topic(), k -> new ArrayList<>());
-            if (entry.getValue().responseOpt().isPresent()) {
-                partitions.add(entry.getValue().responseOpt().get());
-            }
-        }
-        List<ListOffsetsResponseData.ListOffsetsTopicResponse> response = new ArrayList<>();
-        for (Map.Entry<String, List<ListOffsetsResponseData.ListOffsetsPartitionResponse>> entry : groupedByTopic.entrySet()) {
-            response.add(new ListOffsetsResponseData.ListOffsetsTopicResponse()
-                    .setName(entry.getKey())
-                    .setPartitions(entry.getValue()));
-        }
-        responseCallback.accept(response);
+        Map<String, ListOffsetsResponseData.ListOffsetsTopicResponse> groupedByTopic = new HashMap<>();
+        statusByPartition.forEach((tp, status) -> {
+            ListOffsetsResponseData.ListOffsetsTopicResponse response = groupedByTopic.computeIfAbsent(tp.topic(), k ->
+                    new ListOffsetsResponseData.ListOffsetsTopicResponse().setName(tp.topic()));
+            status.responseOpt().ifPresent(res -> response.partitions().add(res));
+        });
+        responseCallback.accept(groupedByTopic.values());
     }
 
     /**
@@ -195,6 +189,6 @@ public class DelayedRemoteListOffsets extends DelayedOperation {
         PARTITION_EXPIRATION_METERS.computeIfAbsent(partition, tp -> METRICS_GROUP.newMeter("ExpiresPerSec",
                 "requests",
                 TimeUnit.SECONDS,
-                Map.of("topic", tp.topic(), "partition", String.valueOf(tp.partition())))).mark();
+                mkMap(mkEntry("topic", tp.topic()), mkEntry("partition", String.valueOf(tp.partition()))))).mark();
     }
 }

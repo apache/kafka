@@ -29,6 +29,7 @@ import org.apache.kafka.storage.internals.log.OffsetResultHolder;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -60,7 +61,7 @@ public class DelayedRemoteListOffsetsTest {
     @Test
     public void testResponseOnRequestExpiration() throws InterruptedException {
         AtomicInteger numResponse = new AtomicInteger(0);
-        Consumer<List<ListOffsetsResponseData.ListOffsetsTopicResponse>> responseCallback = response ->
+        Consumer<Collection<ListOffsetsResponseData.ListOffsetsTopicResponse>> responseCallback = response ->
             response.forEach(topic ->
                 topic.partitions().forEach(partition -> {
                     assertEquals(Errors.REQUEST_TIMED_OUT.code(), partition.errorCode());
@@ -107,7 +108,7 @@ public class DelayedRemoteListOffsetsTest {
     @Test
     public void testResponseOnSuccess() {
         AtomicInteger numResponse = new AtomicInteger(0);
-        Consumer<List<ListOffsetsResponseData.ListOffsetsTopicResponse>> responseCallback = response ->
+        Consumer<Collection<ListOffsetsResponseData.ListOffsetsTopicResponse>> responseCallback = response ->
             response.forEach(topic ->
                 topic.partitions().forEach(partition -> {
                     assertEquals(Errors.NONE.code(), partition.errorCode());
@@ -149,7 +150,7 @@ public class DelayedRemoteListOffsetsTest {
     @Test
     public void testResponseOnPartialError() {
         AtomicInteger numResponse = new AtomicInteger(0);
-        Consumer<List<ListOffsetsResponseData.ListOffsetsTopicResponse>> responseCallback = response ->
+        Consumer<Collection<ListOffsetsResponseData.ListOffsetsTopicResponse>> responseCallback = response ->
             response.forEach(topic ->
                 topic.partitions().forEach(partition -> {
                     if (topic.name().equals("test1")) {
@@ -204,7 +205,7 @@ public class DelayedRemoteListOffsetsTest {
     @Test
     public void testPartialResponseWhenNotLeaderOrFollowerExceptionOnOnePartition() {
         AtomicInteger numResponse = new AtomicInteger(0);
-        Consumer<List<ListOffsetsResponseData.ListOffsetsTopicResponse>> responseCallback = response ->
+        Consumer<Collection<ListOffsetsResponseData.ListOffsetsTopicResponse>> responseCallback = response ->
             response.forEach(topic ->
                 topic.partitions().forEach(partition -> {
                     if (topic.name().equals("test1") && partition.partitionIndex() == 0) {

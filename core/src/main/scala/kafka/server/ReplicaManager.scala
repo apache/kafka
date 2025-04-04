@@ -1471,7 +1471,7 @@ class ReplicaManager(val config: KafkaConfig,
                   correlationId: Int,
                   version: Short,
                   buildErrorResponse: (Errors, ListOffsetsPartition) => ListOffsetsPartitionResponse,
-                  responseCallback: Consumer[util.List[ListOffsetsTopicResponse]],
+                  responseCallback: Consumer[util.Collection[ListOffsetsTopicResponse]],
                   timeoutMs: Int = 0): Unit = {
     val statusByPartition = mutable.Map[TopicPartition, ListOffsetsPartitionStatus]()
     topics.foreach { topic =>
