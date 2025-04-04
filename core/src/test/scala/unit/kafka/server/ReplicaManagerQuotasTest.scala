@@ -17,7 +17,7 @@
 package kafka.server
 
 import java.io.File
-import java.util.{Collections, Optional, Properties}
+import java.util.{Optional, Properties}
 import kafka.cluster.{Partition, PartitionTest}
 import kafka.log.LogManager
 import kafka.server.QuotaFactory.QuotaManagers
@@ -50,7 +50,7 @@ class ReplicaManagerQuotasTest {
   val topicPartition1 = new TopicPartition("test-topic", 1)
   val topicPartition2 = new TopicPartition("test-topic", 2)
   val topicId = Uuid.randomUuid()
-  val topicIds = Collections.singletonMap("test-topic", topicId)
+  val topicIds = java.util.Map.of("test-topic", topicId)
   val topicIdPartition1 = new TopicIdPartition(topicId, topicPartition1)
   val topicIdPartition2 = new TopicIdPartition(topicId, topicPartition2)
   val fetchInfo = Seq(
@@ -262,7 +262,7 @@ class ReplicaManagerQuotasTest {
     when(log.lastStableOffset).thenReturn(5)
     when(log.logEndOffsetMetadata).thenReturn(new LogOffsetMetadata(20L))
     when(log.topicId).thenReturn(Optional.of(topicId))
-    when(log.config).thenReturn(new LogConfig(Collections.emptyMap()))
+    when(log.config).thenReturn(new LogConfig(java.util.Map.of()))
 
     //if we ask for len 1 return a message
     when(log.read(anyLong,

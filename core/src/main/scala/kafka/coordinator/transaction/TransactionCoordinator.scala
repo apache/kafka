@@ -570,7 +570,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                   txnMetadata.lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH
                 }
 
-                Right(coordinatorEpoch, txnMetadata.prepareAbortOrCommit(nextState, TransactionVersion.fromFeatureLevel(0), RecordBatch.NO_PRODUCER_ID, time.milliseconds(), false))
+                Right(coordinatorEpoch, txnMetadata.prepareAbortOrCommit(nextState, TransactionVersion.fromFeatureLevel(0), RecordBatch.NO_PRODUCER_ID, time.milliseconds(), noPartitionAdded = false))
               case CompleteCommit =>
                 if (txnMarkerResult == TransactionResult.COMMIT)
                   Left(Errors.NONE)
@@ -845,7 +845,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 else
                   PrepareAbort
 
-                generateTxnTransitMetadataForTxnCompletion(nextState, false)
+                generateTxnTransitMetadataForTxnCompletion(nextState, noPartitionAdded = false)
               case CompleteCommit =>
                 if (txnMarkerResult == TransactionResult.COMMIT) {
                   if (isRetry)
@@ -857,14 +857,14 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                   if (isRetry)
                     logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
                   else
-                    generateTxnTransitMetadataForTxnCompletion(PrepareAbort, true)
+                    generateTxnTransitMetadataForTxnCompletion(PrepareAbort, noPartitionAdded = true)
                 }
               case CompleteAbort =>
                 if (txnMarkerResult == TransactionResult.ABORT) {
                   if (isRetry)
                     Left(Errors.NONE)
                   else
-                    generateTxnTransitMetadataForTxnCompletion(PrepareAbort, true)
+                    generateTxnTransitMetadataForTxnCompletion(PrepareAbort, noPartitionAdded = true)
                 } else {
                   // Commit.
                   logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
@@ -881,7 +881,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                   logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
               case Empty =>
                 if (txnMarkerResult == TransactionResult.ABORT) {
-                  generateTxnTransitMetadataForTxnCompletion(PrepareAbort, true)
+                  generateTxnTransitMetadataForTxnCompletion(PrepareAbort, noPartitionAdded = true)
                 } else {
                   logInvalidStateTransitionAndReturnError(transactionalId, txnMetadata.state, txnMarkerResult)
                 }

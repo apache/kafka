@@ -38,7 +38,7 @@ import org.apache.kafka.image.TopicsImage
 import org.apache.kafka.metadata.ConfigRepository
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, PropertiesUtils}
 
-import java.util.{Collections, Optional, OptionalLong, Properties}
+import java.util.{Optional, OptionalLong, Properties}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{FileLock, Scheduler}
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, LogOffsetsListener, ProducerStateManagerConfig, RemoteIndexCache, UnifiedLog}
@@ -445,7 +445,7 @@ class LogManager(logDirs: Seq[File],
           case e: Exception =>
             warn(s"Error occurred while reading recovery-point-offset-checkpoint file of directory " +
               s"$logDirAbsolutePath, resetting the recovery checkpoint to 0", e)
-            Collections.emptyMap[TopicPartition, JLong]
+            util.Map.of[TopicPartition, JLong]
         }
 
         val logStartOffsets: util.Map[TopicPartition, JLong] = try {
@@ -454,7 +454,7 @@ class LogManager(logDirs: Seq[File],
           case e: Exception =>
             warn(s"Error occurred while reading log-start-offset-checkpoint file of directory " +
               s"$logDirAbsolutePath, resetting to the base offset of the first segment", e)
-            Collections.emptyMap[TopicPartition, JLong]
+            util.Map.of[TopicPartition, JLong]
         }
 
         val logsToLoad = Option(dir.listFiles).getOrElse(Array.empty).filter(logDir =>

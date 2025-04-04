@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.util
-import java.util.{Collections, Properties}
+import java.util.Properties
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.log.{LogCleaner, LogManager}
@@ -402,7 +402,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
           case reconfigurable: ListenerReconfigurable =>
             val kafkaProps = validatedKafkaProps(newProps, perBrokerConfig = true)
             val newConfig = new KafkaConfig(kafkaProps.asJava, false)
-            processListenerReconfigurable(reconfigurable, newConfig, Collections.emptyMap(), validateOnly = false, reloadOnly = true)
+            processListenerReconfigurable(reconfigurable, newConfig, util.Map.of(), validateOnly = false, reloadOnly = true)
           case reconfigurable =>
             trace(s"Files will not be reloaded without config change for $reconfigurable")
         }
@@ -805,7 +805,7 @@ class DynamicMetricReporterState(brokerId: Int, config: KafkaConfig, metrics: Me
   private val propsOverride = Map[String, AnyRef](ServerConfigs.BROKER_ID_CONFIG -> brokerId.toString)
   private[server] val currentReporters = mutable.Map[String, MetricsReporter]()
   createReporters(config, clusterId, metricsReporterClasses(dynamicConfig.currentKafkaConfig.values()).asJava,
-    Collections.emptyMap[String, Object])
+    util.Map.of[String, Object])
 
   private[server] def createReporters(reporterClasses: util.List[String],
                                       updatedConfigs: util.Map[String, _]): Unit = {

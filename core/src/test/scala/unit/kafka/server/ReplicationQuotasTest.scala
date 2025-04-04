@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.util.AbstractMap.SimpleImmutableEntry
-import java.util.{Collections, Properties}
+import java.util.Properties
 import java.util.Map.Entry
 import kafka.server.KafkaConfig.fromProps
 import kafka.utils.TestUtils._
@@ -41,6 +41,7 @@ import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import java.util
 import scala.jdk.CollectionConverters._
 import scala.util.Using
 
@@ -215,7 +216,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     Using.resource(createAdminClient(brokers, listenerName)) { admin =>
       registerBroker(101)
       admin.createTopics(
-        List(new NewTopic(topic, Collections.singletonMap(0, List(100, 101).map(_.asInstanceOf[Integer]).asJava))).asJava
+        List(new NewTopic(topic, util.Map.of(0, List(100, 101).map(_.asInstanceOf[Integer]).asJava))).asJava
       ).all().get()
       //Set the throttle to only limit leader
       val configs = Map(
@@ -295,7 +296,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
         .setClusterId(controllerServer.clusterId)
         .setIncarnationId(Uuid.randomUuid())
         .setListeners(listeners)
-        .setLogDirs(Collections.singletonList(
+        .setLogDirs(util.List.of(
           Uuid.fromString(s"TESTBROKER${Integer.toString(100000 + id).substring(1)}DIRAAAA")
         ))
         .setFeatures(features)

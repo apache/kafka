@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.lang.{Byte => JByte}
-import java.util.Collections
 import kafka.network.RequestChannel
 import org.apache.kafka.clients.admin.EndpointType
 import org.apache.kafka.common.acl.AclOperation
@@ -35,6 +34,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 
+import java.util
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
@@ -48,7 +48,7 @@ class AuthHelper(authorizer: Option[Authorizer]) {
                 refCount: Int = 1): Boolean = {
     authorizer.forall { authZ =>
       val resource = new ResourcePattern(resourceType, resourceName, PatternType.LITERAL)
-      val actions = Collections.singletonList(new Action(operation, resource, refCount, logIfAllowed, logIfDenied))
+      val actions = util.List.of(new Action(operation, resource, refCount, logIfAllowed, logIfDenied))
       authZ.authorize(requestContext, actions).get(0) == AuthorizationResult.ALLOWED
     }
   }

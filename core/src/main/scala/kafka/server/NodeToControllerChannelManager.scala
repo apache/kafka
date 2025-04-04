@@ -265,7 +265,7 @@ class NodeToControllerRequestThread(
         val controllerAddress = activeControllerAddress()
         if (controllerAddress.isDefined) {
           requestIter.remove()
-          return util.Collections.singletonList(new RequestAndCompletionHandler(
+          return util.List.of(new RequestAndCompletionHandler(
             time.milliseconds(),
             controllerAddress.get,
             request.request,
@@ -274,7 +274,7 @@ class NodeToControllerRequestThread(
         }
       }
     }
-    util.Collections.emptyList()
+    util.List.of()
   }
 
   private[server] def handleResponse(queueItem: NodeToControllerQueueItem)(response: ClientResponse): Unit = {

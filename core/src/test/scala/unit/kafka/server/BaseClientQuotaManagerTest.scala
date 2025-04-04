@@ -18,7 +18,6 @@ package kafka.server
 
 import java.net.InetAddress
 import java.util
-import java.util.Collections
 import kafka.network.RequestChannel
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.memory.MemoryPool
@@ -38,7 +37,7 @@ import org.mockito.Mockito.mock
 class BaseClientQuotaManagerTest {
   protected val time = new MockTime
   protected var numCallbacks: Int = 0
-  protected val metrics = new Metrics(new MetricConfig(), Collections.emptyList(), time)
+  protected val metrics = new Metrics(new MetricConfig(), util.List.of, time)
 
   @AfterEach
   def tearDown(): Unit = {

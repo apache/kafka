@@ -251,7 +251,7 @@ object KafkaDockerWrapper extends Logging {
     val mapper = new ObjectMapper(new YAMLFactory().disable(Feature.WRITE_DOC_START_MARKER))
       .configure(DeserializationFeature.ACCEPT_EMPTY_STRING_AS_NULL_OBJECT, true)
       .setSerializationInclusion(JsonInclude.Include.NON_EMPTY)
-      .findAndRegisterModules();
+      .findAndRegisterModules()
 
     val yaml = try {
       mapper.readValue(filepath.toFile, classOf[Log4jConfiguration])

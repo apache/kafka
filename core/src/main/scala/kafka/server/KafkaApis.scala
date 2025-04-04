@@ -73,7 +73,7 @@ import java.util
 import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.stream.Collectors
-import java.util.{Collections, Optional}
+import java.util.Optional
 import scala.annotation.nowarn
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, mutable}
@@ -138,7 +138,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     info(s"The client connection will be closed due to controller responded " +
       s"unsupported version exception during $request forwarding. " +
       s"This could happen when the controller changed after the connection was established.")
-    requestChannel.closeConnection(request, Collections.emptyMap())
+    requestChannel.closeConnection(request, util.Map.of())
   }
 
   /**
@@ -301,7 +301,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           val topicWithValidPartitions = new OffsetCommitRequestData.OffsetCommitRequestTopic().setName(topic.name)
 
           topic.partitions.forEach { partition =>
-            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).isPresent()) {
+            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).isPresent) {
               topicWithValidPartitions.partitions.add(partition)
             } else {
               responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
@@ -537,7 +537,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (fetchRequest.version() >= 13)
         metadataCache.topicIdsToNames()
       else
-        Collections.emptyMap[Uuid, String]()
+        util.Map.of[Uuid, String]()
 
     val fetchData = fetchRequest.fetchData(topicNames)
     val forgottenTopics = fetchRequest.forgottenTopics(topicNames)
@@ -835,7 +835,7 @@ class KafkaApis(val requestChannel: RequestChannel,
             topic,
             metadataCache.getTopicId(topic),
             Topic.isInternal(topic),
-            util.Collections.emptyList()
+            util.List.of()
           )
         }
       }
@@ -868,7 +868,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val knownTopicNames = topicIds.flatMap(id => OptionConverters.toScala(metadataCache.getTopicName(id)))
 
     val unknownTopicIdsTopicMetadata = unknownTopicIds.map(topicId =>
-        metadataResponseTopic(Errors.UNKNOWN_TOPIC_ID, null, topicId, isInternal = false, util.Collections.emptyList())).toSeq
+        metadataResponseTopic(Errors.UNKNOWN_TOPIC_ID, null, topicId, isInternal = false, util.List.of())).toSeq
 
     val topics = if (metadataRequest.isAllTopics)
       metadataCache.getAllTopics.asScala
@@ -896,7 +896,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val unauthorizedForCreateTopicMetadata = unauthorizedForCreateTopics.map(topic =>
       // Set topicId to zero since we will never create topic which topicId
-      metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Uuid.ZERO_UUID, isInternal(topic), util.Collections.emptyList()))
+      metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Uuid.ZERO_UUID, isInternal(topic), util.List.of()))
 
     // do not disclose the existence of topics unauthorized for Describe, so we've not even checked if they exist or not
     val unauthorizedForDescribeTopicMetadata =
@@ -906,11 +906,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       else if (useTopicId) {
         // Topic IDs are not considered sensitive information, so returning TOPIC_AUTHORIZATION_FAILED is OK
         unauthorizedForDescribeTopics.map(topic =>
-          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, null, metadataCache.getTopicId(topic), isInternal = false, util.Collections.emptyList()))
+          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, null, metadataCache.getTopicId(topic), isInternal = false, util.List.of()))
       } else {
         // We should not return topicId when on unauthorized error, so we return zero uuid.
         unauthorizedForDescribeTopics.map(topic =>
-          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Uuid.ZERO_UUID, isInternal = false, util.Collections.emptyList()))
+          metadataResponseTopic(Errors.TOPIC_AUTHORIZATION_FAILED, topic, Uuid.ZERO_UUID, isInternal = false, util.List.of()))
       }
 
     // In version 0, we returned an error when brokers with replicas were unavailable,
@@ -1521,7 +1521,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         requestHelper.sendErrorResponseMaybeThrottle(request, Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.exception)
         return
       }
-    } else if (!authHelper.authorize(request.context, IDEMPOTENT_WRITE, CLUSTER, CLUSTER_NAME, true, false)
+    } else if (!authHelper.authorize(request.context, IDEMPOTENT_WRITE, CLUSTER, CLUSTER_NAME, logIfDenied = false)
         && !authHelper.authorizeByResourceType(request.context, AclOperation.WRITE, ResourceType.TOPIC)) {
       requestHelper.sendErrorResponseMaybeThrottle(request, Errors.CLUSTER_AUTHORIZATION_FAILED.exception)
       return
@@ -1976,7 +1976,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           val topicWithValidPartitions = new TxnOffsetCommitRequestData.TxnOffsetCommitRequestTopic().setName(topic.name)
 
           topic.partitions.forEach { partition =>
-            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).isPresent()) {
+            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).isPresent) {
               topicWithValidPartitions.partitions.add(partition)
             } else {
               responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
@@ -2227,14 +2227,14 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     if (!allowTokenRequests(request))
-      sendResponseCallback(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, Collections.emptyList)
+      sendResponseCallback(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, util.List.of)
     else if (!config.tokenAuthEnabled)
-      sendResponseCallback(Errors.DELEGATION_TOKEN_AUTH_DISABLED, Collections.emptyList)
+      sendResponseCallback(Errors.DELEGATION_TOKEN_AUTH_DISABLED, util.List.of)
     else {
       val requestPrincipal = request.context.principal
 
       if (describeTokenRequest.ownersListEmpty()) {
-        sendResponseCallback(Errors.NONE, Collections.emptyList)
+        sendResponseCallback(Errors.NONE, util.List.of)
       }
       else {
         val owners = if (describeTokenRequest.data.owners == null)

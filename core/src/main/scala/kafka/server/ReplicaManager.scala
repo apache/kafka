@@ -69,7 +69,7 @@ import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.Lock
 import java.util.concurrent.{CompletableFuture, Future, RejectedExecutionException, TimeUnit}
-import java.util.{Collections, Optional, OptionalInt, OptionalLong}
+import java.util.{Optional, OptionalInt, OptionalLong}
 import scala.collection.{Map, Seq, Set, immutable, mutable}
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.{RichOption, RichOptional}
@@ -1257,7 +1257,7 @@ class ReplicaManager(val config: KafkaConfig,
                 }.toList.asJava)
             }.filterNot(_.partitions().isEmpty).toList.asJava
           case None =>
-            Collections.emptyList[DescribeLogDirsTopic]()
+            util.List.of[DescribeLogDirsTopic]()
         }
 
         val describeLogDirsResult = new DescribeLogDirsResponseData.DescribeLogDirsResult()
@@ -1624,7 +1624,7 @@ class ReplicaManager(val config: KafkaConfig,
     val remoteFetchMaxWaitMs = config.remoteLogManagerConfig.remoteFetchMaxWaitMs().toLong
     val remoteFetch = new DelayedRemoteFetch(remoteFetchTask, remoteFetchResult, remoteFetchInfo, remoteFetchMaxWaitMs,
       fetchPartitionStatus, params, logReadResults, this, responseCallback)
-    delayedRemoteFetchPurgatory.tryCompleteElseWatch(remoteFetch, util.Collections.singletonList(key))
+    delayedRemoteFetchPurgatory.tryCompleteElseWatch(remoteFetch, util.List.of(key))
     None
   }
 
@@ -1899,7 +1899,7 @@ class ReplicaManager(val config: KafkaConfig,
         createLogReadResult(highWatermark, leaderLogStartOffset, leaderLogEndOffset,
           new OffsetMovedToTieredStorageException("Given offset" + offset + " is moved to tiered storage"))
       } else {
-        val throttleTimeMs = remoteLogManager.get.getFetchThrottleTimeMs()
+        val throttleTimeMs = remoteLogManager.get.getFetchThrottleTimeMs
         val fetchDataInfo = if (throttleTimeMs > 0) {
           // Record the throttle time for the remote log fetches
           remoteLogManager.get.fetchThrottleTimeSensor().record(throttleTimeMs, time.milliseconds())

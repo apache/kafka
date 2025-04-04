@@ -16,7 +16,6 @@
   */
 package kafka.server
 
-import java.util.Collections
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.metrics.{MetricConfig, Metrics, Quota}
 import org.apache.kafka.common.utils.MockTime
@@ -29,7 +28,7 @@ import scala.jdk.CollectionConverters._
 
 class ReplicationQuotaManagerTest {
   private val time = new MockTime
-  private val metrics = new Metrics(new MetricConfig(), Collections.emptyList(), time)
+  private val metrics = new Metrics(new MetricConfig(), java.util.List.of, time)
 
   @AfterEach
   def tearDown(): Unit = {

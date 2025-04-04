@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import java.util.{Collections, Properties}
+import java.util.Properties
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.server.config.QuotaConfig
@@ -53,7 +53,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     val wasRemoteLogEnabled = logs.exists(_.remoteLogEnabled())
     val wasCopyDisabled = logs.exists(_.config.remoteLogCopyDisable())
 
-    logManager.updateTopicConfig(topic, topicConfig, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
+    logManager.updateTopicConfig(topic, topicConfig, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled,
       wasRemoteLogEnabled)
     maybeUpdateRemoteLogComponents(topic, logs, wasRemoteLogEnabled, wasCopyDisabled)
   }
@@ -72,7 +72,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     // Topic configs gets updated incrementally. This check is added to prevent redundant updates.
     // When remote log is enabled, or remote copy is enabled, we should create RLM tasks accordingly via `onLeadershipChange`.
     if (isRemoteLogEnabled && (!wasRemoteLogEnabled || (wasCopyDisabled && !isCopyDisabled))) {
-      val topicIds = Collections.singletonMap(topic, replicaManager.metadataCache.getTopicId(topic))
+      val topicIds = java.util.Map.of(topic, replicaManager.metadataCache.getTopicId(topic))
       replicaManager.remoteLogManager.foreach(rlm =>
         rlm.onLeadershipChange(leaderPartitions.toSet.asJava, followerPartitions.toSet.asJava, topicIds))
     }

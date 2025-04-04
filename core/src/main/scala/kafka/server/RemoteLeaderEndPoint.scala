@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import java.util.{Collections, Optional}
+import java.util.Optional
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.utils.Logging
 import org.apache.kafka.clients.FetchSessionHandler
@@ -106,14 +106,14 @@ class RemoteLeaderEndPoint(logPrefix: String,
   private def fetchOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int, timestamp: Long): OffsetAndEpoch = {
     val topic = new ListOffsetsTopic()
       .setName(topicPartition.topic)
-      .setPartitions(Collections.singletonList(
+      .setPartitions(java.util.List.of(
         new ListOffsetsPartition()
           .setPartitionIndex(topicPartition.partition)
           .setCurrentLeaderEpoch(currentLeaderEpoch)
           .setTimestamp(timestamp)))
     val metadataVersion = metadataVersionSupplier()
     val requestBuilder = ListOffsetsRequest.Builder.forReplica(metadataVersion.listOffsetRequestVersion, brokerConfig.brokerId)
-      .setTargetTimes(Collections.singletonList(topic))
+      .setTargetTimes(java.util.List.of(topic))
 
     val clientResponse = blockingSender.sendRequest(requestBuilder)
     val response = clientResponse.responseBody.asInstanceOf[ListOffsetsResponse]

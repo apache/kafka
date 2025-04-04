@@ -802,7 +802,7 @@ private[kafka] object Processor {
     val header = RequestHeader.parse(buffer)
     if (apiVersionManager.isApiEnabled(header.apiKey, header.apiVersion)) {
       header
-    } else if (header.isApiVersionSupported()) {
+    } else if (header.isApiVersionSupported) {
       throw new InvalidRequestException(s"Received request for disabled api with key ${header.apiKey.id} (${header.apiKey().name}) and version ${header.apiVersion}")
     } else {
       throw new UnsupportedVersionException(s"Received request for api with key ${header.apiKey.id} (${header.apiKey().name}) and unsupported version ${header.apiVersion}")

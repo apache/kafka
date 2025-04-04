@@ -19,7 +19,7 @@ package kafka.admin
 
 import java.nio.charset.StandardCharsets
 import java.util.concurrent.{ExecutionException, TimeUnit}
-import java.util.{Collections, Properties}
+import java.util.Properties
 import joptsimple._
 import kafka.server.DynamicConfig
 import kafka.utils.Implicits._
@@ -319,7 +319,7 @@ object ConfigCommand extends Logging {
       new ClientQuotaAlteration.Op(key, doubleValue)
     } ++ configsToBeDeleted.map(key => new ClientQuotaAlteration.Op(key, null))).asJavaCollection
 
-    adminClient.alterClientQuotas(Collections.singleton(new ClientQuotaAlteration(entity, alterOps)), alterOptions)
+    adminClient.alterClientQuotas(java.util.Set.of(new ClientQuotaAlteration(entity, alterOps)), alterOptions)
       .all().get(60, TimeUnit.SECONDS)
   }
 
@@ -422,7 +422,7 @@ object ConfigCommand extends Logging {
 
     val configResource = new ConfigResource(configResourceType, entityName)
     val describeOptions = new DescribeConfigsOptions().includeSynonyms(includeSynonyms)
-    val configs = adminClient.describeConfigs(Collections.singleton(configResource), describeOptions)
+    val configs = adminClient.describeConfigs(java.util.Set.of(configResource), describeOptions)
       .all.get(30, TimeUnit.SECONDS)
     configs.get(configResource).entries.asScala
       .filter(entry => configSourceFilter match {

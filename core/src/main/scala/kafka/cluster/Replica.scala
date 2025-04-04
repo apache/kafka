@@ -113,7 +113,7 @@ class Replica(val brokerId: Int, val topicPartition: TopicPartition, val metadat
     replicaState.updateAndGet { currentReplicaState =>
       val cachedBrokerEpoch = metadataCache.getAliveBrokerEpoch(brokerId)
       // Fence the update if it provides a stale broker epoch.
-      if (brokerEpoch != -1 && cachedBrokerEpoch.filter(_ > brokerEpoch).isPresent()) {
+      if (brokerEpoch != -1 && cachedBrokerEpoch.filter(_ > brokerEpoch).isPresent) {
         throw new NotLeaderOrFollowerException(s"Received stale fetch state update. broker epoch=$brokerEpoch " +
           s"vs expected=${currentReplicaState.brokerEpoch.get}")
       }

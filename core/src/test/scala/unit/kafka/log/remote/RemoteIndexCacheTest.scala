@@ -41,7 +41,7 @@ import java.nio.file.{Files, NoSuchFileException, Path, Paths}
 import java.util
 import java.util.concurrent.{CountDownLatch, Executors, Future, TimeUnit}
 import java.util.stream.Collectors
-import java.util.{Collections, Optional}
+import java.util.Optional
 import scala.collection.mutable
 
 class RemoteIndexCacheTest {
@@ -68,7 +68,7 @@ class RemoteIndexCacheTest {
 
     val remoteLogSegmentId = RemoteLogSegmentId.generateNew(idPartition)
     rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset, time.milliseconds(),
-      brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
+      brokerId, time.milliseconds(), segmentSize, util.Map.of(0, 0L))
     cache = new RemoteIndexCache(defaultRemoteIndexCacheSizeBytes, rsm, logDir.toString)
     mockRsmFetchIndex(rsm)
   }
@@ -701,7 +701,7 @@ class RemoteIndexCacheTest {
   @Test
   def testConcurrentRemoveReadForCache(): Unit = {
     // Create a spy Cache Entry
-    val rlsMetadata = new RemoteLogSegmentMetadata(RemoteLogSegmentId.generateNew(idPartition), baseOffset, lastOffset, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
+    val rlsMetadata = new RemoteLogSegmentMetadata(RemoteLogSegmentId.generateNew(idPartition), baseOffset, lastOffset, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, util.Map.of(0, 0L))
 
     val timeIndex = spy(createTimeIndexForSegmentMetadata(rlsMetadata, new File(logDir, DIR_NAME)))
     val txIndex = spy(createTxIndexForSegmentMetadata(rlsMetadata, new File(logDir, DIR_NAME)))
@@ -961,7 +961,7 @@ class RemoteIndexCacheTest {
     invalidTimeIndexFile.createNewFile()
 
     val rlsMetadata = new RemoteLogSegmentMetadata(RemoteLogSegmentId.generateNew(idPartition), baseOffset + 100,
-      lastOffset, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
+      lastOffset, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, util.Map.of(0, 0L))
     val validOffsetIdx = createOffsetIndexForSegmentMetadata(rlsMetadata, logDir)
     val validTimeIdx = createTxIndexForSegmentMetadata(rlsMetadata, logDir)
 
@@ -974,7 +974,7 @@ class RemoteIndexCacheTest {
 
   private def generateSpyCacheEntry(remoteLogSegmentId: RemoteLogSegmentId
                                     = RemoteLogSegmentId.generateNew(idPartition)): RemoteIndexCache.Entry = {
-    val rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L))
+    val rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, util.Map.of(0, 0L))
     val timeIndex = spy(createTimeIndexForSegmentMetadata(rlsMetadata, tpDir))
     val txIndex = spy(createTxIndexForSegmentMetadata(rlsMetadata, tpDir))
     val offsetIndex = spy(createOffsetIndexForSegmentMetadata(rlsMetadata, tpDir))
@@ -1051,7 +1051,7 @@ class RemoteIndexCacheTest {
                                                tpId: TopicIdPartition): List[RemoteLogSegmentMetadata] = {
     val metadataList = mutable.Buffer.empty[RemoteLogSegmentMetadata]
     for (i <- 0 until size) {
-      metadataList.append(new RemoteLogSegmentMetadata(new RemoteLogSegmentId(tpId, Uuid.randomUuid()), baseOffset * i, baseOffset * i + 10, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L)))
+      metadataList.append(new RemoteLogSegmentMetadata(new RemoteLogSegmentId(tpId, Uuid.randomUuid()), baseOffset * i, baseOffset * i + 10, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, util.Map.of(0, 0L)))
     }
     metadataList.toList
   }

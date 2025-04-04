@@ -87,7 +87,7 @@ class DelayedFuturePurgatory(purgatoryName: String, brokerId: Int) {
                               futures: Seq[CompletableFuture[T]],
                               responseCallback: () => Unit): DelayedFuture[T] = {
     val delayedFuture = new DelayedFuture[T](timeoutMs, futures, responseCallback)
-    val done = purgatory.tryCompleteElseWatch(delayedFuture, util.Collections.singletonList(purgatoryKey))
+    val done = purgatory.tryCompleteElseWatch(delayedFuture, util.List.of(purgatoryKey))
     if (!done) {
       val callbackAction = new BiConsumer[Void, Throwable]() {
         override def accept(result: Void, exception: Throwable): Unit = delayedFuture.forceComplete()

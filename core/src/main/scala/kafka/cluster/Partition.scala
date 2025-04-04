@@ -1071,7 +1071,7 @@ class Partition(val topicPartition: TopicPartition,
   }
 
   private def isBrokerEpochIsrEligible(storedBrokerEpoch: Option[Long], cachedBrokerEpoch: Optional[java.lang.Long]): Boolean = {
-    storedBrokerEpoch.isDefined && cachedBrokerEpoch.isPresent() &&
+    storedBrokerEpoch.isDefined && cachedBrokerEpoch.isPresent &&
       (storedBrokerEpoch.get == -1 || storedBrokerEpoch.get == cachedBrokerEpoch.get())
   }
 

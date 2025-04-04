@@ -232,7 +232,7 @@ class UnifiedLogTest {
 
     reopened.truncateFullyAndStartAt(2L, Optional.of(1L))
     assertEquals(Optional.empty, reopened.firstUnstableOffset)
-    assertEquals(java.util.Collections.emptyMap(), reopened.producerStateManager.activeProducers)
+    assertEquals(java.util.Map.of(), reopened.producerStateManager.activeProducers)
     assertEquals(1L, reopened.logStartOffset)
     assertEquals(2L, reopened.logEndOffset)
   }
@@ -275,7 +275,7 @@ class UnifiedLogTest {
 
     truncateFunc(reopened, 0L)
     assertEquals(Optional.empty, reopened.firstUnstableOffset)
-    assertEquals(java.util.Collections.emptyMap(), reopened.producerStateManager.activeProducers)
+    assertEquals(java.util.Map.of(), reopened.producerStateManager.activeProducers)
   }
 
   @Test
@@ -1992,7 +1992,7 @@ class UnifiedLogTest {
     val log = createLog(logDir, logConfig)
     val previousEndOffset = log.logEndOffsetMetadata.messageOffset
 
-    if (expectedException.isPresent()) {
+    if (expectedException.isPresent) {
       assertThrows(
         expectedException.get(),
         () => log.appendAsFollower(records, Int.MaxValue)

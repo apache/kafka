@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.network.RequestChannel
 
-import java.util.{Collections, Properties}
+import java.util.Properties
 import kafka.utils.{LoggingController, Logging}
 import org.apache.kafka.common.acl.AclOperation.DESCRIBE_CONFIGS
 import org.apache.kafka.common.config.{AbstractConfig, ConfigDef, ConfigResource}
@@ -74,7 +74,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
       }
       new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(error.code)
         .setErrorMessage(error.message)
-        .setConfigs(Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])
+        .setConfigs(java.util.List.of[DescribeConfigsResponseData.DescribeConfigsResourceResult])
         .setResourceName(resource.resourceName)
         .setResourceType(resource.resourceType)
     }
@@ -111,7 +111,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
               createResponseConfig(allConfigs(logConfig), createTopicConfigEntry(logConfig, topicProps, includeSynonyms, includeDocumentation))
             } else {
               new DescribeConfigsResponseData.DescribeConfigsResult().setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-                .setConfigs(Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])
+                .setConfigs(java.util.List.of[DescribeConfigsResponseData.DescribeConfigsResourceResult])
             }
 
           case ConfigResource.Type.BROKER =>
@@ -171,7 +171,7 @@ class ConfigHelper(metadataCache: MetadataCache, config: KafkaConfig, configRepo
             .setResourceType(resource.resourceType)
             .setErrorMessage(err.message)
             .setErrorCode(err.error.code)
-            .setConfigs(Collections.emptyList[DescribeConfigsResponseData.DescribeConfigsResourceResult])
+            .setConfigs(java.util.List.of[DescribeConfigsResponseData.DescribeConfigsResourceResult])
       }
     }
   }
