@@ -71,6 +71,7 @@ import static org.apache.kafka.streams.StreamsConfig.DSL_STORE_SUPPLIERS_CLASS_C
 import static org.apache.kafka.streams.StreamsConfig.ENABLE_METRICS_PUSH_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.EXACTLY_ONCE_V2;
+import static org.apache.kafka.streams.StreamsConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_KEY_LENGTH;
 import static org.apache.kafka.streams.StreamsConfig.MAX_RACK_AWARE_ASSIGNMENT_TAG_VALUE_LENGTH;
 import static org.apache.kafka.streams.StreamsConfig.PROCESSOR_WRAPPER_CLASS_CONFIG;
@@ -1594,6 +1595,23 @@ public class StreamsConfigTest {
         props.put(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG, true);
         streamsConfig = new StreamsConfig(props);
         assertTrue(streamsConfig.getBoolean(ENSURE_EXPLICIT_INTERNAL_RESOURCE_NAMING_CONFIG));
+    }
+
+    @Test
+    public void shouldSetGroupProtocolToClassicByDefault() {
+        assertEquals(GroupProtocol.CLASSIC.name().toLowerCase(), streamsConfig.getString(GROUP_PROTOCOL_CONFIG).toLowerCase());
+    }
+
+    @Test
+    public void shouldSetGroupProtocolToClassic() {
+        props.put(GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC);
+        assertEquals(GroupProtocol.CLASSIC.name().toLowerCase(), streamsConfig.getString(GROUP_PROTOCOL_CONFIG).toLowerCase());
+    }
+
+    @Test
+    public void shouldSetGroupProtocolToStreams() {
+        props.put(GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS);
+        assertEquals(GroupProtocol.STREAMS.name().toLowerCase(), streamsConfig.getString(GROUP_PROTOCOL_CONFIG).toLowerCase());
     }
 
     static class MisconfiguredSerde implements Serde<Object> {
