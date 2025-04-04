@@ -36,7 +36,6 @@ import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -51,7 +50,6 @@ import java.util.function.Supplier;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
-import static java.util.Collections.singletonList;
 import static org.apache.kafka.common.utils.Utils.require;
 import static org.apache.kafka.storage.internals.log.LogFileUtils.CLEANED_FILE_SUFFIX;
 import static org.apache.kafka.storage.internals.log.LogFileUtils.DELETED_FILE_SUFFIX;
@@ -433,11 +431,11 @@ public class LocalLog {
                 config.preallocate);
         segments.add(newSegment);
 
-        reason.logReason(singletonList(segmentToDelete));
+        reason.logReason(List.of(segmentToDelete));
         if (newOffset != segmentToDelete.baseOffset()) {
             segments.remove(segmentToDelete.baseOffset());
         }
-        deleteSegmentFiles(singletonList(segmentToDelete), asyncDelete, dir, topicPartition, config, scheduler, logDirFailureChannel, logIdent);
+        deleteSegmentFiles(List.of(segmentToDelete), asyncDelete, dir, topicPartition, config, scheduler, logDirFailureChannel, logIdent);
         return newSegment;
     }
 
@@ -619,7 +617,7 @@ public class LocalLog {
                     File offsetIdxFile = LogFileUtils.offsetIndexFile(dir, newOffset);
                     File timeIdxFile = LogFileUtils.timeIndexFile(dir, newOffset);
                     File txnIdxFile = LogFileUtils.transactionIndexFile(dir, newOffset);
-                    for (File file : Arrays.asList(logFile, offsetIdxFile, timeIdxFile, txnIdxFile)) {
+                    for (File file : List.of(logFile, offsetIdxFile, timeIdxFile, txnIdxFile)) {
                         if (file.exists()) {
                             logger.warn("Newly rolled segment file {} already exists; deleting it first", file.getAbsolutePath());
                             Files.delete(file.toPath());
@@ -791,7 +789,7 @@ public class LocalLog {
 
     private static FetchDataInfo emptyFetchDataInfo(LogOffsetMetadata fetchOffsetMetadata, boolean includeAbortedTxns) {
         Optional<List<FetchResponseData.AbortedTransaction>> abortedTransactions = includeAbortedTxns
-            ? Optional.of(Collections.emptyList())
+            ? Optional.of(List.of())
             : Optional.empty();
         return new FetchDataInfo(fetchOffsetMetadata, MemoryRecords.EMPTY, false, abortedTransactions);
     }
@@ -943,7 +941,7 @@ public class LocalLog {
             }
             // replace old segment with new ones
             LOG.info("{}Replacing overflowed segment {} with split segments {}", logPrefix, segment, newSegments);
-            List<LogSegment> deletedSegments = replaceSegments(existingSegments, newSegments, singletonList(segment),
+            List<LogSegment> deletedSegments = replaceSegments(existingSegments, newSegments, List.of(segment),
                     dir, topicPartition, config, scheduler, logDirFailureChannel, logPrefix, false);
             return new SplitSegmentResult(deletedSegments, newSegments);
         } catch (Exception e) {
@@ -1035,7 +1033,7 @@ public class LocalLog {
                 existingSegments.remove(segment.baseOffset());
             }
             deleteSegmentFiles(
-                    singletonList(segment),
+                    List.of(segment),
                     true,
                     dir,
                     topicPartition,

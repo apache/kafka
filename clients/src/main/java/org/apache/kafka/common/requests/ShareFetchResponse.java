@@ -144,7 +144,7 @@ public class ShareFetchResponse extends AbstractResponse {
                              Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partIterator) {
         // Since the throttleTimeMs and metadata field sizes are constant and fixed, we can
         // use arbitrary values here without affecting the result.
-        ShareFetchResponseData data = toMessage(Errors.NONE, 0, partIterator, Collections.emptyList());
+        ShareFetchResponseData data = toMessage(Errors.NONE, 0, partIterator, Collections.emptyList(), 0);
         ObjectSerializationCache cache = new ObjectSerializationCache();
         return 4 + data.size(cache, version);
     }
@@ -159,13 +159,13 @@ public class ShareFetchResponse extends AbstractResponse {
     public static ShareFetchResponse of(Errors error,
                                         int throttleTimeMs,
                                         LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData,
-                                        List<Node> nodeEndpoints) {
-        return new ShareFetchResponse(toMessage(error, throttleTimeMs, responseData.entrySet().iterator(), nodeEndpoints));
+                                        List<Node> nodeEndpoints, int acquisitionLockTimeout) {
+        return new ShareFetchResponse(toMessage(error, throttleTimeMs, responseData.entrySet().iterator(), nodeEndpoints, acquisitionLockTimeout));
     }
 
     public static ShareFetchResponseData toMessage(Errors error, int throttleTimeMs,
                                                    Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partIterator,
-                                                   List<Node> nodeEndpoints) {
+                                                   List<Node> nodeEndpoints, int acquisitionLockTimeout) {
         Map<Uuid, ShareFetchResponseData.ShareFetchableTopicResponse> topicResponseList = new LinkedHashMap<>();
         while (partIterator.hasNext()) {
             Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData> entry = partIterator.next();
@@ -193,6 +193,7 @@ public class ShareFetchResponse extends AbstractResponse {
                         .setRack(endpoint.rack())));
         return data.setThrottleTimeMs(throttleTimeMs)
                 .setErrorCode(error.code())
+                .setAcquisitionLockTimeoutMs(acquisitionLockTimeout)
                 .setResponses(new ArrayList<>(topicResponseList.values()));
     }
 
