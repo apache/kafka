@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Gauge;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Monitorable;
 import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
@@ -29,18 +30,22 @@ import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.server.ProcessRole;
 import org.apache.kafka.server.config.QuotaConfig;
 
-import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CustomQuotaCallbackTest {
+
+    private static int controllerId(Type type) {
+        return type == Type.KRAFT ? 3000 : 0;
+    }
 
     @ClusterTest(
         controllers = 3,
@@ -81,25 +86,37 @@ public class CustomQuotaCallbackTest {
         }
     )
     public void testMonitorableCustomQuotaCallbackWithCombinedMode(ClusterInstance cluster) {
-        assertEquals(2, MonitorableCustomQuotaCallback.metricNames.size());
-        MetricName metricName1 = MonitorableCustomQuotaCallback.metricNames.get(0);
-        MetricName metricName2 = MonitorableCustomQuotaCallback.metricNames.get(1);
-        if (metricName1.tags().get("role").equals(ProcessRole.ControllerRole.toString())) {
-            assertMetric(metricName1, ProcessRole.ControllerRole);
-            assertMetric(metricName2, ProcessRole.BrokerRole);
-        } else {
-            assertMetric(metricName1, ProcessRole.BrokerRole);
-            assertMetric(metricName2, ProcessRole.ControllerRole);
-        }
-        MonitorableCustomQuotaCallback.clearMetrics();
+        assertMetrics(
+            cluster.brokers().get(0).metrics(),
+            expectedTags(Map.of("role", "broker"))
+        );
+        assertMetrics(
+            cluster.controllers().get(controllerId(cluster.type())).metrics(),
+            expectedTags(Map.of("role", "controller"))
+        );
     }
 
-    private void assertMetric(MetricName metricName, ProcessRole processRole) {
-        assertEquals(QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG, metricName.tags().get("config"));
-        assertEquals(MonitorableCustomQuotaCallback.class.getSimpleName(), metricName.tags().get("class"));
-        assertEquals(processRole.toString(), metricName.tags().get("role"));
-        assertEquals(MonitorableCustomQuotaCallback.name, metricName.name());
-        assertEquals(MonitorableCustomQuotaCallback.description, metricName.description());
+    private void assertMetrics(Metrics metrics, Map<String, String> expectedTags) {
+        boolean found = false;
+        for (MetricName metricName : metrics.metrics().keySet()) {
+            if (metricName.group().equals("plugins")) {
+                Map<String, String> tags = metricName.tags();
+                if (expectedTags.equals(tags)) {
+                    assertEquals(MonitorableCustomQuotaCallback.METRIC_NAME, metricName.name());
+                    assertEquals(MonitorableCustomQuotaCallback.METRIC_DESCRIPTION, metricName.description());
+                    found = true;
+                }
+            }
+        }
+        assertTrue(found);
+    }
+
+    private static Map<String, String> expectedTags(Map<String, String> extraTags) {
+        Map<String, String> tags = new LinkedHashMap<>();
+        tags.put("config", QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG);
+        tags.put("class", "MonitorableCustomQuotaCallback");
+        tags.putAll(extraTags);
+        return tags;
     }
 
     public static class CustomQuotaCallback implements ClientQuotaCallback {
@@ -151,21 +168,15 @@ public class CustomQuotaCallbackTest {
     }
 
     public static class MonitorableCustomQuotaCallback extends CustomQuotaCallback implements Monitorable {
-
         
-        public static List<MetricName> metricNames = new ArrayList<>();
-        public static String name = "client quota callback";
-        public static String description = "client quota callback description";
+        private static final String METRIC_NAME = "monitorable-custom-quot-callback-name";
+        private static final String METRIC_DESCRIPTION = "monitorable-custom-quot-callback-description";
 
         @Override
         public void withPluginMetrics(PluginMetrics metrics) {
-            MetricName metricName = metrics.metricName(name, description, Map.of());
-            metricNames.add(metricName);
+            MetricName metricName = metrics.metricName(METRIC_NAME, METRIC_DESCRIPTION, Map.of());
             metrics.addMetric(metricName, (Gauge<Integer>) (config, now) -> 1);
         }
         
-        public static void clearMetrics() {
-            metricNames.clear();
-        }
     }
 }

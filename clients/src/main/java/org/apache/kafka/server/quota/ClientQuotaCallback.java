@@ -27,7 +27,7 @@ import java.util.Map;
  * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the callback to register metrics. 
  * The following tags are automatically added to all metrics registered: 
  * <ul>
- *     <li><code>config</code> set to <code>clientQuotaCallback.class</code></li>
+ *     <li><code>config</code> set to <code>client.quota.callback.class</code></li>
  *     <li><code>class</code> set to the ClientQuotaCallback class name</li>
  *     <li><code>role</code> set to broker/controller, which indicates the role of the server</li>
  * </ul>
