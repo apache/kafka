@@ -69,11 +69,11 @@ public final class GroupConfig extends AbstractConfig {
         "If set to \"read_uncommitted\", the share group will return all messages, even transactional messages which have been aborted. " +
         "Non-transactional records will be returned unconditionally in either mode.";
 
-    public static final String STREAMS_SESSION_TIMEOUT_MS_CONFIG = "group.streams.session.timeout.ms";
+    public static final String STREAMS_SESSION_TIMEOUT_MS_CONFIG = "streams.session.timeout.ms";
 
-    public static final String STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG = "group.streams.heartbeat.interval.ms";
+    public static final String STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG = "streams.heartbeat.interval.ms";
 
-    public static final String STREAMS_NUM_STANDBY_REPLICAS_CONFIG = "group.streams.num.standby.replicas";
+    public static final String STREAMS_NUM_STANDBY_REPLICAS_CONFIG = "streams.num.standby.replicas";
 
     public final int consumerSessionTimeoutMs;
 

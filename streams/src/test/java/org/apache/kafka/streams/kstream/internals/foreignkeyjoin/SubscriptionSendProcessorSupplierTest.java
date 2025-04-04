@@ -149,7 +149,7 @@ public class SubscriptionSendProcessorSupplierTest {
         assertThat(context.forwarded().size(), greaterThan(0));
         assertThat(
             context.forwarded().get(0).record(),
-            is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), DELETE_KEY_AND_PROPAGATE, pk, 0), 0))
+            is(new Record<>(fk1, new SubscriptionWrapper<>(hash(leftRecordValue), DELETE_KEY_NO_PROPAGATE, pk, 0), 0))
         );
     }
 
@@ -198,7 +198,7 @@ public class SubscriptionSendProcessorSupplierTest {
         assertThat(context.forwarded().size(), greaterThan(0));
         assertThat(
             context.forwarded().get(0).record(),
-            is(new Record<>(fk1, new SubscriptionWrapper<>(null, DELETE_KEY_AND_PROPAGATE, pk, 0), 0))
+            is(new Record<>(fk1, new SubscriptionWrapper<>(null, DELETE_KEY_NO_PROPAGATE, pk, 0), 0))
         );
     }
 
@@ -438,7 +438,7 @@ public class SubscriptionSendProcessorSupplierTest {
         assertThat(context.forwarded().size(), greaterThan(0));
         assertThat(
             context.forwarded().get(0).record(),
-            is(new Record<>(compositeKey, new SubscriptionWrapper<>(hash(leftRecordValue), DELETE_KEY_AND_PROPAGATE, pk, 0), 0))
+            is(new Record<>(compositeKey, new SubscriptionWrapper<>(hash(leftRecordValue), DELETE_KEY_NO_PROPAGATE, pk, 0), 0))
         );
     }
 
@@ -491,7 +491,7 @@ public class SubscriptionSendProcessorSupplierTest {
         assertThat(context.forwarded().size(), greaterThan(0));
         assertThat(
             context.forwarded().get(0).record(),
-            is(new Record<>(compositeKey, new SubscriptionWrapper<>(null, DELETE_KEY_AND_PROPAGATE, pk, 0), 0))
+            is(new Record<>(compositeKey, new SubscriptionWrapper<>(null, DELETE_KEY_NO_PROPAGATE, pk, 0), 0))
         );
     }
 

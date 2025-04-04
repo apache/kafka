@@ -140,7 +140,7 @@ public class KafkaNetworkChannel implements NetworkChannel {
             log.error("Request {} failed due to unsupported version error", request, clientResponse.versionMismatch());
             response = errorResponse(request.data(), Errors.UNSUPPORTED_VERSION);
         } else if (clientResponse.authenticationException() != null) {
-            // For now we treat authentication errors as retriable. We use the
+            // For now, we treat authentication errors as retriable. We use the
             // `NETWORK_EXCEPTION` error code for lack of a good alternative.
             // Note that `NodeToControllerChannelManager` will still log the
             // authentication errors so that users have a chance to fix the problem.

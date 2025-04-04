@@ -132,7 +132,7 @@ public class SubscriptionSendProcessorSupplier<KLeft, VLeft, KRight>
                 final KRight oldForeignKey = foreignKeyExtractor.extract(record.key(), record.value().oldValue);
                 final KRight newForeignKey = record.value().newValue == null ? null : foreignKeyExtractor.extract(record.key(), record.value().newValue);
                 if (oldForeignKey != null && !Arrays.equals(serialize(newForeignKey), serialize(oldForeignKey))) {
-                    forward(record, oldForeignKey, DELETE_KEY_AND_PROPAGATE);
+                    forward(record, oldForeignKey, DELETE_KEY_NO_PROPAGATE);
                 }
                 forward(record, newForeignKey, PROPAGATE_NULL_IF_NO_FK_VAL_AVAILABLE);
             } else if (record.value().newValue != null) {
