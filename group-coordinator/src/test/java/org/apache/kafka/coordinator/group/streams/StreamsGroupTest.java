@@ -1123,7 +1123,7 @@ public class StreamsGroupTest {
         assertFalse(streamsGroup.isShutdownRequested());
 
         // Set shutdown requested
-        streamsGroup.maybeSetShutdownRequested(memberId1, true);
+        streamsGroup.setShutdownRequested(memberId1);
         assertTrue(streamsGroup.isShutdownRequested());
 
         // As long as group not empty, remain in shutdown requested state
@@ -1134,4 +1134,5 @@ public class StreamsGroupTest {
         streamsGroup.removeMember(memberId2);
         assertFalse(streamsGroup.isShutdownRequested());
     }
+
 }

@@ -2194,7 +2194,9 @@ public class GroupMetadataManager {
         );
 
         scheduleStreamsGroupSessionTimeout(groupId, memberId);
-        group.maybeSetShutdownRequested(memberId, shutdownApplication);
+        if (shutdownApplication) {
+            group.setShutdownRequested(memberId);
+        }
 
         // Prepare the response.
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()

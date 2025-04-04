@@ -199,8 +199,9 @@ public class StreamsGroup implements Group {
 
     /**
      * A flag to indicate whether a shutdown has been requested for this group.
-     * This has no direct effect inside the group coordinator, but is propagated to all members of the group.
-     * This is not persisted in the log.
+     * This has no direct effect inside the group coordinator, but is propagated to old and new members of the group.
+     * It is cleared once the group is empty.
+     * This is not persisted in the log, as the flag is best-effort.
      */
     private boolean shutdownRequested = false;
 
@@ -1057,11 +1058,9 @@ public class StreamsGroup implements Group {
         return describedGroup;
     }
 
-    public void maybeSetShutdownRequested(final String memberId, final boolean shutdownApplication) {
-        if (shutdownApplication) {
-            log.info("[GroupId {}][MemberId {}] Shutdown requested for the streams application.", groupId, memberId);
-            shutdownRequested = true;
-        }
+    public void setShutdownRequested(final String memberId) {
+        log.info("[GroupId {}][MemberId {}] Shutdown requested for the streams application.", groupId, memberId);
+        shutdownRequested = true;
     }
 
     public boolean isShutdownRequested() {

@@ -16305,7 +16305,6 @@ public class GroupMetadataManagerTest {
                 .setGroupId(groupId)
                 .setMemberId(memberId2)
                 .setMemberEpoch(10)
-                .setShutdownApplication(true)
         );
 
         assertResponseEquals(
