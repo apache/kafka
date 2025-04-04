@@ -97,18 +97,18 @@ public class CustomQuotaCallbackTest {
     }
 
     private void assertMetrics(Metrics metrics, Map<String, String> expectedTags) {
-        boolean found = false;
+        int found = 0;
         for (MetricName metricName : metrics.metrics().keySet()) {
             if (metricName.group().equals("plugins")) {
                 Map<String, String> tags = metricName.tags();
                 if (expectedTags.equals(tags)) {
                     assertEquals(MonitorableCustomQuotaCallback.METRIC_NAME, metricName.name());
                     assertEquals(MonitorableCustomQuotaCallback.METRIC_DESCRIPTION, metricName.description());
-                    found = true;
+                    found++;
                 }
             }
         }
-        assertTrue(found);
+        assertEquals(1, found);
     }
 
     private static Map<String, String> expectedTags(Map<String, String> extraTags) {
