@@ -284,6 +284,11 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
+    public TerminateTransactionResult forceTerminateTransaction(String transactionalId, TerminateTransactionOptions options) {
+        return delegate.forceTerminateTransaction(transactionalId, options);
+    }
+
+    @Override
     public ListTransactionsResult listTransactions(ListTransactionsOptions options) {
         return delegate.listTransactions(options);
     }

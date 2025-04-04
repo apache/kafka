@@ -79,6 +79,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import static kafka.server.share.ShareFetchUtils.offsetForEarliestTimestamp;
 import static kafka.server.share.ShareFetchUtils.offsetForLatestTimestamp;
 import static kafka.server.share.ShareFetchUtils.offsetForTimestamp;
+import static kafka.server.share.ShareFetchUtils.recordLockDurationMsOrDefault;
 
 /**
  * The SharePartition is used to track the state of a partition that is shared between multiple
@@ -580,8 +581,10 @@ public class SharePartition {
                     // offset removed from batch, which is the next offset to be fetched.
                     // 2. When startOffset has moved beyond the in-flight records, startOffset and
                     // endOffset point to the LSO, which is the next offset to be fetched.
+                    log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, endOffset);
                     return endOffset;
                 } else {
+                    log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, endOffset + 1);
                     return endOffset + 1;
                 }
             }
@@ -592,6 +595,7 @@ public class SharePartition {
                 // Same case when startOffset has moved beyond the in-flight records, startOffset and endOffset point to the LSO
                 // and the cached state is fresh.
                 findNextFetchOffset.set(false);
+                log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, endOffset);
                 return endOffset;
             }
 
@@ -638,6 +642,7 @@ public class SharePartition {
                 findNextFetchOffset.set(false);
                 nextFetchOffset = endOffset + 1;
             }
+            log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, nextFetchOffset);
             return nextFetchOffset;
         } finally {
             lock.writeLock().unlock();
@@ -2302,12 +2307,7 @@ public class SharePartition {
         // The recordLockDuration value would depend on whether the dynamic config SHARE_RECORD_LOCK_DURATION_MS in
         // GroupConfig.java is set or not. If dynamic config is set, then that is used, otherwise the value of
         // SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG defined in ShareGroupConfig is used
-        int recordLockDurationMs;
-        if (groupConfigManager.groupConfig(groupId).isPresent()) {
-            recordLockDurationMs = groupConfigManager.groupConfig(groupId).get().shareRecordLockDurationMs();
-        } else {
-            recordLockDurationMs = defaultRecordLockDurationMs;
-        }
+        int recordLockDurationMs = recordLockDurationMsOrDefault(groupConfigManager, groupId, defaultRecordLockDurationMs);
         return scheduleAcquisitionLockTimeout(memberId, firstOffset, lastOffset, recordLockDurationMs);
     }
 

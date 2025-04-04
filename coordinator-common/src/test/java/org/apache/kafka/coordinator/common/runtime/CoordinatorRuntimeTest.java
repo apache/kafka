@@ -649,42 +649,37 @@ public class CoordinatorRuntimeTest {
         runtime.scheduleLoadOperation(TP, 10);
         CoordinatorRuntime<MockCoordinatorShard, String>.CoordinatorContext ctx = runtime.contextOrThrow(TP);
 
-        // Get the max batch size.
-        int maxBatchSize = writer.config(TP).maxMessageSize();
-
-        // Create records with three quarters of the max batch size each, so that it is not
-        // possible to have more than one record in a single batch.
-        List<String> records = Stream.of('1', '2', '3').map(c -> {
-            char[] payload = new char[maxBatchSize * 3 / 4];
-            Arrays.fill(payload, c);
-            return new String(payload);
-        }).collect(Collectors.toList());
-
         // Write #1.
         CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
-            state -> new CoordinatorResult<>(List.of(records.get(0)), "response1")
+            state -> new CoordinatorResult<>(List.of("record1"), "response1")
         );
 
-        // Write #2.
+        // Complete transaction #1, to force the flush of write #1.
+        CompletableFuture<Void> complete1 = runtime.scheduleTransactionCompletion(
+            "complete#1",
+            TP,
+            100L,
+            (short) 50,
+            10,
+            TransactionResult.COMMIT,
+            DEFAULT_WRITE_TIMEOUT
+        );
+
+        // Write #2 but without any records.
         CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
-            state -> new CoordinatorResult<>(List.of(records.get(1)), "response2")
-        );
-
-        // Write #3, to force the flush of write #2.
-        CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP, Duration.ofMillis(20),
-            state -> new CoordinatorResult<>(List.of(records.get(1)), "response3")
+            state -> new CoordinatorResult<>(List.of(), "response2")
         );
 
         // Records have been written to the log.
         assertEquals(List.of(
-            records(timer.time().milliseconds(), records.get(0)),
-            records(timer.time().milliseconds(), records.get(1))
+            records(timer.time().milliseconds(), "record1"),
+            endTransactionMarker(100L, (short) 50, timer.time().milliseconds(), 10, ControlRecordType.COMMIT)
         ), writer.entries(TP));
 
         // Verify that no writes are committed yet.
         assertFalse(write1.isDone());
+        assertFalse(complete1.isDone());
         assertFalse(write2.isDone());
-        assertFalse(write3.isDone());
 
         // Schedule the unloading.
         runtime.scheduleUnloadOperation(TP, OptionalInt.of(ctx.epoch + 1));
@@ -693,11 +688,11 @@ public class CoordinatorRuntimeTest {
         // All write completions throw exceptions after completing their futures.
         // Despite the exceptions, the unload should still complete.
         assertTrue(write1.isDone());
+        assertTrue(complete1.isDone());
         assertTrue(write2.isDone());
-        assertTrue(write3.isDone());
         assertFutureThrows(NotCoordinatorException.class, write1);
+        assertFutureThrows(NotCoordinatorException.class, complete1);
         assertFutureThrows(NotCoordinatorException.class, write2);
-        assertFutureThrows(NotCoordinatorException.class, write3);
 
         // Verify that onUnloaded is called.
         verify(coordinator, times(1)).onUnloaded();
@@ -2698,53 +2693,56 @@ public class CoordinatorRuntimeTest {
         // Load the coordinator.
         runtime.scheduleLoadOperation(TP, 10);
 
-        // Get the max batch size.
-        int maxBatchSize = writer.config(TP).maxMessageSize();
-
-        // Create records with three quarters of the max batch size each, so that it is not
-        // possible to have more than one record in a single batch.
-        List<String> records = Stream.of('1', '2', '3').map(c -> {
-            char[] payload = new char[maxBatchSize * 3 / 4];
-            Arrays.fill(payload, c);
-            return new String(payload);
-        }).collect(Collectors.toList());
-
         // Write #1.
         CompletableFuture<String> write1 = runtime.scheduleWriteOperation("write#1", TP, Duration.ofMillis(20),
-            state -> new CoordinatorResult<>(List.of(records.get(0)), "response1")
+            state -> new CoordinatorResult<>(List.of("record1"), "response1")
         );
 
-        // Write #2.
+        // Complete transaction #1, to force the flush of write #2.
+        CompletableFuture<Void> complete1 = runtime.scheduleTransactionCompletion(
+            "complete#1",
+            TP,
+            100L,
+            (short) 50,
+            10,
+            TransactionResult.COMMIT,
+            DEFAULT_WRITE_TIMEOUT
+        );
+
+        // Write #2 but without any records.
         CompletableFuture<String> write2 = runtime.scheduleWriteOperation("write#2", TP, Duration.ofMillis(20),
-            state -> new CoordinatorResult<>(List.of(records.get(1)), "response2")
+            state -> new CoordinatorResult<>(List.of(), "response2")
         );
 
-        // Write #3, to force the flush of write #2.
+        // Write #3, also without any records. Should complete together with write #2.
         CompletableFuture<String> write3 = runtime.scheduleWriteOperation("write#3", TP, Duration.ofMillis(20),
-            state -> new CoordinatorResult<>(List.of(records.get(1)), "response3")
+            state -> new CoordinatorResult<>(List.of(), "response3")
         );
 
         // Records have been written to the log.
         assertEquals(List.of(
-            records(timer.time().milliseconds(), records.get(0)),
-            records(timer.time().milliseconds(), records.get(1))
+            records(timer.time().milliseconds(), "record1"),
+            endTransactionMarker(100L, (short) 50, timer.time().milliseconds(), 10, ControlRecordType.COMMIT)
         ), writer.entries(TP));
 
         // Verify that no writes are committed yet.
         assertFalse(write1.isDone());
+        assertFalse(complete1.isDone());
         assertFalse(write2.isDone());
         assertFalse(write3.isDone());
 
-        // Commit the first and second record.
+        // Commit the records and transaction marker.
         writer.commit(TP, 2);
 
-        // Write #1 and write #2's completions throw exceptions after completing their futures.
-        // Despite the exception from write #1, write #2 should still be completed.
+        // All write completions throw exceptions after completing their futures.
+        // Despite the exceptions, all writes should still complete.
         assertTrue(write1.isDone());
+        assertTrue(complete1.isDone());
         assertTrue(write2.isDone());
-        assertFalse(write3.isDone());
+        assertTrue(write3.isDone());
         assertEquals("response1", write1.get(5, TimeUnit.SECONDS));
         assertEquals("response2", write2.get(5, TimeUnit.SECONDS));
+        assertEquals("response3", write3.get(5, TimeUnit.SECONDS));
     }
 
     @Test
