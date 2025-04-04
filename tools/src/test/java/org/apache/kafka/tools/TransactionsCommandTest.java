@@ -305,13 +305,13 @@ public class TransactionsCommandTest {
     }
 
         @Test
-    public void testListTransactionsWithTransactionalIdPrefix() throws Exception {
+    public void testListTransactionsWithTransactionalIdPattern() throws Exception {
         String[] args = new String[] {
             "--bootstrap-server",
             "localhost:9092",
             "list",
-            "--transactional-id-prefix-filter",
-            "ba"
+            "--transactional-id-pattern-filter",
+            "ba.*"
         };
 
         Map<Integer, Collection<TransactionListing>> transactions = new HashMap<>();
@@ -322,7 +322,7 @@ public class TransactionsCommandTest {
             new TransactionListing("baz", 13579L, TransactionState.COMPLETE_COMMIT)
         ));
 
-        expectListTransactions(new ListTransactionsOptions().filterOnTransactionalIdPrefix("ba"), transactions);
+        expectListTransactions(new ListTransactionsOptions().filterOnTransactionalIdPattern("ba.*"), transactions);
 
         execute(args);
         assertNormalExit();

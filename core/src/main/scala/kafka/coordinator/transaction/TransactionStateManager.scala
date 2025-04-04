@@ -43,6 +43,7 @@ import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.AppendOrigin
 
+import java.util.regex.Pattern
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
 
@@ -316,7 +317,7 @@ class TransactionStateManager(brokerId: Int,
     filterProducerIds: Set[Long],
     filterStateNames: Set[String],
     filterDurationMs: Long,
-    filteredTransactionalIdPrefix: String
+    filteredTransactionalIdPattern: String
   ): ListTransactionsResponseData = {
     inReadLock(stateLock) {
       val response = new ListTransactionsResponseData()
@@ -344,7 +345,8 @@ class TransactionStateManager(brokerId: Int,
             false
           } else if (filterDurationMs >= 0 && (now - txnMetadata.txnStartTimestamp) <= filterDurationMs) {
             false
-          } else if (!filteredTransactionalIdPrefix.isEmpty && !txnMetadata.transactionalId.startsWith(filteredTransactionalIdPrefix)) {
+          } else if (!filteredTransactionalIdPattern.isEmpty &&
+            !Pattern.compile(filteredTransactionalIdPattern).matcher(txnMetadata.transactionalId).matches()) {
             false
           } else {
             true

@@ -91,12 +91,12 @@ public class ListTransactionsHandlerTest {
     public void testBuildRequestWithFilteredTransactionalIdPrefix() {
         int brokerId = 1;
         BrokerKey brokerKey = new BrokerKey(OptionalInt.of(brokerId));
-        String filteredTransactionalIdPrefix = "special-";
+        String filteredTransactionalIdPattern = "^special-";
         ListTransactionsOptions options = new ListTransactionsOptions()
-            .filterOnTransactionalIdPrefix(filteredTransactionalIdPrefix);
+            .filterOnTransactionalIdPattern(filteredTransactionalIdPattern);
         ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
         ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, singleton(brokerKey)).build();
-        assertEquals(filteredTransactionalIdPrefix, request.data().transactionalIdPrefixFilter());
+        assertEquals(filteredTransactionalIdPattern, request.data().transactionalIdPatternFilter());
         assertEquals(Collections.emptyList(), request.data().stateFilters());
     }
 

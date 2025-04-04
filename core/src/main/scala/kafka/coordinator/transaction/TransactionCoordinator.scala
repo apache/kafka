@@ -293,12 +293,12 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
     filteredProducerIds: Set[Long],
     filteredStates: Set[String],
     filteredDuration: Long = -1L,
-    filteredTransactionalIdPrefix: String = ""
+    filteredTransactionalIdPattern: String = ""
   ): ListTransactionsResponseData = {
     if (!isActive.get()) {
       new ListTransactionsResponseData().setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code)
     } else {
-      txnManager.listTransactionStates(filteredProducerIds, filteredStates, filteredDuration, filteredTransactionalIdPrefix)
+      txnManager.listTransactionStates(filteredProducerIds, filteredStates, filteredDuration, filteredTransactionalIdPattern)
     }
   }
 

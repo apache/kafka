@@ -447,8 +447,8 @@ public abstract class TransactionsCommand {
                     .action(store())
                     .type(Long.class)
                     .required(false);
-            subparser.addArgument("--transactional-id-prefix-filter")
-                    .help("Transactional id prefix to filter by")
+            subparser.addArgument("--transactional-id-pattern-filter")
+                    .help("Transactional id regular expression pattern to filter by")
                     .action(store())
                     .type(String.class)
                     .required(false);
@@ -458,7 +458,7 @@ public abstract class TransactionsCommand {
         public void execute(Admin admin, Namespace ns, PrintStream out) throws Exception {
             ListTransactionsOptions options = new ListTransactionsOptions();
             Optional.ofNullable(ns.getLong("duration_filter")).ifPresent(options::filterOnDuration);
-            Optional.ofNullable(ns.getString("transactional_id_prefix_filter")).ifPresent(options::filterOnTransactionalIdPrefix);
+            Optional.ofNullable(ns.getString("transactional_id_pattern_filter")).ifPresent(options::filterOnTransactionalIdPattern);
 
             final Map<Integer, Collection<TransactionListing>> result;
 

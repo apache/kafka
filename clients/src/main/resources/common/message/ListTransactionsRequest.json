@@ -20,7 +20,7 @@
   "name": "ListTransactionsRequest",
   // Version 1: adds DurationFilter to list transactions older than specified duration
 
-  // Version 2: adds TransactionalIdPrefixFilter to list transactions with the same prefix(KIP-1152)
+  // Version 2: adds TransactionalIdPatternFilter to list transactions with the same pattern(KIP-1152)
   "validVersions": "0-2",
   "flexibleVersions": "0+",
   "fields": [
@@ -33,8 +33,8 @@
     { "name": "DurationFilter", "type": "int64", "versions": "1+", "default": -1,
       "about": "Duration (in millis) to filter by: if < 0, all transactions will be returned; otherwise, only transactions running longer than this duration will be returned."
     },
-    { "name": "TransactionalIdPrefixFilter", "type": "string", "versions": "2+", "entityType": "transactionalId",
-      "about": "The transactional ID prefix to filter by: if empty, all transactions are returned; If non-empty, then only the transactions matching with the same prefix will be returned."
+    { "name": "TransactionalIdPatternFilter", "type": "string", "versions": "2+",
+      "about": "The transactional ID regular expression pattern to filter by: if empty, all transactions are returned; If non-empty, then only the transactions matching with the pattern will be returned."
     }
   ]
 }

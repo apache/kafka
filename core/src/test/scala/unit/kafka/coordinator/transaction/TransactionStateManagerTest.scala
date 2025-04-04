@@ -588,18 +588,18 @@ class TransactionStateManagerTest {
 
     putTransaction(transactionalId = "t0", producerId = 0, state = Ongoing)
     putTransaction(transactionalId = "t1", producerId = 1, state = Ongoing)
-    putTransaction(transactionalId = "special-0", producerId = 0, state = Ongoing)
+    putTransaction(transactionalId = "my-special-0", producerId = 0, state = Ongoing)
     // update time to create transactions with various durations
     time.sleep(1000)
     putTransaction(transactionalId = "t2", producerId = 2, state = PrepareCommit)
     putTransaction(transactionalId = "t3", producerId = 3, state = PrepareAbort)
-    putTransaction(transactionalId = "special-1", producerId = 0, state = PrepareAbort)
+    putTransaction(transactionalId = "your-special-1", producerId = 0, state = PrepareAbort)
     time.sleep(1000)
     putTransaction(transactionalId = "t4", producerId = 4, state = CompleteCommit)
     putTransaction(transactionalId = "t5", producerId = 5, state = CompleteAbort)
     putTransaction(transactionalId = "t6", producerId = 6, state = CompleteAbort)
     putTransaction(transactionalId = "t7", producerId = 7, state = PrepareEpochFence)
-    putTransaction(transactionalId = "special-2", producerId = 7, state = CompleteAbort)
+    putTransaction(transactionalId = "their-special-2", producerId = 7, state = CompleteAbort)
     time.sleep(1000)
     // Note that `Dead` transactions are never returned. This is a transient state
     // which is used when the transaction state is in the process of being deleted
@@ -611,21 +611,21 @@ class TransactionStateManagerTest {
       filterProducerIds: Set[Long] = Set.empty,
       filterStates: Set[String] = Set.empty,
       filterDuration: Long = -1L,
-      filteredTransactionalIdPrefix: String = ""
+      filteredTransactionalIdPattern: String = ""
     ): Unit = {
-      val listResponse = transactionManager.listTransactionStates(filterProducerIds, filterStates, filterDuration, filteredTransactionalIdPrefix)
+      val listResponse = transactionManager.listTransactionStates(filterProducerIds, filterStates, filterDuration, filteredTransactionalIdPattern)
       assertEquals(Errors.NONE, Errors.forCode(listResponse.errorCode))
       assertEquals(expectedTransactionalIds, listResponse.transactionStates.asScala.map(_.transactionalId).toSet)
       val expectedUnknownStates = filterStates.filter(state => TransactionState.fromName(state).isEmpty)
       assertEquals(expectedUnknownStates, listResponse.unknownStateFilters.asScala.toSet)
     }
-    assertListTransactions(Set("t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "special-0", "special-1", "special-2"))
-    assertListTransactions(Set("t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "special-0", "special-1", "special-2"), filterDuration = 0L)
-    assertListTransactions(Set("t0", "t1", "t2", "t3", "special-0", "special-1"), filterDuration = 1000L)
-    assertListTransactions(Set("t0", "t1", "special-0"), filterDuration = 2000L)
+    assertListTransactions(Set("t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "my-special-0", "your-special-1", "their-special-2"))
+    assertListTransactions(Set("t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "my-special-0", "your-special-1", "their-special-2"), filterDuration = 0L)
+    assertListTransactions(Set("t0", "t1", "t2", "t3", "my-special-0", "your-special-1"), filterDuration = 1000L)
+    assertListTransactions(Set("t0", "t1", "my-special-0"), filterDuration = 2000L)
     assertListTransactions(Set(), filterDuration = 3000L)
-    assertListTransactions(Set("t0", "t1", "special-0"), filterStates = Set("Ongoing"))
-    assertListTransactions(Set("t0", "t1", "special-0"), filterStates = Set("Ongoing", "UnknownState"))
+    assertListTransactions(Set("t0", "t1", "my-special-0"), filterStates = Set("Ongoing"))
+    assertListTransactions(Set("t0", "t1", "my-special-0"), filterStates = Set("Ongoing", "UnknownState"))
     assertListTransactions(Set("t2", "t4"), filterStates = Set("PrepareCommit", "CompleteCommit"))
     assertListTransactions(Set(), filterStates = Set("UnknownState"))
     assertListTransactions(Set("t5"), filterProducerIds = Set(5L))
@@ -635,10 +635,10 @@ class TransactionStateManagerTest {
     assertListTransactions(Set(), filterProducerIds = Set(3L, 6L), filterStates = Set("UnknownState"))
     assertListTransactions(Set(), filterProducerIds = Set(10L), filterStates = Set("CompleteCommit"))
     assertListTransactions(Set(), filterStates = Set("Dead"))
-    assertListTransactions(Set("special-0", "special-1", "special-2"), filteredTransactionalIdPrefix = "special-")
-    assertListTransactions(Set(), filteredTransactionalIdPrefix = "nothing")
-    assertListTransactions(Set("special-0", "special-1"), filterDuration = 1000L, filteredTransactionalIdPrefix = "special-")
-    assertListTransactions(Set("special-2"), filterProducerIds = Set(7L), filterStates = Set("CompleteCommit", "CompleteAbort"), filteredTransactionalIdPrefix = "special-")
+    assertListTransactions(Set("my-special-0", "your-special-1", "their-special-2"), filteredTransactionalIdPattern = ".*special-.*")
+    assertListTransactions(Set(), filteredTransactionalIdPattern = "nothing")
+    assertListTransactions(Set("my-special-0", "your-special-1"), filterDuration = 1000L, filteredTransactionalIdPattern = ".*special-.*")
+    assertListTransactions(Set("their-special-2"), filterProducerIds = Set(7L), filterStates = Set("CompleteCommit", "CompleteAbort"), filteredTransactionalIdPattern = ".*special-.*")
   }
 
   @Test
