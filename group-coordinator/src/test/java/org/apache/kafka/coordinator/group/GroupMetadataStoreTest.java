@@ -42,6 +42,7 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmen
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMetadataValue;
+import org.apache.kafka.coordinator.group.generated.CoordinatorRecordType;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentKey;
@@ -233,23 +234,14 @@ public class GroupMetadataStoreTest {
             ));
         });
 
-        CoordinatorRecord groupMetadataRecord = new CoordinatorRecord(
-            new ApiMessageAndVersion(
-                new GroupMetadataKey()
-                    .setGroup("group-id"),
-                (short) 2
-            ),
-            new ApiMessageAndVersion(
-                new GroupMetadataValue()
-                    .setMembers(members)
-                    .setGeneration(1)
-                    .setLeader("member-0")
-                    .setProtocolType("consumer")
-                    .setProtocol("range")
-                    .setCurrentStateTimestamp(time.milliseconds()),
-                MetadataVersion.latestTesting().groupMetadataValueVersion()
-            )
-        );
+        CoordinatorRecord groupMetadataRecord = GroupMetadataManagerTestContext.newGroupMetadataRecord("group-id",
+            new GroupMetadataValue()
+                .setMembers(members)
+                .setGeneration(1)
+                .setLeader("member-0")
+                .setProtocolType("consumer")
+                .setProtocol("range")
+                .setCurrentStateTimestamp(time.milliseconds()));
         replay(groupMetadataRecord);
         ClassicGroup group = groupMetadataStore.getOrMaybeCreateClassicGroup("group-id", false);
 
@@ -457,114 +449,113 @@ public class GroupMetadataStoreTest {
     private void replay(
         CoordinatorRecord record
     ) {
-        ApiMessageAndVersion key = record.key();
+        ApiMessage key = record.key();
         ApiMessageAndVersion value = record.value();
 
         if (key == null) {
             throw new IllegalStateException("Received a null key in " + record);
         }
 
-        switch (key.version()) {
-            case GroupMetadataKey.HIGHEST_SUPPORTED_VERSION:
+        switch (CoordinatorRecordType.fromId(record.key().apiKey())) {
+            case GROUP_METADATA:
                 groupMetadataStore.replay(
-                    (GroupMetadataKey) key.message(),
+                    (GroupMetadataKey) key,
                     (GroupMetadataValue) messageOrNull(value)
                 );
                 break;
-
-            case ConsumerGroupMemberMetadataKey.HIGHEST_SUPPORTED_VERSION:
+            case CONSUMER_GROUP_MEMBER_METADATA:
                 groupMetadataStore.replay(
-                    (ConsumerGroupMemberMetadataKey) key.message(),
+                    (ConsumerGroupMemberMetadataKey) key,
                     (ConsumerGroupMemberMetadataValue) messageOrNull(value)
                 );
                 break;
 
-            case ConsumerGroupMetadataKey.HIGHEST_SUPPORTED_VERSION:
+            case CONSUMER_GROUP_METADATA:
                 groupMetadataStore.replay(
-                    (ConsumerGroupMetadataKey) key.message(),
+                    (ConsumerGroupMetadataKey) key,
                     (ConsumerGroupMetadataValue) messageOrNull(value)
                 );
                 break;
 
-            case ConsumerGroupPartitionMetadataKey.HIGHEST_SUPPORTED_VERSION:
+            case CONSUMER_GROUP_PARTITION_METADATA:
                 groupMetadataStore.replay(
-                    (ConsumerGroupPartitionMetadataKey) key.message(),
+                    (ConsumerGroupPartitionMetadataKey) key,
                     (ConsumerGroupPartitionMetadataValue) messageOrNull(value)
                 );
                 break;
 
-            case ConsumerGroupTargetAssignmentMemberKey.HIGHEST_SUPPORTED_VERSION:
+            case CONSUMER_GROUP_TARGET_ASSIGNMENT_MEMBER:
                 groupMetadataStore.replay(
-                    (ConsumerGroupTargetAssignmentMemberKey) key.message(),
+                    (ConsumerGroupTargetAssignmentMemberKey) key,
                     (ConsumerGroupTargetAssignmentMemberValue) messageOrNull(value)
                 );
                 break;
 
-            case ConsumerGroupTargetAssignmentMetadataKey.HIGHEST_SUPPORTED_VERSION:
+            case CONSUMER_GROUP_TARGET_ASSIGNMENT_METADATA:
                 groupMetadataStore.replay(
-                    (ConsumerGroupTargetAssignmentMetadataKey) key.message(),
+                    (ConsumerGroupTargetAssignmentMetadataKey) key,
                     (ConsumerGroupTargetAssignmentMetadataValue) messageOrNull(value)
                 );
                 break;
 
-            case ConsumerGroupCurrentMemberAssignmentKey.HIGHEST_SUPPORTED_VERSION:
+            case CONSUMER_GROUP_CURRENT_MEMBER_ASSIGNMENT:
                 groupMetadataStore.replay(
-                    (ConsumerGroupCurrentMemberAssignmentKey) key.message(),
+                    (ConsumerGroupCurrentMemberAssignmentKey) key,
                     (ConsumerGroupCurrentMemberAssignmentValue) messageOrNull(value)
                 );
                 break;
 
-            case ShareGroupMemberMetadataKey.HIGHEST_SUPPORTED_VERSION:
+            case SHARE_GROUP_MEMBER_METADATA:
                 groupMetadataStore.replay(
-                    (ShareGroupMemberMetadataKey) key.message(),
+                    (ShareGroupMemberMetadataKey) key,
                     (ShareGroupMemberMetadataValue) messageOrNull(value)
                 );
                 break;
 
-            case ShareGroupMetadataKey.HIGHEST_SUPPORTED_VERSION:
+            case SHARE_GROUP_METADATA:
                 groupMetadataStore.replay(
-                    (ShareGroupMetadataKey) key.message(),
+                    (ShareGroupMetadataKey) key,
                     (ShareGroupMetadataValue) messageOrNull(value)
                 );
                 break;
 
-            case ShareGroupPartitionMetadataKey.HIGHEST_SUPPORTED_VERSION:
+            case SHARE_GROUP_PARTITION_METADATA:
                 groupMetadataStore.replay(
-                    (ShareGroupPartitionMetadataKey) key.message(),
+                    (ShareGroupPartitionMetadataKey) key,
                     (ShareGroupPartitionMetadataValue) messageOrNull(value)
                 );
                 break;
 
-            case ShareGroupTargetAssignmentMemberKey.HIGHEST_SUPPORTED_VERSION:
+            case SHARE_GROUP_TARGET_ASSIGNMENT_MEMBER:
                 groupMetadataStore.replay(
-                    (ShareGroupTargetAssignmentMemberKey) key.message(),
+                    (ShareGroupTargetAssignmentMemberKey) key,
                     (ShareGroupTargetAssignmentMemberValue) messageOrNull(value)
                 );
                 break;
 
-            case ShareGroupTargetAssignmentMetadataKey.HIGHEST_SUPPORTED_VERSION:
+            case SHARE_GROUP_TARGET_ASSIGNMENT_METADATA:
                 groupMetadataStore.replay(
-                    (ShareGroupTargetAssignmentMetadataKey) key.message(),
+                    (ShareGroupTargetAssignmentMetadataKey) key,
                     (ShareGroupTargetAssignmentMetadataValue) messageOrNull(value)
                 );
                 break;
 
-            case ShareGroupCurrentMemberAssignmentKey.HIGHEST_SUPPORTED_VERSION:
+            case SHARE_GROUP_CURRENT_MEMBER_ASSIGNMENT:
                 groupMetadataStore.replay(
-                    (ShareGroupCurrentMemberAssignmentKey) key.message(),
+                    (ShareGroupCurrentMemberAssignmentKey) key,
                     (ShareGroupCurrentMemberAssignmentValue) messageOrNull(value)
                 );
                 break;
 
-            case ConsumerGroupRegularExpressionKey.HIGHEST_SUPPORTED_VERSION:
+            case CONSUMER_GROUP_REGULAR_EXPRESSION:
                 groupMetadataStore.replay(
-                    (ConsumerGroupRegularExpressionKey) key.message(),
+                    (ConsumerGroupRegularExpressionKey) key,
                     (ConsumerGroupRegularExpressionValue) messageOrNull(value)
                 );
                 break;
 
             default:
-                throw new IllegalStateException("Received an unknown record type " + key.version()
+                throw new IllegalStateException("Received an unknown record type " + record.key().apiKey()
                     + " in " + record);
         }
     }

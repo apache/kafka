@@ -751,7 +751,6 @@ public class GroupMetadataStore {
         if (group == null) {
             ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
             groups.put(groupId, consumerGroup);
-            metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
             return consumerGroup;
         } else if (group.type() == CONSUMER) {
             return (ConsumerGroup) group;
@@ -762,7 +761,6 @@ public class GroupMetadataStore {
             // replaying consumer group records after offset commit records would not work.
             ConsumerGroup consumerGroup = new ConsumerGroup(snapshotRegistry, groupId, metrics);
             groups.put(groupId, consumerGroup);
-            metrics.onConsumerGroupStateTransition(null, consumerGroup.state());
             return consumerGroup;
         } else {
             throw new IllegalStateException(String.format("Group %s is not a consumer group", groupId));
