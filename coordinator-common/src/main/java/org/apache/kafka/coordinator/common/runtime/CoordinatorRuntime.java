@@ -941,7 +941,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                     currentBatch.deferredEvents.add(event);
                 } else {
                     if (coordinator.lastCommittedOffset() < coordinator.lastWrittenOffset()) {
-                        deferredEventQueue.add(coordinator.lastWrittenOffset(), event);
+                        deferredEventQueue.add(coordinator.lastWrittenOffset(), DeferredEventCollection.of(log, event));
                     } else {
                         event.complete(null);
                     }
@@ -1128,7 +1128,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
                 runtimeMetrics.recordFlushTime(time.milliseconds() - flushStartMs);
                 coordinator.updateLastWrittenOffset(offset);
 
-                deferredEventQueue.add(offset, event);
+                deferredEventQueue.add(offset, DeferredEventCollection.of(log, event));
             } catch (Throwable t) {
                 coordinator.revertLastWrittenOffset(prevLastWrittenOffset);
                 event.complete(t);
@@ -1199,6 +1199,14 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         @Override
         public String toString() {
             return "DeferredEventCollection(events=" + events + ")";
+        }
+
+        public static DeferredEventCollection of(Logger log, DeferredEvent... deferredEvents) {
+            DeferredEventCollection collection = new DeferredEventCollection(log);
+            for (DeferredEvent deferredEvent : deferredEvents) {
+                collection.add(deferredEvent);
+            }
+            return collection;
         }
     }
 

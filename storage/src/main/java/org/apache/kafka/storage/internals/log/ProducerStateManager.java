@@ -49,7 +49,6 @@ import java.util.Optional;
 import java.util.OptionalLong;
 import java.util.TreeMap;
 import java.util.concurrent.ConcurrentSkipListMap;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 /**
@@ -701,10 +700,10 @@ public class ProducerStateManager {
         if (dir.exists() && dir.isDirectory()) {
             try (Stream<Path> paths = Files.list(dir.toPath())) {
                 return paths.filter(ProducerStateManager::isSnapshotFile)
-                        .map(path -> new SnapshotFile(path.toFile())).collect(Collectors.toList());
+                        .map(path -> new SnapshotFile(path.toFile())).toList();
             }
         } else {
-            return Collections.emptyList();
+            return List.of();
         }
     }
 
