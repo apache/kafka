@@ -33,7 +33,6 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.stream.Collectors;
 
 import scala.jdk.javaapi.CollectionConverters;
 
@@ -77,7 +76,7 @@ public class TransactionsWithTieredStoreTest extends TransactionsTest {
         CollectionConverters.asJava(topicPartitions).forEach(topicPartition -> {
             List<BrokerLocalStorage> localStorages = CollectionConverters.asJava(brokers()).stream()
                     .map(b -> new BrokerLocalStorage(b.config().brokerId(), CollectionConverters.asJava(b.config().logDirs().toSet()), STORAGE_WAIT_TIMEOUT_SEC))
-                    .collect(Collectors.toList());
+                    .toList();
             localStorages
                     .stream()
                     // Select brokers which are assigned a replica of the topic-partition

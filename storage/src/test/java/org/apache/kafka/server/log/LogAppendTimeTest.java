@@ -36,9 +36,9 @@ import org.apache.kafka.common.test.api.Type;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.IntStream;
 
@@ -108,7 +108,7 @@ public class LogAppendTimeTest {
             try (Consumer<byte[], byte[]> consumer = clusterInstance.consumer(
                 Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol.name())
             )) {
-                consumer.subscribe(Collections.singleton(TOPIC));
+                consumer.subscribe(Set.of(TOPIC));
                 ArrayList<ConsumerRecord<byte[], byte[]>> consumerRecords = new ArrayList<>();
                 TestUtils.waitForCondition(() -> {
                     ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
