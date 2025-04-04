@@ -18,7 +18,6 @@ package kafka.coordinator.transaction
 
 import java.util
 import java.util.Arrays.asList
-import java.util.Collections
 import java.util.Optional
 import java.util.concurrent.{Callable, Executors, Future}
 import kafka.server.KafkaConfig
@@ -155,7 +154,7 @@ class TransactionMarkerChannelManagerTest {
 
       val header = new RequestHeader(ApiKeys.WRITE_TXN_MARKERS, 0, "client", 1)
       val response = new WriteTxnMarkersResponse(
-        Collections.singletonMap(producerId2: java.lang.Long, Collections.singletonMap(partition1, Errors.NONE)))
+        util.Map.of(producerId2: java.lang.Long, util.Map.of(partition1, Errors.NONE)))
       val clientResponse = new ClientResponse(header, null, null,
         time.milliseconds(), time.milliseconds(), false, null, null,
         response)
@@ -204,7 +203,7 @@ class TransactionMarkerChannelManagerTest {
     // Build a successful client response.
     val header = new RequestHeader(ApiKeys.WRITE_TXN_MARKERS, 0, "client", 1)
     val successfulResponse = new WriteTxnMarkersResponse(
-      Collections.singletonMap(producerId2: java.lang.Long, Collections.singletonMap(partition1, Errors.NONE)))
+      util.Map.of(producerId2: java.lang.Long, util.Map.of(partition1, Errors.NONE)))
     val successfulClientResponse = new ClientResponse(header, null, null,
       time.milliseconds(), time.milliseconds(), false, null, null,
       successfulResponse)

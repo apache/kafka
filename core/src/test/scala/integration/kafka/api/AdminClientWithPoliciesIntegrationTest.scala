@@ -14,7 +14,7 @@
 package kafka.api
 
 import java.util
-import java.util.{Collections, Properties}
+import java.util.Properties
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, TestUtils}
@@ -127,7 +127,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
     // Set a mutable broker config
     val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, brokers.head.config.brokerId.toString)
-    var alterResult = client.incrementalAlterConfigs(Collections.singletonMap(brokerResource,
+    var alterResult = client.incrementalAlterConfigs(util.Map.of(brokerResource,
       util.Arrays.asList(new AlterConfigOp(new ConfigEntry(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, "50000"), OpType.SET))))
     alterResult.all.get
     assertEquals(Set(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG), validationsForResource(brokerResource).head.configs().keySet().asScala)

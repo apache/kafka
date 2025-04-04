@@ -18,7 +18,7 @@
 package kafka.server
 
 import java.nio.ByteBuffer
-import java.util.{Collections, Properties}
+import java.util.Properties
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, TopicDescription}
 import org.apache.kafka.common.TopicPartition
@@ -55,10 +55,10 @@ class ProduceRequestTest extends BaseRequestTest {
     def sendAndCheck(memoryRecords: MemoryRecords, expectedOffset: Long): Unit = {
       val topicPartition = new TopicPartition("topic", partition)
       val produceRequest = ProduceRequest.builder(new ProduceRequestData()
-        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(java.util.List.of(
           new ProduceRequestData.TopicProduceData()
             .setName(topicPartition.topic())
-            .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
+            .setPartitionData(java.util.List.of(new ProduceRequestData.PartitionProduceData()
               .setIndex(topicPartition.partition())
               .setRecords(memoryRecords)))).iterator))
         .setAcks((-1).toShort)
@@ -135,10 +135,10 @@ class ProduceRequestTest extends BaseRequestTest {
     val records = createRecords(RecordBatch.MAGIC_VALUE_V2, recordTimestamp, Compression.gzip().build())
     val topicPartition = new TopicPartition("topic", partition)
     val produceResponse = sendProduceRequest(leader, ProduceRequest.builder(new ProduceRequestData()
-      .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+      .setTopicData(new ProduceRequestData.TopicProduceDataCollection(java.util.List.of(
         new ProduceRequestData.TopicProduceData()
           .setName(topicPartition.topic())
-          .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
+          .setPartitionData(java.util.List.of(new ProduceRequestData.PartitionProduceData()
             .setIndex(topicPartition.partition())
             .setRecords(records)))).iterator))
       .setAcks((-1).toShort)
@@ -184,10 +184,10 @@ class ProduceRequestTest extends BaseRequestTest {
     val records = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("key".getBytes, "value".getBytes))
     val topicPartition = new TopicPartition("topic", partition)
     val produceRequest = ProduceRequest.builder(new ProduceRequestData()
-      .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+      .setTopicData(new ProduceRequestData.TopicProduceDataCollection(java.util.List.of(
         new ProduceRequestData.TopicProduceData()
           .setName(topicPartition.topic())
-          .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
+          .setPartitionData(java.util.List.of(new ProduceRequestData.PartitionProduceData()
             .setIndex(topicPartition.partition())
             .setRecords(records)))).iterator))
       .setAcks((-1).toShort)
@@ -222,10 +222,10 @@ class ProduceRequestTest extends BaseRequestTest {
     memoryRecords.buffer.array.update(DefaultRecordBatch.RECORD_BATCH_OVERHEAD + lz4ChecksumOffset, 0)
     val topicPartition = new TopicPartition("topic", partition)
     val produceResponse = sendProduceRequest(leader, ProduceRequest.builder(new ProduceRequestData()
-      .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+      .setTopicData(new ProduceRequestData.TopicProduceDataCollection(java.util.List.of(
         new ProduceRequestData.TopicProduceData()
           .setName(topicPartition.topic())
-          .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
+          .setPartitionData(java.util.List.of(new ProduceRequestData.PartitionProduceData()
             .setIndex(topicPartition.partition())
             .setRecords(memoryRecords)))).iterator))
       .setAcks((-1).toShort)
@@ -260,9 +260,9 @@ class ProduceRequestTest extends BaseRequestTest {
       new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes))
     val topicPartition = new TopicPartition("topic", partition)
     val partitionRecords = new ProduceRequestData()
-      .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
+      .setTopicData(new ProduceRequestData.TopicProduceDataCollection(java.util.List.of(
         new ProduceRequestData.TopicProduceData()
-          .setName("topic").setPartitionData(Collections.singletonList(
+          .setName("topic").setPartitionData(java.util.List.of(
             new ProduceRequestData.PartitionProduceData()
               .setIndex(partition)
               .setRecords(memoryRecords))))

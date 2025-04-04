@@ -29,7 +29,7 @@ import org.junit.jupiter.api.Assertions.{assertThrows, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-import java.util.Collections
+import java.util
 import scala.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
 import scala.util.Using
@@ -110,7 +110,7 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
       Using.resource(createScramAdminClient(kafkaClientSaslMechanism, otherClientPrincipal.getName, otherClientPassword)) { otherClientAdminClient =>
         otherClientAdminClient.createDelegationToken().delegationToken().get()
         val tokens = describeTokenFailAdminClient.describeDelegationToken(
-          new DescribeDelegationTokenOptions().owners(Collections.singletonList(otherClientPrincipal))
+          new DescribeDelegationTokenOptions().owners(util.List.of(otherClientPrincipal))
         ).delegationTokens.get.asScala
         assertTrue(tokens.isEmpty)
       }
@@ -123,7 +123,7 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
     val adminClient = createTokenRequesterAdminClient()
     try {
       val tokens = adminClient.describeDelegationToken(
-        new DescribeDelegationTokenOptions().owners(Collections.singletonList(clientPrincipal)))
+        new DescribeDelegationTokenOptions().owners(util.List.of(clientPrincipal)))
         .delegationTokens.get.asScala
       assertTrue(tokens.nonEmpty)
       tokens.foreach(t => {

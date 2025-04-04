@@ -19,7 +19,6 @@ package kafka.server.metadata
 
 import kafka.coordinator.transaction.TransactionCoordinator
 
-import java.util.Collections.{singleton, singletonList, singletonMap}
 import java.util.Properties
 import java.util.concurrent.atomic.{AtomicInteger, AtomicReference}
 import kafka.log.LogManager
@@ -48,6 +47,7 @@ import org.mockito.Mockito.{doThrow, mock, verify}
 import org.mockito.invocation.InvocationOnMock
 import org.mockito.stubbing.Answer
 
+import java.util
 import java.util.concurrent.TimeUnit
 import scala.jdk.CollectionConverters._
 
@@ -121,17 +121,17 @@ class BrokerMetadataPublisherTest {
       val admin = Admin.create(cluster.clientProperties())
       try {
         assertEquals(0, numTimesReloadCalled.get())
-        admin.incrementalAlterConfigs(singletonMap(
+        admin.incrementalAlterConfigs(util.Map.of(
           new ConfigResource(BROKER, ""),
-          singleton(new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "123"), SET)))).all().get()
+          util.Set.of(new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "123"), SET)))).all().get()
         TestUtils.waitUntilTrue(() => numTimesReloadCalled.get() == 0,
           "numTimesConfigured never reached desired value")
 
         // Setting the foo.bar.test.configuration to 1 will still trigger reconfiguration because
         // reloadUpdatedFilesWithoutConfigChange will be called.
-        admin.incrementalAlterConfigs(singletonMap(
+        admin.incrementalAlterConfigs(util.Map.of(
           new ConfigResource(BROKER, broker.config.nodeId.toString),
-          singleton(new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "123"), SET)))).all().get()
+          util.Set.of(new AlterConfigOp(new ConfigEntry(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "123"), SET)))).all().get()
         TestUtils.waitUntilTrue(() => numTimesReloadCalled.get() == 1,
           "numTimesConfigured never reached desired value")
       } finally {
@@ -166,7 +166,7 @@ class BrokerMetadataPublisherTest {
       broker.sharedServer.loader.installPublishers(List(publisher).asJava).get(1, TimeUnit.MINUTES)
       val admin = Admin.create(cluster.clientProperties())
       try {
-        admin.createTopics(singletonList(new NewTopic("foo", 1, 1.toShort))).all().get()
+        admin.createTopics(util.List.of(new NewTopic("foo", 1, 1.toShort))).all().get()
       } finally {
         admin.close()
       }

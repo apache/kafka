@@ -20,7 +20,6 @@ package kafka.tools
 import java.io.{ByteArrayOutputStream, File, PrintWriter}
 import java.nio.ByteBuffer
 import java.util
-import java.util.Collections
 import java.util.Optional
 import java.util.Properties
 import java.util.stream.IntStream
@@ -700,7 +699,7 @@ class DumpLogSegmentsTest {
             .setProtocol("range")
             .setLeader("member")
             .setGeneration(10)
-            .setMembers(Collections.singletonList(
+            .setMembers(util.List.of(
               new GroupMetadataValue.MemberMetadata()
                 .setMemberId("member")
                 .setClientId("client")
@@ -710,13 +709,13 @@ class DumpLogSegmentsTest {
                 .setRebalanceTimeout(1000)
                 .setSubscription(Utils.toArray(ConsumerProtocol.serializeSubscription(
                   new Subscription(
-                    Collections.singletonList("foo"),
+                    util.List.of("foo"),
                     null,
-                    Collections.singletonList(new TopicPartition("foo", 0)),
+                    util.List.of(new TopicPartition("foo", 0)),
                     0,
                     Optional.of("rack")))))
                 .setAssignment(Utils.toArray(ConsumerProtocol.serializeAssignment(
-                  new Assignment(Collections.singletonList(new TopicPartition("foo", 0))))))
+                  new Assignment(util.List.of(new TopicPartition("foo", 0))))))
             )),
           GroupMetadataValue.HIGHEST_SUPPORTED_VERSION
         )
@@ -742,7 +741,7 @@ class DumpLogSegmentsTest {
             .setProtocol("range")
             .setLeader("member")
             .setGeneration(10)
-            .setMembers(Collections.singletonList(
+            .setMembers(util.List.of(
               new GroupMetadataValue.MemberMetadata()
                 .setMemberId("member")
                 .setClientId("client")

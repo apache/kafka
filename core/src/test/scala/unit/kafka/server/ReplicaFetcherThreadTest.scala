@@ -49,7 +49,7 @@ import org.mockito.Mockito.{mock, times, verify, when}
 import java.lang.{Long => JLong}
 import java.nio.charset.StandardCharsets
 import java.util
-import java.util.{Collections, Optional}
+import java.util.Optional
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
@@ -278,7 +278,7 @@ class ReplicaFetcherThreadTest {
     stub(partition, replicaManager, log)
 
     // Create the fetcher thread
-    val mockNetwork = new MockBlockingSender(Collections.emptyMap(), brokerEndPoint, Time.SYSTEM)
+    val mockNetwork = new MockBlockingSender(util.Map.of(), brokerEndPoint, Time.SYSTEM)
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
     val fetchSessionHandler = new FetchSessionHandler(logContext, brokerEndPoint.id)
     val leader = new RemoteLeaderEndPoint(logContext.logPrefix, mockNetwork, fetchSessionHandler, config,
@@ -398,7 +398,7 @@ class ReplicaFetcherThreadTest {
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
 
     val mockNetwork = new MockBlockingSender(
-      Collections.emptyMap(),
+      util.Map.of,
       brokerEndPoint,
       Time.SYSTEM
     )
@@ -489,7 +489,7 @@ class ReplicaFetcherThreadTest {
     val logContext = new LogContext(s"[ReplicaFetcher replicaId=${config.brokerId}, leaderId=${brokerEndPoint.id}, fetcherId=0] ")
 
     val mockNetwork = new MockBlockingSender(
-      Collections.emptyMap(),
+      util.Map.of,
       brokerEndPoint,
       Time.SYSTEM
     )
@@ -663,8 +663,8 @@ class ReplicaFetcherThreadTest {
     assertTrue(fetchRequestOpt2.isDefined)
     val fetchRequestBuilder2 = fetchRequestOpt2.get.fetchRequest
     assertEquals(partitionDataMap2.asJava, fetchRequestBuilder2.fetchData())
-    assertEquals(Collections.singletonList(tid2p1), fetchRequestBuilder2.replaced())
-    assertEquals(Collections.singletonList(tid1p0), fetchRequestBuilder2.removed())
+    assertEquals(util.List.of(tid2p1), fetchRequestBuilder2.replaced())
+    assertEquals(util.List.of(tid1p0), fetchRequestBuilder2.removed())
   }
 
   @ParameterizedTest

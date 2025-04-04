@@ -17,7 +17,7 @@
 
 package kafka.api
 
-import java.util.{Collections, Properties}
+import java.util.Properties
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
@@ -35,6 +35,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
+import java.util
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
 
@@ -199,7 +200,7 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
   }
 
   private def producerState: List[ProducerState] = {
-    val describeResult = admin.describeProducers(Collections.singletonList(tp0))
+    val describeResult = admin.describeProducers(util.List.of(tp0))
     val activeProducers = describeResult.partitionResult(tp0).get().activeProducers
     activeProducers.asScala.toList
   }
@@ -207,7 +208,7 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
   private def waitUntilTransactionalStateExpires(): Unit = {
     TestUtils.waitUntilTrue(() =>  {
       var removedTransactionState = false
-      val txnDescribeResult = admin.describeTransactions(Collections.singletonList("transactionalProducer")).description("transactionalProducer")
+      val txnDescribeResult = admin.describeTransactions(util.List.of("transactionalProducer")).description("transactionalProducer")
       try {
         txnDescribeResult.get()
       } catch {
@@ -220,7 +221,7 @@ class TransactionsExpirationTest extends KafkaServerTestHarness {
   }
 
   private def waitUntilTransactionalStateExists(): Unit = {
-    val describeState = admin.describeTransactions(Collections.singletonList("transactionalProducer")).description("transactionalProducer")
+    val describeState = admin.describeTransactions(util.List.of("transactionalProducer")).description("transactionalProducer")
     TestUtils.waitUntilTrue(() => describeState.isDone, "Transactional state was never added.")
   }
 

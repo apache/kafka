@@ -47,9 +47,8 @@ import org.mockito.Mockito._
 
 import java.net.InetAddress
 import java.util
-import java.util.Collections.{singletonList, singletonMap}
 import java.util.concurrent.ExecutionException
-import java.util.{Collections, Properties}
+import java.util.Properties
 import scala.collection.{Map, Seq}
 import scala.jdk.CollectionConverters._
 
@@ -236,10 +235,10 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val admin = createAdminClient()
     try {
       val alterations = util.Arrays.asList(
-        new ClientQuotaAlteration(new ClientQuotaEntity(singletonMap(IP, null)),
-          singletonList(new Op(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, 20))),
-        new ClientQuotaAlteration(new ClientQuotaEntity(singletonMap(IP, "1.2.3.4")),
-          singletonList(new Op(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, 10))))
+        new ClientQuotaAlteration(new ClientQuotaEntity(util.Map.of(IP, null)),
+          util.List.of(new Op(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, 20))),
+        new ClientQuotaAlteration(new ClientQuotaEntity(util.Map.of(IP, "1.2.3.4")),
+          util.List.of(new Op(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, 10))))
       admin.alterClientQuotas(alterations).all().get()
     } finally {
       admin.close()
@@ -257,10 +256,10 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val admin = createAdminClient()
     try {
       val alterations = util.Arrays.asList(
-        new ClientQuotaAlteration(new ClientQuotaEntity(singletonMap(IP, null)),
-          singletonList(new Op(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, 20))),
-        new ClientQuotaAlteration(new ClientQuotaEntity(singletonMap(IP, "1.2.3.4")),
-          singletonList(new Op(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, 10))))
+        new ClientQuotaAlteration(new ClientQuotaEntity(util.Map.of(IP, null)),
+          util.List.of(new Op(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, 20))),
+        new ClientQuotaAlteration(new ClientQuotaEntity(util.Map.of(IP, "1.2.3.4")),
+          util.List.of(new Op(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, 10))))
       admin.alterClientQuotas(alterations).all().get()
 
       def verifyConnectionQuota(ip: InetAddress, expectedQuota: Integer): Unit = {
@@ -278,14 +277,14 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       verifyConnectionQuota(defaultQuotaIp, 20)
 
       val deletions1 = util.Arrays.asList(
-        new ClientQuotaAlteration(new ClientQuotaEntity(singletonMap(IP, "1.2.3.4")),
-          singletonList(new Op(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, null))))
+        new ClientQuotaAlteration(new ClientQuotaEntity(util.Map.of(IP, "1.2.3.4")),
+          util.List.of(new Op(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, null))))
       admin.alterClientQuotas(deletions1).all().get()
       verifyConnectionQuota(overrideQuotaIp, 20)
 
       val deletions2 = util.Arrays.asList(
-        new ClientQuotaAlteration(new ClientQuotaEntity(singletonMap(IP, null)),
-          singletonList(new Op(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, null))))
+        new ClientQuotaAlteration(new ClientQuotaEntity(util.Map.of(IP, null)),
+          util.List.of(new Op(QuotaConfig.IP_CONNECTION_RATE_OVERRIDE_CONFIG, null))))
       admin.alterClientQuotas(deletions2).all().get()
       verifyConnectionQuota(overrideQuotaIp, QuotaConfig.IP_CONNECTION_RATE_DEFAULT)
     } finally {
@@ -563,7 +562,7 @@ class DynamicConfigChangeUnitTest {
     when(log0.remoteLogEnabled()).thenReturn(true)
     when(partition0.isLeader).thenReturn(true)
     when(replicaManager.onlinePartition(tp0)).thenReturn(Some(partition0))
-    when(log0.config).thenReturn(new LogConfig(Collections.emptyMap()))
+    when(log0.config).thenReturn(new LogConfig(util.Map.of()))
 
     val tp1 = new TopicPartition(topic, 1)
     val log1: UnifiedLog = mock(classOf[UnifiedLog])
@@ -572,7 +571,7 @@ class DynamicConfigChangeUnitTest {
     when(log1.remoteLogEnabled()).thenReturn(true)
     when(partition1.isLeader).thenReturn(false)
     when(replicaManager.onlinePartition(tp1)).thenReturn(Some(partition1))
-    when(log1.config).thenReturn(new LogConfig(Collections.emptyMap()))
+    when(log1.config).thenReturn(new LogConfig(util.Map.of()))
 
     val leaderPartitionsArg: ArgumentCaptor[util.Set[Partition]] = ArgumentCaptor.forClass(classOf[util.Set[Partition]])
     val followerPartitionsArg: ArgumentCaptor[util.Set[Partition]] = ArgumentCaptor.forClass(classOf[util.Set[Partition]])
@@ -581,8 +580,8 @@ class DynamicConfigChangeUnitTest {
     val isRemoteLogEnabledBeforeUpdate = false
     val configHandler: TopicConfigHandler = new TopicConfigHandler(replicaManager, null, null)
     configHandler.maybeUpdateRemoteLogComponents(topic, Seq(log0, log1), isRemoteLogEnabledBeforeUpdate, false)
-    assertEquals(Collections.singleton(partition0), leaderPartitionsArg.getValue)
-    assertEquals(Collections.singleton(partition1), followerPartitionsArg.getValue)
+    assertEquals(util.Set.of(partition0), leaderPartitionsArg.getValue)
+    assertEquals(util.Set.of(partition1), followerPartitionsArg.getValue)
   }
 
   @Test
@@ -598,7 +597,7 @@ class DynamicConfigChangeUnitTest {
     val log0: UnifiedLog = mock(classOf[UnifiedLog])
     when(log0.remoteLogEnabled()).thenReturn(true)
     doNothing().when(rlm).onLeadershipChange(any(), any(), any())
-    when(log0.config).thenReturn(new LogConfig(Collections.emptyMap()))
+    when(log0.config).thenReturn(new LogConfig(util.Map.of()))
     when(log0.topicPartition).thenReturn(tp0)
     when(partition.isLeader).thenReturn(true)
 

@@ -50,7 +50,7 @@ import org.junit.jupiter.params.provider.ValueSource
 import java.net.InetAddress
 import java.util
 import java.util.concurrent.{Executors, Future, TimeUnit}
-import java.util.{Collections, Optional, Properties}
+import java.util.{Optional, Properties}
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 
@@ -242,8 +242,8 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.PRODUCE =>
           requests.ProduceRequest.builder(new ProduceRequestData()
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
-              Collections.singletonList(new ProduceRequestData.TopicProduceData()
-                .setName(tp.topic()).setPartitionData(Collections.singletonList(
+              util.List.of(new ProduceRequestData.TopicProduceData()
+                .setName(tp.topic()).setPartitionData(util.List.of(
                 new ProduceRequestData.PartitionProduceData()
                   .setIndex(tp.partition())
                   .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test".getBytes))))))
@@ -276,11 +276,11 @@ class RequestQuotaTest extends BaseRequestTest {
               .setGenerationIdOrMemberEpoch(1)
               .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
               .setTopics(
-                Collections.singletonList(
+                util.List.of(
                   new OffsetCommitRequestData.OffsetCommitRequestTopic()
                     .setName(topic)
                     .setPartitions(
-                      Collections.singletonList(
+                      util.List.of(
                         new OffsetCommitRequestData.OffsetCommitRequestPartition()
                           .setPartitionIndex(0)
                           .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
@@ -298,7 +298,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new FindCoordinatorRequest.Builder(
               new FindCoordinatorRequestData()
                 .setKeyType(FindCoordinatorRequest.CoordinatorType.GROUP.id)
-                .setCoordinatorKeys(Collections.singletonList("test-group")))
+                .setCoordinatorKeys(util.List.of("test-group")))
 
         case ApiKeys.JOIN_GROUP =>
           new JoinGroupRequest.Builder(
@@ -310,7 +310,7 @@ class RequestQuotaTest extends BaseRequestTest {
               .setProtocolType("consumer")
               .setProtocols(
                 new JoinGroupRequestProtocolCollection(
-                  Collections.singletonList(new JoinGroupRequestData.JoinGroupRequestProtocol()
+                  util.List.of(new JoinGroupRequestData.JoinGroupRequestProtocol()
                     .setName("consumer-range")
                     .setMetadata("test".getBytes())).iterator()
                 )
@@ -329,7 +329,7 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.LEAVE_GROUP =>
           new LeaveGroupRequest.Builder(
             "test-leave-group",
-            Collections.singletonList(
+            util.List.of(
               new MemberIdentity()
                 .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID))
           )
@@ -340,7 +340,7 @@ class RequestQuotaTest extends BaseRequestTest {
               .setGroupId("test-sync-group")
               .setGenerationId(1)
               .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)
-              .setAssignments(Collections.emptyList())
+              .setAssignments(util.List.of())
           )
 
         case ApiKeys.DESCRIBE_GROUPS =>
@@ -361,23 +361,23 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.CREATE_TOPICS =>
           new CreateTopicsRequest.Builder(
             new CreateTopicsRequestData().setTopics(
-              new CreatableTopicCollection(Collections.singleton(
+              new CreatableTopicCollection(util.Set.of(
                 new CreatableTopic().setName("topic-2").setNumPartitions(1).
                   setReplicationFactor(1.toShort)).iterator())))
 
         case ApiKeys.DELETE_TOPICS =>
           new DeleteTopicsRequest.Builder(
               new DeleteTopicsRequestData()
-              .setTopicNames(Collections.singletonList("topic-2"))
+              .setTopicNames(util.List.of("topic-2"))
               .setTimeoutMs(5000))
 
         case ApiKeys.DELETE_RECORDS =>
           new DeleteRecordsRequest.Builder(
             new DeleteRecordsRequestData()
               .setTimeoutMs(5000)
-              .setTopics(Collections.singletonList(new DeleteRecordsRequestData.DeleteRecordsTopic()
+              .setTopics(util.List.of(new DeleteRecordsRequestData.DeleteRecordsTopic()
                 .setName(tp.topic())
-                .setPartitions(Collections.singletonList(new DeleteRecordsRequestData.DeleteRecordsPartition()
+                .setPartitions(util.List.of(new DeleteRecordsRequestData.DeleteRecordsPartition()
                   .setPartitionIndex(tp.partition())
                   .setOffset(0L))))))
 
@@ -434,7 +434,7 @@ class RequestQuotaTest extends BaseRequestTest {
           new DescribeAclsRequest.Builder(AclBindingFilter.ANY)
 
         case ApiKeys.CREATE_ACLS =>
-          new CreateAclsRequest.Builder(new CreateAclsRequestData().setCreations(Collections.singletonList(
+          new CreateAclsRequest.Builder(new CreateAclsRequestData().setCreations(util.List.of(
             new CreateAclsRequestData.AclCreation()
               .setResourceType(AdminResourceType.TOPIC.code)
               .setResourceName("mytopic")
@@ -444,7 +444,7 @@ class RequestQuotaTest extends BaseRequestTest {
               .setOperation(AclOperation.WRITE.code)
               .setPermissionType(AclPermissionType.DENY.code))))
         case ApiKeys.DELETE_ACLS =>
-          new DeleteAclsRequest.Builder(new DeleteAclsRequestData().setFilters(Collections.singletonList(
+          new DeleteAclsRequest.Builder(new DeleteAclsRequestData().setFilters(util.List.of(
             new DeleteAclsRequestData.DeleteAclsFilter()
               .setResourceTypeFilter(AdminResourceType.TOPIC.code)
               .setResourceNameFilter(null)
@@ -455,14 +455,14 @@ class RequestQuotaTest extends BaseRequestTest {
               .setPermissionType(AclPermissionType.DENY.code))))
         case ApiKeys.DESCRIBE_CONFIGS =>
           new DescribeConfigsRequest.Builder(new DescribeConfigsRequestData()
-            .setResources(Collections.singletonList(new DescribeConfigsRequestData.DescribeConfigsResource()
+            .setResources(util.List.of(new DescribeConfigsRequestData.DescribeConfigsResource()
               .setResourceType(ConfigResource.Type.TOPIC.id)
               .setResourceName(tp.topic))))
 
         case ApiKeys.ALTER_CONFIGS =>
           new AlterConfigsRequest.Builder(
-            Collections.singletonMap(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic),
-              new AlterConfigsRequest.Config(Collections.singleton(
+            util.Map.of(new ConfigResource(ConfigResource.Type.TOPIC, tp.topic),
+              new AlterConfigsRequest.Config(util.Set.of(
                 new AlterConfigsRequest.ConfigEntry(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "1000000")
               ))), true)
 
@@ -471,7 +471,7 @@ class RequestQuotaTest extends BaseRequestTest {
             .setPath(logDir)
           dir.topics.add(new AlterReplicaLogDirsRequestData.AlterReplicaLogDirTopic()
             .setName(tp.topic)
-            .setPartitions(Collections.singletonList(tp.partition)))
+            .setPartitions(util.List.of(tp.partition)))
           val data = new AlterReplicaLogDirsRequestData()
           data.dirs.add(dir)
           new AlterReplicaLogDirsRequest.Builder(data)
@@ -480,7 +480,7 @@ class RequestQuotaTest extends BaseRequestTest {
           val data = new DescribeLogDirsRequestData()
           data.topics.add(new DescribeLogDirsRequestData.DescribableLogDirTopic()
             .setTopic(tp.topic)
-            .setPartitions(Collections.singletonList(tp.partition)))
+            .setPartitions(util.List.of(tp.partition)))
           new DescribeLogDirsRequest.Builder(data)
 
         case ApiKeys.CREATE_PARTITIONS =>
@@ -493,7 +493,7 @@ class RequestQuotaTest extends BaseRequestTest {
         case ApiKeys.CREATE_DELEGATION_TOKEN =>
           new CreateDelegationTokenRequest.Builder(
               new CreateDelegationTokenRequestData()
-                .setRenewers(Collections.singletonList(new CreateDelegationTokenRequestData.CreatableRenewers()
+                .setRenewers(util.List.of(new CreateDelegationTokenRequestData.CreatableRenewers()
                 .setPrincipalType("User")
                 .setPrincipalName("test")))
                 .setMaxLifetimeMs(1000)
@@ -506,7 +506,7 @@ class RequestQuotaTest extends BaseRequestTest {
                 .setExpiryTimePeriodMs(1000L))
 
         case ApiKeys.DESCRIBE_DELEGATION_TOKEN =>
-          new DescribeDelegationTokenRequest.Builder(Collections.singletonList(SecurityUtils.parseKafkaPrincipal("User:test")))
+          new DescribeDelegationTokenRequest.Builder(util.List.of(SecurityUtils.parseKafkaPrincipal("User:test")))
 
         case ApiKeys.RENEW_DELEGATION_TOKEN =>
           new RenewDelegationTokenRequest.Builder(
@@ -516,12 +516,12 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.DELETE_GROUPS =>
           new DeleteGroupsRequest.Builder(new DeleteGroupsRequestData()
-            .setGroupsNames(Collections.singletonList("test-group")))
+            .setGroupsNames(util.List.of("test-group")))
 
         case ApiKeys.ELECT_LEADERS =>
           new ElectLeadersRequest.Builder(
             ElectionType.PREFERRED,
-            Collections.singletonList(new TopicPartition("my_topic", 0)),
+            util.List.of(new TopicPartition("my_topic", 0)),
             0
           )
 
@@ -544,9 +544,9 @@ class RequestQuotaTest extends BaseRequestTest {
             new OffsetDeleteRequestData()
               .setGroupId("test-group")
               .setTopics(new OffsetDeleteRequestData.OffsetDeleteRequestTopicCollection(
-                Collections.singletonList(new OffsetDeleteRequestData.OffsetDeleteRequestTopic()
+                util.List.of(new OffsetDeleteRequestData.OffsetDeleteRequestTopic()
                   .setName("test-topic")
-                  .setPartitions(Collections.singletonList(
+                  .setPartitions(util.List.of(
                     new OffsetDeleteRequestData.OffsetDeleteRequestPartition()
                       .setPartitionIndex(0)))).iterator())))
 
@@ -570,7 +570,7 @@ class RequestQuotaTest extends BaseRequestTest {
 
         case ApiKeys.END_QUORUM_EPOCH =>
           new EndQuorumEpochRequest.Builder(EndQuorumEpochRequest.singletonRequest(
-            tp, 10, 5, Collections.singletonList(3)))
+            tp, 10, 5, util.List.of(3)))
 
         case ApiKeys.DESCRIBE_QUORUM =>
           new DescribeQuorumRequest.Builder(DescribeQuorumRequest.singletonRequest(

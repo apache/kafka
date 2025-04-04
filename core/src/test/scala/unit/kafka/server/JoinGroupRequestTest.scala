@@ -28,6 +28,7 @@ import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 import org.junit.jupiter.api.Assertions.assertEquals
 
+import java.util
 import java.util.Collections
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
@@ -57,7 +58,7 @@ class JoinGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
 
     for (version <- ApiKeys.JOIN_GROUP.oldestVersion to ApiKeys.JOIN_GROUP.latestVersion(isUnstableApiEnabled)) {
       val metadata = ConsumerProtocol.serializeSubscription(
-        new ConsumerPartitionAssignor.Subscription(Collections.singletonList("foo"))
+        new ConsumerPartitionAssignor.Subscription(util.List.of("foo"))
       ).array
 
       // Join a dynamic member without member id.

@@ -28,7 +28,6 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
-import java.util.Collections
 import java.util.concurrent.TimeUnit
 import scala.collection.Seq
 
@@ -119,9 +118,9 @@ class DeleteRecordsRequestTest extends BaseRequestTest {
 
   private def createDeleteRecordsRequestForTopicPartition(topicPartition: TopicPartition, offsetToDelete: Int) = {
     val requestData = new DeleteRecordsRequestData()
-      .setTopics(Collections.singletonList(new DeleteRecordsTopic()
+      .setTopics(java.util.List.of(new DeleteRecordsTopic()
         .setName(topicPartition.topic())
-        .setPartitions(Collections.singletonList(new DeleteRecordsPartition()
+        .setPartitions(java.util.List.of(new DeleteRecordsPartition()
           .setOffset(offsetToDelete)
           .setPartitionIndex(topicPartition.partition())))))
       .setTimeoutMs(TIMEOUT_MS)

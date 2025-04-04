@@ -25,7 +25,6 @@ import org.apache.kafka.common.test.ClusterInstance
 import org.junit.jupiter.api.Assertions._
 
 import java.net.Socket
-import java.util.Collections
 import scala.jdk.CollectionConverters._
 
 class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVersionsRequestTest(cluster) {
@@ -96,6 +95,6 @@ class SaslApiVersionsRequestTest(cluster: ClusterInstance) extends AbstractApiVe
       ApiKeys.SASL_HANDSHAKE.latestVersion)
     val response = IntegrationTestUtils.sendAndReceive[SaslHandshakeResponse](request, socket)
     assertEquals(Errors.NONE, response.error)
-    assertEquals(Collections.singletonList("PLAIN"), response.enabledMechanisms)
+    assertEquals(java.util.List.of("PLAIN"), response.enabledMechanisms)
   }
 }

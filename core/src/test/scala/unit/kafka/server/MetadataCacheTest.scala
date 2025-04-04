@@ -34,8 +34,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
 import java.util
-import java.util.Arrays.asList
-import java.util.Collections
 import java.util.stream.Collectors
 import scala.collection.{Seq, mutable}
 import scala.jdk.CollectionConverters._
@@ -123,22 +121,22 @@ class MetadataCacheTest {
         .setPartitionId(0)
         .setLeader(0)
         .setLeaderEpoch(0)
-        .setIsr(asList(0, 1, 3))
-        .setReplicas(asList(0, 1, 3)),
+        .setIsr(util.List.of(0, 1, 3))
+        .setReplicas(util.List.of(0, 1, 3)),
       new PartitionRecord()
         .setTopicId(topicIds.get(topic0))
         .setPartitionId(1)
         .setLeader(1)
         .setLeaderEpoch(1)
-        .setIsr(asList(1, 0))
-        .setReplicas(asList(1, 2, 0, 4)),
+        .setIsr(util.List.of(1, 0))
+        .setReplicas(util.List.of(1, 2, 0, 4)),
       new PartitionRecord()
         .setTopicId(topicIds.get(topic1))
         .setPartitionId(0)
         .setLeader(2)
         .setLeaderEpoch(2)
-        .setIsr(asList(2, 1))
-        .setReplicas(asList(2, 1, 3)))
+        .setIsr(util.List.of(2, 1))
+        .setReplicas(util.List.of(2, 1, 3)))
     MetadataCacheTest.updateCache(cache, brokers ++ Seq(topic0Record, topic1Record) ++ partitionStates)
 
     for (securityProtocol <- Seq(SecurityProtocol.PLAINTEXT, SecurityProtocol.SSL)) {
@@ -261,8 +259,8 @@ class MetadataCacheTest {
         .setPartitionEpoch(partitionEpoch)
         .setLeader(leader)
         .setLeaderEpoch(leaderEpoch)
-        .setIsr(asList(0))
-        .setReplicas(asList(0)))
+        .setIsr(util.List.of(0))
+        .setReplicas(util.List.of(0)))
     MetadataCacheTest.updateCache(cache, brokers ++ topicRecords ++ partitionStates)
 
     val topicMetadatas = cache.getTopicMetadata(util.Set.of(topic), listenerName, false, errorUnavailableListeners).asScala
@@ -308,8 +306,8 @@ class MetadataCacheTest {
     // replica 1 is not available
     val leader = 0
     val leaderEpoch = 0
-    val replicas = asList[Integer](0, 1)
-    val isr = asList[Integer](0)
+    val replicas = util.List.of[Integer](0, 1)
+    val isr = util.List.of[Integer](0)
 
     val partitionStates = Seq(
       new PartitionRecord()
@@ -384,8 +382,8 @@ class MetadataCacheTest {
     // replica 1 is not available
     val leader = 0
     val leaderEpoch = 0
-    val replicas = asList[Integer](0)
-    val isr = asList[Integer](0, 1)
+    val replicas = util.List.of[Integer](0)
+    val isr = util.List.of[Integer](0, 1)
 
     val partitionStates = Seq(new PartitionRecord()
       .setTopicId(topicId)
@@ -450,8 +448,8 @@ class MetadataCacheTest {
 
     val leader = 0
     val leaderEpoch = 0
-    val replicas = asList[Integer](0)
-    val isr = asList[Integer](0, 1)
+    val replicas = util.List.of[Integer](0)
+    val isr = util.List.of[Integer](0, 1)
     val partitionStates = Seq(new PartitionRecord()
       .setTopicId(topicId)
       .setPartitionId(0)
@@ -491,8 +489,8 @@ class MetadataCacheTest {
       }
       val leader = 0
       val leaderEpoch = 0
-      val replicas = asList[Integer](0)
-      val isr = asList[Integer](0, 1)
+      val replicas = util.List.of[Integer](0)
+      val isr = util.List.of[Integer](0, 1)
       val partitionStates = Seq(new PartitionRecord()
         .setTopicId(topicId)
         .setPartitionId(0)
@@ -690,44 +688,44 @@ class MetadataCacheTest {
       (topic0, 0) -> new PartitionRecord()
         .setTopicId(topicIds.get(topic0))
         .setPartitionId(0)
-        .setReplicas(asList(0, 1, 2))
+        .setReplicas(util.List.of(0, 1, 2))
         .setLeader(0)
-        .setIsr(asList(0))
-        .setEligibleLeaderReplicas(asList(1))
-        .setLastKnownElr(asList(2))
+        .setIsr(util.List.of(0))
+        .setEligibleLeaderReplicas(util.List.of(1))
+        .setLastKnownElr(util.List.of(2))
         .setLeaderEpoch(0)
         .setPartitionEpoch(1)
         .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
       (topic0, 2) -> new PartitionRecord()
         .setTopicId(topicIds.get(topic0))
         .setPartitionId(2)
-        .setReplicas(asList(0, 2, 3))
+        .setReplicas(util.List.of(0, 2, 3))
         .setLeader(3)
-        .setIsr(asList(3))
-        .setEligibleLeaderReplicas(asList(2))
-        .setLastKnownElr(asList(0))
+        .setIsr(util.List.of(3))
+        .setEligibleLeaderReplicas(util.List.of(2))
+        .setLastKnownElr(util.List.of(0))
         .setLeaderEpoch(1)
         .setPartitionEpoch(2)
         .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
       (topic0, 1) -> new PartitionRecord()
         .setTopicId(topicIds.get(topic0))
         .setPartitionId(1)
-        .setReplicas(asList(0, 1, 3))
+        .setReplicas(util.List.of(0, 1, 3))
         .setLeader(0)
-        .setIsr(asList(0))
-        .setEligibleLeaderReplicas(asList(1))
-        .setLastKnownElr(asList(3))
+        .setIsr(util.List.of(0))
+        .setEligibleLeaderReplicas(util.List.of(1))
+        .setLastKnownElr(util.List.of(3))
         .setLeaderEpoch(0)
         .setPartitionEpoch(2)
         .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
       (topic1, 0) -> new PartitionRecord()
         .setTopicId(topicIds.get(topic1))
         .setPartitionId(0)
-        .setReplicas(asList(0, 1, 2))
+        .setReplicas(util.List.of(0, 1, 2))
         .setLeader(2)
-        .setIsr(asList(2))
-        .setEligibleLeaderReplicas(asList(1))
-        .setLastKnownElr(asList(0))
+        .setIsr(util.List.of(2))
+        .setEligibleLeaderReplicas(util.List.of(1))
+        .setLastKnownElr(util.List.of(0))
         .setLeaderEpoch(10)
         .setPartitionEpoch(11)
         .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
@@ -898,7 +896,7 @@ class MetadataCacheTest {
       brokers.foreach(broker => delta.replay(
         new RegisterBrokerRecord().setFenced(false).
           setBrokerId(broker.id).setLogDirs(broker.dirs).
-          setEndPoints(new BrokerEndpointCollection(Collections.singleton(
+          setEndPoints(new BrokerEndpointCollection(util.Set.of(
             new RegisterBrokerRecord.BrokerEndpoint().setSecurityProtocol(SecurityProtocol.PLAINTEXT.id).
               setPort(9093.toShort).setName("PLAINTEXT").setHost(s"broker-${broker.id}")).iterator()))))
       val topicId = Uuid.fromString("95OVr1IPRYGrcNCLlpImCA")
@@ -914,18 +912,18 @@ class MetadataCacheTest {
     }
 
     val brokers = Seq(
-      Broker(0, asList(Uuid.fromString("broker1logdirjEo71BG0w"))),
-      Broker(1, asList(Uuid.fromString("broker2logdirRmQQgLxgw")))
+      Broker(0, util.List.of(Uuid.fromString("broker1logdirjEo71BG0w"))),
+      Broker(1, util.List.of(Uuid.fromString("broker2logdirRmQQgLxgw")))
     )
     val partitions = Seq(
-      Partition(0, asList(0, 1), asList(Uuid.fromString("broker1logdirjEo71BG0w"), DirectoryId.LOST)),
-      Partition(1, asList(0, 1), asList(Uuid.fromString("unknownlogdirjEo71BG0w"), DirectoryId.UNASSIGNED)),
-      Partition(2, asList(0, 1), asList(DirectoryId.MIGRATING, Uuid.fromString("broker2logdirRmQQgLxgw")))
+      Partition(0, util.List.of(0, 1), util.List.of(Uuid.fromString("broker1logdirjEo71BG0w"), DirectoryId.LOST)),
+      Partition(1, util.List.of(0, 1), util.List.of(Uuid.fromString("unknownlogdirjEo71BG0w"), DirectoryId.UNASSIGNED)),
+      Partition(2, util.List.of(0, 1), util.List.of(DirectoryId.MIGRATING, Uuid.fromString("broker2logdirRmQQgLxgw")))
     )
     assertEquals(Map(
-      0 -> asList(1),
-      1 -> asList(0),
-      2 -> asList(),
+      0 -> util.List.of(1),
+      1 -> util.List.of(0),
+      2 -> util.List.of(),
     ), offlinePartitions(brokers, partitions))
   }
 
@@ -939,26 +937,26 @@ class MetadataCacheTest {
     setTopicId(fooTopicId).
     setPartitionId(0).
     setLeader(4).
-    setIsr(java.util.Arrays.asList(4, 5, 6)).
-    setReplicas(java.util.Arrays.asList(4, 5, 6))
+    setIsr(java.util.Arrays.util.List.of(4, 5, 6)).
+    setReplicas(java.util.Arrays.util.List.of(4, 5, 6))
   val newFooPart0 = new PartitionRecord().
     setTopicId(fooTopicId).
     setPartitionId(0).
     setLeader(5).
-    setIsr(java.util.Arrays.asList(4, 5, 6)).
-    setReplicas(java.util.Arrays.asList(4, 5, 6))
+    setIsr(java.util.Arrays.util.List.of(4, 5, 6)).
+    setReplicas(java.util.Arrays.util.List.of(4, 5, 6))
   val oldFooPart1 = new PartitionRecord().
     setTopicId(fooTopicId).
     setPartitionId(1).
     setLeader(5).
-    setIsr(java.util.Arrays.asList(4, 5, 6)).
-    setReplicas(java.util.Arrays.asList(4, 5, 6))
+    setIsr(java.util.Arrays.util.List.of(4, 5, 6)).
+    setReplicas(java.util.Arrays.util.List.of(4, 5, 6))
   val newFooPart1 = new PartitionRecord().
     setTopicId(fooTopicId).
     setPartitionId(1).
     setLeader(5).
-    setIsr(java.util.Arrays.asList(4, 5)).
-    setReplicas(java.util.Arrays.asList(4, 5, 6))
+    setIsr(java.util.Arrays.util.List.of(4, 5)).
+    setReplicas(java.util.Arrays.util.List.of(4, 5, 6))
   val barTopicName: String = "bar"
   val barTopicId: Uuid = Uuid.fromString("97FBD1g4QyyNNZNY94bkRA")
   val recreatedBarTopicId: Uuid = Uuid.fromString("lZokxuaPRty7c5P4dNdTYA")
@@ -966,57 +964,57 @@ class MetadataCacheTest {
     setTopicId(fooTopicId).
     setPartitionId(0).
     setLeader(7).
-    setIsr(java.util.Arrays.asList(7, 8)).
-    setReplicas(java.util.Arrays.asList(7, 8, 9))
+    setIsr(java.util.Arrays.util.List.of(7, 8)).
+    setReplicas(java.util.Arrays.util.List.of(7, 8, 9))
   val newBarPart0 = new PartitionRecord().
     setTopicId(barTopicId).
     setPartitionId(0).
     setLeader(7).
-    setIsr(java.util.Arrays.asList(7, 8)).
-    setReplicas(java.util.Arrays.asList(7, 8, 9))
+    setIsr(java.util.Arrays.util.List.of(7, 8)).
+    setReplicas(java.util.Arrays.util.List.of(7, 8, 9))
   val deletedBarPart0 = new PartitionRecord().
     setTopicId(barTopicId).
     setPartitionId(0).
     setLeader(-2).
-    setIsr(java.util.Arrays.asList(7, 8)).
-    setReplicas(java.util.Arrays.asList(7, 8, 9))
+    setIsr(java.util.Arrays.util.List.of(7, 8)).
+    setReplicas(java.util.Arrays.util.List.of(7, 8, 9))
   val oldBarPart1 = new PartitionRecord().
     setTopicId(barTopicId).
     setPartitionId(1).
     setLeader(5).
-    setIsr(java.util.Arrays.asList(4, 5, 6)).
-    setReplicas(java.util.Arrays.asList(4, 5, 6))
+    setIsr(java.util.Arrays.util.List.of(4, 5, 6)).
+    setReplicas(java.util.Arrays.util.List.of(4, 5, 6))
   val newBarPart1 = new PartitionRecord().
     setTopicId(barTopicId).
     setPartitionId(1).
     setLeader(5).
-    setIsr(java.util.Arrays.asList(4, 5, 6)).
-    setReplicas(java.util.Arrays.asList(4, 5, 6))
+    setIsr(java.util.Arrays.util.List.of(4, 5, 6)).
+    setReplicas(java.util.Arrays.util.List.of(4, 5, 6))
   val deletedBarPart1 = new PartitionRecord().
     setTopicId(barTopicId).
     setPartitionId(1).
     setLeader(-2).
-    setIsr(java.util.Arrays.asList(4, 5, 6)).
-    setReplicas(java.util.Arrays.asList(4, 5, 6))
+    setIsr(java.util.Arrays.util.List.of(4, 5, 6)).
+    setReplicas(java.util.Arrays.util.List.of(4, 5, 6))
 
   val oldBarPart2 = new PartitionRecord().
     setTopicId(barTopicId).
     setPartitionId(2).
     setLeader(9).
-    setIsr(java.util.Arrays.asList(7, 8, 9)).
-    setReplicas(java.util.Arrays.asList(7, 8, 9))
+    setIsr(java.util.Arrays.util.List.of(7, 8, 9)).
+    setReplicas(java.util.Arrays.util.List.of(7, 8, 9))
 
   val newBarPart2 = new PartitionRecord().
     setTopicId(barTopicId).
     setPartitionId(2).
     setLeader(8).
-    setIsr(java.util.Arrays.asList(7, 8)).
-    setReplicas(java.util.Arrays.asList(7, 8, 9))
+    setIsr(java.util.Arrays.util.List.of(7, 8)).
+    setReplicas(java.util.Arrays.util.List.of(7, 8, 9))
 
   val deletedBarPart2 = new PartitionRecord().
     setTopicId(barTopicId).
     setPartitionId(2).
     setLeader(-2).
-    setIsr(java.util.Arrays.asList(7, 8, 9)).
-    setReplicas(java.util.Arrays.asList(7, 8, 9))
+    setIsr(java.util.Arrays.util.List.of(7, 8, 9)).
+    setReplicas(java.util.Arrays.util.List.of(7, 8, 9))
 }

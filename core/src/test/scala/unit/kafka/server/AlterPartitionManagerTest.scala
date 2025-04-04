@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import java.util.Collections
 import org.apache.kafka.clients.ClientResponse
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.errors.{AuthenticationException, OperationNotAttemptedException, UnknownServerException, UnsupportedVersionException}
@@ -42,6 +41,7 @@ import org.mockito.ArgumentMatchers.any
 import org.mockito.Mockito.{mock, reset, times, verify}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
 
+import java.util
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
@@ -518,10 +518,10 @@ class AlterPartitionManagerTest {
     isr: List[Int] = List.empty
   ): AlterPartitionResponse = {
     new AlterPartitionResponse(new AlterPartitionResponseData()
-      .setTopics(Collections.singletonList(
+      .setTopics(util.List.of(
         new AlterPartitionResponseData.TopicData()
           .setTopicId(tp.topicId)
-          .setPartitions(Collections.singletonList(
+          .setPartitions(util.List.of(
             new AlterPartitionResponseData.PartitionData()
               .setPartitionIndex(tp.partitionId)
               .setPartitionEpoch(partitionEpoch)

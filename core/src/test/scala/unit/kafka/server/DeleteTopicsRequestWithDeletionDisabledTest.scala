@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import java.util.Collections
 import kafka.utils._
 import org.apache.kafka.common.message.DeleteTopicsRequestData
 import org.apache.kafka.common.network.ListenerName
@@ -54,14 +53,14 @@ class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
     val topic = "topic-1"
     val request = new DeleteTopicsRequest.Builder(
         new DeleteTopicsRequestData()
-          .setTopicNames(Collections.singletonList(topic))
+          .setTopicNames(java.util.List.of(topic))
           .setTimeoutMs(1000)).build()
     val response = sendDeleteTopicsRequest(request)
     assertEquals(Errors.TOPIC_DELETION_DISABLED.code, response.data.responses.find(topic).errorCode)
 
     val v2request = new DeleteTopicsRequest.Builder(
         new DeleteTopicsRequestData()
-        .setTopicNames(Collections.singletonList(topic))
+        .setTopicNames(java.util.List.of(topic))
         .setTimeoutMs(1000)).build(2)
     val v2response = sendDeleteTopicsRequest(v2request)
     assertEquals(Errors.INVALID_REQUEST.code, v2response.data.responses.find(topic).errorCode)

@@ -30,7 +30,7 @@ import org.junit.jupiter.params.provider.ValueSource
 
 import java.net.Socket
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.{Collections, Properties}
+import java.util.Properties
 
 /*
  * this test checks that a reporter that throws an exception will not affect other reporters
@@ -75,7 +75,7 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
         val listGroupsRequest = new ListGroupsRequest.Builder(new ListGroupsRequestData).build()
         val listGroupsResponse = sendAndReceive[ListGroupsResponse](listGroupsRequest, socket)
         val errors = listGroupsResponse.errorCounts()
-        assertEquals(Collections.singletonMap(Errors.NONE, 1), errors)
+        assertEquals(java.util.Map.of(Errors.NONE, 1), errors)
         assertEquals(KafkaMetricReporterExceptionHandlingTest.goodReporterRegistered.get, KafkaMetricReporterExceptionHandlingTest.badReporterRegistered.get)
         assertTrue(KafkaMetricReporterExceptionHandlingTest.goodReporterRegistered.get > 0)
       }

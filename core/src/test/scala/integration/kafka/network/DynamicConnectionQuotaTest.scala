@@ -40,8 +40,9 @@ import org.junit.jupiter.params.provider.ValueSource
 
 import java.io.IOException
 import java.net.{InetAddress, Socket}
+import java.util
 import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
-import java.util.{Collections, Properties}
+import java.util.Properties
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 
@@ -307,9 +308,9 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   private def produceRequest: ProduceRequest =
     requests.ProduceRequest.builder(new ProduceRequestData()
       .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
-        Collections.singletonList(new ProduceRequestData.TopicProduceData()
+        util.List.of(new ProduceRequestData.TopicProduceData()
           .setName(topic)
-          .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
+          .setPartitionData(util.List.of(new ProduceRequestData.PartitionProduceData()
             .setIndex(0)
             .setRecords(MemoryRecords.withRecords(Compression.NONE,
               new SimpleRecord(System.currentTimeMillis(), "key".getBytes, "value".getBytes))))))

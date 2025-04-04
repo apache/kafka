@@ -26,7 +26,6 @@ import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 
-import java.util.Collections
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
@@ -65,7 +64,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       )
 
       val metadata = ConsumerProtocol.serializeSubscription(
-        new ConsumerPartitionAssignor.Subscription(Collections.singletonList("foo"))
+        new ConsumerPartitionAssignor.Subscription(java.util.List.of("foo"))
       ).array
 
       // Join a dynamic member without member id.

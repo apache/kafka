@@ -177,14 +177,14 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
 
     // case 1: test the offsets from follower's append path.
     // we make a follower be the new leader to handle the ListOffsetRequest
-    def leader(): Int = adminClient.describeTopics(java.util.Collections.singletonList(topic))
+    def leader(): Int = adminClient.describeTopics(java.util.List.of(topic))
       .allTopicNames().get().get(topic).partitions().get(0).leader().id()
 
     val previousLeader = leader()
     val newLeader = brokers.map(_.config.brokerId).find(_ != previousLeader).get
 
     // change the leader to new one
-    adminClient.alterPartitionReassignments(java.util.Collections.singletonMap(new TopicPartition(topic, 0),
+    adminClient.alterPartitionReassignments(java.util.Map.of(new TopicPartition(topic, 0),
       Optional.of(new NewPartitionReassignment(java.util.Arrays.asList(newLeader))))).all().get()
     // wait for all reassignments get completed
     waitUntilTrue(() => adminClient.listPartitionReassignments().reassignments().get().isEmpty,
@@ -209,7 +209,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
     }
     restartDeadBrokers()
     Utils.closeQuietly(adminClient, "ListOffsetsAdminClient")
-    adminClient = Admin.create(java.util.Collections.singletonMap(
+    adminClient = Admin.create(java.util.Map.of(
       AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers().asInstanceOf[Object]))
     check()
   }

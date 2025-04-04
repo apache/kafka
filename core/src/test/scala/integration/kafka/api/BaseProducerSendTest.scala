@@ -19,7 +19,7 @@ package kafka.api
 
 import java.time.Duration
 import java.nio.charset.StandardCharsets
-import java.util.{Collections, Properties}
+import java.util.Properties
 import java.util.concurrent.TimeUnit
 import kafka.integration.KafkaServerTestHarness
 import kafka.security.JaasTestUtils
@@ -41,6 +41,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
+import java.util
 import scala.collection.mutable
 import scala.concurrent.ExecutionException
 import scala.jdk.CollectionConverters._
@@ -445,7 +446,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
     val e = assertThrows(classOf[ExecutionException], () => producer.send(new ProducerRecord(topic, partition1, null, "value".getBytes(StandardCharsets.UTF_8))).get())
     assertEquals(classOf[TimeoutException], e.getCause.getClass)
 
-    admin.createPartitions(Collections.singletonMap(topic, NewPartitions.increaseTo(2))).all().get()
+    admin.createPartitions(util.Map.of(topic, NewPartitions.increaseTo(2))).all().get()
 
     // read metadata from a broker and verify the new topic partitions exist
     TestUtils.waitForPartitionMetadata(brokers, topic, 0)

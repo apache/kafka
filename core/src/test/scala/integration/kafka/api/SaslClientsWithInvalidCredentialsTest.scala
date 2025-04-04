@@ -15,7 +15,7 @@ package kafka.api
 import kafka.security.JaasTestUtils
 
 import java.time.Duration
-import java.util.{Collections, Properties}
+import java.util.Properties
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import scala.jdk.CollectionConverters._
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
@@ -34,6 +34,7 @@ import org.apache.kafka.metadata.storage.Formatter
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
 
+import java.util
 import scala.jdk.javaapi.OptionConverters
 import scala.util.Using
 
@@ -166,7 +167,7 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
 
     def describeTopic(): Unit = {
       try {
-        val response = adminClient.describeTopics(Collections.singleton(topic)).allTopicNames.get
+        val response = adminClient.describeTopics(util.Set.of(topic)).allTopicNames.get
         assertEquals(1, response.size)
         response.forEach { (_, description) =>
           assertEquals(numPartitions, description.partitions.size)

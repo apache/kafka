@@ -18,7 +18,6 @@ package kafka.server
 
 import java.io.File
 import java.util
-import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import kafka.api.IntegrationTestHarness
 import kafka.utils.TestUtils.{Checkpoint, LogDirFailureType, Roll, waitUntilTrue}
@@ -212,7 +211,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
 
 
   private def subscribeAndWaitForAssignment(topic: String, consumer: Consumer[Array[Byte], Array[Byte]]): Unit = {
-    consumer.subscribe(Collections.singletonList(topic))
+    consumer.subscribe(util.List.of(topic))
     TestUtils.pollUntilTrue(consumer, () => !consumer.assignment.isEmpty, "Expected non-empty assignment")
   }
 

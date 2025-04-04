@@ -30,7 +30,7 @@ import org.apache.kafka.storage.internals.log.UnifiedLog
 import org.junit.jupiter.api.Timeout
 
 import java.time.Duration
-import java.util.Collections
+import java.util
 import java.util.concurrent.TimeUnit
 
 @Timeout(120)
@@ -324,7 +324,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
     assertEquals(groupId, group.groupId)
     assertEquals(groupType, group.`type`)
     assertEquals(state, group.state)
-    assertEquals(Collections.emptyList, group.members)
+    assertEquals(util.List.of, group.members)
   }
 
   private def assertDescribedDeadGroup(

@@ -19,7 +19,7 @@ package kafka.server
 
 import kafka.utils.TestUtils
 
-import java.util.{Collections, Properties}
+import java.util.Properties
 import java.util.stream.{Stream => JStream}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.AddPartitionsToTxnTopic
@@ -77,10 +77,10 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
         val topics = new AddPartitionsToTxnTopicCollection()
         topics.add(new AddPartitionsToTxnTopic()
           .setName(createdTopicPartition.topic)
-          .setPartitions(Collections.singletonList(createdTopicPartition.partition)))
+          .setPartitions(java.util.List.of(createdTopicPartition.partition)))
         topics.add(new AddPartitionsToTxnTopic()
           .setName(nonExistentTopic.topic)
-          .setPartitions(Collections.singletonList(nonExistentTopic.partition)))
+          .setPartitions(java.util.List.of(nonExistentTopic.partition)))
 
         val transactions = new AddPartitionsToTxnTransactionCollection()
         transactions.add(new AddPartitionsToTxnTransaction()
@@ -122,7 +122,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     val txn2Topics = new AddPartitionsToTxnTopicCollection()
     txn2Topics.add(new AddPartitionsToTxnTopic()
       .setName(tp0.topic)
-      .setPartitions(Collections.singletonList(tp0.partition)))
+      .setPartitions(java.util.List.of(tp0.partition)))
 
     val (coordinatorId, txn1) = setUpTransactions(transactionalId1, verifyOnly = false, Set(tp0))
 
@@ -142,8 +142,8 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     val errors = response.errors()
     
     val expectedErrors = Map(
-      transactionalId1 -> Collections.singletonMap(tp0, Errors.NONE),
-      transactionalId2 -> Collections.singletonMap(tp0, Errors.INVALID_PRODUCER_ID_MAPPING)
+      transactionalId1 -> java.util.Map.of(tp0, Errors.NONE),
+      transactionalId2 -> java.util.Map.of(tp0, Errors.INVALID_PRODUCER_ID_MAPPING)
     ).asJava
 
     assertEquals(expectedErrors, errors)
@@ -166,7 +166,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
 
     val verifyErrors = verifyResponse.errors()
 
-    assertEquals(Collections.singletonMap(transactionalId, Collections.singletonMap(tp0, Errors.TRANSACTION_ABORTABLE)), verifyErrors)
+    assertEquals(java.util.Map.of(transactionalId, java.util.Map.of(tp0, Errors.TRANSACTION_ABORTABLE)), verifyErrors)
   }
   
   private def setUpTransactions(transactionalId: String, verifyOnly: Boolean, partitions: Set[TopicPartition]): (Int, AddPartitionsToTxnTransaction) = {
@@ -193,7 +193,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     partitions.foreach { tp => 
     txn1Topics.add(new AddPartitionsToTxnTopic()
       .setName(tp.topic)
-      .setPartitions(Collections.singletonList(tp.partition)))
+      .setPartitions(java.util.List.of(tp.partition)))
     }
 
     (coordinatorId, new AddPartitionsToTxnTransaction()

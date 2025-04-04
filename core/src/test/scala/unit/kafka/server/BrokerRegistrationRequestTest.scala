@@ -33,7 +33,6 @@ import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, Featu
 import org.junit.jupiter.api.Assertions.assertEquals
 
 import java.util
-import java.util.Collections
 import java.util.concurrent.{CompletableFuture, TimeUnit, TimeoutException}
 
 /**
@@ -108,7 +107,7 @@ class BrokerRegistrationRequestTest {
 
     val req = new BrokerRegistrationRequestData()
       .setBrokerId(brokerId)
-      .setLogDirs(Collections.singletonList(Uuid.randomUuid()))
+      .setLogDirs(util.List.of(Uuid.randomUuid()))
       .setClusterId(clusterId)
       .setIncarnationId(Uuid.randomUuid())
       .setIsMigratingZkBroker(zkEpoch.isDefined)

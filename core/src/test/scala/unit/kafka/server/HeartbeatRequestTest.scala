@@ -26,7 +26,6 @@ import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
 
-import java.util.Collections
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.Future
 
@@ -52,7 +51,7 @@ class HeartbeatRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
 
     for (version <- ApiKeys.HEARTBEAT.oldestVersion() to ApiKeys.HEARTBEAT.latestVersion(isUnstableApiEnabled)) {
       val metadata = ConsumerProtocol.serializeSubscription(
-        new ConsumerPartitionAssignor.Subscription(Collections.singletonList("foo"))
+        new ConsumerPartitionAssignor.Subscription(java.util.List.of("foo"))
       ).array
 
       val (leaderMemberId, leaderEpoch) = joinDynamicConsumerGroupWithOldProtocol(

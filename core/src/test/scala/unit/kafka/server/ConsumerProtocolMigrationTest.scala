@@ -30,7 +30,6 @@ import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Timeout
 
 import java.nio.ByteBuffer
-import java.util.Collections
 import scala.jdk.CollectionConverters._
 
 @Timeout(120)
@@ -1331,7 +1330,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
   private def metadata(ownedPartitions: List[Int]): Array[Byte] = {
     ConsumerProtocol.serializeSubscription(
       new ConsumerPartitionAssignor.Subscription(
-        Collections.singletonList("foo"),
+        java.util.List.of("foo"),
         null,
         ownedPartitions.map(new TopicPartition("foo", _)).asJava
       )

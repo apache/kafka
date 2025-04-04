@@ -106,7 +106,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     val init_requests = List (
       new AlterUserScramCredentialsRequest.Builder(
         new AlterUserScramCredentialsRequestData()
-          .setDeletions(util.Collections.emptyList())
+          .setDeletions(util.List.of())
           .setUpsertions(util.Arrays.asList(upsertion1, upsertion2))).build(),
     )
     init_requests.foreach(request => {
@@ -198,7 +198,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
       .setSalt(saltBytes).setSaltedPassword(saltedPasswordBytes)
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
-        .setDeletions(util.Collections.emptyList())
+        .setDeletions(util.List.of())
         .setUpsertions(util.Arrays.asList(upsertionTooFewIterations))).build()
     val response = sendAlterUserScramCredentialsRequest(request)
     val results = response.data.results
@@ -215,7 +215,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
       .setSalt(saltBytes).setSaltedPassword(saltedPasswordBytes)
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
-        .setDeletions(util.Collections.emptyList())
+        .setDeletions(util.List.of())
         .setUpsertions(util.Arrays.asList(upsertionTooFewIterations))).build()
     val response = sendAlterUserScramCredentialsRequest(request)
     val results = response.data.results
@@ -389,7 +389,7 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
       .setSalt(saltBytes).setSaltedPassword(saltedPasswordBytes)
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
-        .setDeletions(util.Collections.emptyList())
+        .setDeletions(util.List.of())
         .setUpsertions(util.Arrays.asList(upsertionMetadataVersionTooLow))).build()
     val response = sendAlterUserScramCredentialsRequest(request)
     val results = response.data.results

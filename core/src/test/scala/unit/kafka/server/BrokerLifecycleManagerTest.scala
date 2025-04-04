@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import java.util.{Collections, OptionalLong, Properties}
+import java.util.{OptionalLong, Properties}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.Node
 import org.apache.kafka.common.Uuid
@@ -70,7 +70,7 @@ class BrokerLifecycleManagerTest {
     assertEquals(BrokerState.NOT_RUNNING, manager.state)
     manager.start(() => context.highestMetadataOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
-      Collections.emptyMap(), OptionalLong.empty())
+      java.util.Map.of(), OptionalLong.empty())
     TestUtils.retry(60000) {
       assertEquals(BrokerState.STARTING, manager.state)
     }
@@ -86,7 +86,7 @@ class BrokerLifecycleManagerTest {
     context.controllerNodeProvider.node.set(controllerNode)
     manager.start(() => context.highestMetadataOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
-      Collections.emptyMap(), OptionalLong.of(10L))
+      java.util.Map.of(), OptionalLong.of(10L))
     TestUtils.retry(60000) {
       assertEquals(1, context.mockChannelManager.unsentQueue.size)
       assertEquals(10L, context.mockChannelManager.unsentQueue.getFirst.request.build().asInstanceOf[BrokerRegistrationRequest].data().previousBrokerEpoch())
@@ -115,7 +115,7 @@ class BrokerLifecycleManagerTest {
     assertEquals(1, context.mockClient.futureResponses().size)
     manager.start(() => context.highestMetadataOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
-      Collections.emptyMap(), OptionalLong.empty())
+      java.util.Map.of(), OptionalLong.empty())
     // We should send the first registration request and get a failure immediately
     TestUtils.retry(60000) {
       context.poll()
@@ -152,7 +152,7 @@ class BrokerLifecycleManagerTest {
       new BrokerHeartbeatResponseData().setIsCaughtUp(true)), controllerNode)
     manager.start(() => context.highestMetadataOffset.get(),
       context.mockChannelManager, context.clusterId, context.advertisedListeners,
-      Collections.emptyMap(), OptionalLong.empty())
+      java.util.Map.of(), OptionalLong.empty())
     TestUtils.retry(10000) {
       context.poll()
       manager.eventQueue.wakeup()
@@ -231,7 +231,7 @@ class BrokerLifecycleManagerTest {
     val registration = prepareResponse(ctx, new BrokerRegistrationResponse(new BrokerRegistrationResponseData().setBrokerEpoch(1000)))
     manager.start(() => ctx.highestMetadataOffset.get(),
       ctx.mockChannelManager, ctx.clusterId, ctx.advertisedListeners,
-      Collections.emptyMap(), OptionalLong.empty())
+      java.util.Map.of(), OptionalLong.empty())
     poll(ctx, manager, registration)
 
     def nextHeartbeatDirs(): Set[String] =
@@ -258,7 +258,7 @@ class BrokerLifecycleManagerTest {
 
     manager.start(() => ctx.highestMetadataOffset.get(),
       ctx.mockChannelManager, ctx.clusterId, ctx.advertisedListeners,
-      Collections.emptyMap(), OptionalLong.empty())
+      java.util.Map.of(), OptionalLong.empty())
     val request = poll(ctx, manager, registration).asInstanceOf[BrokerRegistrationRequest]
 
     assertEquals(logDirs, request.data.logDirs().asScala.toSet)
@@ -274,7 +274,7 @@ class BrokerLifecycleManagerTest {
 
     manager.start(() => ctx.highestMetadataOffset.get(),
       ctx.mockChannelManager, ctx.clusterId, ctx.advertisedListeners,
-      Collections.emptyMap(), OptionalLong.of(10L))
+      java.util.Map.of(), OptionalLong.of(10L))
 
     def doPoll[T<:AbstractRequest](response: AbstractResponse) = poll(ctx, manager, prepareResponse[T](ctx, response))
     def nextHeartbeatRequest() = doPoll[AbstractRequest](new BrokerHeartbeatResponse(new BrokerHeartbeatResponseData()))

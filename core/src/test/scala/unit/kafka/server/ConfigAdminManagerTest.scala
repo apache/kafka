@@ -18,7 +18,6 @@
 package kafka.server
 
 import java.util
-import java.util.Collections
 
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.AlterConfigOp.OpType
@@ -276,7 +275,7 @@ class ConfigAdminManagerTest {
   def testPreprocessIncrementalWithUnauthorizedBrokerLoggerChanges(): Unit = {
     val manager = newConfigAdminManager(1)
     val brokerLogger1 = brokerLogger1Incremental()
-    assertEquals(Collections.singletonMap(brokerLogger1,
+    assertEquals(util.Map.of(brokerLogger1,
         new ApiError(Errors.CLUSTER_AUTHORIZATION_FAILED, null)),
       manager.preprocess(new IncrementalAlterConfigsRequestData().
         setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
@@ -288,7 +287,7 @@ class ConfigAdminManagerTest {
   def testPreprocessIncrementalWithNulls(): Unit = {
     val manager = newConfigAdminManager(2)
     val brokerLogger2 = brokerLogger2Incremental()
-    assertEquals(Collections.singletonMap(brokerLogger2,
+    assertEquals(util.Map.of(brokerLogger2,
       new ApiError(INVALID_REQUEST, s"Null value not supported for : ${logger.getName}")),
       manager.preprocess(new IncrementalAlterConfigsRequestData().
         setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
@@ -300,7 +299,7 @@ class ConfigAdminManagerTest {
   def testPreprocessIncrementalWithLoggerChanges(): Unit = {
     val manager = newConfigAdminManager(1)
     val brokerLogger1 = brokerLogger1Incremental()
-    assertEquals(Collections.singletonMap(brokerLogger1,
+    assertEquals(util.Map.of(brokerLogger1,
       new ApiError(Errors.NONE, null)),
       manager.preprocess(new IncrementalAlterConfigsRequestData().
         setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
@@ -341,7 +340,7 @@ class ConfigAdminManagerTest {
   def testPreprocessLegacyWithBrokerLoggerChanges(): Unit = {
     val manager = newConfigAdminManager(1)
     val brokerLogger1 = brokerLogger1Legacy()
-    assertEquals(Collections.singletonMap(brokerLogger1,
+    assertEquals(util.Map.of(brokerLogger1,
       new ApiError(INVALID_REQUEST, "Unknown resource type 8")),
       manager.preprocess(new AlterConfigsRequestData().
         setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
@@ -352,7 +351,7 @@ class ConfigAdminManagerTest {
   def testPreprocessLegacyWithNulls(): Unit = {
     val manager = newConfigAdminManager(2)
     val brokerLogger2 = broker2Legacy()
-    assertEquals(Collections.singletonMap(brokerLogger2,
+    assertEquals(util.Map.of(brokerLogger2,
       new ApiError(INVALID_REQUEST, s"Null value not supported for : ${logger.getName}")),
       manager.preprocess(new AlterConfigsRequestData().
         setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(
@@ -392,7 +391,7 @@ class ConfigAdminManagerTest {
   def testPreprocessIncrementalWithUnknownResource(): Unit = {
     val manager = newConfigAdminManager(1)
     val unknown = unknownIncremental()
-    assertEquals(Collections.singletonMap(unknown,
+    assertEquals(util.Map.of(unknown,
       new ApiError(INVALID_REQUEST, "Unknown resource type 0")),
         manager.preprocess(new IncrementalAlterConfigsRequestData().
         setResources(new IAlterConfigsResourceCollection(util.Arrays.asList(
@@ -404,7 +403,7 @@ class ConfigAdminManagerTest {
   def testPreprocessLegacyWithUnknownResource(): Unit = {
     val manager = newConfigAdminManager(1)
     val unknown = unknownLegacy()
-    assertEquals(Collections.singletonMap(unknown,
+    assertEquals(util.Map.of(unknown,
       new ApiError(INVALID_REQUEST, "Unknown resource type 0")),
       manager.preprocess(new AlterConfigsRequestData().
         setResources(new LAlterConfigsResourceCollection(util.Arrays.asList(

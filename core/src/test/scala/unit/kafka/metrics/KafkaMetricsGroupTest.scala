@@ -22,7 +22,6 @@ import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull}
 import org.junit.jupiter.api.Test
 
-import java.util.Collections
 import scala.jdk.CollectionConverters._
 
 class KafkaMetricsGroupTest {
@@ -30,7 +29,7 @@ class KafkaMetricsGroupTest {
   @Test
   def testUntaggedMetricName(): Unit = {
     val metricsGroup = new KafkaMetricsGroup("kafka.metrics", "TestMetrics")
-    val metricName = metricsGroup.metricName("TaggedMetric", Collections.emptyMap())
+    val metricName = metricsGroup.metricName("TaggedMetric", java.util.Map.of())
 
     assertEquals("kafka.metrics", metricName.getGroup)
     assertEquals("TestMetrics", metricName.getType)
@@ -67,6 +66,4 @@ class KafkaMetricsGroupTest {
       metricName.getMBeanName)
     assertEquals("baz.raz_taz.foo.bar", metricName.getScope)
   }
-
-
 }

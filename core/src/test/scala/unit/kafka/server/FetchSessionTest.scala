@@ -645,7 +645,7 @@ class FetchSessionTest {
       Optional.empty()))
     val request1 = createRequestWithoutTopicIds(JFetchMetadata.INITIAL, reqData1, EMPTY_PART_LIST, isFromFollower = false)
     // Simulate unknown topic ID for foo.
-    val topicNamesOnlyBar = Collections.singletonMap(topicIds.get("bar"), "bar")
+    val topicNamesOnlyBar = util.Map.of(topicIds.get("bar"), "bar")
     // We should not throw error since we have an older request version.
     val context1 = fetchManager.newContext(
       request1.version,
@@ -701,7 +701,7 @@ class FetchSessionTest {
       Optional.empty()))
     val request1 = createRequest(JFetchMetadata.INITIAL, reqData1, EMPTY_PART_LIST, isFromFollower = false)
     // Simulate unknown topic ID for foo.
-    val topicNamesOnlyBar = Collections.singletonMap(barId, "bar")
+    val topicNamesOnlyBar = util.Map.of(barId, "bar")
     // We should not throw error since we have an older request version.
     val context1 = fetchManager.newContext(
       request1.version,
@@ -1316,7 +1316,7 @@ class FetchSessionTest {
     )
     assertEquals(classOf[SessionErrorContext], context4.getClass)
     // The response should be empty.
-    assertEquals(Collections.emptyList, updateAndGenerateResponseData(context4).data.responses)
+    assertEquals(util.List.of, updateAndGenerateResponseData(context4).data.responses)
   }
 
   @Test
@@ -1755,7 +1755,7 @@ class FetchSessionTest {
     val resp2 = context2.updateAndGenerateResponseData(respData, Seq.empty.asJava)
     assertEquals(Errors.NONE, resp2.error)
     assertEquals(resp1.sessionId, resp2.sessionId)
-    assertEquals(Collections.singleton(tp2.topicPartition), resp2.responseData(topicNames, request2.version).keySet)
+    assertEquals(util.Set.of(tp2.topicPartition), resp2.responseData(topicNames, request2.version).keySet)
 
     // All partitions with divergent epoch should be returned.
     respData.put(tp1, new FetchResponseData.PartitionData()
@@ -1800,7 +1800,7 @@ class FetchSessionTest {
 
     // Full fetch context returns all partitions in the response
     val context1 = fetchManager.newContext(ApiKeys.FETCH.latestVersion(), JFetchMetadata.INITIAL, isFollower = false,
-     reqData, Collections.emptyList(), topicNames)
+     reqData, util.List.of, topicNames)
     assertEquals(classOf[FullFetchContext], context1.getClass)
 
     val respData1 = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]
@@ -1828,7 +1828,7 @@ class FetchSessionTest {
     // Incremental fetch context returns partitions with changes but only deprioritizes
     // the partitions with records
     val context2 = fetchManager.newContext(ApiKeys.FETCH.latestVersion(), new JFetchMetadata(resp1.sessionId, 1), isFollower = false,
-      reqData, Collections.emptyList(), topicNames)
+      reqData, util.List.of, topicNames)
     assertEquals(classOf[IncrementalFetchContext], context2.getClass)
 
     // Partitions are ordered in the session as per last response
@@ -1839,7 +1839,7 @@ class FetchSessionTest {
     val resp2 = context2.updateAndGenerateResponseData(respData2, Seq.empty.asJava)
     assertEquals(Errors.NONE, resp2.error)
     assertEquals(resp1.sessionId, resp2.sessionId)
-    assertEquals(Collections.emptySet(), resp2.responseData(topicNames, ApiKeys.FETCH.latestVersion()).keySet)
+    assertEquals(util.Set.of, resp2.responseData(topicNames, ApiKeys.FETCH.latestVersion()).keySet)
 
     // All partitions with changes should be returned.
     val respData3 = new util.LinkedHashMap[TopicIdPartition, FetchResponseData.PartitionData]

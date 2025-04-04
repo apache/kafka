@@ -32,8 +32,9 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.CsvSource
 
+import java.util
 import java.util.concurrent.Future
-import java.util.{Collections, Properties}
+import java.util.Properties
 import scala.collection.mutable.ListBuffer
 import scala.util.Random
 
@@ -125,7 +126,7 @@ class ProducerCompressionTest extends QuorumTestHarness {
 
       val tp = new TopicPartition(topic, partition)
       // make sure the fetched message count match
-      consumer.assign(Collections.singleton(tp))
+      consumer.assign(util.Set.of(tp))
       consumer.seek(tp, 0)
       val records = TestUtils.consumeRecords(consumer, numRecords*3)
 

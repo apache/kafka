@@ -44,7 +44,7 @@ import org.junit.jupiter.params.provider.ValueSource
 
 import java.net.InetAddress
 import java.util
-import java.util.{Collections, Properties, UUID}
+import java.util.{Properties, UUID}
 import scala.jdk.CollectionConverters._
 
 class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
@@ -696,7 +696,7 @@ class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
   def configureStandardAuthorizer(standardAuthorizer: StandardAuthorizer,
                                   configs: util.Map[String, AnyRef]): Unit = {
     standardAuthorizer.configure(configs)
-    initializeStandardAuthorizer(standardAuthorizer, new AuthorizerTestServerInfo(Collections.singletonList(PLAINTEXT)))
+    initializeStandardAuthorizer(standardAuthorizer, new AuthorizerTestServerInfo(util.List.of(PLAINTEXT)))
   }
 
   def initializeStandardAuthorizer(standardAuthorizer: StandardAuthorizer,

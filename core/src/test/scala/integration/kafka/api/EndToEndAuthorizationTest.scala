@@ -19,7 +19,7 @@ package kafka.api
 
 import com.yammer.metrics.core.Gauge
 
-import java.util.{Collections, Properties}
+import java.util.Properties
 import java.util.concurrent.ExecutionException
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import kafka.utils._
@@ -45,6 +45,7 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
 
+import java.util
 import scala.jdk.CollectionConverters._
 
 /**
@@ -353,7 +354,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     sendRecords(producer2, numRecords, tp2)
     var topic2RecordConsumed = false
     def verifyNoRecords(records: ConsumerRecords[Array[Byte], Array[Byte]]): Boolean = {
-      assertEquals(Collections.singleton(tp2), records.partitions(), "Consumed records with unexpected partitions: " + records)
+      assertEquals(util.Set.of(tp2), records.partitions(), "Consumed records with unexpected partitions: " + records)
       topic2RecordConsumed = true
       false
     }

@@ -17,7 +17,6 @@
 package kafka.coordinator.transaction
 
 import java.nio.ByteBuffer
-import java.util.Collections
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
@@ -46,6 +45,7 @@ import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.ArgumentMatchers.{any, anyInt, anyString}
 import org.mockito.Mockito.{mock, when}
 
+import java.util
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
 
@@ -85,7 +85,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     when(metadataCache.features()).thenReturn {
       new FinalizedFeatures(
         MetadataVersion.latestTesting(),
-        Collections.singletonMap(TransactionVersion.FEATURE_NAME, TransactionVersion.TV_2.featureLevel()),
+        util.Map.of(TransactionVersion.FEATURE_NAME, TransactionVersion.TV_2.featureLevel()),
         0)
     }
 
@@ -470,7 +470,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
   private def prepareTxnLog(partitionId: Int): Unit = {
     val logMock: UnifiedLog = mock(classOf[UnifiedLog])
-    when(logMock.config).thenReturn(new LogConfig(Collections.emptyMap()))
+    when(logMock.config).thenReturn(new LogConfig(util.Map.of()))
 
     val fileRecordsMock: FileRecords = mock(classOf[FileRecords])
 

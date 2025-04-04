@@ -49,7 +49,7 @@ import java.io.File
 import java.nio.ByteBuffer
 import java.nio.file.{Files, Path}
 import java.util
-import java.util.{Collections, Optional, Properties}
+import java.util.{Optional, Properties}
 import scala.jdk.CollectionConverters._
 import scala.util.Using
 
@@ -761,7 +761,7 @@ final class KafkaMetadataLogTest {
     )
 
     val serializationCache = new ObjectSerializationCache
-    val records = Collections.singletonList(new Array[Byte](recordSize))
+    val records = util.List.of(new Array[Byte](recordSize))
     while (!batchBuilder.bytesNeeded(records, serializationCache).isPresent) {
       batchBuilder.appendRecord(records.get(0), serializationCache)
     }

@@ -17,8 +17,6 @@
 
 package kafka.server
 
-
-import java.util.Collections
 import java.util.concurrent.DelayQueue
 import org.apache.kafka.common.metrics.MetricConfig
 import org.apache.kafka.common.utils.MockTime
@@ -32,7 +30,7 @@ class ThrottledChannelExpirationTest {
   private var numCallbacksForStartThrottling: Int = 0
   private var numCallbacksForEndThrottling: Int = 0
   private val metrics = new org.apache.kafka.common.metrics.Metrics(new MetricConfig(),
-                                                                    Collections.emptyList(),
+                                                                    java.util.List.of(),
                                                                     time)
   private val callback = new ThrottleCallback {
     override def startThrottling(): Unit = {
