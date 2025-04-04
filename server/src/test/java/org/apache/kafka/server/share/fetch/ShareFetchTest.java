@@ -78,7 +78,7 @@ public class ShareFetchTest {
     @Test
     public void testDontCacheAnyData() {
         final TopicIdPartition tidp = new TopicIdPartition(Uuid.randomUuid(), 0, "topic");
-        MemoryRecords records = buildRecords(1L, 3, 1);;
+        MemoryRecords records = buildRecords(1L, 3, 1);
 
         ShareFetchResponse shareFetch = shareFetchResponse(tidp, records, Errors.NONE, "", (short) 0,
                 "", List.of(), 0);
