@@ -3549,10 +3549,11 @@ class KafkaApis(val requestChannel: RequestChannel,
       groupDescribeOffsetsRequest
     ).handle[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup] { (groupDescribeOffsetsResponse, exception) =>
       if (exception != null) {
+        val error = Errors.forException(exception)
         new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
           .setGroupId(groupDescribeOffsetsRequest.groupId)
-          .setErrorCode(Errors.forException(exception).code)
-          .setErrorMessage(Errors.forException(exception).message)
+          .setErrorCode(error.code)
+          .setErrorMessage(error.message)
       } else {
         // Clients are not allowed to see offsets for topics that are not authorized for Describe.
         val (authorizedOffsets, _) = authHelper.partitionSeqByAuthorized(
@@ -3584,10 +3585,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         .setTopics(authorizedTopics.asJava)
     ).handle[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup] { (groupDescribeOffsetsResponse, exception) =>
       if (exception != null) {
+        val error = Errors.forException(exception)
         new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
           .setGroupId(groupDescribeOffsetsRequest.groupId)
-          .setErrorCode(Errors.forException(exception).code)
-          .setErrorMessage(Errors.forException(exception).message)
+          .setErrorCode(error.code)
+          .setErrorMessage(error.message)
       } else if (groupDescribeOffsetsResponse.errorCode() != Errors.NONE.code) {
         groupDescribeOffsetsResponse
       } else {

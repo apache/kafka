@@ -37,7 +37,6 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
-import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -86,14 +85,14 @@ public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coordi
 
             if (spec.topicPartitions() != null) {
                 Map<String, List<Integer>> topicPartitionMap = new HashMap<>();
-                spec.topicPartitions().forEach(tp -> topicPartitionMap.computeIfAbsent(tp.topic(), t -> new LinkedList<>()).add(tp.partition()));
+                spec.topicPartitions().forEach(tp -> topicPartitionMap.computeIfAbsent(tp.topic(), t -> new ArrayList<>()).add(tp.partition()));
 
                 Map<String, DescribeShareGroupOffsetsRequestTopic> requestTopics = new HashMap<>();
                 for (TopicPartition tp : spec.topicPartitions()) {
                     requestTopics.computeIfAbsent(tp.topic(), t ->
                             new DescribeShareGroupOffsetsRequestTopic()
                                 .setTopicName(tp.topic())
-                                .setPartitions(new LinkedList<>()))
+                                .setPartitions(new ArrayList<>()))
                         .partitions()
                         .add(tp.partition());
                 }
