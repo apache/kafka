@@ -419,10 +419,12 @@ public class FormatterTest {
             formatter1.formatter.setInitialControllers(DynamicVoters.
                     parse("1@localhost:8020:4znU-ou9Taa06bmEJxsjnw"));
             assertTrue(formatter1.formatter.hasDynamicQuorum());
-            assertEquals("Cannot set kraft.version to 0 if KIP-853 configuration is present. " +
-                "Try removing the --feature flag for kraft.version.",
-                    assertThrows(FormatterException.class,
-                        () -> formatter1.formatter.run()).getMessage());
+            assertEquals(
+                "Cannot set kraft.version to 0 if one of the flags --standalone, --initial-controllers, or " +
+                "--no-initial-controllers is used. For dynamic controllers support, try removing the " +
+                "--feature flag for kraft.version.",
+                assertThrows(FormatterException.class, () -> formatter1.formatter.run()).getMessage()
+            );
         }
     }
 
@@ -433,10 +435,12 @@ public class FormatterTest {
             formatter1.formatter.setFeatureLevel("kraft.version", (short) 1);
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
             assertFalse(formatter1.formatter.hasDynamicQuorum());
-            assertEquals("Cannot set kraft.version to 1 unless KIP-853 configuration is present. " +
-                "Try removing the --feature flag for kraft.version.",
-                    assertThrows(FormatterException.class,
-                        () -> formatter1.formatter.run()).getMessage());
+            assertEquals(
+                "Cannot set kraft.version to 1 unless one of the flags --standalone, --initial-controllers, or " +
+                "--no-initial-controllers is used. For dynamic controllers support, try using one of " +
+                "--standalone, --initial-controllers, or --no-initial-controllers.",
+                assertThrows(FormatterException.class, () -> formatter1.formatter.run()).getMessage()
+            );
         }
     }
 
@@ -526,10 +530,12 @@ public class FormatterTest {
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
             formatter1.formatter.setNoInitialControllersFlag(false);
             assertFalse(formatter1.formatter.hasDynamicQuorum());
-            assertEquals("Cannot set kraft.version to 1 unless KIP-853 configuration is present. " +
-                    "Try removing the --feature flag for kraft.version.",
-                assertThrows(FormatterException.class,
-                    formatter1.formatter::run).getMessage());
+            assertEquals(
+                "Cannot set kraft.version to 1 unless one of the flags --standalone, --initial-controllers, or " +
+                "--no-initial-controllers is used. For dynamic controllers support, try using one of " +
+                "--standalone, --initial-controllers, or --no-initial-controllers.",
+                assertThrows(FormatterException.class, formatter1.formatter::run).getMessage()
+            );
         }
     }
 
@@ -541,10 +547,12 @@ public class FormatterTest {
             formatter1.formatter.setUnstableFeatureVersionsEnabled(true);
             formatter1.formatter.setNoInitialControllersFlag(true);
             assertTrue(formatter1.formatter.hasDynamicQuorum());
-            assertEquals("Cannot set kraft.version to 0 if KIP-853 configuration is present. " +
-                    "Try removing the --feature flag for kraft.version.",
-                assertThrows(FormatterException.class,
-                    formatter1.formatter::run).getMessage());
+            assertEquals(
+                "Cannot set kraft.version to 0 if one of the flags --standalone, --initial-controllers, or " +
+                "--no-initial-controllers is used. For dynamic controllers support, try removing the " +
+                "--feature flag for kraft.version.",
+                assertThrows(FormatterException.class, formatter1.formatter::run).getMessage()
+            );
         }
     }
 }

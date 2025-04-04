@@ -32,7 +32,7 @@ import org.apache.kafka.server.log.remote.storage.RemotePartitionDeleteMetadata;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState.COPY_SEGMENT_FINISHED;
@@ -68,7 +68,7 @@ public class RemoteLogMetadataTransformTest {
     private RemoteLogSegmentMetadata createRemoteLogSegmentMetadata() {
         RemoteLogSegmentId remoteLogSegmentId = new RemoteLogSegmentId(TP0, Uuid.randomUuid());
         return new RemoteLogSegmentMetadata(remoteLogSegmentId, 0L, 100L, -1L, 1,
-                time.milliseconds(), 1024, Collections.singletonMap(0, 0L));
+                time.milliseconds(), 1024, Map.of(0, 0L));
     }
 
     @Test
