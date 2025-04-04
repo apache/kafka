@@ -255,23 +255,17 @@ public class JaasTestUtils {
     }
 
     public static boolean usesSslTransportLayer(SecurityProtocol securityProtocol) {
-        switch (securityProtocol) {
-            case SSL:
-            case SASL_SSL:
-                return true;
-            default:
-                return false;
-        }
+        return switch (securityProtocol) {
+            case SSL, SASL_SSL -> true;
+            default -> false;
+        };
     }
 
     public static boolean usesSaslAuthentication(SecurityProtocol securityProtocol) {
-        switch (securityProtocol) {
-            case SASL_PLAINTEXT:
-            case SASL_SSL:
-                return true;
-            default:
-                return false;
-        }
+        return switch (securityProtocol) {
+            case SASL_PLAINTEXT, SASL_SSL -> true;
+            default -> false;
+        };
     }
 
     public static Properties sslConfigs(ConnectionMode mode,

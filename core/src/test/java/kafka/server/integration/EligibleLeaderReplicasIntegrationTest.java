@@ -73,6 +73,7 @@ import scala.collection.mutable.HashMap;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarness implements Logging {
@@ -270,7 +271,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             // Restart one broker of the ELR and it should be the leader.
 
             int expectLeader = topicPartitionInfo.elr().stream()
-                .filter(node -> node.id() != expectLastKnownLeader).collect(Collectors.toList()).get(0).id();
+                .filter(node -> node.id() != expectLastKnownLeader).toList().get(0).id();
 
             startBroker(expectLeader);
             waitForIsrAndElr((isrSize, elrSize) -> {
@@ -350,7 +351,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             });
             topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
-            assertTrue(topicPartitionInfo.leader() == null);
+            assertNull(topicPartitionInfo.leader());
             assertEquals(1, topicPartitionInfo.lastKnownElr().size());
         } finally {
             restartDeadBrokers(false);
@@ -408,7 +409,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
 
 
             // After remove the clean shutdown file, the broker should report unclean shutdown during restart.
-            topicPartitionInfo.replicas().stream().forEach(replica -> {
+            topicPartitionInfo.replicas().forEach(replica -> {
                 if (replica.id() != lastKnownLeader) startBroker(replica.id());
             });
             waitForIsrAndElr((isrSize, elrSize) -> {
@@ -416,7 +417,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             });
             topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
-            assertTrue(topicPartitionInfo.leader() == null);
+            assertNull(topicPartitionInfo.leader());
             assertEquals(1, topicPartitionInfo.lastKnownElr().size());
 
             // Now if the last known leader goes through unclean shutdown, it will still be elected.

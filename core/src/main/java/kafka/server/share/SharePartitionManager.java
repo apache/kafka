@@ -351,7 +351,7 @@ public class SharePartitionManager implements AutoCloseable {
             log.error("Share session error for {}: no such share session found", key);
             return FutureUtils.failedFuture(Errors.SHARE_SESSION_NOT_FOUND.exception());
         } else {
-            log.debug("Removed share session with key " + key);
+            log.debug("Removed share session with key {}", key);
         }
 
         // Additionally release the acquired records for the respective member.

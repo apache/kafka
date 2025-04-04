@@ -490,7 +490,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
             image.delegationTokens()
         );
         MetadataDelta delta = new MetadataDelta.Builder().setImage(partialImage).build();
-        records.stream().forEach(record -> delta.replay(record));
+        records.forEach(delta::replay);
         kRaftMetadataCache.setImage(delta.apply(new MetadataProvenance(100L, 10, 1000L, true)));
     }
 

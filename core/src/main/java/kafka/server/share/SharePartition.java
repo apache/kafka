@@ -1672,7 +1672,7 @@ public class SharePartition {
         return switch (acknowledgeType) {
             case 1 /* ACCEPT */ -> RecordState.ACKNOWLEDGED;
             case 2 /* RELEASE */ -> RecordState.AVAILABLE;
-            case 3, 0 /* REJECT GAP */ -> RecordState.ARCHIVED;
+            case 3, 0 /* REJECT / GAP */ -> RecordState.ARCHIVED;
             default -> throw new IllegalArgumentException("Invalid acknowledge type: " + acknowledgeType);
         };
     }
@@ -2448,7 +2448,7 @@ public class SharePartition {
         }
     }
 
-    private long startOffsetDuringInitialization(long partitionDataStartOffset) throws Exception {
+    private long startOffsetDuringInitialization(long partitionDataStartOffset) {
         // Set the state epoch and end offset from the persisted state.
         if (partitionDataStartOffset != PartitionFactory.UNINITIALIZED_START_OFFSET) {
             return partitionDataStartOffset;

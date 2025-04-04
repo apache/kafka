@@ -93,7 +93,6 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -161,7 +160,7 @@ public class SharePartitionManagerTest {
     private BrokerTopicStats brokerTopicStats;
     private SharePartitionManager sharePartitionManager;
 
-    private static final List<TopicIdPartition> EMPTY_PART_LIST = Collections.unmodifiableList(new ArrayList<>());
+    private static final List<TopicIdPartition> EMPTY_PART_LIST = List.of();
 
     @BeforeEach
     public void setUp() {
