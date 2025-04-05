@@ -3508,6 +3508,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     val futures = new mutable.ArrayBuffer[CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]](groups.size)
     groups.forEach { groupDescribeOffsets =>
+      val isAllPartitions = groupDescribeOffsets.topics == null
       if (!isShareGroupProtocolEnabled) {
         futures += CompletableFuture.completedFuture(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
           .setGroupId(groupDescribeOffsets.groupId)
@@ -3516,6 +3517,11 @@ class KafkaApis(val requestChannel: RequestChannel,
         futures += CompletableFuture.completedFuture(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
           .setGroupId(groupDescribeOffsets.groupId)
           .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code))
+      } else if (isAllPartitions) {
+        futures += describeShareGroupAllOffsetsForGroup(
+          request.context,
+          groupDescribeOffsets
+        )
       } else if (groupDescribeOffsets.topics.isEmpty) {
         futures += CompletableFuture.completedFuture(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
           .setGroupId(groupDescribeOffsets.groupId))
@@ -3535,19 +3541,76 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  private def describeShareGroupOffsetsForGroup(requestContext: RequestContext,
+  private def describeShareGroupAllOffsetsForGroup(requestContext: RequestContext,
     groupDescribeOffsetsRequest: DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup
   ): CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup] = {
-    groupCoordinator.describeShareGroupOffsets(
+    groupCoordinator.describeShareGroupAllOffsets(
       requestContext,
       groupDescribeOffsetsRequest
     ).handle[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup] { (groupDescribeOffsetsResponse, exception) =>
       if (exception != null) {
+        val error = Errors.forException(exception)
         new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
           .setGroupId(groupDescribeOffsetsRequest.groupId)
-          .setErrorCode(Errors.forException(exception).code)
+          .setErrorCode(error.code)
+          .setErrorMessage(error.message)
       } else {
+        // Clients are not allowed to see offsets for topics that are not authorized for Describe.
+        val (authorizedOffsets, _) = authHelper.partitionSeqByAuthorized(
+          requestContext,
+          DESCRIBE,
+          TOPIC,
+          groupDescribeOffsetsResponse.topics.asScala
+        )(_.topicName)
+        groupDescribeOffsetsResponse.setTopics(authorizedOffsets.asJava)
+      }
+    }
+  }
+
+  private def describeShareGroupOffsetsForGroup(requestContext: RequestContext,
+    groupDescribeOffsetsRequest: DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup
+  ): CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup] = {
+    // Clients are not allowed to see offsets for topics that are not authorized for Describe.
+    val (authorizedTopics, unauthorizedTopics) = authHelper.partitionSeqByAuthorized(
+      requestContext,
+      DESCRIBE,
+      TOPIC,
+      groupDescribeOffsetsRequest.topics.asScala
+    )(_.topicName)
+
+    groupCoordinator.describeShareGroupOffsets(
+      requestContext,
+      new DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup()
+        .setGroupId(groupDescribeOffsetsRequest.groupId)
+        .setTopics(authorizedTopics.asJava)
+    ).handle[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup] { (groupDescribeOffsetsResponse, exception) =>
+      if (exception != null) {
+        val error = Errors.forException(exception)
+        new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+          .setGroupId(groupDescribeOffsetsRequest.groupId)
+          .setErrorCode(error.code)
+          .setErrorMessage(error.message)
+      } else if (groupDescribeOffsetsResponse.errorCode() != Errors.NONE.code) {
         groupDescribeOffsetsResponse
+      } else {
+        val topics = new util.ArrayList[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic](
+          groupDescribeOffsetsResponse.topics.size + unauthorizedTopics.size
+        )
+        topics.addAll(groupDescribeOffsetsResponse.topics)
+        unauthorizedTopics.foreach { topic =>
+          val topicResponse = new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
+            .setTopicName(topic.topicName)
+            .setTopicId(Uuid.ZERO_UUID)
+          topic.partitions().forEach { partitionIndex =>
+            topicResponse.partitions.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(partitionIndex)
+              .setStartOffset(-1)
+              .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+              .setErrorMessage(Errors.TOPIC_AUTHORIZATION_FAILED.message))
+          }
+          topics.add(topicResponse)
+        }
+        groupDescribeOffsetsResponse.setTopics(topics)
       }
     }
   }
