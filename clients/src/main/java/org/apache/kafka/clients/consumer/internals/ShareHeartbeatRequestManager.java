@@ -30,11 +30,9 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.TreeSet;
 
 import static org.apache.kafka.clients.consumer.internals.ConsumerUtils.CONSUMER_SHARE_METRIC_GROUP_PREFIX;
-import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
 
 /**
  * This is the heartbeat request manager for share groups.
@@ -188,15 +186,6 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
     @Override
     protected boolean shouldSendLeaveHeartbeatNow() {
         return membershipManager().state() == MemberState.LEAVING;
-    }
-
-    @Override
-    public NetworkClientDelegate.PollResult pollOnClose(long currentTimeMs) {
-        if (membershipManager().isLeavingGroup()) {
-            NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, true);
-            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(request));
-        }
-        return EMPTY;
     }
 
     /**

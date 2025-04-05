@@ -35,6 +35,7 @@ import org.slf4j.Logger;
 
 import java.util.Collections;
 
+import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
 
 /**
  * <p>Manages the request creation and response handling for the heartbeat. The module creates a
@@ -75,7 +76,7 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
     /**
      * HeartbeatRequestState manages heartbeat request timing and retries
      */
-    protected final HeartbeatRequestState heartbeatRequestState;
+    private final HeartbeatRequestState heartbeatRequestState;
 
     /**
      * ErrorEventHandler allows the background thread to propagate errors back to the user
@@ -224,7 +225,13 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
      * @return PollResult containing the request to send
      */
     @Override
-    public abstract PollResult pollOnClose(long currentTimeMs);
+    public PollResult pollOnClose(long currentTimeMs) {
+        if (membershipManager().isLeavingGroup()) {
+            NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, true);
+            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(request));
+        }
+        return EMPTY;
+    }
 
     /**
      * Returns the delay for which the application thread can safely wait before it should be responsive

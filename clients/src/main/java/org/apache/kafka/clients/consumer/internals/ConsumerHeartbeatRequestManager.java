@@ -32,7 +32,6 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -41,7 +40,6 @@ import java.util.TreeSet;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
-import static org.apache.kafka.clients.consumer.internals.NetworkClientDelegate.PollResult.EMPTY;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.REGEX_RESOLUTION_NOT_SUPPORTED_MSG;
 
 /**
@@ -221,20 +219,6 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
         if (membershipManager.groupInstanceId().isEmpty() && REMAIN_IN_GROUP == membershipManager.leaveGroupOperation())
             return false;
         return membershipManager().state() == MemberState.LEAVING;
-    }
-
-    @Override
-    public NetworkClientDelegate.PollResult pollOnClose(long currentTimeMs) {
-        // Determine if we should send a leaving heartbeat:
-        // - For static membership (when groupInstanceId is present): Always send the leaving heartbeat
-        // - For dynamic membership: Send the leaving heartbeat only when leaveGroupOperation is not REMAIN_IN_GROUP
-        boolean shouldHeartbeat = membershipManager.groupInstanceId().isPresent()
-            || REMAIN_IN_GROUP != membershipManager.leaveGroupOperation();
-        if (membershipManager().isLeavingGroup() && shouldHeartbeat) {
-            NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, true);
-            return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(request));
-        }
-        return EMPTY;
     }
 
     /**

@@ -494,10 +494,9 @@ public class ConsumerMembershipManager extends AbstractMembershipManager<Consume
     @Override
     public int leaveGroupEpoch() {
         boolean isStaticMember = groupInstanceId.isPresent();
-        if (REMAIN_IN_GROUP == leaveGroupOperation && isStaticMember) {
-            return ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
-        }
-
+        // Currently, the server doesn't have a mechanism for static members to permanently leave the group.
+        // Therefore, we use LEAVE_GROUP_MEMBER_EPOCH to force the GroupMetadataManager to fence
+        // this member, effectively removing it from the group.
         if (LEAVE_GROUP == leaveGroupOperation) {
             return ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
         }
