@@ -18,7 +18,7 @@
 package kafka.api
 
 import java.util
-import java.util.{Collections, Properties}
+import java.util.Properties
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{TestInfoUtils, TestUtils}
@@ -150,7 +150,7 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     producer.commitTransaction()
 
     // Check we can still consume the transaction.
-    consumer.subscribe(Collections.singletonList(topic1))
+    consumer.subscribe(util.List.of(topic1))
 
     val records = consumeRecords(consumer, 2)
     records.foreach { record =>
@@ -205,21 +205,21 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
   }
 
   private def producerState: util.List[ProducerState] = {
-    val describeResult = admin.describeProducers(Collections.singletonList(tp0))
+    val describeResult = admin.describeProducers(util.List.of(tp0))
     val activeProducers = describeResult.partitionResult(tp0).get().activeProducers
     activeProducers
   }
 
   private def producerIdExpirationConfig(configValue: String): util.Map[ConfigResource, util.Collection[AlterConfigOp]] = {
     val producerIdCfg = new ConfigEntry(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_CONFIG, configValue)
-    val configs = Collections.singletonList(new AlterConfigOp(producerIdCfg, AlterConfigOp.OpType.SET))
-    Collections.singletonMap(configResource, configs)
+    val configs = util.List.of(new AlterConfigOp(producerIdCfg, AlterConfigOp.OpType.SET))
+    util.Map.of(configResource, configs)
   }
 
   private def waitUntilTransactionalStateExpires(): Unit = {
     TestUtils.waitUntilTrue(() =>  {
       var removedTransactionState = false
-      val txnDescribeResult = admin.describeTransactions(Collections.singletonList("transactionalProducer")).description("transactionalProducer")
+      val txnDescribeResult = admin.describeTransactions(util.List.of("transactionalProducer")).description("transactionalProducer")
       try {
         txnDescribeResult.get()
       } catch {

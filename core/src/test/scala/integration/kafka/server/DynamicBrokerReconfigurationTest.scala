@@ -24,7 +24,7 @@ import java.lang.management.ManagementFactory
 import java.security.KeyStore
 import java.time.Duration
 import java.util
-import java.util.{Collections, Optional, Properties}
+import java.util.{Optional, Properties}
 import java.util.concurrent._
 import javax.management.ObjectName
 import com.yammer.metrics.core.MetricName
@@ -494,7 +494,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     properties.setProperty(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_CONFIG, updatedMaxConnections)
     properties.setProperty(SocketServerConfigs.MAX_CONNECTIONS_PER_IP_OVERRIDES_CONFIG, connectionsIpsOverride)
 
-    TestUtils.incrementalAlterConfigs(servers, adminClients.head, properties, true)
+    TestUtils.incrementalAlterConfigs(servers, adminClients.head, properties, perBrokerConfig = true)
 
     servers.foreach(_.shutdown())
     servers.foreach(_.awaitShutdown())
@@ -740,7 +740,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     consumer.commitSync()
 
     def partitionInfo: TopicPartitionInfo =
-      adminClients.head.describeTopics(Collections.singleton(topic)).topicNameValues().get(topic).get().partitions().get(0)
+      adminClients.head.describeTopics(util.Set.of(topic)).topicNameValues().get(topic).get().partitions().get(0)
 
     val partitionInfo0 = partitionInfo
     assertEquals(partitionInfo0.replicas.get(0), partitionInfo0.leader)
@@ -1412,7 +1412,7 @@ val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new Con
     private var _retries = Int.MaxValue
     private var _acks = -1
     private var _requestTimeoutMs = 30000
-    private val defaultLingerMs = 5;
+    private val defaultLingerMs = 5
     private var _deliveryTimeoutMs = 30000 + defaultLingerMs
 
     def maxRetries(retries: Int): ProducerBuilder = { _retries = retries; this }
@@ -1456,7 +1456,7 @@ val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new Con
       val consumer = new KafkaConsumer[String, String](consumerProps, new StringDeserializer, new StringDeserializer)
       consumers += consumer
 
-      consumer.subscribe(Collections.singleton(_topic))
+      consumer.subscribe(util.Set.of(_topic))
       if (_autoOffsetReset == "latest")
         awaitInitialPositions(consumer)
       consumer

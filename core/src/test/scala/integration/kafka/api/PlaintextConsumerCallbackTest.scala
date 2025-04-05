@@ -21,8 +21,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
 import java.util
-import java.util.Arrays.asList
-import java.util.Collections
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
@@ -36,7 +34,7 @@ class PlaintextConsumerCallbackTest extends AbstractConsumerTest {
   def testConsumerRebalanceListenerAssignOnPartitionsAssigned(groupProtocol: String): Unit = {
     val tp = new TopicPartition(topic, 0)
     triggerOnPartitionsAssigned(tp, { (consumer, _) =>
-      val e: Exception = assertThrows(classOf[IllegalStateException], () => consumer.assign(Collections.singletonList(tp)))
+      val e: Exception = assertThrows(classOf[IllegalStateException], () => consumer.assign(util.List.of(tp)))
       assertEquals(e.getMessage, "Subscription to topics, partitions and pattern are mutually exclusive")
     })
   }
@@ -55,7 +53,7 @@ class PlaintextConsumerCallbackTest extends AbstractConsumerTest {
   def testConsumerRebalanceListenerBeginningOffsetsOnPartitionsAssigned(groupProtocol: String): Unit = {
     val tp = new TopicPartition(topic, 0)
     triggerOnPartitionsAssigned(tp, { (consumer, _) =>
-      val map = consumer.beginningOffsets(Collections.singletonList(tp))
+      val map = consumer.beginningOffsets(util.List.of(tp))
       assertTrue(map.containsKey(tp))
       assertEquals(0, map.get(tp))
     })
@@ -66,7 +64,7 @@ class PlaintextConsumerCallbackTest extends AbstractConsumerTest {
   def testConsumerRebalanceListenerAssignOnPartitionsRevoked(groupProtocol: String): Unit = {
     val tp = new TopicPartition(topic, 0)
     triggerOnPartitionsRevoked(tp, { (consumer, _) =>
-      val e: Exception = assertThrows(classOf[IllegalStateException], () => consumer.assign(Collections.singletonList(tp)))
+      val e: Exception = assertThrows(classOf[IllegalStateException], () => consumer.assign(util.List.of(tp)))
       assertEquals(e.getMessage, "Subscription to topics, partitions and pattern are mutually exclusive")
     })
   }
@@ -85,7 +83,7 @@ class PlaintextConsumerCallbackTest extends AbstractConsumerTest {
   def testConsumerRebalanceListenerBeginningOffsetsOnPartitionsRevoked(groupProtocol: String): Unit = {
     val tp = new TopicPartition(topic, 0)
     triggerOnPartitionsRevoked(tp, { (consumer, _) =>
-      val map = consumer.beginningOffsets(Collections.singletonList(tp))
+      val map = consumer.beginningOffsets(util.List.of(tp))
       assertTrue(map.containsKey(tp))
       assertEquals(0, map.get(tp))
     })
@@ -111,11 +109,11 @@ class PlaintextConsumerCallbackTest extends AbstractConsumerTest {
 
     triggerOnPartitionsAssigned(tp, consumer, { (consumer, _) =>
       consumer.seek(tp, startingOffset)
-      consumer.pause(asList(tp))
+      consumer.pause(util.List.of(tp))
     })
 
     assertTrue(consumer.paused().contains(tp))
-    consumer.resume(asList(tp))
+    consumer.resume(util.List.of(tp))
     consumeAndVerifyRecords(consumer, numRecords = (totalRecords - startingOffset).toInt,
       startingOffset = startingOffset.toInt, startingKeyAndValueIndex = startingOffset.toInt,
       startingTimestamp = startingOffset)
@@ -131,7 +129,7 @@ class PlaintextConsumerCallbackTest extends AbstractConsumerTest {
                                           consumer: Consumer[Array[Byte], Array[Byte]],
                                           execute: (Consumer[Array[Byte], Array[Byte]], util.Collection[TopicPartition]) => Unit): Unit = {
     val partitionsAssigned = new AtomicBoolean(false)
-    consumer.subscribe(asList(topic), new ConsumerRebalanceListener {
+    consumer.subscribe(util.List.of(topic), new ConsumerRebalanceListener {
       override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
         // Make sure the partition used in the test is actually assigned before continuing.
         if (partitions.contains(tp)) {
@@ -152,7 +150,7 @@ class PlaintextConsumerCallbackTest extends AbstractConsumerTest {
     val consumer = createConsumer()
     val partitionsAssigned = new AtomicBoolean(false)
     val partitionsRevoked = new AtomicBoolean(false)
-    consumer.subscribe(asList(topic), new ConsumerRebalanceListener {
+    consumer.subscribe(util.List.of(topic), new ConsumerRebalanceListener {
       override def onPartitionsAssigned(partitions: util.Collection[TopicPartition]): Unit = {
         // Make sure the partition used in the test is actually assigned before continuing.
         if (partitions.contains(tp)) {

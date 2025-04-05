@@ -20,7 +20,7 @@ package kafka.server
 import java.io.File
 import java.net.InetSocketAddress
 import java.util
-import java.util.{Collections, Locale, Optional, OptionalInt, Properties, stream}
+import java.util.{Locale, Optional, OptionalInt, Properties, stream}
 import java.util.concurrent.{CompletableFuture, TimeUnit}
 import javax.security.auth.login.Configuration
 import kafka.utils.{CoreUtils, Logging, TestInfoUtils, TestUtils}
@@ -311,7 +311,7 @@ abstract class QuorumTestHarness extends Logging {
       Time.SYSTEM,
       new Metrics(),
       controllerQuorumVotersFuture,
-      Collections.emptyList(),
+      util.List.of,
       faultHandlerFactory,
       ServerSocketFactory.INSTANCE,
     )
@@ -328,7 +328,7 @@ abstract class QuorumTestHarness extends Logging {
           controllerQuorumVotersFuture.completeExceptionally(e)
         } else {
           controllerQuorumVotersFuture.complete(
-            Collections.singletonMap(nodeId, new InetSocketAddress("localhost", port))
+            util.Map.of(nodeId, new InetSocketAddress("localhost", port))
           )
         }
       })

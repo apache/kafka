@@ -32,7 +32,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
 import java.util
-import java.util.{Collections, Properties}
+import java.util.Properties
 import java.util.concurrent.{Executors, TimeUnit}
 import scala.jdk.CollectionConverters._
 
@@ -240,11 +240,11 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
 
     try {
       // Rack-based assignment results in partitions assigned in reverse order since partition racks are in the reverse order.
-      consumers.foreach(_.subscribe(Collections.singleton(topicWithSingleRackPartitions)))
+      consumers.foreach(_.subscribe(util.Set.of(topicWithSingleRackPartitions)))
       verifyAssignments(partitionList.reverse, topicWithSingleRackPartitions)
 
       // Non-rack-aware assignment results in ordered partitions.
-      consumers.foreach(_.subscribe(Collections.singleton(topicWithAllPartitionsOnAllRacks)))
+      consumers.foreach(_.subscribe(util.Set.of(topicWithAllPartitionsOnAllRacks)))
       verifyAssignments(partitionList, topicWithAllPartitionsOnAllRacks)
 
       // Rack-aware assignment with co-partitioning results in reverse assignment for both topics.
@@ -256,7 +256,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       val admin = createAdminClient()
       val reassignments = new util.HashMap[TopicPartition, util.Optional[NewPartitionReassignment]]()
       partitionList.foreach { p =>
-        val newAssignment = new NewPartitionReassignment(Collections.singletonList(p))
+        val newAssignment = new NewPartitionReassignment(util.List.of(p))
         reassignments.put(new TopicPartition(topicWithSingleRackPartitions, p), util.Optional.of(newAssignment))
       }
       admin.alterPartitionReassignments(reassignments).all().get(30, TimeUnit.SECONDS)

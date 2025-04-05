@@ -778,7 +778,7 @@ class TransactionsTest extends IntegrationTestHarness {
     "consumer, true"
   ))
   def testBumpTransactionalEpochWithTV2Enabled(groupProtocol: String, isTV2Enabled: Boolean): Unit = {
-    val defaultLinger = 5;
+    val defaultLinger = 5
     val producer = createTransactionalProducer("transactionalProducer",
       deliveryTimeoutMs = 5000 + defaultLinger, requestTimeoutMs = 5000)
     val consumer = transactionalConsumers.head

@@ -34,7 +34,7 @@ import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
 
 import java.util
 import java.util.concurrent.atomic.AtomicInteger
-import java.util.{Collections, Optional, Properties}
+import java.util.{Optional, Properties}
 import scala.collection.Seq
 import scala.concurrent.ExecutionException
 import scala.util.Random
@@ -310,7 +310,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
 
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
-      Collections.singleton(
+      util.Set.of(
       new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"),
         AlterConfigOp.OpType.SET))
     )
@@ -333,7 +333,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
     TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor)
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
-      Collections.singleton(
+      util.Set.of(
         new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"),
           AlterConfigOp.OpType.SET))
     )
@@ -589,7 +589,7 @@ class MyRemoteLogMetadataManager extends NoOpRemoteLogMetadataManager {
       val timestamp = time.milliseconds()
       val startOffset = idx * recordsPerSegment
       val endOffset = startOffset + recordsPerSegment - 1
-      val segmentLeaderEpochs: util.Map[Integer, java.lang.Long] = Collections.singletonMap(0, 0L)
+      val segmentLeaderEpochs: util.Map[Integer, java.lang.Long] = util.Map.of(0, 0L)
       segmentMetadataList.add(new RemoteLogSegmentMetadata(new RemoteLogSegmentId(topicIdPartition, Uuid.randomUuid()), startOffset, endOffset, timestamp, 0, timestamp, segmentSize, Optional.empty(), RemoteLogSegmentState.COPY_SEGMENT_FINISHED, segmentLeaderEpochs))
     }
     segmentMetadataList.iterator()

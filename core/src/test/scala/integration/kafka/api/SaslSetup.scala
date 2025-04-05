@@ -166,7 +166,7 @@ trait SaslSetup {
   def createScramCredentials(adminClient: Admin, userName: String, password: String): Unit = {
     PublicScramMechanism.values().filter(_ != PublicScramMechanism.UNKNOWN).map(mechanism => {
 
-      val results = adminClient.alterUserScramCredentials(util.Arrays.asList(
+      val results = adminClient.alterUserScramCredentials(util.List.of(
         new UserScramCredentialUpsertion(userName, new ScramCredentialInfo(mechanism, 4096), password)))
       results.all.get
     })

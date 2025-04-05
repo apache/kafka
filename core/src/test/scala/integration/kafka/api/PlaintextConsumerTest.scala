@@ -17,7 +17,7 @@ import kafka.api.BaseConsumerTest.{DeserializerImpl, SerializerImpl}
 import java.time.Duration
 import java.util
 import java.util.Arrays.asList
-import java.util.{Collections, Locale, Optional, Properties}
+import java.util.{Locale, Optional, Properties}
 import kafka.server.KafkaBroker
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.admin.{NewPartitions, NewTopic}
@@ -745,7 +745,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   def testSeekThrowsIllegalStateIfPartitionsNotAssigned(groupProtocol: String): Unit = {
     val tp = new TopicPartition(topic, 0)
     val consumer = createConsumer(configOverrides = consumerConfig)
-    val e: Exception = assertThrows(classOf[IllegalStateException], () => consumer.seekToEnd(Collections.singletonList(tp)))
+    val e: Exception = assertThrows(classOf[IllegalStateException], () => consumer.seekToEnd(util.List.of(tp)))
     assertEquals("No current assignment for partition " + tp, e.getMessage)
   }
 
@@ -767,7 +767,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val consumer = createConsumer()
     // Test negative target time
     assertThrows(classOf[IllegalArgumentException],
-      () => consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(topic, 0), -1)))
+      () => consumer.offsetsForTimes(util.Map.of(new TopicPartition(topic, 0), -1)))
     val timestampOffsets = consumer.offsetsForTimes(timestampsToSearch)
 
     val timestampTp0 = timestampOffsets.get(new TopicPartition(topic, 0))
@@ -862,7 +862,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
       () => {
         try {
           val groupId = config.getString(ConsumerConfig.GROUP_ID_CONFIG)
-          val groupDescription = adminClient.describeConsumerGroups (Collections.singletonList (groupId) ).describedGroups.get (groupId).get
+          val groupDescription = adminClient.describeConsumerGroups(util.List.of(groupId)).describedGroups.get(groupId).get
           groupDescription.members.isEmpty
         } catch {
           case _: ExecutionException | _: InterruptedException =>

@@ -14,7 +14,7 @@
 package kafka.api
 
 import java.util
-import java.util.{Collections, Properties}
+import java.util.Properties
 import kafka.integration.KafkaServerTestHarness
 import kafka.server.KafkaConfig
 import kafka.utils.{Logging, TestUtils}
@@ -127,27 +127,27 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
 
     // Set a mutable broker config
     val brokerResource = new ConfigResource(ConfigResource.Type.BROKER, brokers.head.config.brokerId.toString)
-    var alterResult = client.incrementalAlterConfigs(Collections.singletonMap(brokerResource,
-      util.Arrays.asList(new AlterConfigOp(new ConfigEntry(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, "50000"), OpType.SET))))
+    var alterResult = client.incrementalAlterConfigs(util.Map.of(brokerResource,
+      util.List.of(new AlterConfigOp(new ConfigEntry(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG, "50000"), OpType.SET))))
     alterResult.all.get
     assertEquals(Set(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG), validationsForResource(brokerResource).head.configs().keySet().asScala)
     validations.clear()
 
     val alterConfigs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
-    alterConfigs.put(topicResource1, util.Arrays.asList(
+    alterConfigs.put(topicResource1, util.List.of(
       new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.9"), OpType.SET),
       new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "2"), OpType.SET)
     ))
 
-    alterConfigs.put(topicResource2, util.Arrays.asList(
+    alterConfigs.put(topicResource2, util.List.of(
       new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.8"), OpType.SET),
     ))
 
-    alterConfigs.put(topicResource3, util.Arrays.asList(
+    alterConfigs.put(topicResource3, util.List.of(
       new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "-1"), OpType.SET),
     ))
 
-    alterConfigs.put(brokerResource, util.Arrays.asList(
+    alterConfigs.put(brokerResource, util.List.of(
       new AlterConfigOp(new ConfigEntry(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG, "12313"), OpType.SET),
     ))
 
@@ -177,7 +177,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     assertNull(configs.get(brokerResource).get(SslConfigs.SSL_TRUSTSTORE_PASSWORD_CONFIG).value)
 
     // Alter configs with validateOnly = true: only second is valid
-    alterConfigs.put(topicResource2, util.Arrays.asList(
+    alterConfigs.put(topicResource2, util.List.of(
       new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, "0.7"), OpType.SET),
     ))
 

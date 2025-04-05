@@ -34,7 +34,7 @@ import scala.jdk.CollectionConverters._
 class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
   val producerCount: Int = 1
   val brokerCount: Int = 2
-  val defaultLingerMs: Int = 5;
+  val defaultLingerMs: Int = 5
 
   serverConfig.put(ServerLogConfigs.NUM_PARTITIONS_CONFIG, 2.toString)
   serverConfig.put(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, 2.toString)
@@ -60,8 +60,8 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
     createTopicWithAssignment(topic, Map(0 -> Seq(0, 1), 1 -> Seq(0, 1)))
 
     val reassignment = Map(
-      new TopicPartition(topic, 0) -> Optional.of(new NewPartitionReassignment(util.Arrays.asList(1, 0))),
-      new TopicPartition(topic, 1) -> Optional.of(new NewPartitionReassignment(util.Arrays.asList(1, 0)))
+      new TopicPartition(topic, 0) -> Optional.of(new NewPartitionReassignment(util.List.of(1, 0))),
+      new TopicPartition(topic, 1) -> Optional.of(new NewPartitionReassignment(util.List.of(1, 0)))
     )
 
     // Change leader to 1 for both the partitions to increase leader epoch from 0 -> 1
