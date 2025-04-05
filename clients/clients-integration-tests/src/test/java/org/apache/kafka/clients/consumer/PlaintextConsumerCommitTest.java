@@ -46,8 +46,6 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG;
 import static org.apache.kafka.clients.consumer.PlaintextConsumerCommitTest.BROKER_COUNT;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
@@ -60,11 +58,9 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     types = {Type.KRAFT},
     brokers = BROKER_COUNT, 
     serverProperties = {
-        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "3"),
         @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "3"),
         @ClusterConfigProperty(key = GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, value = "100"),
-        @ClusterConfigProperty(key = GROUP_MAX_SESSION_TIMEOUT_MS_CONFIG, value = "60000"),
-        @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "10"),
     }
 )
 public class PlaintextConsumerCommitTest {
@@ -81,7 +77,7 @@ public class PlaintextConsumerCommitTest {
 
     @BeforeEach
     public void setup() throws InterruptedException {
-        cluster.createTopic(topic, 2, (short) 3);
+        cluster.createTopic(topic, 2, (short) BROKER_COUNT);
     }
     
     @ClusterTest
@@ -346,7 +342,7 @@ public class PlaintextConsumerCommitTest {
         try (var consumer = createConsumer(groupProtocol, true)) {
             sendRecords(10000);
             
-            ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
+            var rebalanceListener = new ConsumerRebalanceListener() {
                 @Override
                 public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
                     // keep partitions paused in this test so that we can verify the commits based on specific seeks
@@ -509,9 +505,7 @@ public class PlaintextConsumerCommitTest {
         return cluster.consumer(Map.of(
             GROUP_ID_CONFIG, "test-group",
             GROUP_PROTOCOL_CONFIG, protocol.name().toLowerCase(Locale.ROOT),
-            ENABLE_AUTO_COMMIT_CONFIG, enableAutoCommit,
-            ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "6000",
-            ConsumerConfig.METADATA_MAX_AGE_CONFIG, "100"
+            ENABLE_AUTO_COMMIT_CONFIG, enableAutoCommit
         ));
     }
     
@@ -565,7 +559,7 @@ public class PlaintextConsumerCommitTest {
         Consumer<byte[], byte[]> consumer,
         Optional<Map<TopicPartition, OffsetAndMetadata>> offsetsOpt
     ) throws InterruptedException {
-        RetryCommitCallback commitCallback = new RetryCommitCallback(consumer, offsetsOpt);
+        var commitCallback = new RetryCommitCallback(consumer, offsetsOpt);
 
         commitCallback.sendAsyncCommit();
         TestUtils.waitForCondition(() -> {
