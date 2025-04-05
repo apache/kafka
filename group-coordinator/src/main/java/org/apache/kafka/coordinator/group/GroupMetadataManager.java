@@ -2363,11 +2363,8 @@ public class GroupMetadataManager {
             response.setStandbyTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedStandbyTasks()));
             response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedWarmupTasks()));
         } else {
-            Map<Integer, Integer> epochCount = new HashMap<>();
-            group.members().values().forEach((mem) -> {
-                  epochCount.put(mem.memberEpoch(), epochCount.getOrDefault(mem.memberEpoch(), 0) + 1);
-            });
-            if (epochCount.get(groupEpoch) == group.members().size()) {
+            long memberGroupEpochCount = group.members().values().stream().filter(m -> m.memberEpoch() == group.groupEpoch()).count();
+            if (memberGroupEpochCount == group.members().size()) {
                 if (!streamsGroupMembersSendMetadata.contains(updatedMember.memberId())) {
                     response.setPartitionsByUserEndpoint(maybeBuildEndpointToPartitions(group));
                     streamsGroupMembersSendMetadata.add(updatedMember.memberId());
