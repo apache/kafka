@@ -946,7 +946,10 @@ public class ConsumerHeartbeatRequestManagerTest {
     @ParameterizedTest
     @MethodSource("pollOnLeavingMatrix")
     public void testPollOnCloseGeneratesRequestIfNeeded(Optional<String> groupInstanceId, CloseOptions.GroupMembershipOperation operation) {
-        when(membershipManager.isLeavingGroup()).thenReturn(true);
+        if (groupInstanceId.isEmpty() && REMAIN_IN_GROUP == operation)
+            when(membershipManager.isLeavingGroup()).thenReturn(false);
+        else
+            when(membershipManager.isLeavingGroup()).thenReturn(true);
         when(membershipManager.groupInstanceId()).thenReturn(groupInstanceId);
         when(membershipManager.leaveGroupOperation()).thenReturn(operation);
         String membership = groupInstanceId.isEmpty() ? "dynamic" : "static";
