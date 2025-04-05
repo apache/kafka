@@ -186,7 +186,7 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
     }
 
     @Override
-    protected boolean isLeavingGroup() {
+    protected boolean shouldSendLeaveHeartbeatNow() {
         return membershipManager().state() == MemberState.LEAVING;
     }
 

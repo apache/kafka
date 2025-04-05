@@ -180,8 +180,9 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(leaveHeartbeat));
         }
 
-        // Case 1: The member is leaving
-        boolean heartbeatNow = isLeavingGroup() ||
+        // Case 1: The member state is LEAVING - if the member is a share consumer, we should immediately send leave;
+        // if the member is an async consumer, this will also depend on leavingGroupOperation.
+        boolean heartbeatNow = shouldSendLeaveHeartbeatNow() ||
             // Case 2: The member state indicates it should send a heartbeat without waiting for the interval,
             // and there is no heartbeat request currently in-flight
             (membershipManager().shouldHeartbeatNow() && !heartbeatRequestState.requestInFlight());
@@ -201,9 +202,9 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
     public abstract AbstractMembershipManager<R> membershipManager();
 
     /**
-     * @return the member is leaving the group or not
+     * @return the member should send leave heartbeat immediately or not
      */
-    protected abstract boolean isLeavingGroup();
+    protected abstract boolean shouldSendLeaveHeartbeatNow();
 
     /**
      * Generate a heartbeat request to leave the group if the state is still LEAVING when this is

@@ -215,7 +215,7 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
     }
 
     @Override
-    protected boolean isLeavingGroup() {
+    protected boolean shouldSendLeaveHeartbeatNow() {
         // If the consumer has dynamic membership,
         // we should skip the leaving heartbeat when leaveGroupOperation is REMAIN_IN_GROUP
         if (membershipManager.groupInstanceId().isEmpty() && REMAIN_IN_GROUP == membershipManager.leaveGroupOperation())
@@ -225,11 +225,12 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
 
     @Override
     public NetworkClientDelegate.PollResult pollOnClose(long currentTimeMs) {
-        // If the consumer has dynamic membership,
-        // we should skip the leaving heartbeat when leaveGroupOperation is REMAIN_IN_GROUP
-        boolean skipHeartbeatForDynamicMemberRemainInGroup = membershipManager.groupInstanceId().isEmpty()
-            && REMAIN_IN_GROUP == membershipManager.leaveGroupOperation();
-        if (membershipManager().isLeavingGroup() && !skipHeartbeatForDynamicMemberRemainInGroup) {
+        // Determine if we should send a leaving heartbeat:
+        // - For static membership (when groupInstanceId is present): Always send the leaving heartbeat
+        // - For dynamic membership: Send the leaving heartbeat only when leaveGroupOperation is not REMAIN_IN_GROUP
+        boolean shouldHeartbeat = membershipManager.groupInstanceId().isPresent()
+            || REMAIN_IN_GROUP != membershipManager.leaveGroupOperation();
+        if (membershipManager().isLeavingGroup() && shouldHeartbeat) {
             NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequest(currentTimeMs, true);
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(request));
         }
