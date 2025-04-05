@@ -225,8 +225,8 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                 }
                 if (materialized) {
                     assertThat(
-                        asList(store),
-                        is(expected)
+                        asMap(store),
+                        is(asMap(expected))
                     );
                 }
             }
@@ -311,12 +311,11 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
 
             assertThat(
                 outputTopic.readKeyValuesToList(),
-                is(leftJoin
-                    ? Arrays.asList(
-                    KeyValue.pair("lhs1", "(lhsValue1|rhs1,null)"),
-                    KeyValue.pair("lhs2", "(lhsValue2|rhs2,null)"),
-                    KeyValue.pair("lhs3", "(lhsValue3|rhs1,null)"))
-                    : emptyList()
+                is(leftJoin ? Arrays.asList(
+                        KeyValue.pair("lhs1", "(lhsValue1|rhs1,null)"),
+                        KeyValue.pair("lhs2", "(lhsValue2|rhs2,null)"),
+                        KeyValue.pair("lhs3", "(lhsValue3|rhs1,null)")
+                    ) : emptyList()
                 )
             );
             if (materialized) {
@@ -436,8 +435,8 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                 );
                 if (materialized) {
                     assertThat(
-                        asList(store),
-                        is(expected)
+                        asMap(store),
+                        is(asMap(expected))
                     );
                 }
             }
@@ -654,8 +653,8 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                 );
                 if (materialized) {
                     assertThat(
-                        asList(store),
-                        is(expected)
+                        asMap(store),
+                        is(asMap(expected))
                     );
                 }
             }
@@ -672,8 +671,8 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                 );
                 if (materialized) {
                     assertThat(
-                        asList(store),
-                        is(expected)
+                        asMap(store),
+                        is(asMap(expected))
                     );
                 }
             }
@@ -718,7 +717,10 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                 );
                 assertThat(outputTopic.readKeyValuesToList(), is(expected));
                 if (materialized) {
-                    assertThat(asList(store), is(expected));
+                    assertThat(
+                        asMap(store),
+                        is(asMap(expected))
+                    );
                 }
             }
         }
@@ -759,7 +761,10 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                 );
                 assertThat(outputTopic.readKeyValuesToList(), is(expected));
                 if (materialized) {
-                    assertThat(asList(store), is(expected));
+                    assertThat(
+                        asMap(store),
+                        is(asMap(expected))
+                    );
                 }
                 Assertions.assertNotNull(subscriptionStore.get(key));
             }
@@ -770,7 +775,10 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
                 );
                 assertThat(outputTopic.readKeyValuesToList(), is(expected));
                 if (materialized) {
-                    assertThat(asList(store), is(expected));
+                    assertThat(
+                        asMap(store),
+                        is(asMap(expected))
+                    );
                 }
                 Assertions.assertNull(subscriptionStore.get(key));
             }
@@ -796,10 +804,8 @@ public class KTableKTableForeignKeyJoinIntegrationTest {
         return result;
     }
 
-    protected static List<KeyValue<String, String>> asList(final KeyValueStore<String, ValueAndTimestamp<String>> store) {
-        final List<KeyValue<String, String>> result = new LinkedList<>();
-        store.all().forEachRemaining(kv -> result.add(new KeyValue<>(kv.key, kv.value.value()))); // TODO: find a better solution
-        return result;
+    protected static Map<String, String> asMap(final List<KeyValue<String, String>> records) {
+        return records.stream().collect(Collectors.toMap(kv -> kv.key, kv -> kv.value));
     }
 
     protected static Topology getTopology(final Properties streamsConfig,
