@@ -17,18 +17,23 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.clients.producer.Producer;
+import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.MockConsumerInterceptor;
+
 import org.junit.jupiter.api.BeforeEach;
 
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -39,16 +44,19 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMI
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.clients.consumer.PlaintextConsumerCommitTest.BROKER_COUNT;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(
     types = {Type.KRAFT},
-    brokers = 3
+    brokers = BROKER_COUNT
 )
 public class PlaintextConsumerCommitTest {
 
+    public static final int BROKER_COUNT = 3;
     private final ClusterInstance cluster;
     private final String topic = "topic";
     private final TopicPartition tp = new TopicPartition(topic, 0);
@@ -104,8 +112,7 @@ public class PlaintextConsumerCommitTest {
 
     private void testAutoCommitOnCloseAfterWakeup(GroupProtocol groupProtocol) throws InterruptedException {
         try (var consumer = createConsumer(groupProtocol, true)) {
-            var numRecords = 10000;
-            sendRecords(numRecords);
+            sendRecords(10000);
 
             consumer.subscribe(List.of(topic));
             awaitAssignment(consumer, Set.of(tp, tp1));
@@ -197,9 +204,9 @@ public class PlaintextConsumerCommitTest {
     }
 
     private void testAutoCommitIntercept(GroupProtocol groupProtocol) throws InterruptedException {
-        String topic2 = "topic2";
+        var topic2 = "topic2";
         cluster.createTopic(topic2, 2, (short) 3);
-        int numRecords = 100;
+        var numRecords = 100;
         try (var producer = cluster.producer();
              // create consumer with interceptor
              Consumer<byte[], byte[]> consumer = cluster.consumer(Map.of(
@@ -252,12 +259,12 @@ public class PlaintextConsumerCommitTest {
             assertTrue(MockConsumerInterceptor.ON_COMMIT_COUNT.intValue() > commitCountBeforeRebalance);
 
             // In both CLASSIC and CONSUMER protocols, interceptors are executed in poll and close.
-            // However, in the CONSUMER protocol, the assignment may be changed outside of a poll, so
+            // However, in the CONSUMER protocol, the assignment may be changed outside a poll, so
             // we need to poll once to ensure the interceptor is called.
             if (groupProtocol == GroupProtocol.CONSUMER) {
                 consumer.poll(Duration.ZERO);
             }
-
+            
             // verify commits are intercepted on close
             var commitCountBeforeClose = MockConsumerInterceptor.ON_COMMIT_COUNT.intValue();
             consumer.close();
@@ -268,31 +275,263 @@ public class PlaintextConsumerCommitTest {
         }
     }
 
+    @ClusterTest
+    public void testClassicConsumerCommitSpecifiedOffsets() throws InterruptedException {
+        testCommitSpecifiedOffsets(GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerCommitSpecifiedOffsets() throws InterruptedException {
+        testCommitSpecifiedOffsets(GroupProtocol.CONSUMER);
+    }
+
+    private void testCommitSpecifiedOffsets(GroupProtocol groupProtocol) throws InterruptedException {
+        try (Producer<byte[], byte[]> producer = cluster.producer();
+             var consumer = createConsumer(groupProtocol, false)
+        ) {
+            sendRecords(producer, 5, tp);
+            sendRecords(producer, 7, tp1);
+
+            consumer.assign(List.of(tp, tp1));
+
+            var pos1 = consumer.position(tp);
+            var pos2 = consumer.position(tp1);
+            
+            consumer.commitSync(Map.of(tp, new OffsetAndMetadata(3L)));
+
+            assertEquals(3, consumer.committed(Set.of(tp)).get(tp).offset());
+            assertNull(consumer.committed(Collections.singleton(tp1)).get(tp1));
+
+            // Positions should not change
+            assertEquals(pos1, consumer.position(tp));
+            assertEquals(pos2, consumer.position(tp1));
+
+            consumer.commitSync(Map.of(tp1, new OffsetAndMetadata(5L)));
+
+            assertEquals(3, consumer.committed(Set.of(tp)).get(tp).offset());
+            assertEquals(5, consumer.committed(Set.of(tp1)).get(tp1).offset());
+
+            // Using async should pick up the committed changes after commit completes
+            sendAndAwaitAsyncCommit(consumer, Optional.of(Map.of(tp1, new OffsetAndMetadata(7L))));
+            assertEquals(7, consumer.committed(Collections.singleton(tp1)).get(tp1).offset());
+        }
+    }
+    
+    @ClusterTest
+    public void testClassicConsumerAutoCommitOnRebalance() throws InterruptedException {
+        testAutoCommitOnRebalance(GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerAutoCommitOnRebalance() throws InterruptedException {
+        testAutoCommitOnRebalance(GroupProtocol.CONSUMER);
+    }
+
+    private void testAutoCommitOnRebalance(GroupProtocol groupProtocol) throws InterruptedException {
+        var topic2 = "topic2";
+        cluster.createTopic(topic2, 2, (short) BROKER_COUNT);
+        try (var consumer = createConsumer(groupProtocol, true)) {
+            sendRecords(10000);
+            
+            ConsumerRebalanceListener rebalanceListener = new ConsumerRebalanceListener() {
+                @Override
+                public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
+                    // keep partitions paused in this test so that we can verify the commits based on specific seeks
+                    consumer.pause(partitions);
+                }
+
+                @Override
+                public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
+                    
+                }
+            };
+
+            consumer.subscribe(List.of(topic), rebalanceListener);
+            awaitAssignment(consumer, Set.of(tp, tp1));
+
+            consumer.seek(tp, 300);
+            consumer.seek(tp1, 500);
+            // change subscription to trigger rebalance
+            consumer.subscribe(List.of(topic, topic2), rebalanceListener);
+
+            var newAssignment = Set.of(tp, tp1, new TopicPartition(topic2, 0), new TopicPartition(topic2, 1));
+            awaitAssignment(consumer, newAssignment);
+
+            // after rebalancing, we should have reset to the committed positions
+            assertEquals(300, consumer.committed(Set.of(tp)).get(tp).offset());
+            assertEquals(500, consumer.committed(Set.of(tp1)).get(tp1).offset());
+        }
+    }
+    
+    @ClusterTest
+    public void testClassicConsumerSubscribeAndCommitSync() throws InterruptedException {
+        testSubscribeAndCommitSync(GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerSubscribeAndCommitSync() throws InterruptedException {
+        testSubscribeAndCommitSync(GroupProtocol.CONSUMER);
+    }
+
+    private void testSubscribeAndCommitSync(GroupProtocol groupProtocol) throws InterruptedException {
+        // This test ensure that the member ID is propagated from the group coordinator when the
+        // assignment is received into a subsequent offset commit
+        try (var consumer = createConsumer(groupProtocol, false)) {
+            assertEquals(0, consumer.assignment().size());
+            consumer.subscribe(List.of(topic));
+            awaitAssignment(consumer, Set.of(tp, tp1));
+
+            consumer.seek(tp, 0);
+            consumer.commitSync();
+        }
+    }
+
+    @ClusterTest
+    public void testClassicConsumerPositionAndCommit() throws InterruptedException {
+        testPositionAndCommit(GroupProtocol.CLASSIC);
+    }
+
+    @ClusterTest
+    public void testAsyncConsumerPositionAndCommit() throws InterruptedException {
+        testPositionAndCommit(GroupProtocol.CONSUMER);
+    }
+
+    private void testPositionAndCommit(GroupProtocol groupProtocol) throws InterruptedException {
+        try (Producer<byte[], byte[]> producer = cluster.producer();
+             var consumer = createConsumer(groupProtocol, false);
+             var otherConsumer = createConsumer(groupProtocol, false)
+        ) {
+            var startingTimestamp = System.currentTimeMillis();
+            sendRecords(producer, 5, tp, startingTimestamp);
+
+            var topicPartition = new TopicPartition(topic, 15);
+            assertNull(consumer.committed(Collections.singleton(topicPartition)).get(topicPartition));
+
+            // position() on a partition that we aren't subscribed to throws an exception
+            assertThrows(IllegalStateException.class, () -> consumer.position(topicPartition));
+
+            consumer.assign(List.of(tp));
+
+            assertEquals(0L, consumer.position(tp), "position() on a partition that we are subscribed to should reset the offset");
+            consumer.commitSync();
+            assertEquals(0L, consumer.committed(Set.of(tp)).get(tp).offset());
+            consumeAndVerifyRecords(consumer, 5, 0, startingTimestamp);
+            assertEquals(5L, consumer.position(tp), "After consuming 5 records, position should be 5");
+            consumer.commitSync();
+            assertEquals(5L, consumer.committed(Set.of(tp)).get(tp).offset(), "Committed offset should be returned");
+
+            startingTimestamp = System.currentTimeMillis();
+            sendRecords(producer, 1, tp, startingTimestamp);
+
+            // another consumer in the same group should get the same position
+            otherConsumer.assign(List.of(tp));
+            consumeAndVerifyRecords(otherConsumer, 1, 5, startingTimestamp);
+        }
+    }
+
+    // TODO: This only works in the new consumer, but should be fixed for the old consumer as well
+    @ClusterTest
+    public void testCommitAsyncCompletedBeforeConsumerCloses() {
+        // This is testing the contract that asynchronous offset commit are completed before the consumer
+        // is closed, even when no commit sync is performed as part of the close (due to auto-commit
+        // disabled, or simply because there are no consumed offsets).
+        try (Producer<byte[], byte[]> producer = cluster.producer(Map.of(ProducerConfig.ACKS_CONFIG, "all"));
+             var consumer = createConsumer(GroupProtocol.CONSUMER, false)
+        ) {
+            sendRecords(producer, 3, tp);
+            sendRecords(producer, 3, tp1);
+            consumer.assign(List.of(tp, tp1));
+
+            // Try without looking up the coordinator first
+            var cb = new CountConsumerCommitCallback();
+            consumer.commitAsync(Map.of(tp, new OffsetAndMetadata(1L)), cb);
+            consumer.commitAsync(Map.of(tp1, new OffsetAndMetadata(1L)), cb);
+
+            consumer.close();
+            assertEquals(2, cb.successCount);
+        }
+    }
+
+    // TODO: This only works in the new consumer, but should be fixed for the old consumer as well
+    @ClusterTest
+    public void testCommitAsyncCompletedBeforeCommitSyncReturns() {
+        // This is testing the contract that asynchronous offset commits sent previously with the
+        // `commitAsync` are guaranteed to have their callbacks invoked prior to completion of
+        // `commitSync` (given that it does not time out).
+        try (Producer<byte[], byte[]> producer = cluster.producer();
+             var consumer = createConsumer(GroupProtocol.CONSUMER, false)
+        ) {
+            sendRecords(producer, 3, tp);
+            sendRecords(producer, 3, tp1);
+
+            consumer.assign(List.of(tp, tp1));
+
+            // Try without looking up the coordinator first
+            var cb = new CountConsumerCommitCallback();
+            consumer.commitAsync(Map.of(tp, new OffsetAndMetadata(1L)), cb);
+            consumer.commitSync(Map.of());
+
+            assertEquals(1, consumer.committed(Set.of(tp)).get(tp).offset());
+            assertEquals(1, cb.successCount);
+
+            // Try with coordinator known
+            consumer.commitAsync(Map.of(tp, new OffsetAndMetadata(2L)), cb);
+            consumer.commitSync(Map.of(tp1, new OffsetAndMetadata(2L)));
+
+            assertEquals(2, consumer.committed(Set.of(tp)).get(tp).offset());
+            assertEquals(2, consumer.committed(Set.of(tp1)).get(tp1).offset());
+            assertEquals(2, cb.successCount);
+
+            // Try with empty sync commit
+            consumer.commitAsync(Map.of(tp, new OffsetAndMetadata(3L)), cb);
+            consumer.commitSync(Map.of());
+
+            assertEquals(3, consumer.committed(Set.of(tp)).get(tp).offset());
+            assertEquals(2, consumer.committed(Set.of(tp1)).get(tp1).offset());
+            assertEquals(3, cb.successCount);
+        }
+    }
+
     private Consumer<byte[], byte[]> createConsumer(GroupProtocol protocol, boolean enableAutoCommit) {
         return cluster.consumer(Map.of(
             GROUP_ID_CONFIG, "test-group",
-            MAX_POLL_INTERVAL_MS_CONFIG, 600,
             GROUP_PROTOCOL_CONFIG, protocol.name().toLowerCase(Locale.ROOT),
             ENABLE_AUTO_COMMIT_CONFIG, enableAutoCommit
         ));
     }
-
+    
     private void sendRecords(int numRecords) {
-        long startingTimestamp = System.currentTimeMillis();
         try (Producer<byte[], byte[]> producer = cluster.producer()) {
-            for (int i = 0; i < numRecords; i++) {
-                long timestamp = startingTimestamp + i;
-                var record = new ProducerRecord<>(
-                    tp.topic(),
-                    tp.partition(),
-                    timestamp,
-                    ("key " + i).getBytes(),
-                    ("value " + i).getBytes()
-                );
-                producer.send(record);
-            }
-            producer.flush();
+            sendRecords(producer, numRecords, tp, System.currentTimeMillis());
         }
+    }
+
+    private void sendRecords(
+        Producer<byte[], byte[]> producer,
+        int numRecords,
+        TopicPartition topicPartition
+    ) {
+        sendRecords(producer, numRecords, topicPartition, System.currentTimeMillis());
+    }
+
+    private void sendRecords(
+        Producer<byte[], byte[]> producer, 
+        int numRecords, 
+        TopicPartition topicPartition,
+        long startingTimestamp
+    ) {
+        for (var i = 0; i < numRecords; i++) {
+            var timestamp = startingTimestamp + i;
+            var record = new ProducerRecord<>(
+                topicPartition.topic(),
+                topicPartition.partition(),
+                timestamp,
+                ("key " + i).getBytes(),
+                ("value " + i).getBytes()
+            );
+            producer.send(record);
+        }
+        producer.flush();
     }
 
     private void awaitAssignment(
@@ -359,7 +598,6 @@ public class PlaintextConsumerCommitTest {
 
     private class CountConsumerCommitCallback implements OffsetCommitCallback {
         private int successCount = 0;
-        private int failCount = 0;
         private Optional<Exception> lastError = Optional.empty();
 
         @Override
@@ -367,7 +605,6 @@ public class PlaintextConsumerCommitTest {
             if (exception == null) {
                 successCount += 1;
             } else {
-                failCount += 1;
                 lastError = Optional.of(exception);
             }
         }
@@ -381,5 +618,45 @@ public class PlaintextConsumerCommitTest {
     ) throws InterruptedException {
         consumer.subscribe(topicsToSubscribe, rebalanceListener);
         awaitAssignment(consumer, expectedAssignment);
+    }
+
+    protected void consumeAndVerifyRecords(
+        Consumer<byte[], byte[]> consumer,
+        int numRecords,
+        int startingOffset,
+        long startingTimestamp
+    ) throws InterruptedException {
+        var records = consumeRecords(consumer, numRecords);
+        for (var i = 0; i < numRecords; i++) {
+            var record = records.get(i);
+            var offset = startingOffset + i;
+
+            assertEquals(tp.topic(), record.topic());
+            assertEquals(tp.partition(), record.partition());
+
+            assertEquals(TimestampType.CREATE_TIME, record.timestampType());
+            var timestamp = startingTimestamp + i;
+            assertEquals(timestamp, record.timestamp());
+
+            assertEquals(offset, record.offset());
+            assertEquals("key " + i, new String(record.key()));
+            assertEquals("value " + i, new String(record.value()));
+            // this is true only because K and V are byte arrays
+            assertEquals(("key " + i).length(), record.serializedKeySize());
+            assertEquals(("value " + i).length(), record.serializedValueSize());
+        }
+    }
+    
+    protected <K, V> List<ConsumerRecord<K, V>> consumeRecords(
+        Consumer<K, V> consumer,
+        int numRecords
+    ) throws InterruptedException {
+        List<ConsumerRecord<K, V>> records = new ArrayList<>();
+        TestUtils.waitForCondition(() -> {
+            consumer.poll(Duration.ofMillis(100)).forEach(records::add);
+            return records.size() >= numRecords;
+        }, 60000, "Timed out before consuming expected " + numRecords + " records.");
+
+        return records;
     }
 }
