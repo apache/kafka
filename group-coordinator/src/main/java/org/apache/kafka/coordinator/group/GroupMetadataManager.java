@@ -3037,7 +3037,7 @@ public class GroupMetadataManager {
         }
         return member;
     }
-    
+
     /**
      * Gets or subscribes a static consumer group member. This method also replaces the
      * previous static member if allowed.
@@ -4115,7 +4115,8 @@ public class GroupMetadataManager {
         return shareGroupFenceMember(group, member, response);
     }
 
-    /** Fences a member from a consumer group and maybe downgrade the consumer group to a classic group.
+    /**
+      * Fences a member from a consumer group and maybe downgrade the consumer group to a classic group.
      *
      * @param group     The group.
      * @param member    The member.
@@ -5028,7 +5029,7 @@ public class GroupMetadataManager {
     }
 
     private Map<Uuid, Map.Entry<String, Set<Integer>>> attachTopicName(Map<Uuid, Set<Integer>> initMap) {
-        TopicsImage topicsImage = metadataImage.topics(); 
+        TopicsImage topicsImage = metadataImage.topics();
         Map<Uuid, Map.Entry<String, Set<Integer>>> finalMap = new HashMap<>();
         for (Map.Entry<Uuid, Set<Integer>> entry : initMap.entrySet()) {
             Uuid topicId = entry.getKey();
@@ -5036,6 +5037,28 @@ public class GroupMetadataManager {
             finalMap.put(topicId, Map.entry(topicName, entry.getValue()));
         }
         return Collections.unmodifiableMap(finalMap);
+    }
+
+    /**
+     * Returns the set of share partitions whose state has been initialized.
+     *
+     * @param groupId The group id corresponding to the share group whose share partitions have been initialized.
+     *
+     * @return A map representing the initialized share-partitions for the share group.
+     */
+    public Map<Uuid, Set<Integer>> initializedShareGroupPartitions(
+        String groupId
+    ) {
+        Map<Uuid, Set<Integer>> resultMap = new HashMap<>();
+
+        ShareGroupStatePartitionMetadataInfo currentMap = shareGroupPartitionMetadata.get(groupId);
+        if (currentMap != null) {
+            currentMap.initializedTopics().forEach((topicId, partitions) -> {
+                resultMap.put(topicId, new HashSet<>(partitions));
+            });
+        }
+
+        return resultMap;
     }
 
     /**
@@ -8289,7 +8312,7 @@ public class GroupMetadataManager {
     private Map<String, String> streamsGroupAssignmentConfigs(String groupId) {
         return Map.of("group.streams.num.standby.replicas", "0");
     }
-    
+
     /**
      * Generate a classic group heartbeat key for the timer.
      *

@@ -1386,13 +1386,16 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         ).toList()
                     ));
             } else {
+                // If the topic does not exist, the start offset is returned as -1 (uninitialized offset).
+                // This is consistent with OffsetFetch for situations in which there is no offset information to fetch.
+                // It's treated as absence of data, rather than an error, unlike TOPIC_AUTHORIZATION_ERROR for example.
                 describeShareGroupOffsetsResponseTopicList.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
                     .setTopicName(topic.topicName())
+                    .setTopicId(Uuid.ZERO_UUID)
                     .setPartitions(topic.partitions().stream().map(
                         partition -> new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
                             .setPartitionIndex(partition)
-                            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                            .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
+                            .setStartOffset(PartitionFactory.UNINITIALIZED_START_OFFSET)
                     ).toList()));
             }
         });
@@ -1408,6 +1411,67 @@ public class GroupCoordinatorService implements GroupCoordinator {
         ReadShareGroupStateSummaryRequestData readSummaryRequestData = new ReadShareGroupStateSummaryRequestData()
             .setGroupId(requestData.groupId())
             .setTopics(readStateSummaryData);
+
+        return readShareGroupStateSummary(readSummaryRequestData, requestTopicIdToNameMapping, describeShareGroupOffsetsResponseTopicList);
+    }
+
+    /**
+     * See {@link GroupCoordinator#describeShareGroupAllOffsets(RequestContext, DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup)}.
+     */
+    @Override
+    public CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> describeShareGroupAllOffsets(
+        RequestContext context,
+        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData
+    ) {
+        if (!isActive.get()) {
+            return CompletableFuture.completedFuture(
+                DescribeShareGroupOffsetsRequest.getErrorDescribedGroup(requestData.groupId(), Errors.COORDINATOR_NOT_AVAILABLE));
+        }
+
+        if (metadataImage == null) {
+            return CompletableFuture.completedFuture(
+                DescribeShareGroupOffsetsRequest.getErrorDescribedGroup(requestData.groupId(), Errors.COORDINATOR_NOT_AVAILABLE));
+        }
+
+        return runtime.scheduleReadOperation(
+            "share-group-initialized-partitions",
+            topicPartitionFor(requestData.groupId()),
+            (coordinator, offset) -> coordinator.initializedShareGroupPartitions(requestData.groupId())
+        ).thenCompose(topicPartitionMap -> {
+            Map<Uuid, String> requestTopicIdToNameMapping = new HashMap<>();
+            List<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic> describeShareGroupOffsetsResponseTopicList = new ArrayList<>(topicPartitionMap.size());
+            ReadShareGroupStateSummaryRequestData readSummaryRequestData = new ReadShareGroupStateSummaryRequestData()
+                .setGroupId(requestData.groupId());
+            topicPartitionMap.forEach((topicId, partitionSet) -> {
+                String topicName = metadataImage.topics().topicIdToNameView().get(topicId);
+                if (topicName != null) {
+                    requestTopicIdToNameMapping.put(topicId, topicName);
+                    readSummaryRequestData.topics().add(new ReadShareGroupStateSummaryRequestData.ReadStateSummaryData()
+                        .setTopicId(topicId)
+                        .setPartitions(
+                            partitionSet.stream().map(
+                                partitionIndex -> new ReadShareGroupStateSummaryRequestData.PartitionData().setPartition(partitionIndex)
+                            ).toList()
+                        ));
+                }
+            });
+            return readShareGroupStateSummary(readSummaryRequestData, requestTopicIdToNameMapping, describeShareGroupOffsetsResponseTopicList);
+        });
+    }
+
+    private CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> readShareGroupStateSummary(
+        ReadShareGroupStateSummaryRequestData readSummaryRequestData,
+        Map<Uuid, String> requestTopicIdToNameMapping,
+        List<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic> describeShareGroupOffsetsResponseTopicList
+    ) {
+        // If the request for the persister is empty, just complete the operation right away.
+        if (readSummaryRequestData.topics().isEmpty()) {
+            return CompletableFuture.completedFuture(
+                new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
+                    .setGroupId(readSummaryRequestData.groupId())
+                    .setTopics(describeShareGroupOffsetsResponseTopicList));
+        }
+
         CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> future = new CompletableFuture<>();
         persister.readSummary(ReadShareGroupStateSummaryParameters.from(readSummaryRequestData))
             .whenComplete((result, error) -> {
@@ -1421,6 +1485,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     future.completeExceptionally(new IllegalStateException("Result is null for the read state summary"));
                     return;
                 }
+
+                // Return -1 (uninitialized offset) for the situation where the persister returned an error.
+                // This is consistent with OffsetFetch for situations in which there is no offset information to fetch.
+                // It's treated as absence of data, rather than an error.
                 result.topicsData().forEach(topicData ->
                     describeShareGroupOffsetsResponseTopicList.add(new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseTopic()
                         .setTopicId(topicData.topicId())
@@ -1428,15 +1496,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         .setPartitions(topicData.partitions().stream().map(
                             partitionData -> new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponsePartition()
                                 .setPartitionIndex(partitionData.partition())
-                                .setStartOffset(partitionData.startOffset())
-                                .setErrorMessage(Errors.forCode(partitionData.errorCode()).message())
-                                .setErrorCode(partitionData.errorCode())
+                                .setStartOffset(partitionData.errorCode() == Errors.NONE.code() ? partitionData.startOffset() : PartitionFactory.UNINITIALIZED_START_OFFSET)
                         ).toList())
                     ));
 
                 future.complete(
                     new DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup()
-                        .setGroupId(requestData.groupId())
+                        .setGroupId(readSummaryRequestData.groupId())
                         .setTopics(describeShareGroupOffsetsResponseTopicList));
             });
         return future;
