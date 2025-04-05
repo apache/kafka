@@ -33,7 +33,6 @@ import org.junit.jupiter.api.Assertions;
 
 import java.io.IOException;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
@@ -41,7 +40,6 @@ import java.util.Map;
 import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
-import java.util.stream.Collectors;
 
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_CLEANUP_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.server.config.ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG;
@@ -69,7 +67,7 @@ public class TieredStorageTestUtils {
 
     public static TopicDescription describeTopic(TieredStorageTestContext context, String topic)
             throws ExecutionException, InterruptedException {
-        return describeTopics(context, Collections.singletonList(topic)).get(topic);
+        return describeTopics(context, List.of(topic)).get(topic);
     }
 
     public static Map<String, TopicDescription> describeTopics(TieredStorageTestContext context,
@@ -102,7 +100,7 @@ public class TieredStorageTestUtils {
                 })
                 .sorted(Comparator.comparingLong(records -> records.get(0).offset()))
                 .flatMap(Collection::stream)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     public static Properties createPropsForRemoteStorage(String testClassName,
