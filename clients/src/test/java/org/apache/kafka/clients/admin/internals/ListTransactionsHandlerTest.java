@@ -43,6 +43,7 @@ import static java.util.Arrays.asList;
 import static java.util.Collections.singleton;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ListTransactionsHandlerTest {
@@ -98,6 +99,18 @@ public class ListTransactionsHandlerTest {
         ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, singleton(brokerKey)).build();
         assertEquals(filteredTransactionalIdPattern, request.data().transactionalIdPatternFilter());
         assertEquals(Collections.emptyList(), request.data().stateFilters());
+    }
+
+    @Test
+    public void testBuildRequestWithEmptyFilteredTransactionalIdPattern() {
+        int brokerId = 1;
+        BrokerKey brokerKey = new BrokerKey(OptionalInt.of(brokerId));
+        String filteredTransactionalIdPattern = "";
+        ListTransactionsOptions options = new ListTransactionsOptions()
+            .filterOnTransactionalIdPattern(filteredTransactionalIdPattern);
+        ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
+        ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, singleton(brokerKey)).build();
+        assertNull(request.data().transactionalIdPatternFilter());
     }
 
     @Test

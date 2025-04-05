@@ -317,7 +317,7 @@ class TransactionStateManager(brokerId: Int,
     filterProducerIds: Set[Long],
     filterStateNames: Set[String],
     filterDurationMs: Long,
-    filteredTransactionalIdPattern: String
+    filterTransactionalIdPattern: String
   ): ListTransactionsResponseData = {
     inReadLock(stateLock) {
       val response = new ListTransactionsResponseData()
@@ -345,8 +345,8 @@ class TransactionStateManager(brokerId: Int,
             false
           } else if (filterDurationMs >= 0 && (now - txnMetadata.txnStartTimestamp) <= filterDurationMs) {
             false
-          } else if (!filteredTransactionalIdPattern.isEmpty &&
-            !Pattern.compile(filteredTransactionalIdPattern).matcher(txnMetadata.transactionalId).matches()) {
+          } else if (!filterTransactionalIdPattern.isEmpty &&
+            !Pattern.compile(filterTransactionalIdPattern).matcher(txnMetadata.transactionalId).matches()) {
             false
           } else {
             true

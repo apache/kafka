@@ -75,7 +75,9 @@ public class ListTransactionsHandler extends AdminApiHandler.Batched<AllBrokersS
             .map(TransactionState::toString)
             .collect(Collectors.toList()));
         request.setDurationFilter(options.filteredDuration());
-        request.setTransactionalIdPatternFilter(options.filteredTransactionalIdPattern());
+        if (!options.filteredTransactionalIdPattern().isEmpty()) {
+            request.setTransactionalIdPatternFilter(options.filteredTransactionalIdPattern());
+        }
         return new ListTransactionsRequest.Builder(request);
     }
 
