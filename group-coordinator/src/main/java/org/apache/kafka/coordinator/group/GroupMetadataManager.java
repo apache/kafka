@@ -513,6 +513,8 @@ public class GroupMetadataManager {
      */
     private final int streamsGroupMetadataRefreshIntervalMs;
 
+    private final Set<String> streamsGroupMembersSendMetadata = new HashSet<>();
+
     /**
      * The metadata image.
      */
@@ -2341,15 +2343,13 @@ public class GroupMetadataManager {
         );
 
         scheduleStreamsGroupSessionTimeout(groupId, memberId);
-        List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitions = maybeBuildEndpointToPartitions(group);
         // Prepare the response.
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
-            .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs)
-            .setPartitionsByUserEndpoint(endpointToPartitions);
-
-        // The assignment is only provided in the following cases:
+            .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs);
+        
+        // The assignment and endpoint partitions are only provided in the following cases:
         // 1. The member sent a full request.
         // 2. The member's assignment has been updated.
         boolean isFullRequest = memberEpoch == 0;
@@ -2358,9 +2358,21 @@ public class GroupMetadataManager {
             || hasAssignedStandbyTasksChanged(member, updatedMember)
             || hasAssignedWarmupTasksChanged(member, updatedMember)
         ) {
+            streamsGroupMembersSendMetadata.clear();
             response.setActiveTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedActiveTasks()));
             response.setStandbyTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedStandbyTasks()));
             response.setWarmupTasks(createStreamsGroupHeartbeatResponseTaskIds(updatedMember.assignedWarmupTasks()));
+        } else {
+            Map<Integer, Integer> epochCount = new HashMap<>();
+            group.members().values().forEach((mem) -> {
+                  epochCount.put(mem.memberEpoch(), epochCount.getOrDefault(mem.memberEpoch(), 0) + 1);
+            });
+            if (epochCount.get(groupEpoch) == group.members().size()) {
+                if (!streamsGroupMembersSendMetadata.contains(updatedMember.memberId())) {
+                    response.setPartitionsByUserEndpoint(maybeBuildEndpointToPartitions(group));
+                    streamsGroupMembersSendMetadata.add(updatedMember.memberId());
+                }
+            }
         }
 
         Map<String, CreatableTopic> internalTopicsToBeCreated = Collections.emptyMap();
@@ -2386,7 +2398,7 @@ public class GroupMetadataManager {
         for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {
             final String memberIdForAssignment = entry.getKey();
             final StreamsGroupMemberMetadataValue.Endpoint endpoint = members.get(memberIdForAssignment).userEndpoint();
-            StreamsGroupMember groupMember = entry.getValue();
+            StreamsGroupMember groupMember =  entry.getValue();
             if (endpoint != null) {
                 final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
                 responseEndpoint.setHost(endpoint.host());
