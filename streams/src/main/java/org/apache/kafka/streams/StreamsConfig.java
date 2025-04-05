@@ -45,6 +45,10 @@ import org.apache.kafka.streams.errors.ProductionExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.internals.StreamsConfigUtils;
 import org.apache.kafka.streams.internals.UpgradeFromValues;
+import org.apache.kafka.streams.kstream.SessionWindowedDeserializer;
+import org.apache.kafka.streams.kstream.SessionWindowedSerializer;
+import org.apache.kafka.streams.kstream.TimeWindowedDeserializer;
+import org.apache.kafka.streams.kstream.TimeWindowedSerializer;
 import org.apache.kafka.streams.processor.FailOnInvalidTimestamp;
 import org.apache.kafka.streams.processor.TimestampExtractor;
 import org.apache.kafka.streams.processor.assignment.TaskAssignor;
@@ -829,13 +833,28 @@ public class StreamsConfig extends AbstractConfig {
         + CONFIG_ERROR_MSG
         + "\"NO_OPTIMIZATION\" by default.";
 
-    /** {@code windowed.inner.class.serde} */
+    /**
+     * {@code windowed.inner.class.serde}
+     *
+     * @deprecated since 4.1.0.
+     * Use {@link TimeWindowedSerializer#WINDOWED_INNER_SERIALIZER_CLASS} for {@link TimeWindowedSerializer}.
+     * Use {@link TimeWindowedDeserializer#WINDOWED_INNER_DESERIALIZER_CLASS} for {@link TimeWindowedDeserializer}.
+     * Use {@link SessionWindowedSerializer#WINDOWED_INNER_SERIALIZER_CLASS} for {@link SessionWindowedSerializer}.
+     * Use {@link SessionWindowedDeserializer#WINDOWED_INNER_DESERIALIZER_CLASS} for {@link SessionWindowedDeserializer}.
+     */
+    @Deprecated
     public static final String WINDOWED_INNER_CLASS_SERDE = "windowed.inner.class.serde";
     private static final String WINDOWED_INNER_CLASS_SERDE_DOC = " Default serializer / deserializer for the inner class of a windowed record. Must implement the " +
         "<code>org.apache.kafka.common.serialization.Serde</code> interface. Note that setting this config in KafkaStreams application would result " +
         "in an error as it is meant to be used only from Plain consumer client.";
 
-    /** {@code window.size.ms} */
+    /**
+     * {@code window.size.ms}
+     *
+     * @deprecated since 4.1.0.
+     * Use {@link TimeWindowedDeserializer#WINDOW_SIZE_MS_CONFIG} for {@link TimeWindowedDeserializer}.
+     */
+    @Deprecated
     public static final String WINDOW_SIZE_MS_CONFIG = "window.size.ms";
     private static final String WINDOW_SIZE_MS_DOC = "Sets window size for the deserializer in order to calculate window end times.";
 

@@ -200,4 +200,13 @@ public interface Group {
      * Requests a metadata refresh.
      */
     void requestMetadataRefresh();
+
+    /**
+     * Returns whether this group should be expired or not.
+     *
+     * @return whether the group should be expired.
+     */
+    default boolean shouldExpire() {
+        return true;
+    }
 }
