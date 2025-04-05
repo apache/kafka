@@ -208,7 +208,7 @@ class KafkaRequestHandlerPool(
   /* a meter to track the average free capacity of the request handlers */
   private val aggregateIdleMeter = metricsGroup.newMeter(requestHandlerAvgIdleMetricName, "percent", TimeUnit.NANOSECONDS)
 
-  this.logIdent = "[" + logAndThreadNamePrefix + " Kafka Request Handler on Controller " + brokerId + "], "
+  this.logIdent = s"[$logAndThreadNamePrefix Kafka Request Handler on ${nodeName.capitalize} $brokerId], "
   val runnables = new mutable.ArrayBuffer[KafkaRequestHandler](numThreads)
   for (i <- 0 until numThreads) {
     createHandler(i)
