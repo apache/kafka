@@ -168,8 +168,8 @@ public class CustomQuotaCallbackTest {
 
     public static class MonitorableCustomQuotaCallback extends CustomQuotaCallback implements Monitorable {
         
-        private static final String METRIC_NAME = "monitorable-custom-quot-callback-name";
-        private static final String METRIC_DESCRIPTION = "monitorable-custom-quot-callback-description";
+        private static final String METRIC_NAME = "monitorable-custom-quota-callback-name";
+        private static final String METRIC_DESCRIPTION = "monitorable-custom-quota-callback-description";
 
         @Override
         public void withPluginMetrics(PluginMetrics metrics) {
