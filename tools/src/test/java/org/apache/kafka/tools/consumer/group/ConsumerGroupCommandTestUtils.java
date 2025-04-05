@@ -36,6 +36,7 @@ import java.util.function.Supplier;
 
 
 /**
+ * This class provides methods to build and manage consumer instances, and does not generate or manage Kafka clusters.
  * The old test framework {@link kafka.api.BaseConsumerTest#getTestGroupProtocolParametersAll} test for the following cases:
  * <ul>
  *     <li>(KRAFT server) with (group.coordinator.new.enable=true) with (classic group protocol) = 1 case</li>
