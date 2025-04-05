@@ -48,13 +48,15 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class RemoteLogReaderTest {
-    public static final String TOPIC = "test";
-    RemoteLogManager mockRLM = mock(RemoteLogManager.class);
-    BrokerTopicStats brokerTopicStats = null;
-    RLMQuotaManager mockQuotaManager = mock(RLMQuotaManager.class);
-    LogOffsetMetadata logOffsetMetadata = new LogOffsetMetadata(100);
-    Records records = mock(Records.class);
-    Timer timer = mock(Timer.class);
+    private static final String TOPIC = "test";
+
+    private final RemoteLogManager mockRLM = mock(RemoteLogManager.class);
+    private final RLMQuotaManager mockQuotaManager = mock(RLMQuotaManager.class);
+    private final LogOffsetMetadata logOffsetMetadata = new LogOffsetMetadata(100);
+    private final Records records = mock(Records.class);
+    private final Timer timer = mock(Timer.class);
+
+    private BrokerTopicStats brokerTopicStats;
 
     @BeforeEach
     public void setUp() throws Exception {

@@ -405,16 +405,11 @@ public class MiniKdc {
         // transport
         AbstractTransport absTransport;
         String transport = config.getProperty(TRANSPORT).trim();
-        switch (transport) {
-            case "TCP":
-                absTransport = new TcpTransport(bindAddress, port, 3, 50);
-                break;
-            case "UDP":
-                absTransport = new UdpTransport(port);
-                break;
-            default:
-                throw new IllegalArgumentException("Invalid transport: " + transport);
-        }
+        absTransport = switch (transport) {
+            case "TCP" -> new TcpTransport(bindAddress, port, 3, 50);
+            case "UDP" -> new UdpTransport(port);
+            default -> throw new IllegalArgumentException("Invalid transport: " + transport);
+        };
         kdc.addTransports(absTransport);
         kdc.setServiceName(config.getProperty(INSTANCE));
         kdc.start();

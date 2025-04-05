@@ -45,10 +45,8 @@ import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
-import org.mockito.Mockito;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -73,6 +71,7 @@ import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class ShareFetchUtilsTest {
@@ -143,10 +142,10 @@ public class ShareFetchUtilsTest {
         assertEquals(1, resultData.get(tp1).partitionIndex());
         assertEquals(Errors.NONE.code(), resultData.get(tp0).errorCode());
         assertEquals(Errors.NONE.code(), resultData.get(tp1).errorCode());
-        assertEquals(Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
+        assertEquals(List.of(new ShareFetchResponseData.AcquiredRecords()
                         .setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)),
                 resultData.get(tp0).acquiredRecords());
-        assertEquals(Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
+        assertEquals(List.of(new ShareFetchResponseData.AcquiredRecords()
                         .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1)),
                 resultData.get(tp1).acquiredRecords());
     }
@@ -192,8 +191,8 @@ public class ShareFetchUtilsTest {
         assertEquals(1, resultData.get(tp1).partitionIndex());
         assertEquals(Errors.NONE.code(), resultData.get(tp0).errorCode());
         assertEquals(Errors.NONE.code(), resultData.get(tp1).errorCode());
-        assertEquals(Collections.emptyList(), resultData.get(tp0).acquiredRecords());
-        assertEquals(Collections.emptyList(), resultData.get(tp1).acquiredRecords());
+        assertEquals(List.of(), resultData.get(tp0).acquiredRecords());
+        assertEquals(List.of(), resultData.get(tp1).acquiredRecords());
     }
 
     @Test
@@ -203,8 +202,8 @@ public class ShareFetchUtilsTest {
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
 
-        SharePartition sp0 = Mockito.mock(SharePartition.class);
-        SharePartition sp1 = Mockito.mock(SharePartition.class);
+        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp1 = mock(SharePartition.class);
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
@@ -258,8 +257,8 @@ public class ShareFetchUtilsTest {
 
         // Since we have OFFSET_OUT_OF_RANGE exception for tp1 and no exception for tp2 from SharePartition class,
         // we should have 1 call for updateCacheAndOffsets for tp0 and 0 calls for tp1.
-        Mockito.verify(sp0, times(1)).updateCacheAndOffsets(any(Long.class));
-        Mockito.verify(sp1, times(0)).updateCacheAndOffsets(any(Long.class));
+        verify(sp0, times(1)).updateCacheAndOffsets(any(Long.class));
+        verify(sp1, times(0)).updateCacheAndOffsets(any(Long.class));
 
         MemoryRecords records2 = MemoryRecords.withRecords(100L, Compression.NONE,
             new SimpleRecord("0".getBytes(), "v".getBytes()),
@@ -288,8 +287,8 @@ public class ShareFetchUtilsTest {
 
         // Since we don't see any exception for tp1 and tp2 from SharePartition class,
         // the updateCacheAndOffsets calls should remain the same as the previous case.
-        Mockito.verify(sp0, times(1)).updateCacheAndOffsets(1L);
-        Mockito.verify(sp1, times(0)).updateCacheAndOffsets(any(Long.class));
+        verify(sp0, times(1)).updateCacheAndOffsets(1L);
+        verify(sp1, times(0)).updateCacheAndOffsets(any(Long.class));
     }
 
     @Test
@@ -298,7 +297,7 @@ public class ShareFetchUtilsTest {
 
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
 
-        SharePartition sp0 = Mockito.mock(SharePartition.class);
+        SharePartition sp0 = mock(SharePartition.class);
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
 
@@ -349,7 +348,7 @@ public class ShareFetchUtilsTest {
         assertTrue(resultData.get(tp0).acquiredRecords().isEmpty());
         assertEquals(Errors.NONE.code(), resultData.get(tp0).errorCode());
 
-        Mockito.verify(sp0, times(1)).updateCacheAndOffsets(1L);
+        verify(sp0, times(1)).updateCacheAndOffsets(1L);
     }
 
     @Test
@@ -358,8 +357,8 @@ public class ShareFetchUtilsTest {
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
 
-        SharePartition sp0 = Mockito.mock(SharePartition.class);
-        SharePartition sp1 = Mockito.mock(SharePartition.class);
+        SharePartition sp0 = mock(SharePartition.class);
+        SharePartition sp1 = mock(SharePartition.class);
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
@@ -431,7 +430,7 @@ public class ShareFetchUtilsTest {
     @Test
     @SuppressWarnings("unchecked")
     public void testProcessFetchResponseWithOffsetFetchException() {
-        SharePartition sp0 = Mockito.mock(SharePartition.class);
+        SharePartition sp0 = mock(SharePartition.class);
         when(sp0.leaderEpoch()).thenReturn(1);
 
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
@@ -459,9 +458,9 @@ public class ShareFetchUtilsTest {
                 replicaManager, exceptionHandler);
 
         assertTrue(resultData.isEmpty());
-        Mockito.verify(shareFetch, times(1)).addErroneous(tp0, exception);
-        Mockito.verify(exceptionHandler, times(1)).accept(new SharePartitionKey("grp", tp0), exception);
-        Mockito.verify(sp0, times(0)).updateCacheAndOffsets(any(Long.class));
+        verify(shareFetch, times(1)).addErroneous(tp0, exception);
+        verify(exceptionHandler, times(1)).accept(new SharePartitionKey("grp", tp0), exception);
+        verify(sp0, times(0)).updateCacheAndOffsets(any(Long.class));
     }
 
     @Test

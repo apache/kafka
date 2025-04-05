@@ -15,6 +15,7 @@
  * limitations under the License.
  */
 package kafka.server.integration;
+
 import kafka.integration.KafkaServerTestHarness;
 import kafka.server.KafkaBroker;
 import kafka.server.KafkaConfig;
@@ -41,7 +42,6 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
@@ -58,7 +58,6 @@ import java.io.File;
 import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -74,6 +73,7 @@ import scala.collection.mutable.HashMap;
 import static org.apache.kafka.test.TestUtils.DEFAULT_MAX_WAIT_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarness implements Logging {
@@ -88,25 +88,24 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
 
     @Override
     public Seq<KafkaConfig> generateConfigs() {
-        List<Properties> brokerConfigs = new ArrayList<>();
-        brokerConfigs.addAll(scala.collection.JavaConverters.seqAsJavaList(TestUtils.createBrokerConfigs(
-            5, // The tests require 4 brokers to host the partition. However, we need the 5th broker to handle the admin client requests.
-            true,
-            true,
-            scala.Option.<SecurityProtocol>empty(),
-            scala.Option.<File>empty(),
-            scala.Option.<Properties>empty(),
-            true,
-            false,
-            false,
-            false,
-            new HashMap<>(),
-            1,
-            false,
-            1,
-            (short) 4,
-            0,
-            false
+        List<Properties> brokerConfigs = new ArrayList<>(JavaConverters.seqAsJavaList(TestUtils.createBrokerConfigs(
+                5, // The tests require 4 brokers to host the partition. However, we need the 5th broker to handle the admin client requests.
+                true,
+                true,
+                scala.Option.empty(),
+                scala.Option.empty(),
+                scala.Option.empty(),
+                true,
+                false,
+                false,
+                false,
+                new HashMap<>(),
+                1,
+                false,
+                1,
+                (short) 4,
+                0,
+                false
         )));
         List<KafkaConfig> configs = new ArrayList<>();
         for (Properties props : brokerConfigs) {
@@ -140,44 +139,42 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
     @ParameterizedTest
     @ValueSource(strings = {"kraft"})
     public void testHighWatermarkShouldNotAdvanceIfUnderMinIsr(String quorum) throws ExecutionException, InterruptedException {
-        adminClient.createTopics(
-            Collections.singletonList(new NewTopic(testTopicName, 1, (short) 4))).all().get();
+        adminClient.createTopics(List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
         TestUtils.waitForPartitionMetadata(brokers(), testTopicName, 0, 1000);
 
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
-        Collection<AlterConfigOp> ops = new ArrayList<>();
-        ops.add(new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3"), AlterConfigOp.OpType.SET));
-        Map<ConfigResource, Collection<AlterConfigOp>> configOps = Collections.singletonMap(configResource, ops);
+        Collection<AlterConfigOp> ops = List.of(
+            new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3"), AlterConfigOp.OpType.SET));
+        Map<ConfigResource, Collection<AlterConfigOp>> configOps = Map.of(configResource, ops);
         // alter configs on target cluster
         adminClient.incrementalAlterConfigs(configOps).all().get();
-        Producer producer = null;
-        Consumer consumer = null;
-        try {
-            TopicDescription testTopicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName))
-                .allTopicNames().get().get(testTopicName);
-            TopicPartitionInfo topicPartitionInfo = testTopicDescription.partitions().get(0);
-            List<Node> initialReplicas = topicPartitionInfo.replicas();
-            assertEquals(4, topicPartitionInfo.isr().size());
-            assertEquals(0, topicPartitionInfo.elr().size());
-            assertEquals(0, topicPartitionInfo.lastKnownElr().size());
 
-            Properties producerProps = new Properties();
-            producerProps.putIfAbsent(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            producerProps.putIfAbsent(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
-            // Use Ack=1 for the producer.
-            producerProps.put(ProducerConfig.ACKS_CONFIG, "1");
-            producer = new KafkaProducer(producerProps);
+        TopicDescription testTopicDescription = adminClient.describeTopics(List.of(testTopicName))
+            .allTopicNames().get().get(testTopicName);
+        TopicPartitionInfo topicPartitionInfo = testTopicDescription.partitions().get(0);
+        List<Node> initialReplicas = topicPartitionInfo.replicas();
+        assertEquals(4, topicPartitionInfo.isr().size());
+        assertEquals(0, topicPartitionInfo.elr().size());
+        assertEquals(0, topicPartitionInfo.lastKnownElr().size());
 
-            Properties consumerProps = new Properties();
-            consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
-            consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test");
-            consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "10");
-            consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-            consumerProps.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-            consumerProps.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
-            consumer = new KafkaConsumer<>(consumerProps);
-            consumer.subscribe(Collections.singleton(testTopicName));
+        Properties producerProps = new Properties();
+        producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        producerProps.put(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        producerProps.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
+        // Use Ack=1 for the producer.
+        producerProps.put(ProducerConfig.ACKS_CONFIG, "1");
+
+        Properties consumerProps = new Properties();
+        consumerProps.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServer);
+        consumerProps.put(ConsumerConfig.GROUP_ID_CONFIG, "test");
+        consumerProps.put(ConsumerConfig.FETCH_MAX_WAIT_MS_CONFIG, "10");
+        consumerProps.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
+        consumerProps.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        consumerProps.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
+        try (Producer<String, String> producer = new KafkaProducer<>(producerProps);
+             Consumer<String, String> consumer = new KafkaConsumer<>(consumerProps)) {
+
+            consumer.subscribe(Set.of(testTopicName));
 
             producer.send(new ProducerRecord<>(testTopicName, "0", "0")).get();
             waitUntilOneMessageIsConsumed(consumer);
@@ -185,9 +182,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             killBroker(initialReplicas.get(0).id());
             killBroker(initialReplicas.get(1).id());
 
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize == 2 && elrSize == 1;
-            });
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 2 && elrSize == 1);
 
             // Now the partition is under min ISR. HWM should not advance.
             producer.send(new ProducerRecord<>(testTopicName, "1", "1")).get();
@@ -197,23 +192,19 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             // Restore the min ISR and the previous log should be visible.
             startBroker(initialReplicas.get(1).id());
             startBroker(initialReplicas.get(0).id());
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize == 4 && elrSize == 0;
-            });
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 4 && elrSize == 0);
 
             waitUntilOneMessageIsConsumed(consumer);
         } finally {
             restartDeadBrokers(false);
-            if (consumer != null) consumer.close();
-            if (producer != null) producer.close();
         }
     }
 
-    void waitUntilOneMessageIsConsumed(Consumer consumer) {
+    void waitUntilOneMessageIsConsumed(Consumer<String, String> consumer) {
         TestUtils.waitUntilTrue(
             () -> {
                 try {
-                    ConsumerRecords record = consumer.poll(Duration.ofMillis(100L));
+                    ConsumerRecords<String, String> record = consumer.poll(Duration.ofMillis(100L));
                     return record.count() >= 1;
                 } catch (Exception e) {
                     return false;
@@ -228,18 +219,18 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
     @ValueSource(strings = {"kraft"})
     public void testElrMemberCanBeElected(String quorum) throws ExecutionException, InterruptedException {
         adminClient.createTopics(
-            Collections.singletonList(new NewTopic(testTopicName, 1, (short) 4))).all().get();
+            List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
         TestUtils.waitForPartitionMetadata(brokers(), testTopicName, 0, 1000);
 
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
-        Collection<AlterConfigOp> ops = new ArrayList<>();
-        ops.add(new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3"), AlterConfigOp.OpType.SET));
-        Map<ConfigResource, Collection<AlterConfigOp>> configOps = Collections.singletonMap(configResource, ops);
+        Collection<AlterConfigOp> ops = List.of(
+            new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3"), AlterConfigOp.OpType.SET));
+        Map<ConfigResource, Collection<AlterConfigOp>> configOps = Map.of(configResource, ops);
         // alter configs on target cluster
         adminClient.incrementalAlterConfigs(configOps).all().get();
 
         try {
-            TopicDescription testTopicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName))
+            TopicDescription testTopicDescription = adminClient.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName);
             TopicPartitionInfo topicPartitionInfo = testTopicDescription.partitions().get(0);
             List<Node> initialReplicas = topicPartitionInfo.replicas();
@@ -251,17 +242,13 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             killBroker(initialReplicas.get(1).id());
             killBroker(initialReplicas.get(2).id());
 
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize == 1 && elrSize == 2;
-            });
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 1 && elrSize == 2);
 
             killBroker(initialReplicas.get(3).id());
 
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize == 0 && elrSize == 3;
-            });
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 3);
 
-            topicPartitionInfo = adminClient.describeTopics(Collections.singletonList(testTopicName))
+            topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
             assertEquals(1, topicPartitionInfo.lastKnownElr().size(), topicPartitionInfo.toString());
             int expectLastKnownLeader = initialReplicas.get(3).id();
@@ -271,14 +258,12 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             // Restart one broker of the ELR and it should be the leader.
 
             int expectLeader = topicPartitionInfo.elr().stream()
-                .filter(node -> node.id() != expectLastKnownLeader).collect(Collectors.toList()).get(0).id();
+                .filter(node -> node.id() != expectLastKnownLeader).toList().get(0).id();
 
             startBroker(expectLeader);
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize == 1 && elrSize == 2;
-            });
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 1 && elrSize == 2);
 
-            topicPartitionInfo = adminClient.describeTopics(Collections.singletonList(testTopicName))
+            topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
             assertEquals(0, topicPartitionInfo.lastKnownElr().size(), topicPartitionInfo.toString());
             assertEquals(expectLeader, topicPartitionInfo.leader().id(), topicPartitionInfo.toString());
@@ -287,11 +272,9 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             topicPartitionInfo.replicas().stream().filter(node -> node.id() != expectLeader).limit(2)
                 .forEach(node -> startBroker(node.id()));
 
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize == 3 && elrSize == 0;
-            });
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 3 && elrSize == 0);
 
-            topicPartitionInfo = adminClient.describeTopics(Collections.singletonList(testTopicName))
+            topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
             assertEquals(0, topicPartitionInfo.lastKnownElr().size(), topicPartitionInfo.toString());
             assertEquals(expectLeader, topicPartitionInfo.leader().id(), topicPartitionInfo.toString());
@@ -304,18 +287,18 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
     @ValueSource(strings = {"kraft"})
     public void testElrMemberShouldBeKickOutWhenUncleanShutdown(String quorum) throws ExecutionException, InterruptedException {
         adminClient.createTopics(
-            Collections.singletonList(new NewTopic(testTopicName, 1, (short) 4))).all().get();
+            List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
         TestUtils.waitForPartitionMetadata(brokers(), testTopicName, 0, 1000);
 
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
-        Collection<AlterConfigOp> ops = new ArrayList<>();
-        ops.add(new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3"), AlterConfigOp.OpType.SET));
-        Map<ConfigResource, Collection<AlterConfigOp>> configOps = Collections.singletonMap(configResource, ops);
+        Collection<AlterConfigOp> ops = List.of(
+            new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3"), AlterConfigOp.OpType.SET));
+        Map<ConfigResource, Collection<AlterConfigOp>> configOps = Map.of(configResource, ops);
         // alter configs on target cluster
         adminClient.incrementalAlterConfigs(configOps).all().get();
 
         try {
-            TopicDescription testTopicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName))
+            TopicDescription testTopicDescription = adminClient.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName);
             TopicPartitionInfo topicPartitionInfo = testTopicDescription.partitions().get(0);
             List<Node> initialReplicas = topicPartitionInfo.replicas();
@@ -328,30 +311,24 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             killBroker(initialReplicas.get(2).id());
             killBroker(initialReplicas.get(3).id());
 
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize == 0 && elrSize == 3;
-            });
-            topicPartitionInfo = adminClient.describeTopics(Collections.singletonList(testTopicName))
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 3);
+            topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
 
             int brokerToBeUncleanShutdown = topicPartitionInfo.elr().get(0).id();
-            KafkaBroker broker = brokers().find(b -> {
-                return b.config().brokerId() == brokerToBeUncleanShutdown;
-            }).get();
+            KafkaBroker broker = brokers().find(b -> b.config().brokerId() == brokerToBeUncleanShutdown).get();
             Seq<File> dirs = broker.logManager().liveLogDirs();
             assertEquals(1, dirs.size());
             CleanShutdownFileHandler handler = new CleanShutdownFileHandler(dirs.apply(0).toString());
             assertTrue(handler.exists());
-            assertDoesNotThrow(() -> handler.delete());
+            assertDoesNotThrow(handler::delete);
 
             // After remove the clean shutdown file, the broker should report unclean shutdown during restart.
             startBroker(brokerToBeUncleanShutdown);
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize == 0 && elrSize == 2;
-            });
-            topicPartitionInfo = adminClient.describeTopics(Collections.singletonList(testTopicName))
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 2);
+            topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
-            assertTrue(topicPartitionInfo.leader() == null);
+            assertNull(topicPartitionInfo.leader());
             assertEquals(1, topicPartitionInfo.lastKnownElr().size());
         } finally {
             restartDeadBrokers(false);
@@ -365,18 +342,18 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
     @ValueSource(strings = {"kraft"})
     public void testLastKnownLeaderShouldBeElectedIfEmptyElr(String quorum) throws ExecutionException, InterruptedException {
         adminClient.createTopics(
-            Collections.singletonList(new NewTopic(testTopicName, 1, (short) 4))).all().get();
+            List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
         TestUtils.waitForPartitionMetadata(brokers(), testTopicName, 0, 1000);
 
         ConfigResource configResource = new ConfigResource(ConfigResource.Type.TOPIC, testTopicName);
-        Collection<AlterConfigOp> ops = new ArrayList<>();
-        ops.add(new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3"), AlterConfigOp.OpType.SET));
-        Map<ConfigResource, Collection<AlterConfigOp>> configOps = Collections.singletonMap(configResource, ops);
+        Collection<AlterConfigOp> ops = List.of(
+            new AlterConfigOp(new ConfigEntry(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, "3"), AlterConfigOp.OpType.SET));
+        Map<ConfigResource, Collection<AlterConfigOp>> configOps = Map.of(configResource, ops);
         // alter configs on target cluster
         adminClient.incrementalAlterConfigs(configOps).all().get();
 
         try {
-            TopicDescription testTopicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName))
+            TopicDescription testTopicDescription = adminClient.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName);
             TopicPartitionInfo topicPartitionInfo = testTopicDescription.partitions().get(0);
             List<Node> initialReplicas = topicPartitionInfo.replicas();
@@ -389,47 +366,41 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
             killBroker(initialReplicas.get(2).id());
             killBroker(initialReplicas.get(3).id());
 
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize == 0 && elrSize == 3;
-            });
-            topicPartitionInfo = adminClient.describeTopics(Collections.singletonList(testTopicName))
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 3);
+            topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
             int lastKnownLeader = topicPartitionInfo.lastKnownElr().get(0).id();
 
-            Set<Integer> initialReplicaSet = initialReplicas.stream().map(node -> node.id()).collect(Collectors.toSet());
+            Set<Integer> initialReplicaSet = initialReplicas.stream().map(Node::id).collect(Collectors.toSet());
             brokers().foreach(broker -> {
                 if (initialReplicaSet.contains(broker.config().brokerId())) {
                     Seq<File> dirs = broker.logManager().liveLogDirs();
                     assertEquals(1, dirs.size());
                     CleanShutdownFileHandler handler = new CleanShutdownFileHandler(dirs.apply(0).toString());
-                    assertDoesNotThrow(() -> handler.delete());
+                    assertDoesNotThrow(handler::delete);
                 }
                 return true;
             });
 
 
             // After remove the clean shutdown file, the broker should report unclean shutdown during restart.
-            topicPartitionInfo.replicas().stream().forEach(replica -> {
+            topicPartitionInfo.replicas().forEach(replica -> {
                 if (replica.id() != lastKnownLeader) startBroker(replica.id());
             });
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize == 0 && elrSize == 1;
-            });
-            topicPartitionInfo = adminClient.describeTopics(Collections.singletonList(testTopicName))
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize == 0 && elrSize == 1);
+            topicPartitionInfo = adminClient.describeTopics(List.of(testTopicName))
                 .allTopicNames().get().get(testTopicName).partitions().get(0);
-            assertTrue(topicPartitionInfo.leader() == null);
+            assertNull(topicPartitionInfo.leader());
             assertEquals(1, topicPartitionInfo.lastKnownElr().size());
 
             // Now if the last known leader goes through unclean shutdown, it will still be elected.
             startBroker(lastKnownLeader);
-            waitForIsrAndElr((isrSize, elrSize) -> {
-                return isrSize > 0 && elrSize == 0;
-            });
+            waitForIsrAndElr((isrSize, elrSize) -> isrSize > 0 && elrSize == 0);
 
             TestUtils.waitUntilTrue(
                 () -> {
                     try {
-                        TopicPartitionInfo partition = adminClient.describeTopics(Collections.singletonList(testTopicName))
+                        TopicPartitionInfo partition = adminClient.describeTopics(List.of(testTopicName))
                             .allTopicNames().get().get(testTopicName).partitions().get(0);
                         if (partition.leader() == null) return false;
                         return partition.lastKnownElr().isEmpty() && partition.elr().isEmpty() && partition.leader().id() == lastKnownLeader;
@@ -449,7 +420,7 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
         TestUtils.waitUntilTrue(
             () -> {
                 try {
-                    TopicDescription topicDescription = adminClient.describeTopics(Collections.singletonList(testTopicName))
+                    TopicDescription topicDescription = adminClient.describeTopics(List.of(testTopicName))
                         .allTopicNames().get().get(testTopicName);
                     TopicPartitionInfo partition = topicDescription.partitions().get(0);
                     return isIsrAndElrSizeSatisfied.apply(partition.isr().size(), partition.elr().size());

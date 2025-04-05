@@ -48,61 +48,14 @@ public class QuotaFactory {
         }
     };
 
-    public static class QuotaManagers {
-        private final ClientQuotaManager fetch;
-        private final ClientQuotaManager produce;
-        private final ClientRequestQuotaManager request;
-        private final ControllerMutationQuotaManager controllerMutation;
-        private final ReplicationQuotaManager leader;
-        private final ReplicationQuotaManager follower;
-        private final ReplicationQuotaManager alterLogDirs;
-        private final Optional<ClientQuotaCallback> clientQuotaCallback;
-
-        public QuotaManagers(ClientQuotaManager fetch, ClientQuotaManager produce, ClientRequestQuotaManager request,
-                             ControllerMutationQuotaManager controllerMutation, ReplicationQuotaManager leader,
-                             ReplicationQuotaManager follower, ReplicationQuotaManager alterLogDirs,
-                             Optional<ClientQuotaCallback> clientQuotaCallback) {
-            this.fetch = fetch;
-            this.produce = produce;
-            this.request = request;
-            this.controllerMutation = controllerMutation;
-            this.leader = leader;
-            this.follower = follower;
-            this.alterLogDirs = alterLogDirs;
-            this.clientQuotaCallback = clientQuotaCallback;
-        }
-
-        public ClientQuotaManager fetch() {
-            return fetch;
-        }
-
-        public ClientQuotaManager produce() {
-            return produce;
-        }
-
-        public ClientRequestQuotaManager request() {
-            return request;
-        }
-
-        public ControllerMutationQuotaManager controllerMutation() {
-            return controllerMutation;
-        }
-
-        public ReplicationQuotaManager leader() {
-            return leader;
-        }
-
-        public ReplicationQuotaManager follower() {
-            return follower;
-        }
-
-        public ReplicationQuotaManager alterLogDirs() {
-            return alterLogDirs;
-        }
-
-        public Optional<ClientQuotaCallback> clientQuotaCallback() {
-            return clientQuotaCallback;
-        }
+    public record QuotaManagers(ClientQuotaManager fetch,
+                                ClientQuotaManager produce,
+                                ClientRequestQuotaManager request,
+                                ControllerMutationQuotaManager controllerMutation,
+                                ReplicationQuotaManager leader,
+                                ReplicationQuotaManager follower,
+                                ReplicationQuotaManager alterLogDirs,
+                                Optional<ClientQuotaCallback> clientQuotaCallback) {
 
         public void shutdown() {
             fetch.shutdown();

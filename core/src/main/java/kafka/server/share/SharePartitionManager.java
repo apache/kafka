@@ -352,7 +352,7 @@ public class SharePartitionManager implements AutoCloseable {
             log.error("Share session error for {}: no such share session found", key);
             return FutureUtils.failedFuture(Errors.SHARE_SESSION_NOT_FOUND.exception());
         } else {
-            log.debug("Removed share session with key " + key);
+            log.debug("Removed share session with key {}", key);
         }
 
         // Additionally release the acquired records for the respective member.
@@ -654,7 +654,7 @@ public class SharePartitionManager implements AutoCloseable {
                     // to identify the respective share partition.
                     SharePartitionListener listener = new SharePartitionListener(sharePartitionKey, replicaManager, partitionCacheMap);
                     replicaManager.maybeAddListener(sharePartitionKey.topicIdPartition().topicPartition(), listener);
-                    SharePartition partition = new SharePartition(
+                    return new SharePartition(
                             sharePartitionKey.groupId(),
                             sharePartitionKey.topicIdPartition(),
                             leaderEpoch,
@@ -668,7 +668,6 @@ public class SharePartitionManager implements AutoCloseable {
                             groupConfigManager,
                             listener
                     );
-                    return partition;
                 });
     }
 

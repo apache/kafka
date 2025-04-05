@@ -61,10 +61,6 @@ public class JaasModule {
         );
     }
 
-    public static JaasModule plainLoginModule(String username, String password) {
-        return plainLoginModule(username, password, false, Collections.emptyMap());
-    }
-
     public static JaasModule plainLoginModule(String username, String password, boolean debug, Map<String, String> validUsers) {
         String name = "org.apache.kafka.common.security.plain.PlainLoginModule";
 
@@ -100,9 +96,7 @@ public class JaasModule {
     }
 
     private final String name;
-
     private final boolean debug;
-
     private final Map<String, String> entries;
 
     private JaasModule(String name, boolean debug, Map<String, String> entries) {
