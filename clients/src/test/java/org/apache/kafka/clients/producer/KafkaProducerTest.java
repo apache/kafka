@@ -211,9 +211,10 @@ public class KafkaProducerTest {
     }
 
     @AfterEach
-    public void detectLeaks() {
+    public void detectLeaks(TestInfo testInfo) {
         // Assert no thread leakage of Kafka producer.
-        TestUtils.assertNoLeakedThreadsWithNameAndDaemonStatus(NETWORK_THREAD_PREFIX, Boolean.TRUE);
+        String methodName = testInfo.getTestMethod().get().getName();
+        TestUtils.assertNoLeakedThreadsWithNameAndDaemonStatus(NETWORK_THREAD_PREFIX, Boolean.TRUE, methodName);
     }
 
     @Test

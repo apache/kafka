@@ -69,6 +69,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
 import java.util.regex.Matcher;
@@ -98,6 +99,7 @@ public class TestUtils {
     public static final Random RANDOM = new Random();
     public static final long DEFAULT_POLL_INTERVAL_MS = 100;
     public static final long DEFAULT_MAX_WAIT_MS = 15000;
+    public static AtomicInteger traceFirstProducerThreadLeak = new AtomicInteger(0);
 
     public static Cluster singletonCluster() {
         return clusterWith(1);
@@ -170,11 +172,17 @@ public class TestUtils {
      *
      * @throws AssertionError If any thread with the specified name prefix and daemon status is found and is alive.
      */
-    public static void assertNoLeakedThreadsWithNameAndDaemonStatus(String threadName, boolean isDaemon) {
+    public static void assertNoLeakedThreadsWithNameAndDaemonStatus(String threadName, boolean isDaemon, String testName) {
         List<Thread> threads = Thread.getAllStackTraces().keySet().stream()
                 .filter(t -> t.isDaemon() == isDaemon && t.isAlive() && t.getName().startsWith(threadName))
                 .collect(Collectors.toList());
         int threadCount = threads.size();
+        int count = traceFirstProducerThreadLeak.incrementAndGet();
+        if (count != 0) {
+            assertEquals(0, threadCount, "Thread leak detected in test " + testName + ": " +
+                    threadCount + " threads with name prefix '" + threadName + "' and daemon status " +
+                    isDaemon + " were found. This is the " + count + "th time this test has leaked threads.");
+        }
         assertEquals(0, threadCount);
     }
 
