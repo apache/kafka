@@ -581,8 +581,10 @@ public class SharePartition {
                     // offset removed from batch, which is the next offset to be fetched.
                     // 2. When startOffset has moved beyond the in-flight records, startOffset and
                     // endOffset point to the LSO, which is the next offset to be fetched.
+                    log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, endOffset);
                     return endOffset;
                 } else {
+                    log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, endOffset + 1);
                     return endOffset + 1;
                 }
             }
@@ -593,6 +595,7 @@ public class SharePartition {
                 // Same case when startOffset has moved beyond the in-flight records, startOffset and endOffset point to the LSO
                 // and the cached state is fresh.
                 findNextFetchOffset.set(false);
+                log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, endOffset);
                 return endOffset;
             }
 
@@ -639,6 +642,7 @@ public class SharePartition {
                 findNextFetchOffset.set(false);
                 nextFetchOffset = endOffset + 1;
             }
+            log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, nextFetchOffset);
             return nextFetchOffset;
         } finally {
             lock.writeLock().unlock();

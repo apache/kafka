@@ -400,7 +400,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param context The request context.
      * @param request The actual StreamsGroupHeartbeat request.
      *
-     * @return A result containing the StreamsGroupHeartbeat response, a list of internal topics to be created and
+     * @return A Result containing the StreamsGroupHeartbeat response, a list of internal topics to be created and
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
@@ -464,6 +464,19 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      */
     public List<InitializeShareGroupStateParameters> reconcileShareGroupStateInitializingState(long offset) {
         return groupMetadataManager.reconcileShareGroupStateInitializingState(offset);
+    }
+
+    /**
+     * Returns the set of share-partitions whose share-group state has been initialized in the persister.
+     *
+     * @param groupId The group id corresponding to the share group whose share partitions have been initialized.
+     *
+     * @return A map representing the initialized share-partitions for the share group.
+     */
+    public Map<Uuid, Set<Integer>> initializedShareGroupPartitions(
+        String groupId
+    ) {
+        return groupMetadataManager.initializedShareGroupPartitions(groupId);
     }
 
     /**
