@@ -358,7 +358,7 @@ class KRaftClusterTest {
         "Broker never made it to RUNNING state.")
       val admin = Admin.create(cluster.clientProperties())
       try {
-        val defaultUser = new ClientQuotaEntity(util.Map.of[String, String]("user", null))
+        val defaultUser = new ClientQuotaEntity(util.Collections.singletonMap[String, String]("user", null))
         val bobUser = new ClientQuotaEntity(util.Map.of[String, String]("user", "bob"))
         TestUtils.retry(30000) {
           assertEquals(Map(), getConsumerByteRates(admin))
