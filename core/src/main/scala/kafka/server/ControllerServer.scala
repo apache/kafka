@@ -284,7 +284,7 @@ class ControllerServer(
         controllerApis,
         time,
         config.numIoThreads,
-        s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
+        s"RequestHandlerAvgIdlePercent",
         DataPlaneAcceptor.ThreadPrefix,
         "controller")
 

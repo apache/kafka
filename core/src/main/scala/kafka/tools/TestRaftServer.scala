@@ -130,7 +130,7 @@ class TestRaftServer(
       requestHandler,
       time,
       config.numIoThreads,
-      s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
+      s"RequestHandlerAvgIdlePercent",
       DataPlaneAcceptor.ThreadPrefix
     )
 
