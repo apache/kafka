@@ -22,8 +22,8 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -41,22 +41,21 @@ public class SocketServerConfigsTest {
 
     @Test
     public void testListenerListToEndPointsWithEmptyString() {
-        assertEquals(Arrays.asList(),
+        assertEquals(List.of(),
             SocketServerConfigs.listenerListToEndPoints("",
                 SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO));
     }
 
     @Test
     public void testListenerListToEndPointsWithBlankString() {
-        assertEquals(Arrays.asList(),
+        assertEquals(List.of(),
             SocketServerConfigs.listenerListToEndPoints(" ",
                 SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO));
     }
 
     @Test
     public void testListenerListToEndPointsWithOneEndpoint() {
-        assertEquals(Arrays.asList(
-            new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "example.com", 8080)),
+        assertEquals(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "example.com", 8080)),
                 SocketServerConfigs.listenerListToEndPoints("PLAINTEXT://example.com:8080",
                     SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO));
     }
@@ -64,7 +63,7 @@ public class SocketServerConfigsTest {
     // Regression test for KAFKA-3719
     @Test
     public void testListenerListToEndPointsWithUnderscores() {
-        assertEquals(Arrays.asList(
+        assertEquals(List.of(
             new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "example.com", 8080),
             new Endpoint("SSL", SecurityProtocol.SSL, "local_host", 8081)),
                 SocketServerConfigs.listenerListToEndPoints("PLAINTEXT://example.com:8080,SSL://local_host:8081",
@@ -73,24 +72,21 @@ public class SocketServerConfigsTest {
 
     @Test
     public void testListenerListToEndPointsWithWildcard() {
-        assertEquals(Arrays.asList(
-            new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, null, 8080)),
+        assertEquals(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, null, 8080)),
                 SocketServerConfigs.listenerListToEndPoints("PLAINTEXT://:8080",
                     SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO));
     }
 
     @Test
     public void testListenerListToEndPointsWithIpV6() {
-        assertEquals(Arrays.asList(
-            new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "::1", 9092)),
+        assertEquals(List.of(new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "::1", 9092)),
                 SocketServerConfigs.listenerListToEndPoints("PLAINTEXT://[::1]:9092",
                     SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO));
     }
 
     @Test
     public void testAnotherListenerListToEndPointsWithIpV6() {
-        assertEquals(Arrays.asList(
-            new Endpoint("SASL_SSL", SecurityProtocol.SASL_SSL, "fe80::b1da:69ca:57f7:63d8%3", 9092)),
+        assertEquals(List.of(new Endpoint("SASL_SSL", SecurityProtocol.SASL_SSL, "fe80::b1da:69ca:57f7:63d8%3", 9092)),
                 SocketServerConfigs.listenerListToEndPoints("SASL_SSL://[fe80::b1da:69ca:57f7:63d8%3]:9092",
                     SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO));
     }
@@ -99,8 +95,7 @@ public class SocketServerConfigsTest {
     public void testAnotherListenerListToEndPointsWithNonDefaultProtoMap() {
         Map<ListenerName, SecurityProtocol> map = new HashMap<>();
         map.put(new ListenerName("CONTROLLER"), SecurityProtocol.PLAINTEXT);
-        assertEquals(Arrays.asList(
-            new Endpoint("CONTROLLER", SecurityProtocol.PLAINTEXT, "example.com", 9093)),
+        assertEquals(List.of(new Endpoint("CONTROLLER", SecurityProtocol.PLAINTEXT, "example.com", 9093)),
                 SocketServerConfigs.listenerListToEndPoints("CONTROLLER://example.com:9093",
                     map));
     }
