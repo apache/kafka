@@ -177,13 +177,16 @@ public class TestUtils {
                 .filter(t -> t.isDaemon() == isDaemon && t.isAlive() && t.getName().startsWith(threadName))
                 .collect(Collectors.toList());
         int threadCount = threads.size();
-        int count = traceFirstProducerThreadLeak.incrementAndGet();
-        if (count != 0) {
-            assertEquals(0, threadCount, "Thread leak detected in test " + testName + ": " +
-                    threadCount + " threads with name prefix '" + threadName + "' and daemon status " +
-                    isDaemon + " were found. This is the " + count + "th time this test has leaked threads.");
+        try {
+            assertEquals(0, threadCount);
+        } catch (Exception e) {
+            int count = traceFirstProducerThreadLeak.incrementAndGet();
+            if (count != 0) {
+                assertEquals(0, threadCount, "Thread leak detected in test " + testName + ": " +
+                        threadCount + " threads with name prefix '" + threadName + "' and daemon status " +
+                        isDaemon + " were found. This is the " + count + "th time this test has leaked threads.");
+            }
         }
-        assertEquals(0, threadCount);
     }
 
     /**
