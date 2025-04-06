@@ -16,22 +16,22 @@
  */
 package integration.kafka.server
 
-import kafka.server.DelayedFuturePurgatory
 import kafka.utils.TestUtils
 import org.apache.kafka.common.utils.Time
+import org.apache.kafka.server.purgatory.DelayedFuturePurgatory
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 
 import java.util.concurrent.{CompletableFuture, ExecutionException}
 import java.util.concurrent.atomic.AtomicInteger
-import scala.jdk.CollectionConverters.CollectionHasAsScala
+import scala.jdk.CollectionConverters._
 
 class DelayedFutureTest {
 
   @Test
   def testDelayedFuture(): Unit = {
     val purgatoryName = "testDelayedFuture"
-    val purgatory = new DelayedFuturePurgatory(purgatoryName, brokerId = 0)
+    val purgatory = new DelayedFuturePurgatory(purgatoryName, 0)
     try {
       val result = new AtomicInteger()
 
@@ -46,7 +46,7 @@ class DelayedFutureTest {
       // Two completed futures: callback should be executed immediately on the same thread
       val futures1 = List(CompletableFuture.completedFuture(10.asInstanceOf[Integer]),
         CompletableFuture.completedFuture(11.asInstanceOf[Integer]))
-      val r1 = purgatory.tryCompleteElseWatch[Integer](100000L, futures1, () => updateResult(futures1))
+      val r1 = purgatory.tryCompleteElseWatch[Integer](100000L, futures1.asJava, () => updateResult(futures1))
       assertTrue(r1.isCompleted, "r1 not completed")
       assertEquals(21, result.get())
       assertFalse(hasExecutorThread, "Unnecessary thread created")
@@ -54,7 +54,7 @@ class DelayedFutureTest {
       // Two delayed futures: callback should wait for both to complete
       result.set(-1)
       val futures2 = List(new CompletableFuture[Integer], new CompletableFuture[Integer])
-      val r2 = purgatory.tryCompleteElseWatch[Integer](100000L, futures2, () => updateResult(futures2))
+      val r2 = purgatory.tryCompleteElseWatch[Integer](100000L, futures2.asJava, () => updateResult(futures2))
       assertFalse(r2.isCompleted, "r2 should be incomplete")
       futures2.head.complete(20)
       assertFalse(r2.isCompleted)
@@ -67,7 +67,7 @@ class DelayedFutureTest {
       // One immediate and one delayed future: callback should wait for delayed task to complete
       result.set(-1)
       val futures3 = List(new CompletableFuture[Integer], CompletableFuture.completedFuture(31.asInstanceOf[Integer]))
-      val r3 = purgatory.tryCompleteElseWatch[Integer](100000L, futures3, () => updateResult(futures3))
+      val r3 = purgatory.tryCompleteElseWatch[Integer](100000L, futures3.asJava, () => updateResult(futures3))
       assertFalse(r3.isCompleted, "r3 should be incomplete")
       assertEquals(-1, result.get())
       futures3.head.complete(30)
@@ -79,7 +79,7 @@ class DelayedFutureTest {
       val start = Time.SYSTEM.hiResClockMs
       val expirationMs = 2000L
       val futures4 = List(new CompletableFuture[Integer], new CompletableFuture[Integer])
-      val r4 = purgatory.tryCompleteElseWatch[Integer](expirationMs, futures4, () => updateResult(futures4))
+      val r4 = purgatory.tryCompleteElseWatch[Integer](expirationMs, futures4.asJava, () => updateResult(futures4))
       futures4.head.complete(40)
       TestUtils.waitUntilTrue(() => futures4(1).isDone, "r4 futures not expired")
       assertTrue(r4.isCompleted, "r4 not completed after timeout")
