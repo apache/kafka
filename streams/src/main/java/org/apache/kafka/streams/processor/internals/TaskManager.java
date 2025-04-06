@@ -192,18 +192,14 @@ public class TaskManager {
     void handleRebalanceComplete() {
         // we should pause consumer only within the listener since
         // before then the assignment has not been updated yet.
-        if (stateUpdater == null) {
-            mainConsumer.pause(mainConsumer.assignment());
-        } else {
-            // All tasks that are owned by the task manager are ready and do not need to be paused
-            final Set<TopicPartition> partitionsNotToPause = tasks.allNonFailedTasks()
-                .stream()
-                .flatMap(task -> task.inputPartitions().stream())
-                .collect(Collectors.toSet());
-            final Set<TopicPartition> partitionsToPause = new HashSet<>(mainConsumer.assignment());
-            partitionsToPause.removeAll(partitionsNotToPause);
-            mainConsumer.pause(partitionsToPause);
-        }
+        // All tasks that are owned by the task manager are ready and do not need to be paused
+        final Set<TopicPartition> partitionsNotToPause = tasks.allNonFailedTasks()
+            .stream()
+            .flatMap(task -> task.inputPartitions().stream())
+            .collect(Collectors.toSet());
+        final Set<TopicPartition> partitionsToPause = new HashSet<>(mainConsumer.assignment());
+        partitionsToPause.removeAll(partitionsNotToPause);
+        mainConsumer.pause(partitionsToPause);
 
         releaseLockedUnassignedTaskDirectories();
 
@@ -266,13 +262,6 @@ public class TaskManager {
     private void closeDirtyAndRevive(final Collection<Task> taskWithChangelogs, final boolean markAsCorrupted) {
         for (final Task task : taskWithChangelogs) {
             if (task.state() != State.CLOSED) {
-                final Collection<TopicPartition> corruptedPartitions = task.changelogPartitions();
-
-                // mark corrupted partitions to not be checkpointed, and then close the task as dirty
-                // TODO: this step should be removed as we complete migrating to state updater
-                if (markAsCorrupted && stateUpdater == null) {
-                    task.markChangelogAsCorrupted(corruptedPartitions);
-                }
 
                 try {
                     // we do not need to take the returned offsets since we are not going to commit anyways;
@@ -340,7 +329,7 @@ public class TaskManager {
                 if (task != null) {
                     // replace our dummy values with the real ones, now we know our thread and assignment
                     final Set<TopicPartition> inputPartitions = entry.getValue();
-                    task.stateManager().assignToStreamThread(new LogContext(threadLogPrefix), changelogReader, inputPartitions);
+                    task.stateManager().assignToStreamThread(new LogContext(threadLogPrefix), inputPartitions);
                     updateInputPartitionsOfStandbyTaskIfTheyChanged(task, inputPartitions);
 
                     assignedTasks.put(task, inputPartitions);
@@ -395,18 +384,15 @@ public class TaskManager {
         // 2. for tasks that have changed active/standby status, just recycle and skip re-creating them
         // 3. otherwise, close them since they are no longer owned
         final Map<TaskId, RuntimeException> failedTasks = new LinkedHashMap<>();
-        if (stateUpdater == null) {
-            handleTasksWithoutStateUpdater(activeTasksToCreate, standbyTasksToCreate, tasksToRecycle, tasksToCloseClean);
-        } else {
-            handleTasksWithStateUpdater(
-                activeTasksToCreate,
-                standbyTasksToCreate,
-                tasksToRecycle,
-                tasksToCloseClean,
-                failedTasks
-            );
-            failedTasks.putAll(collectExceptionsAndFailedTasksFromStateUpdater());
-        }
+
+        handleTasksWithStateUpdater(
+            activeTasksToCreate,
+            standbyTasksToCreate,
+            tasksToRecycle,
+            tasksToCloseClean,
+            failedTasks
+        );
+        failedTasks.putAll(collectExceptionsAndFailedTasksFromStateUpdater());
 
         final Map<TaskId, RuntimeException> taskCloseExceptions = closeAndRecycleTasks(tasksToRecycle, tasksToCloseClean);
 
@@ -469,53 +455,8 @@ public class TaskManager {
         final Collection<Task> newActiveTasks = activeTaskCreator.createTasks(mainConsumer, activeTasksToCreate);
         final Collection<Task> newStandbyTasks = standbyTaskCreator.createTasks(standbyTasksToCreate);
 
-        if (stateUpdater == null) {
-            tasks.addActiveTasks(newActiveTasks);
-            tasks.addStandbyTasks(newStandbyTasks);
-        } else {
-            tasks.addPendingTasksToInit(newActiveTasks);
-            tasks.addPendingTasksToInit(newStandbyTasks);
-        }
-    }
-
-    private void handleTasksWithoutStateUpdater(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
-                                                final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
-                                                final Map<Task, Set<TopicPartition>> tasksToRecycle,
-                                                final Set<Task> tasksToCloseClean) {
-        final Map<Task, Set<TopicPartition>> startupStandbyTasksToRecycle = assignStartupTasks(activeTasksToCreate, logPrefix, topologyMetadata, changelogReader);
-        final Map<Task, Set<TopicPartition>> startupStandbyTasksToUse = assignStartupTasks(standbyTasksToCreate, logPrefix, topologyMetadata, changelogReader);
-
-        // recycle the startup standbys to active
-        tasks.addStandbyTasks(startupStandbyTasksToRecycle.keySet());
-
-        // use startup Standbys as real Standby tasks
-        tasks.addStandbyTasks(startupStandbyTasksToUse.keySet());
-
-        for (final Task task : tasks.allTasks()) {
-            final TaskId taskId = task.id();
-            if (activeTasksToCreate.containsKey(taskId)) {
-                if (task.isActive()) {
-                    final Set<TopicPartition> topicPartitions = activeTasksToCreate.get(taskId);
-                    if (tasks.updateActiveTaskInputPartitions(task, topicPartitions)) {
-                        task.updateInputPartitions(topicPartitions, topologyMetadata.nodeToSourceTopics(task.id()));
-                    }
-                    task.resume();
-                } else {
-                    tasksToRecycle.put(task, activeTasksToCreate.get(taskId));
-                }
-                activeTasksToCreate.remove(taskId);
-            } else if (standbyTasksToCreate.containsKey(taskId)) {
-                if (!task.isActive()) {
-                    updateInputPartitionsOfStandbyTaskIfTheyChanged(task, standbyTasksToCreate.get(taskId));
-                    task.resume();
-                } else {
-                    tasksToRecycle.put(task, standbyTasksToCreate.get(taskId));
-                }
-                standbyTasksToCreate.remove(taskId);
-            } else {
-                tasksToCloseClean.add(task);
-            }
-        }
+        tasks.addPendingTasksToInit(newActiveTasks);
+        tasks.addPendingTasksToInit(newStandbyTasks);
     }
 
     private void updateInputPartitionsOfStandbyTaskIfTheyChanged(final Task task,
@@ -899,6 +840,7 @@ public class TaskManager {
         return activeTaskCreator.createActiveTaskFromStandby(standbyTask, partitions, mainConsumer);
     }
 
+    // This can also be removed, but what about the test cases?
     /**
      * Tries to initialize any new or still-uninitialized tasks, then checks if they can/have completed restoration.
      *
@@ -2208,7 +2150,7 @@ public class TaskManager {
             e -> log.debug("Ignoring error in unclean {}", name));
     }
 
-    boolean needsInitializationOrRestoration() {
+    boolean needsInitializationOrRestoration() { // This can also be removed
         return activeTaskStream().anyMatch(Task::needsInitializationOrRestoration);
     }
 

@@ -40,7 +40,6 @@ class StandbyTaskCreator {
     private final StreamsConfig applicationConfig;
     private final StreamsMetricsImpl streamsMetrics;
     private final StateDirectory stateDirectory;
-    private final ChangelogReader storeChangelogReader;
     private final ThreadCache dummyCache;
     private final Logger log;
     private final Sensor createTaskSensor;
@@ -49,14 +48,12 @@ class StandbyTaskCreator {
                        final StreamsConfig applicationConfig,
                        final StreamsMetricsImpl streamsMetrics,
                        final StateDirectory stateDirectory,
-                       final ChangelogReader storeChangelogReader,
                        final String threadId,
                        final Logger log) {
         this.topologyMetadata = topologyMetadata;
         this.applicationConfig = applicationConfig;
         this.streamsMetrics = streamsMetrics;
         this.stateDirectory = stateDirectory;
-        this.storeChangelogReader = storeChangelogReader;
         this.log = log;
 
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
@@ -84,7 +81,6 @@ class StandbyTaskCreator {
                     eosEnabled(applicationConfig),
                     getLogContext(taskId),
                     stateDirectory,
-                    storeChangelogReader,
                     topology.storeToChangelogTopic(),
                     partitions);
 

@@ -407,7 +407,6 @@ public class StreamThread extends Thread implements ProcessingThread {
             config,
             streamsMetrics,
             stateDirectory,
-            changelogReader,
             cache,
             time,
             clientSupplier,
@@ -422,7 +421,6 @@ public class StreamThread extends Thread implements ProcessingThread {
             config,
             streamsMetrics,
             stateDirectory,
-            changelogReader,
             threadId,
             log);
 

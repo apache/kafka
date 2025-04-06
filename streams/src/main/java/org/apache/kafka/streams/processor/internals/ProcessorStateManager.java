@@ -170,7 +170,6 @@ public class ProcessorStateManager implements StateManager {
 
     private final TaskId taskId;
     private final boolean eosEnabled;
-    private ChangelogRegister changelogReader;
     private final Collection<TopicPartition> sourcePartitions;
     private final Map<String, String> storeToChangelogTopic;
 
@@ -201,7 +200,6 @@ public class ProcessorStateManager implements StateManager {
                                  final boolean eosEnabled,
                                  final LogContext logContext,
                                  final StateDirectory stateDirectory,
-                                 final ChangelogRegister changelogReader,
                                  final Map<String, String> storeToChangelogTopic,
                                  final Collection<TopicPartition> sourcePartitions) throws ProcessorStateException {
         this.storeToChangelogTopic = storeToChangelogTopic;
@@ -210,7 +208,6 @@ public class ProcessorStateManager implements StateManager {
         this.taskId = taskId;
         this.taskType = taskType;
         this.eosEnabled = eosEnabled;
-        this.changelogReader = changelogReader;
         this.sourcePartitions = sourcePartitions;
 
         this.baseDir = stateDirectory.getOrCreateDirectoryForTask(taskId);
@@ -222,7 +219,7 @@ public class ProcessorStateManager implements StateManager {
     /**
      * Special constructor used by {@link StateDirectory} to partially initialize startup tasks for local state, before
      * they're assigned to a thread. When the task is assigned to a thread, the initialization of this StateManager is
-     * completed in {@link #assignToStreamThread(LogContext, ChangelogRegister, Collection)}.
+     * completed in {@link #assignToStreamThread(LogContext, Collection)}.
      */
     static ProcessorStateManager createStartupTaskStateManager(final TaskId taskId,
                                                                final boolean eosEnabled,
@@ -230,7 +227,7 @@ public class ProcessorStateManager implements StateManager {
                                                                final StateDirectory stateDirectory,
                                                                final Map<String, String> storeToChangelogTopic,
                                                                final Set<TopicPartition> sourcePartitions) {
-        return new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, logContext, stateDirectory, null, storeToChangelogTopic, sourcePartitions);
+        return new ProcessorStateManager(taskId, TaskType.STANDBY, eosEnabled, logContext, stateDirectory, storeToChangelogTopic, sourcePartitions);
     }
 
     /**
@@ -239,15 +236,10 @@ public class ProcessorStateManager implements StateManager {
      * assigned StreamThread's context.
      */
     void assignToStreamThread(final LogContext logContext,
-                              final ChangelogRegister changelogReader,
                               final Collection<TopicPartition> sourcePartitions) {
-        if (this.changelogReader != null) {
-            throw new IllegalStateException("Attempted to replace an existing changelogReader on a StateManager without closing it.");
-        }
         this.sourcePartitions.clear();
         this.log = logContext.logger(ProcessorStateManager.class);
         this.logPrefix = logContext.logPrefix();
-        this.changelogReader = changelogReader;
         this.sourcePartitions.addAll(sourcePartitions);
     }
 
@@ -598,10 +590,6 @@ public class ProcessorStateManager implements StateManager {
     public void close() throws ProcessorStateException {
         log.debug("Closing its state manager and all the registered state stores: {}", stores);
 
-        if (changelogReader != null) {
-            changelogReader.unregister(getAllChangelogTopicPartitions());
-        }
-
         RuntimeException firstException = null;
         // attempting to close the stores, just in case they
         // are not closed by a ProcessorNode yet
@@ -645,11 +633,6 @@ public class ProcessorStateManager implements StateManager {
      */
     void recycle() {
         log.debug("Recycling state for {} task {}.", taskType, taskId);
-
-        if (changelogReader != null) {
-            final List<TopicPartition> allChangelogs = getAllChangelogTopicPartitions();
-            changelogReader.unregister(allChangelogs);
-        }
 
         // when the state manager is recycled to be used, future writes may bypass its store's caching
         // layer if they are from restoration, hence we need to clear the state store's caches just in case
