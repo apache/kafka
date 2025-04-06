@@ -1316,13 +1316,6 @@ public class StreamsConfig extends AbstractConfig {
         // Private API used to control the prefix of the auto created topics
         public static final String TOPIC_PREFIX_ALTERNATIVE = "__internal.override.topic.prefix__";
 
-        // Private API to enable the state updater (i.e. state updating on a dedicated thread)
-        public static final String STATE_UPDATER_ENABLED = "__state.updater.enabled__";
-
-        public static boolean stateUpdaterEnabled(final Map<String, Object> configs) {
-            return InternalConfig.getBoolean(configs, InternalConfig.STATE_UPDATER_ENABLED, true);
-        }
-
         // Private API to enable processing threads (i.e. polling is decoupled from processing)
         public static final String PROCESSING_THREADS_ENABLED = "__processing.threads.enabled__";
 
