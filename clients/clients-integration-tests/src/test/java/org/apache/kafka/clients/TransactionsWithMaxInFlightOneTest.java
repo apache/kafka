@@ -112,7 +112,7 @@ public class TransactionsWithMaxInFlightOneTest {
                         ConsumerRecords<byte[], byte[]> records = consumer.poll(Duration.ofMillis(100));
                         records.forEach(consumerRecords::add);
                         return consumerRecords.size() == 2;
-                    }, "Consumer with protocol " + groupProtocol.name + " should consume 2 records, but get " + consumerRecords.size());
+                    }, 15_000, () -> "Consumer with protocol " + groupProtocol.name + " should consume 2 records, but get " + consumerRecords.size());
                 }
                 consumerRecords.forEach(record -> {
                     Iterator<Header> headers = record.headers().headers(HEADER_KEY).iterator();
