@@ -2555,55 +2555,63 @@ public class SharePartition {
         List<RecordBatch> batchesToArchive
     ) {
         List<AcquiredRecords> result = new ArrayList<>();
-        for (AcquiredRecords acquiredRecords : acquiredRecordsList) {
-            List<AcquiredRecords> tempAcquiredRecordsList = new ArrayList<>();
-            tempAcquiredRecordsList.add(acquiredRecords);
-            for (RecordBatch batchToArchive : batchesToArchive) {
-                List<AcquiredRecords> newAcquiredRecords = new ArrayList<>();
-                int tempAcquiredRecordsIndex = 0;
+        Iterator<AcquiredRecords> acquiredRecordsListIter = acquiredRecordsList.iterator();
+        Iterator<RecordBatch> batchesToArchiveIterator = batchesToArchive.iterator();
+        if (!batchesToArchiveIterator.hasNext())
+            return acquiredRecordsList;
+        RecordBatch batchToArchive = batchesToArchiveIterator.next();
+        AcquiredRecords unresolvedAcquiredRecords = null;
 
-                // Non-overlap check - acquired records offsets lie before the batchToArchive offsets. No need to filter out the offsets in such a scenario.
-                while (tempAcquiredRecordsIndex < tempAcquiredRecordsList.size() &&
-                    tempAcquiredRecordsList.get(tempAcquiredRecordsIndex).lastOffset() < batchToArchive.baseOffset()) {
-                    // Offsets in tempAcquiredRecordsList element do not overlap with batchToArchive, hence it should not get filtered out.
-                    newAcquiredRecords.add(tempAcquiredRecordsList.get(tempAcquiredRecordsIndex));
-                    tempAcquiredRecordsIndex++;
-                }
+        while (unresolvedAcquiredRecords != null || acquiredRecordsListIter.hasNext()) {
+            if (unresolvedAcquiredRecords == null)
+                unresolvedAcquiredRecords = acquiredRecordsListIter.next();
 
-                // Overlap check - acquired records offsets overlap with the record batch offsets. We need to filter out the overlapping
-                // offsets in such a scenario.
-                while (tempAcquiredRecordsIndex < tempAcquiredRecordsList.size() &&
-                    tempAcquiredRecordsList.get(tempAcquiredRecordsIndex).firstOffset() <= batchToArchive.lastOffset() &&
-                    tempAcquiredRecordsList.get(tempAcquiredRecordsIndex).lastOffset() >= batchToArchive.baseOffset()) {
-                    AcquiredRecords tempAcquiredRecords = tempAcquiredRecordsList.get(tempAcquiredRecordsIndex);
-                    // Split the acquired record into parts - before and after the overlapping record batch.
-                    if (tempAcquiredRecords.firstOffset() < batchToArchive.baseOffset()) {
-                        // The offsets in tempAcquiredRecords that are present before batchToArchive's baseOffset should not get filtered out.
-                        newAcquiredRecords.add(new AcquiredRecords()
-                            .setFirstOffset(tempAcquiredRecords.firstOffset())
-                            .setLastOffset(batchToArchive.baseOffset() - 1)
-                            .setDeliveryCount(tempAcquiredRecords.deliveryCount()));
-                    }
-                    if (tempAcquiredRecords.lastOffset() > batchToArchive.lastOffset()) {
-                        // The offsets in tempAcquiredRecords that are present after batchToArchive's lastOffset should not get filtered out.
-                        newAcquiredRecords.add(new AcquiredRecords()
-                            .setFirstOffset(batchToArchive.lastOffset() + 1)
-                            .setLastOffset(tempAcquiredRecords.lastOffset())
-                            .setDeliveryCount(tempAcquiredRecords.deliveryCount()));
-                    }
-                    tempAcquiredRecordsIndex++;
-                }
+            long unresolvedFirstOffset = unresolvedAcquiredRecords.firstOffset();
+            long unresolvedLastOffset = unresolvedAcquiredRecords.lastOffset();
+            short unresolvedDeliveryCount = unresolvedAcquiredRecords.deliveryCount();
 
-                // Non-overlap check - acquired records offsets lie after the batchToArchive offsets. No need to filter out the offsets in such a scenario.
-                while (tempAcquiredRecordsIndex < tempAcquiredRecordsList.size() &&
-                    tempAcquiredRecordsList.get(tempAcquiredRecordsIndex).firstOffset() > batchToArchive.lastOffset()) {
-                    // Offsets in tempAcquiredRecordsList element do not overlap with batchToArchive, hence it should not get filtered out.
-                    newAcquiredRecords.add(tempAcquiredRecordsList.get(tempAcquiredRecordsIndex));
-                    tempAcquiredRecordsIndex++;
-                }
-                tempAcquiredRecordsList = newAcquiredRecords;
+            if (batchToArchive == null) {
+                result.add(unresolvedAcquiredRecords);
+                unresolvedAcquiredRecords = null;
+                continue;
             }
-            result.addAll(tempAcquiredRecordsList);
+
+            // Non-overlap check - unresolvedFirstOffset offsets lie before the batchToArchive offsets. No need to filter out the offsets in such a scenario.
+            if (unresolvedLastOffset < batchToArchive.baseOffset()) {
+                // Offsets in unresolvedAcquiredRecords do not overlap with batchToArchive, hence it should not get filtered out.
+                result.add(unresolvedAcquiredRecords);
+                unresolvedAcquiredRecords = null;
+            }
+
+            // Overlap check - unresolvedFirstOffset offsets overlap with the batchToArchive offsets. We need to filter out the overlapping
+            // offsets in such a scenario.
+            if (unresolvedFirstOffset <= batchToArchive.lastOffset() &&
+                unresolvedLastOffset >= batchToArchive.baseOffset()) {
+                unresolvedAcquiredRecords = null;
+                // Split the unresolvedFirstOffset into parts - before and after the overlapping record batchToArchive.
+                if (unresolvedFirstOffset < batchToArchive.baseOffset()) {
+                    // The offsets in unresolvedAcquiredRecords that are present before batchToArchive's baseOffset should not get filtered out.
+                    result.add(new AcquiredRecords()
+                        .setFirstOffset(unresolvedFirstOffset)
+                        .setLastOffset(batchToArchive.baseOffset() - 1)
+                        .setDeliveryCount(unresolvedDeliveryCount));
+                }
+                if (unresolvedLastOffset > batchToArchive.lastOffset()) {
+                    // The offsets in unresolvedAcquiredRecords that are present after batchToArchive's lastOffset should not get filtered out
+                    // and should be taken forward for further processing since they could potentially contain offsets that need to be archived.
+                    unresolvedAcquiredRecords = new AcquiredRecords()
+                        .setFirstOffset(batchToArchive.lastOffset() + 1)
+                        .setLastOffset(unresolvedLastOffset)
+                        .setDeliveryCount(unresolvedDeliveryCount);
+                }
+            }
+
+            if (unresolvedLastOffset >= batchToArchive.lastOffset()) {
+                if (batchesToArchiveIterator.hasNext())
+                    batchToArchive = batchesToArchiveIterator.next();
+                else
+                    batchToArchive = null;
+            }
         }
         return result;
     }
