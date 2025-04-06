@@ -20,6 +20,7 @@ import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.TestUtils;
@@ -46,6 +47,8 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.INTERCEPTOR_CLASSES_CONFIG;
 import static org.apache.kafka.clients.consumer.PlaintextConsumerCommitTest.BROKER_COUNT;
+import static org.apache.kafka.clients.consumer.PlaintextConsumerCommitTest.OFFSETS_TOPIC_PARTITIONS;
+import static org.apache.kafka.clients.consumer.PlaintextConsumerCommitTest.OFFSETS_TOPIC_REPLICATION;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
@@ -58,14 +61,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
     types = {Type.KRAFT},
     brokers = BROKER_COUNT, 
     serverProperties = {
-        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "3"),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = OFFSETS_TOPIC_PARTITIONS),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = OFFSETS_TOPIC_REPLICATION),
         @ClusterConfigProperty(key = GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, value = "100"),
     }
 )
 public class PlaintextConsumerCommitTest {
 
     public static final int BROKER_COUNT = 3;
+    public static final String OFFSETS_TOPIC_PARTITIONS = "1";
+    public static final String OFFSETS_TOPIC_REPLICATION = "3";
     private final ClusterInstance cluster;
     private final String topic = "topic";
     private final TopicPartition tp = new TopicPartition(topic, 0);
@@ -92,8 +97,7 @@ public class PlaintextConsumerCommitTest {
 
     private void testAutoCommitOnClose(GroupProtocol groupProtocol) throws InterruptedException {
         try (var consumer = createConsumer(groupProtocol, true)) {
-            var numRecords = 10000;
-            sendRecords(numRecords);
+            sendRecords(10000);
 
             consumer.subscribe(List.of(topic));
             awaitAssignment(consumer, Set.of(tp, tp1));
@@ -183,6 +187,11 @@ public class PlaintextConsumerCommitTest {
     }
 
     private void testAsyncCommit(GroupProtocol groupProtocol) throws InterruptedException {
+        cluster.createTopic(
+            Topic.GROUP_METADATA_TOPIC_NAME, 
+            Integer.parseInt(OFFSETS_TOPIC_PARTITIONS), 
+            Short.parseShort(OFFSETS_TOPIC_REPLICATION)
+        );
         try (var consumer = createConsumer(groupProtocol, false)) {
             consumer.assign(List.of(tp));
 
