@@ -59,20 +59,20 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 
 @ClusterTestDefaults(
-        types = {Type.KRAFT},
-        brokers = 2,
-        serverProperties = {
-            @ClusterConfigProperty(key = AUTO_CREATE_TOPICS_ENABLE_CONFIG, value = "false"),
-            //  15000 is filed serverMessageMaxBytes
-            @ClusterConfigProperty(key = MESSAGE_MAX_BYTES_CONFIG, value = "15000"),
-            //  15200 is filed replicaFetchMaxBytes
-            @ClusterConfigProperty(key = REPLICA_FETCH_MAX_BYTES_CONFIG, value = "15200"),
-            //  15400 is filed replicaFetchMaxResponseBytes
-            @ClusterConfigProperty(key = REPLICA_FETCH_RESPONSE_MAX_BYTES_DOC, value = "15400"),
-            // Set a smaller value for the number of partitions for the offset commit topic (__consumer_offset topic)
-            // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
-            @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-        }
+    types = {Type.KRAFT},
+    brokers = 2,
+    serverProperties = {
+        @ClusterConfigProperty(key = AUTO_CREATE_TOPICS_ENABLE_CONFIG, value = "false"),
+        //  15000 is filed serverMessageMaxBytes
+        @ClusterConfigProperty(key = MESSAGE_MAX_BYTES_CONFIG, value = "15000"),
+        //  15200 is filed replicaFetchMaxBytes
+        @ClusterConfigProperty(key = REPLICA_FETCH_MAX_BYTES_CONFIG, value = "15200"),
+        //  15400 is filed replicaFetchMaxResponseBytes
+        @ClusterConfigProperty(key = REPLICA_FETCH_RESPONSE_MAX_BYTES_DOC, value = "15400"),
+        // Set a smaller value for the number of partitions for the offset commit topic (__consumer_offset topic)
+        // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+    }
 )
 public class ProducerFailureHandlingTest {
 

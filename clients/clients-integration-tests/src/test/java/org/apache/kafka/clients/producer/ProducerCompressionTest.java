@@ -23,6 +23,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.Header;
 import org.apache.kafka.common.header.internals.RecordHeader;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
@@ -31,12 +32,10 @@ import org.apache.kafka.test.TestUtils;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
-import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -49,9 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.fail;
 
 
-@ClusterTestDefaults(
-        types = {Type.KRAFT}
-)
+@ClusterTestDefaults(types = {Type.KRAFT})
 class ProducerCompressionTest {
 
     private final String topicName = "topic";
@@ -64,29 +61,27 @@ class ProducerCompressionTest {
      */
     @ClusterTest
     void testCompression(ClusterInstance cluster) {
-        Set<String> compressionSet = Set.of("none", "gzip", "snappy", "lz4", "zstd");
-        compressionSet.forEach(compression -> {
+        for (CompressionType compression : CompressionType.values()) {
             try {
                 processCompressionTest(cluster, compression);
             } catch (InterruptedException | ExecutionException e) {
                 fail(e);
             }
-        });
+        }
     }
 
 
-    void processCompressionTest(ClusterInstance cluster, String compression) throws InterruptedException,
+    void processCompressionTest(ClusterInstance cluster, CompressionType compression) throws InterruptedException,
             ExecutionException {
-        String compressionTopic = topicName + "_" + compression;
+        String compressionTopic = topicName + "_" + compression.name;
         cluster.createTopic(compressionTopic, 1, (short) 1);
         Map<String, Object> producerProps = new HashMap<>();
-        producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compression);
+        producerProps.put(ProducerConfig.COMPRESSION_TYPE_CONFIG, compression.name);
         producerProps.put(ProducerConfig.BATCH_SIZE_CONFIG, "66000");
         producerProps.put(ProducerConfig.LINGER_MS_CONFIG, "200");
-        Producer<byte[], byte[]> producer = cluster.producer(producerProps);
         Consumer<byte[], byte[]> classicConsumer = cluster.consumer(Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic"));
         Consumer<byte[], byte[]> consumer = cluster.consumer(Map.of(ConsumerConfig.GROUP_PROTOCOL_CONFIG, "consumer"));
-        try (producer) {
+        try (Producer<byte[], byte[]> producer = cluster.producer(producerProps)) {
             int partition = 0;
             // prepare the messages
             List<String> messages = IntStream.range(0, numRecords).mapToObj(this::messageValue).toList();
@@ -108,10 +103,10 @@ class ProducerCompressionTest {
                         String.valueOf(message.length()).getBytes(), message.getBytes(), headers)));
             });
             for (int offset = 0; offset < responses.size(); offset++) {
-                assertEquals(offset, responses.get(offset).get().offset(), compression);
+                assertEquals(offset, responses.get(offset).get().offset(), compression.name);
             }
-            verifyConsumerRecords(consumer, messages, now, headerArr, partition, compressionTopic, compression);
-            verifyConsumerRecords(classicConsumer, messages, now, headerArr, partition, compressionTopic, compression);
+            verifyConsumerRecords(consumer, messages, now, headerArr, partition, compressionTopic, compression.name);
+            verifyConsumerRecords(classicConsumer, messages, now, headerArr, partition, compressionTopic, compression.name);
         } finally {
             //  This consumer close very slowly, which may cause the entire test to time out, and we can't wait for 
             //  it to  auto close 
@@ -123,7 +118,7 @@ class ProducerCompressionTest {
     private void verifyConsumerRecords(Consumer<byte[], byte[]> consumer, List<String> messages, long now,
                                        Header[] headerArr, int partition, String topic, String compression) {
         TopicPartition tp = new TopicPartition(topic, partition);
-        consumer.assign(Collections.singleton(tp));
+        consumer.assign(List.of(tp));
         consumer.seek(tp, 0);
         AtomicInteger num = new AtomicInteger(0);
         AtomicInteger flag = new AtomicInteger(0);
