@@ -2276,11 +2276,16 @@ public class SharePartition {
         return switch (error) {
             case NOT_COORDINATOR, COORDINATOR_NOT_AVAILABLE, COORDINATOR_LOAD_IN_PROGRESS ->
                 new CoordinatorNotAvailableException(errorMessage);
-            case GROUP_ID_NOT_FOUND -> new GroupIdNotFoundException(errorMessage);
-            case UNKNOWN_TOPIC_OR_PARTITION -> new UnknownTopicOrPartitionException(errorMessage);
-            case FENCED_STATE_EPOCH -> new FencedStateEpochException(errorMessage);
-            case FENCED_LEADER_EPOCH -> new NotLeaderOrFollowerException(errorMessage);
-            default -> new UnknownServerException(errorMessage);
+            case GROUP_ID_NOT_FOUND ->
+                new GroupIdNotFoundException(errorMessage);
+            case UNKNOWN_TOPIC_OR_PARTITION ->
+                new UnknownTopicOrPartitionException(errorMessage);
+            case FENCED_STATE_EPOCH ->
+                new FencedStateEpochException(errorMessage);
+            case FENCED_LEADER_EPOCH ->
+                new NotLeaderOrFollowerException(errorMessage);
+            default ->
+                new UnknownServerException(errorMessage);
         };
     }
 
