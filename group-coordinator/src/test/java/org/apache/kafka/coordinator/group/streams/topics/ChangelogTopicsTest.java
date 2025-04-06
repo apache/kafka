@@ -28,6 +28,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -48,6 +49,18 @@ public class ChangelogTopicsTest {
         .setSourceTopics(List.of())
         .setRepartitionSinkTopics(List.of(SINK_TOPIC_NAME))
         .setRepartitionSourceTopics(List.of(REPARTITION_TOPIC_INFO))
+        .setStateChangelogTopics(List.of());
+    private static final Subtopology SUBTOPOLOGY_NO_REPARTITION_SOURCE = new Subtopology()
+        .setSubtopologyId("SUBTOPOLOGY_NO_SOURCE")
+        .setSourceTopics(List.of(SOURCE_TOPIC_NAME))
+        .setRepartitionSinkTopics(List.of(SINK_TOPIC_NAME))
+        .setRepartitionSourceTopics(List.of())
+        .setStateChangelogTopics(List.of());
+    private static final Subtopology SUBTOPOLOGY_NO_SOURCE_NO_REPARTITION_SOURCE = new Subtopology()
+        .setSubtopologyId("SUBTOPOLOGY_NO_SOURCE")
+        .setSourceTopics(List.of())
+        .setRepartitionSinkTopics(List.of(SINK_TOPIC_NAME))
+        .setRepartitionSourceTopics(List.of())
         .setStateChangelogTopics(List.of());
     private static final Subtopology SUBTOPOLOGY_STATELESS = new Subtopology()
         .setSubtopologyId("SUBTOPOLOGY_STATELESS")
@@ -85,14 +98,32 @@ public class ChangelogTopicsTest {
     }
 
     @Test
-    public void shouldFailIfNoSourceTopics() {
-        final List<Subtopology> subtopologies = List.of(SUBTOPOLOGY_NO_SOURCE);
+    public void shouldFailIfNoSourceTopicsAndNoRepartitionSourceTopics() {
+        final List<Subtopology> subtopologies = List.of(SUBTOPOLOGY_NO_SOURCE_NO_REPARTITION_SOURCE);
 
         final ChangelogTopics changelogTopics =
             new ChangelogTopics(LOG_CONTEXT, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
         StreamsInvalidTopologyException e = assertThrows(StreamsInvalidTopologyException.class, changelogTopics::setup);
 
         assertTrue(e.getMessage().contains("No source topics found for subtopology"));
+    }
+
+    @Test
+    public void shouldNotFailIfOnlySourceTopicsEmpty() {
+        final List<Subtopology> subtopologies = List.of(SUBTOPOLOGY_NO_SOURCE);
+
+        final ChangelogTopics changelogTopics =
+            new ChangelogTopics(LOG_CONTEXT, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
+        assertDoesNotThrow(changelogTopics::setup);
+    }
+
+    @Test
+    public void shouldNotFailIfOnlyRepartitionSourceTopicsEmpty() {
+        final List<Subtopology> subtopologies = List.of(SUBTOPOLOGY_NO_REPARTITION_SOURCE);
+
+        final ChangelogTopics changelogTopics =
+            new ChangelogTopics(LOG_CONTEXT, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
+        assertDoesNotThrow(changelogTopics::setup);
     }
 
     @Test

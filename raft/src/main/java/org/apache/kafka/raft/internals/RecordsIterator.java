@@ -360,26 +360,14 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
 
         ControlRecordType type = ControlRecordType.parse(key.get());
 
-        final ApiMessage message;
-        switch (type) {
-            case LEADER_CHANGE:
-                message = ControlRecordUtils.deserializeLeaderChangeMessage(value.get());
-                break;
-            case SNAPSHOT_HEADER:
-                message = ControlRecordUtils.deserializeSnapshotHeaderRecord(value.get());
-                break;
-            case SNAPSHOT_FOOTER:
-                message = ControlRecordUtils.deserializeSnapshotFooterRecord(value.get());
-                break;
-            case KRAFT_VERSION:
-                message = ControlRecordUtils.deserializeKRaftVersionRecord(value.get());
-                break;
-            case KRAFT_VOTERS:
-                message = ControlRecordUtils.deserializeVotersRecord(value.get());
-                break;
-            default:
-                throw new IllegalArgumentException(String.format("Unknown control record type %s", type));
-        }
+        final ApiMessage message = switch (type) {
+            case LEADER_CHANGE -> ControlRecordUtils.deserializeLeaderChangeMessage(value.get());
+            case SNAPSHOT_HEADER -> ControlRecordUtils.deserializeSnapshotHeaderRecord(value.get());
+            case SNAPSHOT_FOOTER -> ControlRecordUtils.deserializeSnapshotFooterRecord(value.get());
+            case KRAFT_VERSION -> ControlRecordUtils.deserializeKRaftVersionRecord(value.get());
+            case KRAFT_VOTERS -> ControlRecordUtils.deserializeVotersRecord(value.get());
+            default -> throw new IllegalArgumentException(String.format("Unknown control record type %s", type));
+        };
 
         return new ControlRecord(type, message);
     }
