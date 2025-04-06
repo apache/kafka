@@ -194,14 +194,10 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         String baseDisplayName,
         ClusterConfig config
     ) {
-        switch (type) {
-            case KRAFT:
-                return new RaftClusterInvocationContext(baseDisplayName, config, false);
-            case CO_KRAFT:
-                return new RaftClusterInvocationContext(baseDisplayName, config, true);
-            default:
-                throw new IllegalArgumentException("Unsupported @Type value " + type);
-        }
+        return switch (type) {
+            case KRAFT -> new RaftClusterInvocationContext(baseDisplayName, config, false);
+            case CO_KRAFT -> new RaftClusterInvocationContext(baseDisplayName, config, true);
+        };
     }
 
     List<TestTemplateInvocationContext> processClusterTemplate(ExtensionContext context, ClusterTemplate annot) {

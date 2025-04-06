@@ -51,7 +51,6 @@ import java.io.RandomAccessFile;
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -263,7 +262,7 @@ public class LogSegmentTest {
 
                 // check that we can read back both messages
                 FetchDataInfo read = seg.read(offset, 10000);
-                assertIterableEquals(Arrays.asList(ms1.records().iterator().next(), ms2.records().iterator().next()), read.records.records());
+                assertIterableEquals(List.of(ms1.records().iterator().next(), ms2.records().iterator().next()), read.records.records());
 
                 // Now truncate off the last message
                 seg.truncateTo(offset + 1);
@@ -540,7 +539,7 @@ public class LogSegmentTest {
                 new SimpleRecord("a".getBytes()), new SimpleRecord("b".getBytes())));
 
             seg.recover(newProducerStateManager(), cache);
-            assertEquals(Arrays.asList(
+            assertEquals(List.of(
                 new EpochEntry(0, 104L),
                 new EpochEntry(1, 106L),
                 new EpochEntry(2, 110L)), cache.epochEntries());

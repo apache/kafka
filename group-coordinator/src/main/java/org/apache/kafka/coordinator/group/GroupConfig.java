@@ -59,11 +59,11 @@ public final class GroupConfig extends AbstractConfig {
         "Negative duration is not allowed.</li>" +
         "<li>anything else: throw exception to the share consumer.</li></ul>";
 
-    public static final String STREAMS_SESSION_TIMEOUT_MS_CONFIG = "group.streams.session.timeout.ms";
+    public static final String STREAMS_SESSION_TIMEOUT_MS_CONFIG = "streams.session.timeout.ms";
 
-    public static final String STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG = "group.streams.heartbeat.interval.ms";
+    public static final String STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG = "streams.heartbeat.interval.ms";
 
-    public static final String STREAMS_NUM_STANDBY_REPLICAS_CONFIG = "group.streams.num.standby.replicas";
+    public static final String STREAMS_NUM_STANDBY_REPLICAS_CONFIG = "streams.num.standby.replicas";
 
     public final int consumerSessionTimeoutMs;
 
