@@ -120,6 +120,7 @@ public class UnifiedLog implements AutoCloseable {
     private final Object lock = new Object();
     private final Map<String, Map<String, String>> metricNames = new HashMap<>();
 
+    private final TopicPartition topicPartition;
     // localLog The LocalLog instance containing non-empty log segments recovered from disk
     private final LocalLog localLog;
     private final BrokerTopicStats brokerTopicStats;
@@ -207,6 +208,7 @@ public class UnifiedLog implements AutoCloseable {
                       LogOffsetsListener logOffsetsListener) throws IOException {
         this.logStartOffset = logStartOffset;
         this.localLog = localLog;
+        this.topicPartition = localLog.topicPartition();
         this.brokerTopicStats = brokerTopicStats;
         this.producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs;
         this.leaderEpochCache = leaderEpochCache;
@@ -215,7 +217,7 @@ public class UnifiedLog implements AutoCloseable {
         this.remoteStorageSystemEnable = remoteStorageSystemEnable;
         this.logOffsetsListener = logOffsetsListener;
 
-        this.logIdent = "[UnifiedLog partition=" + topicPartition() + ", dir=" + parentDir() + "] ";
+        this.logIdent = "[UnifiedLog partition=" + topicPartition + ", dir=" + parentDir() + "] ";
         this.logger = new LogContext(logIdent).logger(UnifiedLog.class);
         this.futureTimestampLogger = new LogContext(logIdent).logger("LogFutureTimestampLogger");
         this.highWatermarkMetadata = new LogOffsetMetadata(logStartOffset);
@@ -422,7 +424,7 @@ public class UnifiedLog implements AutoCloseable {
     }
 
     public TopicPartition topicPartition() {
-        return localLog.topicPartition();
+        return topicPartition;
     }
 
     public LogDirFailureChannel logDirFailureChannel() {
@@ -434,7 +436,7 @@ public class UnifiedLog implements AutoCloseable {
     }
 
     public boolean remoteLogEnabled() {
-        return UnifiedLog.isRemoteLogEnabled(remoteStorageSystemEnable, config(), topicPartition().topic());
+        return UnifiedLog.isRemoteLogEnabled(remoteStorageSystemEnable, config(), topicPartition.topic());
     }
 
     public ScheduledFuture<?> producerExpireCheck() {
@@ -483,7 +485,7 @@ public class UnifiedLog implements AutoCloseable {
         if (partMetadataFile.exists()) {
             Uuid fileTopicId = partMetadataFile.read().topicId();
             if (topicId.isPresent() && !topicId.get().equals(fileTopicId)) {
-                throw new InconsistentTopicIdException("Tried to assign topic ID " + topicId + " to log for topic partition " + topicPartition() + "," +
+                throw new InconsistentTopicIdException("Tried to assign topic ID " + topicId + " to log for topic partition " + topicPartition + "," +
                         "but log already contained topic ID " + fileTopicId);
             }
             topicId = Optional.of(fileTopicId);
@@ -699,8 +701,8 @@ public class UnifiedLog implements AutoCloseable {
 
     public void newMetrics() {
         Map<String, String> tags = new LinkedHashMap<>();
-        tags.put("topic", topicPartition().topic());
-        tags.put("partition", String.valueOf(topicPartition().partition()));
+        tags.put("topic", topicPartition.topic());
+        tags.put("partition", String.valueOf(topicPartition.partition()));
         if (isFuture()) {
             tags.put("is-future", "true");
         }
@@ -744,7 +746,7 @@ public class UnifiedLog implements AutoCloseable {
         if (this.topicId.isPresent()) {
             Uuid currentId = this.topicId.get();
             if (!currentId.equals(topicId)) {
-                throw new InconsistentTopicIdException("Tried to assign topic ID " + topicId + " to log for topic partition " + topicPartition() +
+                throw new InconsistentTopicIdException("Tried to assign topic ID " + topicId + " to log for topic partition " + topicPartition +
                         ", but log already contained topic ID " + currentId);
             }
         } else {
@@ -764,7 +766,7 @@ public class UnifiedLog implements AutoCloseable {
     private void reinitializeLeaderEpochCache() throws IOException {
         synchronized (lock) {
             leaderEpochCache = UnifiedLog.createLeaderEpochCache(
-                    dir(), topicPartition(), logDirFailureChannel(), Optional.of(leaderEpochCache), scheduler());
+                    dir(), topicPartition, logDirFailureChannel(), Optional.of(leaderEpochCache), scheduler());
         }
     }
 
@@ -922,7 +924,7 @@ public class UnifiedLog implements AutoCloseable {
             localLog.checkIfMemoryMappedBufferClosed();
             producerExpireCheck.cancel(true);
             maybeHandleIOException(
-                    "Error while renaming dir for " + topicPartition() + " in dir " + dir().getParent(),
+                    "Error while renaming dir for " + topicPartition + " in dir " + dir().getParent(),
                     () -> {
                         // We take a snapshot at the last written offset to hopefully avoid the need to scan the log
                         // after restarting and to ensure that we cannot inadvertently hit the upgrade optimization
@@ -945,7 +947,7 @@ public class UnifiedLog implements AutoCloseable {
     public void renameDir(String name, boolean shouldReinitialize) {
         synchronized (lock) {
             maybeHandleIOException(
-                    "Error while renaming dir for " + topicPartition() + " in log dir " + dir().getParent(),
+                    "Error while renaming dir for " + topicPartition + " in log dir " + dir().getParent(),
                     () -> {
                         // Flush partitionMetadata file before initializing again
                         maybeFlushMetadataFile();
@@ -1087,7 +1089,7 @@ public class UnifiedLog implements AutoCloseable {
             // they are valid, insert them in the log
             synchronized (lock)  {
                 return maybeHandleIOException(
-                        "Error while appending records to " + topicPartition() + " in dir " + dir().getParent(),
+                        "Error while appending records to " + topicPartition + " in dir " + dir().getParent(),
                         () -> {
                             MemoryRecords validRecords = trimmedRecords;
                             localLog.checkIfMemoryMappedBufferClosed();
@@ -1097,7 +1099,7 @@ public class UnifiedLog implements AutoCloseable {
                                 appendInfo.setFirstOffset(offset.value);
                                 Compression targetCompression = BrokerCompressionType.targetCompression(config().compression, appendInfo.sourceCompression());
                                 LogValidator validator = new LogValidator(validRecords,
-                                        topicPartition(),
+                                        topicPartition,
                                         time(),
                                         appendInfo.sourceCompression(),
                                         targetCompression,
@@ -1129,10 +1131,10 @@ public class UnifiedLog implements AutoCloseable {
                                         if (batch.sizeInBytes() > config().maxMessageSize()) {
                                             // we record the original message set size instead of the trimmed size
                                             // to be consistent with pre-compression bytesRejectedRate recording
-                                            brokerTopicStats.topicStats(topicPartition().topic()).bytesRejectedRate().mark(records.sizeInBytes());
+                                            brokerTopicStats.topicStats(topicPartition.topic()).bytesRejectedRate().mark(records.sizeInBytes());
                                             brokerTopicStats.allTopicsStats().bytesRejectedRate().mark(records.sizeInBytes());
                                             throw new RecordTooLargeException("Message batch size is " + batch.sizeInBytes() + " bytes in append to" +
-                                                    "partition " + topicPartition() + " which exceeds the maximum configured size of " + config().maxMessageSize() + ".");
+                                                    "partition " + topicPartition + " which exceeds the maximum configured size of " + config().maxMessageSize() + ".");
                                         }
                                     });
                                 }
@@ -1152,7 +1154,7 @@ public class UnifiedLog implements AutoCloseable {
                                         if (offsets.size() == 10) break;
                                     }
                                     throw new UnexpectedAppendOffsetException(
-                                            "Unexpected offset in append to " + topicPartition() + ". " + firstOrLast + " " +
+                                            "Unexpected offset in append to " + topicPartition + ". " + firstOrLast + " " +
                                                     appendInfo.firstOrLastOffsetOfFirstBatch() + " is less than the next offset " + localLog.logEndOffset() + ". " +
                                                     "First 10 offsets in append: " + String.join(", ", offsets) + ", last offset in" +
                                                     " append: " + appendInfo.lastOffset() + ". Log start offset = " + logStartOffset,
@@ -1178,7 +1180,7 @@ public class UnifiedLog implements AutoCloseable {
                             // check messages size does not exceed config.segmentSize
                             if (validRecords.sizeInBytes() > config().segmentSize) {
                                 throw new RecordBatchTooLargeException("Message batch size is " + validRecords.sizeInBytes() + " bytes in append " +
-                                        "to partition " + topicPartition() + ", which exceeds the maximum configured segment size of " + config().segmentSize + ".");
+                                        "to partition " + topicPartition + ", which exceeds the maximum configured segment size of " + config().segmentSize + ".");
                             }
 
                             // maybe roll the log if this segment is full
@@ -1300,11 +1302,11 @@ public class UnifiedLog implements AutoCloseable {
         // The deleteRecordsOffset may be lost only if all in-sync replicas of this broker are shutdown
         // in an unclean manner within log.flush.start.offset.checkpoint.interval.ms. The chance of this happening is low.
         return maybeHandleIOException(
-                "Exception while increasing log start offset for " + topicPartition() + " to " + newLogStartOffset + " in dir " + dir().getParent(),
+                "Exception while increasing log start offset for " + topicPartition + " to " + newLogStartOffset + " in dir " + dir().getParent(),
                 () -> {
                     synchronized (lock)  {
                         if (newLogStartOffset > highWatermark()) {
-                            throw new OffsetOutOfRangeException("Cannot increment the log start offset to " + newLogStartOffset + " of partition " + topicPartition() +
+                            throw new OffsetOutOfRangeException("Cannot increment the log start offset to " + newLogStartOffset + " of partition " + topicPartition +
                                     " since it is larger than the high watermark " + highWatermark());
                         }
 
@@ -1441,7 +1443,7 @@ public class UnifiedLog implements AutoCloseable {
             }
             // we only validate V2 and higher to avoid potential compatibility issues with older clients
             if (batch.magic() >= RecordBatch.MAGIC_VALUE_V2 && origin == AppendOrigin.CLIENT && batch.baseOffset() != 0) {
-                throw new InvalidRecordException("The baseOffset of the record batch in the append to " + topicPartition() + " should " +
+                throw new InvalidRecordException("The baseOffset of the record batch in the append to " + topicPartition + " should " +
                         "be 0, but it is " + batch.baseOffset());
             }
 
@@ -1481,16 +1483,16 @@ public class UnifiedLog implements AutoCloseable {
                 // Check if the message sizes are valid.
                 int batchSize = batch.sizeInBytes();
                 if (!ignoreRecordSize && batchSize > config().maxMessageSize()) {
-                    brokerTopicStats.topicStats(topicPartition().topic()).bytesRejectedRate().mark(records.sizeInBytes());
+                    brokerTopicStats.topicStats(topicPartition.topic()).bytesRejectedRate().mark(records.sizeInBytes());
                     brokerTopicStats.allTopicsStats().bytesRejectedRate().mark(records.sizeInBytes());
-                    throw new RecordTooLargeException("The record batch size in the append to " + topicPartition() + " is " + batchSize + " bytes " +
+                    throw new RecordTooLargeException("The record batch size in the append to " + topicPartition + " is " + batchSize + " bytes " +
                             "which exceeds the maximum configured value of " + config().maxMessageSize() + ").");
                 }
 
                 // check the validity of the message by checking CRC
                 if (!batch.isValid()) {
                     brokerTopicStats.allTopicsStats().invalidMessageCrcRecordsPerSec().mark();
-                    throw new CorruptRecordException("Record is corrupt (stored crc = " + batch.checksum() + ") in topic partition " + topicPartition() + ".");
+                    throw new CorruptRecordException("Record is corrupt (stored crc = " + batch.checksum() + ") in topic partition " + topicPartition + ".");
                 }
 
                 if (batch.maxTimestamp() > maxTimestamp) {
@@ -1507,7 +1509,7 @@ public class UnifiedLog implements AutoCloseable {
             }
 
             if (requireOffsetsMonotonic && !monotonic) {
-                throw new OffsetsOutOfOrderException("Out of order offsets found in append to " + topicPartition() + ": " +
+                throw new OffsetsOutOfOrderException("Out of order offsets found in append to " + topicPartition + ": " +
                         StreamSupport.stream(records.records().spliterator(), false)
                             .map(Record::offset)
                             .map(String::valueOf)
@@ -1549,7 +1551,7 @@ public class UnifiedLog implements AutoCloseable {
         int validBytes = info.validBytes();
         if (validBytes < 0) {
             throw new CorruptRecordException("Cannot append record batch with illegal length " + validBytes + " to " +
-                    "log for " + topicPartition() + ". A possible cause is a corrupted produce request.");
+                    "log for " + topicPartition + ". A possible cause is a corrupted produce request.");
         }
         if (validBytes == records.sizeInBytes()) {
             return records;
@@ -1563,7 +1565,7 @@ public class UnifiedLog implements AutoCloseable {
 
     private void checkLogStartOffset(long offset) {
         if (offset < logStartOffset) {
-            throw new OffsetOutOfRangeException("Received request for offset " + offset + " for partition " + topicPartition() + ", " +
+            throw new OffsetOutOfRangeException("Received request for offset " + offset + " for partition " + topicPartition + ", " +
                     "but we only have log segments starting from offset: " + logStartOffset + ".");
         }
     }
@@ -1613,7 +1615,7 @@ public class UnifiedLog implements AutoCloseable {
      */
     public OffsetResultHolder fetchOffsetByTimestamp(long targetTimestamp, Optional<AsyncOffsetReader> remoteOffsetReader) {
         return maybeHandleIOException(
-                "Error while fetching offset by timestamp for " + topicPartition() + " in dir " + dir().getParent(),
+                "Error while fetching offset by timestamp for " + topicPartition + " in dir " + dir().getParent(),
                 () -> {
                     logger.debug("Searching offset for timestamp {}.", targetTimestamp);
 
@@ -1685,7 +1687,7 @@ public class UnifiedLog implements AutoCloseable {
                             }
 
                             AsyncOffsetReadFutureHolder<OffsetResultHolder.FileRecordsOrError> asyncOffsetReadFutureHolder =
-                                    remoteOffsetReader.get().asyncOffsetRead(topicPartition(), targetTimestamp,
+                                    remoteOffsetReader.get().asyncOffsetRead(topicPartition, targetTimestamp,
                                     logStartOffset, leaderEpochCache, () -> searchOffsetInLocalLog(targetTimestamp, localLogStartOffset()));
                             return new OffsetResultHolder(Optional.empty(), Optional.of(asyncOffsetReadFutureHolder));
                         } else {
@@ -1831,7 +1833,7 @@ public class UnifiedLog implements AutoCloseable {
     }
 
     private int deleteSegments(List<LogSegment> deletable, SegmentDeletionReason reason) {
-        return maybeHandleIOException("Error while deleting segments for " + topicPartition() + " in dir " + dir().getParent(),
+        return maybeHandleIOException("Error while deleting segments for " + topicPartition + " in dir " + dir().getParent(),
                 () -> {
                     int numToDelete = deletable.size();
                     if (numToDelete > 0) {
@@ -2138,7 +2140,7 @@ public class UnifiedLog implements AutoCloseable {
         long flushOffset = includingOffset ? offset + 1 : offset;
         String includingOffsetStr = includingOffset ? "inclusive" : "exclusive";
         maybeHandleIOException(
-                "Error while flushing log for " + topicPartition() + " in dir " + dir().getParent() + " with offset " + offset +
+                "Error while flushing log for " + topicPartition + " in dir " + dir().getParent() + " with offset " + offset +
                 " (" + includingOffsetStr + ") and recovery point " + offset,
                 () -> {
                     if (flushOffset > localLog.recoveryPoint()) {
@@ -2158,7 +2160,7 @@ public class UnifiedLog implements AutoCloseable {
      */
     public void delete() {
         maybeHandleIOException(
-            "Error while deleting log for " + topicPartition() + " in dir " + dir().getParent(),
+            "Error while deleting log for " + topicPartition + " in dir " + dir().getParent(),
             () -> {
                 synchronized (lock) {
                     localLog.checkIfMemoryMappedBufferClosed();
@@ -2204,7 +2206,7 @@ public class UnifiedLog implements AutoCloseable {
     // visible for testing
     public void flushProducerStateSnapshot(Path snapshot) {
         maybeHandleIOException(
-                "Error while deleting producer state snapshot " + snapshot + " for " + topicPartition() + " in dir " + dir().getParent(),
+                "Error while deleting producer state snapshot " + snapshot + " for " + topicPartition + " in dir " + dir().getParent(),
                 () -> {
                     Utils.flushFileIfExists(snapshot);
                     return null;
@@ -2219,10 +2221,10 @@ public class UnifiedLog implements AutoCloseable {
      */
     public boolean truncateTo(long targetOffset) {
         return maybeHandleIOException(
-                "Error while truncating log to offset " + targetOffset + " for " + topicPartition() + " in dir " + dir().getParent(),
+                "Error while truncating log to offset " + targetOffset + " for " + topicPartition + " in dir " + dir().getParent(),
                 () -> {
                     if (targetOffset < 0) {
-                        throw new IllegalArgumentException("Cannot truncate partition " + topicPartition() + " to a negative offset (" + targetOffset + ").");
+                        throw new IllegalArgumentException("Cannot truncate partition " + topicPartition + " to a negative offset (" + targetOffset + ").");
                     }
                     if (targetOffset >= localLog.logEndOffset()) {
                         logger.info("Truncating to {} has no effect as the largest offset in the log is {}", targetOffset, localLog.logEndOffset() - 1);
@@ -2263,7 +2265,7 @@ public class UnifiedLog implements AutoCloseable {
      */
     public void truncateFullyAndStartAt(long newOffset, Optional<Long> logStartOffsetOpt) {
         maybeHandleIOException(
-                "Error while truncating the entire log for " + topicPartition() + " in dir " + dir().getParent(),
+                "Error while truncating the entire log for " + topicPartition + " in dir " + dir().getParent(),
                 () -> {
                     logger.debug("Truncate and start at offset {}, logStartOffset: {}", newOffset, logStartOffsetOpt.orElse(newOffset));
                     synchronized (lock)  {
@@ -2327,9 +2329,9 @@ public class UnifiedLog implements AutoCloseable {
             logString.append(id);
         });
         logString.append(", topic=");
-        logString.append(topicPartition().topic());
+        logString.append(topicPartition.topic());
         logString.append(", partition=");
-        logString.append(topicPartition().partition());
+        logString.append(topicPartition.partition());
         logString.append(", highWatermark=");
         logString.append(highWatermark());
         logString.append(", lastStableOffset=");
@@ -2345,7 +2347,7 @@ public class UnifiedLog implements AutoCloseable {
     public void replaceSegments(List<LogSegment> newSegments, List<LogSegment> oldSegments) throws IOException {
         synchronized (lock) {
             localLog.checkIfMemoryMappedBufferClosed();
-            List<LogSegment> deletedSegments = LocalLog.replaceSegments(localLog.segments(), newSegments, oldSegments, dir(), topicPartition(),
+            List<LogSegment> deletedSegments = LocalLog.replaceSegments(localLog.segments(), newSegments, oldSegments, dir(), topicPartition,
                     config(), scheduler(), logDirFailureChannel(), logIdent, false);
             deleteProducerSnapshots(deletedSegments, true);
         }
@@ -2376,14 +2378,14 @@ public class UnifiedLog implements AutoCloseable {
 
     public List<LogSegment> splitOverflowedSegment(LogSegment segment) throws IOException {
         synchronized (lock) {
-            LocalLog.SplitSegmentResult result = LocalLog.splitOverflowedSegment(segment, localLog.segments(), dir(), topicPartition(), config(), scheduler(), logDirFailureChannel(), logIdent);
+            LocalLog.SplitSegmentResult result = LocalLog.splitOverflowedSegment(segment, localLog.segments(), dir(), topicPartition, config(), scheduler(), logDirFailureChannel(), logIdent);
             deleteProducerSnapshots(result.deletedSegments, true);
             return result.newSegments;
         }
     }
 
     private void deleteProducerSnapshots(Collection<LogSegment> segments, boolean asyncDelete) throws IOException {
-        UnifiedLog.deleteProducerSnapshots(segments, producerStateManager, asyncDelete, scheduler(), config(), logDirFailureChannel(), parentDir(), topicPartition());
+        UnifiedLog.deleteProducerSnapshots(segments, producerStateManager, asyncDelete, scheduler(), config(), logDirFailureChannel(), parentDir(), topicPartition);
     }
 
     private static <T> Optional<T> findFirst(Iterable<T> iterable, Predicate<T> predicate) {
