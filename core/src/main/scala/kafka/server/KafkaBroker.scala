@@ -28,7 +28,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.coordinator.group.GroupCoordinator
-import org.apache.kafka.metadata.BrokerState
+import org.apache.kafka.metadata.{BrokerState, MetadataCache}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.NodeToControllerChannelManager
@@ -69,6 +69,8 @@ object KafkaBroker {
    * you do change it, be sure to make it match that regex or the system tests will fail.
    */
   val STARTED_MESSAGE = "Kafka Server started"
+
+  val MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS: Long = 120000
 }
 
 trait KafkaBroker extends Logging {

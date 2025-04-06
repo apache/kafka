@@ -52,7 +52,7 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
   var admin: Admin = _
 
   override def generateConfigs: Seq[KafkaConfig] = {
-    TestUtils.createBrokerConfigs(3, null).map(KafkaConfig.fromProps(_, serverProps()))
+    TestUtils.createBrokerConfigs(3).map(KafkaConfig.fromProps(_, serverProps()))
   }
 
   @BeforeEach
@@ -79,9 +79,9 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     super.tearDown()
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testProducerIdExpirationWithNoTransactions(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProducerIdExpirationWithNoTransactions(groupProtocol: String): Unit = {
     producer = TestUtils.createProducer(bootstrapServers(), enableIdempotence = true)
 
     // Send records to populate producer state cache.
@@ -103,9 +103,9 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     assertEquals(1, producerState.size)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testTransactionAfterTransactionIdExpiresButProducerIdRemains(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testTransactionAfterTransactionIdExpiresButProducerIdRemains(groupProtocol: String): Unit = {
     producer = TestUtils.createTransactionalProducer("transactionalProducer", brokers)
     producer.initTransactions()
 
@@ -130,7 +130,7 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     producer.beginTransaction()
     val failedFuture = producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "1", "1", willBeCommitted = false))
     TestUtils.waitUntilTrue(() => failedFuture.isDone, "Producer future never completed.")
-    org.apache.kafka.test.TestUtils.assertFutureThrows(failedFuture, classOf[InvalidPidMappingException])
+    org.apache.kafka.test.TestUtils.assertFutureThrows(classOf[InvalidPidMappingException], failedFuture)
 
     // Assert that aborting the transaction throws a KafkaException due to the fatal error.
     assertThrows(classOf[KafkaException], () => producer.abortTransaction())
@@ -158,9 +158,9 @@ class ProducerIdExpirationTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testDynamicProducerIdExpirationMs(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testDynamicProducerIdExpirationMs(groupProtocol: String): Unit = {
     producer = TestUtils.createProducer(bootstrapServers(), enableIdempotence = true)
 
     // Send records to populate producer state cache.

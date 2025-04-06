@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.network;
 
-import java.util.Objects;
 
 /**
  * BrokerEndPoint is used to connect to specific host:port pair.
@@ -25,45 +24,4 @@ import java.util.Objects;
  * Clients should know which security protocol to use from configuration.
  * This allows us to keep the wire protocol with the clients unchanged where the protocol is not needed.
  */
-public class BrokerEndPoint {
-
-    private final int id;
-    private final String host;
-    private final int port;
-
-    public BrokerEndPoint(int id, String host, int port) {
-        this.id = id;
-        this.host = host;
-        this.port = port;
-    }
-
-    public int id() {
-        return id;
-    }
-
-    public String host() {
-        return host;
-    }
-
-    public int port() {
-        return port;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        BrokerEndPoint that = (BrokerEndPoint) o;
-        return id == that.id && host.equals(that.host) && port == that.port;
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(id, host, port);
-    }
-
-    public String toString() {
-        return String.format("BrokerEndPoint(id=%s, host=%s:%s)", id, host, port);
-    }
-}
+public record BrokerEndPoint(int id, String host, int port) { }

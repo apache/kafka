@@ -82,7 +82,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     private final List<KafkaMetric> addedMetrics = new ArrayList<>();
 
     /**
-     * @deprecated Since 4.0. Use {@link #MockConsumer(String)}.
+     * @deprecated Since 4.0. Use {@link #MockConsumer(String)} instead.
      */
     @Deprecated
     public MockConsumer(OffsetResetStrategy offsetResetStrategy) {
@@ -312,14 +312,6 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
             throw new IllegalStateException("Cannot add records for a partition that is not assigned to the consumer");
         List<ConsumerRecord<K, V>> recs = records.computeIfAbsent(tp, k -> new ArrayList<>());
         recs.add(record);
-    }
-
-    /**
-     * @deprecated Use {@link #setPollException(KafkaException)} instead
-     */
-    @Deprecated
-    public synchronized void setException(KafkaException exception) {
-        setPollException(exception);
     }
 
     public synchronized void setPollException(KafkaException exception) {
@@ -557,6 +549,7 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public synchronized void close(Duration timeout) {
         this.closed = true;
     }
@@ -568,6 +561,11 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
     @Override
     public synchronized void wakeup() {
         wakeup.set(true);
+    }
+
+    @Override
+    public void close(CloseOptions option) {
+        this.closed = true;
     }
 
     /**

@@ -22,15 +22,14 @@ import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.record.BaseRecords;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.utils.Utils;
 
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
@@ -40,6 +39,7 @@ import java.util.stream.Collectors;
 import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
 
 public class ProduceRequest extends AbstractRequest {
+
     public static final short LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2 = 11;
 
     public static Builder builder(ProduceRequestData data, boolean useTransactionV1Version) {
@@ -66,21 +66,10 @@ public class ProduceRequest extends AbstractRequest {
 
         @Override
         public ProduceRequest build(short version) {
-            return build(version, true);
-        }
-
-        // Visible for testing only
-        public ProduceRequest buildUnsafe(short version) {
-            return build(version, false);
-        }
-
-        private ProduceRequest build(short version, boolean validate) {
-            if (validate) {
-                // Validate the given records first
-                data.topicData().forEach(tpd ->
-                        tpd.partitionData().forEach(partitionProduceData ->
-                                ProduceRequest.validateRecords(version, partitionProduceData.records())));
-            }
+            // Validate the given records first
+            data.topicData().forEach(tpd ->
+                tpd.partitionData().forEach(partitionProduceData ->
+                    ProduceRequest.validateRecords(version, partitionProduceData.records())));
             return new ProduceRequest(data, version);
         }
 
@@ -237,11 +226,12 @@ public class ProduceRequest extends AbstractRequest {
         }
     }
 
-    public static ProduceRequest parse(ByteBuffer buffer, short version) {
-        return new ProduceRequest(new ProduceRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static ProduceRequest parse(Readable readable, short version) {
+        return new ProduceRequest(new ProduceRequestData(readable, version), version);
     }
 
     public static boolean isTransactionV2Requested(short version) {
         return version > LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2;
     }
+
 }

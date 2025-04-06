@@ -64,7 +64,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     Map[String, Object](AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers()).asJava
 
   override def generateConfigs: collection.Seq[KafkaConfig] = {
-    val configs = TestUtils.createBrokerConfigs(brokerCount, null)
+    val configs = TestUtils.createBrokerConfigs(brokerCount)
     configs.foreach(overrideNodeConfigs)
     configs.map(KafkaConfig.fromProps)
   }
@@ -155,10 +155,10 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     alterResult = client.incrementalAlterConfigs(alterConfigs)
 
     assertEquals(Set(topicResource1, topicResource2, topicResource3, brokerResource).asJava, alterResult.values.keySet)
-    assertFutureThrows(alterResult.values.get(topicResource1), classOf[PolicyViolationException])
+    assertFutureThrows(classOf[PolicyViolationException], alterResult.values.get(topicResource1))
     alterResult.values.get(topicResource2).get
-    assertFutureThrows(alterResult.values.get(topicResource3), classOf[InvalidConfigurationException])
-    assertFutureThrows(alterResult.values.get(brokerResource), classOf[InvalidRequestException])
+    assertFutureThrows(classOf[InvalidConfigurationException], alterResult.values.get(topicResource3))
+    assertFutureThrows(classOf[InvalidRequestException], alterResult.values.get(brokerResource))
     assertTrue(validationsForResource(brokerResource).isEmpty,
       "Should not see the broker resource in the AlterConfig policy when the broker configs are not being updated.")
     validations.clear()
@@ -184,10 +184,10 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     alterResult = client.incrementalAlterConfigs(alterConfigs, new AlterConfigsOptions().validateOnly(true))
 
     assertEquals(Set(topicResource1, topicResource2, topicResource3, brokerResource).asJava, alterResult.values.keySet)
-    assertFutureThrows(alterResult.values.get(topicResource1), classOf[PolicyViolationException])
+    assertFutureThrows(classOf[PolicyViolationException], alterResult.values.get(topicResource1))
     alterResult.values.get(topicResource2).get
-    assertFutureThrows(alterResult.values.get(topicResource3), classOf[InvalidConfigurationException])
-    assertFutureThrows(alterResult.values.get(brokerResource), classOf[InvalidRequestException])
+    assertFutureThrows(classOf[InvalidConfigurationException], alterResult.values.get(topicResource3))
+    assertFutureThrows(classOf[InvalidRequestException], alterResult.values.get(brokerResource))
     assertTrue(validationsForResource(brokerResource).isEmpty,
       "Should not see the broker resource in the AlterConfig policy when the broker configs are not being updated.")
     validations.clear()

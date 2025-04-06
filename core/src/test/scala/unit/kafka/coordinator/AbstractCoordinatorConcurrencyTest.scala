@@ -23,22 +23,20 @@ import java.util.concurrent.atomic.AtomicInteger
 import java.util.concurrent.locks.Lock
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.cluster.Partition
-import kafka.log.{LogManager, UnifiedLog}
+import kafka.log.LogManager
 import kafka.server.QuotaFactory.QuotaManagers
-import kafka.server.{KafkaConfig, _}
+import kafka.server._
 import kafka.utils._
-import kafka.zk.KafkaZkClient
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordValidationStats}
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.server.ActionQueue
 import org.apache.kafka.server.common.RequestLocal
-import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, TopicPartitionOperationKey}
+import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedRemoteListOffsets, TopicPartitionOperationKey}
 import org.apache.kafka.server.util.timer.{MockTimer, Timer}
 import org.apache.kafka.server.util.{MockScheduler, MockTime, Scheduler}
-import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, VerificationGuard}
+import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, UnifiedLog, VerificationGuard}
 import org.junit.jupiter.api.{AfterEach, BeforeEach}
 import org.mockito.Mockito.{mock, when, withSettings}
 
@@ -47,10 +45,9 @@ import scala.jdk.CollectionConverters._
 
 abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] extends Logging {
   val nThreads = 5
-  val serverProps = TestUtils.createBrokerConfig(nodeId = 0, zkConnect = "")
+  val serverProps = TestUtils.createBrokerConfig(0)
   val random = new Random
   var replicaManager: TestReplicaManager = _
-  var zkClient: KafkaZkClient = _
   var time: MockTime = _
   var timer: MockTimer = _
   var executor: ExecutorService = _
@@ -67,7 +64,6 @@ abstract class AbstractCoordinatorConcurrencyTest[M <: CoordinatorMember] extend
     val producePurgatory = new DelayedOperationPurgatory[DelayedProduce]("Produce", timer, 1, 1000, false, true)
     val watchKeys = Collections.newSetFromMap(new ConcurrentHashMap[TopicPartitionOperationKey, java.lang.Boolean]()).asScala
     replicaManager = TestReplicaManager(KafkaConfig.fromProps(serverProps), time, scheduler, timer, mockLogMger, mock(classOf[QuotaManagers], withSettings().stubOnly()), producePurgatory, watchKeys)
-    zkClient = mock(classOf[KafkaZkClient], withSettings().stubOnly())
   }
 
   @AfterEach
@@ -193,14 +189,13 @@ object AbstractCoordinatorConcurrencyTest {
       delayedProducePurgatoryParam = Some(producePurgatory),
       delayedFetchPurgatoryParam = Some(delayedFetchPurgatoryParam),
       delayedDeleteRecordsPurgatoryParam = Some(delayedDeleteRecordsPurgatoryParam),
-      delayedElectLeaderPurgatoryParam = Some(delayedElectLeaderPurgatoryParam),
       delayedRemoteFetchPurgatoryParam = Some(delayedRemoteFetchPurgatoryParam),
       delayedRemoteListOffsetsPurgatoryParam = Some(delayedRemoteListOffsetsPurgatoryParam),
       threadNamePrefix = Option(this.getClass.getName)) {
 
     @volatile var logs: mutable.Map[TopicPartition, (UnifiedLog, Long)] = _
 
-    override def maybeStartTransactionVerificationForPartition(
+    override def maybeSendPartitionToTransactionCoordinator(
       topicPartition: TopicPartition,
       transactionalId: String,
       producerId: Long,
@@ -224,7 +219,6 @@ object AbstractCoordinatorConcurrencyTest {
                                delayedProduceLock: Option[Lock] = None,
                                processingStatsCallback: Map[TopicPartition, RecordValidationStats] => Unit = _ => (),
                                requestLocal: RequestLocal = RequestLocal.noCaching,
-                               actionQueue: ActionQueue = null,
                                verificationGuards: Map[TopicPartition, VerificationGuard] = Map.empty): Unit = {
 
       if (entriesPerPartition.isEmpty)

@@ -61,7 +61,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
         propsToChangeUponRestart.put(ServerLogConfigs.LOG_DIR_CONFIG, originals.get(ServerLogConfigs.LOG_DIR_CONFIG))
       }
     }
-    priorConfig = Some(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1, null).head, propsToChangeUponRestart))
+    priorConfig = Some(KafkaConfig.fromProps(TestUtils.createBrokerConfigs(1).head, propsToChangeUponRestart))
     Seq(priorConfig.get)
   }
 
@@ -74,9 +74,9 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     super.setUp(testInfo)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testCleanShutdown(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testCleanShutdown(groupProtocol: String): Unit = {
 
     def createProducer(): KafkaProducer[Integer, String] =
       TestUtils.createProducer(

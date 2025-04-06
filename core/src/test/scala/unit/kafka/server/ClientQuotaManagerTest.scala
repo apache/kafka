@@ -16,11 +16,12 @@
  */
 package kafka.server
 
+import kafka.server.ClientQuotaManager.BaseUserEntity
+
 import java.net.InetAddress
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.common.security.auth.KafkaPrincipal
-import org.apache.kafka.common.utils.Sanitizer
-import org.apache.kafka.server.config.{ClientQuotaManagerConfig, ZooKeeperInternals}
+import org.apache.kafka.server.config.ClientQuotaManagerConfig
 import org.apache.kafka.network.Session
 import org.apache.kafka.server.quota.QuotaType
 import org.junit.jupiter.api.Assertions._
@@ -34,8 +35,16 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
     try {
       // Case 1: Update the quota. Assert that the new quota value is returned
-      clientQuotaManager.updateQuota(client1.configUser, client1.configClientId, client1.sanitizedConfigClientId, Some(new Quota(2000, true)))
-      clientQuotaManager.updateQuota(client2.configUser, client2.configClientId, client2.sanitizedConfigClientId, Some(new Quota(4000, true)))
+      clientQuotaManager.updateQuota(
+        client1.configUser,
+        client1.configClientEntity,
+        Some(new Quota(2000, true))
+      )
+      clientQuotaManager.updateQuota(
+        client2.configUser,
+        client2.configClientEntity,
+        Some(new Quota(4000, true))
+      )
 
       assertEquals(Long.MaxValue.toDouble, clientQuotaManager.quota(randomClient.user, randomClient.clientId).bound, 0.0,
         "Default producer quota should be " + Long.MaxValue.toDouble)
@@ -50,22 +59,38 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
       // Case 2: Change quota again. The quota should be updated within KafkaMetrics as well since the sensor was created.
       // p1 should not longer be throttled after the quota change
-      clientQuotaManager.updateQuota(client1.configUser, client1.configClientId, client1.sanitizedConfigClientId, Some(new Quota(3000, true)))
+      clientQuotaManager.updateQuota(
+        client1.configUser,
+        client1.configClientEntity,
+        Some(new Quota(3000, true))
+      )
       assertEquals(3000, clientQuotaManager.quota(client1.user, client1.clientId).bound, 0.0, "Should return the newly overridden value (3000)")
 
       throttleTimeMs = maybeRecord(clientQuotaManager, client1.user, client1.clientId, 0)
       assertEquals(0, throttleTimeMs, s"throttleTimeMs should be 0. was $throttleTimeMs")
 
       // Case 3: Change quota back to default. Should be throttled again
-      clientQuotaManager.updateQuota(client1.configUser, client1.configClientId, client1.sanitizedConfigClientId, Some(new Quota(500, true)))
+      clientQuotaManager.updateQuota(
+        client1.configUser,
+        client1.configClientEntity,
+        Some(new Quota(500, true))
+      )
       assertEquals(500, clientQuotaManager.quota(client1.user, client1.clientId).bound, 0.0, "Should return the default value (500)")
 
       throttleTimeMs = maybeRecord(clientQuotaManager, client1.user, client1.clientId, 0)
       assertTrue(throttleTimeMs > 0, s"throttleTimeMs should be > 0. was $throttleTimeMs")
 
       // Case 4: Set high default quota, remove p1 quota. p1 should no longer be throttled
-      clientQuotaManager.updateQuota(client1.configUser, client1.configClientId, client1.sanitizedConfigClientId, None)
-      clientQuotaManager.updateQuota(defaultConfigClient.configUser, defaultConfigClient.configClientId, defaultConfigClient.sanitizedConfigClientId, Some(new Quota(4000, true)))
+      clientQuotaManager.updateQuota(
+        client1.configUser,
+        client1.configClientEntity,
+        None
+      )
+      clientQuotaManager.updateQuota(
+        defaultConfigClient.configUser,
+        defaultConfigClient.configClientEntity,
+        Some(new Quota(4000, true))
+      )
       assertEquals(4000, clientQuotaManager.quota(client1.user, client1.clientId).bound, 0.0, "Should return the newly overridden value (4000)")
 
       throttleTimeMs = maybeRecord(clientQuotaManager, client1.user, client1.clientId, 1000 * config.numQuotaSamples)
@@ -77,67 +102,14 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   }
 
   /**
-   * Tests parsing for <client-id> quotas.
-   * Quota overrides persisted in ZooKeeper in /config/clients/<client-id>, default persisted in /config/clients/<default>
-   */
-  @Test
-  def testClientIdQuotaParsing(): Unit = {
-    val client1 = UserClient("ANONYMOUS", "p1", None, Some("p1"))
-    val client2 = UserClient("ANONYMOUS", "p2", None, Some("p2"))
-    val randomClient = UserClient("ANONYMOUS", "random-client-id", None, None)
-    val defaultConfigClient = UserClient("", "", None, Some(ZooKeeperInternals.DEFAULT_STRING))
-    testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
-  }
-
-  /**
-   * Tests parsing for <user> quotas.
-   * Quota overrides persisted in ZooKeeper in /config/users/<user>, default persisted in /config/users/<default>
-   */
-  @Test
-  def testUserQuotaParsing(): Unit = {
-    val client1 = UserClient("User1", "p1", Some("User1"), None)
-    val client2 = UserClient("User2", "p2", Some("User2"), None)
-    val randomClient = UserClient("RandomUser", "random-client-id", None, None)
-    val defaultConfigClient = UserClient("", "", Some(ZooKeeperInternals.DEFAULT_STRING), None)
-    val config = new ClientQuotaManagerConfig()
-    testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
-  }
-
-  /**
-   * Tests parsing for <user, client-id> quotas.
-   * Quotas persisted in ZooKeeper in /config/users/<user>/clients/<client-id>, default in /config/users/<default>/clients/<default>
-   */
-  @Test
-  def testUserClientIdQuotaParsing(): Unit = {
-    val client1 = UserClient("User1", "p1", Some("User1"), Some("p1"))
-    val client2 = UserClient("User2", "p2", Some("User2"), Some("p2"))
-    val randomClient = UserClient("RandomUser", "random-client-id", None, None)
-    val defaultConfigClient = UserClient("", "", Some(ZooKeeperInternals.DEFAULT_STRING), Some(ZooKeeperInternals.DEFAULT_STRING))
-    val config = new ClientQuotaManagerConfig()
-    testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
-  }
-
-  /**
    * Tests parsing for <user> quotas when client-id default quota properties are set.
    */
   @Test
   def testUserQuotaParsingWithDefaultClientIdQuota(): Unit = {
-    val client1 = UserClient("User1", "p1", Some("User1"), None)
-    val client2 = UserClient("User2", "p2", Some("User2"), None)
+    val client1 = UserClient("User1", "p1", Some(ClientQuotaManager.UserEntity("User1")), None)
+    val client2 = UserClient("User2", "p2", Some(ClientQuotaManager.UserEntity("User2")), None)
     val randomClient = UserClient("RandomUser", "random-client-id", None, None)
-    val defaultConfigClient = UserClient("", "", Some(ZooKeeperInternals.DEFAULT_STRING), None)
-    testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
-  }
-
-  /**
-   * Tests parsing for <user, client-id> quotas when client-id default quota properties are set.
-   */
-  @Test
-  def testUserClientQuotaParsingIdWithDefaultClientIdQuota(): Unit = {
-    val client1 = UserClient("User1", "p1", Some("User1"), Some("p1"))
-    val client2 = UserClient("User2", "p2", Some("User2"), Some("p2"))
-    val randomClient = UserClient("RandomUser", "random-client-id", None, None)
-    val defaultConfigClient = UserClient("", "", Some(ZooKeeperInternals.DEFAULT_STRING), Some(ZooKeeperInternals.DEFAULT_STRING))
+    val defaultConfigClient = UserClient("", "", Some(ClientQuotaManager.DefaultUserEntity), None)
     testQuotaParsing(config, client1, client2, randomClient, defaultConfigClient)
   }
 
@@ -168,7 +140,11 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       assertEquals(Double.MaxValue, clientQuotaManager.getMaxValueInQuotaWindow(userSession, "client1"), 0.01)
 
       // Set default <user> quota config
-      clientQuotaManager.updateQuota(Some(ZooKeeperInternals.DEFAULT_STRING), None, None, Some(new Quota(10, true)))
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.DefaultUserEntity), 
+        None, 
+        Some(new Quota(10, true))
+      )
       assertEquals(10 * numFullQuotaWindows, clientQuotaManager.getMaxValueInQuotaWindow(userSession, "client1"), 0.01)
     } finally {
       clientQuotaManager.shutdown()
@@ -186,11 +162,19 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       checkQuota(clientQuotaManager, "userA", "client1", Long.MaxValue, 1000, expectThrottle = false)
 
       // Set default <user> quota config
-      clientQuotaManager.updateQuota(Some(ZooKeeperInternals.DEFAULT_STRING), None, None, Some(new Quota(10, true)))
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.DefaultUserEntity),
+        None, 
+        Some(new Quota(10, true))
+      )
       checkQuota(clientQuotaManager, "userA", "client1", 10, 1000, expectThrottle = true)
 
       // Remove default <user> quota config, back to no quotas
-      clientQuotaManager.updateQuota(Some(ZooKeeperInternals.DEFAULT_STRING), None, None, None)
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.DefaultUserEntity),
+        None, 
+        None
+      )
       checkQuota(clientQuotaManager, "userA", "client1", Long.MaxValue, 1000, expectThrottle = false)
     } finally {
       clientQuotaManager.shutdown()
@@ -205,11 +189,19 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
     try {
       // Set <user> quota config
-      clientQuotaManager.updateQuota(Some("userA"), None, None, Some(new Quota(10, true)))
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userA")), 
+        None, 
+        Some(new Quota(10, true))
+      )
       checkQuota(clientQuotaManager, "userA", "client1", 10, 1000, expectThrottle = true)
 
       // Remove <user> quota config, back to no quotas
-      clientQuotaManager.updateQuota(Some("userA"), None, None, None)
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userA")), 
+        None, 
+        None
+      )
       checkQuota(clientQuotaManager, "userA", "client1", Long.MaxValue, 1000, expectThrottle = false)
     } finally {
       clientQuotaManager.shutdown()
@@ -224,11 +216,19 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
 
     try {
       // Set <user, client-id> quota config
-      clientQuotaManager.updateQuota(Some("userA"), Some("client1"), Some("client1"), Some(new Quota(10, true)))
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userA")),
+        Some(ClientQuotaManager.ClientIdEntity("client1")), 
+        Some(new Quota(10, true))
+      )
       checkQuota(clientQuotaManager, "userA", "client1", 10, 1000, expectThrottle = true)
 
       // Remove <user, client-id> quota config, back to no quotas
-      clientQuotaManager.updateQuota(Some("userA"), Some("client1"), Some("client1"), None)
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userA")),
+        Some(ClientQuotaManager.ClientIdEntity("client1")), 
+        None
+      )
       checkQuota(clientQuotaManager, "userA", "client1", Long.MaxValue, 1000, expectThrottle = false)
     } finally {
       clientQuotaManager.shutdown()
@@ -241,16 +241,56 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       metrics, QuotaType.PRODUCE, time, "")
 
     try {
-      clientQuotaManager.updateQuota(Some(ZooKeeperInternals.DEFAULT_STRING), None, None, Some(new Quota(1000, true)))
-      clientQuotaManager.updateQuota(None, Some(ZooKeeperInternals.DEFAULT_STRING), Some(ZooKeeperInternals.DEFAULT_STRING), Some(new Quota(2000, true)))
-      clientQuotaManager.updateQuota(Some(ZooKeeperInternals.DEFAULT_STRING), Some(ZooKeeperInternals.DEFAULT_STRING), Some(ZooKeeperInternals.DEFAULT_STRING), Some(new Quota(3000, true)))
-      clientQuotaManager.updateQuota(Some("userA"), None, None, Some(new Quota(4000, true)))
-      clientQuotaManager.updateQuota(Some("userA"), Some("client1"), Some("client1"), Some(new Quota(5000, true)))
-      clientQuotaManager.updateQuota(Some("userB"), None, None, Some(new Quota(6000, true)))
-      clientQuotaManager.updateQuota(Some("userB"), Some("client1"), Some("client1"), Some(new Quota(7000, true)))
-      clientQuotaManager.updateQuota(Some("userB"), Some(ZooKeeperInternals.DEFAULT_STRING), Some(ZooKeeperInternals.DEFAULT_STRING), Some(new Quota(8000, true)))
-      clientQuotaManager.updateQuota(Some("userC"), None, None, Some(new Quota(10000, true)))
-      clientQuotaManager.updateQuota(None, Some("client1"), Some("client1"), Some(new Quota(9000, true)))
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.DefaultUserEntity), 
+        None, 
+        Some(new Quota(1000, true))
+      )
+      clientQuotaManager.updateQuota(
+        None,
+        Some(ClientQuotaManager.DefaultClientIdEntity),
+        Some(new Quota(2000, true))
+      )
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.DefaultUserEntity),
+        Some(ClientQuotaManager.DefaultClientIdEntity), 
+        Some(new Quota(3000, true))
+      )
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userA")), 
+        None, 
+        Some(new Quota(4000, true))
+      )
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userA")), 
+        Some(ClientQuotaManager.ClientIdEntity("client1")),
+        Some(new Quota(5000, true))
+      )
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userB")), 
+        None, 
+        Some(new Quota(6000, true))
+      )
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userB")),
+        Some(ClientQuotaManager.ClientIdEntity("client1")),
+        Some(new Quota(7000, true))
+      )
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userB")),
+        Some(ClientQuotaManager.DefaultClientIdEntity), 
+        Some(new Quota(8000, true))
+      )
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userC")), 
+        None, 
+        Some(new Quota(10000, true))
+      )
+      clientQuotaManager.updateQuota(
+        None,
+        Some(ClientQuotaManager.ClientIdEntity("client1")),
+        Some(new Quota(9000, true))
+      )
 
       checkQuota(clientQuotaManager, "userA", "client1", 5000, 4500, expectThrottle = false) // <user, client> quota takes precedence over <user>
       checkQuota(clientQuotaManager, "userA", "client2", 4000, 4500, expectThrottle = true)  // <user> quota takes precedence over <client> and defaults
@@ -266,32 +306,64 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
       checkQuota(clientQuotaManager, "userE", "client1", 3000, 2500, expectThrottle = false)
 
       // Remove default <user, client> quota config, revert to <user> default
-      clientQuotaManager.updateQuota(Some(ZooKeeperInternals.DEFAULT_STRING), Some(ZooKeeperInternals.DEFAULT_STRING), Some(ZooKeeperInternals.DEFAULT_STRING), None)
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.DefaultUserEntity),
+        Some(ClientQuotaManager.DefaultClientIdEntity),
+        None
+      )
       checkQuota(clientQuotaManager, "userD", "client1", 1000, 0, expectThrottle = false)    // Metrics tags changed, restart counter
       checkQuota(clientQuotaManager, "userE", "client4", 1000, 1500, expectThrottle = true)
       checkQuota(clientQuotaManager, "userF", "client4", 1000, 800, expectThrottle = false)  // Default <user> quota shared across clients of user
       checkQuota(clientQuotaManager, "userF", "client5", 1000, 800, expectThrottle = true)
 
       // Remove default <user> quota config, revert to <client-id> default
-      clientQuotaManager.updateQuota(Some(ZooKeeperInternals.DEFAULT_STRING), None, None, None)
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.DefaultUserEntity),
+        None, 
+        None
+      )
       checkQuota(clientQuotaManager, "userF", "client4", 2000, 0, expectThrottle = false)  // Default <client-id> quota shared across client-id of all users
       checkQuota(clientQuotaManager, "userF", "client5", 2000, 0, expectThrottle = false)
       checkQuota(clientQuotaManager, "userF", "client5", 2000, 2500, expectThrottle = true)
       checkQuota(clientQuotaManager, "userG", "client5", 2000, 0, expectThrottle = true)
 
       // Update quotas
-      clientQuotaManager.updateQuota(Some("userA"), None, None, Some(new Quota(8000, true)))
-      clientQuotaManager.updateQuota(Some("userA"), Some("client1"), Some("client1"), Some(new Quota(10000, true)))
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userA")), 
+        None, 
+        Some(new Quota(8000, true))
+      )
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userA")),
+        Some(ClientQuotaManager.ClientIdEntity("client1")),
+        Some(new Quota(10000, true))
+      )
       checkQuota(clientQuotaManager, "userA", "client2", 8000, 0, expectThrottle = false)
       checkQuota(clientQuotaManager, "userA", "client2", 8000, 4500, expectThrottle = true) // Throttled due to sum of new and earlier values
       checkQuota(clientQuotaManager, "userA", "client1", 10000, 0, expectThrottle = false)
       checkQuota(clientQuotaManager, "userA", "client1", 10000, 6000, expectThrottle = true)
-      clientQuotaManager.updateQuota(Some("userA"), Some("client1"), Some("client1"), None)
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userA")),
+        Some(ClientQuotaManager.ClientIdEntity("client1")),
+        None
+      )
       checkQuota(clientQuotaManager, "userA", "client6", 8000, 0, expectThrottle = true)    // Throttled due to shared user quota
-      clientQuotaManager.updateQuota(Some("userA"), Some("client6"), Some("client6"), Some(new Quota(11000, true)))
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userA")),
+        Some(ClientQuotaManager.ClientIdEntity("client6")),
+        Some(new Quota(11000, true))
+      )
       checkQuota(clientQuotaManager, "userA", "client6", 11000, 8500, expectThrottle = false)
-      clientQuotaManager.updateQuota(Some("userA"), Some(ZooKeeperInternals.DEFAULT_STRING), Some(ZooKeeperInternals.DEFAULT_STRING), Some(new Quota(12000, true)))
-      clientQuotaManager.updateQuota(Some("userA"), Some("client6"), Some("client6"), None)
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userA")),
+        Some(ClientQuotaManager.DefaultClientIdEntity),
+        Some(new Quota(12000, true))
+      )
+      clientQuotaManager.updateQuota(
+        Some(ClientQuotaManager.UserEntity("userA")),
+        Some(ClientQuotaManager.ClientIdEntity("client6")),
+        None
+      )
       checkQuota(clientQuotaManager, "userA", "client6", 12000, 4000, expectThrottle = true) // Throttled due to sum of new and earlier values
 
     } finally {
@@ -304,10 +376,13 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, QuotaType.PRODUCE, time, "")
     val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", "Produce", ""))
     try {
-      clientQuotaManager.updateQuota(None, Some(ZooKeeperInternals.DEFAULT_STRING), Some(ZooKeeperInternals.DEFAULT_STRING),
-        Some(new Quota(500, true)))
+      clientQuotaManager.updateQuota(
+        None,
+        Some(ClientQuotaManager.DefaultClientIdEntity),
+        Some(new Quota(500, true))
+      )
 
-      // We have 10 second windows. Make sure that there is no quota violation
+      // We have 10 seconds windows. Make sure that there is no quota violation
       // if we produce under the quota
       for (_ <- 0 until 10) {
         assertEquals(0, maybeRecord(clientQuotaManager, "ANONYMOUS", "unknown", 400))
@@ -352,8 +427,11 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   def testExpireThrottleTimeSensor(): Unit = {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, QuotaType.PRODUCE, time, "")
     try {
-      clientQuotaManager.updateQuota(None, Some(ZooKeeperInternals.DEFAULT_STRING), Some(ZooKeeperInternals.DEFAULT_STRING),
-        Some(new Quota(500, true)))
+      clientQuotaManager.updateQuota(
+        None,
+        Some(ClientQuotaManager.DefaultClientIdEntity),
+        Some(new Quota(500, true))
+      )
 
       maybeRecord(clientQuotaManager, "ANONYMOUS", "client1", 100)
       // remove the throttle time sensor
@@ -374,8 +452,11 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
   def testExpireQuotaSensors(): Unit = {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, QuotaType.PRODUCE, time, "")
     try {
-      clientQuotaManager.updateQuota(None, Some(ZooKeeperInternals.DEFAULT_STRING), Some(ZooKeeperInternals.DEFAULT_STRING),
-        Some(new Quota(500, true)))
+      clientQuotaManager.updateQuota(
+        None,
+        Some(ClientQuotaManager.DefaultClientIdEntity),
+        Some(new Quota(500, true))
+      )
 
       maybeRecord(clientQuotaManager, "ANONYMOUS", "client1", 100)
       // remove all the sensors
@@ -401,8 +482,11 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     val clientQuotaManager = new ClientQuotaManager(config, metrics, QuotaType.PRODUCE, time, "")
     val clientId = "client@#$%"
     try {
-      clientQuotaManager.updateQuota(None, Some(ZooKeeperInternals.DEFAULT_STRING), Some(ZooKeeperInternals.DEFAULT_STRING),
-        Some(new Quota(500, true)))
+      clientQuotaManager.updateQuota(
+        None,
+        Some(ClientQuotaManager.DefaultClientIdEntity),
+        Some(new Quota(500, true))
+      )
 
       maybeRecord(clientQuotaManager, "ANONYMOUS", clientId, 100)
 
@@ -417,10 +501,10 @@ class ClientQuotaManagerTest extends BaseClientQuotaManagerTest {
     }
   }
 
-  private case class UserClient(user: String, clientId: String, configUser: Option[String] = None, configClientId: Option[String] = None) {
-    // The class under test expects only sanitized client configs. We pass both the default value (which should not be
-    // sanitized to ensure it remains unique) and non-default values, so we need to take care in generating the sanitized
-    // client ID
-    def sanitizedConfigClientId = configClientId.map(x => if (x == ZooKeeperInternals.DEFAULT_STRING) ZooKeeperInternals.DEFAULT_STRING else Sanitizer.sanitize(x))
-  }
+  private case class UserClient(
+    user: String,
+    clientId: String,
+    configUser: Option[BaseUserEntity] = None,
+    configClientEntity: Option[ClientQuotaManager.ClientIdEntity] = None
+  )
 }

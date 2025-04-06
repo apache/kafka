@@ -64,7 +64,7 @@ public class BrokerRegistration {
             this.fenced = false;
             this.inControlledShutdown = false;
             this.isMigratingZkBroker = false;
-            this.directories = Collections.emptyList();
+            this.directories = List.of();
         }
 
         public Builder setId(int id) {
@@ -235,6 +235,10 @@ public class BrokerRegistration {
         }
         return Optional.of(new Node(id, endpoint.host(), endpoint.port(), rack.orElse(null), fenced));
     }
+    
+    public List<Node> nodes() {
+        return listeners.keySet().stream().flatMap(l -> node(l).stream()).toList();
+    }
 
     public Map<String, VersionRange> supportedFeatures() {
         return supportedFeatures;
@@ -290,15 +294,8 @@ public class BrokerRegistration {
             setRack(rack.orElse(null)).
             setBrokerEpoch(epoch).
             setIncarnationId(incarnationId).
-            setFenced(fenced);
-
-        if (inControlledShutdown) {
-            if (options.metadataVersion().isInControlledShutdownStateSupported()) {
-                registrationRecord.setInControlledShutdown(true);
-            } else {
-                options.handleLoss("the inControlledShutdown state of one or more brokers");
-            }
-        }
+            setFenced(fenced).
+            setInControlledShutdown(inControlledShutdown);
 
         if (isMigratingZkBroker) {
             if (options.metadataVersion().isMigrationSupported()) {
@@ -342,8 +339,7 @@ public class BrokerRegistration {
 
     @Override
     public boolean equals(Object o) {
-        if (!(o instanceof BrokerRegistration)) return false;
-        BrokerRegistration other = (BrokerRegistration) o;
+        if (!(o instanceof BrokerRegistration other)) return false;
         return other.id == id &&
             other.epoch == epoch &&
             other.incarnationId.equals(incarnationId) &&

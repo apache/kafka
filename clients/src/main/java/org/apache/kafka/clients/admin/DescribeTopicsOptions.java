@@ -17,16 +17,11 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Collection;
 
 /**
  * Options for {@link Admin#describeTopics(Collection)}.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DescribeTopicsOptions extends AbstractOptions<DescribeTopicsOptions> {
 
     private boolean includeAuthorizedOperations;
@@ -48,8 +43,19 @@ public class DescribeTopicsOptions extends AbstractOptions<DescribeTopicsOptions
         return this;
     }
 
-    // Note that, partitionSizeLimitPerResponse will not be effective if it is larger than the config
-    // max.request.partition.size.limit on the server side.
+    /**
+     * Sets the maximum number of partitions to be returned in a single response.
+     * <p>
+     * <strong>This option:</strong>
+     * <ul>
+     *   <li>Is only effective when using topic names (not topic IDs).</li>
+     *   <li>Will not be effective if it is larger than the server-side configuration
+     *       {@code max.request.partition.size.limit}.
+     *   </li>
+     * </ul>
+     * 
+     * @param partitionSizeLimitPerResponse the maximum number of partitions per response
+     */
     public DescribeTopicsOptions partitionSizeLimitPerResponse(int partitionSizeLimitPerResponse) {
         this.partitionSizeLimitPerResponse = partitionSizeLimitPerResponse;
         return this;

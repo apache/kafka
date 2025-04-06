@@ -25,6 +25,8 @@ import org.apache.kafka.common.KafkaException
  *
  * @param message     The message to print out before exiting.  A stack trace will not
  *                    be printed.
+ * @param cause       The exception's cause
  */
-class TerseFailure(message: String) extends KafkaException(message) {
+class TerseFailure(message: String, cause: Throwable) extends KafkaException(message, cause) {
+  def this(message: String) = this(message, null)
 }

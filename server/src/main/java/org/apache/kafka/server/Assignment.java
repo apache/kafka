@@ -24,8 +24,9 @@ import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.TopicIdPartition;
 
-import java.util.Objects;
-
+/**
+ * The class is not converted to a Java record since record classes are meant for pure data, but this one contains a Runnable
+ **/
 final class Assignment {
     /**
      * The topic ID and partition index of the replica.
@@ -94,24 +95,6 @@ final class Assignment {
         }
         // Check if this broker is still a replica.
         return Replicas.contains(partition.replicas, nodeId);
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (o == null || (!(o instanceof Assignment))) return false;
-        Assignment other = (Assignment) o;
-        return topicIdPartition.equals(other.topicIdPartition) &&
-            directoryId.equals(other.directoryId) &&
-            submissionTimeNs == other.submissionTimeNs &&
-            successCallback.equals(other.successCallback);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(topicIdPartition,
-            directoryId,
-            submissionTimeNs,
-            successCallback);
     }
 
     @Override

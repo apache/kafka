@@ -152,13 +152,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- Add a suppression for auto-generated calls to instanceof in kafka.utils.Json -->
-        <Source name="Json.scala"/>
-        <Package name="kafka.utils"/>
-        <Bug pattern="BC_VACUOUS_INSTANCEOF"/>
-    </Match>
-
-    <Match>
         <!-- A spurious null check after inlining by the scalac optimizer confuses spotBugs -->
         <Class name="kafka.log.Log"/>
         <Bug pattern="NP_NULL_ON_SOME_PATH_EXCEPTION"/>
@@ -287,15 +280,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
     </Match>
 
     <Match>
-        <!-- Suppress a warning about ignoring the return value of await.
-             This is done intentionally because we use other clues to determine
-             if the wait was cut short. -->
-        <Package name="kafka.log"/>
-        <Source name="LogCleanerManager.scala"/>
-        <Bug pattern="RV_RETURN_VALUE_IGNORED,RV_RETURN_VALUE_IGNORED_BAD_PRACTICE"/>
-    </Match>
-
-    <Match>
         <!-- Suppress some warnings about intentional switch statement fallthrough. -->
         <Class name="org.apache.kafka.connect.runtime.WorkerConnector"/>
         <Or>
@@ -323,16 +307,6 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
         <Class name="org.apache.kafka.server.util.KafkaScheduler"/>
         <Method name="taskRunning"/>
         <Bug pattern="GC_UNRELATED_TYPES"/>
-    </Match>
-
-    <Match>
-        <!-- Suppress a spurious warning about a missing default case. -->
-        <Or>
-            <Class name="org.apache.kafka.common.utils.Crc32"/>
-            <Class name="org.apache.kafka.common.utils.PureJavaCrc32C"/>
-        </Or>
-        <Method name="update"/>
-        <Bug pattern="SF_SWITCH_NO_DEFAULT"/>
     </Match>
 
     <Match>
@@ -571,6 +545,7 @@ For a detailed description of spotbugs bug categories, see https://spotbugs.read
             <Class name="org.apache.kafka.common.Node"/>
             <Class name="org.apache.kafka.common.record.UnalignedMemoryRecords"/>
             <Class name="org.apache.kafka.clients.Metadata$LeaderAndEpoch"/>
+            <Class name="org.apache.kafka.server.share.fetch.ShareAcquiredRecords"/>
         </Or>
         <Bug pattern="SING_SINGLETON_HAS_NONPRIVATE_CONSTRUCTOR"/>
     </Match>

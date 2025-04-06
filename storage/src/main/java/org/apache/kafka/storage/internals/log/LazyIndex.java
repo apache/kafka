@@ -175,8 +175,7 @@ public class LazyIndex<T extends AbstractIndex> implements Closeable {
             try {
                 if (indexWrapper instanceof IndexValue<?>)
                     return ((IndexValue<T>) indexWrapper).index;
-                else if (indexWrapper instanceof IndexFile) {
-                    IndexFile indexFile = (IndexFile) indexWrapper;
+                else if (indexWrapper instanceof IndexFile indexFile) {
                     IndexValue<T> indexValue = new IndexValue<>(loadIndex(indexFile.file));
                     indexWrapper = indexValue;
                     return indexValue.index;

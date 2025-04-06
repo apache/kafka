@@ -22,24 +22,25 @@ import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StoreQueryParameters;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.Topology;
+import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ReadOnlyKeyValueStore;
 import org.apache.kafka.streams.state.TimestampedKeyValueStore;
 
 /**
- * {@code KGroupedStream} is an abstraction of a <i>grouped</i> record stream of {@link KeyValue} pairs.
- * It is an intermediate representation of a {@link KStream} in order to apply an aggregation operation on the original
- * {@link KStream} records.
- * <p>
- * It is an intermediate representation after a grouping of a {@link KStream} before an aggregation is applied to the
- * new partitions resulting in a {@link KTable}.
- * <p>
- * A {@code KGroupedStream} must be obtained from a {@link KStream} via {@link KStream#groupByKey() groupByKey()} or
+ * {@code KGroupedStream} is an abstraction of a <em>grouped</em> record stream of {@link Record key-value} pairs.
+ * It is an intermediate representation of a {@link KStream} in order to apply a (windowed) aggregation operation
+ * on the original {@link KStream} records.
+ *
+ * <p>A {@code KGroupedStream} can be either {@link #cogroup(Aggregator) co-grouped} with other
+ * {@link CogroupedKStream#cogroup(KGroupedStream, Aggregator) grouped record streams}, windowed by applying
+ * {@code windowedBy(...)} operation, or can be aggregated into a {@link KTable}.
+ *
+ * <p>A {@code KGroupedStream} is obtained from a {@link KStream} via {@link KStream#groupByKey() groupByKey()} or
  * {@link KStream#groupBy(KeyValueMapper) groupBy(...)}.
  *
- * @param <K> Type of keys
- * @param <V> Type of values
- * @see KStream
+ * @param <K> the key type of this grouped stream
+ * @param <V> the value type of this grouped stream
  */
 public interface KGroupedStream<K, V> {
 
@@ -201,7 +202,7 @@ public interface KGroupedStream<K, V> {
      * Combine the values of records in this stream by the grouped key.
      * Records with {@code null} key or value are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
-     * (c.f. {@link #aggregate(Initializer, Aggregator)}).
+     * (cf. {@link #aggregate(Initializer, Aggregator)}).
      * <p>
      * The specified {@link Reducer} is applied for each input record and computes a new aggregate using the current
      * aggregate and the record's value.
@@ -239,7 +240,7 @@ public interface KGroupedStream<K, V> {
      * Combine the value of records in this stream by the grouped key.
      * Records with {@code null} key or value are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
-     * (c.f. {@link #aggregate(Initializer, Aggregator, Materialized)}).
+     * (cf. {@link #aggregate(Initializer, Aggregator, Materialized)}).
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * provided by the given store name in {@code materialized}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
@@ -304,7 +305,7 @@ public interface KGroupedStream<K, V> {
      * Combine the value of records in this stream by the grouped key.
      * Records with {@code null} key or value are ignored.
      * Combining implies that the type of the aggregate result is the same as the type of the input value
-     * (c.f. {@link #aggregate(Initializer, Aggregator, Materialized)}).
+     * (cf. {@link #aggregate(Initializer, Aggregator, Materialized)}).
      * The result is written into a local {@link KeyValueStore} (which is basically an ever-updating materialized view)
      * provided by the given store name in {@code materialized}.
      * Furthermore, updates to the store are sent downstream into a {@link KTable} changelog stream.
@@ -380,7 +381,7 @@ public interface KGroupedStream<K, V> {
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
      * Thus, {@code aggregate(Initializer, Aggregator)} can be used to compute aggregate functions like
-     * count (c.f. {@link #count()}).
+     * count (cf. {@link #count()}).
      * <p>
      * The default value serde from config will be used for serializing the result.
      * If a different serde is required then you should use {@link #aggregate(Initializer, Aggregator, Materialized)}.
@@ -405,14 +406,14 @@ public interface KGroupedStream<K, V> {
      *
      * @param initializer   an {@link Initializer} that computes an initial intermediate aggregation result
      * @param aggregator    an {@link Aggregator} that computes a new aggregate result
-     * @param <VR>          the value type of the resulting {@link KTable}
+     * @param <VOut>          the value type of the resulting {@link KTable}
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key. If the aggregate function returns {@code null}, it is then interpreted as
      * deletion for the key, and future messages of the same key coming from upstream operators
      * will be handled as newly initialized value.
      */
-    <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
-                                 final Aggregator<? super K, ? super V, VR> aggregator);
+    <VOut> KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
+                                     final Aggregator<? super K, ? super V, VOut> aggregator);
 
     /**
      * Aggregate the values of records in this stream by the grouped key.
@@ -429,7 +430,7 @@ public interface KGroupedStream<K, V> {
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
      * Thus, {@code aggregate(Initializer, Aggregator, Materialized)} can be used to compute aggregate functions like
-     * count (c.f. {@link #count()}).
+     * count (cf. {@link #count()}).
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same key.
@@ -466,13 +467,13 @@ public interface KGroupedStream<K, V> {
      * @param initializer   an {@link Initializer} that computes an initial intermediate aggregation result
      * @param aggregator    an {@link Aggregator} that computes a new aggregate result
      * @param materialized  an instance of {@link Materialized} used to materialize a state store. Cannot be {@code null}.
-     * @param <VR>          the value type of the resulting {@link KTable}
+     * @param <VOut>          the value type of the resulting {@link KTable}
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key
      */
-    <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
-                                 final Aggregator<? super K, ? super V, VR> aggregator,
-                                 final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+    <VOut> KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
+                                     final Aggregator<? super K, ? super V, VOut> aggregator,
+                                     final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Aggregate the values of records in this stream by the grouped key.
@@ -489,7 +490,7 @@ public interface KGroupedStream<K, V> {
      * aggregate (or for the very first record using the intermediate aggregation result provided via the
      * {@link Initializer}) and the record's value.
      * Thus, {@code aggregate(Initializer, Aggregator, Materialized)} can be used to compute aggregate functions like
-     * count (c.f. {@link #count()}).
+     * count (cf. {@link #count()}).
      * <p>
      * Not all updates might get sent downstream, as an internal cache is used to deduplicate consecutive updates to
      * the same key.
@@ -527,16 +528,16 @@ public interface KGroupedStream<K, V> {
      * @param aggregator    an {@link Aggregator} that computes a new aggregate result
      * @param named         a {@link Named} config used to name the processor in the topology
      * @param materialized  an instance of {@link Materialized} used to materialize a state store. Cannot be {@code null}.
-     * @param <VR>          the value type of the resulting {@link KTable}
+     * @param <VOut>          the value type of the resulting {@link KTable}
      * @return a {@link KTable} that contains "update" records with unmodified keys, and values that represent the
      * latest (rolling) aggregate for each key. If the aggregate function returns {@code null}, it is then interpreted as
      * deletion for the key, and future messages of the same key coming from upstream operators
      * will be handled as newly initialized value.
      */
-    <VR> KTable<K, VR> aggregate(final Initializer<VR> initializer,
-                                 final Aggregator<? super K, ? super V, VR> aggregator,
-                                 final Named named,
-                                 final Materialized<K, VR, KeyValueStore<Bytes, byte[]>> materialized);
+    <VOut> KTable<K, VOut> aggregate(final Initializer<VOut> initializer,
+                                     final Aggregator<? super K, ? super V, VOut> aggregator,
+                                     final Named named,
+                                     final Materialized<K, VOut, KeyValueStore<Bytes, byte[]>> materialized);
 
     /**
      * Create a new {@link TimeWindowedKStream} instance that can be used to perform windowed aggregations.

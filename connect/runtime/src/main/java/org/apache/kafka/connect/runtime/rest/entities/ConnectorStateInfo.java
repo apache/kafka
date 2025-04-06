@@ -124,9 +124,8 @@ public class ConnectorStateInfo {
         public boolean equals(Object o) {
             if (o == this)
                 return true;
-            if (!(o instanceof TaskState))
+            if (!(o instanceof TaskState other))
                 return false;
-            TaskState other = (TaskState) o;
             return compareTo(other) == 0;
         }
 
