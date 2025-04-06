@@ -18,7 +18,7 @@
 package kafka.log
 
 import kafka.log.remote.RemoteLogManager
-import kafka.server.{DelayedRemoteListOffsets, KafkaConfig}
+import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.TopicConfig
@@ -38,7 +38,7 @@ import org.apache.kafka.server.config.KRaftConfigs
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.apache.kafka.server.purgatory.DelayedOperationPurgatory
+import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, DelayedRemoteListOffsets}
 import org.apache.kafka.server.storage.log.{FetchIsolation, UnexpectedAppendOffsetException}
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime, Scheduler}
 import org.apache.kafka.storage.internals.checkpoint.{LeaderEpochCheckpointFile, PartitionMetadataFile}
