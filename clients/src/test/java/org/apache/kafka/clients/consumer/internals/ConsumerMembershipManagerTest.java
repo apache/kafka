@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
@@ -446,6 +447,54 @@ public class ConsumerMembershipManagerTest {
         assertEquals(MemberState.LEAVING, membershipManager.state());
         assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH,
                 membershipManager.memberEpoch());
+    }
+
+    @Test
+    public void testLeaveGroupEpochOnClose() {
+        // Static member should leave the group with epoch -2 with GroupMembershipOperation.DEFAULT
+        ConsumerMembershipManager membershipManager = createMemberInStableState("instance1");
+        mockLeaveGroup();
+        membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.DEFAULT);
+        verify(subscriptionState).unsubscribe();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH,
+            membershipManager.memberEpoch());
+
+        // Static member should leave the group with epoch -1 with GroupMembershipOperation.LEAVE_GROUP
+        membershipManager = createMemberInStableState("instance1");
+        mockLeaveGroup();
+        membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
+        verify(subscriptionState).unsubscribe();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH,
+            membershipManager.memberEpoch());
+
+        // Static member should leave the group with epoch -2 with GroupMembershipOperation.REMAIN_IN_GROUP
+        membershipManager = createMemberInStableState("instance1");
+        mockLeaveGroup();
+        membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP);
+        verify(subscriptionState).unsubscribe();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH,
+            membershipManager.memberEpoch());
+
+        // Dynamic member should leave the group with epoch -1 with GroupMembershipOperation.DEFAULT
+        membershipManager = createMemberInStableState(null);
+        mockLeaveGroup();
+        membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.DEFAULT);
+        verify(subscriptionState).unsubscribe();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH,
+            membershipManager.memberEpoch());
+
+        // Dynamic member should leave the group with epoch -1 with GroupMembershipOperation.LEAVE_GROUP
+        membershipManager = createMemberInStableState(null);
+        mockLeaveGroup();
+        membershipManager.leaveGroupOnClose(CloseOptions.GroupMembershipOperation.LEAVE_GROUP);
+        verify(subscriptionState).unsubscribe();
+        assertEquals(MemberState.LEAVING, membershipManager.state());
+        assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH,
+            membershipManager.memberEpoch());
     }
 
     /**
