@@ -915,7 +915,7 @@ public class KafkaRaftClientTest {
         context.client.poll();
         context.assertSentBeginQuorumEpochRequest(1, Set.of(otherNodeId));
 
-        Records records = context.log.read(0, Isolation.UNCOMMITTED).records();
+        Records records = context.log.read(0, Isolation.UNCOMMITTED).records;
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
 
@@ -964,7 +964,7 @@ public class KafkaRaftClientTest {
         context.client.poll();
         context.assertSentBeginQuorumEpochRequest(2, Set.of(firstNodeId, secondNodeId));
 
-        Records records = context.log.read(0, Isolation.UNCOMMITTED).records();
+        Records records = context.log.read(0, Isolation.UNCOMMITTED).records;
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
 
