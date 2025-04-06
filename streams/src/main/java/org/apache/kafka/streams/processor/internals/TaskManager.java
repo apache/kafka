@@ -2150,10 +2150,6 @@ public class TaskManager {
             e -> log.debug("Ignoring error in unclean {}", name));
     }
 
-    boolean needsInitializationOrRestoration() { // This can also be removed
-        return activeTaskStream().anyMatch(Task::needsInitializationOrRestoration);
-    }
-
     // for testing only
     void addTask(final Task task) {
         tasks.addTask(task);
