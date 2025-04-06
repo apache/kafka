@@ -31,7 +31,6 @@ import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.ConfigUtils;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms;
@@ -49,7 +48,6 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import static java.util.Arrays.asList;
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
@@ -63,7 +61,6 @@ import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
 import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
-import static org.apache.kafka.server.common.MetadataVersion.IBP_3_0_IV1;
 
 public class LogConfig extends AbstractConfig {
 
@@ -107,7 +104,7 @@ public class LogConfig extends AbstractConfig {
 
         @Override
         public List<String> headers() {
-            return asList("Name", "Description", "Type", "Default", "Valid Values", SERVER_DEFAULT_HEADER_NAME, "Importance");
+            return List.of("Name", "Description", "Type", "Default", "Valid Values", SERVER_DEFAULT_HEADER_NAME, "Importance");
         }
 
         // Visible for testing
@@ -302,7 +299,7 @@ public class LogConfig extends AbstractConfig {
     private final Map<?, ?> props;
 
     public LogConfig(Map<?, ?> props) {
-        this(props, Collections.emptySet());
+        this(props, Set.of());
     }
 
     @SuppressWarnings({"this-escape"})
@@ -328,11 +325,11 @@ public class LogConfig extends AbstractConfig {
         this.minCleanableRatio = getDouble(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG);
         this.compact = getList(TopicConfig.CLEANUP_POLICY_CONFIG).stream()
                 .map(c -> c.toLowerCase(Locale.ROOT))
-                .collect(Collectors.toList())
+                .toList()
                 .contains(TopicConfig.CLEANUP_POLICY_COMPACT);
         this.delete = getList(TopicConfig.CLEANUP_POLICY_CONFIG).stream()
                 .map(c -> c.toLowerCase(Locale.ROOT))
-                .collect(Collectors.toList())
+                .toList()
                 .contains(TopicConfig.CLEANUP_POLICY_DELETE);
         this.uncleanLeaderElectionEnable = getBoolean(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
         this.minInSyncReplicas = getInt(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
@@ -444,16 +441,12 @@ public class LogConfig extends AbstractConfig {
         return new LogConfigDef(CONFIG);
     }
 
-    public static boolean shouldIgnoreMessageFormatVersion(MetadataVersion interBrokerProtocolVersion) {
-        return interBrokerProtocolVersion.isAtLeast(IBP_3_0_IV1);
-    }
-
     public static Optional<Type> configType(String configName) {
         return Optional.ofNullable(CONFIG.configKeys().get(configName)).map(c -> c.type);
     }
 
     public static List<String> configNames() {
-        return CONFIG.names().stream().sorted().collect(Collectors.toList());
+        return CONFIG.names().stream().sorted().toList();
     }
 
     public static Optional<String> serverConfigName(String configName) {
@@ -616,7 +609,7 @@ public class LogConfig extends AbstractConfig {
      * Check that the given properties contain only valid log config names and that all values can be parsed and are valid
      */
     public static void validate(Properties props) {
-        validate(Collections.emptyMap(), props, Collections.emptyMap(), false);
+        validate(Map.of(), props, Map.of(), false);
     }
 
     public static void validate(Map<String, String> existingConfigs,

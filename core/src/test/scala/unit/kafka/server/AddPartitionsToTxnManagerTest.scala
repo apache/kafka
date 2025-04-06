@@ -29,7 +29,7 @@ import org.apache.kafka.common.{Node, TopicPartition}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractResponse, AddPartitionsToTxnRequest, AddPartitionsToTxnResponse, MetadataResponse}
 import org.apache.kafka.common.utils.MockTime
-import org.apache.kafka.metadata.LeaderAndIsr
+import org.apache.kafka.metadata.{LeaderAndIsr, MetadataCache}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.RequestAndCompletionHandler
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -220,7 +220,7 @@ class AddPartitionsToTxnManagerTest {
 
     // The transaction state topic does not exist.
     when(metadataCache.getLeaderAndIsr(Topic.TRANSACTION_STATE_TOPIC_NAME, 0))
-      .thenReturn(Option.empty)
+      .thenReturn(util.Optional.empty())
     checkError()
 
     // The partition has no leader.
@@ -405,10 +405,10 @@ class AddPartitionsToTxnManagerTest {
 
   private def mockTransactionStateMetadata(partitionIndex: Int, leaderId: Int, leaderNode: Option[Node]): Unit = {
     when(metadataCache.getLeaderAndIsr(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionIndex))
-      .thenReturn(Some(new LeaderAndIsr(leaderId, util.Arrays.asList(leaderId))))
+      .thenReturn(util.Optional.of(new LeaderAndIsr(leaderId, util.Arrays.asList(leaderId))))
     if (leaderId != MetadataResponse.NO_LEADER_ID) {
       when(metadataCache.getAliveBrokerNode(leaderId, config.interBrokerListenerName))
-        .thenReturn(leaderNode)
+        .thenReturn(util.Optional.ofNullable(leaderNode.orNull))
     }
   }
 

@@ -944,7 +944,7 @@ public final class MessageTest {
     @Test
     public void defaultValueShouldBeWritable() {
         for (short version = SimpleExampleMessageData.LOWEST_SUPPORTED_VERSION; version <= SimpleExampleMessageData.HIGHEST_SUPPORTED_VERSION; ++version) {
-            MessageUtil.toByteBuffer(new SimpleExampleMessageData(), version);
+            MessageUtil.toByteBufferAccessor(new SimpleExampleMessageData(), version).buffer();
         }
     }
 
@@ -1127,6 +1127,8 @@ public final class MessageTest {
         for (short version : ApiKeys.CREATE_TOPICS.allVersions()) {
             verifyWriteRaisesNpe(version, createTopics);
         }
+        MetadataRequestData metadata = new MetadataRequestData().setTopics(null);
+        verifyWriteRaisesNpe((short) 0, metadata);
     }
 
     @Test

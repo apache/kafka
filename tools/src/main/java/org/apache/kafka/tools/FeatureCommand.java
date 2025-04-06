@@ -196,7 +196,7 @@ public class FeatureCommand {
                 );
         versionMappingParser.addArgument("--release-version")
                 .help("The release version to use for the corresponding feature mapping. The minimum is " +
-                        MetadataVersion.IBP_3_0_IV1 + "; the default is " + MetadataVersion.LATEST_PRODUCTION)
+                        MetadataVersion.MINIMUM_VERSION + "; the default is " + MetadataVersion.LATEST_PRODUCTION)
                 .action(store());
     }
 
@@ -298,7 +298,7 @@ public class FeatureCommand {
             } catch (Throwable e) {
                 throw new TerseException("Unknown metadata.version " + releaseVersion +
                         ". Supported metadata.version are " + metadataVersionsToString(
-                        MetadataVersion.MINIMUM_BOOTSTRAP_VERSION, MetadataVersion.latestProduction()));
+                        MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestProduction()));
             }
             try {
                 for (Feature feature : Feature.PRODUCTION_FEATURES) {
@@ -320,7 +320,7 @@ public class FeatureCommand {
                 } catch (Throwable e) {
                     throw new TerseException("Unknown metadata.version " + metadata +
                             ". Supported metadata.version are " + metadataVersionsToString(
-                            MetadataVersion.MINIMUM_BOOTSTRAP_VERSION, MetadataVersion.latestProduction()));
+                            MetadataVersion.MINIMUM_VERSION, MetadataVersion.latestProduction()));
                 }
                 updates.put(MetadataVersion.FEATURE_NAME, new FeatureUpdate(metadataVersion.featureLevel(), upgradeType));
             }
@@ -373,7 +373,7 @@ public class FeatureCommand {
             }
         } catch (IllegalArgumentException e) {
             throw new TerseException("Unknown release version '" + releaseVersion + "'." +
-                " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION +
+                " Supported versions are: " + MetadataVersion.MINIMUM_VERSION +
                 " to " + MetadataVersion.LATEST_PRODUCTION);
         }
     }

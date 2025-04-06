@@ -278,6 +278,21 @@ public record StreamsGroupMember(String memberId,
                 taskIds -> Set.copyOf(taskIds.partitions())));
         }
 
+        public static Builder withDefaults(String memberId) {
+            return new Builder(memberId)
+                .setRebalanceTimeoutMs(-1)
+                .setTopologyEpoch(-1)
+                .setInstanceId(null)
+                .setRackId(null)
+                .setProcessId("")
+                .setClientTags(Collections.emptyMap())
+                .setState(MemberState.STABLE)
+                .setMemberEpoch(0)
+                .setAssignedTasks(TasksTuple.EMPTY)
+                .setTasksPendingRevocation(TasksTuple.EMPTY)
+                .setUserEndpoint(null);
+        }
+
         public StreamsGroupMember build() {
             return new StreamsGroupMember(
                 memberId,
@@ -341,7 +356,7 @@ public record StreamsGroupMember(String memberId,
                 entry -> new StreamsGroupDescribeResponseData.KeyValue()
                     .setKey(entry.getKey())
                     .setValue(entry.getValue())
-            ).collect(Collectors.toList()))
+            ).toList())
             .setProcessId(processId)
             .setTopologyEpoch(topologyEpoch)
             .setUserEndpoint(
@@ -355,10 +370,10 @@ public record StreamsGroupMember(String memberId,
 
     private static List<StreamsGroupDescribeResponseData.TaskIds> taskIdsFromMap(Map<String, Set<Integer>> tasks) {
         List<StreamsGroupDescribeResponseData.TaskIds> taskIds = new ArrayList<>();
-        tasks.forEach((subtopologyId, partitionSet) -> {
+        tasks.keySet().stream().sorted().forEach(subtopologyId -> {
             taskIds.add(new StreamsGroupDescribeResponseData.TaskIds()
                 .setSubtopologyId(subtopologyId)
-                .setPartitions(new ArrayList<>(partitionSet)));
+                .setPartitions(tasks.get(subtopologyId).stream().sorted().toList()));
         });
         return taskIds;
     }

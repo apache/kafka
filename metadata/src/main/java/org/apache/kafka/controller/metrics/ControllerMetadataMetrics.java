@@ -24,9 +24,10 @@ import com.yammer.metrics.core.Meter;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
-import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 
 /**
@@ -54,6 +55,10 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         "KafkaController", "MetadataErrorCount");
     private static final MetricName UNCLEAN_LEADER_ELECTIONS_PER_SEC = getMetricName(
         "ControllerStats", "UncleanLeaderElectionsPerSec");
+    private static final MetricName ELECTION_FROM_ELIGIBLE_LEADER_REPLICAS_PER_SEC = getMetricName(
+        "ControllerStats", "ElectionFromEligibleLeaderReplicasPerSec");
+    private static final MetricName IGNORED_STATIC_VOTERS = getMetricName(
+        "KafkaController", "IgnoredStaticVoters");
 
     private final Optional<MetricsRegistry> registry;
     private final AtomicInteger fencedBrokerCount = new AtomicInteger(0);
@@ -64,7 +69,8 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     private final AtomicInteger preferredReplicaImbalanceCount = new AtomicInteger(0);
     private final AtomicInteger metadataErrorCount = new AtomicInteger(0);
     private Optional<Meter> uncleanLeaderElectionMeter = Optional.empty();
-
+    private Optional<Meter> electionFromEligibleLeaderReplicasMeter = Optional.empty();
+    private final AtomicBoolean ignoredStaticVoters = new AtomicBoolean(false);
 
     /**
      * Create a new ControllerMetadataMetrics object.
@@ -117,6 +123,15 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         }));
         registry.ifPresent(r -> uncleanLeaderElectionMeter =
                 Optional.of(registry.get().newMeter(UNCLEAN_LEADER_ELECTIONS_PER_SEC, "elections", TimeUnit.SECONDS)));
+        registry.ifPresent(r -> electionFromEligibleLeaderReplicasMeter =
+                Optional.of(registry.get().newMeter(ELECTION_FROM_ELIGIBLE_LEADER_REPLICAS_PER_SEC, "elections", TimeUnit.SECONDS)));
+
+        registry.ifPresent(r -> r.newGauge(IGNORED_STATIC_VOTERS, new Gauge<Integer>() {
+            @Override
+            public Integer value() {
+                return ignoredStaticVoters() ? 1 : 0;
+            }
+        }));
     }
 
     public void setFencedBrokerCount(int brokerCount) {
@@ -203,9 +218,21 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         this.uncleanLeaderElectionMeter.ifPresent(m -> m.mark(count));
     }
 
+    public void updateElectionFromEligibleLeaderReplicasCount(int count) {
+        this.electionFromEligibleLeaderReplicasMeter.ifPresent(m -> m.mark(count));
+    }
+
+    public void setIgnoredStaticVoters(boolean ignored) {
+        ignoredStaticVoters.set(ignored);
+    }
+
+    public boolean ignoredStaticVoters() {
+        return ignoredStaticVoters.get();
+    }
+
     @Override
     public void close() {
-        registry.ifPresent(r -> Arrays.asList(
+        registry.ifPresent(r -> List.of(
             FENCED_BROKER_COUNT,
             ACTIVE_BROKER_COUNT,
             GLOBAL_TOPIC_COUNT,
@@ -213,7 +240,9 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
             OFFLINE_PARTITION_COUNT,
             PREFERRED_REPLICA_IMBALANCE_COUNT,
             METADATA_ERROR_COUNT,
-            UNCLEAN_LEADER_ELECTIONS_PER_SEC
+            UNCLEAN_LEADER_ELECTIONS_PER_SEC,
+            ELECTION_FROM_ELIGIBLE_LEADER_REPLICAS_PER_SEC,
+            IGNORED_STATIC_VOTERS
         ).forEach(r::removeMetric));
     }
 

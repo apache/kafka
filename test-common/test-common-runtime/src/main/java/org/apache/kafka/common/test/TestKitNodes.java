@@ -25,6 +25,7 @@ import org.apache.kafka.metadata.bootstrap.BootstrapMetadata;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.properties.MetaPropertiesVersion;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.io.File;
@@ -55,7 +56,15 @@ public class TestKitNodes {
         private BootstrapMetadata bootstrapMetadata;
 
         public Builder() {
-            this(BootstrapMetadata.fromVersion(MetadataVersion.latestTesting(), "testkit"));
+            this(BootstrapMetadata.fromVersions(
+                    MetadataVersion.latestTesting(),
+                    Feature.PRODUCTION_FEATURES.stream()
+                            .collect(Collectors.toMap(
+                                    Feature::featureName,
+                                    feature -> feature.defaultLevel(MetadataVersion.latestTesting()),
+                                    (existing, replacement) -> existing,
+                                    TreeMap::new)),
+                    "testkit"));
         }
 
         public Builder(BootstrapMetadata bootstrapMetadata) {
@@ -166,10 +175,10 @@ public class TestKitNodes {
             int controllerId = combined ? TestKitDefaults.BROKER_ID_OFFSET : TestKitDefaults.BROKER_ID_OFFSET + TestKitDefaults.CONTROLLER_ID_OFFSET;
             List<Integer> controllerNodeIds = IntStream.range(controllerId, controllerId + numControllerNodes)
                 .boxed()
-                .collect(Collectors.toList());
+                .toList();
             List<Integer> brokerNodeIds = IntStream.range(TestKitDefaults.BROKER_ID_OFFSET, TestKitDefaults.BROKER_ID_OFFSET + numBrokerNodes)
                 .boxed()
-                .collect(Collectors.toList());
+                .toList();
 
             String unknownIds = perServerProperties.keySet().stream()
                     .filter(id -> !controllerNodeIds.contains(id))
@@ -307,7 +316,7 @@ public class TestKitNodes {
                 }
                 return new File(baseDirectory, logDir).getAbsolutePath();
             })
-            .collect(Collectors.toList());
+            .toList();
         MetaPropertiesEnsemble.Copier copier = new MetaPropertiesEnsemble.Copier(MetaPropertiesEnsemble.EMPTY);
 
         copier.setMetaLogDir(Optional.of(logDataDirectories.get(0)));

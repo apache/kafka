@@ -206,34 +206,41 @@ public class KafkaClusterTestKit implements AutoCloseable {
             }
         }
 
+        private Optional<File> maybeSetupJaasFile() throws Exception {
+            if (brokerSecurityProtocol.equals(SecurityProtocol.SASL_PLAINTEXT.name)) {
+                File file = JaasUtils.writeJaasContextsToFile(Set.of(
+                    new JaasUtils.JaasSection(JaasUtils.KAFKA_SERVER_CONTEXT_NAME,
+                        List.of(
+                            JaasModule.plainLoginModule(
+                                JaasUtils.KAFKA_PLAIN_ADMIN, 
+                                JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD,
+                                true,
+                                Map.of(
+                                    JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD,
+                                    JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD)
+                            )
+                        )
+                    )
+                ));
+                JaasUtils.refreshJavaLoginConfigParam(file);
+                return Optional.of(file);
+            }
+            return Optional.empty();
+        }
+
         public KafkaClusterTestKit build() throws Exception {
             Map<Integer, ControllerServer> controllers = new HashMap<>();
             Map<Integer, BrokerServer> brokers = new HashMap<>();
             Map<Integer, SharedServer> jointServers = new HashMap<>();
             File baseDirectory = null;
-            File jaasFile = null;
-
-            if (brokerSecurityProtocol.equals(SecurityProtocol.SASL_PLAINTEXT.name)) {
-                jaasFile = JaasUtils.writeJaasContextsToFile(Set.of(
-                    new JaasUtils.JaasSection(JaasUtils.KAFKA_SERVER_CONTEXT_NAME,
-                        List.of(
-                            JaasModule.plainLoginModule(
-                                JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD,
-                                true,
-                                Map.of(
-                                    JaasUtils.KAFKA_PLAIN_USER1, JaasUtils.KAFKA_PLAIN_USER1_PASSWORD,
-                                    JaasUtils.KAFKA_PLAIN_ADMIN, JaasUtils.KAFKA_PLAIN_ADMIN_PASSWORD)
-                                )
-                        )
-                    )
-                ));
-                JaasUtils.refreshJavaLoginConfigParam(jaasFile);
-            }
-
+            Optional<File> jaasFile = maybeSetupJaasFile();
             try {
                 baseDirectory = new File(nodes.baseDirectory());
                 for (TestKitNode node : nodes.controllerNodes().values()) {
                     socketFactoryManager.getOrCreatePortForListener(node.id(), controllerListenerName);
+                }
+                for (TestKitNode node : nodes.brokerNodes().values()) {
+                    socketFactoryManager.getOrCreatePortForListener(node.id(), brokerListenerName);
                 }
                 for (TestKitNode node : nodes.controllerNodes().values()) {
                     setupNodeDirectories(baseDirectory, node.metadataDirectory(), Collections.emptyList());
@@ -308,7 +315,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     baseDirectory,
                     faultHandlerFactory,
                     socketFactoryManager,
-                    jaasFile == null ? Optional.empty() : Optional.of(jaasFile));
+                    jaasFile);
         }
 
         private String listeners(int node) {
@@ -384,16 +391,12 @@ public class KafkaClusterTestKit implements AutoCloseable {
         List<Future<?>> futures = new ArrayList<>();
         try {
             for (ControllerServer controller : controllers.values()) {
-                futures.add(executorService.submit(() -> {
-                    formatNode(controller.sharedServer().metaPropsEnsemble(), true);
-                }));
+                futures.add(executorService.submit(() -> formatNode(controller.sharedServer().metaPropsEnsemble(), true)));
             }
             for (Entry<Integer, BrokerServer> entry : brokers.entrySet()) {
                 BrokerServer broker = entry.getValue();
-                futures.add(executorService.submit(() -> {
-                    formatNode(broker.sharedServer().metaPropsEnsemble(),
-                        !nodes.isCombined(nodes().brokerNodes().get(entry.getKey()).id()));
-                }));
+                futures.add(executorService.submit(() -> formatNode(broker.sharedServer().metaPropsEnsemble(),
+                    !nodes.isCombined(nodes().brokerNodes().get(entry.getKey()).id()))));
             }
             for (Future<?> future: futures) {
                 future.get();
@@ -489,12 +492,13 @@ public class KafkaClusterTestKit implements AutoCloseable {
 
         // make sure metadata cache in each broker server is up-to-date
         TestUtils.waitForCondition(() ->
-                brokers().values().stream().allMatch(brokerServer -> brokerServer.metadataCache().getAliveBrokers().size() == brokers.size()),
+                brokers.values().stream().map(BrokerServer::metadataCache)
+                    .allMatch(cache -> brokers.values().stream().map(b -> b.config().brokerId()).allMatch(cache::hasAliveBroker)),
             "Failed to wait for publisher to publish the metadata update to each broker.");
     }
 
     public class ClientPropertiesBuilder {
-        private Properties properties;
+        private final Properties properties;
         private boolean usingBootstrapControllers = false;
 
         public ClientPropertiesBuilder() {

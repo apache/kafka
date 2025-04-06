@@ -25,11 +25,11 @@ import java.util
 import java.util.Optional
 import java.util.concurrent._
 import java.util.concurrent.atomic._
-import kafka.cluster.EndPoint
 import kafka.network.Processor._
 import kafka.network.RequestChannel.{CloseConnectionResponse, EndThrottlingResponse, NoOpResponse, SendResponse, StartThrottlingResponse}
 import kafka.network.SocketServer._
 import kafka.server.{ApiVersionManager, BrokerReconfigurable, KafkaConfig}
+import org.apache.kafka.network.EndPoint
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import kafka.utils._
 import org.apache.kafka.common.config.ConfigException
@@ -1159,14 +1159,14 @@ private[kafka] class Processor(
    */
   def accept(socketChannel: SocketChannel,
              mayBlock: Boolean,
-             acceptorIdlePercentMeter: com.yammer.metrics.core.Meter): Boolean = {
+             acceptorBlockedPercentMeter: com.yammer.metrics.core.Meter): Boolean = {
     val accepted = {
       if (newConnections.offer(socketChannel))
         true
       else if (mayBlock) {
         val startNs = time.nanoseconds
         newConnections.put(socketChannel)
-        acceptorIdlePercentMeter.mark(time.nanoseconds() - startNs)
+        acceptorBlockedPercentMeter.mark(time.nanoseconds() - startNs)
         true
       } else
         false

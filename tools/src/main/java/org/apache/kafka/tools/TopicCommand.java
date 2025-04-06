@@ -210,7 +210,7 @@ public abstract class TopicCommand {
         // If no topic name was mentioned, do not need to throw exception.
         if (requestedTopic.isPresent() && !requestedTopic.get().isEmpty() && requireTopicExists && foundTopics.isEmpty()) {
             // If given topic doesn't exist then throw exception
-            throw new IllegalArgumentException(String.format("Topic '%s' does not exist as expected", requestedTopic));
+            throw new IllegalArgumentException(String.format("Topic '%s' does not exist as expected", requestedTopic.get()));
         }
     }
 

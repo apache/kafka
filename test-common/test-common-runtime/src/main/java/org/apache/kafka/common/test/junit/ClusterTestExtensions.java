@@ -78,7 +78,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * For example:
  *
  * <pre>
- * &#64;ExtendWith(value = Array(classOf[ClusterTestExtensions]))
  * class SomeIntegrationTest {
  *   &#64;ClusterTest(brokers = 1, controllers = 1, clusterType = ClusterType.Both)
  *   def someTest(): Unit = {
@@ -195,14 +194,10 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         String baseDisplayName,
         ClusterConfig config
     ) {
-        switch (type) {
-            case KRAFT:
-                return new RaftClusterInvocationContext(baseDisplayName, config, false);
-            case CO_KRAFT:
-                return new RaftClusterInvocationContext(baseDisplayName, config, true);
-            default:
-                throw new IllegalArgumentException("Unsupported @Type value " + type);
-        }
+        return switch (type) {
+            case KRAFT -> new RaftClusterInvocationContext(baseDisplayName, config, false);
+            case CO_KRAFT -> new RaftClusterInvocationContext(baseDisplayName, config, true);
+        };
     }
 
     List<TestTemplateInvocationContext> processClusterTemplate(ExtensionContext context, ClusterTemplate annot) {
@@ -213,7 +208,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
         String baseDisplayName = context.getRequiredTestMethod().getName();
         int repeatCount = getTestRepeatCount();
         List<TestTemplateInvocationContext> contexts = IntStream.range(0, repeatCount)
-            .mapToObj(__ -> generateClusterConfigurations(context, annot.value()).stream())
+            .mapToObj(__ -> generateClusterConfiguration(context, annot.value()).stream())
             .flatMap(Function.identity())
             .flatMap(config -> config.clusterTypes().stream().map(type -> invocationContextForClusterType(type, baseDisplayName, config)))
             .collect(Collectors.toList());
@@ -226,7 +221,7 @@ public class ClusterTestExtensions implements TestTemplateInvocationContextProvi
     }
 
     @SuppressWarnings("unchecked")
-    private List<ClusterConfig> generateClusterConfigurations(
+    private List<ClusterConfig> generateClusterConfiguration(
         ExtensionContext context,
         String generateClustersMethods
     ) {
