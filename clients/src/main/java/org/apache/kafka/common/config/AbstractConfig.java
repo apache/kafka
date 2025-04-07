@@ -556,7 +556,7 @@ public class AbstractConfig {
                 resolvedOriginals.putAll(result.data());
             }
         }
-        providerPlugins.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
+        providerPlugins.values().forEach(x -> Utils.closeQuietly(x, "config provider plugin"));
 
         return new ResolvingMap<>(resolvedOriginals, originals);
     }

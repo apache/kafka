@@ -98,6 +98,6 @@ public class WorkerConfigTransformer implements AutoCloseable {
 
     @Override
     public void close() {
-        configProviderPlugins.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
+        configProviderPlugins.values().forEach(x -> Utils.closeQuietly(x, "config provider plugin"));
     }
 }

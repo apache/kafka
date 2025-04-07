@@ -282,7 +282,7 @@ public final class MirrorMakerConfig extends AbstractConfig {
         }
         ConfigTransformer transformer = new ConfigTransformer(providerPlugins);
         Map<String, String> transformed = transformer.transform(props).data();
-        providerPlugins.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
+        providerPlugins.values().forEach(x -> Utils.closeQuietly(x, "config provider plugin"));
         return transformed;
     }
 
