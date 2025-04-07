@@ -198,7 +198,7 @@ public class TransactionManagerTest {
 
         this.brokerNode = new Node(0, "localhost", 2211);
         this.accumulator = new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
-                deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
+                deliveryTimeoutMs, metrics, metricGrpName, time, transactionManager,
                 new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, true,
@@ -737,7 +737,7 @@ public class TransactionManagerTest {
         final int deliveryTimeout = 15000;
 
         RecordAccumulator accumulator = new RecordAccumulator(logContext, 16 * 1024, Compression.NONE, 0, 0L, 0L,
-                deliveryTimeout, metrics, "", time, apiVersions, transactionManager,
+                deliveryTimeout, metrics, "", time, transactionManager,
                 new BufferPool(1024 * 1024, 16 * 1024, metrics, time, ""));
 
         Sender sender = new Sender(logContext, this.client, this.metadata, accumulator, false,
@@ -1048,7 +1048,7 @@ public class TransactionManagerTest {
 
         this.brokerNode = new Node(0, "localhost", 2211);
         this.accumulator = new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
-            deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
+            deliveryTimeoutMs, metrics, metricGrpName, time, transactionManager,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, true,

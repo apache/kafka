@@ -435,7 +435,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     metrics,
                     PRODUCER_METRIC_GROUP_NAME,
                     time,
-                    apiVersions,
                     transactionManager,
                     new BufferPool(this.totalMemorySize, batchSize, metrics, time, PRODUCER_METRIC_GROUP_NAME));
 
