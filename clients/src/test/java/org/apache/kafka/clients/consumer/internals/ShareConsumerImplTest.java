@@ -29,6 +29,7 @@ import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCo
 import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
+import org.apache.kafka.clients.consumer.internals.events.StopFindCoordinatorOnCloseEvent;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
@@ -48,6 +49,7 @@ import org.apache.kafka.test.MockConsumerInterceptor;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentMatchers;
+import org.mockito.InOrder;
 import org.mockito.Mockito;
 
 import java.time.Duration;
@@ -77,6 +79,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doAnswer;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -338,6 +341,25 @@ public class ShareConsumerImplTest {
 
         completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
         assertDoesNotThrow(() -> consumer.close());
+    }
+
+    @Test
+    public void testStopFindCoordinatorOnClose() {
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
+        // Setup the expected successful completion of close events
+        completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
+        completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
+
+        // Close the consumer
+        consumer.close();
+
+        // Verify events are sent in correct order using InOrder
+        InOrder inOrder = inOrder(applicationEventHandler);
+        inOrder.verify(applicationEventHandler).addAndGet(any(ShareAcknowledgeOnCloseEvent.class));
+        inOrder.verify(applicationEventHandler).add(any(ShareUnsubscribeEvent.class));
+        inOrder.verify(applicationEventHandler).add(any(StopFindCoordinatorOnCloseEvent.class));
     }
 
     @Test
