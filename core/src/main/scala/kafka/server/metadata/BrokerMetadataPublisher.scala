@@ -27,6 +27,7 @@ import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.coordinator.share.ShareCoordinator
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.publisher.MetadataPublisher
 import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta}
@@ -331,9 +332,10 @@ class BrokerMetadataPublisher(
       case t: Throwable => fatalFaultHandler.handleFault("Error starting GroupCoordinator", t)
     }
     try {
+      val transactionLogConfig = new TransactionLogConfig(config)
       // Start the transaction coordinator.
       txnCoordinator.startup(() => metadataCache.numPartitions(
-        Topic.TRANSACTION_STATE_TOPIC_NAME).orElse(config.transactionLogConfig.transactionTopicPartitions))
+        Topic.TRANSACTION_STATE_TOPIC_NAME).orElse(transactionLogConfig.transactionTopicPartitions))
     } catch {
       case t: Throwable => fatalFaultHandler.handleFault("Error starting TransactionCoordinator", t)
     }
