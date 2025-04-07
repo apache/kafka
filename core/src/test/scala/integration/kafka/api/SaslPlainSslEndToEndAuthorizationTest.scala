@@ -30,9 +30,7 @@ import org.apache.kafka.common.security.plain.PlainAuthenticateCallback
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.Test
 
-import java.security.AccessController
 import java.util.Properties
-import javax.security.auth.Subject
 import javax.security.auth.callback._
 import javax.security.auth.login.AppConfigurationEntry
 import scala.collection.Seq
