@@ -97,7 +97,7 @@ public class PlaintextConsumerCommitTest {
 
     private void testAutoCommitOnClose(GroupProtocol groupProtocol) throws InterruptedException {
         try (var consumer = createConsumer(groupProtocol, true)) {
-            sendRecords(10000);
+            sendRecords();
 
             consumer.subscribe(List.of(topic));
             awaitAssignment(consumer, Set.of(tp, tp1));
@@ -125,7 +125,7 @@ public class PlaintextConsumerCommitTest {
 
     private void testAutoCommitOnCloseAfterWakeup(GroupProtocol groupProtocol) throws InterruptedException {
         try (var consumer = createConsumer(groupProtocol, true)) {
-            sendRecords(10000);
+            sendRecords();
 
             consumer.subscribe(List.of(topic));
             awaitAssignment(consumer, Set.of(tp, tp1));
@@ -166,7 +166,7 @@ public class PlaintextConsumerCommitTest {
 
             // async commit
             var asyncMetadata = new OffsetAndMetadata(10, "bar");
-            sendAndAwaitAsyncCommit(consumer, Optional.of(Map.of(tp, asyncMetadata)));
+            sendAndAwaitAsyncCommit(consumer, Map.of(tp, asyncMetadata));
             assertEquals(asyncMetadata, consumer.committed(Set.of(tp)).get(tp));
 
             // handle null metadata
@@ -187,6 +187,8 @@ public class PlaintextConsumerCommitTest {
     }
 
     private void testAsyncCommit(GroupProtocol groupProtocol) throws InterruptedException {
+        // Ensure the __consumer_offsets topic is created to prevent transient issues, 
+        // such as RetriableCommitFailedException during async offset commits.
         cluster.createTopic(
             Topic.GROUP_METADATA_TOPIC_NAME, 
             Integer.parseInt(OFFSETS_TOPIC_PARTITIONS), 
@@ -330,7 +332,7 @@ public class PlaintextConsumerCommitTest {
             assertEquals(5, consumer.committed(Set.of(tp1)).get(tp1).offset());
 
             // Using async should pick up the committed changes after commit completes
-            sendAndAwaitAsyncCommit(consumer, Optional.of(Map.of(tp1, new OffsetAndMetadata(7L))));
+            sendAndAwaitAsyncCommit(consumer, Map.of(tp1, new OffsetAndMetadata(7L)));
             assertEquals(7, consumer.committed(Collections.singleton(tp1)).get(tp1).offset());
         }
     }
@@ -349,7 +351,7 @@ public class PlaintextConsumerCommitTest {
         var topic2 = "topic2";
         cluster.createTopic(topic2, 2, (short) BROKER_COUNT);
         try (var consumer = createConsumer(groupProtocol, true)) {
-            sendRecords(10000);
+            sendRecords();
             
             var rebalanceListener = new ConsumerRebalanceListener() {
                 @Override
@@ -518,9 +520,9 @@ public class PlaintextConsumerCommitTest {
         ));
     }
     
-    private void sendRecords(int numRecords) {
+    private void sendRecords() {
         try (Producer<byte[], byte[]> producer = cluster.producer()) {
-            sendRecords(producer, numRecords, tp, System.currentTimeMillis());
+            sendRecords(producer, 10000, tp, System.currentTimeMillis());
         }
     }
 
@@ -566,7 +568,7 @@ public class PlaintextConsumerCommitTest {
 
     private void sendAndAwaitAsyncCommit(
         Consumer<byte[], byte[]> consumer,
-        Optional<Map<TopicPartition, OffsetAndMetadata>> offsetsOpt
+        Map<TopicPartition, OffsetAndMetadata> offsetsOpt
     ) throws InterruptedException {
         var commitCallback = new RetryCommitCallback(consumer, offsetsOpt);
 
@@ -580,16 +582,16 @@ public class PlaintextConsumerCommitTest {
         assertEquals(Optional.empty(), commitCallback.error);
     }
 
-    private class RetryCommitCallback implements OffsetCommitCallback {
+    private static class RetryCommitCallback implements OffsetCommitCallback {
         private boolean isComplete = false;
         private Optional<Exception> error = Optional.empty();
         
         private final Consumer<byte[], byte[]> consumer;
-        private final Optional<Map<TopicPartition, OffsetAndMetadata>> offsetsOpt;
+        private final Map<TopicPartition, OffsetAndMetadata> offsetsOpt;
         
         public RetryCommitCallback(
             Consumer<byte[], byte[]> consumer,
-            Optional<Map<TopicPartition, OffsetAndMetadata>> offsetsOpt
+            Map<TopicPartition, OffsetAndMetadata> offsetsOpt
         ) {
             this.consumer = consumer;
             this.offsetsOpt = offsetsOpt;
@@ -606,15 +608,11 @@ public class PlaintextConsumerCommitTest {
         }
 
         void sendAsyncCommit() {
-            if (offsetsOpt.isPresent()) {
-                consumer.commitAsync(offsetsOpt.get(), this);
-            } else {
-                consumer.commitAsync(this);
-            }
+            consumer.commitAsync(offsetsOpt, this);
         }
     }
 
-    private class CountConsumerCommitCallback implements OffsetCommitCallback {
+    private static class CountConsumerCommitCallback implements OffsetCommitCallback {
         private int successCount = 0;
         private Optional<Exception> lastError = Optional.empty();
 
