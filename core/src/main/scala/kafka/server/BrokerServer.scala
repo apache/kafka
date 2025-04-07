@@ -36,7 +36,7 @@ import org.apache.kafka.common.utils.{LogContext, Time, Utils}
 import org.apache.kafka.common.{ClusterResource, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
-import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorRecordSerde, GroupCoordinatorService}
+import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorConfig, GroupCoordinatorRecordSerde, GroupCoordinatorService}
 import org.apache.kafka.coordinator.share.metrics.{ShareCoordinatorMetrics, ShareCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorConfig, ShareCoordinatorRecordSerde, ShareCoordinatorService}
 import org.apache.kafka.coordinator.transaction.ProducerIdManager
@@ -77,6 +77,7 @@ class BrokerServer(
 ) extends KafkaBroker {
   val config: KafkaConfig = sharedServer.brokerConfig
   val shareCoordinatorConfig: ShareCoordinatorConfig = new ShareCoordinatorConfig(config)
+  val groupCoordinatorConfig: GroupCoordinatorConfig = new GroupCoordinatorConfig(config)
   val time: Time = sharedServer.time
   def metrics: Metrics = sharedServer.metrics
 
@@ -359,7 +360,7 @@ class BrokerServer(
       tokenManager = new DelegationTokenManager(config, tokenCache, time)
 
       /* initializing the groupConfigManager */
-      groupConfigManager = new GroupConfigManager(config.groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig))
+      groupConfigManager = new GroupConfigManager(groupCoordinatorConfig.extractGroupConfigMap(config.shareGroupConfig))
 
       /* create share coordinator */
       shareCoordinator = createShareCoordinator()
@@ -429,7 +430,7 @@ class BrokerServer(
       val fetchManager = new FetchManager(Time.SYSTEM, new FetchSessionCache(fetchSessionCacheShards))
 
       val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(
-        config.shareGroupConfig.shareGroupMaxGroups * config.groupCoordinatorConfig.shareGroupMaxSize,
+        config.shareGroupConfig.shareGroupMaxGroups * groupCoordinatorConfig.shareGroupMaxSize,
         KafkaBroker.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS)
 
       sharePartitionManager = new SharePartitionManager(
@@ -633,12 +634,12 @@ class BrokerServer(
       time,
       replicaManager,
       serde,
-      config.groupCoordinatorConfig.offsetsLoadBufferSize
+      groupCoordinatorConfig.offsetsLoadBufferSize
     )
     val writer = new CoordinatorPartitionWriter(
       replicaManager
     )
-    new GroupCoordinatorService.Builder(config.brokerId, config.groupCoordinatorConfig)
+    new GroupCoordinatorService.Builder(config.brokerId, groupCoordinatorConfig)
       .withTime(time)
       .withTimer(timer)
       .withLoader(loader)

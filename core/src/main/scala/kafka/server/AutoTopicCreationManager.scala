@@ -30,7 +30,7 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.{CreatableTopic, 
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{CreateTopicsRequest, RequestContext, RequestHeader}
-import org.apache.kafka.coordinator.group.GroupCoordinator
+import org.apache.kafka.coordinator.group.{GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
@@ -184,10 +184,11 @@ class DefaultAutoTopicCreationManager(
   private def creatableTopic(topic: String): CreatableTopic = {
     topic match {
       case GROUP_METADATA_TOPIC_NAME =>
+        val groupCoordinatorConfig = new GroupCoordinatorConfig(config)
         new CreatableTopic()
           .setName(topic)
-          .setNumPartitions(config.groupCoordinatorConfig.offsetsTopicPartitions)
-          .setReplicationFactor(config.groupCoordinatorConfig.offsetsTopicReplicationFactor)
+          .setNumPartitions(groupCoordinatorConfig.offsetsTopicPartitions)
+          .setReplicationFactor(groupCoordinatorConfig.offsetsTopicReplicationFactor)
           .setConfigs(convertToTopicConfigCollections(groupCoordinator.groupMetadataTopicConfigs))
       case TRANSACTION_STATE_TOPIC_NAME =>
         val transactionLogConfig = new TransactionLogConfig(config)

@@ -193,10 +193,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   private val _quorumConfig = new QuorumConfig(this)
   def quorumConfig: QuorumConfig = _quorumConfig
 
-  private val _groupCoordinatorConfig = new GroupCoordinatorConfig(this)
-
-  def groupCoordinatorConfig: GroupCoordinatorConfig = _groupCoordinatorConfig
-
   private val _shareGroupConfig = new ShareGroupConfig(this)
   def shareGroupConfig: ShareGroupConfig = _shareGroupConfig
 
