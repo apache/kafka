@@ -401,6 +401,8 @@ class DataPlaneAcceptor(socketServer: SocketServer,
                    memoryPool,
                    apiVersionManager) with ListenerReconfigurable {
 
+  override def threadPrefix(): String = DataPlaneAcceptor.ThreadPrefix
+
   /**
    * Returns the listener name associated with this reconfigurable. Listener-specific
    * configs corresponding to this listener name are provided for reconfiguration.
@@ -491,7 +493,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
 
   val shouldRun = new AtomicBoolean(true)
 
-  def threadPrefix(): String = DataPlaneAcceptor.ThreadPrefix
+  def threadPrefix(): String
 
   private val sendBufferSize = config.socketSendBufferBytes
   private val recvBufferSize = config.socketReceiveBufferBytes
