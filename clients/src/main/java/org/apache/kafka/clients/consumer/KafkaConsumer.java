@@ -1633,7 +1633,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @see #seekToBeginning(Collection)
      *
      * @param partitions the partitions to get the earliest offsets
-     * @param timeout The maximum amount of time to await retrieval of the beginning offsets.
+     * @param timeout The maximum amount of time to await retrieval of the beginning offsets
      *
      * @return The earliest available offsets for the given partitions. If the offset for a specific partition cannot be 
      *         found or the timeout is zero, the corresponding value will be {@code null}
