@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.components.Versioned;
@@ -374,7 +375,8 @@ public class PluginsTest {
 
     @Test
     public void newConfigProviderShouldConfigureWithPluginClassLoader() {
-        String providerPrefix = "some.provider";
+        String providerName = "customProvider";
+        String providerPrefix = WorkerConfig.CONFIG_PROVIDERS_CONFIG + "." + providerName;
         props.put(providerPrefix + ".class", TestPlugin.SAMPLING_CONFIG_PROVIDER.className());
 
         PluginClassLoader classLoader = plugins.delegatingLoader().pluginClassLoader(TestPlugin.SAMPLING_CONFIG_PROVIDER.className());
@@ -383,16 +385,17 @@ public class PluginsTest {
             createConfig();
         }
 
-        ConfigProvider plugin = plugins.newConfigProvider(
+        Plugin<ConfigProvider> plugin = plugins.newConfigProvider(
             config,
-            providerPrefix,
-            ClassLoaderUsage.PLUGINS
+            providerName,
+            ClassLoaderUsage.PLUGINS,
+            null
         );
 
-        assertInstanceOf(SamplingTestPlugin.class, plugin, "Cannot collect samples");
-        Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin).flatten();
+        assertInstanceOf(SamplingTestPlugin.class, plugin.get(), "Cannot collect samples");
+        Map<String, SamplingTestPlugin> samples = ((SamplingTestPlugin) plugin.get()).flatten();
         assertTrue(samples.containsKey("configure"));
-        assertPluginClassLoaderAlwaysActive(plugin);
+        assertPluginClassLoaderAlwaysActive(plugin.get());
     }
 
     @Test

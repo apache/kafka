@@ -17,6 +17,7 @@
 package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.common.internals.Plugin;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,12 +46,12 @@ public class ConfigTransformerTest {
 
     @BeforeEach
     public void setup() {
-        configTransformer = new ConfigTransformer(Collections.singletonMap("test", new TestConfigProvider()));
+        configTransformer = new ConfigTransformer(Map.of("test", Plugin.wrapInstance(new TestConfigProvider(), null, "config.providers")));
     }
 
     @Test
     public void testReplaceVariable() {
-        ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, "${test:testPath:testKey}"));
+        ConfigTransformerResult result = configTransformer.transform(Map.of(MY_KEY, "${test:testPath:testKey}"));
         Map<String, String> data = result.data();
         Map<String, Long> ttls = result.ttls();
         assertEquals(TEST_RESULT, data.get(MY_KEY));
@@ -59,7 +60,7 @@ public class ConfigTransformerTest {
 
     @Test
     public void testReplaceVariableWithTTL() {
-        ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, "${test:testPath:testKeyWithTTL}"));
+        ConfigTransformerResult result = configTransformer.transform(Map.of(MY_KEY, "${test:testPath:testKeyWithTTL}"));
         Map<String, String> data = result.data();
         Map<String, Long> ttls = result.ttls();
         assertEquals(TEST_RESULT_WITH_TTL, data.get(MY_KEY));
@@ -68,28 +69,28 @@ public class ConfigTransformerTest {
 
     @Test
     public void testReplaceMultipleVariablesInValue() {
-        ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, "hello, ${test:testPath:testKey}; goodbye, ${test:testPath:testKeyWithTTL}!!!"));
+        ConfigTransformerResult result = configTransformer.transform(Map.of(MY_KEY, "hello, ${test:testPath:testKey}; goodbye, ${test:testPath:testKeyWithTTL}!!!"));
         Map<String, String> data = result.data();
         assertEquals("hello, testResult; goodbye, testResultWithTTL!!!", data.get(MY_KEY));
     }
 
     @Test
     public void testNoReplacement() {
-        ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, "${test:testPath:missingKey}"));
+        ConfigTransformerResult result = configTransformer.transform(Map.of(MY_KEY, "${test:testPath:missingKey}"));
         Map<String, String> data = result.data();
         assertEquals("${test:testPath:missingKey}", data.get(MY_KEY));
     }
 
     @Test
     public void testSingleLevelOfIndirection() {
-        ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, "${test:testPath:testIndirection}"));
+        ConfigTransformerResult result = configTransformer.transform(Map.of(MY_KEY, "${test:testPath:testIndirection}"));
         Map<String, String> data = result.data();
         assertEquals("${test:testPath:testResult}", data.get(MY_KEY));
     }
 
     @Test
     public void testReplaceVariableNoPath() {
-        ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, "${test:testKey}"));
+        ConfigTransformerResult result = configTransformer.transform(Map.of(MY_KEY, "${test:testKey}"));
         Map<String, String> data = result.data();
         Map<String, Long> ttls = result.ttls();
         assertEquals(TEST_RESULT_NO_PATH, data.get(MY_KEY));
@@ -98,7 +99,7 @@ public class ConfigTransformerTest {
 
     @Test
     public void testReplaceMultipleVariablesWithoutPathInValue() {
-        ConfigTransformerResult result = configTransformer.transform(Collections.singletonMap(MY_KEY, "first ${test:testKey}; second ${test:testKey}"));
+        ConfigTransformerResult result = configTransformer.transform(Map.of(MY_KEY, "first ${test:testKey}; second ${test:testKey}"));
         Map<String, String> data = result.data();
         assertEquals("first testResultNoPath; second testResultNoPath", data.get(MY_KEY));
     }

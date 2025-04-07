@@ -36,12 +36,19 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.provider.MockFileConfigProvider;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.JmxReporter;
+import org.apache.kafka.common.metrics.Measurable;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
+import org.apache.kafka.common.metrics.Monitorable;
+import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
@@ -91,6 +98,7 @@ import org.apache.kafka.connect.util.TopicAdmin;
 
 import org.apache.maven.artifact.versioning.VersionRange;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.AdditionalAnswers;
@@ -103,6 +111,7 @@ import org.mockito.MockitoSession;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.quality.Strictness;
 
+import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.util.Arrays;
 import java.util.Collection;
@@ -110,6 +119,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -373,10 +383,14 @@ public class WorkerTest {
     private void mockFileConfigProvider() {
         MockFileConfigProvider mockFileConfigProvider = new MockFileConfigProvider();
         mockFileConfigProvider.configure(Collections.singletonMap("testId", mockFileProviderTestId));
+        Plugin<ConfigProvider> providerPlugin = Plugin.wrapInstance(mockFileConfigProvider,
+            null,
+            WorkerConfig.CONFIG_PROVIDERS_CONFIG,
+            Map.of("provider", "file"));
         when(plugins.newConfigProvider(any(AbstractConfig.class),
-                                       eq("config.providers.file"),
-                                       any(ClassLoaderUsage.class)))
-               .thenReturn(mockFileConfigProvider);
+            eq("file"),
+            any(ClassLoaderUsage.class),
+            any(Metrics.class))).thenReturn(providerPlugin);
     }
 
     @ParameterizedTest
@@ -2891,6 +2905,56 @@ public class WorkerTest {
         }
     }
 
+    @Test
+    public void testMonitorableConfigProvider() {
+        setup(false);
+        Map<String, String> props = new HashMap<>(this.workerProps);
+        props.put("config.providers", "monitorable,monitorable2");
+        props.put("config.providers.monitorable.class", MonitorableConfigProvider.class.getName());
+        props.put("config.providers.monitorable2.class", MonitorableConfigProvider.class.getName());
+        config = new StandaloneConfig(props);
+        mockKafkaClusterId();
+        when(plugins.newConfigProvider(any(AbstractConfig.class), any(String.class), any(ClassLoaderUsage.class), any(Metrics.class)))
+            .thenAnswer(invocation -> {
+                String providerName = invocation.getArgument(1);
+                Metrics metrics = invocation.getArgument(3);
+                return Plugin.wrapInstance(new MonitorableConfigProvider(), metrics,
+                    WorkerConfig.CONFIG_PROVIDERS_CONFIG, Map.of("provider", providerName));
+            });
+
+        worker = new Worker(WORKER_ID, new MockTime(), plugins, config, offsetBackingStore, noneConnectorClientConfigOverridePolicy);
+        Metrics metrics = worker.metrics().metrics();
+        assertMetrics(metrics,
+            1,
+            expectedTags(WorkerConfig.CONFIG_PROVIDERS_CONFIG, MonitorableConfigProvider.class.getSimpleName(), Map.of("provider", "monitorable")));
+        assertMetrics(metrics,
+            1,
+            expectedTags(WorkerConfig.CONFIG_PROVIDERS_CONFIG, MonitorableConfigProvider.class.getSimpleName(), Map.of("provider", "monitorable2")));
+    }
+
+    private static Map<String, String> expectedTags(String config, String clazz, Map<String, String> extraTags) {
+        Map<String, String> tags = new LinkedHashMap<>();
+        tags.put("config", config);
+        tags.put("class", clazz);
+        tags.putAll(extraTags);
+        return tags;
+    }
+
+    private void assertMetrics(Metrics metrics, int expected, Map<String, String> expectedTags) {
+        int found = 0;
+        for (MetricName metricName : metrics.metrics().keySet()) {
+            if (metricName.group().equals("plugins")) {
+                Map<String, String> tags = metricName.tags();
+                if (expectedTags.equals(tags)) {
+                    assertEquals(MonitorableConfigProvider.NAME, metricName.name());
+                    assertEquals(MonitorableConfigProvider.DESCRIPTION, metricName.description());
+                    found++;
+                }
+            }
+        }
+        assertEquals(expected, found);
+    }
+
     private void assertTasksMaxExceededMessage(String connector, int numTasks, int maxTasks, String message) {
         String expectedPrefix = "The connector " + connector
                 + " has generated "
@@ -3217,4 +3281,32 @@ public class WorkerTest {
 
     }
 
+    public static class MonitorableConfigProvider implements ConfigProvider, Monitorable {
+        private static final String NAME = "name";
+        private static final String DESCRIPTION = "description";
+
+        @Override
+        public void withPluginMetrics(PluginMetrics metrics) {
+            MetricName metricName = metrics.metricName(NAME, DESCRIPTION, Map.of());
+            metrics.addMetric(metricName, (Measurable) (config, now) -> 123);
+        }
+
+        @Override
+        public ConfigData get(String path) {
+            return null;
+        }
+
+        @Override
+        public ConfigData get(String path, Set<String> keys) {
+            return null;
+        }
+
+        @Override
+        public void close() throws IOException {
+        }
+
+        @Override
+        public void configure(Map<String, ?> configs) {
+        }
+    }
 }

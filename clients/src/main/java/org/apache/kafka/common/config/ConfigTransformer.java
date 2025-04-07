@@ -18,6 +18,7 @@ package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.provider.FileConfigProvider;
+import org.apache.kafka.common.internals.Plugin;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -56,15 +57,16 @@ public class ConfigTransformer {
     public static final Pattern DEFAULT_PATTERN = Pattern.compile("\\$\\{([^}]*?):(([^}]*?):)?([^}]*?)\\}");
     private static final String EMPTY_PATH = "";
 
-    private final Map<String, ConfigProvider> configProviders;
+    private final Map<String, Plugin<ConfigProvider>> configProviderPlugins;
 
     /**
      * Creates a ConfigTransformer with the default pattern, of the form <code>${provider:[path:]key}</code>.
      *
-     * @param configProviders a Map of provider names and {@link ConfigProvider} instances.
+     * @param configProviderPlugins a Map of provider names and {@link ConfigProvider} instances, where each instance
+     *                              is wrapped in a {@link org.apache.kafka.common.internals.Plugin}.
      */
-    public ConfigTransformer(Map<String, ConfigProvider> configProviders) {
-        this.configProviders = configProviders;
+    public ConfigTransformer(Map<String, Plugin<ConfigProvider>> configProviderPlugins) {
+        this.configProviderPlugins = configProviderPlugins;
     }
 
     /**
@@ -94,7 +96,7 @@ public class ConfigTransformer {
         Map<String, Long> ttls = new HashMap<>();
         for (Map.Entry<String, Map<String, Set<String>>> entry : keysByProvider.entrySet()) {
             String providerName = entry.getKey();
-            ConfigProvider provider = configProviders.get(providerName);
+            ConfigProvider provider = configProviderPlugins.get(providerName).get();
             Map<String, Set<String>> keysByPath = entry.getValue();
             if (provider != null && keysByPath != null) {
                 for (Map.Entry<String, Set<String>> pathWithKeys : keysByPath.entrySet()) {

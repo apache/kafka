@@ -20,6 +20,7 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.ConfigTransformerResult;
 import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.Herder.ConfigReloadAction;
 import org.apache.kafka.connect.util.Callback;
@@ -42,12 +43,12 @@ public class WorkerConfigTransformer implements AutoCloseable {
     private final Worker worker;
     private final ConfigTransformer configTransformer;
     private final ConcurrentMap<String, Map<String, HerderRequest>> requests = new ConcurrentHashMap<>();
-    private final Map<String, ConfigProvider> configProviders;
+    private final Map<String, Plugin<ConfigProvider>> configProviderPlugins;
 
-    public WorkerConfigTransformer(Worker worker, Map<String, ConfigProvider> configProviders) {
+    public WorkerConfigTransformer(Worker worker, Map<String, Plugin<ConfigProvider>> configProviderPlugins) {
         this.worker = worker;
-        this.configProviders = configProviders;
-        this.configTransformer = new ConfigTransformer(configProviders);
+        this.configProviderPlugins = configProviderPlugins;
+        this.configTransformer = new ConfigTransformer(configProviderPlugins);
     }
 
     public Map<String, String> transform(Map<String, String> configs) {
@@ -97,6 +98,6 @@ public class WorkerConfigTransformer implements AutoCloseable {
 
     @Override
     public void close() {
-        configProviders.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
+        configProviderPlugins.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
     }
 }

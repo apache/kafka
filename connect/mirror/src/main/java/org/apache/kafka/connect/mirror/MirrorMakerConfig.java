@@ -23,6 +23,7 @@ import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
 import org.apache.kafka.common.config.ConfigTransformer;
 import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.connect.runtime.WorkerConfig;
@@ -269,18 +270,19 @@ public final class MirrorMakerConfig extends AbstractConfig {
     Map<String, String> transform(Map<String, String> props) {
         // transform worker config according to config.providers
         List<String> providerNames = configProviders();
-        Map<String, ConfigProvider> providers = new HashMap<>();
+        Map<String, Plugin<ConfigProvider>> providerPlugins = new HashMap<>();
         for (String name : providerNames) {
-            ConfigProvider configProvider = plugins.newConfigProvider(
+            Plugin<ConfigProvider> configProviderPlugin = plugins.newConfigProvider(
                     this,
-                    CONFIG_PROVIDERS_CONFIG + "." + name,
-                    Plugins.ClassLoaderUsage.PLUGINS
+                    name,
+                    Plugins.ClassLoaderUsage.PLUGINS,
+                    null
             );
-            providers.put(name, configProvider);
+            providerPlugins.put(name, configProviderPlugin);
         }
-        ConfigTransformer transformer = new ConfigTransformer(providers);
+        ConfigTransformer transformer = new ConfigTransformer(providerPlugins);
         Map<String, String> transformed = transformer.transform(props).data();
-        providers.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
+        providerPlugins.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
         return transformed;
     }
 

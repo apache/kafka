@@ -29,6 +29,10 @@ import java.util.Set;
  * <p>Kafka Connect discovers implementations of this interface using the Java {@link java.util.ServiceLoader} mechanism.
  * To support this, implementations of this interface should also contain a service provider configuration file in
  * {@code META-INF/services/org.apache.kafka.common.config.provider.ConfigProvider}.
+ * <p>Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the config provider to register metrics.
+ * The following tags are automatically added to all metrics registered: <code>config</code> set to
+ * <code>config.providers</code>, <code>class</code> set to the ConfigProvider class name,
+ * and <code>provider</code> set to the provider name.
  */
 public interface ConfigProvider extends Configurable, Closeable {
 

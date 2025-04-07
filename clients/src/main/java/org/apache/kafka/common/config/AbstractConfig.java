@@ -20,6 +20,7 @@ import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
@@ -546,16 +547,16 @@ public class AbstractConfig {
             configProperties = configProviderProps;
             classNameFilter = ignored -> true;
         }
-        Map<String, ConfigProvider> providers = instantiateConfigProviders(providerConfigString, configProperties, classNameFilter);
+        Map<String, Plugin<ConfigProvider>> providerPlugins = instantiateConfigProviders(providerConfigString, configProperties, classNameFilter);
 
-        if (!providers.isEmpty()) {
-            ConfigTransformer configTransformer = new ConfigTransformer(providers);
+        if (!providerPlugins.isEmpty()) {
+            ConfigTransformer configTransformer = new ConfigTransformer(providerPlugins);
             ConfigTransformerResult result = configTransformer.transform(indirectVariables);
             if (!result.data().isEmpty()) {
                 resolvedOriginals.putAll(result.data());
             }
         }
-        providers.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
+        providerPlugins.values().forEach(x -> Utils.closeQuietly(x, "config provider"));
 
         return new ResolvingMap<>(resolvedOriginals, originals);
     }
@@ -587,14 +588,14 @@ public class AbstractConfig {
      * config.providers : A comma-separated list of names for providers.
      * config.providers.{name}.class : The Java class name for a provider.
      * config.providers.{name}.param.{param-name} : A parameter to be passed to the above Java class on initialization.
-     * returns a map of config provider name and its instance.
+     * returns a map of config provider name and its instance wrapped in a {@link org.apache.kafka.common.internals.Plugin}.
      *
      * @param indirectConfigs          The map of potential variable configs
      * @param providerConfigProperties The map of config provider configs
      * @param classNameFilter          Filter for config provider class names
-     * @return map of config provider name and its instance.
+     * @return map of config provider name and its instance wrapped in a {@link org.apache.kafka.common.internals.Plugin}.
      */
-    private Map<String, ConfigProvider> instantiateConfigProviders(
+    private Map<String, Plugin<ConfigProvider>> instantiateConfigProviders(
             Map<String, String> indirectConfigs,
             Map<String, ?> providerConfigProperties,
             Predicate<String> classNameFilter
@@ -620,21 +621,22 @@ public class AbstractConfig {
             }
         }
         // Instantiate Config Providers
-        Map<String, ConfigProvider> configProviderInstances = new HashMap<>();
+        Map<String, Plugin<ConfigProvider>> configProviderPluginInstances = new HashMap<>();
         for (Map.Entry<String, String> entry : providerMap.entrySet()) {
             try {
                 String prefix = CONFIG_PROVIDERS_CONFIG + "." + entry.getKey() + CONFIG_PROVIDERS_PARAM;
                 Map<String, ?> configProperties = configProviderProperties(prefix, providerConfigProperties);
                 ConfigProvider provider = Utils.newInstance(entry.getValue(), ConfigProvider.class);
                 provider.configure(configProperties);
-                configProviderInstances.put(entry.getKey(), provider);
+                Plugin<ConfigProvider> providerPlugin = Plugin.wrapInstance(provider, null, CONFIG_PROVIDERS_CONFIG);
+                configProviderPluginInstances.put(entry.getKey(), providerPlugin);
             } catch (ClassNotFoundException e) {
                 log.error("Could not load config provider class {}", entry.getValue(), e);
                 throw new ConfigException(providerClassProperty(entry.getKey()), entry.getValue(), "Could not load config provider class or one of its dependencies");
             }
         }
 
-        return configProviderInstances;
+        return configProviderPluginInstances;
     }
 
     private static String providerClassProperty(String providerName) {
