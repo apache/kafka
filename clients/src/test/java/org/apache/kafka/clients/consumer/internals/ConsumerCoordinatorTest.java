@@ -223,8 +223,7 @@ public abstract class ConsumerCoordinatorTest {
                                         groupId,
                                         groupInstanceId,
                                         retryBackoffMs,
-                                        retryBackoffMaxMs,
-                                        groupInstanceId.isEmpty());
+                                        retryBackoffMaxMs);
     }
 
     @AfterEach

@@ -331,8 +331,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 groupId.get(),
                 groupInstanceId,
                 retryBackoffMs,
-                retryBackoffMaxMs,
-                true
+                retryBackoffMaxMs
             );
             this.coordinator = new ConsumerCoordinator(
                 rebalanceConfig,

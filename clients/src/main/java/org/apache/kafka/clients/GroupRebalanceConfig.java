@@ -45,7 +45,6 @@ public class GroupRebalanceConfig {
     public final Optional<String> groupInstanceId;
     public final long retryBackoffMs;
     public final long retryBackoffMaxMs;
-    public final boolean leaveGroupOnClose;
 
     public GroupRebalanceConfig(AbstractConfig config, ProtocolType protocolType) {
         this.sessionTimeoutMs = config.getInt(CommonClientConfigs.SESSION_TIMEOUT_MS_CONFIG);
@@ -75,13 +74,6 @@ public class GroupRebalanceConfig {
 
         this.retryBackoffMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MS_CONFIG);
         this.retryBackoffMaxMs = config.getLong(CommonClientConfigs.RETRY_BACKOFF_MAX_MS_CONFIG);
-
-        // Internal leave group config is only defined in Consumer.
-        if (protocolType == ProtocolType.CONSUMER) {
-            this.leaveGroupOnClose = config.getBoolean("internal.leave.group.on.close");
-        } else {
-            this.leaveGroupOnClose = true;
-        }
     }
 
     // For testing purpose.
@@ -91,8 +83,7 @@ public class GroupRebalanceConfig {
                                 String groupId,
                                 Optional<String> groupInstanceId,
                                 long retryBackoffMs,
-                                long retryBackoffMaxMs,
-                                boolean leaveGroupOnClose) {
+                                long retryBackoffMaxMs) {
         this.sessionTimeoutMs = sessionTimeoutMs;
         this.rebalanceTimeoutMs = rebalanceTimeoutMs;
         this.heartbeatIntervalMs = heartbeatIntervalMs;
@@ -100,6 +91,5 @@ public class GroupRebalanceConfig {
         this.groupInstanceId = groupInstanceId;
         this.retryBackoffMs = retryBackoffMs;
         this.retryBackoffMaxMs = retryBackoffMaxMs;
-        this.leaveGroupOnClose = leaveGroupOnClose;
     }
 }

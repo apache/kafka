@@ -1278,7 +1278,6 @@ public class StreamsConfig extends AbstractConfig {
         ConsumerConfig.MAX_POLL_RECORDS_CONFIG, "1000",
         ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest",
         ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, "false",
-        "internal.leave.group.on.close", false,
         ConsumerConfig.GROUP_PROTOCOL_CONFIG, "classic"
     );
 
