@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.metrics.Measurable;
@@ -271,7 +272,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     @Override
     protected void handlePollTimeoutExpiry() {
         listener.onPollTimeoutExpiry();
-        maybeLeaveGroup("worker poll timeout has expired.");
+        maybeLeaveGroup(CloseOptions.GroupMembershipOperation.DEFAULT, "worker poll timeout has expired.");
     }
 
     /**

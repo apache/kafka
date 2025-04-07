@@ -55,10 +55,6 @@ import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import static java.util.Arrays.asList;
-import static java.util.Collections.emptySet;
-import static java.util.Collections.singleton;
-import static java.util.Collections.singletonList;
 import static org.apache.kafka.storage.internals.log.ProducerStateManager.LATE_TRANSACTION_BUFFER_MS;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -606,20 +602,20 @@ public class ProducerStateManagerTest {
         appendClientEntry(stateManager, producerId, epoch, 1, 1L, false);
         stateManager.takeSnapshot();
         assertEquals(1, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(singleton(2L), currentSnapshotOffsets());
+        assertEquals(Set.of(2L), currentSnapshotOffsets());
 
         appendClientEntry(stateManager, producerId, epoch, 2, 2L, false);
         stateManager.takeSnapshot();
         assertEquals(2, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(new HashSet<>(asList(2L, 3L)), currentSnapshotOffsets());
+        assertEquals(new HashSet<>(List.of(2L, 3L)), currentSnapshotOffsets());
 
         stateManager.deleteSnapshotsBefore(3L);
         assertEquals(1, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(singleton(3L), currentSnapshotOffsets());
+        assertEquals(Set.of(3L), currentSnapshotOffsets());
 
         stateManager.deleteSnapshotsBefore(4L);
         assertEquals(0, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(emptySet(), currentSnapshotOffsets());
+        assertEquals(Set.of(), currentSnapshotOffsets());
     }
 
     @Test
@@ -628,22 +624,22 @@ public class ProducerStateManagerTest {
         appendClientEntry(stateManager, producerId, epoch, 1, 1L, false);
         stateManager.takeSnapshot();
         assertEquals(1, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(singleton(2L), currentSnapshotOffsets());
+        assertEquals(Set.of(2L), currentSnapshotOffsets());
 
         appendClientEntry(stateManager, producerId, epoch, 2, 2L, false);
         stateManager.takeSnapshot();
         assertEquals(2, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(new HashSet<>(asList(2L, 3L)), currentSnapshotOffsets());
+        assertEquals(new HashSet<>(List.of(2L, 3L)), currentSnapshotOffsets());
 
         stateManager.truncateFullyAndStartAt(0L);
 
         assertEquals(0, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(emptySet(), currentSnapshotOffsets());
+        assertEquals(Set.of(), currentSnapshotOffsets());
 
         appendClientEntry(stateManager, producerId, epoch, 0, 0L, false);
         stateManager.takeSnapshot();
         assertEquals(1, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(singleton(1L), currentSnapshotOffsets());
+        assertEquals(Set.of(1L), currentSnapshotOffsets());
     }
 
     @Test
@@ -659,12 +655,12 @@ public class ProducerStateManagerTest {
         appendClientEntry(stateManager, producerId, epoch, 4, 4L, false);
         stateManager.takeSnapshot();
         assertEquals(2, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(new HashSet<>(asList(3L, 5L)), currentSnapshotOffsets());
+        assertEquals(new HashSet<>(List.of(3L, 5L)), currentSnapshotOffsets());
 
         // Truncate to the range (3, 5), this will delete the earlier snapshot until offset 3.
         stateManager.truncateAndReload(3, 5, time.milliseconds());
         assertEquals(1, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(singleton(5L), currentSnapshotOffsets());
+        assertEquals(Set.of(5L), currentSnapshotOffsets());
 
         // Add the snapshot files until offset 3 to the log dir.
         pathAndDataList.forEach((path, data) -> assertDoesNotThrow(() -> Files.write(path, data)));
@@ -673,7 +669,7 @@ public class ProducerStateManagerTest {
         stateManager.truncateFullyAndReloadSnapshots();
 
         assertEquals(OptionalLong.of(3), stateManager.latestSnapshotOffset());
-        assertEquals(singleton(3L), currentSnapshotOffsets());
+        assertEquals(Set.of(3L), currentSnapshotOffsets());
     }
 
     @Test
@@ -727,12 +723,12 @@ public class ProducerStateManagerTest {
 
         stateManager.takeSnapshot();
         assertEquals(1, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(singleton(1L), currentSnapshotOffsets());
+        assertEquals(Set.of(1L), currentSnapshotOffsets());
 
         // nothing changed so there should be no new snapshot
         stateManager.takeSnapshot();
         assertEquals(1, Objects.requireNonNull(logDir.listFiles()).length);
-        assertEquals(singleton(1L), currentSnapshotOffsets());
+        assertEquals(Set.of(1L), currentSnapshotOffsets());
     }
 
     @Test
@@ -920,17 +916,17 @@ public class ProducerStateManagerTest {
         Files.createFile(LogFileUtils.producerSnapshotFile(logDir, 42).toPath()); // not stray
 
         // claim that we only have one segment with a base offset of 5
-        stateManager.removeStraySnapshots(singletonList(5L));
+        stateManager.removeStraySnapshots(List.of(5L));
 
         // The snapshot file at offset 2 should be considered a stray, but the snapshot at 42 should be kept
         // around because it is the largest snapshot.
         assertEquals(OptionalLong.of(42), stateManager.latestSnapshotOffset());
         assertEquals(OptionalLong.of(5), stateManager.oldestSnapshotOffset());
-        assertEquals(asList(5L, 42L), ProducerStateManager.listSnapshotFiles(logDir)
+        assertEquals(List.of(5L, 42L), ProducerStateManager.listSnapshotFiles(logDir)
                 .stream()
                 .map(file -> file.offset)
                 .sorted()
-                .collect(Collectors.toList()));
+                .toList());
     }
 
     @Test
@@ -943,12 +939,12 @@ public class ProducerStateManagerTest {
         Files.createFile(LogFileUtils.producerSnapshotFile(logDir, 2).toPath()); // stray
         Files.createFile(LogFileUtils.producerSnapshotFile(logDir, 42).toPath()); // not stray
 
-        stateManager.removeStraySnapshots(singletonList(42L));
-        assertEquals(singletonList(42L), ProducerStateManager.listSnapshotFiles(logDir)
+        stateManager.removeStraySnapshots(List.of(42L));
+        assertEquals(List.of(42L), ProducerStateManager.listSnapshotFiles(logDir)
                 .stream()
                 .map(file -> file.offset)
                 .sorted()
-                .collect(Collectors.toList()));
+                .toList());
 
     }
 
@@ -1237,7 +1233,7 @@ public class ProducerStateManagerTest {
         assertEquals(expectedFirstDataOffset, lastEntry.firstDataOffset());
         assertEquals(expectedLastDataOffset, lastEntry.lastDataOffset());
         assertEquals(expectedCurrentTxnFirstOffset, lastEntry.currentTxnFirstOffset());
-        assertTxnMetadataEquals(singletonList(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions());
+        assertTxnMetadataEquals(List.of(new TxnMetadata(producerId, 16L)), appendInfo.startedTransactions());
     }
 
     private void assertTxnMetadataEquals(List<TxnMetadata> expected, List<TxnMetadata> actual) {

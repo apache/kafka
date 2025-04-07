@@ -56,13 +56,6 @@ public class VersionRange {
         return version >= min && version <= max;
     }
 
-    /**
-     * Check if a given version range has overlap with this one
-     */
-    public boolean intersects(VersionRange other) {
-        return other.min <= max && other.max >= min;
-    }
-
     @Override
     public int hashCode() {
         return Objects.hash(min, max);

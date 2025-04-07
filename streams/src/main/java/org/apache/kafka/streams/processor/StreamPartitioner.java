@@ -50,6 +50,7 @@ import java.util.Set;
  *      org.apache.kafka.common.serialization.Serializer, StreamPartitioner, String...)
  * @see Topology#addSink(String, String, StreamPartitioner, String...)
  */
+@FunctionalInterface
 public interface StreamPartitioner<K, V> {
 
     /**

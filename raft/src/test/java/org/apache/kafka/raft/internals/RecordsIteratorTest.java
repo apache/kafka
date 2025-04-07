@@ -62,7 +62,6 @@ import org.mockito.Mockito;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.IdentityHashMap;
 import java.util.List;
@@ -95,7 +94,7 @@ public final class RecordsIteratorTest {
     @ParameterizedTest
     @MethodSource("emptyRecords")
     void testEmptyRecords(Records records) {
-        testIterator(Collections.emptyList(), records, true);
+        testIterator(List.of(), records, true);
     }
 
     @Property(tries = 50)
@@ -172,9 +171,9 @@ public final class RecordsIteratorTest {
                 new MockRawSnapshotWriter(new OffsetAndEpoch(100, 10), buffer::set)
             );
         try (RecordsSnapshotWriter<String> snapshot = builder.build(STRING_SERDE)) {
-            snapshot.append(Arrays.asList("a", "b", "c"));
-            snapshot.append(Arrays.asList("d", "e", "f"));
-            snapshot.append(Arrays.asList("g", "h", "i"));
+            snapshot.append(List.of("a", "b", "c"));
+            snapshot.append(List.of("d", "e", "f"));
+            snapshot.append(List.of("g", "h", "i"));
             snapshot.freeze();
         }
 
@@ -222,9 +221,9 @@ public final class RecordsIteratorTest {
                 new MockRawSnapshotWriter(new OffsetAndEpoch(100, 10), buffer::set)
             );
         try (RecordsSnapshotWriter<String> snapshot = builder.build(STRING_SERDE)) {
-            snapshot.append(Arrays.asList("a", "b", "c"));
-            snapshot.append(Arrays.asList("d", "e", "f"));
-            snapshot.append(Arrays.asList("g", "h", "i"));
+            snapshot.append(List.of("a", "b", "c"));
+            snapshot.append(List.of("d", "e", "f"));
+            snapshot.append(List.of("g", "h", "i"));
             snapshot.freeze();
         }
 
@@ -278,7 +277,7 @@ public final class RecordsIteratorTest {
         try (RecordsIterator<String> iterator = createIterator(records, BufferSupplier.NO_CACHING, true)) {
             assertTrue(iterator.hasNext());
             assertEquals(
-                Collections.singletonList(new ControlRecord(type, expectedMessage)),
+                List.of(new ControlRecord(type, expectedMessage)),
                 iterator.next().controlRecords()
             );
             assertFalse(iterator.hasNext());
@@ -315,7 +314,7 @@ public final class RecordsIteratorTest {
             assertThrows(NoSuchElementException.class, iterator::next);
         }
 
-        assertEquals(Collections.emptySet(), allocatedBuffers);
+        assertEquals(Set.of(), allocatedBuffers);
     }
 
     static RecordsIterator<String> createIterator(
@@ -475,36 +474,24 @@ public final class RecordsIteratorTest {
     }
 
     private static ApiMessage defaultControlRecord(ControlRecordType type) {
-        switch (type) {
-            case LEADER_CHANGE:
-                return new LeaderChangeMessage();
-            case SNAPSHOT_HEADER:
-                return new SnapshotHeaderRecord();
-            case SNAPSHOT_FOOTER:
-                return new SnapshotFooterRecord();
-            case KRAFT_VERSION:
-                return new KRaftVersionRecord();
-            case KRAFT_VOTERS:
-                return new VotersRecord();
-            default:
-                throw new RuntimeException("Should not happen. Poorly configured test");
-        }
+        return switch (type) {
+            case LEADER_CHANGE -> new LeaderChangeMessage();
+            case SNAPSHOT_HEADER -> new SnapshotHeaderRecord();
+            case SNAPSHOT_FOOTER -> new SnapshotFooterRecord();
+            case KRAFT_VERSION -> new KRaftVersionRecord();
+            case KRAFT_VOTERS -> new VotersRecord();
+            default -> throw new RuntimeException("Should not happen. Poorly configured test");
+        };
     }
 
     private static short defaultControlRecordVersion(ControlRecordType type) {
-        switch (type) {
-            case LEADER_CHANGE:
-                return ControlRecordUtils.LEADER_CHANGE_CURRENT_VERSION;
-            case SNAPSHOT_HEADER:
-                return ControlRecordUtils.SNAPSHOT_HEADER_CURRENT_VERSION;
-            case SNAPSHOT_FOOTER:
-                return ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION;
-            case KRAFT_VERSION:
-                return ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION;
-            case KRAFT_VOTERS:
-                return ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION;
-            default:
-                throw new RuntimeException("Should not happen. Poorly configured test");
-        }
+        return switch (type) {
+            case LEADER_CHANGE -> ControlRecordUtils.LEADER_CHANGE_CURRENT_VERSION;
+            case SNAPSHOT_HEADER -> ControlRecordUtils.SNAPSHOT_HEADER_CURRENT_VERSION;
+            case SNAPSHOT_FOOTER -> ControlRecordUtils.SNAPSHOT_FOOTER_CURRENT_VERSION;
+            case KRAFT_VERSION -> ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION;
+            case KRAFT_VOTERS -> ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION;
+            default -> throw new RuntimeException("Should not happen. Poorly configured test");
+        };
     }
 }

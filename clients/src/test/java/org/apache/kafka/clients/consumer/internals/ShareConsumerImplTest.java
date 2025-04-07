@@ -26,6 +26,7 @@ import org.apache.kafka.clients.consumer.internals.events.ErrorEvent;
 import org.apache.kafka.clients.consumer.internals.events.PollEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgeOnCloseEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareAcknowledgementCommitCallbackRegistrationEvent;
+import org.apache.kafka.clients.consumer.internals.events.ShareFetchEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareSubscriptionChangeEvent;
 import org.apache.kafka.clients.consumer.internals.events.ShareUnsubscribeEvent;
 import org.apache.kafka.common.KafkaException;
@@ -33,6 +34,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -53,6 +55,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -149,6 +152,7 @@ public class ShareConsumerImplTest {
             String clientId
     ) {
         final int defaultApiTimeoutMs = 1000;
+        final int requestTimeoutMs = 30000;
 
         return new ShareConsumerImpl<>(
                 new LogContext(),
@@ -164,6 +168,7 @@ public class ShareConsumerImplTest {
                 new Metrics(),
                 subscriptions,
                 metadata,
+                requestTimeoutMs,
                 defaultApiTimeoutMs,
                 groupId
         );
@@ -214,6 +219,48 @@ public class ShareConsumerImplTest {
 
         assertThrows(WakeupException.class, () -> consumer.poll(Duration.ZERO));
         assertDoesNotThrow(() -> consumer.poll(Duration.ZERO));
+    }
+
+    @Test
+    public void testControlRecordsOnEmptyFetch() {
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
+        // Setup subscription
+        final String topicName = "foo";
+        final List<String> subscriptionTopic = Collections.singletonList(topicName);
+        completeShareSubscriptionChangeApplicationEventSuccessfully(subscriptions, subscriptionTopic);
+        consumer.subscribe(subscriptionTopic);
+
+        // Create a fetch with only GAP (no records)
+        final TopicIdPartition tip = new TopicIdPartition(Uuid.randomUuid(), 0, topicName);
+        final ShareInFlightBatch<String, String> batch = new ShareInFlightBatch<>(0, tip);
+        // Add GAP without adding any records
+        batch.addGap(1);
+        
+        final ShareFetch<String, String> fetchWithOnlyGap = ShareFetch.empty();
+        fetchWithOnlyGap.add(tip, batch);
+        doReturn(fetchWithOnlyGap).when(fetchCollector).collect(any(ShareFetchBuffer.class));
+
+        consumer.poll(Duration.ZERO);
+
+        // Verify that next ShareFetchEvent was sent with the acknowledgement GAP for offset 1
+        verify(applicationEventHandler).add(argThat(event -> {
+            if (!(event instanceof ShareFetchEvent)) {
+                return false;
+            }
+            ShareFetchEvent fetchEvent = (ShareFetchEvent) event;
+            
+            // Regular acknowledgements map should be empty
+            if (!fetchEvent.acknowledgementsMap().isEmpty()) {
+                return false;
+            }
+            
+            // Control record acknowledgements map should contain the GAP for offset 1
+            Map<TopicIdPartition, NodeAcknowledgements> controlRecordAcks = fetchEvent.controlRecordAcknowledgements();
+            return controlRecordAcks.containsKey(tip) &&
+                   controlRecordAcks.get(tip).acknowledgements().get(1L) == null; // Null indicates GAP
+        }));
     }
 
     @Test
@@ -282,6 +329,16 @@ public class ShareConsumerImplTest {
         backgroundEventQueue.add(new ErrorEvent(new TopicAuthorizationException(Set.of("test-topic"))));
         completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
         assertDoesNotThrow(() -> consumer.unsubscribe());
+        assertDoesNotThrow(() -> consumer.close());
+    }
+
+    @Test
+    public void testCloseWithInvalidTopicException() {
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
+        backgroundEventQueue.add(new ErrorEvent(new InvalidTopicException(Set.of("!test-topic"))));
+        completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
         assertDoesNotThrow(() -> consumer.close());
     }
 
