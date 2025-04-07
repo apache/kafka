@@ -30,7 +30,9 @@ import org.apache.kafka.streams.tests.SmokeTestDriver;
 
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.BeforeAll;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
+import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.CsvSource;
@@ -45,12 +47,14 @@ import java.util.Set;
 
 import static org.apache.kafka.streams.tests.SmokeTestDriver.generate;
 import static org.apache.kafka.streams.tests.SmokeTestDriver.verify;
+import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @Timeout(600)
 @Tag("integration")
 public class SmokeTestDriverIntegrationTest {
     public static EmbeddedKafkaCluster cluster;
+    public TestInfo testInfo;
 
     @BeforeAll
     public static void startCluster() throws IOException {
@@ -64,6 +68,11 @@ public class SmokeTestDriverIntegrationTest {
     @AfterAll
     public static void closeCluster() {
         cluster.stop();
+    }
+
+    @BeforeEach
+    public void setUp(final TestInfo testInfo) {
+        this.testInfo = testInfo;
     }
 
     private static class Driver extends Thread {
@@ -106,8 +115,14 @@ public class SmokeTestDriverIntegrationTest {
     // We set 2 timeout condition to fail the test before passing the verification:
     // (1) 10 min timeout, (2) 30 tries of polling without getting any data
     @ParameterizedTest
-    @CsvSource({"true, false, true"})
-//    @CsvSource({"false, false", "true, false", "true, true"})
+    @CsvSource({
+        "false, false, true",
+        "true, false, true",
+//        "true, true, true",
+        "false, false, false",
+        "true, false, false",
+//        "true, true, false"
+    })
     public void shouldWorkWithRebalance(
         final boolean stateUpdaterEnabled,
         final boolean processingThreadsEnabled,
@@ -132,6 +147,7 @@ public class SmokeTestDriverIntegrationTest {
 
         final Properties props = new Properties();
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
+        props.put(StreamsConfig.APPLICATION_ID_CONFIG, safeUniqueTestName(testInfo));
         props.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
         props.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
         // decrease the session timeout so that we can trigger the rebalance soon after old client left closed

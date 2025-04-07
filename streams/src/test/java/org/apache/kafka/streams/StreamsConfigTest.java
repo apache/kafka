@@ -1599,19 +1599,21 @@ public class StreamsConfigTest {
 
     @Test
     public void shouldSetGroupProtocolToClassicByDefault() {
-        assertEquals(GroupProtocol.CLASSIC.name().toLowerCase(), streamsConfig.getString(GROUP_PROTOCOL_CONFIG).toLowerCase());
+        assertTrue(GroupProtocol.CLASSIC.name().equalsIgnoreCase(streamsConfig.getString(GROUP_PROTOCOL_CONFIG)));
     }
 
     @Test
     public void shouldSetGroupProtocolToClassic() {
-        props.put(GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC);
-        assertEquals(GroupProtocol.CLASSIC.name().toLowerCase(), streamsConfig.getString(GROUP_PROTOCOL_CONFIG).toLowerCase());
+        props.put(GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name());
+        streamsConfig = new StreamsConfig(props);
+        assertTrue(GroupProtocol.CLASSIC.name().equalsIgnoreCase(streamsConfig.getString(GROUP_PROTOCOL_CONFIG)));
     }
 
     @Test
     public void shouldSetGroupProtocolToStreams() {
-        props.put(GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS);
-        assertEquals(GroupProtocol.STREAMS.name().toLowerCase(), streamsConfig.getString(GROUP_PROTOCOL_CONFIG).toLowerCase());
+        props.put(GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name());
+        streamsConfig = new StreamsConfig(props);
+        assertTrue(GroupProtocol.STREAMS.name().equalsIgnoreCase(streamsConfig.getString(GROUP_PROTOCOL_CONFIG)));
     }
 
     static class MisconfiguredSerde implements Serde<Object> {

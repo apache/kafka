@@ -43,20 +43,14 @@ Configuration:
       - name: org.apache.kafka.clients
         level: ERROR
 
-      - name: org.apache.kafka.clients.NetworkClient
-        level: DEBUG
-
       - name: org.apache.kafka.clients.consumer
-        level: DEBUG
-
-      - name: org.apache.kafka.coordinator.group
-        level: DEBUG
+        level: INFO
 
       - name: org.apache.kafka.clients.producer
         level: INFO
 
       - name: org.apache.kafka.streams
-        level: DEBUG
+        level: INFO
 
       - name: org.apache.kafka.clients.producer.ProducerConfig
         level: ERROR

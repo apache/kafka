@@ -72,7 +72,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         this.metadataVersionSnapshot = metadata.updateVersion();
     }
 
-    @SuppressWarnings({"CyclomaticComplexity"})
+    @SuppressWarnings({"CyclomaticComplexity", "JavaNCSSCheck"})
     @Override
     public void process(ApplicationEvent event) {
         switch (event.type()) {

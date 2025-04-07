@@ -348,7 +348,6 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     @Override
     public NetworkClientDelegate.PollResult poll(long currentTimeMs) {
         if (coordinatorRequestManager.coordinator().isEmpty() || membershipManager.shouldSkipHeartbeat()) {
-            logger.info("Skip heartbeat");
             membershipManager.onHeartbeatRequestSkipped();
             maybePropagateCoordinatorFatalErrorEvent();
             return NetworkClientDelegate.PollResult.EMPTY;
@@ -369,15 +368,10 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             heartbeatState.reset();
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(leaveHeartbeat));
         }
-        boolean shouldHeartbeatBeforeIntervalExpires = shouldHeartbeatBeforeIntervalExpires();
-        boolean canSendRequest = heartbeatRequestState.canSendRequest(currentTimeMs);
-        if (shouldHeartbeatBeforeIntervalExpires || canSendRequest) {
-            logger.info("Do Heartbeat");
+        if (shouldHeartbeatBeforeIntervalExpires() || heartbeatRequestState.canSendRequest(currentTimeMs)) {
             NetworkClientDelegate.UnsentRequest request = makeHeartbeatRequestAndHandleResponse(currentTimeMs);
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.heartbeatIntervalMs(), Collections.singletonList(request));
         } else {
-            logger.info("Heartbeat too early, waiting for {} ms, shouldHeartbeatBeforeIntervalExpires() : {}, canSendRequest : {}, requestInFlight : {}",
-                heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs), shouldHeartbeatBeforeIntervalExpires, canSendRequest, heartbeatRequestState.requestInFlight());
             return new NetworkClientDelegate.PollResult(heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
         }
     }
@@ -516,7 +510,6 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     }
 
     private void onSuccessResponse(final StreamsGroupHeartbeatResponse response, final long currentTimeMs) {
-        logger.info("Success Response from heartbeat");
         final StreamsGroupHeartbeatResponseData data = response.data();
         heartbeatRequestState.updateHeartbeatIntervalMs(data.heartbeatIntervalMs());
         heartbeatRequestState.onSuccessfulAttempt(currentTimeMs);
@@ -537,7 +530,6 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     }
 
     private void onErrorResponse(final StreamsGroupHeartbeatResponse response, final long currentTimeMs) {
-        logger.info("Error Response from heartbeat");
         final Errors error = Errors.forCode(response.data().errorCode());
         final String errorMessage = response.data().errorMessage();
 
@@ -649,7 +641,6 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
     }
 
     private void onFailure(final Throwable exception, final long responseTimeMs) {
-        logger.info("Failure while sending");
         heartbeatRequestState.onFailedAttempt(responseTimeMs);
         heartbeatState.reset();
         if (exception instanceof RetriableException) {
