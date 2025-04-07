@@ -2606,7 +2606,9 @@ public class SharePartition {
                 }
             }
 
-            if (unresolvedLastOffset >= batchToArchive.lastOffset()) {
+            // There is at least one offset in unresolvedFirstOffset which lies after the batchToArchive. Hence, we move forward
+            // the batchToArchive to the next element in batchesToArchiveIterator.
+            if (unresolvedLastOffset > batchToArchive.lastOffset()) {
                 if (batchesToArchiveIterator.hasNext())
                     batchToArchive = batchesToArchiveIterator.next();
                 else

@@ -2267,7 +2267,7 @@ public class ShareConsumerTest {
                 shareConsumer.commitSync();
 
                 // Precautionary poll so that the aborted transaction for Message 4 is fetched by the consumer.
-                shareConsumer.poll(Duration.ofMillis(5000));
+                shareConsumer.poll(Duration.ofMillis(2500));
 
                 // We are altering IsolationLevel to READ_UNCOMMITTED now. We will read both committed/aborted transactions now.
                 alterShareIsolationLevel("group1", "read_uncommitted");
@@ -2352,7 +2352,7 @@ public class ShareConsumerTest {
                 shareConsumer.commitSync();
 
                 // Precautionary poll so that the aborted transaction for Message 4 is fetched by the consumer.
-                shareConsumer.poll(Duration.ofMillis(5000));
+                shareConsumer.poll(Duration.ofMillis(2500));
 
                 // We are altering IsolationLevel to READ_UNCOMMITTED now. We will read both committed/aborted transactions now.
                 alterShareIsolationLevel("group1", "read_uncommitted");

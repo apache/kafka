@@ -1164,7 +1164,7 @@ public class SharePartitionTest {
             10,
             DEFAULT_FETCH_OFFSET,
             fetchPartitionData(records),
-                FETCH_ISOLATION_HWM),
+            FETCH_ISOLATION_HWM),
             5);
 
         assertArrayEquals(expectedAcquiredRecord(0, 4, 1).toArray(), acquiredRecordsList.toArray());
@@ -6906,7 +6906,7 @@ public class SharePartitionTest {
         when(recordBatch.isControlBatch()).thenReturn(false);
         assertFalse(sharePartition.containsAbortMarker(recordBatch));
 
-        // Record batch is a control batch but doesn't contain any records..
+        // Record batch is a control batch but doesn't contain any records.
         recordBatch = mock(RecordBatch.class);
         Iterator batchIterator = mock(Iterator.class);
         when(batchIterator.hasNext()).thenReturn(false);
@@ -7026,7 +7026,7 @@ public class SharePartitionTest {
         buffer.flip();
         Records records = MemoryRecords.readableRecords(buffer);
 
-        // Case 1 - Aborted transactions does not contain the record batch from 4-5 with producer id 2.
+        // Case 1 - Aborted transactions does not contain the record batch from offsets 6-7 with producer id 2.
         List<FetchResponseData.AbortedTransaction> abortedTransactions = List.of(
             new FetchResponseData.AbortedTransaction().setFirstOffset(0).setProducerId(1),
             new FetchResponseData.AbortedTransaction().setFirstOffset(6).setProducerId(1),
