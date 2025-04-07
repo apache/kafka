@@ -2906,8 +2906,6 @@ public class WorkerTest {
         setup(false);
         Map<String, String> props = new HashMap<>(this.workerProps);
         props.put("config.providers", "monitorable,monitorable2");
-        props.put("config.providers.monitorable.class", MonitorableConfigProvider.class.getName());
-        props.put("config.providers.monitorable2.class", MonitorableConfigProvider.class.getName());
         config = new StandaloneConfig(props);
         mockKafkaClusterId();
         when(plugins.newConfigProvider(any(AbstractConfig.class), any(String.class), any(ClassLoaderUsage.class), any(Metrics.class)))

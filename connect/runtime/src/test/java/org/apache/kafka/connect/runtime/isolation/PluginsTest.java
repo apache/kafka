@@ -405,7 +405,7 @@ public class PluginsTest {
     public void newConfigProviderShouldCallWithPluginMetricsAfterConfigure() {
         String providerName = "monitorable";
         String providerPrefix = WorkerConfig.CONFIG_PROVIDERS_CONFIG + "." + providerName;
-        props.put(providerPrefix + ".class", CustomMonitorableConfigProvider .class.getName());
+        props.put(providerPrefix + ".class", CustomMonitorableConfigProvider.class.getName());
         createConfig();
         Plugin<ConfigProvider> plugin = plugins.newConfigProvider(config, providerName, ClassLoaderUsage.PLUGINS, new Metrics());
         assertInstanceOf(CustomMonitorableConfigProvider.class, plugin.get());
