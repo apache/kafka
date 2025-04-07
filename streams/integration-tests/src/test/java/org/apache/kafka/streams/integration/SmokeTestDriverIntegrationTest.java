@@ -118,10 +118,8 @@ public class SmokeTestDriverIntegrationTest {
     @CsvSource({
         "false, false, true",
         "true, false, true",
-//        "true, true, true",
         "false, false, false",
         "true, false, false",
-//        "true, true, false"
     })
     public void shouldWorkWithRebalance(
         final boolean stateUpdaterEnabled,
