@@ -1120,19 +1120,22 @@ public class StreamsGroupTest {
         streamsGroup.updateMember(streamsGroup.getOrCreateDefaultMember(memberId2));
 
         // Initially, shutdown should not be requested
-        assertFalse(streamsGroup.isShutdownRequested());
+        assertTrue(streamsGroup.getShutdownRequestMemberId().isEmpty());
 
         // Set shutdown requested
-        streamsGroup.setShutdownRequested(memberId1);
-        assertTrue(streamsGroup.isShutdownRequested());
+        streamsGroup.setShutdownRequestMemberId(memberId1);
+        assertEquals(Optional.of(memberId1), streamsGroup.getShutdownRequestMemberId());
+
+        // Setting shutdown requested again will be ignored
+        streamsGroup.setShutdownRequestMemberId(memberId2);
+        assertEquals(Optional.of(memberId1), streamsGroup.getShutdownRequestMemberId());
 
         // As long as group not empty, remain in shutdown requested state
         streamsGroup.removeMember(memberId1);
-        assertTrue(streamsGroup.isShutdownRequested());
+        assertEquals(Optional.of(memberId1), streamsGroup.getShutdownRequestMemberId());
 
         // As soon as the group is empty, clear the shutdown requested state
         streamsGroup.removeMember(memberId2);
-        assertFalse(streamsGroup.isShutdownRequested());
+        assertEquals(Optional.empty(), streamsGroup.getShutdownRequestMemberId());
     }
-
 }

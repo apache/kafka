@@ -16286,6 +16286,8 @@ public class GroupMetadataManagerTest {
                 .setShutdownApplication(true)
         );
 
+        String statusDetail = String.format("Streams group member %s encountered a fatal error and requested a shutdown for the entire application.", memberId1);
+
         assertResponseEquals(
             new StreamsGroupHeartbeatResponseData()
                 .setMemberId(memberId1)
@@ -16294,7 +16296,7 @@ public class GroupMetadataManagerTest {
                 .setStatus(List.of(
                     new StreamsGroupHeartbeatResponseData.Status()
                         .setStatusCode(Status.SHUTDOWN_APPLICATION.code())
-                        .setStatusDetail("A KafkaStreams instance encountered a fatal error and requested a shutdown for the entire application.")
+                        .setStatusDetail(statusDetail)
                 )),
             result1.response().data()
         );
@@ -16315,7 +16317,7 @@ public class GroupMetadataManagerTest {
                 .setStatus(List.of(
                     new StreamsGroupHeartbeatResponseData.Status()
                         .setStatusCode(Status.SHUTDOWN_APPLICATION.code())
-                        .setStatusDetail("A KafkaStreams instance encountered a fatal error and requested a shutdown for the entire application.")
+                        .setStatusDetail(statusDetail)
                 )),
             result2.response().data()
         );

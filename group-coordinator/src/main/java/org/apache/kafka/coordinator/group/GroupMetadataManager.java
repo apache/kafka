@@ -2195,7 +2195,7 @@ public class GroupMetadataManager {
 
         scheduleStreamsGroupSessionTimeout(groupId, memberId);
         if (shutdownApplication) {
-            group.setShutdownRequested(memberId);
+            group.setShutdownRequestMemberId(memberId);
         }
 
         // Prepare the response.
@@ -2224,15 +2224,14 @@ public class GroupMetadataManager {
             );
         }
 
-        if (group.isShutdownRequested()) {
-            returnedStatus.add(
-                new StreamsGroupHeartbeatResponseData.Status()
-                    .setStatusCode(StreamsGroupHeartbeatResponse.Status.SHUTDOWN_APPLICATION.code())
-                    .setStatusDetail(
-                        "A KafkaStreams instance encountered a fatal error and requested a shutdown for the entire application."
-                    )
-            );
-        }
+        group.getShutdownRequestMemberId().ifPresent(requestingMemberId -> returnedStatus.add(
+            new Status()
+                .setStatusCode(StreamsGroupHeartbeatResponse.Status.SHUTDOWN_APPLICATION.code())
+                .setStatusDetail(
+                    String.format("Streams group member %s encountered a fatal error and requested a shutdown for the entire application.",
+                        requestingMemberId)
+                )
+        ));
 
         if (!returnedStatus.isEmpty()) {
             response.setStatus(returnedStatus);
