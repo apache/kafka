@@ -196,4 +196,15 @@ public class SessionKeySchema implements SegmentedBytesStore.KeySchema {
         buf.putLong(endTime);
         buf.putLong(startTime);
     }
+
+    static Bytes toStoreKeyBinary(final byte[] serializedKey,
+                                  final long endTime,
+                                  final long startTime) {
+        final ByteBuffer buf = ByteBuffer.allocate(serializedKey.length + TIMESTAMP_SIZE + TIMESTAMP_SIZE);
+        buf.put(serializedKey);
+        buf.putLong(endTime);
+        buf.putLong(startTime);
+
+        return Bytes.wrap(buf.array());
+    }
 }
