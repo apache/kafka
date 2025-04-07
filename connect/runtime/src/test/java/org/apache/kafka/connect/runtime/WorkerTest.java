@@ -36,19 +36,16 @@ import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.ConfigProvider;
 import org.apache.kafka.common.config.provider.MockFileConfigProvider;
+import org.apache.kafka.common.config.provider.MonitorableConfigProvider;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.JmxReporter;
-import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
-import org.apache.kafka.common.metrics.Monitorable;
-import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.metrics.stats.Avg;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.MockTime;
@@ -111,7 +108,6 @@ import org.mockito.MockitoSession;
 import org.mockito.invocation.InvocationOnMock;
 import org.mockito.quality.Strictness;
 
-import java.io.IOException;
 import java.lang.management.ManagementFactory;
 import java.util.Arrays;
 import java.util.Collection;
@@ -3279,34 +3275,5 @@ public class WorkerTest {
         public void stop() {
         }
 
-    }
-
-    public static class MonitorableConfigProvider implements ConfigProvider, Monitorable {
-        private static final String NAME = "name";
-        private static final String DESCRIPTION = "description";
-
-        @Override
-        public void withPluginMetrics(PluginMetrics metrics) {
-            MetricName metricName = metrics.metricName(NAME, DESCRIPTION, Map.of());
-            metrics.addMetric(metricName, (Measurable) (config, now) -> 123);
-        }
-
-        @Override
-        public ConfigData get(String path) {
-            return null;
-        }
-
-        @Override
-        public ConfigData get(String path, Set<String> keys) {
-            return null;
-        }
-
-        @Override
-        public void close() throws IOException {
-        }
-
-        @Override
-        public void configure(Map<String, ?> configs) {
-        }
     }
 }

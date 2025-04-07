@@ -19,13 +19,12 @@ package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.config.AbstractConfig;
-import org.apache.kafka.common.config.ConfigData;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.provider.ConfigProvider;
+import org.apache.kafka.common.config.provider.MonitorableConfigProvider;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.metrics.Monitorable;
 import org.apache.kafka.common.metrics.PluginMetrics;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.Utils;
@@ -56,7 +55,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URL;
 import java.net.URLClassLoader;
@@ -407,10 +405,10 @@ public class PluginsTest {
     public void newConfigProviderShouldCallWithPluginMetricsAfterConfigure() {
         String providerName = "monitorable";
         String providerPrefix = WorkerConfig.CONFIG_PROVIDERS_CONFIG + "." + providerName;
-        props.put(providerPrefix + ".class", MonitorableConfigProvider .class.getName());
+        props.put(providerPrefix + ".class", CustomMonitorableConfigProvider .class.getName());
         createConfig();
         Plugin<ConfigProvider> plugin = plugins.newConfigProvider(config, providerName, ClassLoaderUsage.PLUGINS, new Metrics());
-        assertInstanceOf(MonitorableConfigProvider.class, plugin.get());
+        assertInstanceOf(CustomMonitorableConfigProvider.class, plugin.get());
     }
 
     @Test
@@ -809,31 +807,11 @@ public class PluginsTest {
         }
     }
 
-    public static class MonitorableConfigProvider implements ConfigProvider, Monitorable {
-        private boolean configured = false;
+    public static class CustomMonitorableConfigProvider extends MonitorableConfigProvider {
 
         @Override
         public void withPluginMetrics(PluginMetrics metrics) {
             assertTrue(configured);
-        }
-
-        @Override
-        public ConfigData get(String path) {
-            return null;
-        }
-
-        @Override
-        public ConfigData get(String path, Set<String> keys) {
-            return null;
-        }
-
-        @Override
-        public void close() throws IOException {
-        }
-
-        @Override
-        public void configure(Map<String, ?> configs) {
-            configured = true;
         }
     }
 
