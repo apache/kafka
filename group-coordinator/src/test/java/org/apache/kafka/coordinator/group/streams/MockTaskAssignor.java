@@ -31,6 +31,7 @@ public class MockTaskAssignor implements TaskAssignor {
 
     private final String name;
     private GroupAssignment preparedGroupAssignment = null;
+    private Map<String, String> assignmentConfigs = Map.of();
 
     public MockTaskAssignor(String name) {
         this.name = name;
@@ -52,6 +53,10 @@ public class MockTaskAssignor implements TaskAssignor {
                     })));
     }
 
+    public Map<String, String> lastPassedAssignmentConfigs() {
+        return assignmentConfigs;
+    }
+
     @Override
     public String name() {
         return name;
@@ -60,6 +65,7 @@ public class MockTaskAssignor implements TaskAssignor {
     @Override
     public GroupAssignment assign(final GroupSpec groupSpec, final TopologyDescriber topologyDescriber)
         throws TaskAssignorException {
+        assignmentConfigs = groupSpec.assignmentConfigs();
         return preparedGroupAssignment;
     }
 }

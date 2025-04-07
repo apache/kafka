@@ -175,6 +175,9 @@ import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_HEARTBEAT_
 import static org.apache.kafka.coordinator.group.GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupConfig.SHARE_HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupConfig.SHARE_SESSION_TIMEOUT_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupConfig.STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupConfig.STREAMS_SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.EMPTY_RESULT;
 import static org.apache.kafka.coordinator.group.GroupMetadataManager.appendGroupMetadataErrorToResponseError;
@@ -4070,7 +4073,7 @@ public class GroupMetadataManagerTest {
             .setProcessId(DEFAULT_PROCESS_ID)
             .setUserEndpoint(null);
     }
-    
+
     @Test
     public void testGenerateRecordsOnNewClassicGroup() throws Exception {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -15800,6 +15803,48 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsNewMemberIsRejectedWithMaximumMembersIsReached() {
+        String groupId = "fooup";
+        String memberId1 = Uuid.randomUuid().toString();
+        String memberId2 = Uuid.randomUuid().toString();
+        String memberId3 = Uuid.randomUuid().toString();
+        Topology topology = new Topology().setSubtopologies(List.of());
+
+        // Create a context with one streams group containing two members.
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withMetadataImage(new MetadataImageBuilder().build())
+            .withConfig(GroupCoordinatorConfig.STREAMS_GROUP_MAX_SIZE_CONFIG, 2)
+            .withStreamsGroup(new StreamsGroupBuilder(groupId, 10)
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId1)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .build())
+                .withMember(streamsGroupMemberBuilderWithDefaults(memberId2)
+                    .setMemberEpoch(10)
+                    .setPreviousMemberEpoch(9)
+                    .build())
+                .withTargetAssignmentEpoch(10)
+                .withTopology(StreamsTopology.fromHeartbeatRequest(topology))
+                .withPartitionMetadata(Map.of())
+            )
+            .build();
+
+        assertThrows(GroupMaxSizeReachedException.class, () ->
+            context.streamsGroupHeartbeat(
+                new StreamsGroupHeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId3)
+                    .setMemberEpoch(0)
+                    .setProcessId("process-id")
+                    .setRebalanceTimeoutMs(1500)
+                    .setTopology(topology)
+                    .setActiveTasks(List.of())
+                    .setStandbyTasks(List.of())
+                    .setWarmupTasks(List.of())
+            ));
+    }
+
+    @Test
     public void testMemberJoinsEmptyStreamsGroup() {
         String groupId = "fooup";
         String memberId = Uuid.randomUuid().toString();
@@ -17872,6 +17917,104 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
+    public void testStreamsOnNewMetadataImage() {
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
+
+        // Topology of group 1 uses a and b.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord("group1",
+            new Topology().setSubtopologies(List.of(
+                new Subtopology().setSubtopologyId("subtopology1")
+                    .setSourceTopics(List.of("a"))
+                    .setRepartitionSourceTopics(List.of(new TopicInfo().setName("b"))
+            ))
+        )));
+
+        // Topology of group 2 uses b and c.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord("group2",
+            new Topology().setSubtopologies(List.of(
+                new Subtopology().setSubtopologyId("subtopology2")
+                    .setSourceTopics(List.of("b"))
+                    .setStateChangelogTopics(List.of(new TopicInfo().setName("c")))
+            ))
+        ));
+
+        // Topology of group 3 uses d.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord("group3",
+            new Topology().setSubtopologies(List.of(
+                new Subtopology().setSubtopologyId("subtopology3")
+                    .setSourceTopics(List.of("d"))
+            ))
+        ));
+
+        // Topology of group 4 subscribes to e.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord("group4",
+            new Topology().setSubtopologies(List.of(
+                new Subtopology().setSubtopologyId("subtopology4")
+                    .setSourceTopics(List.of("e"))
+            ))
+        ));
+
+        // Topology of group 5 subscribes to f.
+        context.replay(StreamsCoordinatorRecordHelpers.newStreamsGroupTopologyRecord("group5",
+            new Topology().setSubtopologies(List.of(
+                new Subtopology().setSubtopologyId("subtopology5")
+                    .setSourceTopics(List.of("f"))
+            ))
+        ));
+
+        // Ensures that all refresh flags are set to the future.
+        List.of("group1", "group2", "group3", "group4", "group5").forEach(groupId -> {
+            StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+            group.setMetadataRefreshDeadline(context.time.milliseconds() + 5000L, 0);
+            assertFalse(group.hasMetadataExpired(context.time.milliseconds()));
+        });
+
+        // Update the metadata image.
+        Uuid topicA = Uuid.randomUuid();
+        Uuid topicB = Uuid.randomUuid();
+        Uuid topicC = Uuid.randomUuid();
+        Uuid topicD = Uuid.randomUuid();
+        Uuid topicE = Uuid.randomUuid();
+
+        // Create a first base image with topic a, b, c and d.
+        MetadataDelta delta = new MetadataDelta(MetadataImage.EMPTY);
+        delta.replay(new TopicRecord().setTopicId(topicA).setName("a"));
+        delta.replay(new PartitionRecord().setTopicId(topicA).setPartitionId(0));
+        delta.replay(new TopicRecord().setTopicId(topicB).setName("b"));
+        delta.replay(new PartitionRecord().setTopicId(topicB).setPartitionId(0));
+        delta.replay(new TopicRecord().setTopicId(topicC).setName("c"));
+        delta.replay(new PartitionRecord().setTopicId(topicC).setPartitionId(0));
+        delta.replay(new TopicRecord().setTopicId(topicD).setName("d"));
+        delta.replay(new PartitionRecord().setTopicId(topicD).setPartitionId(0));
+        MetadataImage image = delta.apply(MetadataProvenance.EMPTY);
+
+        // Create a delta which updates topic B, deletes topic D and creates topic E.
+        delta = new MetadataDelta(image);
+        delta.replay(new PartitionRecord().setTopicId(topicB).setPartitionId(2));
+        delta.replay(new RemoveTopicRecord().setTopicId(topicD));
+        delta.replay(new TopicRecord().setTopicId(topicE).setName("e"));
+        delta.replay(new PartitionRecord().setTopicId(topicE).setPartitionId(1));
+        image = delta.apply(MetadataProvenance.EMPTY);
+
+        // Update metadata image with the delta.
+        context.groupMetadataManager.onNewMetadataImage(image, delta);
+
+        // Verify the groups.
+        List.of("group1", "group2", "group3", "group4").forEach(groupId -> {
+            StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+            assertTrue(group.hasMetadataExpired(context.time.milliseconds()), groupId);
+        });
+
+        List.of("group5").forEach(groupId -> {
+            StreamsGroup group = context.groupMetadataManager.streamsGroup(groupId);
+            assertFalse(group.hasMetadataExpired(context.time.milliseconds()));
+        });
+
+        // Verify image.
+        assertEquals(image, context.groupMetadataManager.image());
+    }
+
+    @Test
     public void testConsumerGroupDynamicConfigs() {
         String groupId = "fooup";
         // Use a static member id as it makes the test easier.
@@ -18087,6 +18230,100 @@ public class GroupMetadataManagerTest {
             0,
             false
         );
+
+        // Verify that there are no timers.
+        context.assertNoSessionTimeout(groupId, memberId);
+        context.assertNoRebalanceTimeout(groupId, memberId);
+    }
+
+    @Test
+    public void testStreamsGroupDynamicConfigs() {
+        String groupId = "fooup";
+        String memberId = Uuid.randomUuid().toString();
+        String subtopology1 = "subtopology1";
+        String fooTopicName = "foo";
+        Uuid fooTopicId = Uuid.randomUuid();
+        Topology topology = new Topology().setSubtopologies(List.of(
+            new Subtopology().setSubtopologyId(subtopology1).setSourceTopics(List.of(fooTopicName))
+        ));
+
+        MockTaskAssignor assignor = new MockTaskAssignor("sticky");
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withStreamsGroupTaskAssignors(List.of(assignor))
+            .withMetadataImage(new MetadataImageBuilder()
+                .addTopic(fooTopicId, fooTopicName, 6)
+                .addRacks()
+                .build())
+            .build();
+
+        assignor.prepareGroupAssignment(
+            Map.of(memberId, TaskAssignmentTestUtil.mkTasksTuple(TaskRole.ACTIVE,
+                TaskAssignmentTestUtil.mkTasks(subtopology1, 0, 1, 2))));
+
+        // Session timer is scheduled on first heartbeat.
+        CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> result =
+            context.streamsGroupHeartbeat(
+                new StreamsGroupHeartbeatRequestData()
+                    .setGroupId(groupId)
+                    .setMemberId(memberId)
+                    .setMemberEpoch(0)
+                    .setRebalanceTimeoutMs(10000)
+                    .setTopology(topology)
+                    .setActiveTasks(List.of())
+                    .setStandbyTasks(List.of())
+                    .setWarmupTasks(List.of()));
+        assertEquals(1, result.response().data().memberEpoch());
+        assertEquals(Map.of("num.standby.replicas", "0"), assignor.lastPassedAssignmentConfigs());
+
+        // Verify heartbeat interval
+        assertEquals(GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT, result.response().data().heartbeatIntervalMs());
+
+        // Verify that there is a session time.
+        context.assertSessionTimeout(groupId, memberId, GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT);
+
+        // Advance time.
+        assertEquals(
+            List.of(),
+            context.sleep(result.response().data().heartbeatIntervalMs())
+        );
+
+        // Dynamic update group config
+        Properties newGroupConfig = new Properties();
+        newGroupConfig.put(STREAMS_SESSION_TIMEOUT_MS_CONFIG, 50000);
+        newGroupConfig.put(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, 10000);
+        newGroupConfig.put(STREAMS_NUM_STANDBY_REPLICAS_CONFIG, 2);
+        context.updateGroupConfig(groupId, newGroupConfig);
+
+        // Session timer is rescheduled on second heartbeat, new assignment with new parameter is calculated.
+        result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(result.response().data().memberEpoch())
+                .setRackId("bla"));
+
+        // Verify heartbeat interval
+        assertEquals(10000, result.response().data().heartbeatIntervalMs());
+
+        // Verify that there is a session time.
+        context.assertSessionTimeout(groupId, memberId, 50000);
+
+        // Verify that the new number of standby replicas is used
+        assertEquals(Map.of("num.standby.replicas", "2"), assignor.lastPassedAssignmentConfigs());
+
+        // Advance time.
+        assertEquals(
+            List.of(),
+            context.sleep(result.response().data().heartbeatIntervalMs())
+        );
+
+        // Session timer is cancelled on leave.
+        result = context.streamsGroupHeartbeat(
+            new StreamsGroupHeartbeatRequestData()
+                .setGroupId(groupId)
+                .setMemberId(memberId)
+                .setMemberEpoch(LEAVE_GROUP_MEMBER_EPOCH));
+        assertEquals(LEAVE_GROUP_MEMBER_EPOCH, result.response().data().memberEpoch());
 
         // Verify that there are no timers.
         context.assertNoSessionTimeout(groupId, memberId);
