@@ -31,7 +31,7 @@ import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopi
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{CreateTopicsRequest, RequestContext, RequestHeader}
 import org.apache.kafka.coordinator.group.GroupCoordinator
-import org.apache.kafka.coordinator.share.ShareCoordinator
+import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 
@@ -198,14 +198,15 @@ class DefaultAutoTopicCreationManager(
           .setConfigs(convertToTopicConfigCollections(
             txnCoordinator.transactionTopicConfigs))
       case SHARE_GROUP_STATE_TOPIC_NAME =>
+        val shareCoordinatorConfig = new ShareCoordinatorConfig(config)
         val props = shareCoordinator match {
           case Some(coordinator) => coordinator.shareGroupStateTopicConfigs()
           case None => new Properties()
         }
         new CreatableTopic()
           .setName(topic)
-          .setNumPartitions(config.shareCoordinatorConfig.shareCoordinatorStateTopicNumPartitions())
-          .setReplicationFactor(config.shareCoordinatorConfig.shareCoordinatorStateTopicReplicationFactor())
+          .setNumPartitions(shareCoordinatorConfig.shareCoordinatorStateTopicNumPartitions())
+          .setReplicationFactor(shareCoordinatorConfig.shareCoordinatorStateTopicReplicationFactor())
           .setConfigs(convertToTopicConfigCollections(props))
       case topicName =>
         new CreatableTopic()

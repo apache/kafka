@@ -26,7 +26,7 @@ import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.TimeoutException
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.coordinator.group.GroupCoordinator
-import org.apache.kafka.coordinator.share.ShareCoordinator
+import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorConfig}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.publisher.MetadataPublisher
@@ -341,9 +341,10 @@ class BrokerMetadataPublisher(
     }
     if (config.shareGroupConfig.isShareGroupEnabled && shareCoordinator.isDefined) {
       try {
+        val shareCoordinatorConfig = new ShareCoordinatorConfig(config)
         // Start the share coordinator.
         shareCoordinator.get.startup(() => metadataCache.numPartitions(
-          Topic.SHARE_GROUP_STATE_TOPIC_NAME).orElse(config.shareCoordinatorConfig.shareCoordinatorStateTopicNumPartitions()))
+          Topic.SHARE_GROUP_STATE_TOPIC_NAME).orElse(shareCoordinatorConfig.shareCoordinatorStateTopicNumPartitions()))
       } catch {
         case t: Throwable => fatalFaultHandler.handleFault("Error starting Share coordinator", t)
       }

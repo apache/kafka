@@ -38,7 +38,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord
 import org.apache.kafka.coordinator.group.metrics.{GroupCoordinatorMetrics, GroupCoordinatorRuntimeMetrics}
 import org.apache.kafka.coordinator.group.{GroupConfigManager, GroupCoordinator, GroupCoordinatorRecordSerde, GroupCoordinatorService}
 import org.apache.kafka.coordinator.share.metrics.{ShareCoordinatorMetrics, ShareCoordinatorRuntimeMetrics}
-import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorRecordSerde, ShareCoordinatorService}
+import org.apache.kafka.coordinator.share.{ShareCoordinator, ShareCoordinatorConfig, ShareCoordinatorRecordSerde, ShareCoordinatorService}
 import org.apache.kafka.coordinator.transaction.ProducerIdManager
 import org.apache.kafka.image.publisher.{BrokerRegistrationTracker, MetadataPublisher}
 import org.apache.kafka.metadata.{BrokerState, ListenerInfo}
@@ -76,6 +76,7 @@ class BrokerServer(
   val sharedServer: SharedServer
 ) extends KafkaBroker {
   val config: KafkaConfig = sharedServer.brokerConfig
+  val shareCoordinatorConfig: ShareCoordinatorConfig = new ShareCoordinatorConfig(config)
   val time: Time = sharedServer.time
   def metrics: Metrics = sharedServer.metrics
 
@@ -664,12 +665,12 @@ class BrokerServer(
         time,
         replicaManager,
         serde,
-        config.shareCoordinatorConfig.shareCoordinatorLoadBufferSize()
+        shareCoordinatorConfig.shareCoordinatorLoadBufferSize()
       )
       val writer = new CoordinatorPartitionWriter(
         replicaManager
       )
-      Some(new ShareCoordinatorService.Builder(config.brokerId, config.shareCoordinatorConfig)
+      Some(new ShareCoordinatorService.Builder(config.brokerId, shareCoordinatorConfig)
         .withTimer(timer)
         .withTime(time)
         .withLoader(loader)

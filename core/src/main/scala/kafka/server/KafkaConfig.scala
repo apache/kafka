@@ -36,7 +36,6 @@ import org.apache.kafka.network.EndPoint
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
-import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{AddPartitionsToTxnConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
@@ -200,9 +199,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
   private val _shareGroupConfig = new ShareGroupConfig(this)
   def shareGroupConfig: ShareGroupConfig = _shareGroupConfig
-
-  private val _shareCoordinatorConfig = new ShareCoordinatorConfig(this)
-  def shareCoordinatorConfig: ShareCoordinatorConfig = _shareCoordinatorConfig
 
   private val _transactionStateManagerConfig = new TransactionStateManagerConfig(this)
   private val _addPartitionsToTxnConfig = new AddPartitionsToTxnConfig(this)
