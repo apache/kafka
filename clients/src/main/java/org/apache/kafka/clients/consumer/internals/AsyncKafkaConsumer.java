@@ -21,6 +21,7 @@ import org.apache.kafka.clients.ClientUtils;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.GroupRebalanceConfig;
 import org.apache.kafka.clients.KafkaClient;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -438,7 +439,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // call close methods if internal objects are already constructed; this is to prevent resource leak. see KAFKA-2121
             // we do not need to call `close` at all when `log` is null, which means no internal objects were initialized.
             if (this.log != null) {
-                close(Duration.ZERO, true);
+                close(Duration.ZERO, CloseOptions.GroupMembershipOperation.LEAVE_GROUP, true);
             }
             // now propagate the exception
             throw new KafkaException("Failed to construct kafka consumer", t);
@@ -1264,11 +1265,19 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
     @Override
     public void close() {
-        close(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS));
+        close(CloseOptions.timeout(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS)));
     }
 
     @Override
+    @SuppressWarnings("deprecation")
     public void close(Duration timeout) {
+        close(CloseOptions.timeout(timeout));
+    }
+
+    @Override
+    public void close(CloseOptions option) {
+        Duration timeout = option.timeout().orElseGet(() -> Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS));
+
         if (timeout.toMillis() < 0)
             throw new IllegalArgumentException("The timeout cannot be negative.");
         acquire();
@@ -1276,7 +1285,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             if (!closed) {
                 // need to close before setting the flag since the close function
                 // itself may trigger rebalance callback that needs the consumer to be open still
-                close(timeout, false);
+                close(timeout, option.groupMembershipOperation(), false);
             }
         } finally {
             closed = true;
@@ -1346,7 +1355,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      *     </li>
      * </ol>
      */
-    private void close(Duration timeout, boolean swallowException) {
+    private void close(Duration timeout, CloseOptions.GroupMembershipOperation membershipOperation, boolean swallowException) {
         log.trace("Closing the Kafka consumer");
         AtomicReference<Throwable> firstException = new AtomicReference<>();
 
@@ -1366,7 +1375,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         swallow(log, Level.ERROR, "Failed to release group assignment",
             this::runRebalanceCallbacksOnClose, firstException);
         swallow(log, Level.ERROR, "Failed to leave group while closing consumer",
-            () -> leaveGroupOnClose(closeTimer), firstException);
+            () -> leaveGroupOnClose(closeTimer, membershipOperation), firstException);
         swallow(log, Level.ERROR, "Failed invoking asynchronous commit callbacks while closing consumer",
             () -> awaitPendingAsyncCommitsAndExecuteCommitCallbacks(closeTimer, false), firstException);
         if (applicationEventHandler != null)
@@ -1437,13 +1446,13 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             throw ConsumerUtils.maybeWrapAsKafkaException(error);
     }
 
-    private void leaveGroupOnClose(final Timer timer) {
+    private void leaveGroupOnClose(final Timer timer, final CloseOptions.GroupMembershipOperation membershipOperation) {
         if (groupMetadata.get().isEmpty())
             return;
 
         log.debug("Leaving the consumer group during consumer close");
         try {
-            applicationEventHandler.addAndGet(new LeaveGroupOnCloseEvent(calculateDeadlineMs(timer)));
+            applicationEventHandler.addAndGet(new LeaveGroupOnCloseEvent(calculateDeadlineMs(timer), membershipOperation));
             log.info("Completed leaving the group");
         } catch (TimeoutException e) {
             log.warn("Consumer attempted to leave the group but couldn't " +

@@ -1159,14 +1159,14 @@ private[kafka] class Processor(
    */
   def accept(socketChannel: SocketChannel,
              mayBlock: Boolean,
-             acceptorIdlePercentMeter: com.yammer.metrics.core.Meter): Boolean = {
+             acceptorBlockedPercentMeter: com.yammer.metrics.core.Meter): Boolean = {
     val accepted = {
       if (newConnections.offer(socketChannel))
         true
       else if (mayBlock) {
         val startNs = time.nanoseconds
         newConnections.put(socketChannel)
-        acceptorIdlePercentMeter.mark(time.nanoseconds() - startNs)
+        acceptorBlockedPercentMeter.mark(time.nanoseconds() - startNs)
         true
       } else
         false
