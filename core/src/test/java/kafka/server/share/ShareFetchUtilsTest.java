@@ -48,7 +48,6 @@ import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -143,10 +142,10 @@ public class ShareFetchUtilsTest {
         assertEquals(1, resultData.get(tp1).partitionIndex());
         assertEquals(Errors.NONE.code(), resultData.get(tp0).errorCode());
         assertEquals(Errors.NONE.code(), resultData.get(tp1).errorCode());
-        assertEquals(Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
+        assertEquals(List.of(new ShareFetchResponseData.AcquiredRecords()
                         .setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)),
                 resultData.get(tp0).acquiredRecords());
-        assertEquals(Collections.singletonList(new ShareFetchResponseData.AcquiredRecords()
+        assertEquals(List.of(new ShareFetchResponseData.AcquiredRecords()
                         .setFirstOffset(100).setLastOffset(103).setDeliveryCount((short) 1)),
                 resultData.get(tp1).acquiredRecords());
     }
@@ -192,8 +191,8 @@ public class ShareFetchUtilsTest {
         assertEquals(1, resultData.get(tp1).partitionIndex());
         assertEquals(Errors.NONE.code(), resultData.get(tp0).errorCode());
         assertEquals(Errors.NONE.code(), resultData.get(tp1).errorCode());
-        assertEquals(Collections.emptyList(), resultData.get(tp0).acquiredRecords());
-        assertEquals(Collections.emptyList(), resultData.get(tp1).acquiredRecords());
+        assertEquals(List.of(), resultData.get(tp0).acquiredRecords());
+        assertEquals(List.of(), resultData.get(tp1).acquiredRecords());
     }
 
     @Test
