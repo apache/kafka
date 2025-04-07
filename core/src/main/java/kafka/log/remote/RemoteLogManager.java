@@ -168,7 +168,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     private final BrokerTopicStats brokerTopicStats;
     private final Metrics metrics;
 
-    private final RemoteStorageManager remoteLogStorageManager;
+    private final RemoteStorageManager remoteStorageManager;
 
     private final RemoteLogMetadataManager remoteLogMetadataManager;
 
@@ -238,7 +238,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         this.brokerTopicStats = brokerTopicStats;
         this.metrics = metrics;
 
-        remoteLogStorageManager = createRemoteStorageManager();
+        remoteStorageManager = createRemoteStorageManager();
         remoteLogMetadataManager = createRemoteLogMetadataManager();
         rlmCopyQuotaManager = createRLMCopyQuotaManager();
         rlmFetchQuotaManager = createRLMFetchQuotaManager();
@@ -248,7 +248,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         copyThrottleTimeSensor = new RLMQuotaMetrics(metrics, "remote-copy-throttle-time", RemoteLogManager.class.getSimpleName(),
             "The %s time in millis remote copies was throttled by a broker", INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS).sensor();
 
-        indexCache = new RemoteIndexCache(rlmConfig.remoteLogIndexFileCacheTotalSizeBytes(), remoteLogStorageManager, logDir);
+        indexCache = new RemoteIndexCache(rlmConfig.remoteLogIndexFileCacheTotalSizeBytes(), remoteStorageManager, logDir);
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
         rlmCopyThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerCopierThreadPoolSize(),
             "RLMCopyThreadPool", "kafka-rlm-copy-thread-pool-%d");
@@ -374,7 +374,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     private void configureRSM() {
         final Map<String, Object> rsmProps = new HashMap<>(rlmConfig.remoteStorageManagerProps());
         rsmProps.put(ServerConfigs.BROKER_ID_CONFIG, brokerId);
-        remoteLogStorageManager.configure(rsmProps);
+        remoteStorageManager.configure(rsmProps);
     }
 
     RemoteLogMetadataManager createRemoteLogMetadataManager() {
@@ -423,7 +423,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     }
 
     public RemoteStorageManager storageManager() {
-        return remoteLogStorageManager;
+        return remoteStorageManager;
     }
 
     private Stream<Partition> filterPartitions(Set<Partition> partitions) {
@@ -575,7 +575,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         Collection<Uuid> deletedSegmentIds = new ArrayList<>();
         for (RemoteLogSegmentMetadata metadata: metadataList) {
             deletedSegmentIds.add(metadata.remoteLogSegmentId().id());
-            remoteLogStorageManager.deleteLogSegmentData(metadata);
+            remoteStorageManager.deleteLogSegmentData(metadata);
         }
         indexCache.removeAll(deletedSegmentIds);
 
@@ -632,7 +632,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         InputStream remoteSegInputStream = null;
         try {
             // Search forward for the position of the last offset that is greater than or equal to the startingOffset
-            remoteSegInputStream = remoteLogStorageManager.fetchLogSegment(rlsMetadata, startPos);
+            remoteSegInputStream = remoteStorageManager.fetchLogSegment(rlsMetadata, startPos);
             RemoteLogInputStream remoteLogInputStream = new RemoteLogInputStream(remoteSegInputStream);
 
             while (true) {
@@ -1027,7 +1027,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             Optional<CustomMetadata> customMetadata;
             
             try {
-                customMetadata = remoteLogStorageManager.copyLogSegmentData(copySegmentStartedRlsm, segmentData);
+                customMetadata = remoteStorageManager.copyLogSegmentData(copySegmentStartedRlsm, segmentData);
             } catch (RemoteStorageException e) {
                 logger.info("Copy failed, cleaning segment {}", copySegmentStartedRlsm.remoteLogSegmentId());
                 try {
@@ -1492,7 +1492,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
             // Delete the segment in remote storage.
             try {
-                remoteLogStorageManager.deleteLogSegmentData(segmentMetadata);
+                remoteStorageManager.deleteLogSegmentData(segmentMetadata);
             } catch (RemoteStorageException e) {
                 brokerTopicStats.topicStats(topic).failedRemoteDeleteRequestRate().mark();
                 brokerTopicStats.allTopicsStats().failedRemoteDeleteRequestRate().mark();
@@ -1696,7 +1696,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 remoteLogSegmentMetadata = rlsMetadataOptional.get();
                 // Search forward for the position of the last offset that is greater than or equal to the target offset
                 startPos = lookupPositionForOffset(remoteLogSegmentMetadata, offset);
-                remoteSegInputStream = remoteLogStorageManager.fetchLogSegment(remoteLogSegmentMetadata, startPos);
+                remoteSegInputStream = remoteStorageManager.fetchLogSegment(remoteLogSegmentMetadata, startPos);
                 RemoteLogInputStream remoteLogInputStream = getRemoteLogInputStream(remoteSegInputStream);
                 enrichedRecordBatch = findFirstBatch(remoteLogInputStream, offset);
                 if (enrichedRecordBatch.batch == null) {
@@ -2045,7 +2045,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 leaderCopyRLMTasks.values().forEach(RLMTaskWithFuture::cancel);
                 leaderExpirationRLMTasks.values().forEach(RLMTaskWithFuture::cancel);
                 followerRLMTasks.values().forEach(RLMTaskWithFuture::cancel);
-                Utils.closeQuietly(remoteLogStorageManager, "RemoteLogStorageManager");
+                Utils.closeQuietly(remoteStorageManager, "RemoteStorageManager");
                 Utils.closeQuietly(remoteLogMetadataManager, "RemoteLogMetadataManager");
                 Utils.closeQuietly(indexCache, "RemoteIndexCache");
 
