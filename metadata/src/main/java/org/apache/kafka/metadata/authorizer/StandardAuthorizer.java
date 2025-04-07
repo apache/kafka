@@ -51,8 +51,7 @@ import static org.apache.kafka.server.authorizer.AuthorizationResult.DENIED;
 
 
 /**
- * The standard authorizer which is used in KRaft-based clusters if no other authorizer is
- * configured.
+ * Built-in authorizer implementation that stores ACLs in the metadata log.
  */
 public class StandardAuthorizer implements ClusterMetadataAuthorizer, Monitorable {
     public static final String SUPER_USERS_CONFIG = "super.users";

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server;
 
-import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
@@ -32,7 +31,6 @@ import org.apache.kafka.metadata.authorizer.StandardAuthorizer;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
-import static org.apache.kafka.clients.admin.AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG;
 import static org.apache.kafka.server.config.ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG;
 import static org.apache.kafka.server.config.ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -63,10 +61,7 @@ public class MonitorablePluginsIntegrationTest {
             @ClusterConfigProperty(key = REPLICA_SELECTOR_CLASS_CONFIG, value = "org.apache.kafka.server.MonitorablePluginsIntegrationTest$MonitorableReplicaSelector")
         }
     )
-    public void testMonitorableServerPlugins(ClusterInstance clusterInstance) throws Exception {
-        try (Admin admin = Admin.create(Map.of(BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()))) {
-            admin.describeCluster().clusterId().get();
-        }
+    public void testMonitorableServerPlugins(ClusterInstance clusterInstance) {
         assertAuthorizerMetrics(clusterInstance);
         assertReplicaSelectorMetrics(clusterInstance);
     }
