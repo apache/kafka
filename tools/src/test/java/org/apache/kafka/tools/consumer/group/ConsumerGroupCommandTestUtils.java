@@ -37,26 +37,6 @@ import java.util.function.Supplier;
 
 /**
  * This class provides methods to build and manage consumer instances, and does not generate or manage Kafka clusters.
- * The old test framework {@link kafka.api.BaseConsumerTest#getTestGroupProtocolParametersAll} test for the following cases:
- * <ul>
- *     <li>(KRAFT server) with (group.coordinator.new.enable=true) with (classic group protocol) = 1 case</li>
- *     <li>(KRAFT server) with (group.coordinator.new.enable=true) with (consumer group protocol) = 1 case</li>
- * </ul>
- * <p>
- * The new test framework run seven cases for the following cases:
- * <ul>
- *     <li>(KRAFT / CO_KRAFT servers) with (group.coordinator.new.enable=false) with (classic group protocol) = 2 cases</li>
- *     <li>(KRAFT / CO_KRAFT servers) with (group.coordinator.new.enable=true) with (classic group protocol) = 2 cases</li>
- *     <li>(KRAFT / CO_KRAFT servers) with (group.coordinator.new.enable=true) with (consumer group protocol) = 2 cases</li>
- * </ul>
- * <p>
- * We can reduce the number of cases as same as the old test framework by using the following methods:
- * <ul>
- *     <li>(CO_KRAFT servers) with (group.coordinator.new.enable=true) with (classic / consumer group protocols) = 2 cases</li>
- * </ul>
- * <ul>
- *     <li>(KRAFT server) with (group.coordinator.new.enable=false) with (classic group protocol) = 1 case</li>
- * </ul>
  */
 class ConsumerGroupCommandTestUtils {
 
