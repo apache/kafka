@@ -66,10 +66,6 @@ public final class ClusterImage {
         return controllers;
     }
 
-    public boolean containsBroker(int brokerId) {
-        return brokers.containsKey(brokerId);
-    }
-
     public long brokerEpoch(int brokerId) {
         BrokerRegistration brokerRegistration = broker(brokerId);
         if (brokerRegistration == null) {

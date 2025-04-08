@@ -103,7 +103,7 @@ public class ShareSessionContext extends ShareFetchContext {
     public ShareFetchResponse throttleResponse(int throttleTimeMs) {
         if (!isSubsequent) {
             return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, throttleTimeMs,
-                    Collections.emptyIterator(), List.of()));
+                    Collections.emptyIterator(), List.of(), 0));
         }
         int expectedEpoch = ShareRequestMetadata.nextEpoch(reqMetadata.epoch());
         int sessionEpoch;
@@ -114,10 +114,10 @@ public class ShareSessionContext extends ShareFetchContext {
             log.debug("Subsequent share session {} expected epoch {}, but got {}. " +
                     "Possible duplicate request.", session.key(), expectedEpoch, sessionEpoch);
             return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.INVALID_SHARE_SESSION_EPOCH,
-                    throttleTimeMs, Collections.emptyIterator(), List.of()));
+                    throttleTimeMs, Collections.emptyIterator(), List.of(), 0));
         }
         return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.NONE, throttleTimeMs,
-                Collections.emptyIterator(), List.of()));
+                Collections.emptyIterator(), List.of(), 0));
     }
 
     /**
@@ -196,7 +196,7 @@ public class ShareSessionContext extends ShareFetchContext {
                                                      LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> updates) {
         if (!isSubsequent) {
             return new ShareFetchResponse(ShareFetchResponse.toMessage(
-                    Errors.NONE, 0, updates.entrySet().iterator(), List.of()));
+                    Errors.NONE, 0, updates.entrySet().iterator(), List.of(), 0));
         } else {
             int expectedEpoch = ShareRequestMetadata.nextEpoch(reqMetadata.epoch());
             int sessionEpoch;
@@ -207,7 +207,7 @@ public class ShareSessionContext extends ShareFetchContext {
                 log.debug("Subsequent share session {} expected epoch {}, but got {}. Possible duplicate request.",
                         session.key(), expectedEpoch, sessionEpoch);
                 return new ShareFetchResponse(ShareFetchResponse.toMessage(Errors.INVALID_SHARE_SESSION_EPOCH,
-                        0, Collections.emptyIterator(), List.of()));
+                        0, Collections.emptyIterator(), List.of(), 0));
             }
             // Iterate over the update list using PartitionIterator. This will prune updates which don't need to be sent
             Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partitionIterator = new PartitionIterator(
@@ -218,7 +218,7 @@ public class ShareSessionContext extends ShareFetchContext {
             log.debug("Subsequent share session context with session key {} returning {}", session.key(),
                     partitionsToLogString(updates.keySet()));
             return new ShareFetchResponse(ShareFetchResponse.toMessage(
-                    Errors.NONE, 0, updates.entrySet().iterator(), List.of()));
+                    Errors.NONE, 0, updates.entrySet().iterator(), List.of(), 0));
         }
     }
 

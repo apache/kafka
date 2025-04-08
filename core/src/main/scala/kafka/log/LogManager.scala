@@ -29,6 +29,7 @@ import kafka.utils.{CoreUtils, Logging, Pool}
 import org.apache.kafka.common.{DirectoryId, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.utils.{Exit, KafkaThread, Time, Utils}
 import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException, LogDirNotFoundException}
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 
 import scala.jdk.CollectionConverters._
 import scala.collection._
@@ -83,11 +84,11 @@ class LogManager(logDirs: Seq[File],
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   private val logCreationOrDeletionLock = new Object
-  private val currentLogs = new Pool[TopicPartition, UnifiedLog]()
+  private val currentLogs = new util.concurrent.ConcurrentHashMap[TopicPartition, UnifiedLog]()
   // Future logs are put in the directory with "-future" suffix. Future log is created when user wants to move replica
   // from one log directory to another log directory on the same broker. The directory of the future log will be renamed
   // to replace the current log of the partition after the future log catches up with the current log
-  private val futureLogs = new Pool[TopicPartition, UnifiedLog]()
+  private val futureLogs = new util.concurrent.ConcurrentHashMap[TopicPartition, UnifiedLog]()
   // Each element in the queue contains the log object to be deleted and the time it is scheduled for deletion.
   private val logsToBeDeleted = new LinkedBlockingQueue[(UnifiedLog, Long)]()
 
@@ -230,8 +231,8 @@ class LogManager(logDirs: Seq[File],
       if (cleaner != null)
         cleaner.handleLogDirFailure(dir)
 
-      def removeOfflineLogs(logs: Pool[TopicPartition, UnifiedLog]): Iterable[TopicPartition] = {
-        val offlineTopicPartitions: Iterable[TopicPartition] = logs.collect {
+      def removeOfflineLogs(logs: util.concurrent.ConcurrentMap[TopicPartition, UnifiedLog]): Iterable[TopicPartition] = {
+        val offlineTopicPartitions: Iterable[TopicPartition] = logs.asScala.collect {
           case (tp, log) if log.parentDir == dir => tp
         }
         offlineTopicPartitions.foreach { topicPartition => {
@@ -1180,7 +1181,7 @@ class LogManager(logDirs: Seq[File],
   }
 
   private def findAbandonedFutureLogs(brokerId: Int, newTopicsImage: TopicsImage): Iterable[(UnifiedLog, Option[UnifiedLog])] = {
-    futureLogs.values.flatMap { futureLog =>
+    futureLogs.asScala.values.flatMap { futureLog =>
       val topicId = futureLog.topicId.orElseThrow(() =>
         new RuntimeException(s"The log dir $futureLog does not have a topic ID, " +
           "which is not allowed when running in KRaft mode.")
@@ -1386,7 +1387,7 @@ class LogManager(logDirs: Seq[File],
         // prevent cleaner from working on same partitions when changing cleanup policy
         cleaner.pauseCleaningForNonCompactedPartitions()
       } else {
-        currentLogs.filter {
+        currentLogs.asScala.filter {
           case (_, log) => !log.config.compact
         }
       }
@@ -1418,10 +1419,10 @@ class LogManager(logDirs: Seq[File],
   /**
    * Get all the partition logs
    */
-  def allLogs: Iterable[UnifiedLog] = currentLogs.values ++ futureLogs.values
+  def allLogs: Iterable[UnifiedLog] = currentLogs.asScala.values ++ futureLogs.asScala.values
 
   def logsByTopic(topic: String): Seq[UnifiedLog] = {
-    (currentLogs.toList ++ futureLogs.toList).collect {
+    (currentLogs.asScala.toList ++ futureLogs.asScala.toList).collect {
       case (topicPartition, log) if topicPartition.topic == topic => log
     }
   }
@@ -1437,8 +1438,8 @@ class LogManager(logDirs: Seq[File],
     def addToDir(tp: TopicPartition, log: UnifiedLog): Unit = {
       byDir.getOrElseUpdate(log.parentDir, new mutable.AnyRefMap[TopicPartition, UnifiedLog]()).put(tp, log)
     }
-    currentLogs.foreachEntry(addToDir)
-    futureLogs.foreachEntry(addToDir)
+    currentLogs.asScala.foreachEntry(addToDir)
+    futureLogs.asScala.foreachEntry(addToDir)
     byDir
   }
 
@@ -1466,7 +1467,7 @@ class LogManager(logDirs: Seq[File],
   private def flushDirtyLogs(): Unit = {
     debug("Checking for dirty logs to flush...")
 
-    for ((topicPartition, log) <- currentLogs.toList ++ futureLogs.toList) {
+    for ((topicPartition, log) <- currentLogs.asScala.toList ++ futureLogs.asScala.toList) {
       try {
         val timeSinceLastFlush = time.milliseconds - log.lastFlushTime
         debug(s"Checking if flush is needed on ${topicPartition.topic} flush interval ${log.config.flushMs}" +
@@ -1480,7 +1481,7 @@ class LogManager(logDirs: Seq[File],
     }
   }
 
-  private def removeLogAndMetrics(logs: Pool[TopicPartition, UnifiedLog], tp: TopicPartition): Option[UnifiedLog] = {
+  private def removeLogAndMetrics(logs: util.concurrent.ConcurrentMap[TopicPartition, UnifiedLog], tp: TopicPartition): Option[UnifiedLog] = {
     val removedLog = logs.remove(tp)
     if (removedLog != null) {
       removedLog.removeLogMetrics()
@@ -1548,6 +1549,7 @@ object LogManager {
     val defaultLogConfig = new LogConfig(defaultProps)
 
     val cleanerConfig = LogCleaner.cleanerConfig(config)
+    val transactionLogConfig = new TransactionLogConfig(config)
 
     new LogManager(logDirs = config.logDirs.map(new File(_).getAbsoluteFile),
       initialOfflineDirs = initialOfflineDirs.map(new File(_).getAbsoluteFile),
@@ -1560,8 +1562,8 @@ object LogManager {
       flushStartOffsetCheckpointMs = config.logFlushStartOffsetCheckpointIntervalMs,
       retentionCheckMs = config.logCleanupIntervalMs,
       maxTransactionTimeoutMs = config.transactionStateManagerConfig.transactionMaxTimeoutMs,
-      producerStateManagerConfig = new ProducerStateManagerConfig(config.transactionLogConfig.producerIdExpirationMs, config.transactionLogConfig.transactionPartitionVerificationEnable),
-      producerIdExpirationCheckIntervalMs = config.transactionLogConfig.producerIdExpirationCheckIntervalMs,
+      producerStateManagerConfig = new ProducerStateManagerConfig(transactionLogConfig.producerIdExpirationMs, transactionLogConfig.transactionPartitionVerificationEnable),
+      producerIdExpirationCheckIntervalMs = transactionLogConfig.producerIdExpirationCheckIntervalMs,
       scheduler = kafkaScheduler,
       brokerTopicStats = brokerTopicStats,
       logDirFailureChannel = logDirFailureChannel,
