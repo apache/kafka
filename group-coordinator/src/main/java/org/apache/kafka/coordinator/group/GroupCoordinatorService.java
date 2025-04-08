@@ -1279,7 +1279,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         .setPartitions(topicData.partitions().stream().map(
                             partitionData -> new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
                                 .setPartitionIndex(partitionData.partition())
-                                .setErrorMessage(Errors.forCode(partitionData.errorCode()).message())
+                                .setErrorMessage(partitionData.errorCode() == Errors.NONE.code() ? null : Errors.forCode(partitionData.errorCode()).message())
                                 .setErrorCode(partitionData.errorCode())
                         ).toList())
                     ));
@@ -1635,7 +1635,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         describeGroupFuture.whenComplete((groups, throwable) -> {
             if (throwable != null) {
                 log.error("Failed to describe the share group {}", groupId, throwable);
-                future.complete(DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.GROUP_ID_NOT_FOUND));
+                future.complete(DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.forException(throwable)));
             } else if (groups == null || groups.isEmpty()) {
                 log.error("Describe share group resulted in empty response for group {}", groupId);
                 future.complete(DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.GROUP_ID_NOT_FOUND));

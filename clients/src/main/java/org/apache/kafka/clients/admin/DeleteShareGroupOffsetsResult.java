@@ -43,7 +43,7 @@ public class DeleteShareGroupOffsetsResult {
 
     /**
      * Return a future which succeeds only if all the deletions succeed.
-     * * If not, the first partition error shall be returned.
+     * If not, the first partition error shall be returned.
      */
     public KafkaFuture<Void> all() {
         final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();

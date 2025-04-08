@@ -3314,7 +3314,7 @@ public class GroupCoordinatorServiceTest {
                     .setPartitions(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
                         .setPartitionIndex(partition)
                         .setErrorCode(PartitionFactory.DEFAULT_ERROR_CODE)
-                        .setErrorMessage(PartitionFactory.DEFAULT_ERR_MESSAGE))))
+                        .setErrorMessage(null))))
             );
 
         ShareGroupDescribeResponseData.DescribedGroup describedGroup = new ShareGroupDescribeResponseData.DescribedGroup()
@@ -3366,7 +3366,7 @@ public class GroupCoordinatorServiceTest {
                     .setPartitions(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
                         .setPartitionIndex(partition)
                         .setErrorCode(Errors.NONE.code())
-                        .setErrorMessage(Errors.NONE.message()))))
+                        .setErrorMessage(null))))
             );
 
         DeleteShareGroupStateResponseData deleteShareGroupStateResponseData = new DeleteShareGroupStateResponseData()
@@ -3376,7 +3376,7 @@ public class GroupCoordinatorServiceTest {
                     .setPartitions(List.of(new DeleteShareGroupStateResponseData.PartitionResult()
                         .setPartition(partition)
                         .setErrorCode(Errors.NONE.code())
-                        .setErrorMessage(Errors.NONE.message())))
+                        .setErrorMessage(null)))
                 )
             );
 
