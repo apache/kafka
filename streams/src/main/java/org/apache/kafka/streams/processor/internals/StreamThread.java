@@ -1574,7 +1574,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         log.info("Shutting down {}", cleanRun ? "clean" : "unclean");
 
         mainConsumerInstanceIdFuture.complete(null);
-        CloseOptions closeOptions = leaveGroup ? CloseOptions.groupMembershipOperation(LEAVE_GROUP)
+        final CloseOptions closeOptions = leaveGroup ? CloseOptions.groupMembershipOperation(LEAVE_GROUP)
             : CloseOptions.groupMembershipOperation(REMAIN_IN_GROUP);
 
         try {
