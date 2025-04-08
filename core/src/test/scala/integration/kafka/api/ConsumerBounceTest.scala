@@ -130,7 +130,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
 
         if (records.nonEmpty) {
           consumer.commitSync()
-          assertEquals(consumer.position(tp), consumer.committed(Set(tp).asJava).get(tp).offset)
+          assertEquals(consumer.position(tp), consumer.committed(util.Set.of(tp)).get(tp).offset)
 
           if (consumer.position(tp) == numRecords) {
             consumer.seekToBeginning(util.List.of())
@@ -179,7 +179,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
         } else if (coin == 2) {
           info("Committing offset.")
           consumer.commitSync()
-          assertEquals(consumer.position(tp), consumer.committed(Set(tp).asJava).get(tp).offset)
+          assertEquals(consumer.position(tp), consumer.committed(java.util.Set.of(tp)).get(tp).offset)
         }
       }
     } finally {
@@ -532,7 +532,7 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     }, "Assignment did not complete on time")
 
     if (committedRecords > 0)
-      assertEquals(committedRecords, consumer.committed(Set(tp).asJava).get(tp).offset)
+      assertEquals(committedRecords, consumer.committed(java.util.Set.of(tp)).get(tp).offset)
     consumer.close()
   }
 

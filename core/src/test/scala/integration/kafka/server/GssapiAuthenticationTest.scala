@@ -42,8 +42,6 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
 
-import scala.jdk.CollectionConverters._
-
 class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
   override val brokerCount = 1
   override protected def securityProtocol = SecurityProtocol.SASL_PLAINTEXT
@@ -188,7 +186,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
     val configOverrides = new Properties()
     configOverrides.setProperty(SaslConfigs.SASL_JAAS_CONFIG, clientLoginContext)
     val consumer = createConsumer(configOverrides = configOverrides)
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
 
     val startMs = System.currentTimeMillis()
     assertThrows(classOf[SaslAuthenticationException], () => consumer.poll(Duration.ofMillis(50)))

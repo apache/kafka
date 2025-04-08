@@ -238,7 +238,7 @@ class KRaftClusterTest {
         "Broker never made it to RUNNING state.")
       val admin = Admin.create(cluster.clientProperties())
       try {
-        val entity = new ClientQuotaEntity(Map("user" -> "testkit").asJava)
+        val entity = new ClientQuotaEntity(util.Map.of("user", "testkit"))
         var filter = ClientQuotaFilter.containsOnly(
           List(ClientQuotaFilterComponent.ofEntity("user", "testkit")).asJava)
 
@@ -246,7 +246,7 @@ class KRaftClusterTest {
                               quotas: Seq[ClientQuotaAlteration.Op],
                               filter: ClientQuotaFilter,
                               expectCount: Int): util.Map[ClientQuotaEntity, util.Map[String, lang.Double]] = {
-          val alterResult = admin.alterClientQuotas(Seq(new ClientQuotaAlteration(entity, quotas.asJava)).asJava)
+          val alterResult = admin.alterClientQuotas(util.List.of(new ClientQuotaAlteration(entity, quotas.asJava)))
           try {
             alterResult.all().get()
           } catch {
@@ -296,19 +296,19 @@ class KRaftClusterTest {
         assertEquals(9999.0, describeResult.get(entity).get("producer_byte_rate"), 1e-6)
 
         // Add another quota for a different entity with same user part
-        val entity2 = new ClientQuotaEntity(Map("user" -> "testkit", "client-id" -> "some-client").asJava)
+        val entity2 = new ClientQuotaEntity(util.Map.of("user", "testkit", "client-id", "some-client"))
         filter = ClientQuotaFilter.containsOnly(
-          List(
+          util.List.of(
             ClientQuotaFilterComponent.ofEntity("user", "testkit"),
             ClientQuotaFilterComponent.ofEntity("client-id", "some-client"),
-          ).asJava)
+          ))
         describeResult = alterThenDescribe(entity2,
           Seq(new ClientQuotaAlteration.Op("producer_byte_rate", 9998)), filter, 1)
         assertEquals(9998.0, describeResult.get(entity2).get("producer_byte_rate"), 1e-6)
 
         // non-strict match
         filter = ClientQuotaFilter.contains(
-          List(ClientQuotaFilterComponent.ofEntity("user", "testkit")).asJava)
+          util.List.of(ClientQuotaFilterComponent.ofEntity("user", "testkit")))
 
         TestUtils.tryUntilNoAssertionError() {
           val results = admin.describeClientQuotas(filter).entities().get()
@@ -796,9 +796,9 @@ class KRaftClusterTest {
           new NewTopic("bar", 2, 3.toShort))).values()
         createResults.get("foo").get()
         createResults.get("bar").get()
-        val increaseResults = admin.createPartitions(Map(
-          "foo" -> NewPartitions.increaseTo(3),
-          "bar" -> NewPartitions.increaseTo(2)).asJava).values()
+        val increaseResults = admin.createPartitions(util.Map.of(
+          "foo", NewPartitions.increaseTo(3),
+          "bar", NewPartitions.increaseTo(2))).values()
         increaseResults.get("foo").get()
         assertEquals(classOf[InvalidPartitionsException], assertThrows(
           classOf[ExecutionException], () => increaseResults.get("bar").get()).getCause.getClass)
@@ -989,8 +989,8 @@ class KRaftClusterTest {
       val admin = Admin.create(cluster.clientProperties())
       try {
         admin.updateFeatures(
-          Map(MetadataVersion.FEATURE_NAME ->
-            new FeatureUpdate(MetadataVersion.latestTesting().featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions
+          util.Map.of(MetadataVersion.FEATURE_NAME,
+            new FeatureUpdate(MetadataVersion.latestTesting().featureLevel(), FeatureUpdate.UpgradeType.UPGRADE)), new UpdateFeaturesOptions
         )
         assertEquals(new SupportedVersionRange(0, 1), admin.describeFeatures().featureMetadata().get().
           supportedFeatures().get(KRaftVersion.FEATURE_NAME))
@@ -1696,7 +1696,7 @@ class DummyClientQuotaCallback extends ClientQuotaCallback with Reconfigurable {
     }
   }
 
-  override def reconfigurableConfigs(): util.Set[String] = Set(DummyClientQuotaCallback.dummyClientQuotaCallbackValueConfigKey).asJava
+  override def reconfigurableConfigs(): util.Set[String] = util.Set.of(DummyClientQuotaCallback.dummyClientQuotaCallbackValueConfigKey)
 
   override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
   }
@@ -1735,7 +1735,7 @@ class FakeConfigurableAuthorizer extends Authorizer with Reconfigurable {
     }).toMap.asJava
   }
 
-  override def reconfigurableConfigs(): util.Set[String] = Set(foobarConfigKey).asJava
+  override def reconfigurableConfigs(): util.Set[String] = util.Set.of(foobarConfigKey)
 
   override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
     fakeConfigurableAuthorizerConfigToInt(configs)
@@ -1749,7 +1749,7 @@ class FakeConfigurableAuthorizer extends Authorizer with Reconfigurable {
     actions.asScala.map(_ => AuthorizationResult.ALLOWED).toList.asJava
   }
 
-  override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = List[AclBinding]().asJava
+  override def acls(filter: AclBindingFilter): lang.Iterable[AclBinding] = util.List.of[AclBinding]()
 
   override def close(): Unit = {}
 

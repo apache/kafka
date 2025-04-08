@@ -25,8 +25,6 @@ import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.server.common.MetadataVersion
 import org.junit.jupiter.api.Assertions.assertEquals
 
-import scala.jdk.CollectionConverters._
-
 class MetadataVersionIntegrationTest {
   @ClusterTests(value = Array(
       new ClusterTest(types = Array(Type.KRAFT), metadataVersion = MetadataVersion.IBP_3_3_IV3),
@@ -46,7 +44,7 @@ class MetadataVersionIntegrationTest {
       // Update to new version
       val updateVersion = MetadataVersion.IBP_3_7_IV1.featureLevel.shortValue
       val updateResult = admin.updateFeatures(
-        Map("metadata.version" -> new FeatureUpdate(updateVersion, UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions())
+        java.util.Map.of("metadata.version", new FeatureUpdate(updateVersion, UpgradeType.UPGRADE)), new UpdateFeaturesOptions())
       updateResult.all().get()
 
       // Verify that new version is visible on broker
@@ -66,7 +64,7 @@ class MetadataVersionIntegrationTest {
     try {
       val updateVersion = MetadataVersion.IBP_3_9_IV0.featureLevel.shortValue
       val updateResult = admin.updateFeatures(
-        Map("metadata.version" -> new FeatureUpdate(updateVersion, UpgradeType.UPGRADE)).asJava, new UpdateFeaturesOptions())
+        java.util.Map.of("metadata.version", new FeatureUpdate(updateVersion, UpgradeType.UPGRADE)), new UpdateFeaturesOptions())
       updateResult.all().get()
     } finally {
       admin.close()

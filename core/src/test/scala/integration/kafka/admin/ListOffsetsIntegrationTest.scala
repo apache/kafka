@@ -35,8 +35,7 @@ import org.junit.jupiter.params.provider.ValueSource
 
 import java.io.File
 import java.util.{Optional, Properties}
-import scala.collection.{Map, Seq}
-import scala.jdk.CollectionConverters._
+import scala.collection.Seq
 
 class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
 
@@ -50,9 +49,9 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
   override def setUp(testInfo: TestInfo): Unit = {
     super.setUp(testInfo)
     createTopicWithConfig(topicName, new Properties())
-    adminClient = Admin.create(Map[String, Object](
-      AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG -> bootstrapServers()
-    ).asJava)
+    adminClient = Admin.create(java.util.Map.of[String, Object](
+      AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers()
+    ))
   }
 
   override def brokerTime(brokerId: Int): Time = mockTime
@@ -185,7 +184,7 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
 
     // change the leader to new one
     adminClient.alterPartitionReassignments(java.util.Map.of(new TopicPartition(topic, 0),
-      Optional.of(new NewPartitionReassignment(java.util.Arrays.asList(newLeader))))).all().get()
+      Optional.of(new NewPartitionReassignment(java.util.List.of(newLeader))))).all().get()
     // wait for all reassignments get completed
     waitUntilTrue(() => adminClient.listPartitionReassignments().reassignments().get().isEmpty,
       s"There still are ongoing reassignments")
@@ -218,9 +217,9 @@ class ListOffsetsIntegrationTest extends KafkaServerTestHarness {
                               offsetSpec: OffsetSpec,
                               topic: String): ListOffsetsResult.ListOffsetsResultInfo = {
     val tp = new TopicPartition(topic, 0)
-    adminClient.listOffsets(Map(
-      tp -> offsetSpec
-    ).asJava, new ListOffsetsOptions()).all().get().get(tp)
+    adminClient.listOffsets(java.util.Map.of(
+      tp, offsetSpec
+    ), new ListOffsetsOptions()).all().get().get(tp)
   }
 
   private def produceMessagesInOneBatch(compressionType: String = "none", topic: String = topicName): Unit = {

@@ -44,7 +44,7 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
 
-    consumer.subscribe(List(topic).asJava)
+    consumer.subscribe(java.util.List.of(topic))
     awaitAssignment(consumer, Set(tp, tp2))
 
     // should auto-commit sought positions before closing
@@ -54,8 +54,8 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
 
     // now we should see the committed positions from another consumer
     val anotherConsumer = createConsumer()
-    assertEquals(300, anotherConsumer.committed(Set(tp).asJava).get(tp).offset)
-    assertEquals(500, anotherConsumer.committed(Set(tp2).asJava).get(tp2).offset)
+    assertEquals(300, anotherConsumer.committed(java.util.Set.of(tp)).get(tp).offset)
+    assertEquals(500, anotherConsumer.committed(java.util.Set.of(tp2)).get(tp2).offset)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
@@ -68,7 +68,7 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
 
-    consumer.subscribe(List(topic).asJava)
+    consumer.subscribe(java.util.List.of(topic))
     awaitAssignment(consumer, Set(tp, tp2))
 
     // should auto-commit sought positions before closing
@@ -82,50 +82,50 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
 
     // now we should see the committed positions from another consumer
     val anotherConsumer = createConsumer()
-    assertEquals(300, anotherConsumer.committed(Set(tp).asJava).get(tp).offset)
-    assertEquals(500, anotherConsumer.committed(Set(tp2).asJava).get(tp2).offset)
+    assertEquals(300, anotherConsumer.committed(java.util.Set.of(tp)).get(tp).offset)
+    assertEquals(500, anotherConsumer.committed(java.util.Set.of(tp2)).get(tp2).offset)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testCommitMetadata(groupProtocol: String): Unit = {
     val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
 
     // sync commit
     val syncMetadata = new OffsetAndMetadata(5, Optional.of(15), "foo")
-    consumer.commitSync(Map((tp, syncMetadata)).asJava)
-    assertEquals(syncMetadata, consumer.committed(Set(tp).asJava).get(tp))
+    consumer.commitSync(java.util.Map.of(tp, syncMetadata))
+    assertEquals(syncMetadata, consumer.committed(java.util.Set.of(tp)).get(tp))
 
     // async commit
     val asyncMetadata = new OffsetAndMetadata(10, "bar")
     sendAndAwaitAsyncCommit(consumer, Some(Map(tp -> asyncMetadata)))
-    assertEquals(asyncMetadata, consumer.committed(Set(tp).asJava).get(tp))
+    assertEquals(asyncMetadata, consumer.committed(java.util.Set.of(tp)).get(tp))
 
     // handle null metadata
     val nullMetadata = new OffsetAndMetadata(5, null)
-    consumer.commitSync(Map(tp -> nullMetadata).asJava)
-    assertEquals(nullMetadata, consumer.committed(Set(tp).asJava).get(tp))
+    consumer.commitSync(java.util.Map.of(tp, nullMetadata))
+    assertEquals(nullMetadata, consumer.committed(java.util.Set.of(tp)).get(tp))
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testAsyncCommit(groupProtocol: String): Unit = {
     val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
 
     val callback = new CountConsumerCommitCallback
     val count = 5
 
     for (i <- 1 to count)
-      consumer.commitAsync(Map(tp -> new OffsetAndMetadata(i)).asJava, callback)
+      consumer.commitAsync(java.util.Map.of(tp, new OffsetAndMetadata(i)), callback)
 
     TestUtils.pollUntilTrue(consumer, () => callback.successCount >= count || callback.lastError.isDefined,
       "Failed to observe commit callback before timeout", waitTimeMs = 10000)
 
     assertEquals(None, callback.lastError)
     assertEquals(count, callback.successCount)
-    assertEquals(new OffsetAndMetadata(count), consumer.committed(Set(tp).asJava).get(tp))
+    assertEquals(new OffsetAndMetadata(count), consumer.committed(java.util.Set.of(tp)).get(tp))
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
@@ -165,8 +165,8 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
       rebalanceListener)
 
     // after rebalancing, we should have reset to the committed positions
-    assertEquals(10, testConsumer.committed(Set(tp).asJava).get(tp).offset)
-    assertEquals(20, testConsumer.committed(Set(tp2).asJava).get(tp2).offset)
+    assertEquals(10, testConsumer.committed(java.util.Set.of(tp)).get(tp).offset)
+    assertEquals(20, testConsumer.committed(java.util.Set.of(tp2)).get(tp2).offset)
 
     // In both CLASSIC and CONSUMER protocols, interceptors are executed in poll and close.
     // However, in the CONSUMER protocol, the assignment may be changed outside of a poll, so
@@ -195,24 +195,24 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     sendRecords(producer, numRecords = 7, tp2)
 
     val consumer = createConsumer()
-    consumer.assign(List(tp, tp2).asJava)
+    consumer.assign(java.util.List.of(tp, tp2))
 
     val pos1 = consumer.position(tp)
     val pos2 = consumer.position(tp2)
-    consumer.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(3L))).asJava)
-    assertEquals(3, consumer.committed(Set(tp).asJava).get(tp).offset)
-    assertNull(consumer.committed(Set(tp2).asJava).get(tp2))
+    consumer.commitSync(java.util.Map.of[TopicPartition, OffsetAndMetadata](tp, new OffsetAndMetadata(3L)))
+    assertEquals(3, consumer.committed(java.util.Set.of(tp)).get(tp).offset)
+    assertNull(consumer.committed(java.util.Set.of(tp2)).get(tp2))
 
     // Positions should not change
     assertEquals(pos1, consumer.position(tp))
     assertEquals(pos2, consumer.position(tp2))
-    consumer.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp2, new OffsetAndMetadata(5L))).asJava)
-    assertEquals(3, consumer.committed(Set(tp).asJava).get(tp).offset)
-    assertEquals(5, consumer.committed(Set(tp2).asJava).get(tp2).offset)
+    consumer.commitSync(java.util.Map.of[TopicPartition, OffsetAndMetadata](tp2, new OffsetAndMetadata(5L)))
+    assertEquals(3, consumer.committed(java.util.Set.of(tp)).get(tp).offset)
+    assertEquals(5, consumer.committed(java.util.Set.of(tp2)).get(tp2).offset)
 
     // Using async should pick up the committed changes after commit completes
     sendAndAwaitAsyncCommit(consumer, Some(Map(tp2 -> new OffsetAndMetadata(7L))))
-    assertEquals(7, consumer.committed(Set(tp2).asJava).get(tp2).offset)
+    assertEquals(7, consumer.committed(java.util.Set.of(tp2)).get(tp2).offset)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
@@ -237,7 +237,7 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
       override def onPartitionsRevoked(partitions: util.Collection[TopicPartition]): Unit = {}
     }
 
-    consumer.subscribe(List(topic).asJava, rebalanceListener)
+    consumer.subscribe(java.util.List.of(topic), rebalanceListener)
 
     awaitAssignment(consumer, Set(tp, tp2))
 
@@ -245,14 +245,14 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     consumer.seek(tp2, 500)
 
     // change subscription to trigger rebalance
-    consumer.subscribe(List(topic, topic2).asJava, rebalanceListener)
+    consumer.subscribe(java.util.List.of(topic, topic2), rebalanceListener)
 
     val newAssignment = Set(tp, tp2, new TopicPartition(topic2, 0), new TopicPartition(topic2, 1))
     awaitAssignment(consumer, newAssignment)
 
     // after rebalancing, we should have reset to the committed positions
-    assertEquals(300, consumer.committed(Set(tp).asJava).get(tp).offset)
-    assertEquals(500, consumer.committed(Set(tp2).asJava).get(tp2).offset)
+    assertEquals(300, consumer.committed(java.util.Set.of(tp)).get(tp).offset)
+    assertEquals(500, consumer.committed(java.util.Set.of(tp2)).get(tp2).offset)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
@@ -262,7 +262,7 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     // assignment is received into a subsequent offset commit
     val consumer = createConsumer()
     assertEquals(0, consumer.assignment.size)
-    consumer.subscribe(List(topic).asJava)
+    consumer.subscribe(java.util.List.of(topic))
     awaitAssignment(consumer, Set(tp, tp2))
 
     consumer.seek(tp, 0)
@@ -279,27 +279,27 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
 
     val topicPartition = new TopicPartition(topic, 15)
     val consumer = createConsumer()
-    assertNull(consumer.committed(Set(topicPartition).asJava).get(topicPartition))
+    assertNull(consumer.committed(java.util.Set.of(topicPartition)).get(topicPartition))
 
     // position() on a partition that we aren't subscribed to throws an exception
     assertThrows(classOf[IllegalStateException], () => consumer.position(topicPartition))
 
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
 
     assertEquals(0L, consumer.position(tp), "position() on a partition that we are subscribed to should reset the offset")
     consumer.commitSync()
-    assertEquals(0L, consumer.committed(Set(tp).asJava).get(tp).offset)
+    assertEquals(0L, consumer.committed(java.util.Set.of(tp)).get(tp).offset)
     consumeAndVerifyRecords(consumer = consumer, numRecords = 5, startingOffset = 0, startingTimestamp = startingTimestamp)
     assertEquals(5L, consumer.position(tp), "After consuming 5 records, position should be 5")
     consumer.commitSync()
-    assertEquals(5L, consumer.committed(Set(tp).asJava).get(tp).offset, "Committed offset should be returned")
+    assertEquals(5L, consumer.committed(java.util.Set.of(tp)).get(tp).offset, "Committed offset should be returned")
 
     startingTimestamp = System.currentTimeMillis()
     sendRecords(producer, numRecords = 1, tp, startingTimestamp = startingTimestamp)
 
     // another consumer in the same group should get the same position
     val otherConsumer = createConsumer()
-    otherConsumer.assign(List(tp).asJava)
+    otherConsumer.assign(java.util.List.of(tp))
     consumeAndVerifyRecords(consumer = otherConsumer, numRecords = 1, startingOffset = 5, startingTimestamp = startingTimestamp)
   }
 
@@ -315,12 +315,12 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     sendRecords(producer, numRecords = 3, tp2)
 
     val consumer = createConsumer()
-    consumer.assign(List(tp, tp2).asJava)
+    consumer.assign(java.util.List.of(tp, tp2))
 
     // Try without looking up the coordinator first
     val cb = new CountConsumerCommitCallback
-    consumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(1L))).asJava, cb)
-    consumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp2, new OffsetAndMetadata(1L))).asJava, cb)
+    consumer.commitAsync(java.util.Map.of[TopicPartition, OffsetAndMetadata](tp, new OffsetAndMetadata(1L)), cb)
+    consumer.commitAsync(java.util.Map.of[TopicPartition, OffsetAndMetadata](tp2, new OffsetAndMetadata(1L)), cb)
     consumer.close()
     assertEquals(2, cb.successCount)
   }
@@ -337,27 +337,27 @@ class PlaintextConsumerCommitTest extends AbstractConsumerTest {
     sendRecords(producer, numRecords = 3, tp2)
 
     val consumer = createConsumer()
-    consumer.assign(List(tp, tp2).asJava)
+    consumer.assign(java.util.List.of(tp, tp2))
 
     // Try without looking up the coordinator first
     val cb = new CountConsumerCommitCallback
-    consumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(1L))).asJava, cb)
-    consumer.commitSync(Map.empty[TopicPartition, OffsetAndMetadata].asJava)
-    assertEquals(1, consumer.committed(Set(tp).asJava).get(tp).offset)
+    consumer.commitAsync(java.util.Map.of[TopicPartition, OffsetAndMetadata](tp, new OffsetAndMetadata(1L)), cb)
+    consumer.commitSync(java.util.Map.of[TopicPartition, OffsetAndMetadata]())
+    assertEquals(1, consumer.committed(java.util.Set.of(tp)).get(tp).offset)
     assertEquals(1, cb.successCount)
 
     // Try with coordinator known
-    consumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(2L))).asJava, cb)
-    consumer.commitSync(Map[TopicPartition, OffsetAndMetadata]((tp2, new OffsetAndMetadata(2L))).asJava)
-    assertEquals(2, consumer.committed(Set(tp).asJava).get(tp).offset)
-    assertEquals(2, consumer.committed(Set(tp2).asJava).get(tp2).offset)
+    consumer.commitAsync(java.util.Map.of[TopicPartition, OffsetAndMetadata](tp, new OffsetAndMetadata(2L)), cb)
+    consumer.commitSync(java.util.Map.of[TopicPartition, OffsetAndMetadata](tp2, new OffsetAndMetadata(2L)))
+    assertEquals(2, consumer.committed(java.util.Set.of(tp)).get(tp).offset)
+    assertEquals(2, consumer.committed(java.util.Set.of(tp2)).get(tp2).offset)
     assertEquals(2, cb.successCount)
 
     // Try with empty sync commit
-    consumer.commitAsync(Map[TopicPartition, OffsetAndMetadata]((tp, new OffsetAndMetadata(3L))).asJava, cb)
-    consumer.commitSync(Map.empty[TopicPartition, OffsetAndMetadata].asJava)
-    assertEquals(3, consumer.committed(Set(tp).asJava).get(tp).offset)
-    assertEquals(2, consumer.committed(Set(tp2).asJava).get(tp2).offset)
+    consumer.commitAsync(java.util.Map.of[TopicPartition, OffsetAndMetadata](tp, new OffsetAndMetadata(3L)), cb)
+    consumer.commitSync(java.util.Map.of[TopicPartition, OffsetAndMetadata]())
+    assertEquals(3, consumer.committed(java.util.Set.of(tp)).get(tp).offset)
+    assertEquals(2, consumer.committed(java.util.Set.of(tp2)).get(tp2).offset)
     assertEquals(3, cb.successCount)
   }
 

@@ -917,7 +917,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
   private def verifyMarkPartitionsForTruncation(): Unit = {
     val leaderId = 0
     val topicDescription = adminClients.head.
-      describeTopics(java.util.Arrays.asList(topic)).
+      describeTopics(java.util.List.of(topic)).
       allTopicNames().
       get(3, TimeUnit.MINUTES).get(topic)
     val partitions = topicDescription.partitions().asScala.
@@ -1045,18 +1045,18 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
       .map(_.asInstanceOf[DataPlaneAcceptor]).toSeq
 
     // add new PLAINTEXT listener
-    client.incrementalAlterConfigs(Map(broker0Resource ->
-      Seq(new AlterConfigOp(new ConfigEntry(SocketServerConfigs.LISTENERS_CONFIG,
+    client.incrementalAlterConfigs(util.Map.of(broker0Resource,
+      util.List.of(new AlterConfigOp(new ConfigEntry(SocketServerConfigs.LISTENERS_CONFIG,
         s"PLAINTEXT://localhost:0, $SecureInternal://localhost:0, $SecureExternal://localhost:0"), AlterConfigOp.OpType.SET)
-      ).asJavaCollection).asJava).all().get()
+      ))).all().get()
 
     TestUtils.waitUntilTrue(() => acceptors.size == 3, s"failed to add new DataPlaneAcceptor")
 
     // remove PLAINTEXT listener
-    client.incrementalAlterConfigs(Map(broker0Resource ->
-      Seq(new AlterConfigOp(new ConfigEntry(SocketServerConfigs.LISTENERS_CONFIG,
+    client.incrementalAlterConfigs(util.Map.of(broker0Resource,
+      util.List.of(new AlterConfigOp(new ConfigEntry(SocketServerConfigs.LISTENERS_CONFIG,
         s"$SecureInternal://localhost:0, $SecureExternal://localhost:0"), AlterConfigOp.OpType.SET)
-      ).asJavaCollection).asJava).all().get()
+      ))).all().get()
 
     TestUtils.waitUntilTrue(() => acceptors.size == 2,
       s"failed to remove DataPlaneAcceptor. current: ${acceptors.map(_.endPoint.toString).mkString(",")}")
@@ -1211,11 +1211,11 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
     }
     val cert1 = load(trustStore1Props).getCertificate("kafka")
     val cert2 = load(trustStore2Props).getCertificate("kafka")
-    val certs = Map("kafka1" -> cert1, "kafka2" -> cert2)
+    val certs = util.Map.of("kafka1", cert1, "kafka2", cert2)
 
     val combinedStorePath = TestUtils.tempFile("truststore", ".jks").getAbsolutePath
     val password = trustStore1Props.get(SSL_TRUSTSTORE_PASSWORD_CONFIG).asInstanceOf[Password]
-    TestSslUtils.createTrustStore(combinedStorePath, password, certs.asJava)
+    TestSslUtils.createTrustStore(combinedStorePath, password, certs)
     val newStoreProps = new Properties
     newStoreProps.put(SSL_TRUSTSTORE_LOCATION_CONFIG, combinedStorePath)
     newStoreProps.put(SSL_TRUSTSTORE_PASSWORD_CONFIG, password)
@@ -1379,7 +1379,7 @@ val configEntries = props.asScala.map { case (k, v) => new AlterConfigOp(new Con
 
   private def tempPropertiesFile(properties: Properties): File = TestUtils.tempPropertiesFile(properties.asScala)
 
-  private abstract class ClientBuilder[T]() {
+  private abstract class ClientBuilder[T] {
     protected var _bootstrapServers: Option[String] = None
     protected var _listenerName: String = SecureExternal
     protected var _securityProtocol = SecurityProtocol.SASL_SSL
@@ -1597,7 +1597,7 @@ class TestMetricsReporter extends MetricsReporter with Reconfigurable with Close
   }
 
   override def reconfigurableConfigs(): util.Set[String] = {
-    Set(PollingIntervalProp).asJava
+    util.Set.of(PollingIntervalProp)
   }
 
   override def validateReconfiguration(configs: util.Map[String, _]): Unit = {

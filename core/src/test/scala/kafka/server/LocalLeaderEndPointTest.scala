@@ -40,7 +40,6 @@ import org.mockito.Mockito.mock
 
 import java.io.File
 import scala.collection.Map
-import scala.jdk.CollectionConverters._
 
 class LocalLeaderEndPointTest extends Logging {
 
@@ -87,8 +86,8 @@ class LocalLeaderEndPointTest extends Logging {
     delta.replay(new PartitionRecord()
       .setPartitionId(partition)
       .setTopicId(topicId)
-      .setReplicas(List[Integer](sourceBroker.id).asJava)
-      .setIsr(List[Integer](sourceBroker.id).asJava)
+      .setReplicas(java.util.List.of[Integer](sourceBroker.id))
+      .setIsr(java.util.List.of[Integer](sourceBroker.id))
       .setLeader(sourceBroker.id)
       .setLeaderEpoch(0)
       .setPartitionEpoch(0)

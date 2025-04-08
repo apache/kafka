@@ -43,7 +43,6 @@ import org.junit.jupiter.params.provider.MethodSource
 
 import scala.collection.mutable
 import scala.concurrent.ExecutionException
-import scala.jdk.CollectionConverters._
 import scala.jdk.javaapi.OptionConverters
 
 abstract class BaseProducerSendTest extends KafkaServerTestHarness {
@@ -348,7 +347,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         assertEquals(partition, recordMetadata.partition)
       }
 
-      consumer.assign(List(new TopicPartition(topic, partition)).asJava)
+      consumer.assign(java.util.List.of(new TopicPartition(topic, partition)))
 
       // make sure the fetched messages also respect the partitioning and ordering
       val records = TestUtils.consumeRecords(consumer, numRecords)
@@ -396,7 +395,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
         assertEquals(partition, recordMetadata.partition)
       }
 
-      consumer.assign(List(new TopicPartition(topic, partition)).asJava)
+      consumer.assign(java.util.List.of(new TopicPartition(topic, partition)))
 
       // make sure the fetched messages also respect the partitioning and ordering
       val records = TestUtils.consumeRecords(consumer, numRecords)
@@ -505,7 +504,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   def testCloseWithZeroTimeoutFromCallerThread(groupProtocol: String): Unit = {
     TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 2, 2)
     val partition = 0
-    consumer.assign(List(new TopicPartition(topic, partition)).asJava)
+    consumer.assign(java.util.List.of(new TopicPartition(topic, partition)))
     val record0 = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, null,
       "value".getBytes(StandardCharsets.UTF_8))
 
@@ -531,7 +530,7 @@ abstract class BaseProducerSendTest extends KafkaServerTestHarness {
   def testCloseWithZeroTimeoutFromSenderThread(groupProtocol: String): Unit = {
     TestUtils.createTopicWithAdmin(admin, topic, brokers, controllerServers, 1, 2)
     val partition = 0
-    consumer.assign(List(new TopicPartition(topic, partition)).asJava)
+    consumer.assign(java.util.List.of(new TopicPartition(topic, partition)))
     val record = new ProducerRecord[Array[Byte], Array[Byte]](topic, partition, null, "value".getBytes(StandardCharsets.UTF_8))
 
     // Test closing from sender thread.

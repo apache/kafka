@@ -95,7 +95,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       TestUtils.generateAndProduceMessages(brokers, topic, numMessages = 1)
       val response = receive[FetchResponse](socket, ApiKeys.FETCH, version)
       assertEquals(Errors.NONE, response.error)
-      assertEquals(Map(Errors.NONE -> 2).asJava, response.errorCounts)
+      assertEquals(util.Map.of(Errors.NONE, 2), response.errorCounts)
     } finally {
       socket.close()
     }
@@ -151,7 +151,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     consumerProps.put(ConsumerConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
     val consumer = new KafkaConsumer(consumerProps, new ByteArrayDeserializer, new ByteArrayDeserializer)
     try {
-      consumer.subscribe(List(topic).asJava)
+      consumer.subscribe(util.List.of(topic))
 
       // Wait until preferred replica is set to follower.
       TestUtils.waitUntilTrue(() => {
@@ -248,7 +248,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
       verifyAssignments(partitionList, topicWithAllPartitionsOnAllRacks)
 
       // Rack-aware assignment with co-partitioning results in reverse assignment for both topics.
-      consumers.foreach(_.subscribe(Set(topicWithSingleRackPartitions, topicWithAllPartitionsOnAllRacks).asJava))
+      consumers.foreach(_.subscribe(util.Set.of(topicWithSingleRackPartitions, topicWithAllPartitionsOnAllRacks)))
       verifyAssignments(partitionList.reverse, topicWithAllPartitionsOnAllRacks, topicWithSingleRackPartitions)
 
       // Perform reassignment for topicWithSingleRackPartitions to reverse the replica racks and
@@ -283,7 +283,7 @@ class FetchFromFollowerIntegrationTest extends BaseFetchRequestTest {
     )
     val response = connectAndReceive[FetchResponse](request, brokers(leaderBrokerId).socketServer)
     assertEquals(Errors.NONE, response.error)
-    assertEquals(Map(Errors.NONE -> 2).asJava, response.errorCounts)
+    assertEquals(util.Map.of(Errors.NONE, 2), response.errorCounts)
     assertEquals(1, response.data.responses.size)
     val topicResponse = response.data.responses.get(0)
     assertEquals(1, topicResponse.partitions.size)

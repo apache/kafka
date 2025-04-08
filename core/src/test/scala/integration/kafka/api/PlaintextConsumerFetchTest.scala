@@ -22,7 +22,6 @@ import org.junit.jupiter.params.provider.MethodSource
 import org.apache.kafka.common.TopicPartition
 
 import java.time.{Duration, Instant}
-import scala.jdk.CollectionConverters._
 
 /**
  * Integration tests for the consumer that covers fetching logic
@@ -40,7 +39,7 @@ class PlaintextConsumerFetchTest extends AbstractConsumerTest {
     val totalRecords = 2
     val producer = createProducer()
     sendRecords(producer, totalRecords, tp)
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
 
     // poll should fail because there is no offset reset strategy set.
     // we fail only when resetting positions after coordinator is known, so using a long timeout.
@@ -68,7 +67,7 @@ class PlaintextConsumerFetchTest extends AbstractConsumerTest {
     val producer = createProducer()
     val startingTimestamp = 0
     sendRecords(producer, totalRecords.toInt, tp, startingTimestamp = startingTimestamp)
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     consumeAndVerifyRecords(consumer = consumer, numRecords = totalRecords.toInt, startingOffset = 0)
     // seek to out of range position
     val outOfRangePos = totalRecords + 1
@@ -90,7 +89,7 @@ class PlaintextConsumerFetchTest extends AbstractConsumerTest {
     val producer = createProducer()
     val startingTimestamp = 0
     sendRecords(producer, totalRecords.toInt, tp, startingTimestamp = startingTimestamp)
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     consumer.seek(tp, 0)
     // consume some, but not all of the records
     consumeAndVerifyRecords(consumer = consumer, numRecords = totalRecords.toInt / 2, startingOffset = 0)
@@ -118,7 +117,7 @@ class PlaintextConsumerFetchTest extends AbstractConsumerTest {
     val totalRecords = 10L
     var startingTimestamp = System.currentTimeMillis()
     sendRecords(producer1, totalRecords.toInt, tp, startingTimestamp = startingTimestamp)
-    consumer1.assign(List(tp).asJava)
+    consumer1.assign(java.util.List.of(tp))
     consumeAndVerifyRecords(consumer = consumer1, numRecords = totalRecords.toInt, startingOffset = 0, startingTimestamp = startingTimestamp)
 
     // seek to out of range position
@@ -134,7 +133,7 @@ class PlaintextConsumerFetchTest extends AbstractConsumerTest {
     startingTimestamp = Instant.now().minus(Duration.ofHours(24)).toEpochMilli
     //generate records with 1 hour interval for 1 day
     sendRecords(producer2, totalRecords2.toInt, tp2, startingTimestamp = startingTimestamp, Duration.ofHours(1).toMillis)
-    consumer2.assign(List(tp2).asJava)
+    consumer2.assign(java.util.List.of(tp2))
     //consumer should read one record from last one hour
     consumeAndVerifyRecords(consumer = consumer2, numRecords = 1, startingOffset = 24, startingKeyAndValueIndex = 24,
       startingTimestamp = startingTimestamp + 24 * Duration.ofHours(1).toMillis,
@@ -169,7 +168,7 @@ class PlaintextConsumerFetchTest extends AbstractConsumerTest {
     producer.send(record)
 
     // consuming a record that is too large should succeed since KIP-74
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     val records = consumer.poll(Duration.ofMillis(20000))
     assertEquals(1, records.count)
     val consumerRecord = records.iterator().next()
@@ -202,7 +201,7 @@ class PlaintextConsumerFetchTest extends AbstractConsumerTest {
     producer.send(largeRecord).get
 
     // we should only get the small record in the first `poll`
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     val records = consumer.poll(Duration.ofMillis(20000))
     assertEquals(1, records.count)
     val consumerRecord = records.iterator().next()
@@ -259,7 +258,7 @@ class PlaintextConsumerFetchTest extends AbstractConsumerTest {
 
     assertEquals(0, consumer.assignment().size)
 
-    consumer.subscribe(List(topic1, topic2, topic3).asJava)
+    consumer.subscribe(java.util.List.of(topic1, topic2, topic3))
 
     awaitAssignment(consumer, partitions.toSet)
 

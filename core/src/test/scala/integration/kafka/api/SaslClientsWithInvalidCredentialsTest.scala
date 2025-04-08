@@ -17,7 +17,6 @@ import kafka.security.JaasTestUtils
 import java.time.Duration
 import java.util.Properties
 import java.util.concurrent.{ExecutionException, TimeUnit}
-import scala.jdk.CollectionConverters._
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig}
 import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
@@ -36,7 +35,6 @@ import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
 
 import scala.jdk.javaapi.OptionConverters
 import scala.util.Using
-
 
 class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
   private val kafkaClientSaslMechanism = "SCRAM-SHA-256"
@@ -63,7 +61,7 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
 
   override def addFormatterSettings(formatter: Formatter): Unit = {
     formatter.setScramArguments(
-      List(s"SCRAM-SHA-256=[name=${JaasTestUtils.KAFKA_SCRAM_ADMIN},password=${JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]").asJava)
+      java.util.List.of(s"SCRAM-SHA-256=[name=${JaasTestUtils.KAFKA_SCRAM_ADMIN},password=${JaasTestUtils.KAFKA_SCRAM_ADMIN_PASSWORD}]"))
   }
 
   override def createPrivilegedAdminClient() = {
@@ -125,7 +123,7 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testConsumerWithAuthenticationFailure(groupProtocol: String): Unit = {
     val consumer = createConsumer()
-    consumer.subscribe(List(topic).asJava)
+    consumer.subscribe(java.util.List.of(topic))
     verifyConsumerWithAuthenticationFailure(consumer)
   }
 
@@ -133,7 +131,7 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testManualAssignmentConsumerWithAuthenticationFailure(groupProtocol: String): Unit = {
     val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     verifyConsumerWithAuthenticationFailure(consumer)
   }
 
@@ -142,7 +140,7 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
   def testManualAssignmentConsumerWithAutoCommitDisabledWithAuthenticationFailure(groupProtocol: String): Unit = {
     this.consumerConfig.setProperty(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false.toString)
     val consumer = createConsumer()
-    consumer.assign(List(tp).asJava)
+    consumer.assign(java.util.List.of(tp))
     consumer.seek(tp, 0)
     verifyConsumerWithAuthenticationFailure(consumer)
   }

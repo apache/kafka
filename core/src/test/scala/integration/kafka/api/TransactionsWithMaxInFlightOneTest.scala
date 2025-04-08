@@ -33,7 +33,6 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
 import scala.collection.{Seq, mutable}
-import scala.jdk.CollectionConverters._
 
 /**
  * This is used to test transactions with one broker and `max.in.flight.requests.per.connection=1`.
@@ -94,7 +93,7 @@ class TransactionsWithMaxInFlightOneTest extends KafkaServerTestHarness {
     producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic2, null, "3", "3", willBeCommitted = true))
     producer.commitTransaction()
 
-    consumer.subscribe(List(topic1, topic2).asJava)
+    consumer.subscribe(java.util.List.of(topic1, topic2))
 
     val records = consumeRecords(consumer, 2)
     records.foreach { record =>

@@ -134,7 +134,7 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
   def testEarliestOrLatestOffsets(groupProtocol: String): Unit = {
     setupTopics()
 
-    val partitions = Set(t1p0, t1p1, t2p0, t2p1, t3p0, t3p1).asJava
+    val partitions = util.Set.of(t1p0, t1p1, t2p0, t2p1, t3p0, t3p1)
     val consumer = createConsumer()
 
     val earliests = consumer.beginningOffsets(partitions)

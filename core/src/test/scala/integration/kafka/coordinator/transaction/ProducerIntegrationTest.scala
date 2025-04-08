@@ -104,7 +104,7 @@ class ProducerIntegrationTest {
     val admin = cluster.admin()
     val producer: Producer[Array[Byte], Array[Byte]] = cluster.producer(properties)
     try {
-      admin.createTopics(List(topic).asJava)
+      admin.createTopics(util.List.of(topic))
 
       producer.initTransactions()
       producer.beginTransaction()
