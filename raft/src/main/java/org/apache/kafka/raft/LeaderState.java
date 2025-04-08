@@ -113,6 +113,20 @@ public class LeaderState<T> implements EpochState {
         LogContext logContext,
         KafkaRaftMetrics kafkaRaftMetrics
     ) {
+        if (localVoterNode.voterKey().directoryId().isEmpty()) {
+            throw new IllegalArgumentException(
+                String.format("Unknown local replica directory id: %s", localVoterNode)
+            );
+        } else if (!voterSetAtEpochStart.isVoter(localVoterNode.voterKey())) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Local replica %s is not a voter in %s",
+                    localVoterNode,
+                    voterSetAtEpochStart
+                )
+            );
+        }
+
         this.localVoterNode = localVoterNode;
         this.epoch = epoch;
         this.epochStartOffset = epochStartOffset;
@@ -141,7 +155,7 @@ public class LeaderState<T> implements EpochState {
 
         if (!kraftVersionAtEpochStart.isReconfigSupported()) {
             updatedVolatileVoters.set(
-                voterSetAtEpochStart.unsafeUpdateVoter(localVoterNode)
+                voterSetAtEpochStart.updateVoterIgnoringDirectoryId(localVoterNode)
             );
         }
     }
@@ -410,7 +424,7 @@ public class LeaderState<T> implements EpochState {
         );
     }
 
-    public void updateVolatileVoters(Optional<VoterSet> voters) {
+    public void setVolatileVoters(Optional<VoterSet> voters) {
         updatedVolatileVoters.set(voters);
     }
 
@@ -439,7 +453,7 @@ public class LeaderState<T> implements EpochState {
         this.resignRequested = true;
     }
 
-    public void upgradeKraftVersion(
+    public void upgradeKRaftVersion(
         int epoch,
         KRaftVersion newVersion,
         KRaftVersion persistedVersion,
@@ -486,7 +500,7 @@ public class LeaderState<T> implements EpochState {
 
         var voterSet = updatedVolatileVoters.get().orElse(persistedVoters);
         if (!voterSet.voterIds().equals(persistedVoters.voterIds())) {
-            throw new InvalidUpdateVersionException(
+            throw new IllegalStateException(
                 String.format(
                     "Invalid upgrade of %s to %s because not all of the supported versions are known",
                     KRaftVersion.FEATURE_NAME,
@@ -501,7 +515,13 @@ public class LeaderState<T> implements EpochState {
                     newVersion
                 )
             );
-            // TODO: check that all of the voters have a directory id
+        } else if (voterSet.voterKeys().stream().anyMatch(voterKey -> voterKey.directoryId().isEmpty())) {
+            throw new IllegalStateException(
+                String.format(
+                    "Directory id must be known for all of the voters: %s",
+                    voterSet
+                )
+            );
         } else if (!requestedVersionUpgrade.compareAndSet(pendingVersion, Optional.of(newVersion))) {
             throw new InvalidUpdateVersionException(
                 String.format(
@@ -513,13 +533,15 @@ public class LeaderState<T> implements EpochState {
         }
     }
 
-    public boolean maybeUpgradeKraftVersion(VoterSet persistedVoters, long currentTimeMs) {
+    public Optional<KRaftVersion> requestedKRaftVersion() {
+        return requestedVersionUpgrade.get();
+    }
+
+    public boolean maybeAppendUpgradedKRaftVersion(VoterSet persistedVoters, long currentTimeMs) {
         var pendingVersion = requestedVersionUpgrade.getAndSet(Optional.empty());
         if (pendingVersion.isPresent()) {
             var voterSet = updatedVolatileVoters.get().orElse(persistedVoters);
-            if (voterSet.voterIds().equals(persistedVoters.voterIds()) &&
-                voterSet.supportsVersion(pendingVersion.get())
-            ) {
+            if (voterSet.supportsVersion(pendingVersion.get())) {
                 accumulator.appendControlMessages((baseOffset, epoch, compression, buffer) -> {
                     try (MemoryRecordsBuilder builder = createControlRecordsBuilder(
                             baseOffset,
@@ -529,6 +551,7 @@ public class LeaderState<T> implements EpochState {
                             currentTimeMs
                         )
                     ) {
+                        log.info("Appended kraft.version {} to the batch accumulator", pendingVersion.get());
                         builder.appendKRaftVersionMessage(
                             currentTimeMs,
                             new KRaftVersionRecord()
@@ -537,6 +560,7 @@ public class LeaderState<T> implements EpochState {
                         );
 
                         if (!voterSet.equals(persistedVoters)) {
+                            log.info("Appended voter set {} to the batch accumulator", voterSet);
                             builder.appendVotersMessage(
                                 currentTimeMs,
                                 voterSet.toVotersRecord(

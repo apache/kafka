@@ -227,7 +227,7 @@ public final class UpdateVoterHandler {
     ) {
         return kraftVersion.isReconfigSupported() ?
             voters.updateVoter(updatedVoter) :
-            voters.unsafeUpdateVoter(updatedVoter);
+            voters.updateVoterIgnoringDirectoryId(updatedVoter);
     }
 
     private void storeUpdatedVoters(
@@ -241,7 +241,7 @@ public final class UpdateVoterHandler {
             leaderState.appendVotersRecord(voters, currentTimeMs);
         } else {
             // Store the new voters set in the leader state since it cannot be written to the log
-            leaderState.updateVolatileVoters(Optional.of(voters));
+            leaderState.setVolatileVoters(Optional.of(voters));
         }
     }
 }

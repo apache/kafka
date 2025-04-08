@@ -2973,7 +2973,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         LeaderState<T> state,
         long currentTimeMs
     ) {
-        var upgradedKraftVersion = state.maybeUpgradeKraftVersion(partitionState.lastVoterSet(), currentTimeMs);
+        var upgradedKRaftVersion = state.maybeAppendUpgradedKRaftVersion(partitionState.lastVoterSet(), currentTimeMs);
 
         long timeUntilDrain = state.accumulator().timeUntilDrain(currentTimeMs);
         if (timeUntilDrain <= 0) {
@@ -2993,9 +2993,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 }
             }
 
-            if (upgradedKraftVersion) {
+            if (upgradedKRaftVersion) {
                 // The kraft version was written to the log. Remove the stored in-memory state
-                state.updateVolatileVoters(Optional.empty());
+                state.setVolatileVoters(Optional.empty());
             }
         }
 
@@ -3218,7 +3218,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             if (partitionState.lastKraftVersion().isReconfigSupported() &&
                 partitionState.lastVoterSet().voterNodeNeedsUpdate(quorum.localVoterNodeOrThrow())
             ) {
-                // When the cluster supports reconfiguration, send an updatevd voter configuration
+                // When the cluster supports reconfiguration, send an updated voter configuration
                 // if the one in the log doesn't match the local configuration.
                 backoffMs = maybeSendUpdateVoterRequest(state, currentTimeMs);
             } else if (!partitionState.lastKraftVersion().isReconfigSupported() &&
@@ -3659,12 +3659,14 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             throw new IllegalStateException("Cannot read the kraft version before the replica has been initialized");
         }
 
-        // TODO: this should be the max of the kraft version partition state and the kraft version in leader state
-        return partitionState.lastKraftVersion();
+        return quorum
+            .maybeLeaderState()
+            .flatMap(LeaderState::requestedKRaftVersion)
+            .orElseGet(partitionState::lastKraftVersion);
     }
 
     @Override
-    public void upgradeKraftVersion(int epoch, KRaftVersion version) {
+    public void upgradeKRaftVersion(int epoch, KRaftVersion version) {
         if (!isInitialized()) {
             throw new IllegalStateException("Cannot update the kraft version before the replica has been initialized");
         }
@@ -3673,7 +3675,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             () -> new NotLeaderException("Upgrade kraft version failed because the replica is not the current leader")
         );
 
-        leaderState.upgradeKraftVersion(
+        leaderState.upgradeKRaftVersion(
             epoch,
             version,
             partitionState.lastKraftVersion(),

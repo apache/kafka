@@ -113,7 +113,8 @@ public enum KRaftVersion implements FeatureVersion {
         switch (this) {
             case KRAFT_VERSION_1:
                 return (short) 0;
+            default:
+                throw new IllegalStateException("Unsupported KRaft feature level: " + this);
         }
-        throw new IllegalStateException("Unsupported KRaft feature level: " + this);
     }
 }

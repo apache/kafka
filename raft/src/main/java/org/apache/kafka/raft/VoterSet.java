@@ -253,12 +253,15 @@ public final class VoterSet {
     }
 
     /**
-     * TODO: document this
+     * Update a voter by only comparing the node id.
+     *
+     * This update voter operation doesn't compare the directory id. This is useful when upgrading
+     * from a voter set that doesn't support directory id to one that supports directory ids.
      *
      * @param voter the updated voter
      * @return a new voter set if the voter was updated, otherwise {@code Optional.empty()}
      */
-    public Optional<VoterSet> unsafeUpdateVoter(VoterNode voter) {
+    public Optional<VoterSet> updateVoterIgnoringDirectoryId(VoterNode voter) {
         if (voters.containsKey(voter.voterKey().id())) {
             HashMap<Integer, VoterNode> newVoters = new HashMap<>(voters);
             newVoters.put(voter.voterKey().id(), voter);
