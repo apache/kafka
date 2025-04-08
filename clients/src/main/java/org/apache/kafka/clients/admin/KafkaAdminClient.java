@@ -3847,7 +3847,7 @@ public class KafkaAdminClient extends AdminClient {
         SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, ApiException>> future = DeleteShareGroupOffsetsHandler.newFuture(groupId);
         DeleteShareGroupOffsetsHandler handler = new DeleteShareGroupOffsetsHandler(groupId, partitions, logContext);
         invokeDriver(handler, future, options.timeoutMs);
-        return new DeleteShareGroupOffsetsResult(future.get(CoordinatorKey.byGroupId(groupId)));
+        return new DeleteShareGroupOffsetsResult(future.get(CoordinatorKey.byGroupId(groupId)), partitions);
     }
 
     @Override

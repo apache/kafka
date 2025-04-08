@@ -2794,6 +2794,7 @@ public class GroupCoordinatorServiceTest {
             List.of(new ShareGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("share-group-id")
                 .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code())
+                .setErrorMessage(Errors.COORDINATOR_LOAD_IN_PROGRESS.message())
             ),
             future.get()
         );
@@ -2821,6 +2822,7 @@ public class GroupCoordinatorServiceTest {
             List.of(new ShareGroupDescribeResponseData.DescribedGroup()
                 .setGroupId("share-group-id")
                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+                .setErrorMessage(Errors.COORDINATOR_NOT_AVAILABLE.message())
             ),
             future.get()
         );
@@ -3649,8 +3651,8 @@ public class GroupCoordinatorServiceTest {
             ));
 
         DeleteShareGroupOffsetsResponseData responseData = new DeleteShareGroupOffsetsResponseData()
-            .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
-            .setErrorMessage(Errors.GROUP_ID_NOT_FOUND.message());
+            .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+            .setErrorMessage(Errors.UNKNOWN_SERVER_ERROR.message());
 
         when(runtime.scheduleReadOperation(
             ArgumentMatchers.eq("share-group-describe"),
@@ -3758,8 +3760,8 @@ public class GroupCoordinatorServiceTest {
             .setErrorMessage(Errors.GROUP_ID_NOT_FOUND.message());
 
         ShareGroupDescribeResponseData.DescribedGroup describedGroup = new ShareGroupDescribeResponseData.DescribedGroup()
-            .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
-            .setErrorMessage(Errors.UNKNOWN_SERVER_ERROR.message());
+            .setErrorCode(Errors.GROUP_ID_NOT_FOUND.code())
+            .setErrorMessage(Errors.GROUP_ID_NOT_FOUND.message());
 
         when(runtime.scheduleReadOperation(
             ArgumentMatchers.eq("share-group-describe"),

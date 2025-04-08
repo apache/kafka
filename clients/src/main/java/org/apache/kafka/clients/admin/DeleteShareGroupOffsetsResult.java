@@ -34,47 +34,69 @@ import java.util.Set;
 public class DeleteShareGroupOffsetsResult {
 
     private final KafkaFuture<Map<TopicPartition, ApiException>> future;
+    private final Set<TopicPartition> partitions;
 
-    DeleteShareGroupOffsetsResult(KafkaFuture<Map<TopicPartition, ApiException>> future) {
+    DeleteShareGroupOffsetsResult(KafkaFuture<Map<TopicPartition, ApiException>> future, Set<TopicPartition> partitions) {
         this.future = future;
+        this.partitions = partitions;
     }
 
     /**
      * Return a future which succeeds only if all the deletions succeed.
+     * * If not, the first partition error shall be returned.
      */
     public KafkaFuture<Void> all() {
-        return this.future.thenApply(topicPartitionErrorsMap ->  {
-            for (ApiException error : topicPartitionErrorsMap.values()) {
-                if (error != null) {
-                    throw error;
+        final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
+
+        this.future.whenComplete((topicPartitions, throwable) -> {
+            if (throwable != null) {
+                result.completeExceptionally(throwable);
+            } else {
+                for (TopicPartition partition : partitions) {
+                    if (maybeCompleteExceptionally(topicPartitions, partition, result)) {
+                        return;
+                    }
                 }
+                result.complete(null);
             }
-            return null;
         });
+        return result;
     }
 
     /**
      * Return a future which can be used to check the result for a given partition.
      */
     public KafkaFuture<Void> partitionResult(final TopicPartition partition) {
+        if (!partitions.contains(partition)) {
+            throw new IllegalArgumentException("Partition " + partition + " was not included in the original request");
+        }
         final KafkaFutureImpl<Void> result = new KafkaFutureImpl<>();
 
         this.future.whenComplete((topicPartitions, throwable) -> {
             if (throwable != null) {
                 result.completeExceptionally(throwable);
-            } else if (!topicPartitions.containsKey(partition)) {
-                result.completeExceptionally(new IllegalArgumentException(
-                    "Delete offset for partition \"" + partition + "\" was not attempted"));
-            } else {
-                final ApiException error = topicPartitions.get(partition);
-                if (error == null) {
-                    result.complete(null);
-                } else {
-                    result.completeExceptionally(error);
-                }
+            } else if (!maybeCompleteExceptionally(topicPartitions, partition, result)) {
+                result.complete(null);
             }
         });
-
         return result;
+    }
+
+    private boolean maybeCompleteExceptionally(Map<TopicPartition, ApiException> partitionLevelErrors,
+                                               TopicPartition partition,
+                                               KafkaFutureImpl<Void> result) {
+        Throwable exception;
+        if (!partitionLevelErrors.containsKey(partition)) {
+            exception = new IllegalArgumentException("Offset deletion result for partition \"" + partition + "\" was not included in the response");
+        } else {
+            exception = partitionLevelErrors.get(partition);
+        }
+
+        if (exception != null) {
+            result.completeExceptionally(exception);
+            return true;
+        } else {
+            return false;
+        }
     }
 }

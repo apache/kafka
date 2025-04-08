@@ -10838,7 +10838,7 @@ public class KafkaAdminClientTest {
             assertNull(result.partitionResult(fooTopicPartition0).get());
             assertNull(result.partitionResult(fooTopicPartition1).get());
             assertNull(result.partitionResult(barPartition0).get());
-            TestUtils.assertFutureThrows(IllegalArgumentException.class, result.partitionResult(zooTopicPartition0));
+            assertThrows(IllegalArgumentException.class, () -> result.partitionResult(zooTopicPartition0));
         }
     }
 
@@ -10929,7 +10929,7 @@ public class KafkaAdminClientTest {
             final DeleteShareGroupOffsetsResult result = env.adminClient().deleteShareGroupOffsets(GROUP_ID, Set.of(fooTopicPartition0, fooTopicPartition1, barTopicPartition0));
 
             assertDoesNotThrow(() -> result.all().get());
-            TestUtils.assertFutureThrows(IllegalArgumentException.class, result.partitionResult(barTopicPartition1));
+            assertThrows(IllegalArgumentException.class, () -> result.partitionResult(barTopicPartition1));
             assertNull(result.partitionResult(barTopicPartition0).get());
         }
     }

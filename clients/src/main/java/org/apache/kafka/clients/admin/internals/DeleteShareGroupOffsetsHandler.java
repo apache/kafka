@@ -173,13 +173,12 @@ public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coor
             case UNKNOWN_SERVER_ERROR:
             case KAFKA_STORAGE_ERROR:
             case GROUP_AUTHORIZATION_FAILED:
-            case TOPIC_AUTHORIZATION_FAILED:
                 log.debug("DeleteShareGroupOffsets request for group id {} failed due to error {}. " + errorMessage, groupId.idValue, error);
-                failed.put(groupId, error.exception());
+                failed.put(groupId, error.exception(errorMessage));
                 break;
             default:
                 log.error("DeleteShareGroupOffsets request for group id {} failed due to unexpected error {}. " + errorMessage, groupId.idValue, error);
-                failed.put(groupId, error.exception());
+                failed.put(groupId, error.exception(errorMessage));
         }
     }
 }

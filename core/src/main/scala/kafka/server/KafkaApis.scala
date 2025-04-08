@@ -3670,6 +3670,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     ).handle[Unit] {(responseData, exception) => {
       if (exception != null) {
         requestHelper.sendMaybeThrottle(request, deleteShareGroupOffsetsRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
+      } else if (responseData.errorCode() != Errors.NONE.code) {
+        requestHelper.sendMaybeThrottle(
+          request,
+          deleteShareGroupOffsetsRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, responseData.errorCode(), responseData.errorMessage())
+        )
       } else {
         responseData.responses.forEach { topic => {
           deleteShareGroupOffsetsResponseTopics.add(topic)

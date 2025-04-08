@@ -1641,7 +1641,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 future.complete(DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.GROUP_ID_NOT_FOUND));
             } else if (groups.get(0).errorCode() != Errors.NONE.code()) {
                 log.error("Failed to describe the share group {}", groupId);
-                future.complete(DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.GROUP_ID_NOT_FOUND));
+                future.complete(DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(groups.get(0).errorCode(), groups.get(0).errorMessage()));
             } else if (groups.get(0).members() != null && !groups.get(0).members().isEmpty()) {
                 log.error("Provided group {} is not empty", groupId);
                 future.complete(DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.NON_EMPTY_GROUP));

@@ -56,10 +56,14 @@ public class DeleteShareGroupOffsetsRequest extends AbstractRequest {
     }
 
     public DeleteShareGroupOffsetsResponse getErrorResponse(int throttleTimeMs, Errors error) {
+        return getErrorResponse(throttleTimeMs, error.code(), error.message());
+    }
+
+    public DeleteShareGroupOffsetsResponse getErrorResponse(int throttleTimeMs, short errorCode, String errorMessage) {
         return new DeleteShareGroupOffsetsResponse(new DeleteShareGroupOffsetsResponseData()
             .setThrottleTimeMs(throttleTimeMs)
-            .setErrorMessage(error.message())
-            .setErrorCode(error.code()));
+            .setErrorMessage(errorMessage)
+            .setErrorCode(errorCode));
     }
 
     @Override
@@ -80,8 +84,12 @@ public class DeleteShareGroupOffsetsRequest extends AbstractRequest {
     }
 
     public static DeleteShareGroupOffsetsResponseData getErrorDeleteResponseData(Errors error) {
+        return getErrorDeleteResponseData(error.code(), error.message());
+    }
+
+    public static DeleteShareGroupOffsetsResponseData getErrorDeleteResponseData(short errorCode, String errorMessage) {
         return new DeleteShareGroupOffsetsResponseData()
-            .setErrorCode(error.code())
-            .setErrorMessage(error.message());
+            .setErrorCode(errorCode)
+            .setErrorMessage(errorMessage);
     }
 }
