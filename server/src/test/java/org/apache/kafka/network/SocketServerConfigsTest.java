@@ -22,7 +22,6 @@ import org.apache.kafka.common.security.auth.SecurityProtocol;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -31,11 +30,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 public class SocketServerConfigsTest {
     @Test
     public void testDefaultNameToSecurityProto() {
-        Map<ListenerName, SecurityProtocol> expected = new HashMap<>();
-        expected.put(new ListenerName("PLAINTEXT"), SecurityProtocol.PLAINTEXT);
-        expected.put(new ListenerName("SSL"), SecurityProtocol.SSL);
-        expected.put(new ListenerName("SASL_PLAINTEXT"), SecurityProtocol.SASL_PLAINTEXT);
-        expected.put(new ListenerName("SASL_SSL"), SecurityProtocol.SASL_SSL);
+        Map<ListenerName, SecurityProtocol> expected = Map.of(
+                new ListenerName("PLAINTEXT"), SecurityProtocol.PLAINTEXT,
+                new ListenerName("SSL"), SecurityProtocol.SSL,
+                new ListenerName("SASL_PLAINTEXT"), SecurityProtocol.SASL_PLAINTEXT,
+                new ListenerName("SASL_SSL"), SecurityProtocol.SASL_SSL
+        );
         assertEquals(expected, SocketServerConfigs.DEFAULT_NAME_TO_SECURITY_PROTO);
     }
 
@@ -93,10 +93,8 @@ public class SocketServerConfigsTest {
 
     @Test
     public void testAnotherListenerListToEndPointsWithNonDefaultProtoMap() {
-        Map<ListenerName, SecurityProtocol> map = new HashMap<>();
-        map.put(new ListenerName("CONTROLLER"), SecurityProtocol.PLAINTEXT);
         assertEquals(List.of(new Endpoint("CONTROLLER", SecurityProtocol.PLAINTEXT, "example.com", 9093)),
                 SocketServerConfigs.listenerListToEndPoints("CONTROLLER://example.com:9093",
-                    map));
+                    Map.of(new ListenerName("CONTROLLER"), SecurityProtocol.PLAINTEXT)));
     }
 }
