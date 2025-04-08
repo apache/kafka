@@ -96,13 +96,13 @@ public class ConfigTransformer {
         Map<String, Long> ttls = new HashMap<>();
         for (Map.Entry<String, Map<String, Set<String>>> entry : keysByProvider.entrySet()) {
             String providerName = entry.getKey();
-            ConfigProvider provider = configProviderPlugins.get(providerName).get();
+            Plugin<ConfigProvider> providerPlugin = configProviderPlugins.get(providerName);
             Map<String, Set<String>> keysByPath = entry.getValue();
-            if (provider != null && keysByPath != null) {
+            if (providerPlugin != null && keysByPath != null) {
                 for (Map.Entry<String, Set<String>> pathWithKeys : keysByPath.entrySet()) {
                     String path = pathWithKeys.getKey();
                     Set<String> keys = new HashSet<>(pathWithKeys.getValue());
-                    ConfigData configData = provider.get(path, keys);
+                    ConfigData configData = providerPlugin.get().get(path, keys);
                     Map<String, String> data = configData.data();
                     Long ttl = configData.ttl();
                     if (ttl != null && ttl >= 0) {
