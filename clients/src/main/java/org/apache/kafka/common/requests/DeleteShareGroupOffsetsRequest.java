@@ -55,7 +55,7 @@ public class DeleteShareGroupOffsetsRequest extends AbstractRequest {
         this.data = data;
     }
 
-    public DeleteShareGroupOffsetsResponse getErrorResponse(int throttleTimeMs, Errors error) {
+    DeleteShareGroupOffsetsResponse getErrorResponse(int throttleTimeMs, Errors error) {
         return getErrorResponse(throttleTimeMs, error.code(), error.message());
     }
 

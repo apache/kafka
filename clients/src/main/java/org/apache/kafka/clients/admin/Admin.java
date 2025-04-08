@@ -1959,7 +1959,8 @@ public interface Admin extends AutoCloseable {
     /**
      * Delete offsets for a set of partitions in a share group with the default options.
      *
-     * <p>This is a convenience method for {@link #deleteShareGroupOffsets(String, Set, DeleteShareGroupOffsetsOptions)} with default options.
+     * <p>
+     * This is a convenience method for {@link #deleteShareGroupOffsets(String, Set, DeleteShareGroupOffsetsOptions)} with default options.
      * See the overload for more details.
      *
      * @param groupId The group for which to delete offsets.

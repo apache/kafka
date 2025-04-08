@@ -28,5 +28,4 @@ import java.util.Set;
  */
 @InterfaceStability.Evolving
 public class DeleteShareGroupOffsetsOptions extends AbstractOptions<DeleteShareGroupOffsetsOptions> {
-
 }
