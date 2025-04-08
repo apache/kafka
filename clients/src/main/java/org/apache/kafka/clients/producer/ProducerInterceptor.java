@@ -110,7 +110,7 @@ public interface ProducerInterceptor<K, V> extends Configurable, AutoCloseable {
      *                 The metadata may be null if the client passed null record to
      *                 {@link org.apache.kafka.clients.producer.KafkaProducer#send(ProducerRecord)}.
      * @param exception The exception thrown during processing of this record. Null if no error occurred.
-     * @param headers The headers for the record that was sent.
+     * @param headers The headers for the record that was sent. It is read-only.
      */
     default void onAcknowledgement(RecordMetadata metadata, Exception exception, Headers headers) {
         onAcknowledgement(metadata, exception);
