@@ -280,7 +280,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             setGroupAssignmentSnapshot(partitions);
         }
     };
-
+    
     public AsyncKafkaConsumer(final ConsumerConfig config,
                               final Deserializer<K> keyDeserializer,
                               final Deserializer<V> valueDeserializer,
@@ -302,6 +302,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     // Visible for testing
+    @SuppressWarnings({"this-escape"})
     AsyncKafkaConsumer(final ConsumerConfig config,
                        final Deserializer<K> keyDeserializer,
                        final Deserializer<V> valueDeserializer,
