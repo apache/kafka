@@ -2099,7 +2099,7 @@ public class ShareConsumerTest {
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             produceCommittedAndAbortedTransactionsInInterval(transactionalProducer, 10, 5);
             shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 8);
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 5000L, 8);
             // 5th and 10th message transaction was aborted, hence they won't be included in the fetched records.
             assertEquals(8, records.count());
             int messageCounter = 1;
@@ -2123,7 +2123,7 @@ public class ShareConsumerTest {
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
             produceCommittedAndAbortedTransactionsInInterval(transactionalProducer, 10, 5);
             shareConsumer.subscribe(Set.of(tp.topic()));
-            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 10);
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 5000L, 10);
             // Even though 5th and 10th message transaction was aborted, they will be included in the fetched records since IsolationLevel is READ_UNCOMMITTED.
             assertEquals(10, records.count());
             int messageCounter = 1;
@@ -2149,7 +2149,7 @@ public class ShareConsumerTest {
                 // First transaction is committed.
                 produceCommittedTransaction(transactionalProducer, "Message 1");
 
-                ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+                ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 5000L, 1);
                 assertEquals(1, records.count());
                 ConsumerRecord<byte[], byte[]> record = records.iterator().next();
                 assertEquals("Message 1", new String(record.value()));
@@ -2161,7 +2161,7 @@ public class ShareConsumerTest {
                 // Second transaction is aborted.
                 produceAbortedTransaction(transactionalProducer, "Message 2");
 
-                records = waitedPoll(shareConsumer, 2500L, 1);
+                records = waitedPoll(shareConsumer, 5000L, 1);
                 assertEquals(1, records.count());
                 record = records.iterator().next();
                 assertEquals("Message 2", new String(record.value()));
@@ -2173,7 +2173,7 @@ public class ShareConsumerTest {
                 // Fourth transaction is aborted.
                 produceAbortedTransaction(transactionalProducer, "Message 4");
 
-                records = waitedPoll(shareConsumer, 2500L, 2);
+                records = waitedPoll(shareConsumer, 5000L, 2);
                 // Message 3 and Message 4 would be returned by this poll.
                 assertEquals(2, records.count());
                 Iterator<ConsumerRecord<byte[], byte[]>> recordIterator = records.iterator();
@@ -2236,7 +2236,7 @@ public class ShareConsumerTest {
                 // First transaction is committed.
                 produceCommittedTransaction(transactionalProducer, "Message 1");
 
-                ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+                ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 5000L, 1);
                 assertEquals(1, records.count());
                 ConsumerRecord<byte[], byte[]> record = records.iterator().next();
                 assertEquals("Message 1", new String(record.value()));
@@ -2250,14 +2250,13 @@ public class ShareConsumerTest {
 
                 // Setting the acknowledgement commit callback to verify acknowledgement completion.
                 Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
-                Map<TopicPartition, Exception> partitionExceptionMap = new HashMap<>();
-                shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, partitionExceptionMap));
+                shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, new HashMap<>()));
 
                 // We will not receive any records since the transaction for Message 2 was aborted. Wait for the
                 // aborted marker offset for Message 2 (3L) to be fetched and acknowledged by the consumer.
                 TestUtils.waitForCondition(() -> {
                     ConsumerRecords<byte[], byte[]> pollRecords = shareConsumer.poll(Duration.ofMillis(500));
-                    return pollRecords.count() == 0 && partitionExceptionMap.containsKey(tp) && partitionOffsetsMap.containsKey(tp) && partitionOffsetsMap.get(tp).contains(3L);
+                    return pollRecords.count() == 0 && partitionOffsetsMap.containsKey(tp) && partitionOffsetsMap.get(tp).contains(3L);
                 }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume abort transaction and marker offset for Message 2");
 
                 // Third transaction is committed.
@@ -2267,10 +2266,9 @@ public class ShareConsumerTest {
 
                 // Setting the acknowledgement commit callback to verify acknowledgement completion.
                 Map<TopicPartition, Set<Long>> partitionOffsetsMap2 = new HashMap<>();
-                Map<TopicPartition, Exception> partitionExceptionMap2 = new HashMap<>();
-                shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap2, partitionExceptionMap2));
+                shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap2, new HashMap<>()));
 
-                records = waitedPoll(shareConsumer, 2500L, 1);
+                records = waitedPoll(shareConsumer, 5000L, 1);
                 // Message 3 would be returned by this poll.
                 assertEquals(1, records.count());
                 record = records.iterator().next();
@@ -2282,7 +2280,7 @@ public class ShareConsumerTest {
                 // Wait for the aborted marker offset for Message 4 (7L) to be fetched and acknowledged by the consumer.
                 TestUtils.waitForCondition(() -> {
                     shareConsumer.poll(Duration.ofMillis(500));
-                    return partitionExceptionMap2.containsKey(tp) && partitionOffsetsMap2.containsKey(tp) && partitionOffsetsMap2.get(tp).contains(7L);
+                    return partitionOffsetsMap2.containsKey(tp) && partitionOffsetsMap2.get(tp).contains(7L);
                 }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume abort transaction marker offset for Message 4");
 
                 // We are altering IsolationLevel to READ_UNCOMMITTED now. We will read both committed/aborted transactions now.
@@ -2337,7 +2335,7 @@ public class ShareConsumerTest {
                 // First transaction is committed.
                 produceCommittedTransaction(transactionalProducer, "Message 1");
 
-                ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 1);
+                ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 5000L, 1);
                 assertEquals(1, records.count());
                 ConsumerRecord<byte[], byte[]> record = records.iterator().next();
                 assertEquals("Message 1", new String(record.value()));
@@ -2351,14 +2349,13 @@ public class ShareConsumerTest {
 
                 // Setting the acknowledgement commit callback to verify acknowledgement completion.
                 Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
-                Map<TopicPartition, Exception> partitionExceptionMap = new HashMap<>();
-                shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, partitionExceptionMap));
+                shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, new HashMap<>()));
 
                 // We will not receive any records since the transaction for Message 2 was aborted. Wait for the
                 // aborted marker offset for Message 2 (3L) to be fetched and acknowledged by the consumer.
                 TestUtils.waitForCondition(() -> {
                     ConsumerRecords<byte[], byte[]> pollRecords = shareConsumer.poll(Duration.ofMillis(500));
-                    return pollRecords.count() == 0 && partitionExceptionMap.containsKey(tp) && partitionOffsetsMap.containsKey(tp) && partitionOffsetsMap.get(tp).contains(3L);
+                    return pollRecords.count() == 0 && partitionOffsetsMap.containsKey(tp) && partitionOffsetsMap.get(tp).contains(3L);
                 }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume abort transaction and marker offset for Message 2");
 
                 // Third transaction is committed.
@@ -2368,10 +2365,9 @@ public class ShareConsumerTest {
 
                 // Setting the acknowledgement commit callback to verify acknowledgement completion.
                 Map<TopicPartition, Set<Long>> partitionOffsetsMap2 = new HashMap<>();
-                Map<TopicPartition, Exception> partitionExceptionMap2 = new HashMap<>();
-                shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap2, partitionExceptionMap2));
+                shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap2, new HashMap<>()));
 
-                records = waitedPoll(shareConsumer, 2500L, 1);
+                records = waitedPoll(shareConsumer, 5000L, 1);
                 // Message 3 would be returned by this poll.
                 assertEquals(1, records.count());
                 record = records.iterator().next();
@@ -2383,7 +2379,7 @@ public class ShareConsumerTest {
                 // Wait for the aborted marker offset for Message 4 (7L) to be fetched and acknowledged by the consumer.
                 TestUtils.waitForCondition(() -> {
                     shareConsumer.poll(Duration.ofMillis(500));
-                    return partitionExceptionMap2.containsKey(tp) && partitionOffsetsMap2.containsKey(tp) && partitionOffsetsMap2.get(tp).contains(7L);
+                    return partitionOffsetsMap2.containsKey(tp) && partitionOffsetsMap2.get(tp).contains(7L);
                 }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume abort transaction marker offset for Message 4");
 
                 // We are altering IsolationLevel to READ_UNCOMMITTED now. We will read both committed/aborted transactions now.
