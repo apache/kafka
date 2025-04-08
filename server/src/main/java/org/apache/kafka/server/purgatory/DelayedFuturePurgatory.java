@@ -59,11 +59,7 @@ public class DelayedFuturePurgatory {
 
     public void shutdown() throws Exception {
         executor.shutdownNow();
-        try {
-            executor.awaitTermination(60, TimeUnit.SECONDS);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-        }
+        executor.awaitTermination(60, TimeUnit.SECONDS);
         purgatory.shutdown();
     }
 
