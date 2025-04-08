@@ -159,6 +159,23 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     @Override
+    public void initTransactions(boolean keepPreparedTxn) {
+        verifyNotClosed();
+        verifyNotFenced();
+        if (this.transactionInitialized) {
+            throw new IllegalStateException("MockProducer has already been initialized for transactions.");
+        }
+        if (this.initTransactionException != null) {
+            throw this.initTransactionException;
+        }
+        this.transactionInitialized = true;
+        this.transactionInFlight = false;
+        this.transactionCommitted = false;
+        this.transactionAborted = false;
+        this.sentOffsets = false;
+    }
+
+    @Override
     public void beginTransaction() throws ProducerFencedException {
         verifyNotClosed();
         verifyNotFenced();

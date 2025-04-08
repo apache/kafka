@@ -45,6 +45,11 @@ public interface Producer<K, V> extends Closeable {
     void initTransactions();
 
     /**
+     * See {@link KafkaProducer#initTransactions(boolean)}
+     */
+    void initTransactions(boolean keepPreparedTxn);
+
+    /**
      * See {@link KafkaProducer#beginTransaction()}
      */
     void beginTransaction() throws ProducerFencedException;

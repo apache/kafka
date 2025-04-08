@@ -138,6 +138,7 @@ public class TransactionManager {
      *
      * <ul>
      *     <li>{@link Producer#initTransactions()} calls {@link #initializeTransactions()}</li>
+     *     <li>{@link Producer#initTransactions(boolean)} calls {@link #initializeTransactions(boolean)}</li>
      *     <li>{@link Producer#beginTransaction()} calls {@link #beginTransaction()}</li>
      *     <li>{@link Producer#commitTransaction()}} calls {@link #beginCommit()}</li>
      *     <li>{@link Producer#abortTransaction()} calls {@link #beginAbort()}
@@ -195,6 +196,7 @@ public class TransactionManager {
     private volatile boolean clientSideEpochBumpRequired = false;
     private volatile long latestFinalizedFeaturesEpoch = -1;
     private volatile boolean isTransactionV2Enabled = false;
+    private final boolean enable2PC;
 
     private enum State {
         UNINITIALIZED,
@@ -255,7 +257,8 @@ public class TransactionManager {
                               final String transactionalId,
                               final int transactionTimeoutMs,
                               final long retryBackoffMs,
-                              final ApiVersions apiVersions) {
+                              final ApiVersions apiVersions,
+                              final boolean enable2PC) {
         this.producerIdAndEpoch = ProducerIdAndEpoch.NONE;
         this.transactionalId = transactionalId;
         this.log = logContext.logger(TransactionManager.class);
@@ -273,6 +276,7 @@ public class TransactionManager {
         this.retryBackoffMs = retryBackoffMs;
         this.txnPartitionMap = new TxnPartitionMap(logContext);
         this.apiVersions = apiVersions;
+        this.enable2PC = enable2PC;
     }
 
     void setPoisonStateOnInvalidTransition(boolean shouldPoisonState) {
@@ -280,10 +284,21 @@ public class TransactionManager {
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
-        return initializeTransactions(ProducerIdAndEpoch.NONE);
+        return initializeTransactions(ProducerIdAndEpoch.NONE, false);
     }
 
     synchronized TransactionalRequestResult initializeTransactions(ProducerIdAndEpoch producerIdAndEpoch) {
+        return initializeTransactions(producerIdAndEpoch, false);
+    }
+
+    public synchronized TransactionalRequestResult initializeTransactions(boolean keepPreparedTxn) {
+        return initializeTransactions(ProducerIdAndEpoch.NONE, keepPreparedTxn);
+    }
+
+    synchronized TransactionalRequestResult initializeTransactions(
+        ProducerIdAndEpoch producerIdAndEpoch,
+        boolean keepPreparedTxn
+    ) {
         maybeFailWithError();
 
         boolean isEpochBump = producerIdAndEpoch != ProducerIdAndEpoch.NONE;
@@ -299,9 +314,12 @@ public class TransactionManager {
                     .setTransactionalId(transactionalId)
                     .setTransactionTimeoutMs(transactionTimeoutMs)
                     .setProducerId(producerIdAndEpoch.producerId)
-                    .setProducerEpoch(producerIdAndEpoch.epoch);
+                    .setProducerEpoch(producerIdAndEpoch.epoch)
+                    .setEnable2Pc(enable2PC)
+                    .setKeepPreparedTxn(keepPreparedTxn);
+
             InitProducerIdHandler handler = new InitProducerIdHandler(new InitProducerIdRequest.Builder(requestData),
-                    isEpochBump);
+                isEpochBump);
             enqueueRequest(handler);
             return handler.result;
         }, State.INITIALIZING, "initTransactions");
