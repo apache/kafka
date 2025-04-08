@@ -20,6 +20,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.config.ClientQuotaManagerConfig;
 import org.apache.kafka.server.config.QuotaConfig;
 import org.apache.kafka.server.config.ReplicationQuotaManagerConfig;
@@ -59,12 +60,12 @@ public class QuotaFactory {
         private final ReplicationQuotaManager leader;
         private final ReplicationQuotaManager follower;
         private final ReplicationQuotaManager alterLogDirs;
-        private final Optional<ClientQuotaCallback> clientQuotaCallback;
+        private final Optional<Plugin<ClientQuotaCallback>> clientQuotaCallbackPlugin;
 
         public QuotaManagers(ClientQuotaManager fetch, ClientQuotaManager produce, ClientRequestQuotaManager request,
                              ControllerMutationQuotaManager controllerMutation, ReplicationQuotaManager leader,
                              ReplicationQuotaManager follower, ReplicationQuotaManager alterLogDirs,
-                             Optional<ClientQuotaCallback> clientQuotaCallback) {
+                             Optional<Plugin<ClientQuotaCallback>> clientQuotaCallbackPlugin) {
             this.fetch = fetch;
             this.produce = produce;
             this.request = request;
@@ -72,7 +73,7 @@ public class QuotaFactory {
             this.leader = leader;
             this.follower = follower;
             this.alterLogDirs = alterLogDirs;
-            this.clientQuotaCallback = clientQuotaCallback;
+            this.clientQuotaCallbackPlugin = clientQuotaCallbackPlugin;
         }
 
         public ClientQuotaManager fetch() {
@@ -103,8 +104,8 @@ public class QuotaFactory {
             return alterLogDirs;
         }
 
-        public Optional<ClientQuotaCallback> clientQuotaCallback() {
-            return clientQuotaCallback;
+        public Optional<Plugin<ClientQuotaCallback>> clientQuotaCallbackPlugin() {
+            return clientQuotaCallbackPlugin;
         }
 
         public void shutdown() {
@@ -112,7 +113,7 @@ public class QuotaFactory {
             produce.shutdown();
             request.shutdown();
             controllerMutation.shutdown();
-            clientQuotaCallback.ifPresent(ClientQuotaCallback::close);
+            clientQuotaCallbackPlugin.ifPresent(plugin -> Utils.closeQuietly(plugin, "client quota callback plugin"));
         }
     }
 
@@ -134,7 +135,7 @@ public class QuotaFactory {
             new ReplicationQuotaManager(replicationConfig(cfg), metrics, QuotaType.LEADER_REPLICATION, time),
             new ReplicationQuotaManager(replicationConfig(cfg), metrics, QuotaType.FOLLOWER_REPLICATION, time),
             new ReplicationQuotaManager(alterLogDirsReplicationConfig(cfg), metrics, QuotaType.ALTER_LOG_DIRS_REPLICATION, time),
-            clientQuotaCallbackPlugin.map(Plugin::get)
+            clientQuotaCallbackPlugin
         );
     }
 
