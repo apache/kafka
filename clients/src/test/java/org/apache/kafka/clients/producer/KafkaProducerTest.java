@@ -1149,7 +1149,7 @@ public class KafkaProducerTest {
         ProducerRecord<String, String> record = new ProducerRecord<>("topic", "key", "value");
         Future<RecordMetadata> future = producer.send(record, (recordMetadata, exception) -> { });
         try {
-            assertFutureThrows(future, TimeoutException.class);
+            TestUtils.assertFutureThrows(TimeoutException.class, future);
             //ensure headers are writable if send failure
             RecordHeaders recordHeaders = (RecordHeaders) record.headers();
             assertFalse(recordHeaders.isReadOnly());
