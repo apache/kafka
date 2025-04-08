@@ -4794,11 +4794,11 @@ public class KafkaAdminClient extends AdminClient {
                         future.complete(null);
                         break;
                     case REQUEST_TIMED_OUT:
-                        throw error.exception();
+                        throw error.exception(response.data().errorMessage());
                     default:
                         log.error("Unregister broker request for broker ID {} failed: {}",
-                            brokerId, error.message());
-                        future.completeExceptionally(error.exception());
+                            brokerId, response.data().errorMessage());
+                        future.completeExceptionally(error.exception(response.data().errorMessage()));
                         break;
                 }
             }
@@ -4837,6 +4837,35 @@ public class KafkaAdminClient extends AdminClient {
         AbortTransactionHandler handler = new AbortTransactionHandler(spec, logContext);
         invokeDriver(handler, future, options.timeoutMs);
         return new AbortTransactionResult(future.all());
+    }
+
+    /**
+     * Forcefully terminates an ongoing transaction for a given transactional ID.
+     * <p>
+     * This API is intended for well-formed but long-running transactions that are known to the
+     * transaction coordinator. It is primarily designed for supporting 2PC (two-phase commit) workflows,
+     * where a coordinator may need to unilaterally terminate a participant transaction that hasn't completed.
+     * </p>
+     *
+     * @param transactionalId       The transactional ID whose active transaction should be forcefully terminated.
+     * @return a {@link TerminateTransactionResult} that can be used to await the operation result.
+     */
+    @Override
+    public TerminateTransactionResult forceTerminateTransaction(String transactionalId, TerminateTransactionOptions options) {
+        // Simply leverage the existing fenceProducers implementation with a single transactional ID
+        FenceProducersOptions fenceOptions = new FenceProducersOptions();
+        if (options.timeoutMs() != null) {
+            fenceOptions.timeoutMs(options.timeoutMs());
+        }
+
+        FenceProducersResult fenceResult = fenceProducers(
+            Collections.singleton(transactionalId),
+            fenceOptions
+        );
+
+        // Convert the result to a TerminateTransactionResult
+        KafkaFuture<Void> future = fenceResult.fencedProducers().get(transactionalId);
+        return new TerminateTransactionResult(future);
     }
 
     @Override

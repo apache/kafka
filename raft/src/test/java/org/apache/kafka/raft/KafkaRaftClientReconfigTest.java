@@ -52,12 +52,11 @@ import org.mockito.Mockito;
 
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -88,8 +87,8 @@ public class KafkaRaftClientReconfigTest {
             .withUnknownLeader(0)
             .build();
 
-        List<List<ControlRecord>> expectedBootstrapRecords = Arrays.asList(
-            Arrays.asList(
+        List<List<ControlRecord>> expectedBootstrapRecords = List.of(
+            List.of(
                 new ControlRecord(
                     ControlRecordType.SNAPSHOT_HEADER,
                     new SnapshotHeaderRecord()
@@ -107,7 +106,7 @@ public class KafkaRaftClientReconfigTest {
                     voters.toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)
                 )
             ),
-            Arrays.asList(
+            List.of(
                 new ControlRecord(
                     ControlRecordType.SNAPSHOT_FOOTER,
                     new SnapshotFooterRecord()
@@ -132,15 +131,15 @@ public class KafkaRaftClientReconfigTest {
         context.unattachedToLeader();
 
         // check if leader writes 3 bootstrap records to the log
-        Records records = context.log.read(0, Isolation.UNCOMMITTED).records();
+        Records records = context.log.read(0, Isolation.UNCOMMITTED).records;
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
         Iterator<Record> recordIterator = batch.iterator();
         Record record = recordIterator.next();
         RaftClientTestContext.verifyLeaderChangeMessage(
             local.id(),
-            Arrays.asList(local.id(), follower.id()),
-            Arrays.asList(local.id(), follower.id()),
+            List.of(local.id(), follower.id()),
+            List.of(local.id(), follower.id()),
             record.key(),
             record.value()
         );
@@ -195,15 +194,15 @@ public class KafkaRaftClientReconfigTest {
         // check leader does not write bootstrap records to log
         context.unattachedToLeader();
 
-        Records records = context.log.read(0, Isolation.UNCOMMITTED).records();
+        Records records = context.log.read(0, Isolation.UNCOMMITTED).records;
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
         Iterator<Record> recordIterator = batch.iterator();
         Record record = recordIterator.next();
         RaftClientTestContext.verifyLeaderChangeMessage(
             local.id(),
-            Arrays.asList(local.id(), follower.id()),
-            Arrays.asList(local.id(), follower.id()),
+            List.of(local.id(), follower.id()),
+            List.of(local.id(), follower.id()),
             record.key(),
             record.value()
         );
@@ -334,7 +333,7 @@ public class KafkaRaftClientReconfigTest {
             9990 + newVoter.id()
         );
         Endpoints newListeners = Endpoints.fromInetSocketAddresses(
-            Collections.singletonMap(context.channel.listenerName(), newAddress)
+            Map.of(context.channel.listenerName(), newAddress)
         );
 
         // Show that the new voter is not currently a voter
@@ -415,7 +414,7 @@ public class KafkaRaftClientReconfigTest {
             9990 + newVoter.id()
         );
         Endpoints newListeners = Endpoints.fromInetSocketAddresses(
-            Collections.singletonMap(context.channel.listenerName(), newAddress)
+            Map.of(context.channel.listenerName(), newAddress)
         );
 
         // empty cluster id is rejected
@@ -450,7 +449,7 @@ public class KafkaRaftClientReconfigTest {
             9990 + newVoter.id()
         );
         Endpoints newListeners = Endpoints.fromInetSocketAddresses(
-            Collections.singletonMap(context.channel.listenerName(), newAddress)
+            Map.of(context.channel.listenerName(), newAddress)
         );
 
         // Attempt to add new voter to the quorum
@@ -480,7 +479,7 @@ public class KafkaRaftClientReconfigTest {
             9990 + newVoter.id()
         );
         Endpoints newListeners = Endpoints.fromInetSocketAddresses(
-            Collections.singletonMap(ListenerName.normalised("not_the_default_listener"), newAddress)
+            Map.of(ListenerName.normalised("not_the_default_listener"), newAddress)
         );
 
         // Attempt to add new voter to the quorum
@@ -511,7 +510,7 @@ public class KafkaRaftClientReconfigTest {
             9990 + newVoter.id()
         );
         Endpoints newListeners = Endpoints.fromInetSocketAddresses(
-            Collections.singletonMap(context.channel.listenerName(), newAddress)
+            Map.of(context.channel.listenerName(), newAddress)
         );
 
         // Establish a HWM and fence previous leaders
@@ -538,7 +537,7 @@ public class KafkaRaftClientReconfigTest {
             9990 + anotherNewVoter.id()
         );
         Endpoints anotherNewListeners = Endpoints.fromInetSocketAddresses(
-            Collections.singletonMap(context.channel.listenerName(), anotherNewAddress)
+            Map.of(context.channel.listenerName(), anotherNewAddress)
         );
         context.deliverRequest(context.addVoterRequest(Integer.MAX_VALUE, anotherNewVoter, anotherNewListeners));
         context.pollUntilResponse();
@@ -567,7 +566,7 @@ public class KafkaRaftClientReconfigTest {
             9990 + newVoter.id()
         );
         Endpoints newListeners = Endpoints.fromInetSocketAddresses(
-            Collections.singletonMap(context.channel.listenerName(), newAddress)
+            Map.of(context.channel.listenerName(), newAddress)
         );
 
         // Catch up the new voter to the leader's LEO
@@ -605,7 +604,7 @@ public class KafkaRaftClientReconfigTest {
             9990 + newVoter.id()
         );
         Endpoints newListeners = Endpoints.fromInetSocketAddresses(
-            Collections.singletonMap(context.channel.listenerName(), newAddress)
+            Map.of(context.channel.listenerName(), newAddress)
         );
 
         // Establish a HWM and fence previous leaders
@@ -650,7 +649,7 @@ public class KafkaRaftClientReconfigTest {
             9990 + newVoter.id()
         );
         Endpoints newListeners = Endpoints.fromInetSocketAddresses(
-            Collections.singletonMap(context.channel.listenerName(), newAddress)
+            Map.of(context.channel.listenerName(), newAddress)
         );
 
         // Establish a HWM and fence previous leaders
@@ -695,7 +694,7 @@ public class KafkaRaftClientReconfigTest {
             9990 + newVoter.id()
         );
         Endpoints newListeners = Endpoints.fromInetSocketAddresses(
-            Collections.singletonMap(context.channel.listenerName(), newAddress)
+            Map.of(context.channel.listenerName(), newAddress)
         );
 
         // Establish a HWM and fence previous leaders
@@ -767,7 +766,7 @@ public class KafkaRaftClientReconfigTest {
             9990 + newVoter.id()
         );
         Endpoints newListeners = Endpoints.fromInetSocketAddresses(
-            Collections.singletonMap(context.channel.listenerName(), newAddress)
+            Map.of(context.channel.listenerName(), newAddress)
         );
 
         // Establish a HWM and fence previous leaders
@@ -827,7 +826,7 @@ public class KafkaRaftClientReconfigTest {
             9990 + newVoter.id()
         );
         Endpoints newListeners = Endpoints.fromInetSocketAddresses(
-            Collections.singletonMap(context.channel.listenerName(), newAddress)
+            Map.of(context.channel.listenerName(), newAddress)
         );
 
         // Establish a HWM and fence previous leaders
@@ -887,7 +886,7 @@ public class KafkaRaftClientReconfigTest {
             9990 + newVoter.id()
         );
         Endpoints newListeners = Endpoints.fromInetSocketAddresses(
-            Collections.singletonMap(context.channel.listenerName(), newAddress)
+            Map.of(context.channel.listenerName(), newAddress)
         );
 
         // Establish a HWM and fence previous leaders
@@ -942,7 +941,7 @@ public class KafkaRaftClientReconfigTest {
             9990 + newVoter.id()
         );
         Endpoints newListeners = Endpoints.fromInetSocketAddresses(
-            Collections.singletonMap(context.channel.listenerName(), newAddress)
+            Map.of(context.channel.listenerName(), newAddress)
         );
 
         // Establish a HWM and fence previous leaders
@@ -995,7 +994,7 @@ public class KafkaRaftClientReconfigTest {
             9990 + newVoter.id()
         );
         Endpoints newListeners = Endpoints.fromInetSocketAddresses(
-            Collections.singletonMap(context.channel.listenerName(), newAddress)
+            Map.of(context.channel.listenerName(), newAddress)
         );
 
         // Establish a HWM and fence previous leaders
@@ -1125,7 +1124,7 @@ public class KafkaRaftClientReconfigTest {
         context.pollUntilRequest();
         context.collectEndQuorumRequests(
             epoch,
-            new HashSet<>(Arrays.asList(follower1.id(), follower2.id())),
+            new HashSet<>(List.of(follower1.id(), follower2.id())),
             Optional.empty()
         );
 
@@ -1488,7 +1487,7 @@ public class KafkaRaftClientReconfigTest {
             9990 + newVoter.id()
         );
         Endpoints newListeners = Endpoints.fromInetSocketAddresses(
-            Collections.singletonMap(context.channel.listenerName(), newAddress)
+            Map.of(context.channel.listenerName(), newAddress)
         );
         context.deliverRequest(context.addVoterRequest(Integer.MAX_VALUE, newVoter, newListeners));
         context.pollUntilResponse();
@@ -1517,7 +1516,7 @@ public class KafkaRaftClientReconfigTest {
             9990 + newVoter.id()
         );
         Endpoints newListeners = Endpoints.fromInetSocketAddresses(
-            Collections.singletonMap(context.channel.listenerName(), newAddress)
+            Map.of(context.channel.listenerName(), newAddress)
         );
 
         // Establish a HWM and fence previous leaders
@@ -2014,7 +2013,7 @@ public class KafkaRaftClientReconfigTest {
             9990 + newVoter.id()
         );
         Endpoints newVoterListeners = Endpoints.fromInetSocketAddresses(
-            Collections.singletonMap(context.channel.listenerName(), newVoterAddress)
+            Map.of(context.channel.listenerName(), newVoterAddress)
         );
 
         // Establish a HWM and fence previous leaders
@@ -2477,7 +2476,7 @@ public class KafkaRaftClientReconfigTest {
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.empty())
             .withUnknownLeader(epoch)
-            .withBootstrapServers(Optional.of(Collections.singletonList(bootstrapAddress)))
+            .withBootstrapServers(Optional.of(List.of(bootstrapAddress)))
             .build();
 
         context.pollUntilRequest();
@@ -2549,7 +2548,7 @@ public class KafkaRaftClientReconfigTest {
             9990 + newVoter.id()
         );
         Endpoints newListeners = Endpoints.fromInetSocketAddresses(
-            Collections.singletonMap(context.channel.listenerName(), newAddress)
+            Map.of(context.channel.listenerName(), newAddress)
         );
 
         // Establish a HWM and fence previous leaders

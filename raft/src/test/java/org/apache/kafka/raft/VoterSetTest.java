@@ -28,10 +28,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
 import java.net.InetSocketAddress;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -49,7 +48,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public final class VoterSetTest {
     @Test
     void testEmptyVoterSet() {
-        assertEquals(VoterSet.empty(), VoterSet.fromMap(Collections.emptyMap()));
+        assertEquals(VoterSet.empty(), VoterSet.fromMap(Map.of()));
     }
 
     @Test
@@ -86,7 +85,7 @@ public final class VoterSetTest {
     @Test
     void testVoterIds() {
         VoterSet voterSet = VoterSet.fromMap(voterMap(IntStream.of(1, 2, 3), true));
-        assertEquals(new HashSet<>(Arrays.asList(1, 2, 3)), voterSet.voterIds());
+        assertEquals(new HashSet<>(List.of(1, 2, 3)), voterSet.voterIds());
     }
 
     @Test
@@ -130,7 +129,7 @@ public final class VoterSetTest {
         VoterSet.VoterNode newVoter3 = VoterSet.VoterNode.of(
             voter3.voterKey(),
             Endpoints.fromInetSocketAddresses(
-                Collections.singletonMap(
+                Map.of(
                     ListenerName.normalised("ABC"),
                     InetSocketAddress.createUnresolved("abc", 1234)
                 )
@@ -311,7 +310,7 @@ public final class VoterSetTest {
     }
 
     @Test
-    void testNonoverlappingMajority() {
+    void testNonOverlappingMajority() {
         Map<Integer, VoterSet.VoterNode> startingVoterMap = voterMap(IntStream.of(1, 2, 3, 4, 5), true);
         VoterSet startingVoterSet = voterSet(startingVoterMap);
 
@@ -402,7 +401,7 @@ public final class VoterSetTest {
         return voterNode(
             replicaKey,
             Endpoints.fromInetSocketAddresses(
-                Collections.singletonMap(
+                Map.of(
                     DEFAULT_LISTENER_NAME,
                     InetSocketAddress.createUnresolved(
                         "localhost",

@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
@@ -91,6 +92,8 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
@@ -118,6 +121,7 @@ import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
+import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
 import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.slf4j.Logger;
@@ -412,14 +416,67 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param context The request context.
      * @param request The actual ShareGroupHeartbeat request.
      *
-     * @return A Result containing the ShareGroupHeartbeat response and
-     *         a list of records to update the state machine.
+     * @return A Result containing a pair of ShareGroupHeartbeat response maybe InitializeShareGroupStateParameters
+     *         and a list of records to update the state machine.
      */
-    public CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> shareGroupHeartbeat(
+    public CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> shareGroupHeartbeat(
         RequestContext context,
         ShareGroupHeartbeatRequestData request
     ) {
         return groupMetadataManager.shareGroupHeartbeat(context, request);
+    }
+
+    /**
+     * Handles record creation, if needed, related to ShareGroupStatePartitionMetadata
+     * corresponding to a share group heartbeat request.
+     *
+     * @param groupId The group id corresponding to the share group whose share partitions have been initialized.
+     * @param topicPartitionMap Map representing topic partition data to be added to the share state partition metadata.
+     *
+     * @return A Result containing coordinator records and Void response.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> initializeShareGroupState(
+        String groupId,
+        Map<Uuid, Set<Integer>> topicPartitionMap
+    ) {
+        return groupMetadataManager.initializeShareGroupState(groupId, topicPartitionMap);
+    }
+
+    /**
+     * Removes specific topic partitions from the initializing state for a share group. This is usually part of
+     * shareGroupHeartbeat code flow, specifically, if there is a persister exception.
+     * @param groupId The group id corresponding to the share group whose share partitions have been initialized.
+     * @param topicPartitionMap Map representing topic partition data to be cleaned from the share state partition metadata.
+     *
+     * @return A Result containing ShareGroupStatePartitionMetadata records and Void response.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> uninitializeShareGroupState(
+        String groupId,
+        Map<Uuid, Set<Integer>> topicPartitionMap
+    ) {
+        return groupMetadataManager.uninitializeShareGroupState(groupId, topicPartitionMap);
+    }
+
+    /**
+     * Reconcile initializing and initialized tps in share group state metadata records.
+     *
+     * @return A Result containing ShareGroupStatePartitionMetadata records and Void response.
+     */
+    public List<InitializeShareGroupStateParameters> reconcileShareGroupStateInitializingState(long offset) {
+        return groupMetadataManager.reconcileShareGroupStateInitializingState(offset);
+    }
+
+    /**
+     * Returns the set of share-partitions whose share-group state has been initialized in the persister.
+     *
+     * @param groupId The group id corresponding to the share group whose share partitions have been initialized.
+     *
+     * @return A map representing the initialized share-partitions for the share group.
+     */
+    public Map<Uuid, Set<Integer>> initializedShareGroupPartitions(
+        String groupId
+    ) {
+        return groupMetadataManager.initializedShareGroupPartitions(groupId);
     }
 
     /**
@@ -747,9 +804,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         long startMs = time.milliseconds();
         List<CoordinatorRecord> records = new ArrayList<>();
         groupMetadataManager.groupIds().forEach(groupId -> {
-            boolean allOffsetsExpired = offsetMetadataManager.cleanupExpiredOffsets(groupId, records);
-            if (allOffsetsExpired) {
-                groupMetadataManager.maybeDeleteGroup(groupId, records);
+            Group group = groupMetadataManager.group(groupId);
+            if (group.shouldExpire()) {
+                boolean allOffsetsExpired = offsetMetadataManager.cleanupExpiredOffsets(groupId, records);
+                if (allOffsetsExpired) {
+                    groupMetadataManager.maybeDeleteGroup(groupId, records);
+                }
             }
         });
 
@@ -1010,6 +1070,13 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 groupMetadataManager.replay(
                     (ShareGroupCurrentMemberAssignmentKey) key,
                     (ShareGroupCurrentMemberAssignmentValue) Utils.messageOrNull(value)
+                );
+                break;
+
+            case SHARE_GROUP_STATE_PARTITION_METADATA:
+                groupMetadataManager.replay(
+                    (ShareGroupStatePartitionMetadataKey) key,
+                    (ShareGroupStatePartitionMetadataValue) Utils.messageOrNull(value)
                 );
                 break;
 

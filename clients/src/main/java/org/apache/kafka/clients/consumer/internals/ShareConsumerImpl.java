@@ -57,6 +57,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -201,6 +202,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     private final SubscriptionState subscriptions;
     private final ConsumerMetadata metadata;
     private final Metrics metrics;
+    private final int requestTimeoutMs;
     private final int defaultApiTimeoutMs;
     private volatile boolean closed = false;
     // Init value is needed to avoid NPE in case of exception raised in the constructor
@@ -250,6 +252,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             this.log = logContext.logger(getClass());
 
             log.debug("Initializing the Kafka share consumer");
+            this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
             this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
             this.time = time;
             List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters(clientId, config);
@@ -369,6 +372,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.currentFetch = ShareFetch.empty();
         this.subscriptions = subscriptions;
         this.metadata = metadata;
+        this.requestTimeoutMs = config.getInt(ConsumerConfig.REQUEST_TIMEOUT_MS_CONFIG);
         this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
         this.acknowledgementMode = initializeAcknowledgementMode(config, log);
         this.fetchBuffer = new ShareFetchBuffer(logContext);
@@ -450,6 +454,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                       final Metrics metrics,
                       final SubscriptionState subscriptions,
                       final ConsumerMetadata metadata,
+                      final int requestTimeoutMs,
                       final int defaultApiTimeoutMs,
                       final String groupId) {
         this.log = logContext.logger(getClass());
@@ -464,6 +469,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.backgroundEventReaper = backgroundEventReaper;
         this.metrics = metrics;
         this.metadata = metadata;
+        this.requestTimeoutMs = requestTimeoutMs;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
         this.acknowledgementMode = initializeAcknowledgementMode(null, log);
         this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer, metrics);
@@ -644,14 +650,15 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         if (currentFetch.isEmpty()) {
             final ShareFetch<K, V> fetch = fetchCollector.collect(fetchBuffer);
             if (fetch.isEmpty()) {
-                // Fetch more records and send any waiting acknowledgements
-                applicationEventHandler.add(new ShareFetchEvent(acknowledgementsMap));
+                // Check for any acknowledgements which could have come from control records (GAP) and include them.
+                applicationEventHandler.add(new ShareFetchEvent(acknowledgementsMap, fetch.takeAcknowledgedRecords()));
 
                 // Notify the network thread to wake up and start the next round of fetching
                 applicationEventHandler.wakeupNetworkThread();
             } else if (!acknowledgementsMap.isEmpty()) {
                 // Asynchronously commit any waiting acknowledgements
-                applicationEventHandler.add(new ShareAcknowledgeAsyncEvent(acknowledgementsMap));
+                Timer timer = time.timer(defaultApiTimeoutMs);
+                applicationEventHandler.add(new ShareAcknowledgeAsyncEvent(acknowledgementsMap, calculateDeadlineMs(timer)));
 
                 // Notify the network thread to wake up and start the next round of fetching
                 applicationEventHandler.wakeupNetworkThread();
@@ -660,7 +667,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         } else {
             if (!acknowledgementsMap.isEmpty()) {
                 // Asynchronously commit any waiting acknowledgements
-                applicationEventHandler.add(new ShareAcknowledgeAsyncEvent(acknowledgementsMap));
+                Timer timer = time.timer(defaultApiTimeoutMs);
+                applicationEventHandler.add(new ShareAcknowledgeAsyncEvent(acknowledgementsMap, calculateDeadlineMs(timer)));
 
                 // Notify the network thread to wake up and start the next round of fetching
                 applicationEventHandler.wakeupNetworkThread();
@@ -758,7 +766,8 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
 
             Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap = acknowledgementsToSend();
             if (!acknowledgementsMap.isEmpty()) {
-                ShareAcknowledgeAsyncEvent event = new ShareAcknowledgeAsyncEvent(acknowledgementsMap);
+                Timer timer = time.timer(defaultApiTimeoutMs);
+                ShareAcknowledgeAsyncEvent event = new ShareAcknowledgeAsyncEvent(acknowledgementsMap, calculateDeadlineMs(timer));
                 applicationEventHandler.add(event);
             }
         } finally {
@@ -871,7 +880,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         // We are already closing with a timeout, don't allow wake-ups from here on.
         wakeupTrigger.disableWakeups();
 
-        final Timer closeTimer = time.timer(timeout);
+        final Timer closeTimer = createTimerForCloseRequests(timeout);
         clientTelemetryReporter.ifPresent(ClientTelemetryReporter::initiateClose);
         closeTimer.update();
 
@@ -906,6 +915,12 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         }
     }
 
+    private Timer createTimerForCloseRequests(Duration timeout) {
+        // this.time could be null if an exception occurs in constructor prior to setting the this.time field
+        final Time time = (this.time == null) ? Time.SYSTEM : this.time;
+        return time.timer(Math.min(timeout.toMillis(), requestTimeoutMs));
+    }
+
     /**
      * Prior to closing the network thread, we need to make sure the following operations happen in the right sequence:
      * 1. commit pending acknowledgements and close any share sessions
@@ -923,7 +938,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             // If users have fatal error, they will get some exceptions in the background queue.
             // When running unsubscribe, these exceptions should be ignored, or users can't unsubscribe successfully.
             processBackgroundEvents(unsubscribeEvent.future(), timer, e -> (e instanceof GroupAuthorizationException
-                || e instanceof TopicAuthorizationException));
+                || e instanceof TopicAuthorizationException || e instanceof InvalidTopicException));
             log.info("Completed releasing assignment and leaving group to close consumer.");
         } catch (TimeoutException e) {
             log.warn("Consumer triggered an unsubscribe event to leave the group but couldn't " +

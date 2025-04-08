@@ -136,7 +136,7 @@ public final class UpdateVoterHandler {
             );
         }
 
-        // Check that endpoinds includes the default listener
+        // Check that endpoints includes the default listener
         if (voterEndpoints.address(defaultListenerName).isEmpty()) {
             return CompletableFuture.completedFuture(
                 RaftUtil.updateVoterResponse(

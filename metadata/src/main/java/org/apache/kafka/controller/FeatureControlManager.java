@@ -104,7 +104,7 @@ public class FeatureControlManager {
                 localSupportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
                         MetadataVersion.MINIMUM_VERSION.featureLevel(),
                         MetadataVersion.latestProduction().featureLevel()));
-                quorumFeatures = new QuorumFeatures(0, localSupportedFeatures, Collections.singletonList(0));
+                quorumFeatures = new QuorumFeatures(0, localSupportedFeatures, List.of(0));
             }
             if (raftClient == null) {
                 throw new IllegalStateException("Must specify and raft client");
@@ -186,12 +186,12 @@ public class FeatureControlManager {
                 currentClaimedEpoch
             );
             if (!error.error().equals(Errors.NONE)) {
-                return ControllerResult.of(Collections.emptyList(), error);
+                return ControllerResult.of(List.of(), error);
             }
         }
 
         if (validateOnly) {
-            return ControllerResult.of(Collections.emptyList(), ApiError.NONE);
+            return ControllerResult.of(List.of(), ApiError.NONE);
         } else {
             return ControllerResult.atomicOf(records, ApiError.NONE);
         }
@@ -262,7 +262,7 @@ public class FeatureControlManager {
             if (upgradeType.equals(FeatureUpdate.UpgradeType.UPGRADE)) {
                 try {
                     if (!validateOnly) {
-                        raftClient.upgradeKraftVersion(currentClaimedEpoch, KRaftVersion.fromFeatureLevel(newVersion));
+                        raftClient.upgradeKRaftVersion(currentClaimedEpoch, KRaftVersion.fromFeatureLevel(newVersion));
                     }
                     return ApiError.NONE;
                 } catch (ApiException e) {

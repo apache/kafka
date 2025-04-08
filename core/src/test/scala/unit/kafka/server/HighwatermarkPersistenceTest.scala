@@ -24,6 +24,7 @@ import org.junit.jupiter.api._
 import org.junit.jupiter.api.Assertions._
 import kafka.utils.TestUtils
 import kafka.cluster.Partition
+import kafka.server.metadata.KRaftMetadataCache
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.metadata.MockConfigRepository
@@ -63,7 +64,7 @@ class HighwatermarkPersistenceTest {
     scheduler.startup()
     val metrics = new Metrics
     val time = new MockTime
-    val quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
+    val quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "", "")
     // create replica manager
     val replicaManager = new ReplicaManager(
       metrics = metrics,
@@ -72,7 +73,7 @@ class HighwatermarkPersistenceTest {
       scheduler = scheduler,
       logManager = logManagers.head,
       quotaManagers = quotaManager,
-      metadataCache = MetadataCache.kRaftMetadataCache(configs.head.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
+      metadataCache = new KRaftMetadataCache(configs.head.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
       logDirFailureChannel = logDirFailureChannels.head,
       alterPartitionManager = alterIsrManager)
     replicaManager.startup()
@@ -121,7 +122,7 @@ class HighwatermarkPersistenceTest {
     scheduler.startup()
     val metrics = new Metrics
     val time = new MockTime
-    val quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
+    val quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "", "")
     // create replica manager
     val replicaManager = new ReplicaManager(
       metrics = metrics,
@@ -130,7 +131,7 @@ class HighwatermarkPersistenceTest {
       scheduler = scheduler,
       logManager = logManagers.head,
       quotaManagers = quotaManager,
-      metadataCache = MetadataCache.kRaftMetadataCache(configs.head.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
+      metadataCache = new KRaftMetadataCache(configs.head.brokerId, () => KRaftVersion.KRAFT_VERSION_0),
       logDirFailureChannel = logDirFailureChannels.head,
       alterPartitionManager = alterIsrManager)
     replicaManager.startup()

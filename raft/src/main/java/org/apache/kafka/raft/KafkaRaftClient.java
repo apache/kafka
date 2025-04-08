@@ -98,7 +98,6 @@ import org.slf4j.Logger;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HexFormat;
 import java.util.IdentityHashMap;
 import java.util.Iterator;
@@ -430,7 +429,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             listenerContext.nextExpectedOffset().ifPresent(nextExpectedOffset -> {
                 if (nextExpectedOffset < highWatermark) {
                     LogFetchInfo readInfo = log.read(nextExpectedOffset, Isolation.COMMITTED);
-                    listenerContext.fireHandleCommit(nextExpectedOffset, readInfo.records());
+                    listenerContext.fireHandleCommit(nextExpectedOffset, readInfo.records);
                 }
             });
         }
@@ -652,7 +651,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         log.initializeLeaderEpoch(quorum.epoch());
 
         // The high watermark can only be advanced once we have written a record
-        // from the new leader's epoch. Hence we write a control message immediately
+        // from the new leader's epoch. Hence, we write a control message immediately
         // to ensure there is no delay committing pending data.
         state.appendStartOfEpochControlRecords(currentTimeMs);
 
@@ -1623,11 +1622,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             if (validOffsetAndEpoch.kind() == ValidOffsetAndEpoch.Kind.VALID) {
                 LogFetchInfo info = log.read(fetchOffset, Isolation.UNCOMMITTED);
 
-                if (state.updateReplicaState(replicaKey, currentTimeMs, info.startOffsetMetadata())) {
+                if (state.updateReplicaState(replicaKey, currentTimeMs, info.startOffsetMetadata)) {
                     onUpdateLeaderHighWatermark(state, currentTimeMs);
                 }
 
-                records = info.records();
+                records = info.records;
             } else {
                 records = MemoryRecords.EMPTY;
             }
@@ -1898,7 +1897,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * - {@link Errors#FENCED_LEADER_EPOCH} if the epoch is smaller than this node's epoch
      * - {@link Errors#INVALID_REQUEST} if the request epoch is larger than the leader's current epoch
      *     or if either the fetch offset or the last fetched epoch is invalid
-     * - {@link Errors#SNAPSHOT_NOT_FOUND} if the request snapshot id does not exists
+     * - {@link Errors#SNAPSHOT_NOT_FOUND} if the request snapshot id does not exist
      * - {@link Errors#POSITION_OUT_OF_RANGE} if the request snapshot offset out of range
      */
     private FetchSnapshotResponseData handleFetchSnapshotRequest(
@@ -2412,7 +2411,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         final Endpoints leaderEndpoints;
         if (responseLeaderId.isPresent() && data.currentLeader().host().isEmpty()) {
             leaderEndpoints = Endpoints.fromInetSocketAddresses(
-                Collections.singletonMap(
+                Map.of(
                     channel.listenerName(),
                     InetSocketAddress.createUnresolved(
                         data.currentLeader().host(),
@@ -2891,15 +2890,11 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private long maybeSendFetchToAnyBootstrap(long currentTimeMs) {
         Optional<Node> readyNode = requestManager.findReadyBootstrapServer(currentTimeMs);
-        if (readyNode.isPresent()) {
-            return maybeSendRequest(
-                currentTimeMs,
-                readyNode.get(),
-                this::buildFetchRequest
-            );
-        } else {
-            return requestManager.backoffBeforeAvailableBootstrapServer(currentTimeMs);
-        }
+        return readyNode.map(node -> maybeSendRequest(
+            currentTimeMs,
+            node,
+            this::buildFetchRequest
+        )).orElseGet(() -> requestManager.backoffBeforeAvailableBootstrapServer(currentTimeMs));
     }
 
     private FetchSnapshotRequestData buildFetchSnapshotRequest(OffsetAndEpoch snapshotId, long snapshotSize) {
@@ -3358,7 +3353,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     private void pollListeners() {
-        // Apply all of the pending registration
+        // Apply all the pending registration
         while (true) {
             Registration<T> registration = pendingRegistrations.poll();
             if (registration == null) {
@@ -3877,7 +3872,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
          * This API is used for committed records originating from {@link #prepareAppend(int, List)}
          * on this instance. In this case, we are able to save the original record objects, which
          * saves the need to read them back from disk. This is a nice optimization for the leader
-         * which is typically doing more work than all of the * followers.
+         * which is typically doing more work than all the * followers.
          */
         private void fireHandleCommit(
             long baseOffset,
@@ -3887,7 +3882,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             List<T> records
         ) {
             Batch<T> batch = Batch.data(baseOffset, epoch, appendTimestamp, sizeInBytes, records);
-            MemoryBatchReader<T> reader = MemoryBatchReader.of(Collections.singletonList(batch), this);
+            MemoryBatchReader<T> reader = MemoryBatchReader.of(List.of(batch), this);
             fireHandleCommit(reader);
         }
 

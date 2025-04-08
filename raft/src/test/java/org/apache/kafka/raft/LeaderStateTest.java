@@ -31,8 +31,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.Mockito;
 
-import java.util.Arrays;
-import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -41,8 +40,6 @@ import java.util.Set;
 import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
-import static java.util.Collections.emptySet;
-import static java.util.Collections.singleton;
 import static org.apache.kafka.raft.LeaderState.CHECK_QUORUM_TIMEOUT_FACTOR;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -137,7 +134,7 @@ public class LeaderStateTest {
                 voterSet,
                 OptionalLong.of(0),
                 KRaftVersion.KRAFT_VERSION_1,
-                Collections.emptySet(),
+                Set.of(),
                 null,
                 fetchTimeoutMs,
                 logContext,
@@ -158,9 +155,9 @@ public class LeaderStateTest {
         );
         assertEquals(Set.of(node1, node2), state.nonAcknowledgingVoters());
         state.addAcknowledgementFrom(node1.id());
-        assertEquals(singleton(node2), state.nonAcknowledgingVoters());
+        assertEquals(Set.of(node2), state.nonAcknowledgingVoters());
         state.addAcknowledgementFrom(node2.id());
-        assertEquals(emptySet(), state.nonAcknowledgingVoters());
+        assertEquals(Set.of(), state.nonAcknowledgingVoters());
     }
 
     @Test
@@ -185,7 +182,7 @@ public class LeaderStateTest {
 
         assertEquals(Optional.empty(), state.highWatermark());
         assertFalse(state.updateLocalState(new LogOffsetMetadata(15L), voters));
-        assertEquals(emptySet(), state.nonAcknowledgingVoters());
+        assertEquals(Set.of(), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertTrue(state.updateLocalState(new LogOffsetMetadata(16L), voters));
         assertEquals(Optional.of(new LogOffsetMetadata(16L)), state.highWatermark());
@@ -257,10 +254,10 @@ public class LeaderStateTest {
         );
 
         assertFalse(state.updateLocalState(new LogOffsetMetadata(13L), voters));
-        assertEquals(singleton(otherNodeKey), state.nonAcknowledgingVoters());
+        assertEquals(Set.of(otherNodeKey), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertFalse(state.updateReplicaState(otherNodeKey, 0, new LogOffsetMetadata(10L)));
-        assertEquals(emptySet(), state.nonAcknowledgingVoters());
+        assertEquals(Set.of(), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertTrue(state.updateReplicaState(otherNodeKey, 0, new LogOffsetMetadata(11L)));
         assertEquals(Optional.of(new LogOffsetMetadata(11L)), state.highWatermark());
@@ -285,10 +282,10 @@ public class LeaderStateTest {
         assertEquals(Set.of(nodeKey1, nodeKey2), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertFalse(state.updateReplicaState(nodeKey1, 0, new LogOffsetMetadata(10L)));
-        assertEquals(singleton(nodeKey2), state.nonAcknowledgingVoters());
+        assertEquals(Set.of(nodeKey2), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertFalse(state.updateReplicaState(nodeKey2, 0, new LogOffsetMetadata(10L)));
-        assertEquals(emptySet(), state.nonAcknowledgingVoters());
+        assertEquals(Set.of(), state.nonAcknowledgingVoters());
         assertEquals(Optional.empty(), state.highWatermark());
         assertTrue(state.updateReplicaState(nodeKey2, 0, new LogOffsetMetadata(15L)));
         assertEquals(Optional.of(new LogOffsetMetadata(15L)), state.highWatermark());
@@ -491,7 +488,7 @@ public class LeaderStateTest {
 
         // Leader should not be included; the follower with larger offset should be prioritized.
         assertEquals(
-            Arrays.asList(nodeKey2, nodeKey1),
+            List.of(nodeKey2, nodeKey1),
             state.nonLeaderVotersByDescendingFetchOffset()
         );
     }
@@ -673,7 +670,7 @@ public class LeaderStateTest {
         );
 
         IntStream.of(remoteIds).forEach(id -> {
-            Arrays.asList(true, false).forEach(isPrevote -> {
+            List.of(true, false).forEach(isPrevote -> {
                 assertFalse(
                     state.canGrantVote(
                         ReplicaKey.of(id, ReplicaKey.NO_DIRECTORY_ID),

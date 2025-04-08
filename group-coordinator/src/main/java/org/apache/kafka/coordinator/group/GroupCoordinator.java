@@ -69,11 +69,6 @@ import java.util.function.IntSupplier;
 public interface GroupCoordinator {
 
     /**
-     * @return True if the new coordinator; False otherwise.
-     */
-    boolean isNewGroupCoordinator();
-
-    /**
      * Heartbeat to a Consumer Group.
      *
      * @param context           The request context.
@@ -303,6 +298,20 @@ public interface GroupCoordinator {
     );
 
     /**
+     * Describe all Share Group Offsets for a given group.
+     *
+     * @param context           The request context
+     * @param request           The DescribeShareGroupOffsetsRequestGroup request.
+     *
+     * @return  A future yielding the results.
+     *          The error codes of the response are set to indicate the errors occurred during the execution.
+     */
+    CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> describeShareGroupAllOffsets(
+        RequestContext context,
+        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup request
+    );
+
+    /**
      * Commit offsets for a given Group.
      *
      * @param context           The request context.
@@ -381,26 +390,6 @@ public interface GroupCoordinator {
      * @return The partition index.
      */
     int partitionFor(String groupId);
-
-    /**
-     * Commit or abort the pending transactional offsets for the given partitions.
-     *
-     * This method is only used by the old group coordinator. Internally, the old
-     * group coordinator completes the transaction asynchronously in order to
-     * avoid deadlocks. Hence, this method returns a future that the caller
-     * can wait on.
-     *
-     * @param producerId        The producer id.
-     * @param partitions        The partitions.
-     * @param transactionResult The result of the transaction.
-     *
-     * @return A future yielding the result.
-     */
-    CompletableFuture<Void> onTransactionCompleted(
-        long producerId,
-        Iterable<TopicPartition> partitions,
-        TransactionResult transactionResult
-    );
 
     /**
      * Remove the provided deleted partitions offsets.

@@ -467,7 +467,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
             return;
 
         log.debug("Signal the ConsumerMembershipManager to leave the consumer group since the consumer is closing");
-        CompletableFuture<Void> future = requestManagers.consumerMembershipManager.get().leaveGroupOnClose();
+        CompletableFuture<Void> future = requestManagers.consumerMembershipManager.get().leaveGroupOnClose(event.membershipOperation());
         future.whenComplete(complete(event.future()));
     }
 
@@ -482,7 +482,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
      * Process event that tells the share consume request manager to fetch more records.
      */
     private void process(final ShareFetchEvent event) {
-        requestManagers.shareConsumeRequestManager.ifPresent(scrm -> scrm.fetch(event.acknowledgementsMap()));
+        requestManagers.shareConsumeRequestManager.ifPresent(scrm -> scrm.fetch(event.acknowledgementsMap(), event.controlRecordAcknowledgements()));
     }
 
     /**
@@ -508,7 +508,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         }
 
         ShareConsumeRequestManager manager = requestManagers.shareConsumeRequestManager.get();
-        manager.commitAsync(event.acknowledgementsMap());
+        manager.commitAsync(event.acknowledgementsMap(), event.deadlineMs());
     }
 
     /**

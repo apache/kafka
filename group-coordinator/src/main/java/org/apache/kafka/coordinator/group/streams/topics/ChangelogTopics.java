@@ -31,6 +31,7 @@ import java.util.OptionalInt;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 /**
  * This class is responsible for setting up the changelog topics for a topology. For a given topology, which does not have the number
@@ -75,7 +76,10 @@ public class ChangelogTopics {
             final Set<String> sourceTopics = new HashSet<>(subtopology.sourceTopics());
 
             final OptionalInt maxNumPartitions =
-                subtopology.sourceTopics().stream().mapToInt(this::getPartitionCountOrFail).max();
+                Stream.concat(
+                    subtopology.sourceTopics().stream(),
+                    subtopology.repartitionSourceTopics().stream().map(TopicInfo::name)
+                ).mapToInt(this::getPartitionCountOrFail).max();
 
             if (maxNumPartitions.isEmpty()) {
                 throw new StreamsInvalidTopologyException("No source topics found for subtopology " + subtopology.subtopologyId());
