@@ -150,6 +150,7 @@ public class SmokeTestDriverIntegrationTest {
         props.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
         // decrease the session timeout so that we can trigger the rebalance soon after old client left closed
         props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);
+        props.put(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, 500);
         if (streamsProtocolEnabled) {
             props.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
         }

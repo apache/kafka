@@ -59,7 +59,7 @@ public class StickyTaskAssignor implements TaskAssignor {
         //standby
         final int numStandbyReplicas =
             groupSpec.assignmentConfigs().isEmpty() ? 0
-                : Integer.parseInt(groupSpec.assignmentConfigs().get("group.streams.num.standby.replicas"));
+                : Integer.parseInt(groupSpec.assignmentConfigs().get("num.standby.replicas"));
         if (numStandbyReplicas > 0) {
             Set<TaskId> statefulTasks = taskIds(topologyDescriber, false);
             assignStandby(statefulTasks, numStandbyReplicas);
