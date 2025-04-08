@@ -31,7 +31,7 @@ import org.apache.kafka.common.record.Records;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -55,8 +55,6 @@ public class ShareFetchResponse extends AbstractResponse {
 
     private final ShareFetchResponseData data;
 
-    private volatile LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData = null;
-
     public ShareFetchResponse(ShareFetchResponseData data) {
         super(ApiKeys.SHARE_FETCH);
         this.data = data;
@@ -73,7 +71,7 @@ public class ShareFetchResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        HashMap<Errors, Integer> counts = new HashMap<>();
+        Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
         updateErrorCounts(counts, Errors.forCode(data.errorCode()));
         data.responses().forEach(
                 topic -> topic.partitions().forEach(
@@ -84,23 +82,14 @@ public class ShareFetchResponse extends AbstractResponse {
     }
 
     public LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData(Map<Uuid, String> topicNames) {
-        if (responseData == null) {
-            synchronized (this) {
-                // Assigning the lazy-initialized `responseData` in the last step
-                // to avoid other threads accessing a half-initialized object.
-                if (responseData == null) {
-                    final LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseDataTmp = new LinkedHashMap<>();
-                    data.responses().forEach(topicResponse -> {
-                        String name = topicNames.get(topicResponse.topicId());
-                        if (name != null) {
-                            topicResponse.partitions().forEach(partitionData -> responseDataTmp.put(new TopicIdPartition(topicResponse.topicId(),
-                                    new TopicPartition(name, partitionData.partitionIndex())), partitionData));
-                        }
-                    });
-                    responseData = responseDataTmp;
-                }
+        final LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData = new LinkedHashMap<>();
+        data.responses().forEach(topicResponse -> {
+            String name = topicNames.get(topicResponse.topicId());
+            if (name != null) {
+                topicResponse.partitions().forEach(partitionData -> responseData.put(new TopicIdPartition(topicResponse.topicId(),
+                        new TopicPartition(name, partitionData.partitionIndex())), partitionData));
             }
-        }
+        });
         return responseData;
     }
 

@@ -116,6 +116,7 @@ import java.time.Duration
 import java.util
 import java.util.Arrays.asList
 import java.util.concurrent.{CompletableFuture, TimeUnit}
+import java.util.function.Consumer
 import java.util.{Collections, Comparator, Optional, OptionalInt, OptionalLong, Properties}
 import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
@@ -3398,16 +3399,16 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.anyInt(), // correlationId
       ArgumentMatchers.anyShort(), // version
       ArgumentMatchers.any[(Errors, ListOffsetsPartition) => ListOffsetsPartitionResponse](),
-      ArgumentMatchers.any[List[ListOffsetsTopicResponse] => Unit](),
+      ArgumentMatchers.any[Consumer[util.Collection[ListOffsetsTopicResponse]]],
       ArgumentMatchers.anyInt() // timeoutMs
     )).thenAnswer(ans => {
-      val callback = ans.getArgument[List[ListOffsetsTopicResponse] => Unit](8)
+      val callback = ans.getArgument[Consumer[util.List[ListOffsetsTopicResponse]]](8)
       val partitionResponse = new ListOffsetsPartitionResponse()
         .setErrorCode(error.code())
         .setOffset(ListOffsetsResponse.UNKNOWN_OFFSET)
         .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP)
         .setPartitionIndex(tp.partition())
-      callback(List(new ListOffsetsTopicResponse().setName(tp.topic()).setPartitions(List(partitionResponse).asJava)))
+      callback.accept(util.List.of(new ListOffsetsTopicResponse().setName(tp.topic()).setPartitions(List(partitionResponse).asJava)))
     })
 
     val targetTimes = List(new ListOffsetsTopic()
@@ -3505,7 +3506,7 @@ class KafkaApisTest extends Logging {
 
     // 2 topics returned for authorization in during handle
     val topicsReturnedFromMetadataCacheForAuthorization = util.Set.of("remaining-topic", "later-deleted-topic")
-    when(metadataCache.getAllTopics()).thenReturn(topicsReturnedFromMetadataCacheForAuthorization)
+    when(metadataCache.getAllTopics).thenReturn(topicsReturnedFromMetadataCacheForAuthorization)
     // 1 topic is deleted from metadata right at the time between authorization and the next getTopicMetadata() call
     when(metadataCache.getTopicMetadata(
       ArgumentMatchers.eq(topicsReturnedFromMetadataCacheForAuthorization),
@@ -8859,11 +8860,11 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.anyInt(), // correlationId
       ArgumentMatchers.anyShort(), // version
       ArgumentMatchers.any[(Errors, ListOffsetsPartition) => ListOffsetsPartitionResponse](),
-      ArgumentMatchers.any[List[ListOffsetsTopicResponse] => Unit](),
+      ArgumentMatchers.any[Consumer[util.Collection[ListOffsetsTopicResponse]]],
       ArgumentMatchers.anyInt() // timeoutMs
     )).thenAnswer(ans => {
       val version = ans.getArgument[Short](6)
-      val callback = ans.getArgument[List[ListOffsetsTopicResponse] => Unit](8)
+      val callback = ans.getArgument[Consumer[util.List[ListOffsetsTopicResponse]]](8)
       val errorCode = if (ReplicaManager.isListOffsetsTimestampUnsupported(timestamp, version))
         Errors.UNSUPPORTED_VERSION.code()
       else
@@ -8873,7 +8874,7 @@ class KafkaApisTest extends Logging {
         .setOffset(ListOffsetsResponse.UNKNOWN_OFFSET)
         .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP)
         .setPartitionIndex(tp.partition())
-      callback(List(new ListOffsetsTopicResponse().setName(tp.topic()).setPartitions(List(partitionResponse).asJava)))
+      callback.accept(util.List.of(new ListOffsetsTopicResponse().setName(tp.topic()).setPartitions(List(partitionResponse).asJava)))
     })
 
     val data = new ListOffsetsRequestData().setTopics(targetTimes).setReplicaId(ListOffsetsRequest.CONSUMER_REPLICA_ID)
@@ -8911,16 +8912,16 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.anyInt(), // correlationId
       ArgumentMatchers.anyShort(), // version
       ArgumentMatchers.any[(Errors, ListOffsetsPartition) => ListOffsetsPartitionResponse](),
-      ArgumentMatchers.any[List[ListOffsetsTopicResponse] => Unit](),
+      ArgumentMatchers.any[Consumer[util.Collection[ListOffsetsTopicResponse]]],
       ArgumentMatchers.anyInt() // timeoutMs
     )).thenAnswer(ans => {
-      val callback = ans.getArgument[List[ListOffsetsTopicResponse] => Unit](8)
+      val callback = ans.getArgument[Consumer[util.List[ListOffsetsTopicResponse]]](8)
       val partitionResponse = new ListOffsetsPartitionResponse()
         .setErrorCode(Errors.NONE.code())
         .setOffset(latestOffset)
         .setTimestamp(ListOffsetsResponse.UNKNOWN_TIMESTAMP)
         .setPartitionIndex(tp.partition())
-      callback(List(new ListOffsetsTopicResponse().setName(tp.topic()).setPartitions(List(partitionResponse).asJava)))
+      callback.accept(util.List.of(new ListOffsetsTopicResponse().setName(tp.topic()).setPartitions(List(partitionResponse).asJava)))
     })
 
     val listOffsetRequest = ListOffsetsRequest.Builder.forConsumer(true, isolationLevel)

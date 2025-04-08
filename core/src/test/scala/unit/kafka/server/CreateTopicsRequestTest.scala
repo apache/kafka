@@ -77,9 +77,6 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-config",
       config=Map("not.a.property" -> "error")))),
       Map("error-config" -> error(Errors.INVALID_CONFIG)), checkErrorMessage = false)
-    validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-config-value",
-      config=Map("message.format.version" -> "invalid-value")))),
-      Map("error-config-value" -> error(Errors.INVALID_CONFIG)), checkErrorMessage = false)
     validateErrorCreateTopicsRequests(topicsReq(Seq(topicReq("error-assignment",
       assignment=Map(0 -> List(0, 1), 1 -> List(0))))),
       Map("error-assignment" -> error(Errors.INVALID_REPLICA_ASSIGNMENT)), checkErrorMessage = false)

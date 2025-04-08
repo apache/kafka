@@ -41,7 +41,6 @@ import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -87,7 +86,7 @@ public class ShareFetchUtils {
                     .setRecords(null)
                     .setErrorCode(fetchPartitionData.error.code())
                     .setErrorMessage(fetchPartitionData.error.message())
-                    .setAcquiredRecords(Collections.emptyList());
+                    .setAcquiredRecords(List.of());
 
                 // In case we get OFFSET_OUT_OF_RANGE error, that's because the Log Start Offset is later than the fetch offset.
                 // So, we would update the start and end offset of the share partition and still return an empty
@@ -124,7 +123,7 @@ public class ShareFetchUtils {
                 if (shareAcquiredRecords.acquiredRecords().isEmpty()) {
                     partitionData
                         .setRecords(null)
-                        .setAcquiredRecords(Collections.emptyList());
+                        .setAcquiredRecords(List.of());
                 } else {
                     partitionData
                         .setRecords(maybeSliceFetchRecords(fetchPartitionData.records, shareAcquiredRecords))
