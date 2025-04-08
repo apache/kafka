@@ -30,6 +30,7 @@ import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
 import org.apache.kafka.common.resource.ResourceType
 import org.apache.kafka.security.authorizer.AuthorizerUtils
+import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer._
 
 import java.util
@@ -45,9 +46,9 @@ import scala.jdk.OptionConverters.RichOptional
 class AclApis(authHelper: AuthHelper,
               authorizer: Option[Authorizer],
               requestHelper: RequestHandlerHelper,
-              name: String,
+              role: ProcessRole,
               config: KafkaConfig) extends Logging {
-  this.logIdent = "[AclApis-%s-%s] ".format(name, config.nodeId)
+  this.logIdent = "[AclApis-%s-%s] ".format(role, config.nodeId)
   private val alterAclsPurgatory =
       new DelayedFuturePurgatory(purgatoryName = "AlterAcls", brokerId = config.nodeId)
 
