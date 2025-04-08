@@ -36,7 +36,7 @@ import java.util.function.Supplier;
 
 
 /**
- * This class provides methods to build and manage consumer instances, and does not generate or manage Kafka clusters.
+ * This class provides methods to build and manage consumer instances.
  */
 class ConsumerGroupCommandTestUtils {
 
