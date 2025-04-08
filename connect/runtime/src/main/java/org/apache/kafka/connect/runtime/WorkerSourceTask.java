@@ -280,7 +280,7 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
             log.debug("{} Finished offset commitOffsets successfully in {} ms",
                     this, durationMillis);
 
-            commitSourceTask();
+            commitSourceTask(offsetsToCommit.offsets());
             return true;
         }
 
@@ -327,7 +327,7 @@ class WorkerSourceTask extends AbstractWorkerSourceTask {
         log.debug("{} Finished commitOffsets successfully in {} ms",
                 this, durationMillis);
 
-        commitSourceTask();
+        commitSourceTask(offsetsToCommit.offsets());
 
         return true;
     }
