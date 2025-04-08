@@ -381,18 +381,17 @@ public class ConsumerConfig extends AbstractConfig {
     private static final String SECURITY_PROVIDERS_DOC = SecurityConfig.SECURITY_PROVIDERS_DOC;
 
     /**
-     * <code>share.acknowledgement.mode</code> is being evaluated as a new configuration to control the acknowledgement mode
-     * for share consumers. It will be removed or converted to a proper configuration before release.
-     * An alternative being considered is <code>enable.explicit.share.acknowledgement</code> as a boolean configuration.
+     * <code>share.acknowledgement.mode</code> is a config to control the acknowledgement mode
+     * for share consumers. It can be set to implicit or explicit.
      */
-    public static final String INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_CONFIG = "internal.share.acknowledgement.mode";
-    private static final String INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_DOC = "Controls the acknowledgement mode for a share consumer." +
-            " If unset, the acknowledgement mode of the consumer is decided by the method calls it uses to fetch and commit." +
+    public static final String SHARE_ACKNOWLEDGEMENT_MODE_CONFIG = "share.acknowledgement.mode";
+    private static final String SHARE_ACKNOWLEDGEMENT_MODE_DOC = "Controls the acknowledgement mode for a share consumer." +
             " If set to <code>implicit</code>, the acknowledgement mode of the consumer is implicit and it must not" +
             " use <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records. Instead," +
             " delivery is acknowledged implicitly on the next call to poll or commit." +
             " If set to <code>explicit</code>, the acknowledgement mode of the consumer is explicit and it must use" +
-            " <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records.";
+            " <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records." +
+            " If unset, the acknowledgement mode of the consumer is set to 'implicit' by default";
 
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 
@@ -401,7 +400,7 @@ public class ConsumerConfig extends AbstractConfig {
      */
     private static final List<String> CLASSIC_PROTOCOL_UNSUPPORTED_CONFIGS = List.of(
             GROUP_REMOTE_ASSIGNOR_CONFIG,
-            INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_CONFIG
+            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG
     );
 
     /**
@@ -411,7 +410,7 @@ public class ConsumerConfig extends AbstractConfig {
             PARTITION_ASSIGNMENT_STRATEGY_CONFIG, 
             HEARTBEAT_INTERVAL_MS_CONFIG, 
             SESSION_TIMEOUT_MS_CONFIG,
-            INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_CONFIG
+            SHARE_ACKNOWLEDGEMENT_MODE_CONFIG
     );
     
     static {
@@ -695,12 +694,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         atLeast(0),
                                         Importance.LOW,
                                         CommonClientConfigs.METADATA_RECOVERY_REBOOTSTRAP_TRIGGER_MS_DOC)
-                                .define(ConsumerConfig.INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
+                                .define(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG,
                                         Type.STRING,
                                         null,
                                         in(null, "implicit", "explicit"),
                                         Importance.MEDIUM,
-                                        ConsumerConfig.INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_DOC);
+                                        ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_DOC);
     }
 
     @Override

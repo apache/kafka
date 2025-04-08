@@ -594,7 +594,7 @@ public class ShareConsumerTest {
     public void testExplicitAcknowledgeSuccess() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1", Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, "explicit"))) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -615,7 +615,7 @@ public class ShareConsumerTest {
     public void testExplicitAcknowledgeCommitSuccess() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1", Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, "explicit"))) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -638,7 +638,7 @@ public class ShareConsumerTest {
     public void testExplicitAcknowledgementCommitAsync() throws InterruptedException {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
-             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1");
+             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1", Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, "explicit"));
              ShareConsumer<byte[], byte[]> shareConsumer2 = createShareConsumer("group1")) {
 
             ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
@@ -663,15 +663,16 @@ public class ShareConsumerTest {
             // Acknowledging 2 out of the 3 records received via commitAsync.
             ConsumerRecord<byte[], byte[]> firstRecord = iterator.next();
             ConsumerRecord<byte[], byte[]> secondRecord = iterator.next();
+            ConsumerRecord<byte[], byte[]> thirdRecord = iterator.next();
             assertEquals(0L, firstRecord.offset());
             assertEquals(1L, secondRecord.offset());
 
             shareConsumer1.acknowledge(firstRecord);
             shareConsumer1.acknowledge(secondRecord);
+            shareConsumer1.acknowledge(thirdRecord, AcknowledgeType.RELEASE);
             shareConsumer1.commitAsync();
 
-            // The 3rd record should be reassigned to 2nd consumer when it polls, kept higher wait time
-            // as time out for locks is 15 secs.
+            // The 3rd record should be reassigned to 2nd consumer when it polls.
             TestUtils.waitForCondition(() -> {
                 ConsumerRecords<byte[], byte[]> records2 = shareConsumer2.poll(Duration.ofMillis(1000));
                 return records2.count() == 1 && records2.iterator().next().offset() == 2L;
@@ -691,50 +692,15 @@ public class ShareConsumerTest {
     }
 
     @ClusterTest
-    public void testImplicitModeNotTriggeredByPollWhenNoAcksToSend() throws InterruptedException {
-        alterShareAutoOffsetReset("group1", "earliest");
-        try (Producer<byte[], byte[]> producer = createProducer();
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
-
-            shareConsumer.subscribe(Set.of(tp.topic()));
-
-            Map<TopicPartition, Set<Long>> partitionOffsetsMap1 = new HashMap<>();
-            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap1, Map.of()));
-
-            // The acknowledgement mode moves to PENDING from UNKNOWN.
-            ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
-            assertEquals(0, records.count());
-            shareConsumer.commitAsync();
-
-            ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
-            producer.send(record1);
-            producer.flush();
-
-            // The acknowledgement mode remains in PENDING because no records were returned.
-            records = shareConsumer.poll(Duration.ofMillis(5000));
-            assertEquals(1, records.count());
-
-            // The acknowledgement mode now moves to EXPLICIT.
-            shareConsumer.acknowledge(records.iterator().next());
-            shareConsumer.commitAsync();
-
-            TestUtils.waitForCondition(() -> {
-                shareConsumer.poll(Duration.ofMillis(500));
-                return partitionOffsetsMap1.containsKey(tp);
-            }, 30000, 100L, () -> "Didn't receive call to callback");
-            verifyShareGroupStateTopicRecordsProduced();
-        }
-    }
-
-    @ClusterTest
     public void testExplicitAcknowledgementCommitAsyncPartialBatch() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
-             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1")) {
+             ShareConsumer<byte[], byte[]> shareConsumer1 = createShareConsumer("group1", Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, "explicit"))) {
 
             ProducerRecord<byte[], byte[]> record1 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             ProducerRecord<byte[], byte[]> record2 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             ProducerRecord<byte[], byte[]> record3 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            ProducerRecord<byte[], byte[]> record4 = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record1);
             producer.send(record2);
             producer.send(record3);
@@ -753,6 +719,7 @@ public class ShareConsumerTest {
             // Acknowledging 2 out of the 3 records received via commitAsync.
             ConsumerRecord<byte[], byte[]> firstRecord = iterator.next();
             ConsumerRecord<byte[], byte[]> secondRecord = iterator.next();
+            ConsumerRecord<byte[], byte[]> thirdRecord = iterator.next();
             assertEquals(0L, firstRecord.offset());
             assertEquals(1L, secondRecord.offset());
 
@@ -760,21 +727,25 @@ public class ShareConsumerTest {
             shareConsumer1.acknowledge(secondRecord);
             shareConsumer1.commitAsync();
 
-            // The 3rd record should be re-presented to the consumer when it polls again.
+            producer.send(record4);
+            producer.flush();
+
+            // The next poll() should throw an IllegalStateException as there is still 1 unacknowledged record.
+            // In EXPLICIT acknowledgement mode, we are not allowed to have unacknowledged records from a batch.
+            assertThrows(IllegalStateException.class, () -> shareConsumer1.poll(Duration.ofMillis(5000)));
+
+            // Acknowledging the 3rd record
+            shareConsumer1.acknowledge(thirdRecord);
+            shareConsumer1.commitAsync();
+
+            // The next poll() will not throw an exception, it would continue to fetch more records.
             records = shareConsumer1.poll(Duration.ofMillis(5000));
             assertEquals(1, records.count());
             iterator = records.iterator();
-            firstRecord = iterator.next();
-            assertEquals(2L, firstRecord.offset());
+            ConsumerRecord<byte[], byte[]> fourthRecord = iterator.next();
+            assertEquals(3L, fourthRecord.offset());
 
-            // And poll again without acknowledging - the callback will receive the acknowledgement responses too
-            records = shareConsumer1.poll(Duration.ofMillis(5000));
-            assertEquals(1, records.count());
-            iterator = records.iterator();
-            firstRecord = iterator.next();
-            assertEquals(2L, firstRecord.offset());
-
-            shareConsumer1.acknowledge(firstRecord);
+            shareConsumer1.acknowledge(fourthRecord);
 
             // The callback will receive the acknowledgement responses after polling. The callback is
             // called on entry to the poll method or during close. The commit is being performed asynchronously, so
@@ -784,6 +755,8 @@ public class ShareConsumerTest {
             shareConsumer1.close();
 
             assertFalse(partitionExceptionMap.containsKey(tp));
+            assertNull(partitionExceptionMap.get(tp));
+            assertTrue(partitionOffsetsMap.containsKey(tp) && partitionOffsetsMap.get(tp).size() == 4);
             verifyShareGroupStateTopicRecordsProduced();
         }
     }
@@ -792,7 +765,7 @@ public class ShareConsumerTest {
     public void testExplicitAcknowledgeReleasePollAccept() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1", Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, "explicit"))) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -815,7 +788,7 @@ public class ShareConsumerTest {
     public void testExplicitAcknowledgeReleaseAccept() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1", Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, "explicit"))) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -835,7 +808,7 @@ public class ShareConsumerTest {
     public void testExplicitAcknowledgeReleaseClose() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1", Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, "explicit"))) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -853,7 +826,7 @@ public class ShareConsumerTest {
     public void testExplicitAcknowledgeThrowsNotInBatch() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (Producer<byte[], byte[]> producer = createProducer();
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1", Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, "explicit"))) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -970,7 +943,7 @@ public class ShareConsumerTest {
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
                  "group1",
-                 Map.of(ConsumerConfig.INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, "explicit"))) {
+                 Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, "explicit"))) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -995,7 +968,7 @@ public class ShareConsumerTest {
         try (Producer<byte[], byte[]> producer = createProducer();
              ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
                  "group1",
-                 Map.of(ConsumerConfig.INTERNAL_SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, "implicit"))) {
+                 Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, "implicit"))) {
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             producer.send(record);
@@ -2069,7 +2042,7 @@ public class ShareConsumerTest {
             cluster.bootstrapServers(),
             topicName,
             groupId,
-            Map.of()
+            Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, "explicit")
         );
 
         service.schedule(
