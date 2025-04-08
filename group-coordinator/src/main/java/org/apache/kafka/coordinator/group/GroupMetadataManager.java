@@ -866,7 +866,7 @@ public class GroupMetadataManager {
      * @param groupId           The group ID.
      *
      * @return A StreamsGroup.
-     * @throws GroupIdNotFoundException if the group does not exist
+     * @throws GroupIdNotFoundException if the group does not exist or is not a streams group.
      *
      * Package private for testing.
      */
@@ -1172,8 +1172,8 @@ public class GroupMetadataManager {
      * @param groupId           The group id.
      * @param committedOffset   A specified committed offset corresponding to this shard.
      *
-     * @return A ConsumerGroup.
-     * @throws GroupIdNotFoundException if the group does not exist or is not a consumer group.
+     * @return A ShareGroup.
+     * @throws GroupIdNotFoundException if the group does not exist or is not a share group.
      */
     public ShareGroup shareGroup(
         String groupId,
@@ -1588,7 +1588,7 @@ public class GroupMetadataManager {
             }
         } else if (request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             throwIfNull(request.instanceId(), "InstanceId can't be null.");
-        } else if (request.memberEpoch() <  LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
+        } else if (request.memberEpoch() < LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             throw new InvalidRequestException(String.format("MemberEpoch is %d, but must be greater than or equal to -2.",
                 request.memberEpoch()));
         }
@@ -3417,7 +3417,6 @@ public class GroupMetadataManager {
 
         resolvedRegexes.forEach((__, topicNames) -> topicNames.removeAll(deniedTopics));
     }
-
 
     /**
      * Handle the result of the asynchronous tasks which resolves the regular expressions.
