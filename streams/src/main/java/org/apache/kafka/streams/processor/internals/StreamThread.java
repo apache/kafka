@@ -729,6 +729,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         return subtopologies;
     }
 
+    @SuppressWarnings({"this-escape"})
     public StreamThread(final Time time,
                         final StreamsConfig config,
                         final Admin adminClient,
