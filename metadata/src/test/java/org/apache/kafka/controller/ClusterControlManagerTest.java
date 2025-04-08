@@ -1073,22 +1073,23 @@ public class ClusterControlManagerTest {
         assertEquals(OptionalLong.of(1000L), clusterControl.heartbeatManager().tracker().
             contactTime(new BrokerIdAndEpoch(1, 200)));
 
-        // new registrations should succeed if the broker is fenced or in controlled shutdown, even if the 
-        // last heartbeat was within the session timeout 
         time.sleep(brokerSessionTimeoutMs / 2);
-        clusterControl.registerBroker(new BrokerRegistrationRequestData().
-                setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
-                setBrokerId(0).
-                setLogDirs(List.of(Uuid.fromString("yJGxmjfbQZSVFAlNM3uXZg"))).
-                setFeatures(new BrokerRegistrationRequestData.FeatureCollection(
-                    Set.of(new BrokerRegistrationRequestData.Feature().
-                        setName(MetadataVersion.FEATURE_NAME).
-                        setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
-                        setMaxSupportedVersion(MetadataVersion.LATEST_PRODUCTION.featureLevel())).iterator())).
-                setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")),
-            101L,
-            finalizedFeatures,
-            false);
+        assertThrows(DuplicateBrokerRegistrationException.class, () ->
+            clusterControl.registerBroker(new BrokerRegistrationRequestData().
+                    setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
+                    setBrokerId(0).
+                    setLogDirs(List.of(Uuid.fromString("yJGxmjfbQZSVFAlNM3uXZg"))).
+                    setFeatures(new BrokerRegistrationRequestData.FeatureCollection(
+                        Set.of(new BrokerRegistrationRequestData.Feature().
+                            setName(MetadataVersion.FEATURE_NAME).
+                            setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
+                            setMaxSupportedVersion(MetadataVersion.LATEST_PRODUCTION.featureLevel())).iterator())).
+                    setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")),
+                101L,
+                finalizedFeatures,
+                false));
+        // new registration should succeed immediatelly only if the broker is in controlled shutdown, 
+        // even if the last heartbeat was within the session timeout 
         clusterControl.registerBroker(new BrokerRegistrationRequestData().
                 setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
                 setBrokerId(1).
