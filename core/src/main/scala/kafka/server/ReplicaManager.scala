@@ -47,6 +47,7 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{Exit, Time, Utils}
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.MetadataCache
@@ -889,7 +890,6 @@ class ReplicaManager(val config: KafkaConfig,
         new PartitionResponse(
           result.error,
           result.info.firstOffset,
-          result.info.lastOffset,
           result.info.logAppendTime,
           result.info.logStartOffset,
           result.info.recordErrors,
@@ -1038,10 +1038,13 @@ class ReplicaManager(val config: KafkaConfig,
     callback: ((Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])) => Unit,
     transactionSupportedOperation: TransactionSupportedOperation
   ): Unit = {
+    def transactionPartitionVerificationEnable = {
+      new TransactionLogConfig(config).transactionPartitionVerificationEnable
+    }
     // Skip verification if the request is not transactional or transaction verification is disabled.
-    if (transactionalId == null ||
-      (!config.transactionLogConfig.transactionPartitionVerificationEnable && !transactionSupportedOperation.supportsEpochBump)
+    if (transactionalId == null
       || addPartitionsToTxnManager.isEmpty
+      || (!transactionSupportedOperation.supportsEpochBump && !transactionPartitionVerificationEnable)
     ) {
       callback((Map.empty[TopicPartition, Errors], Map.empty[TopicPartition, VerificationGuard]))
       return
