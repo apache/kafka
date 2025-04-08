@@ -431,6 +431,10 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         if (requestManagers.consumerHeartbeatRequestManager.isPresent()) {
             CompletableFuture<Void> future = requestManagers.consumerHeartbeatRequestManager.get().membershipManager().leaveGroup();
             future.whenComplete(complete(event.future()));
+        }
+        else if (requestManagers.streamsGroupHeartbeatRequestManager.isPresent()) {
+            CompletableFuture<Void> future = requestManagers.streamsGroupHeartbeatRequestManager.get().membershipManager().leaveGroup();
+            future.whenComplete(complete(event.future()));
         } else {
             // If the consumer is not using the group management capabilities, we still need to clear all assignments it may have.
             subscriptions.unsubscribe();
@@ -489,12 +493,15 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
     }
 
     private void process(final LeaveGroupOnCloseEvent event) {
-        if (requestManagers.consumerMembershipManager.isEmpty())
-            return;
-
-        log.debug("Signal the ConsumerMembershipManager to leave the consumer group since the consumer is closing");
-        CompletableFuture<Void> future = requestManagers.consumerMembershipManager.get().leaveGroupOnClose(event.membershipOperation());
-        future.whenComplete(complete(event.future()));
+        if (requestManagers.consumerMembershipManager.isPresent()) {
+            log.debug("Signal the ConsumerMembershipManager to leave the consumer group since the consumer is closing");
+            CompletableFuture<Void> future = requestManagers.consumerMembershipManager.get().leaveGroupOnClose(event.membershipOperation());
+            future.whenComplete(complete(event.future()));
+        } else if (requestManagers.streamsMembershipManager.isPresent()) {
+            log.debug("Signal the StreamsMembershipManager to leave the Streams group since the member is closing");
+            CompletableFuture<Void> future = requestManagers.streamsMembershipManager.get().leaveGroupOnClose();
+            future.whenComplete(complete(event.future()));
+        }
     }
 
     private void process(@SuppressWarnings("unused") final StopFindCoordinatorOnCloseEvent event) {
