@@ -22,7 +22,6 @@ import org.apache.kafka.common.utils.KafkaThread;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.LinkedBlockingQueue;
-import java.util.concurrent.ThreadFactory;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
@@ -40,18 +39,8 @@ public class DelayedFuturePurgatory {
             0,
             TimeUnit.MILLISECONDS,
             new LinkedBlockingQueue<>(),
-            new ThreadFactory() {
-                @Override
-                public Thread newThread(Runnable r) {
-                    return new KafkaThread("DelayedExecutor-" + purgatoryName, r, true);
-                }
-            });
-        this.purgatoryKey = new DelayedOperationKey() {
-            @Override
-            public String keyLabel() {
-                return "delayed-future-key";
-            }
-        };
+            r -> new KafkaThread("DelayedExecutor-" + purgatoryName, r, true));
+        this.purgatoryKey = () -> "delayed-future-key";
     }
 
     public <T> DelayedFuture<T> tryCompleteElseWatch(
@@ -62,12 +51,7 @@ public class DelayedFuturePurgatory {
         DelayedFuture<T> delayedFuture = new DelayedFuture<>(timeoutMs, futures, responseCallback);
         boolean done = purgatory.tryCompleteElseWatch(delayedFuture, List.of(purgatoryKey));
         if (!done) {
-            BiConsumer<Void, Throwable> callbackAction = new BiConsumer<>() {
-                @Override
-                public void accept(Void result, Throwable exception) {
-                    delayedFuture.forceComplete();
-                }
-            };
+            BiConsumer<Void, Throwable> callbackAction = (result, exception) -> delayedFuture.forceComplete();
             CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[0])).whenCompleteAsync(callbackAction, executor);
         }
         return delayedFuture;
