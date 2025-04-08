@@ -10809,7 +10809,7 @@ public class KafkaAdminClientTest {
             assertEquals(GROUP_ID, data.groupId());
             assertEquals(1, data.topics().size());
             assertEquals(Collections.singletonList("A"),
-                data.topics().stream().map(DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic::topicName).toList());
+                data.topics().stream().map(DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic::topicName).collect(Collectors.toList()));
         }
     }
 

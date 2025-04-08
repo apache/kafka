@@ -92,7 +92,7 @@ public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coor
                 .setTopicName(topic)
                 .setPartitions(topicPartitions.stream()
                     .map(TopicPartition::partition)
-                    .toList()
+                    .collect(Collectors.toList())
                 )
         ));
 
