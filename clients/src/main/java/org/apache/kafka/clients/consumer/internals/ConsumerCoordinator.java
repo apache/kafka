@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -1012,7 +1013,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     /**
      * @throws KafkaException if the rebalance callback throws exception
      */
-    public void close(final Timer timer) {
+    public void close(final Timer timer, CloseOptions.GroupMembershipOperation membershipOperation) {
         // we do not need to re-enable wakeups since we are closing already
         client.disableWakeups();
         try {
@@ -1023,7 +1024,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 invokeCompletedOffsetCommitCallbacks();
             }
         } finally {
-            super.close(timer);
+            super.close(timer, membershipOperation);
         }
     }
 
