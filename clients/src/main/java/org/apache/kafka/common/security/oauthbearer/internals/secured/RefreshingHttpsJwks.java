@@ -18,7 +18,6 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerConfigurable;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
@@ -29,26 +28,18 @@ import org.jose4j.lang.JoseException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.Closeable;
 import java.io.IOException;
-import java.net.URL;
 import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-
-import javax.security.auth.login.AppConfigurationEntry;
-
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 
 /**
  * Implementation of {@link HttpsJwks} that will periodically refresh the JWKS cache to reduce or
@@ -67,7 +58,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_E
  * @see org.jose4j.keys.resolvers.VerificationKeyResolver
  * @see DefaultJwtValidator
  */
-public class RefreshingHttpsJwks implements OAuthBearerConfigurable {
+public class RefreshingHttpsJwks implements Closeable {
 
     private static final Logger log = LoggerFactory.getLogger(RefreshingHttpsJwks.class);
 
@@ -81,23 +72,7 @@ public class RefreshingHttpsJwks implements OAuthBearerConfigurable {
 
     private static final TimeUnit SHUTDOWN_TIME_UNIT = TimeUnit.SECONDS;
 
-    private final ScheduledExecutorService executorService;
-
     private final Time time;
-
-    /**
-     * Protects {@link #missingKeyIds} and {@link #jsonWebKeys}.
-     */
-
-    private final ReadWriteLock refreshLock = new ReentrantReadWriteLock();
-
-    private final Map<String, Long> missingKeyIds;
-
-    /**
-     * Flag to prevent concurrent refresh invocations.
-     */
-
-    private final AtomicBoolean refreshInProgressFlag = new AtomicBoolean(false);
 
     /**
      * {@link HttpsJwks} does the actual work of contacting the OAuth/OIDC endpoint to get the
@@ -109,81 +84,65 @@ public class RefreshingHttpsJwks implements OAuthBearerConfigurable {
      * perform any operation (directly or indirectly) that could cause blocking. This is because
      * the JWKS logic is part of the larger authentication logic which operates on Kafka's network
      * thread. It's OK to execute {@link HttpsJwks#getJsonWebKeys()} (which calls
-     * {@link HttpsJwks#refresh()}) from within {@link #configure(Map, String, List)} as that method is called only at
+     * {@link HttpsJwks#refresh()}) from within the constructor as it's called only at
      * startup, and we can afford the blocking hit there.
      */
 
-    private HttpsJwks httpsJwks;
+    private final HttpsJwks httpsJwks;
 
-    private Optional<SslResource> sslResource = Optional.empty();
+    private final ScheduledExecutorService executorService;
 
-    private long refreshMs;
+    private final Optional<SslResource> sslResource;
 
-    private long refreshRetryBackoffMs;
+    private final long refreshRetryBackoffMs;
 
-    private long refreshRetryBackoffMaxMs;
+    private final long refreshRetryBackoffMaxMs;
+
+    private final Map<String, Long> missingKeyIds;
+
+    /**
+     * Flag to prevent concurrent refresh invocations.
+     */
+    private final AtomicBoolean refreshInProgressFlag = new AtomicBoolean(false);
+
+    /**
+     * Protects {@link #missingKeyIds} and {@link #jsonWebKeys}.
+     */
+    private final ReadWriteLock refreshLock = new ReentrantReadWriteLock();
 
     /**
      * As mentioned in the comments for {@link #httpsJwks}, we cache the JWKS ourselves so that
      * we can return the list immediately without any network I/O. They are only cached within
      * calls to {@link #refresh()}.
      */
-
     private List<JsonWebKey> jsonWebKeys;
 
-    protected boolean isInitialized;
-
-    public RefreshingHttpsJwks(Time time) {
-        this(time, Executors.newSingleThreadScheduledExecutor());
-    }
-
-    public RefreshingHttpsJwks(Time time, ScheduledExecutorService executorService) {
+    public RefreshingHttpsJwks(Time time,
+                               HttpsJwks httpsJwks,
+                               Optional<SslResource> sslResource,
+                               ScheduledExecutorService executorService,
+                               long refreshMs,
+                               long refreshRetryBackoffMs,
+                               long refreshRetryBackoffMaxMs) {
         this.time = time;
+        this.httpsJwks = httpsJwks;
+        this.sslResource = sslResource;
         this.executorService = executorService;
+        this.refreshRetryBackoffMs = refreshRetryBackoffMs;
+        this.refreshRetryBackoffMaxMs = refreshRetryBackoffMaxMs;
         this.missingKeyIds = new LinkedHashMap<>(MISSING_KEY_ID_CACHE_MAX_ENTRIES, .75f, true) {
             @Override
             protected boolean removeEldestEntry(Map.Entry<String, Long> eldest) {
                 return this.size() > MISSING_KEY_ID_CACHE_MAX_ENTRIES;
             }
         };
-    }
 
-    @Override
-    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        try {
-            log.debug("init started");
+        sslResource.ifPresent(r -> {
+            Get get = new Get();
+            get.setSslSocketFactory(r.sslSocketFactory());
+            httpsJwks.setSimpleHttpGet(get);
+        });
 
-            ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-            URL jwksEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
-
-            JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
-
-            HttpsJwks httpsJwks = new HttpsJwks(jwksEndpointUrl.toString());
-            sslResource = jou.maybeCreateSslResource(jwksEndpointUrl);
-
-            sslResource.ifPresent(sslResource -> {
-                Get get = new Get();
-                get.setSslSocketFactory(sslResource.sslSocketFactory());
-                httpsJwks.setSimpleHttpGet(get);
-            });
-
-            configure(httpsJwks, configs, saslMechanism);
-
-            log.info("JWKS validation key refresh thread started with a refresh interval of {} ms", refreshMs);
-        } finally {
-            isInitialized = true;
-
-            log.debug("init completed");
-        }
-    }
-
-    void configure(HttpsJwks httpsJwks, Map<String, ?> configs, String saslMechanism) {
-        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        refreshMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, true, 0L);
-        refreshRetryBackoffMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS);
-        refreshRetryBackoffMaxMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS);
-
-        this.httpsJwks = httpsJwks;
         this.httpsJwks.setDefaultCacheDuration(refreshMs);
 
         List<JsonWebKey> localJWKs;
@@ -211,6 +170,8 @@ public class RefreshingHttpsJwks implements OAuthBearerConfigurable {
             refreshMs,
             TimeUnit.MILLISECONDS
         );
+
+        log.info("JWKS validation key refresh thread started with a refresh interval of {} ms", refreshMs);
     }
 
     @Override
@@ -235,7 +196,7 @@ public class RefreshingHttpsJwks implements OAuthBearerConfigurable {
      * sometimes called internal to {@link HttpsJwks#getJsonWebKeys()}. We want to avoid any
      * blocking I/O as this code is running in the authentication path on the Kafka network thread.
      * <p>
-     * The list may be stale up to {@link #refreshMs}.
+     * The list may be stale up to the refresh interval.
      *
      * @return {@link List} of {@link JsonWebKey} instances
      * @throws JoseException Thrown if a problem is encountered parsing the JSON content into JWKs
@@ -243,9 +204,6 @@ public class RefreshingHttpsJwks implements OAuthBearerConfigurable {
      */
 
     public List<JsonWebKey> getJsonWebKeys() throws JoseException, IOException {
-        if (!isInitialized)
-            throw new IllegalStateException("Please call init() first");
-
         try {
             refreshLock.readLock().lock();
             return jsonWebKeys;
@@ -281,8 +239,8 @@ public class RefreshingHttpsJwks implements OAuthBearerConfigurable {
      * </p>
      *
      * <p>
-     * The <i>scheduled</i> refresh is scheduled in {@link #configure(Map, String, List)} and runs every
-     * {@link #refreshMs} milliseconds. An <i>expedited</i> refresh is performed when an
+     * The <i>scheduled</i> refresh is scheduled in the constructor and runs at interval
+     * defined by the refresh configuration. An <i>expedited</i> refresh is performed when an
      * incoming JWT refers to a key ID that isn't in our JWKS cache ({@link #jsonWebKeys})
      * and we try to perform a refresh sooner than the next scheduled refresh.
      * </p>

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import org.jose4j.jwk.HttpsJwks;
@@ -33,9 +32,6 @@ import org.slf4j.LoggerFactory;
 import java.io.IOException;
 import java.security.Key;
 import java.util.List;
-import java.util.Map;
-
-import javax.security.auth.login.AppConfigurationEntry;
 
 /**
  * <code>RefreshingHttpsJwksVerificationKeyResolver</code> is a
@@ -89,24 +85,13 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
 
     private static final Logger log = LoggerFactory.getLogger(RefreshingHttpsJwksVerificationKeyResolver.class);
 
-    private final Time time;
-
     private final VerificationJwkSelector verificationJwkSelector;
 
-    private RefreshingHttpsJwks refreshingHttpsJwks;
+    private final RefreshingHttpsJwks refreshingHttpsJwks;
 
-    private boolean isInitialized;
-
-    public RefreshingHttpsJwksVerificationKeyResolver(Time time) {
-        this.time = time;
+    public RefreshingHttpsJwksVerificationKeyResolver(RefreshingHttpsJwks refreshingHttpsJwks) {
+        this.refreshingHttpsJwks = refreshingHttpsJwks;
         this.verificationJwkSelector = new VerificationJwkSelector();
-    }
-
-    @Override
-    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        refreshingHttpsJwks = new RefreshingHttpsJwks(time);
-        refreshingHttpsJwks.configure(configs, saslMechanism, jaasConfigEntries);
-        isInitialized = true;
     }
 
     @Override
@@ -116,9 +101,6 @@ public class RefreshingHttpsJwksVerificationKeyResolver implements CloseableVeri
 
     @Override
     public Key resolveKey(JsonWebSignature jws, List<JsonWebStructure> nestingContext) throws UnresolvableKeyException {
-        if (!isInitialized)
-            throw new IllegalStateException("Please call init() first");
-
         try {
             List<JsonWebKey> jwks = refreshingHttpsJwks.getJsonWebKeys();
             JsonWebKey jwk = verificationJwkSelector.select(jws, jwks);

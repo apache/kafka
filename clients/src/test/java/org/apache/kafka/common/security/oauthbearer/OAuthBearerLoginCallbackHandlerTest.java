@@ -209,8 +209,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
     public void testConfigureWithJwtFile() throws Exception {
         String expected = "{}";
 
-        File tmpDir = createTempDir("jwt");
-        File jwtFile = createTempFile(tmpDir, "jwt-", ".json", expected);
+        File jwtFile = createTempFile("jwt-", ".json", expected);
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, jwtFile.toURI().toString());
 
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();

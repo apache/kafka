@@ -51,7 +51,7 @@ public class BrokerJwtValidatorTest extends JwtValidatorTest {
         return new BrokerJwtValidator() {
             @Override
             public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-                super.configure(keyResolver, configs, saslMechanism, jaasConfigEntries);
+                super.configure(keyResolver, configs, saslMechanism);
             }
         };
     }

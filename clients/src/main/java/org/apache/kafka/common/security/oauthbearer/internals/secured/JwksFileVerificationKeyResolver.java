@@ -30,11 +30,10 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
+import java.io.IOException;
 import java.security.Key;
 import java.util.List;
 import java.util.Map;
-
-import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 
@@ -87,10 +86,9 @@ public class JwksFileVerificationKeyResolver implements CloseableVerificationKey
 
     private static final Logger log = LoggerFactory.getLogger(JwksFileVerificationKeyResolver.class);
 
-    private VerificationKeyResolver delegate;
+    private final VerificationKeyResolver delegate;
 
-    @Override
-    public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+    public JwksFileVerificationKeyResolver(Map<String, ?> configs, String saslMechanism) {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
         File jwksFile = cu.validateFile(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
         log.debug("Starting creation of new VerificationKeyResolver from {}", jwksFile.getPath());
@@ -99,6 +97,8 @@ public class JwksFileVerificationKeyResolver implements CloseableVerificationKey
         try {
             String json = Utils.readFileAsString(jwksFile.getPath());
             jwks = new JsonWebKeySet(json);
+        } catch (IOException e) {
+            throw new KafkaException("An error occurred loading JWKS data from " + jwksFile.getPath(), e);
         } catch (Exception e) {
             throw new KafkaException(e);
         }
@@ -108,14 +108,6 @@ public class JwksFileVerificationKeyResolver implements CloseableVerificationKey
 
     @Override
     public Key resolveKey(JsonWebSignature jws, List<JsonWebStructure> nestingContext) throws UnresolvableKeyException {
-        if (delegate == null)
-            throw new UnresolvableKeyException("VerificationKeyResolver delegate is null; please call init() first");
-
         return delegate.resolveKey(jws, nestingContext);
-    }
-
-    @Override
-    public void close() {
-        // Do nothing...
     }
 }

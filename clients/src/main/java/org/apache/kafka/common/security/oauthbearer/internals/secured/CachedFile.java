@@ -28,7 +28,7 @@ import java.util.function.Function;
 
 public class CachedFile<T> {
 
-    public final static Function<String, String> STRING_TRANSFORMER = s -> s;
+    public static final Function<String, String> STRING_TRANSFORMER = s -> s;
 
     private final Path path;
 

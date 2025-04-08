@@ -24,6 +24,7 @@ import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.test.TestUtils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.node.ObjectNode;
@@ -38,13 +39,9 @@ import org.junit.jupiter.api.function.Executable;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.ByteArrayInputStream;
-import java.io.ByteArrayOutputStream;
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
-import java.net.HttpURLConnection;
-import java.net.URL;
+import java.nio.file.Files;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Map;
@@ -56,8 +53,6 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModul
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 @TestInstance(Lifecycle.PER_CLASS)
 public abstract class OAuthBearerTest {
@@ -128,61 +123,10 @@ public abstract class OAuthBearerTest {
         }
     }
 
-//    protected Retryable<String> createRetryable(Exception[] attempts) {
-//        Iterator<Exception> i = Arrays.asList(attempts).iterator();
-//
-//        return () -> {
-//            Exception e = i.hasNext() ? i.next() : null;
-//
-//            if (e == null) {
-//                return "success!";
-//            } else {
-//                if (e instanceof IOException)
-//                    throw new ExecutionException(e);
-//                else if (e instanceof RuntimeException)
-//                    throw (RuntimeException) e;
-//                else
-//                    throw new RuntimeException(e);
-//            }
-//        };
-//    }
-
-    protected HttpURLConnection createHttpURLConnection(String response) throws IOException {
-        HttpURLConnection mockedCon = mock(HttpURLConnection.class);
-        when(mockedCon.getURL()).thenReturn(new URL("https://www.example.com"));
-        when(mockedCon.getResponseCode()).thenReturn(200);
-        when(mockedCon.getOutputStream()).thenReturn(new ByteArrayOutputStream());
-        when(mockedCon.getInputStream()).thenReturn(new ByteArrayInputStream(Utils.utf8(response)));
-        return mockedCon;
-    }
-
-    protected File createTempDir(String directory) throws IOException {
-        File tmpDir = new File(System.getProperty("java.io.tmpdir"));
-
-        if (directory != null)
-            tmpDir = new File(tmpDir, directory);
-
-        if (!tmpDir.exists() && !tmpDir.mkdirs())
-            throw new IOException("Could not create " + tmpDir);
-
-        tmpDir.deleteOnExit();
-        log.debug("Created temp directory {}", tmpDir);
-        return tmpDir;
-    }
-
-    protected File createTempFile(File tmpDir,
-        String prefix,
-        String suffix,
-        String contents)
-        throws IOException {
-        File file = File.createTempFile(prefix, suffix, tmpDir);
+    protected File createTempFile(String prefix, String suffix, String contents) throws IOException {
+        File file = TestUtils.tempFile(prefix, suffix);
+        Files.writeString(file.toPath(), contents);
         log.debug("Created new temp file {}", file);
-        file.deleteOnExit();
-
-        try (FileWriter writer = new FileWriter(file)) {
-            writer.write(contents);
-        }
-
         return file;
     }
 

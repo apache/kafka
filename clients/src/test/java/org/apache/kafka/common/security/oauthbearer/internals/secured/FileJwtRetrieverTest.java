@@ -52,8 +52,7 @@ public class FileJwtRetrieverTest extends OAuthBearerTest {
         String expected = createAccessKey("{}", String.format("{\"exp\":%s, \"iat\":%s, \"sub\":\"subj\"}", exp, iat), "sign");
         String withNewline = expected + "\n";
 
-        File tmpDir = createTempDir("jwt");
-        File jwtFile = createTempFile(tmpDir, "jwt-", ".json", withNewline);
+        File jwtFile = createTempFile("jwt-", ".json", withNewline);
 
         List<AppConfigurationEntry> jaasConfigEntries = new ArrayList<>();
         jaasConfigEntries.add(new AppConfigurationEntry("dummy", OPTIONAL, Collections.emptyMap()));

@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -43,8 +44,7 @@ public class DefaultJwtRetrieverTest extends OAuthBearerTest {
     public void testConfigureRefreshingFileJwtRetriever() throws Exception {
         String expected = "{}";
 
-        File tmpDir = createTempDir("jwt");
-        File jwtFile = createTempFile(tmpDir, "jwt-", ".json", expected);
+        File jwtFile = createTempFile("jwt-", ".json", expected);
 
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, jwtFile.toURI().toString());
         Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, jwtFile.toURI().toString());
@@ -70,8 +70,7 @@ public class DefaultJwtRetrieverTest extends OAuthBearerTest {
     @Test
     public void testConfigureRefreshingFileJwtRetrieverWithInvalidFile() throws Exception {
         // Should fail because while the parent path exists, the file itself doesn't.
-        File tmpDir = createTempDir("this-directory-does-exist");
-        File jwtFile = new File(tmpDir, "this-file-does-not-exist.json");
+        File jwtFile = new File(TestUtils.tempDirectory(), "this-file-does-not-exist.json");
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, jwtFile.toURI().toString());
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, jwtFile.toURI().toString());
 
@@ -83,8 +82,7 @@ public class DefaultJwtRetrieverTest extends OAuthBearerTest {
     @Test
     public void testSaslOauthbearerTokenEndpointUrlIsNotAllowed() throws Exception {
         // Should fail if the URL is not allowed
-        File tmpDir = createTempDir("not_allowed");
-        File jwtFile = new File(tmpDir, "not_allowed.json");
+        File jwtFile = new File("not_allowed.json");
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, jwtFile.toURI().toString());
 
         try (JwtRetriever jwtRetriever = new DefaultJwtRetriever()) {

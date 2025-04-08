@@ -23,14 +23,14 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Function;
 
-public class OAuthSingleton<K, V> {
+public class RefCountingMap<K, V> {
 
-    private final Map<K, V> cache = new HashMap<>();
+    private final Map<K, V> values = new HashMap<>();
 
     private final Map<K, AtomicInteger> counters = new HashMap<>();
 
     public synchronized V get(K key, Function<? super K, ? extends V> mappingFunction) {
-        V value = cache.computeIfAbsent(key, mappingFunction);
+        V value = values.computeIfAbsent(key, mappingFunction);
         counters.computeIfAbsent(key, k -> new AtomicInteger()).incrementAndGet();
         return value;
     }
@@ -39,7 +39,7 @@ public class OAuthSingleton<K, V> {
         int currentCount = counters.computeIfAbsent(key, k -> new AtomicInteger()).decrementAndGet();
 
         if (currentCount == 0) {
-            V value = cache.remove(key);
+            V value = values.remove(key);
 
             // maybeCloseQuietly includes checks for AutoCloseable and null.
             Utils.maybeCloseQuietly(value, "value for " + key);
