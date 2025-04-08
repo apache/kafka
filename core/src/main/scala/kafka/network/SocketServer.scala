@@ -401,8 +401,6 @@ class DataPlaneAcceptor(socketServer: SocketServer,
                    memoryPool,
                    apiVersionManager) with ListenerReconfigurable {
 
-  override def threadPrefix(): String = DataPlaneAcceptor.ThreadPrefix
-
   /**
    * Returns the listener name associated with this reconfigurable. Listener-specific
    * configs corresponding to this listener name are provided for reconfiguration.
@@ -493,8 +491,6 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
 
   val shouldRun = new AtomicBoolean(true)
 
-  def threadPrefix(): String
-
   private val sendBufferSize = config.socketSendBufferBytes
   private val recvBufferSize = config.socketReceiveBufferBytes
   private val listenBacklogSize = config.socketListenBacklogSize
@@ -528,7 +524,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   private[network] val startedFuture = new CompletableFuture[Void]()
 
   val thread: KafkaThread = KafkaThread.nonDaemon(
-    s"${threadPrefix()}-kafka-socket-acceptor-${endPoint.listenerName}-${endPoint.securityProtocol}-${endPoint.port}",
+    s"data-plane-kafka-socket-acceptor-${endPoint.listenerName}-${endPoint.securityProtocol}-${endPoint.port}",
     this)
 
   def start(): Unit = synchronized {
@@ -766,7 +762,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
                    listenerName: ListenerName,
                    securityProtocol: SecurityProtocol,
                    connectionDisconnectListeners: Seq[ConnectionDisconnectListener]): Processor = {
-    val name = s"${threadPrefix()}-kafka-network-thread-$nodeId-${endPoint.listenerName}-${endPoint.securityProtocol}-$id"
+    val name = s"data-plane-kafka-network-thread-$nodeId-${endPoint.listenerName}-${endPoint.securityProtocol}-$id"
     new Processor(id,
                   time,
                   config.socketRequestMaxBytes,
