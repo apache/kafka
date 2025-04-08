@@ -25,7 +25,8 @@ import javax.security.auth.login.Configuration;
 public final class JaasUtils {
     private static final Logger LOG = LoggerFactory.getLogger(JaasUtils.class);
     public static final String JAVA_LOGIN_CONFIG_PARAM = "java.security.auth.login.config";
-
+    public static final String DISALLOWED_LOGIN_MODULES_CONFIG = "org.apache.kafka.disallowed.login.modules";
+    public static final String DISALLOWED_LOGIN_MODULES_DEFAULT = "com.sun.security.auth.module.JndiLoginModule";
     public static final String SERVICE_NAME = "serviceName";
 
     public static final String ZK_SASL_CLIENT = "zookeeper.sasl.client";
@@ -69,8 +70,8 @@ public final class JaasUtils {
 
         if (foundLoginConfigEntry && !zkSaslEnabled) {
             LOG.error("JAAS configuration is present, but system property " +
-                        ZK_SASL_CLIENT + " is set to false, which disables " +
-                        "SASL in the ZooKeeper client");
+                    ZK_SASL_CLIENT + " is set to false, which disables " +
+                    "SASL in the ZooKeeper client");
             throw new KafkaException("Exception while determining if ZooKeeper is secure " +
                     zkSecuritySysConfigString());
         }
@@ -78,4 +79,3 @@ public final class JaasUtils {
         return foundLoginConfigEntry;
     }
 }
-
