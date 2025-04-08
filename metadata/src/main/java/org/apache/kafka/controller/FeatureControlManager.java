@@ -52,7 +52,6 @@ import static org.apache.kafka.common.metadata.MetadataRecordType.FEATURE_LEVEL_
 import static org.apache.kafka.controller.QuorumController.MAX_RECORDS_PER_USER_OP;
 
 
-// TODO: broker registration should check the raft version
 public class FeatureControlManager {
     public static class Builder {
         private LogContext logContext = null;
@@ -143,7 +142,7 @@ public class FeatureControlManager {
     private final ClusterFeatureSupportDescriber clusterSupportDescriber;
 
     /**
-     * TODO: document
+     * The interface that used to mutate the Raft log.
      */
     private final RaftClient<?> raftClient;
 

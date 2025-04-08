@@ -18,6 +18,7 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.errors.InvalidUpdateVersionException;
 import org.apache.kafka.common.feature.SupportedVersionRange;
 import org.apache.kafka.common.message.ApiVersionsResponseData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
@@ -61,14 +62,17 @@ import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.raft.KafkaRaftClientTest.replicaKey;
+import static org.apache.kafka.raft.RaftClientTestContext.RaftProtocol;
 import static org.apache.kafka.snapshot.Snapshots.BOOTSTRAP_SNAPSHOT_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 // TODO: test upgrade kraft version
@@ -2342,6 +2346,130 @@ public class KafkaRaftClientReconfigTest {
         context.pollUntilRequest();
         fetchRequest = context.assertSentFetchRequest();
         context.assertFetchRequestData(fetchRequest, newEpoch, 0L, 0);
+    }
+
+    @Test
+    void testKRaftUpgradeVersion() throws Exception {
+        var local = replicaKey(randomReplicaId(), true);
+        var voter1 = replicaKey(local.id() + 1, true);
+        var voter2  = replicaKey(local.id() + 2, true);
+
+        VoterSet startingVoters = VoterSetTest.voterSet(
+            VoterSetTest.voterMap(IntStream.of(local.id(), voter1.id(), voter2.id()), false)
+        );
+
+        var context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withRaftProtocol(RaftProtocol.KIP_853_PROTOCOL)
+            .withStartingVoters(startingVoters, KRaftVersion.KRAFT_VERSION_0)
+            .build();
+
+        context.unattachedToLeader();
+        var epoch = context.currentEpoch();
+
+        // Establish a HWM and fence previous leaders
+        for (var voter : List.of(voter1, voter2)) {
+            context.deliverRequest(
+                context.fetchRequest(epoch, voter, context.log.endOffset().offset(), epoch, 0)
+            );
+            context.pollUntilResponse();
+            context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
+        }
+
+        // Update voters so that they supports kraft version 1
+        for (var voter : List.of(voter1, voter2)) {
+            context.deliverRequest(
+                context.updateVoterRequest(
+                    voter,
+                    Feature.KRAFT_VERSION.supportedVersionRange(),
+                    startingVoters.listeners(voter.id())
+                )
+            );
+            context.pollUntilResponse();
+            context.assertSentUpdateVoterResponse(
+                Errors.NONE,
+                OptionalInt.of(local.id()),
+                epoch
+            );
+        }
+
+        context.client.upgradeKRaftVersion(epoch, KRaftVersion.KRAFT_VERSION_1);
+        assertEquals(KRaftVersion.KRAFT_VERSION_1, context.client.kraftVersion());
+
+        var localLogEndOffset = context.log.endOffset().offset();
+        context.client.poll();
+
+        // check if leader writes 2 control records to the log;
+        // one for the kraft version and one for the voter set
+        var updatedVoters = VoterSetTest.voterSet(Stream.of(local, voter1, voter2));
+        var records = context.log.read(localLogEndOffset, Isolation.UNCOMMITTED).records;
+        var batch = records.batches().iterator().next();
+        assertTrue(batch.isControlBatch());
+        var recordsIterator = batch.iterator();
+        var controlRecord = recordsIterator.next();
+        verifyKRaftVersionRecord(
+            KRaftVersion.KRAFT_VERSION_1.featureLevel(),
+            controlRecord.key(),
+            controlRecord.value()
+        );
+        controlRecord = recordsIterator.next();
+        verifyVotersRecord(updatedVoters, controlRecord.key(), controlRecord.value());
+    }
+
+    @Test
+    void testInvalidKRaftUpgradeVersion() throws Exception {
+        var local = replicaKey(randomReplicaId(), true);
+        var voter1 = replicaKey(local.id() + 1, true);
+        var voter2  = replicaKey(local.id() + 2, true);
+
+        VoterSet startingVoters = VoterSetTest.voterSet(
+            VoterSetTest.voterMap(IntStream.of(local.id(), voter1.id(), voter2.id()), false)
+        );
+
+        var context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withRaftProtocol(RaftProtocol.KIP_853_PROTOCOL)
+            .withStartingVoters(startingVoters, KRaftVersion.KRAFT_VERSION_0)
+            .build();
+
+        context.unattachedToLeader();
+        var epoch = context.currentEpoch();
+
+        // Upgrade not allowed since none of the remote voters support the new version
+        assertEquals(KRaftVersion.KRAFT_VERSION_0, context.client.kraftVersion());
+        assertThrows(
+            InvalidUpdateVersionException.class,
+            () -> context.client.upgradeKRaftVersion(epoch, KRaftVersion.KRAFT_VERSION_1)
+        );
+
+        // Establish a HWM and fence previous leaders
+        for (var voter : List.of(voter1, voter2)) {
+            context.deliverRequest(
+                context.fetchRequest(epoch, voter, context.log.endOffset().offset(), epoch, 0)
+            );
+            context.pollUntilResponse();
+            context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
+        }
+
+        // Update only one of the voters so that they supports kraft version 1
+        context.deliverRequest(
+            context.updateVoterRequest(
+                voter1,
+                Feature.KRAFT_VERSION.supportedVersionRange(),
+                startingVoters.listeners(voter1.id())
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentUpdateVoterResponse(
+            Errors.NONE,
+            OptionalInt.of(local.id()),
+            epoch
+        );
+
+        // Upgrade not allowed since one of the voters doesn't support the new version
+        assertEquals(KRaftVersion.KRAFT_VERSION_0, context.client.kraftVersion());
+        assertThrows(
+            InvalidUpdateVersionException.class,
+            () -> context.client.upgradeKRaftVersion(epoch, KRaftVersion.KRAFT_VERSION_1)
+        );
     }
 
     @Test

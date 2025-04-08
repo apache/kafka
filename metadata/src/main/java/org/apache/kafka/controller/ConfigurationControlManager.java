@@ -665,7 +665,7 @@ public class ConfigurationControlManager {
      * @param updates       The user-requested updates.
      * @param upgradeTypes  The user-requested upgrade types.
      * @param validateOnly  True if we should validate the request but not make changes.
-     * @param currentClaimEpoch TODO
+     * @param currentClaimEpoch the currently claimed epoch
      *
      * @return              The result.
      */
