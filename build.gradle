@@ -3738,7 +3738,6 @@ project(':connect:mirror') {
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':server')
     testImplementation project(':server-common')
-    testImplementation project(':server-common').sourceSets.test.output
 
 
     testRuntimeOnly project(':connect:runtime')

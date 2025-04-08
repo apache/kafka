@@ -18,8 +18,6 @@ package org.apache.kafka.config;
 
 import org.apache.kafka.common.config.AbstractConfig;
 
-import org.apache.kafka.common.config.AbstractConfig;
-
 import java.util.Set;
 
 /**
@@ -35,12 +33,6 @@ import java.util.Set;
  *   <li>Applying the new configuration via {@link #reconfigure(AbstractConfig, AbstractConfig)}</li>
  * </ol>
  * <strong>Note: Since Kafka is eliminating Scala, developers should implement this interface instead of {@link kafka.server.BrokerReconfigurable}</strong>
-<<<<<<<< HEAD:server-common/src/main/java/org/apache/kafka/server/config/BrokerReconfigurable.java
- *
- *
- * @see AbstractConfig
-========
->>>>>>>> refs/heads/trunk:server-common/src/main/java/org/apache/kafka/config/BrokerReconfigurable.java
  */
 public interface BrokerReconfigurable {
     /**

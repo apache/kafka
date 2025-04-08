@@ -22,7 +22,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.config.BrokerReconfigurable;
+import org.apache.kafka.config.BrokerReconfigurable;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.util.ShutdownableThread;
@@ -43,6 +43,7 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
+import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
 /**
@@ -95,7 +96,7 @@ import java.util.stream.IntStream;
  * </ol>
  */
 public class LogCleaner implements BrokerReconfigurable {
-    private static final Logger LOG = LoggerFactory.getLogger(LogCleaner.class);
+    private static final Logger LOG = LoggerFactory.getLogger("kafka.log.LogCleaner");
 
     public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
             CleanerConfig.LOG_CLEANER_THREADS_PROP,
@@ -136,11 +137,9 @@ public class LogCleaner implements BrokerReconfigurable {
      * A throttle used to limit the I/O of all the cleaner threads to a user-specified maximum rate.
      */
     private final Throttler throttler;
-
     private final ConcurrentMap<TopicPartition, UnifiedLog> logs;
     private final LogDirFailureChannel logDirFailureChannel;
     private final Time time;
-
     private final List<CleanerThread> cleaners = new ArrayList<>();
 
     /**
@@ -399,10 +398,11 @@ public class LogCleaner implements BrokerReconfigurable {
      * To prevent race between retention and compaction,
      * retention threads need to make this call to obtain:
      *
-     * @return A list of log partitions that retention threads can safely work on
+     * @return A map of log partitions that retention threads can safely work on
      */
-    public List<Map.Entry<TopicPartition, UnifiedLog>> pauseCleaningForNonCompactedPartitions() {
-        return cleanerManager.pauseCleaningForNonCompactedPartitions();
+    public Map<TopicPartition, UnifiedLog> pauseCleaningForNonCompactedPartitions() {
+        return cleanerManager.pauseCleaningForNonCompactedPartitions().stream()
+                .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     /**
