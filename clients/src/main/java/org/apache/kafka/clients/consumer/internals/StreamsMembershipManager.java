@@ -16,9 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackCompletedEvent;
+import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksAssignedCallbackCompletedEvent;
+import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksAssignedCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksRevokedCallbackCompletedEvent;
+import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksRevokedCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.ConsumerRebalanceMetricsManager;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.KafkaException;
@@ -149,7 +153,7 @@ public class StreamsMembershipManager implements RequestManager {
      * For example, requests for invocation of assignment/revocation callbacks.
      */
     private final StreamsRebalanceEventsProcessor streamsRebalanceEventsProcessor;
-
+    private final BackgroundEventHandler backgroundEventHandler;
     /**
      * Data needed to participate in the Streams rebalance protocol.
      */
@@ -279,6 +283,7 @@ public class StreamsMembershipManager implements RequestManager {
      * @param metrics                           The metrics.
      */
     public StreamsMembershipManager(final String groupId,
+                                    final BackgroundEventHandler backgroundEventHandler,
                                     final StreamsRebalanceEventsProcessor streamsRebalanceEventsProcessor,
                                     final StreamsRebalanceData streamsRebalanceData,
                                     final SubscriptionState subscriptionState,
@@ -289,6 +294,7 @@ public class StreamsMembershipManager implements RequestManager {
         this.state = MemberState.UNSUBSCRIBED;
         this.groupId = groupId;
         this.streamsRebalanceEventsProcessor = streamsRebalanceEventsProcessor;
+        this.backgroundEventHandler = backgroundEventHandler;
         this.streamsRebalanceData = streamsRebalanceData;
         this.subscriptionState = subscriptionState;
         metricsManager = new ConsumerRebalanceMetricsManager(metrics);
@@ -448,8 +454,7 @@ public class StreamsMembershipManager implements RequestManager {
     private void transitionToStale() {
         transitionTo(MemberState.STALE);
 
-        final CompletableFuture<Void> onAllTasksLostCallbackExecution =
-            streamsRebalanceEventsProcessor.requestOnAllTasksLostCallbackInvocation();
+        final CompletableFuture<Void> onAllTasksLostCallbackExecution = requestOnAllTasksLostCallbackInvocation();
         staleMemberAssignmentRelease = onAllTasksLostCallbackExecution.whenComplete((result, error) -> {
             if (error != null) {
                 log.error("Task revocation callback invocation failed " +
@@ -487,7 +492,7 @@ public class StreamsMembershipManager implements RequestManager {
             return;
         }
 
-        CompletableFuture<Void> onAllTasksLostCallbackExecuted = streamsRebalanceEventsProcessor.requestOnAllTasksLostCallbackInvocation();
+        CompletableFuture<Void> onAllTasksLostCallbackExecuted = requestOnAllTasksLostCallbackInvocation();
         onAllTasksLostCallbackExecuted.whenComplete((result, error) -> {
             if (error != null) {
                 log.error("onAllTasksLost callback invocation failed while releasing assignment " +
@@ -763,7 +768,7 @@ public class StreamsMembershipManager implements RequestManager {
         log.debug("Member {} with epoch {} transitioned to {} state. It will release its " +
             "assignment and rejoin the group.", memberId, memberEpoch, MemberState.FENCED);
 
-        CompletableFuture<Void> callbackResult = streamsRebalanceEventsProcessor.requestOnAllTasksLostCallbackInvocation();
+        CompletableFuture<Void> callbackResult = requestOnAllTasksLostCallbackInvocation();
         callbackResult.whenComplete((result, error) -> {
             if (error != null) {
                 log.error("onAllTasksLost callback invocation failed while releasing assignment" +
@@ -1090,8 +1095,7 @@ public class StreamsMembershipManager implements RequestManager {
         subscriptionState.markPendingRevocation(partitionsToRevoke);
 
         CompletableFuture<Void> tasksRevoked = new CompletableFuture<>();
-        CompletableFuture<Void> onTasksRevokedCallbackExecuted =
-            streamsRebalanceEventsProcessor.requestOnTasksRevokedCallbackInvocation(activeTasksToRevoke);
+        CompletableFuture<Void> onTasksRevokedCallbackExecuted = requestOnTasksRevokedCallbackInvocation(activeTasksToRevoke);
         onTasksRevokedCallbackExecuted.whenComplete((__, callbackError) -> {
             if (callbackError != null) {
                 log.error("onTasksRevoked callback invocation failed for tasks {}",
@@ -1131,7 +1135,7 @@ public class StreamsMembershipManager implements RequestManager {
         notifyAssignmentChange(partitionsToAssign);
 
         CompletableFuture<Void> onTasksAssignedCallbackExecuted =
-            streamsRebalanceEventsProcessor.requestOnTasksAssignedCallbackInvocation(
+            requestOnTasksAssignedCallbackInvocation(
                 new StreamsRebalanceData.Assignment(
                     activeTasksToAssign,
                     standbyTasksToAssign,
@@ -1163,7 +1167,7 @@ public class StreamsMembershipManager implements RequestManager {
         log.debug("Marking lost partitions pending for revocation: {}", partitionsToRelease);
         subscriptionState.markPendingRevocation(partitionsToRelease);
 
-        return streamsRebalanceEventsProcessor.requestOnAllTasksLostCallbackInvocation();
+        return requestOnAllTasksLostCallbackInvocation();
     }
 
     private SortedSet<TopicPartition> partitionsToAssignNotPreviouslyOwned(final SortedSet<TopicPartition> assignedTopicPartitions,
@@ -1285,5 +1289,23 @@ public class StreamsMembershipManager implements RequestManager {
             log.debug("The onAllTasksLost callback completed successfully; signaling to continue to the next phase of rebalance");
             future.complete(null);
         }
+    }
+
+    private CompletableFuture<Void> requestOnTasksAssignedCallbackInvocation(final StreamsRebalanceData.Assignment assignment) {
+        final StreamsOnTasksAssignedCallbackNeededEvent onTasksAssignedCallbackNeededEvent = new StreamsOnTasksAssignedCallbackNeededEvent(assignment);
+        backgroundEventHandler.add(onTasksAssignedCallbackNeededEvent);
+        return onTasksAssignedCallbackNeededEvent.future();
+    }
+
+    private CompletableFuture<Void> requestOnAllTasksLostCallbackInvocation() {
+        final StreamsOnAllTasksLostCallbackNeededEvent onAllTasksLostCallbackNeededEvent = new StreamsOnAllTasksLostCallbackNeededEvent();
+        backgroundEventHandler.add(onAllTasksLostCallbackNeededEvent);
+        return onAllTasksLostCallbackNeededEvent.future();
+    }
+
+    public CompletableFuture<Void> requestOnTasksRevokedCallbackInvocation(final Set<StreamsRebalanceData.TaskId> activeTasksToRevoke) {
+        final StreamsOnTasksRevokedCallbackNeededEvent onTasksRevokedCallbackNeededEvent = new StreamsOnTasksRevokedCallbackNeededEvent(activeTasksToRevoke);
+        backgroundEventHandler.add(onTasksRevokedCallbackNeededEvent);
+        return onTasksRevokedCallbackNeededEvent.future();
     }
 }

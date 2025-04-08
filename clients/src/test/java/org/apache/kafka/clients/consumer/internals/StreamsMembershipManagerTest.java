@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksAssignedCallbackCompletedEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksRevokedCallbackCompletedEvent;
@@ -96,6 +97,9 @@ public class StreamsMembershipManagerTest {
     private StreamsRebalanceEventsProcessor streamsRebalanceEventsProcessor;
 
     @Mock
+    private BackgroundEventHandler backgroundEventHandler;
+
+    @Mock
     private StreamsRebalanceData streamsRebalanceData;
 
     @Mock
@@ -105,6 +109,7 @@ public class StreamsMembershipManagerTest {
     public void setup() {
         membershipManager = new StreamsMembershipManager(
             GROUP_ID,
+            backgroundEventHandler,
             streamsRebalanceEventsProcessor,
             streamsRebalanceData,
             subscriptionState,

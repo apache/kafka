@@ -1108,7 +1108,20 @@ public class StreamThread extends Thread implements ProcessingThread {
         if (topologyMetadata.usesPatternSubscription()) {
             mainConsumer.subscribe(topologyMetadata.sourceTopicPattern(), rebalanceListener);
         } else {
-            mainConsumer.subscribe(topologyMetadata.allFullSourceTopicNames(), rebalanceListener);
+            if (streamsRebalanceData.isPresent()) {
+                ((AsyncKafkaConsumer<byte[], byte[]>) mainConsumer).subscribe(
+                    topologyMetadata.allFullSourceTopicNames(),
+                    new DefaultStreamsGroupRebalanceCallbacks(
+                        log,
+                        time,
+                        streamsRebalanceData.get(),
+                        this,
+                        taskManager
+                    )
+                );
+            } else {
+                mainConsumer.subscribe(topologyMetadata.allFullSourceTopicNames(), rebalanceListener);
+            }
         }
     }
 
@@ -1486,7 +1499,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             // ToDo: process IQ-related metadata
 
             // Process assignment from Streams Rebalance Protocol
-            streamsRebalanceEventsProcessor.get().process();
+//            streamsRebalanceEventsProcessor.get().process();
         }
     }
 
