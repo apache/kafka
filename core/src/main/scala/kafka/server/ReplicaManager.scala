@@ -890,7 +890,6 @@ class ReplicaManager(val config: KafkaConfig,
         new PartitionResponse(
           result.error,
           result.info.firstOffset,
-          result.info.lastOffset,
           result.info.logAppendTime,
           result.info.logStartOffset,
           result.info.recordErrors,
