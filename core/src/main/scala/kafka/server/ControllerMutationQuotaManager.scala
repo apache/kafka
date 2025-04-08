@@ -60,7 +60,7 @@ object UnboundedControllerMutationQuota extends ControllerMutationQuota {
  */
 abstract class AbstractControllerMutationQuota(private val time: Time) extends ControllerMutationQuota {
   protected var lastThrottleTimeMs = 0L
-  protected var lastRecordedTimeMs = 0L
+  private var lastRecordedTimeMs = 0L
 
   protected def updateThrottleTime(e: QuotaViolationException, timeMs: Long): Unit = {
     lastThrottleTimeMs = ControllerMutationQuotaManager.throttleTimeMs(e)
