@@ -183,6 +183,11 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
         return membershipManager;
     }
 
+    @Override
+    protected boolean shouldSendLeaveHeartbeatNow() {
+        return membershipManager().state() == MemberState.LEAVING;
+    }
+
     /**
      * Builds the heartbeat requests correctly, ensuring that all information is sent according to
      * the protocol, but subsequent requests do not send information which has not changed. This
