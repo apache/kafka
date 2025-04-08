@@ -38,7 +38,9 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIME
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_ALGORITHM;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 
 public class JwtBearerJwtRetriever implements JwtRetriever {
@@ -79,11 +81,31 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
 
         client = clientBuilder.build();
 
-        String algorithm = cu.validateString(SASL_OAUTHBEARER_ASSERTION_ALGORITHM);
-        File privateKeyFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE);
-        AssertionCreator assertionCreator = new DefaultAssertionCreator(time, algorithm, privateKeyFile);
+        AssertionCreator assertionCreator;
+        AssertionJwtTemplate assertionJwtTemplate;
 
-        AssertionJwtTemplate assertionJwtTemplate = new AssertionJwtTemplateFile();
+        if (cu.validateString(SASL_OAUTHBEARER_ASSERTION_FILE, false) != null) {
+            File assertionFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_FILE);
+            assertionCreator = new FileAssertionCreator(assertionFile);
+            assertionJwtTemplate = new AssertionJwtTemplate() {
+                @Override
+                public Map<String, Object> header() {
+                    return Map.of();
+                }
+
+                @Override
+                public Map<String, Object> payload() {
+                    return Map.of();
+                }
+            };
+        } else {
+            String algorithm = cu.validateString(SASL_OAUTHBEARER_ASSERTION_ALGORITHM);
+            File privateKeyFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE);
+            assertionCreator = new DefaultAssertionCreator(time, algorithm, privateKeyFile);
+
+            File assertionTemplateFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE);
+            assertionJwtTemplate = new AssertionJwtTemplateFile(assertionTemplateFile);
+        }
 
         URI tokenEndpoint = cu.validateUri(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 

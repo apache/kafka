@@ -24,21 +24,25 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
-import java.util.function.Function;
+import java.util.function.BiFunction;
 
-public class CachedFile<T> {
+public class RefreshingCachedFile<T> {
 
-    public static final Function<String, String> STRING_TRANSFORMER = s -> s;
+    public static final BiFunction<File, String, String> NOOP_TRANSFORMER = (file, contents) -> contents;
 
     private final Path path;
 
-    private final Function<String, T> transformer;
+    private final BiFunction<File, String, T> transformer;
 
     private final ReadWriteLock lock;
 
     private CachedFileInfo cachedFile;
 
-    public CachedFile(Path path, Function<String, T> transformer) {
+    public RefreshingCachedFile(File file, BiFunction<File, String, T> transformer) {
+        this(file.toPath(), transformer);
+    }
+
+    public RefreshingCachedFile(Path path, BiFunction<File, String, T> transformer) {
         this.path = path;
         this.transformer = transformer;
         this.lock = new ReentrantReadWriteLock();
@@ -82,7 +86,7 @@ public class CachedFile<T> {
                             throw new KafkaException("Error reading the file contents of OAuth resource " + path + " for caching");
                         }
 
-                        T transformed = transformer.apply(contents);
+                        T transformed = transformer.apply(file, contents);
                         cachedFile = new CachedFileInfo(size, lastModified, contents, transformed);
                     }
                 } finally {
@@ -97,7 +101,7 @@ public class CachedFile<T> {
         }
     }
 
-    private final class CachedFileInfo {
+    private class CachedFileInfo {
 
         private final long size;
 

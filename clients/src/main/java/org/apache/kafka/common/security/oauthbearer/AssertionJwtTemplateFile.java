@@ -16,7 +16,15 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingCachedFile;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.io.File;
+import java.util.Collections;
 import java.util.Map;
+import java.util.function.BiFunction;
 
 
 /**
@@ -109,18 +117,46 @@ import java.util.Map;
  */
 public class AssertionJwtTemplateFile implements AssertionJwtTemplate {
 
+    @SuppressWarnings("unchecked")
+    private static final BiFunction<File, String, CachedTemplate> JSON_TRANSFORMER = (file, json) -> {
+        try {
+            ObjectMapper mapper = new ObjectMapper();
+            Map<String, Object> map = (Map<String, Object>) mapper.readValue(json, Map.class);
+
+            Map<String, Object> header = (Map<String, Object>) map.computeIfAbsent("header", k -> Map.of());
+            Map<String, Object> payload = (Map<String, Object>) map.computeIfAbsent("payload", k -> Map.of());
+
+            return new CachedTemplate(header, payload);
+        } catch (Exception e) {
+            throw new KafkaException("An error occurred parsing the OAuth assertion template file from " + file.getPath(), e);
+        }
+    };
+
+    private final RefreshingCachedFile<CachedTemplate> jsonFile;
+
+    public AssertionJwtTemplateFile(File jsonFile) {
+        this.jsonFile = new RefreshingCachedFile<>(jsonFile, JSON_TRANSFORMER);
+    }
+
     @Override
     public Map<String, Object> header() {
-        throw new UnsupportedOperationException();
+        return jsonFile.transformed().header;
     }
 
     @Override
     public Map<String, Object> payload() {
-        throw new UnsupportedOperationException();
+        return jsonFile.transformed().payload;
     }
 
-    @Override
-    public void close() {
-        throw new UnsupportedOperationException();
+    private static class CachedTemplate {
+
+        private final Map<String, Object> header;
+
+        private final Map<String, Object> payload;
+
+        private CachedTemplate(Map<String, Object> header, Map<String, Object> payload) {
+            this.header = Collections.unmodifiableMap(header);
+            this.payload = Collections.unmodifiableMap(payload);
+        }
     }
 }

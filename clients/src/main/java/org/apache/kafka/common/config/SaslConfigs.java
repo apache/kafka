@@ -165,9 +165,12 @@ public class SaslConfigs {
     public static final String SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID = "sasl.oauthbearer.client.credentials.client.id";
     public static final String SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET = "sasl.oauthbearer.client.credentials.client.secret";
     public static final String SASL_OAUTHBEARER_ASSERTION_ALGORITHM = "sasl.oauthbearer.assertion.algorithm";
+    public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD = "sasl.oauthbearer.assertion.claim.aud";
     public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_MINUTES = "sasl.oauthbearer.assertion.claim.exp.minutes";
-    public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_MINUTES = "sasl.oauthbearer.assertion.claim.nbf.minutes";
+    public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS = "sasl.oauthbearer.assertion.claim.iss";
     public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_JTI_INCLUDE = "sasl.oauthbearer.assertion.claim.jti.include";
+    public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_MINUTES = "sasl.oauthbearer.assertion.claim.nbf.minutes";
+    public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB = "sasl.oauthbearer.assertion.claim.sub";
     public static final String SASL_OAUTHBEARER_ASSERTION_FILE = "sasl.oauthbearer.assertion.file";
     public static final String SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE = "sasl.oauthbearer.assertion.private.key.file";
     public static final String SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE = "sasl.oauthbearer.assertion.private.key.passphrase";

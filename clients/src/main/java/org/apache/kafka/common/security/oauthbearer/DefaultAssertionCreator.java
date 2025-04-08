@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingCachedFile;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
@@ -34,20 +36,32 @@ import java.time.Duration;
 import java.util.Base64;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.BiFunction;
 
 public class DefaultAssertionCreator implements AssertionCreator {
 
     static final String TOKEN_SIGNING_ALGORITHM_RS256 = "RS256";
     static final String TOKEN_SIGNING_ALGORITHM_ES256 = "ES256";
 
+    private static final BiFunction<File, String, PrivateKey> PRIVATE_KEY_TRANSFORMER = (file, privateKeySecret) -> {
+        try {
+            byte[] pkcs8EncodedBytes = Base64.getDecoder().decode(privateKeySecret);
+            PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(pkcs8EncodedBytes);
+            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+            return keyFactory.generatePrivate(keySpec);
+        } catch (GeneralSecurityException e) {
+            throw new KafkaException("An error occurred generating the OAuth assertion private key from " + file.getPath(), e);
+        }
+    };
+
     private final Time time;
     private final String algorithm;
-    private final File privateKeyFile;
+    private final RefreshingCachedFile<PrivateKey> privateKeyFile;
 
     public DefaultAssertionCreator(Time time, String algorithm, File privateKeyFile) {
         this.time = time;
         this.algorithm = algorithm;
-        this.privateKeyFile = privateKeyFile;
+        this.privateKeyFile = new RefreshingCachedFile<>(privateKeyFile, PRIVATE_KEY_TRANSFORMER);
     }
 
     @Override
@@ -57,17 +71,9 @@ public class DefaultAssertionCreator implements AssertionCreator {
         String header = encodeHeader(template, mapper, encoder);
         String payload = encodePayload(template, mapper, encoder);
         String content = header + "." + payload;
-        PrivateKey privateKey = getPrivateKey();
+        PrivateKey privateKey = privateKeyFile.transformed();
         String signedContent = sign(privateKey, content);
         return content + "." + signedContent;
-    }
-
-    PrivateKey getPrivateKey() throws GeneralSecurityException, IOException {
-        String privateKeySecret = Utils.readFileAsString(privateKeyFile.getPath());
-        byte[] pkcs8EncodedBytes = Base64.getDecoder().decode(privateKeySecret);
-        PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(pkcs8EncodedBytes);
-        KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-        return keyFactory.generatePrivate(keySpec);
     }
 
     String encodeHeader(AssertionJwtTemplate template,

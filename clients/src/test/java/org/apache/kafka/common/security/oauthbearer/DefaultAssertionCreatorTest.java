@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -49,6 +50,7 @@ import java.util.Map;
 
 import static org.apache.kafka.common.security.oauthbearer.DefaultAssertionCreator.TOKEN_SIGNING_ALGORITHM_RS256;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -104,7 +106,9 @@ public class DefaultAssertionCreatorTest {
         AssertionCreator assertionCreator = new Builder()
             .setPrivateKeyFile(privateKeyFile)
             .build();
-        assertThrows(GeneralSecurityException.class, () -> assertionCreator.create(jwtTemplate));
+        KafkaException e = assertThrows(KafkaException.class, () -> assertionCreator.create(jwtTemplate));
+        assertNotNull(e.getCause());
+        assertInstanceOf(GeneralSecurityException.class, e.getCause());
     }
 
     @ParameterizedTest

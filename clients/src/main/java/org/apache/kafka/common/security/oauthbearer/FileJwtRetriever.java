@@ -18,7 +18,7 @@ package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
-import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingCachedFile;
 
 import java.io.File;
 import java.util.List;
@@ -33,7 +33,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
  */
 public class FileJwtRetriever implements JwtRetriever {
 
-    private String jwt;
+    private RefreshingCachedFile<String> jwtFile;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
@@ -41,9 +41,11 @@ public class FileJwtRetriever implements JwtRetriever {
         File fileName = cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
         try {
-            String fileContents = Utils.readFileAsString(fileName.getPath());
             // always non-null; to remove any newline chars or backend will report err
-            jwt = fileContents.trim();
+            jwtFile = new RefreshingCachedFile<>(
+                fileName,
+                (file, contents) -> contents.trim()
+            );
         } catch (Exception e) {
             throw new KafkaException("An error occurred reading the OAuth JWT from " + fileName);
         }
@@ -51,9 +53,9 @@ public class FileJwtRetriever implements JwtRetriever {
 
     @Override
     public String retrieve() throws JwtRetrieverException {
-        if (Utils.isBlank(jwt))
+        if (jwtFile == null)
             throw new JwtRetrieverException("JWT is null; please call configure() first");
 
-        return jwt;
+        return jwtFile.transformed();
     }
 }
