@@ -7044,7 +7044,7 @@ public class SharePartitionTest {
         assertEquals(16, actual.get(2).lastOffset());
         assertEquals(1, actual.get(2).producerId());
 
-        // Case 2 - Aborted transactions contains the record batch from 4-5 with producer id 2.
+        // Case 2 - Aborted transactions contains the record batch from offsets 6-7 with producer id 2.
         abortedTransactions = List.of(
             new FetchResponseData.AbortedTransaction().setFirstOffset(0).setProducerId(1),
             new FetchResponseData.AbortedTransaction().setFirstOffset(6).setProducerId(2),
