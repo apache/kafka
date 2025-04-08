@@ -85,7 +85,7 @@ class ControllerApis(
   val configHelper = new ConfigHelper(metadataCache, config, metadataCache)
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   val runtimeLoggerManager = new RuntimeLoggerManager(config.nodeId, logger.underlying)
-  private val aclApis = new AclApis(authHelper, authorizer, requestHelper, ProcessRole.ControllerRole.toString, config)
+  private val aclApis = new AclApis(authHelper, authorizer, requestHelper, ProcessRole.ControllerRole, config)
 
   def isClosed: Boolean = aclApis.isClosed
 
