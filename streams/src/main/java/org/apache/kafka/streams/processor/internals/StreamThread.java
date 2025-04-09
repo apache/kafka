@@ -2004,7 +2004,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     public void closeConsumer(final long timeoutMs, final boolean leaveGroup) {
         final CloseOptions.GroupMembershipOperation operation = leaveGroup ? LEAVE_GROUP : REMAIN_IN_GROUP;
-        final CloseOptions closeOptions = CloseOptions.timeout(Duration.ofMillis(timeoutMs))
+        final CloseOptions closeOptions = CloseOptions.timeout(Duration.ofMillis(timeoutMs <= 0 ? 0 : timeoutMs))
             .withGroupMembershipOperation(operation);
         mainConsumer.close(closeOptions);
     }

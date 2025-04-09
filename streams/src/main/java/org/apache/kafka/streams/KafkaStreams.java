@@ -1200,7 +1200,7 @@ public class KafkaStreams implements AutoCloseable {
                         final long cacheSizePerThread = cacheSizePerThread(numLiveStreamThreads());
                         log.info("Resizing thread cache due to thread removal, new cache size per thread is {}", cacheSizePerThread);
                         resizeThreadCache(cacheSizePerThread);
-                        if (callingThreadIsNotCurrentStreamThread) {
+                        if (streamThread.groupInstanceID().isPresent() && callingThreadIsNotCurrentStreamThread) {
                             final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
                             streamThread.closeConsumer(remainingTimeMs, true);
                         }
