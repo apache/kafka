@@ -157,7 +157,7 @@ public class SenderTest {
 
     private static final String TOPIC_NAME = "test";
     private static final Uuid TOPIC_ID = Uuid.fromString("MKXx1fIkQy2J9jXHhK8m1w");
-    private static final Map<String, Uuid> TOPIC_IDS = Collections.singletonMap(TOPIC_NAME, TOPIC_ID);
+    private static final Map<String, Uuid> TOPIC_IDS = new HashMap<>(Map.of(TOPIC_NAME, TOPIC_ID));
     private final TopicPartition tp0 = new TopicPartition(TOPIC_NAME, 0);
     private final TopicPartition tp1 = new TopicPartition(TOPIC_NAME, 1);
     private final TopicPartition tp2 = new TopicPartition(TOPIC_NAME, 2);
@@ -176,7 +176,7 @@ public class SenderTest {
     @BeforeEach
     public void setup() {
         setupWithTransactionState(null);
-        apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 13));
+        apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE.id, ApiKeys.PRODUCE.oldestVersion(), ApiKeys.PRODUCE.latestVersion()));
         this.client.updateMetadata(
                 RequestTestUtils.metadataUpdateWithIds(1,
                         Collections.singletonMap(TOPIC_NAME, 3),
@@ -193,7 +193,7 @@ public class SenderTest {
         request.data().topicData().forEach(tpData -> tpData.partitionData().forEach(p -> {
             String topicName = tpData.name();
 
-            if (request.version() >= 13) {
+            if (request.version() >= 13 && tpData.topicId() != Uuid.ZERO_UUID) {
                 topicName = TOPIC_IDS.entrySet().stream().filter(e -> e.getValue() == tpData.topicId()).map(Map.Entry::getKey).findFirst().get();
             }
 
@@ -550,7 +550,7 @@ public class SenderTest {
                 new BufferPool(totalSize, batchSize, m, time, "producer-internal-metrics"));
 
             SenderMetricsRegistry senderMetrics = new SenderMetricsRegistry(m);
-            apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 13));
+            apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE.id, ApiKeys.PRODUCE.oldestVersion(), ApiKeys.PRODUCE.latestVersion()));
 
             Sender sender = new Sender(logContext, client, metadata, this.accumulator, false, MAX_REQUEST_SIZE, ACKS_ALL, 1,
                 senderMetrics, time, REQUEST_TIMEOUT, 1000L, null, apiVersions);
@@ -2357,39 +2357,44 @@ public class SenderTest {
 
     @Test
     public void testIdempotentSplitBatchAndSend() throws Exception {
-        TopicPartition tp = new TopicPartition("testSplitBatchAndSend", 1);
+        Uuid topicId = Uuid.fromString("2J9hK8m1wHMKjXfIkQyXx1");
+        TOPIC_IDS.put("testSplitBatchAndSend", topicId);
+        TopicIdPartition tpId = new TopicIdPartition(topicId, new TopicPartition("testSplitBatchAndSend", 1));
         TransactionManager txnManager = createTransactionManager();
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
         setupWithTransactionState(txnManager);
         prepareAndReceiveInitProducerId(123456L, Errors.NONE);
         assertTrue(txnManager.hasProducerId());
-        testSplitBatchAndSend(txnManager, producerIdAndEpoch, tp);
+        testSplitBatchAndSend(txnManager, producerIdAndEpoch, tpId);
     }
 
     @Test
     public void testTransactionalSplitBatchAndSend() throws Exception {
+        Uuid topicId = Uuid.fromString("2J9hK8m1wHMKjXfIkQyXx1");
+        TOPIC_IDS.put("testSplitBatchAndSend", topicId);
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
-        TopicPartition tp = new TopicPartition("testSplitBatchAndSend", 1);
+        TopicIdPartition tpId = new TopicIdPartition(topicId, new TopicPartition("testSplitBatchAndSend", 1));
+
         TransactionManager txnManager = new TransactionManager(logContext, "testSplitBatchAndSend", 60000, 100, apiVersions);
 
         setupWithTransactionState(txnManager);
         doInitTransactions(txnManager, producerIdAndEpoch);
 
         txnManager.beginTransaction();
-        txnManager.maybeAddPartition(tp);
+        txnManager.maybeAddPartition(tpId.topicPartition());
         apiVersions.update("0", NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 13));
-        client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp, Errors.NONE)));
+        client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tpId.topicPartition(), Errors.NONE)));
         sender.runOnce();
 
-        testSplitBatchAndSend(txnManager, producerIdAndEpoch, tp);
+        testSplitBatchAndSend(txnManager, producerIdAndEpoch, tpId);
     }
 
     @SuppressWarnings("deprecation")
     private void testSplitBatchAndSend(TransactionManager txnManager,
                                        ProducerIdAndEpoch producerIdAndEpoch,
-                                       TopicPartition tp) throws Exception {
+                                       TopicIdPartition tpId) throws Exception {
         int maxRetries = 1;
-        String topic = tp.topic();
+        String topic = tpId.topic();
         int deliveryTimeoutMs = 3000;
         long totalSize = 1024 * 1024;
         String metricGrpName = "producer-metrics";
@@ -2406,20 +2411,20 @@ public class SenderTest {
             MetadataResponse metadataUpdate1 = RequestTestUtils.metadataUpdateWithIds(2, Collections.singletonMap(topic, 2), TOPIC_IDS);
             client.prepareMetadataUpdate(metadataUpdate1);
             metadataUpdate1.brokers().stream().forEach(node ->
-                    apiVersions.update(node.idString(), NodeApiVersions.create(ApiKeys.PRODUCE.id, (short) 0, (short) 13))
+                    apiVersions.update(node.idString(), NodeApiVersions.create(ApiKeys.PRODUCE.id, ApiKeys.PRODUCE.oldestVersion(), ApiKeys.PRODUCE.latestVersion()))
             );
 
             // Send the first message.
             long nowMs = time.milliseconds();
             Cluster cluster = TestUtils.singletonCluster();
             Future<RecordMetadata> f1 =
-                    accumulator.append(tp.topic(), tp.partition(), 0L, "key1".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, nowMs, cluster).future;
+                    accumulator.append(tpId.topic(), tpId.partition(), 0L, "key1".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, nowMs, cluster).future;
             Future<RecordMetadata> f2 =
-                    accumulator.append(tp.topic(), tp.partition(), 0L, "key2".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, nowMs, cluster).future;
+                    accumulator.append(tpId.topic(), tpId.partition(), 0L, "key2".getBytes(), new byte[batchSize / 2], null, null, MAX_BLOCK_TIMEOUT, nowMs, cluster).future;
             sender.runOnce(); // connect
             sender.runOnce(); // send produce request
 
-            assertEquals(2, txnManager.sequenceNumber(tp), "The next sequence should be 2");
+            assertEquals(2, txnManager.sequenceNumber(tpId.topicPartition()), "The next sequence should be 2");
             String id = client.requests().peek().destination();
             assertEquals(ApiKeys.PRODUCE, client.requests().peek().requestBuilder().apiKey());
             Node node = new Node(Integer.parseInt(id), "localhost", 0);
@@ -2427,15 +2432,15 @@ public class SenderTest {
             assertTrue(client.isReady(node, time.milliseconds()), "Client ready status should be true");
 
             Map<TopicIdPartition, ProduceResponse.PartitionResponse> responseMap = new HashMap<>();
-            responseMap.put(new TopicIdPartition(TOPIC_ID, tp), new ProduceResponse.PartitionResponse(Errors.MESSAGE_TOO_LARGE));
+            responseMap.put(tpId, new ProduceResponse.PartitionResponse(Errors.MESSAGE_TOO_LARGE));
             client.respond(new ProduceResponse(responseMap));
             sender.runOnce(); // split and reenqueue
-            assertEquals(2, txnManager.sequenceNumber(tp), "The next sequence should be 2");
+            assertEquals(2, txnManager.sequenceNumber(tpId.topicPartition()), "The next sequence should be 2");
             // The compression ratio should have been improved once.
             assertEquals(CompressionType.GZIP.rate - CompressionRatioEstimator.COMPRESSION_RATIO_IMPROVING_STEP,
                     CompressionRatioEstimator.estimation(topic, CompressionType.GZIP), 0.01);
             sender.runOnce(); // send the first produce request
-            assertEquals(2, txnManager.sequenceNumber(tp), "The next sequence number should be 2");
+            assertEquals(2, txnManager.sequenceNumber(tpId.topicPartition()), "The next sequence number should be 2");
             assertFalse(f1.isDone(), "The future shouldn't have been done.");
             assertFalse(f2.isDone(), "The future shouldn't have been done.");
             id = client.requests().peek().destination();
@@ -2444,14 +2449,14 @@ public class SenderTest {
             assertEquals(1, client.inFlightRequestCount());
             assertTrue(client.isReady(node, time.milliseconds()), "Client ready status should be true");
 
-            responseMap.put(new TopicIdPartition(TOPIC_ID, tp), new ProduceResponse.PartitionResponse(Errors.NONE, 0L, 0L, 0L));
-            client.respond(produceRequestMatcher(tp, producerIdAndEpoch, 0, txnManager.isTransactional()),
+            responseMap.put(tpId, new ProduceResponse.PartitionResponse(Errors.NONE, 0L, 0L, 0L));
+            client.respond(produceRequestMatcher(tpId.topicPartition(), producerIdAndEpoch, 0, txnManager.isTransactional()),
                     new ProduceResponse(responseMap));
 
             sender.runOnce(); // receive
             assertTrue(f1.isDone(), "The future should have been done.");
-            assertEquals(2, txnManager.sequenceNumber(tp), "The next sequence number should still be 2");
-            assertEquals(OptionalInt.of(0), txnManager.lastAckedSequence(tp), "The last ack'd sequence number should be 0");
+            assertEquals(2, txnManager.sequenceNumber(tpId.topicPartition()), "The next sequence number should still be 2");
+            assertEquals(OptionalInt.of(0), txnManager.lastAckedSequence(tpId.topicPartition()), "The last ack'd sequence number should be 0");
             assertFalse(f2.isDone(), "The future shouldn't have been done.");
             assertEquals(0L, f1.get().offset(), "Offset of the first message should be 0");
             sender.runOnce(); // send the second produce request
@@ -2461,16 +2466,16 @@ public class SenderTest {
             assertEquals(1, client.inFlightRequestCount());
             assertTrue(client.isReady(node, time.milliseconds()), "Client ready status should be true");
 
-            responseMap.put(new TopicIdPartition(TOPIC_ID, tp), new ProduceResponse.PartitionResponse(Errors.NONE, 1L, 0L, 0L));
-            client.respond(produceRequestMatcher(tp, producerIdAndEpoch, 1, txnManager.isTransactional()),
+            responseMap.put(tpId, new ProduceResponse.PartitionResponse(Errors.NONE, 1L, 0L, 0L));
+            client.respond(produceRequestMatcher(tpId.topicPartition(), producerIdAndEpoch, 1, txnManager.isTransactional()),
                     new ProduceResponse(responseMap));
 
             sender.runOnce(); // receive
             assertTrue(f2.isDone(), "The future should have been done.");
-            assertEquals(2, txnManager.sequenceNumber(tp), "The next sequence number should be 2");
-            assertEquals(OptionalInt.of(1), txnManager.lastAckedSequence(tp), "The last ack'd sequence number should be 1");
+            assertEquals(2, txnManager.sequenceNumber(tpId.topicPartition()), "The next sequence number should be 2");
+            assertEquals(OptionalInt.of(1), txnManager.lastAckedSequence(tpId.topicPartition()), "The last ack'd sequence number should be 1");
             assertEquals(1L, f2.get().offset(), "Offset of the first message should be 1");
-            assertTrue(accumulator.getDeque(tp).isEmpty(), "There should be no batch in the accumulator");
+            assertTrue(accumulator.getDeque(tpId.topicPartition()).isEmpty(), "There should be no batch in the accumulator");
             assertTrue((Double) (m.metrics().get(senderMetrics.batchSplitRate).metricValue()) > 0, "There should be a split");
         }
     }

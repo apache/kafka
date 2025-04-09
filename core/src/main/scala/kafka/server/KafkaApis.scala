@@ -108,7 +108,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val groupConfigManager: GroupConfigManager
 ) extends ApiRequestHandler with Logging {
 
-  type FetchResponseStats = Map[TopicIdPartition, RecordValidationStats]
+  type ProduceResponseStats = Map[TopicIdPartition, RecordValidationStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   val configHelper = new ConfigHelper(metadataCache, config, configRepository)
   val authHelper = new AuthHelper(authorizer)
@@ -512,7 +512,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       }
     }
 
-    def processingStatsCallback(processingStats: FetchResponseStats): Unit = {
+    def processingStatsCallback(processingStats: ProduceResponseStats): Unit = {
       processingStats.foreachEntry { (topicIdPartition, info) =>
         updateRecordConversionStats(request, topicIdPartition.topicPartition(), info)
       }

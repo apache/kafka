@@ -160,7 +160,7 @@ class ReplicaManagerTest {
     setupMetadataCacheWithTopicIds(topicIds, metadataCache)
   }
 
-  private def setupMetadataCacheWithTopicIds(topicIds: Map[String, Uuid], metadataCache: KRaftMetadataCache): Unit = {
+  private def setupMetadataCacheWithTopicIds(topicIds: Map[String, Uuid], metadataCache:MetadataCache): Unit = {
     val topicNames = topicIds.map(_.swap)
     topicNames.foreach {
       case (id, name) =>
@@ -743,6 +743,7 @@ class ReplicaManagerTest {
     val timer = new MockTimer(time)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(timer)
     val topicPartition = new TopicPartition(topic, 0)
+    setupMetadataCacheWithTopicIds(topicIds, replicaManager.metadataCache)
 
     def assertLateTransactionCount(expectedCount: Option[Int]): Unit = {
       assertEquals(expectedCount, yammerGaugeValue[Int]("PartitionsWithLateTransactionsCount"))
@@ -808,6 +809,7 @@ class ReplicaManagerTest {
   def testReadCommittedFetchLimitedAtLSO(): Unit = {
     val timer = new MockTimer(time)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(timer)
+    setupMetadataCacheWithTopicIds(topicIds, replicaManager.metadataCache)
 
     try {
       val brokerList = Seq[Integer](0, 1).asJava
@@ -930,6 +932,7 @@ class ReplicaManagerTest {
   def testDelayedFetchIncludesAbortedTransactions(): Unit = {
     val timer = new MockTimer(time)
     val replicaManager = setupReplicaManagerWithMockedPurgatories(timer)
+    setupMetadataCacheWithTopicIds(topicIds, replicaManager.metadataCache)
 
     try {
       val brokerList = Seq[Integer](0, 1).asJava
@@ -2411,6 +2414,7 @@ class ReplicaManagerTest {
     val sequence = 0
 
     val replicaManager = setupReplicaManagerWithMockedPurgatories(mockTimer)
+    setupMetadataCacheWithTopicIds(topicIds, replicaManager.metadataCache)
     try {
       replicaManager.becomeLeaderOrFollower(1,
         makeLeaderAndIsrRequest(topicIds(tp0.topic), tp0, Seq(0, 1), new LeaderAndIsr(0, List(0, 1).map(Int.box).asJava)),

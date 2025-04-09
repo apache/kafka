@@ -34,7 +34,7 @@ import scala.jdk.CollectionConverters._
 class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
   val producerCount: Int = 1
   val brokerCount: Int = 3
-  val defaultLingerMs: Int = 5;
+  val defaultLingerMs: Int = 5
 
   serverConfig.put(ServerLogConfigs.NUM_PARTITIONS_CONFIG, 2.toString)
   serverConfig.put(ReplicationConfigs.DEFAULT_REPLICATION_FACTOR_CONFIG, 2.toString)
@@ -125,20 +125,19 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
    * Producer will attempt to send messages to the partition specified in each record, and should
    * succeed as long as the metadata cache on the leader includes the partition topic id.
    */
-  def testSendWithTopicReassignmentIsMidWay(): Unit = {
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testSendWithTopicReassignmentIsMidWay(quorum: String): Unit = {
     val numRecords = 10
     val topic = "topic"
     val partition0: TopicPartition = new TopicPartition(topic, 0)
-    val partition1 = new TopicPartition(topic, 1)
     val admin: Admin = createAdminClient()
 
-    // Create topic with leader as 0 for the 2 partitions.
-    createTopicWithAssignment(topic, Map(0 -> Seq(0, 1), 1 -> Seq(0, 1)))
-    TestUtils.assertLeader(admin, partition1, 0)
+    // Create topic with leader as 0 for the 1 partition.
+    createTopicWithAssignment(topic, Map(0 -> Seq(0)))
+    TestUtils.assertLeader(admin, partition0, 0)
 
     val topicDetails = topicMetadata(admin, topic)
-    TestUtils.assertLeader(admin, partition1, 0)
-
     val producer = createProducer()
 
     (1 to numRecords).foreach { i =>
@@ -148,12 +147,10 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
 
     val reassignment = Map(
       partition0 -> Optional.of(new NewPartitionReassignment(util.Arrays.asList(1, 2))),
-      partition1 -> Optional.of(new NewPartitionReassignment(util.Arrays.asList(1, 2)))
     )
 
     // Change assignment of one of the replicas from 0 to 2. Leadership moves be 1.
     admin.alterPartitionReassignments(reassignment.asJava).all().get()
-    TestUtils.assertLeader(admin, partition1, 1)
     TestUtils.assertLeader(admin, partition0, 1)
     assertEquals(topicDetails.topicId(), topicMetadata(admin, topic).topicId())
 

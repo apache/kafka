@@ -88,9 +88,6 @@ public class MirrorCheckpointTask extends SourceTask {
         this.topicFilter = topic -> true;
         this.interval = Duration.ofNanos(1);
         this.pollTimeout = Duration.ofNanos(1);
-        // read __offset-sync-topic
-        // update __checkpoint_topic has consumer group offset on source/destination
-        // admincliuent -> consumergroupX 100 on source and consumergroupX 20 on destination
     }
 
     @Override

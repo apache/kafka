@@ -455,8 +455,8 @@ public class RequestResponseTest {
     public void testProduceRequestPartitionSize() {
         Uuid topicId = Uuid.fromString("e9TvBGX5JkYAB0AQorYD4w");
         String topicName = "foo";
-        TopicIdPartition tp0 = createTopicIdPartition(topicId, 0, topicName);
-        TopicIdPartition tp1 = createTopicIdPartition(topicId, 1, topicName);
+        TopicIdPartition tpId0 = createTopicIdPartition(topicId, 0, topicName);
+        TopicIdPartition tpId1 = createTopicIdPartition(topicId, 1, topicName);
         MemoryRecords records0 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2,
             Compression.NONE, new SimpleRecord("woot".getBytes()));
         MemoryRecords records1 = MemoryRecords.withRecords(RecordBatch.MAGIC_VALUE_V2,
@@ -464,16 +464,24 @@ public class RequestResponseTest {
         ProduceRequest request = ProduceRequest.builder(
                 new ProduceRequestData()
                         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(asList(
-                                createTopicProduceData(PRODUCE.latestVersion(), records0, tp0),
-                                createTopicProduceData(PRODUCE.latestVersion(), records1, tp1)).iterator()))
+                                createTopicProduceData(PRODUCE.latestVersion(), records0, tpId0),
+                                createTopicProduceData(PRODUCE.latestVersion(), records1, tpId1)).iterator()))
                         .setAcks((short) 1)
                         .setTimeoutMs(5000)
                         .setTransactionalId("transactionalId"),
                 true)
             .build((short) 7);
         assertEquals(2, request.partitionSizes().size());
-        assertEquals(records0.sizeInBytes(), (int) request.partitionSizes().get(tp0));
-        assertEquals(records1.sizeInBytes(), (int) request.partitionSizes().get(tp1));
+
+        assertEquals(records0.sizeInBytes(), partitionSize(request.partitionSizes(), tpId0));
+        assertEquals(records1.sizeInBytes(), partitionSize(request.partitionSizes(), tpId1));
+    }
+
+    private int partitionSize(Map<TopicIdPartition, Integer> partitionSizes, TopicIdPartition topicIdPartition) {
+        return partitionSizes.entrySet().stream()
+                .filter(tpId -> tpId.getKey().topicId() == topicIdPartition.topicId() &&
+                        tpId.getKey().partition() == topicIdPartition.partition()).map(Map.Entry::getValue)
+                .findFirst().get();
     }
 
     @Test
@@ -2490,7 +2498,7 @@ public class RequestResponseTest {
                 .setPartitionData(singletonList(new ProduceRequestData.PartitionProduceData()
                         .setIndex(tp.partition())
                         .setRecords(records)));
-        if (version >= 12) {
+        if (version >= 13) {
             topicProduceData.setTopicId(tp.topicId());
         } else {
             topicProduceData.setName(tp.topic());

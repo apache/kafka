@@ -98,7 +98,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       val topicId = topicNames.find { case (_, topicName) => topicName == topic}
         .map { case (topicId, _) => topicId }
         .getOrElse(Uuid.ZERO_UUID)
-      val topicName = if (version >= 12) "" else topic
+      val topicName = if (version >= 13) "" else topic
       Errors.forCode(
         resp.data
           .responses.find(topicName, topicId)
@@ -276,6 +276,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       .setTimeoutMs(5000))
       .build()
   }
+
   private def createProduceRequest = createProduceRequestWithId(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID))
 
   private def createFetchRequest = {

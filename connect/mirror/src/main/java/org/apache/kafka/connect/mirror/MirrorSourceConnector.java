@@ -169,9 +169,6 @@ public class MirrorSourceConnector extends SourceConnector {
             "refreshing topics");
         log.info("Started {} with {} topic-partitions.", connectorName, knownSourceTopicPartitions.size());
         log.info("Starting {} took {} ms.", connectorName, System.currentTimeMillis() - start);
-
-        // your topics -> destination
-        // __offset-sync-topic
     }
 
     @Override

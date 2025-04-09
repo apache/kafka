@@ -648,8 +648,8 @@ class TransactionStateManager(brokerId: Int,
     val timestamp = time.milliseconds()
 
     val records = MemoryRecords.withRecords(TransactionLog.EnforcedCompression, new SimpleRecord(timestamp, keyBytes, valueBytes))
-    val topicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionFor(transactionalId))
-    val transactionStateTopicIdPartition = replicaManager.topicIdPartition(topicPartition)
+    val transactionStateTopicPartition = new TopicPartition(Topic.TRANSACTION_STATE_TOPIC_NAME, partitionFor(transactionalId))
+    val transactionStateTopicIdPartition = replicaManager.topicIdPartition(transactionStateTopicPartition)
     val recordsPerPartition = Map(transactionStateTopicIdPartition -> records)
 
     // set the callback function to update transaction status in cache after log append completed
@@ -657,7 +657,7 @@ class TransactionStateManager(brokerId: Int,
       // the append response should only contain the topics partition
       if (responseStatus.size != 1 || !responseStatus.contains(transactionStateTopicIdPartition))
         throw new IllegalStateException("Append status %s should only have one partition %s"
-          .format(responseStatus, topicPartition))
+          .format(responseStatus, transactionStateTopicPartition))
 
       val status = responseStatus(transactionStateTopicIdPartition)
 

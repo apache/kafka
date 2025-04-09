@@ -18,7 +18,6 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.InvalidRecordException;
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
@@ -53,10 +52,6 @@ public class ProduceRequest extends AbstractRequest {
 
     public static Builder builder(ProduceRequestData data) {
         return builder(data, false);
-    }
-
-    private static boolean canNotSupportTopicId(ProduceRequestData data) {
-        return data.topicData().stream().anyMatch(d -> d.topicId() == Uuid.ZERO_UUID);
     }
 
     public static class Builder extends AbstractRequest.Builder<ProduceRequest> {
@@ -120,10 +115,11 @@ public class ProduceRequest extends AbstractRequest {
                     Map<TopicIdPartition, Integer> tmpPartitionSizes = new HashMap<>();
                     data.topicData().forEach(topicData ->
                         topicData.partitionData().forEach(partitionData ->
-                            // While topic id and name will never be populated at the same time in the request, to simplify
-                            // initializing `TopicIdPartition` the code will use both topic name and id.
-                            // Topic Id will be Uuid.ZERO_UUID in versions < 13 and topic name will be used as main identifier of topic partition.
-                            // Topic Name will be empty string in versions >= 13 and topic id will be used as the main identifier.
+                            // While topic id and name might not be populated at the same time in the request all the time;
+                            // for example on server side they will never be populated together while in produce client they will be,
+                            // to simplify initializing `TopicIdPartition` the code will use both topic name and id.
+                            // TopicId will be Uuid.ZERO_UUID in versions < 13 and topic name will be used as main identifier of topic partition.
+                            // TopicName will be empty string in versions >= 13 and topic id will be used as the main identifier.
                             tmpPartitionSizes.compute(new TopicIdPartition(topicData.topicId(), partitionData.index(), topicData.name()),
                                 (ignored, previousValue) ->
                                     partitionData.records().sizeInBytes() + (previousValue == null ? 0 : previousValue))
@@ -170,14 +166,14 @@ public class ProduceRequest extends AbstractRequest {
         if (acks == 0) return null;
         ApiError apiError = ApiError.fromThrowable(e);
         ProduceResponseData data = new ProduceResponseData().setThrottleTimeMs(throttleTimeMs);
-        partitionSizes().forEach((tp, ignored) -> {
-            ProduceResponseData.TopicProduceResponse tpr = data.responses().find(tp.topic(), tp.topicId());
+        partitionSizes().forEach((tpId, ignored) -> {
+            ProduceResponseData.TopicProduceResponse tpr = data.responses().find(tpId.topic(), tpId.topicId());
             if (tpr == null) {
-                tpr = new ProduceResponseData.TopicProduceResponse().setName(tp.topic()).setTopicId(tp.topicId());
+                tpr = new ProduceResponseData.TopicProduceResponse().setName(tpId.topic()).setTopicId(tpId.topicId());
                 data.responses().add(tpr);
             }
             tpr.partitionResponses().add(new ProduceResponseData.PartitionProduceResponse()
-                    .setIndex(tp.partition())
+                    .setIndex(tpId.partition())
                     .setRecordErrors(Collections.emptyList())
                     .setBaseOffset(INVALID_OFFSET)
                     .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)

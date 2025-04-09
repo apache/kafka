@@ -133,7 +133,7 @@ public class ProduceRequestTest {
                         .setTimeoutMs(5000),
                 false);
         assertEquals(3, requestBuilder.oldestAllowedVersion());
-        assertEquals(11, requestBuilder.latestAllowedVersion());
+        assertEquals(13, requestBuilder.latestAllowedVersion());
     }
 
     @Test

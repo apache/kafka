@@ -941,7 +941,7 @@ public final class MessageTest {
                 testAllMessageRoundTripsBetweenVersions(version, (short) 5, responseData, responseData);
             } else if (version >= 6 && version <= 7) {
                 testAllMessageRoundTripsBetweenVersions(version, (short) 8, responseData, responseData);
-            } else if (version < 12) {
+            } else if (version <= 12) {
                 testAllMessageRoundTripsBetweenVersions(version, (short) 12, responseData, responseData);
             } else {
                 testEquivalentMessageRoundTrip(version, responseData);
