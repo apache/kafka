@@ -302,6 +302,7 @@ public class LogConfig extends AbstractConfig {
     }
 
     // visible for testing
+    @SuppressWarnings({"this-escape"})
     public LogConfig(Map<?, ?> props, Integer segmentBytes) {
         super(CONFIG, props, false);
         if (props.containsKey(TopicConfig.SEGMENT_BYTES_CONFIG)) {
