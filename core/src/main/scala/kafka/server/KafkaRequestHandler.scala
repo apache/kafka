@@ -95,7 +95,7 @@ class KafkaRequestHandler(
   time: Time,
   nodeName: String = "broker"
 ) extends Runnable with Logging {
-  this.logIdent = s"[Kafka Request Handler $id on ${nodeName.capitalize} $brokerId], "
+  this.logIdent = s"[Kafka Request Handler $id on ${nodeName.capitalize} $brokerId] "
   private val shutdownComplete = new CountDownLatch(1)
   private val requestLocal = RequestLocal.withThreadConfinedCaching
   @volatile private var stopped = false
