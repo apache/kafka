@@ -31,7 +31,7 @@ Building image and running tests using github actions
 
 - image-type - This is the type of image that we intend to build. This will be dropdown menu type selection in the workflow.
   - `jvm` image type is for official docker image (to be hosted on apache/kafka) as described in [KIP-975](https://cwiki.apache.org/confluence/display/KAFKA/KIP-975%3A+Docker+Image+for+Apache+Kafka)
-  - `native` image type is for graalvm based `native` kafka docker image (to be hosted on apache/kafka-native) as described in [KIP-974](https://cwiki.apache.org/confluence/display/KAFKA/KIP-974%3A+Docker+Image+for+GraalVM+based+Native+Kafka+Broker#KIP974:DockerImageforGraalVMbasedNativeKafkaBroker-ImageNaming)
+  - `native` image type is for graalvm based `native` kafka docker image (to be hosted on apache/kafka-native) as described in [KIP-974](https://cwiki.apache.org/confluence/display/KAFKA/KIP-974%3A+Docker+Image+for+GraalVM+based+Native+Kafka+Broker#KIP974:DockerImageforGraalVMbasedNativeKafkaBroker-ImageNaming). Or you can see [native/README.md](native/README.md) for more information.
 
 - Example(jvm):-
 To build and test a jvm image type ensuring kafka to be containerised should be https://archive.apache.org/dist/kafka/3.6.0/kafka_2.13-3.6.0.tgz (it is recommended to use scala 2.13 binary tarball), following inputs in github actions workflow are recommended.
