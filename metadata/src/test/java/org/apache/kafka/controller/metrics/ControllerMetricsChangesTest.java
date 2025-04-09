@@ -115,6 +115,17 @@ public class ControllerMetricsChangesTest {
     }
 
     @Test
+    public void testHandleBrokerInControlledShutdownFencing() {
+        ControllerMetricsChanges changes = new ControllerMetricsChanges();
+        ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(new MetricsRegistry()));
+        int brokerId = 1;
+        changes.handleBrokerChange(brokerRegistration(brokerId, false, true), brokerRegistration(brokerId, true, true), metrics);
+        assertEquals(1, changes.fencedBrokersChange());
+        assertEquals(-1, changes.activeBrokersChange());
+        assertEquals(1, metrics.brokerRegistrationState(brokerId));
+    }
+
+    @Test
     public void testHandleBrokerUnfencing() {
         ControllerMetricsChanges changes = new ControllerMetricsChanges();
         ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(new MetricsRegistry()));

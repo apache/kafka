@@ -96,13 +96,12 @@ class ControllerMetricsChanges {
             isFenced = next.fenced();
             isActive = !next.fenced();
             isInControlledShutdown = next.inControlledShutdown();
-            if (isActive) {
-                metrics.setBrokerRegistrationState(next.id(), 0);
-            } else {
+            if (isFenced) {
                 metrics.setBrokerRegistrationState(next.id(), 1);
-            }
-            if (isInControlledShutdown) {
+            } else if (isInControlledShutdown) {
                 metrics.setBrokerRegistrationState(next.id(), 2);
+            } else {
+                metrics.setBrokerRegistrationState(next.id(), 0);
             }
         }
         fencedBrokersChange += delta(wasFenced, isFenced);
@@ -112,7 +111,6 @@ class ControllerMetricsChanges {
         if (prev == null) {
             metrics.addBrokerRegistrationStateMetric(next.id());
         } else if (next == null) {
-            // TODO: should we remove? Or track unregistered brokers as -1?
             metrics.removeBrokerRegistrationStateMetric(prev.id());
             metrics.setBrokerRegistrationState(prev.id(), -1);
         }

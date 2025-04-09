@@ -82,6 +82,11 @@ public class ControllerMetadataMetricsTest {
         return new MetricName("kafka.controller", type, name, null, mBeanName);
     }
 
+    private static MetricName metricName(String type, String name, String scope) {
+        String mBeanName = String.format("kafka.controller:type=%s,name=%s,%s", type, name, scope);
+        return new MetricName("kafka.controller", type, name, scope, mBeanName);
+    }
+
     private void testIntGaugeMetric(
         Function<ControllerMetadataMetrics, Integer> metricsGetter,
         Function<MetricsRegistry, Integer> registryGetter,
@@ -149,7 +154,7 @@ public class ControllerMetadataMetricsTest {
             int brokerId = 1;
             metrics.addBrokerRegistrationStateMetric(brokerId);
             metrics.setBrokerRegistrationState(1, 0);
-            Gauge<Integer> registrationState = (Gauge<Integer>) registry.allMetrics().get(metricName("KafkaController", "BrokerRegistrationState.kafka-1"));
+            Gauge<Integer> registrationState = (Gauge<Integer>) registry.allMetrics().get(metricName("KafkaController", "BrokerRegistrationState", "brokerId=1"));
             assertEquals(0, registrationState.value());
             metrics.setBrokerRegistrationState(1, 2);
             assertEquals(2, registrationState.value());

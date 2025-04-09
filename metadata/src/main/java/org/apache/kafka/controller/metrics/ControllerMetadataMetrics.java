@@ -25,6 +25,7 @@ import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -48,7 +49,8 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
     private static final MetricName CONTROLLED_SHUTDOWN_BROKER_COUNT = getMetricName(
         "KafkaController", "ControlledShutdownBrokerCount"
     );
-    private static final String BROKER_REGISTRATION_STATE_PREFIX = "BrokerRegistrationState.kafka-";
+    private static final String BROKER_REGISTRATION_STATE_METRIC_NAME = "BrokerRegistrationState";
+    private static final String BROKER_ID_TAG = "brokerId";
     private static final MetricName GLOBAL_TOPIC_COUNT = getMetricName(
         "KafkaController", "GlobalTopicCount");
     private static final MetricName GLOBAL_PARTITION_COUNT = getMetricName(
@@ -150,7 +152,7 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
 
     public void addBrokerRegistrationStateMetric(int brokerId) {
         registry.ifPresent(r -> r.newGauge(
-            getMetricName("KafkaController", BROKER_REGISTRATION_STATE_PREFIX + brokerId),
+            getBrokerIdTagMetricName("KafkaController", BROKER_REGISTRATION_STATE_METRIC_NAME, brokerId),
             new Gauge<Integer>() {
                 @Override
                 public Integer value() {
@@ -162,7 +164,7 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
 
     public void removeBrokerRegistrationStateMetric(int brokerId) {
         registry.ifPresent(r -> r.removeMetric(
-            getMetricName("KafkaController", BROKER_REGISTRATION_STATE_PREFIX + brokerId)
+            getBrokerIdTagMetricName("KafkaController", BROKER_REGISTRATION_STATE_METRIC_NAME, brokerId)
         ));
     }
 
@@ -312,5 +314,11 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
 
     public static MetricName getMetricName(String type, String name) {
         return KafkaYammerMetrics.getMetricName("kafka.controller", type, name);
+    }
+
+    public static MetricName getBrokerIdTagMetricName(String type, String name, int brokerId) {
+        LinkedHashMap<String, String> brokerIdTag = new LinkedHashMap<>();
+        brokerIdTag.put(BROKER_ID_TAG, Integer.toString(brokerId));
+        return KafkaYammerMetrics.getMetricName("kafka.controller", type, name, brokerIdTag);
     }
 }
