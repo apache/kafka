@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.network.{DataPlaneAcceptor, SocketServer}
+import kafka.network.{SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 
@@ -284,8 +284,7 @@ class ControllerServer(
         controllerApis,
         time,
         config.numIoThreads,
-        s"RequestHandlerAvgIdlePercent",
-        DataPlaneAcceptor.ThreadPrefix,
+        "RequestHandlerAvgIdlePercent",
         "controller")
 
       // Set up the metadata cache publisher.

@@ -370,7 +370,6 @@ object SocketServer {
 }
 
 object DataPlaneAcceptor {
-  val ThreadPrefix: String = "data-plane"
   val ListenerReconfigurableConfigs: Set[String] = Set(SocketServerConfigs.NUM_NETWORK_THREADS_CONFIG)
 }
 
