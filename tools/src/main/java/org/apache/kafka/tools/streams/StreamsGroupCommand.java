@@ -48,11 +48,9 @@ public class StreamsGroupCommand {
         try {
             opts.checkArgs();
 
-            CommandLineUtils.maybePrintHelpOrVersion(opts, "This tool helps to list all streams groups.");
-
             // should have exactly one action
-            long actions = Stream.of(opts.listOpt).filter(opts.options::has).count();
-            if (actions != 1)
+            long numberOfActions = Stream.of(opts.listOpt).filter(opts.options::has).count();
+            if (numberOfActions != 1)
                 CommandLineUtils.printUsageAndExit(opts.parser, "Command must include exactly one action: --list.");
 
             run(opts);

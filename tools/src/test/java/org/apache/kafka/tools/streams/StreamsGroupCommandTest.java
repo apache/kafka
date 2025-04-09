@@ -30,11 +30,12 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 import joptsimple.OptionException;
 
@@ -44,7 +45,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
-public class StreamsGroupCommandUnitTest {
+public class StreamsGroupCommandTest {
 
     @Test
     public void testListStreamsGroups() throws Exception {
@@ -63,7 +64,7 @@ public class StreamsGroupCommandUnitTest {
         StreamsGroupCommand.StreamsGroupService service = getStreamsGroupService(cgcArgs, adminClient);
         Set<String> expectedGroups = new HashSet<>(Arrays.asList(firstGroup, secondGroup));
 
-        final Set[] foundGroups = new Set[]{Collections.emptySet()};
+        final Set[] foundGroups = new Set[]{Set.of()};
         TestUtils.waitForCondition(() -> {
             foundGroups[0] = new HashSet<>(service.listStreamsGroups());
             return Objects.equals(expectedGroups, foundGroups[0]);
@@ -75,7 +76,10 @@ public class StreamsGroupCommandUnitTest {
     public void testListWithUnrecognizedOption() {
         String bootstrapServer = "localhost:9092";
         String[] cgcArgs = new String[]{"--frivolous-nonsense", "--bootstrap-server", bootstrapServer, "--list"};
-        assertThrows(OptionException.class, () -> getStreamsGroupService(cgcArgs, new MockAdminClient()));
+        final Exception exception = assertThrows(OptionException.class, () -> {
+            getStreamsGroupService(cgcArgs, new MockAdminClient());
+        });
+        assertEquals("frivolous-nonsense is not a recognized option", exception.getMessage());
     }
 
     @Test
@@ -97,24 +101,24 @@ public class StreamsGroupCommandUnitTest {
                 new GroupListing(firstGroup, Optional.of(GroupType.STREAMS), "streams", Optional.of(GroupState.STABLE)),
                 new GroupListing(secondGroup, Optional.of(GroupType.STREAMS), "streams", Optional.of(GroupState.EMPTY))));
 
-        final Set[] foundListing = new Set[]{Collections.emptySet()};
+        final Set[] foundListing = new Set[]{Set.of()};
         TestUtils.waitForCondition(() -> {
             foundListing[0] = new HashSet<>(service.listStreamsGroupsInStates(new HashSet<>(Arrays.asList(GroupState.values()))));
             return Objects.equals(expectedListing, foundListing[0]);
         }, "Expected to show groups " + expectedListing + ", but found " + foundListing[0]);
 
         ListGroupsResult resultWithStableState = mock(ListGroupsResult.class);
-        when(resultWithStableState.all()).thenReturn(KafkaFuture.completedFuture(Collections.singletonList(
+        when(resultWithStableState.all()).thenReturn(KafkaFuture.completedFuture(List.of(
                 new GroupListing(firstGroup, Optional.of(GroupType.STREAMS), "streams", Optional.of(GroupState.STABLE))
         )));
         when(adminClient.listGroups(any(ListGroupsOptions.class))).thenReturn(resultWithStableState);
-        Set<GroupListing> expectedListingStable = Collections.singleton(
+        Set<GroupListing> expectedListingStable = Set.of(
                 new GroupListing(firstGroup, Optional.of(GroupType.STREAMS), "streams", Optional.of(GroupState.STABLE)));
 
-        foundListing[0] = Collections.emptySet();
+        foundListing[0] = Set.of();
 
         TestUtils.waitForCondition(() -> {
-            foundListing[0] = new HashSet<>(service.listStreamsGroupsInStates(Collections.singleton(GroupState.STABLE)));
+            foundListing[0] = new HashSet<>(service.listStreamsGroupsInStates(Set.of(GroupState.STABLE)));
             return Objects.equals(expectedListingStable, foundListing[0]);
         }, "Expected to show groups " + expectedListingStable + ", but found " + foundListing[0]);
         service.close();
@@ -123,44 +127,55 @@ public class StreamsGroupCommandUnitTest {
     @Test
     public void testGroupStatesFromString() {
         Set<GroupState> result = StreamsGroupCommand.groupStatesFromString("empty");
-        assertEquals(new HashSet<>(Collections.singletonList(GroupState.EMPTY)), result);
+        assertEquals(new HashSet<>(List.of(GroupState.EMPTY)), result);
         result = StreamsGroupCommand.groupStatesFromString("EMPTY");
-        assertEquals(new HashSet<>(Collections.singletonList(GroupState.EMPTY)), result);
+        assertEquals(new HashSet<>(List.of(GroupState.EMPTY)), result);
 
         result = StreamsGroupCommand.groupStatesFromString("notready");
-        assertEquals(new HashSet<>(Collections.singletonList(GroupState.NOT_READY)), result);
+        assertEquals(new HashSet<>(List.of(GroupState.NOT_READY)), result);
         result = StreamsGroupCommand.groupStatesFromString("notReady");
-        assertEquals(new HashSet<>(Collections.singletonList(GroupState.NOT_READY)), result);
+        assertEquals(new HashSet<>(List.of(GroupState.NOT_READY)), result);
 
         result = StreamsGroupCommand.groupStatesFromString("assigning");
-        assertEquals(new HashSet<>(Collections.singletonList(GroupState.ASSIGNING)), result);
+        assertEquals(new HashSet<>(List.of(GroupState.ASSIGNING)), result);
         result = StreamsGroupCommand.groupStatesFromString("ASSIGNING");
-        assertEquals(new HashSet<>(Collections.singletonList(GroupState.ASSIGNING)), result);
+        assertEquals(new HashSet<>(List.of(GroupState.ASSIGNING)), result);
 
         result = StreamsGroupCommand.groupStatesFromString("RECONCILING");
-        assertEquals(new HashSet<>(Collections.singletonList(GroupState.RECONCILING)), result);
+        assertEquals(new HashSet<>(List.of(GroupState.RECONCILING)), result);
         result = StreamsGroupCommand.groupStatesFromString("reconCILING");
-        assertEquals(new HashSet<>(Collections.singletonList(GroupState.RECONCILING)), result);
+        assertEquals(new HashSet<>(List.of(GroupState.RECONCILING)), result);
 
         result = StreamsGroupCommand.groupStatesFromString("STABLE");
-        assertEquals(new HashSet<>(Collections.singletonList(GroupState.STABLE)), result);
+        assertEquals(new HashSet<>(List.of(GroupState.STABLE)), result);
         result = StreamsGroupCommand.groupStatesFromString("stable");
-        assertEquals(new HashSet<>(Collections.singletonList(GroupState.STABLE)), result);
+        assertEquals(new HashSet<>(List.of(GroupState.STABLE)), result);
 
         result = StreamsGroupCommand.groupStatesFromString("DEAD");
-        assertEquals(new HashSet<>(Collections.singletonList(GroupState.DEAD)), result);
+        assertEquals(new HashSet<>(List.of(GroupState.DEAD)), result);
         result = StreamsGroupCommand.groupStatesFromString("dead");
-        assertEquals(new HashSet<>(Collections.singletonList(GroupState.DEAD)), result);
+        assertEquals(new HashSet<>(List.of(GroupState.DEAD)), result);
 
-        assertThrows(IllegalArgumentException.class, () -> StreamsGroupCommand.groupStatesFromString("preparingRebalance"));
+        final Set<String> validStates = new HashSet<>(Arrays.asList("Assigning", "Dead", "Empty", "Reconciling", "Stable", "NotReady"));
+        Exception exception = assertThrows(IllegalArgumentException.class, () -> StreamsGroupCommand.groupStatesFromString("preparingRebalance"), "");
+        final String[] exceptionMessage = exception.getMessage().split(" Valid states are: ");
+        assertEquals("Invalid state list 'preparingRebalance'.", exceptionMessage[0]);
+        assertEquals(Arrays.stream(exceptionMessage[1].split(","))
+            .map(String::trim)
+            .collect(Collectors.toSet()), validStates);
 
-        assertThrows(IllegalArgumentException.class, () -> StreamsGroupCommand.groupStatesFromString("completingRebalance"));
+        exception = assertThrows(IllegalArgumentException.class, () -> StreamsGroupCommand.groupStatesFromString("completingRebalance"));
+        assertEquals("Invalid state list 'completingRebalance'.", exception.getMessage().split(" Valid states are: ")[0]);
 
-        assertThrows(IllegalArgumentException.class, () -> StreamsGroupCommand.groupStatesFromString("bad, wrong"));
 
-        assertThrows(IllegalArgumentException.class, () -> StreamsGroupCommand.groupStatesFromString("  bad, Stable"));
+        exception = assertThrows(IllegalArgumentException.class, () -> StreamsGroupCommand.groupStatesFromString("bad, wrong"));
+        assertEquals("Invalid state list 'bad, wrong'.", exception.getMessage().split(" Valid states are: ")[0]);
 
-        assertThrows(IllegalArgumentException.class, () -> StreamsGroupCommand.groupStatesFromString("   ,   ,"));
+        exception = assertThrows(IllegalArgumentException.class, () -> StreamsGroupCommand.groupStatesFromString("  bad, Stable"));
+        assertEquals("Invalid state list '  bad, Stable'.", exception.getMessage().split(" Valid states are: ")[0]);
+
+        exception = assertThrows(IllegalArgumentException.class, () -> StreamsGroupCommand.groupStatesFromString("   ,   ,"));
+        assertEquals("Invalid state list '   ,   ,'.", exception.getMessage().split(" Valid states are: ")[0]);
     }
 
     StreamsGroupCommand.StreamsGroupService getStreamsGroupService(String[] args, Admin adminClient) {
