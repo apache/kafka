@@ -41,6 +41,7 @@ import joptsimple.OptionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
@@ -156,30 +157,29 @@ public class StreamsGroupCommandTest {
         result = StreamsGroupCommand.groupStatesFromString("dead");
         assertEquals(new HashSet<>(List.of(GroupState.DEAD)), result);
 
-        final Set<String> validStates = new HashSet<>(Arrays.asList("Assigning", "Dead", "Empty", "Reconciling", "Stable", "NotReady"));
-        Exception exception = assertThrows(IllegalArgumentException.class, () -> StreamsGroupCommand.groupStatesFromString("preparingRebalance"), "");
-        final String[] exceptionMessage = exception.getMessage().split(" Valid states are: ");
-        assertEquals("Invalid state list 'preparingRebalance'.", exceptionMessage[0]);
-        assertEquals(Arrays.stream(exceptionMessage[1].split(","))
-            .map(String::trim)
-            .collect(Collectors.toSet()), validStates);
-
-        exception = assertThrows(IllegalArgumentException.class, () -> StreamsGroupCommand.groupStatesFromString("completingRebalance"));
-        assertEquals("Invalid state list 'completingRebalance'.", exception.getMessage().split(" Valid states are: ")[0]);
-
-
-        exception = assertThrows(IllegalArgumentException.class, () -> StreamsGroupCommand.groupStatesFromString("bad, wrong"));
-        assertEquals("Invalid state list 'bad, wrong'.", exception.getMessage().split(" Valid states are: ")[0]);
-
-        exception = assertThrows(IllegalArgumentException.class, () -> StreamsGroupCommand.groupStatesFromString("  bad, Stable"));
-        assertEquals("Invalid state list '  bad, Stable'.", exception.getMessage().split(" Valid states are: ")[0]);
-
-        exception = assertThrows(IllegalArgumentException.class, () -> StreamsGroupCommand.groupStatesFromString("   ,   ,"));
-        assertEquals("Invalid state list '   ,   ,'.", exception.getMessage().split(" Valid states are: ")[0]);
+        assertThrow("preparingRebalance");
+        assertThrow("completingRebalance");
+        assertThrow("bad, wrong");
+        assertThrow("  bad, Stable");
+        assertThrow("   ,   ,");
     }
 
     StreamsGroupCommand.StreamsGroupService getStreamsGroupService(String[] args, Admin adminClient) {
         StreamsGroupCommandOptions opts = new StreamsGroupCommandOptions(args);
         return new StreamsGroupCommand.StreamsGroupService(opts, adminClient);
+    }
+
+    private static void assertThrow(final String wrongState) {
+        final Set<String> validStates = new HashSet<>(Arrays.asList("Assigning", "Dead", "Empty", "Reconciling", "Stable", "NotReady"));
+
+        final Exception exception = assertThrows(IllegalArgumentException.class, () -> StreamsGroupCommand.groupStatesFromString(wrongState));
+
+        assertTrue(exception.getMessage().contains(" Valid states are: "));
+
+        final String[] exceptionMessage = exception.getMessage().split(" Valid states are: ");
+        assertEquals("Invalid state list '" + wrongState + "'.", exceptionMessage[0]);
+        assertEquals(Arrays.stream(exceptionMessage[1].split(","))
+            .map(String::trim)
+            .collect(Collectors.toSet()), validStates);
     }
 }
