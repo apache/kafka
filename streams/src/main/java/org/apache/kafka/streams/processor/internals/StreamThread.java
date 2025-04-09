@@ -700,7 +700,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             streamsUncaughtExceptionHandler.accept(e, false);
             // Note: the above call currently rethrows the exception, so nothing below this line will be executed
         } finally {
-            completeShutdown(cleanRun, false);
+            completeShutdown(cleanRun, true);
         }
     }
 

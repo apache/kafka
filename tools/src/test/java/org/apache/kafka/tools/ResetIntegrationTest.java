@@ -49,7 +49,6 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.is
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -256,9 +255,8 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
         streams.cleanUp();
 
-        // Reset would fail since long session timeout has been configured
         final boolean cleanResult = tryCleanGlobal(false, null, null, appID);
-        assertFalse(cleanResult);
+        assertTrue(cleanResult);
 
         // Reset will success with --force, it will force delete active members on broker side
         cleanGlobal(false, "--force", null, appID);
