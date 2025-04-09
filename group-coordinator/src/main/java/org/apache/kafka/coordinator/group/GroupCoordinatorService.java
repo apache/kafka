@@ -1101,6 +1101,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     /**
      * Processes input shareGroupErrMap by retaining only those which do not contain an error.
      * Also updates the result collection input arg with share groups containing errors.
+     *
      * @param shareGroupErrMap      Map keyed on share groupId and value as the error (NONE for no error).
      * @param groupList             Entire list of groups (all types)
      * @param deletableGroupResults Collection of responses for delete groups request.
