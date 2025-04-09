@@ -913,6 +913,8 @@ class KafkaServer(
           CoreUtils.swallow(socketServer.shutdown(), this)
         if (metrics != null)
           CoreUtils.swallow(metrics.close(), this)
+        if (kafkaYammerMetrics != null)
+          CoreUtils.swallow(kafkaYammerMetrics.shutdownJmxReporter(), this)
         if (brokerTopicStats != null)
           CoreUtils.swallow(brokerTopicStats.close(), this)
 

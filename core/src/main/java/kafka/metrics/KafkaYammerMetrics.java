@@ -50,7 +50,10 @@ public class KafkaYammerMetrics implements Reconfigurable {
 
     private KafkaYammerMetrics() {
         jmxReporter.start();
-        Runtime.getRuntime().addShutdownHook(new Thread(jmxReporter::shutdown));
+    }
+
+    public void shutdownJmxReporter() {
+        jmxReporter.shutdown();
     }
 
     @Override
