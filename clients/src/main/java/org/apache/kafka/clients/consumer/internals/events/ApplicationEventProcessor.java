@@ -431,8 +431,7 @@ public class ApplicationEventProcessor implements EventProcessor<ApplicationEven
         if (requestManagers.consumerHeartbeatRequestManager.isPresent()) {
             CompletableFuture<Void> future = requestManagers.consumerHeartbeatRequestManager.get().membershipManager().leaveGroup();
             future.whenComplete(complete(event.future()));
-        }
-        else if (requestManagers.streamsGroupHeartbeatRequestManager.isPresent()) {
+        } else if (requestManagers.streamsGroupHeartbeatRequestManager.isPresent()) {
             CompletableFuture<Void> future = requestManagers.streamsGroupHeartbeatRequestManager.get().membershipManager().leaveGroup();
             future.whenComplete(complete(event.future()));
         } else {
