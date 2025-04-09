@@ -99,7 +99,7 @@ fail due to code changes. You can just run:
  
     ./gradlew processMessages processTestMessages
 
-See [Apache Kafka Message Definitions](/clients/src/main/resources/common/message/README.md) for details on Apache Kafka message protocol
+See [Apache Kafka Message Definitions](/clients/src/main/resources/common/message/README.md) for details on Apache Kafka message protocol.
 
 ### Running a Kafka broker
 
@@ -113,7 +113,7 @@ Using docker image:
 
     docker run -p 9092:9092 apache/kafka:3.7.0
 
-See [docker/README.md] for detailed information.
+See [docker/README.md](docker/README.md) for detailed information.
 
 ### Cleaning the build ###
     ./gradlew clean
@@ -269,7 +269,7 @@ See [tests/README.md](tests/README.md).
 
 ### Using Trogdor for testing ###
 
-We Trogdor as a test framework for Apache Kafka. You can use it to run benchmarks and other workloads.
+We use Trogdor as a test framework for Apache Kafka. You can use it to run benchmarks and other workloads.
 
 See [trogdor/README.md](trogdor/README.md).
 
