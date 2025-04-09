@@ -1383,6 +1383,11 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public TerminateTransactionResult forceTerminateTransaction(String transactionalId, TerminateTransactionOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
     public ListTransactionsResult listTransactions(ListTransactionsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
@@ -1421,6 +1426,11 @@ public class MockAdminClient extends AdminClient {
 
     @Override
     public synchronized ListShareGroupOffsetsResult listShareGroupOffsets(Map<String, ListShareGroupOffsetsSpec> groupSpecs, ListShareGroupOffsetsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public synchronized DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteShareGroupOffsetsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 

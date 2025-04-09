@@ -26,7 +26,7 @@ import org.apache.kafka.common.protocol.Errors;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -98,7 +98,7 @@ public class FindCoordinatorResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         if (!data.coordinators().isEmpty()) {
-            Map<Errors, Integer> errorCounts = new HashMap<>();
+            Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
             for (Coordinator coordinator : data.coordinators()) {
                 updateErrorCounts(errorCounts, Errors.forCode(coordinator.errorCode()));
             }

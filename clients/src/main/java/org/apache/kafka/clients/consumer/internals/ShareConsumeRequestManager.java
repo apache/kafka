@@ -256,13 +256,19 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         return new PollResult(requests);
     }
 
-    public void fetch(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
+    public void fetch(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap,
+                      Map<TopicIdPartition, NodeAcknowledgements> controlRecordAcknowledgements) {
         if (!fetchMoreRecords) {
             log.debug("Fetch more data");
             fetchMoreRecords = true;
         }
 
-        // The acknowledgements sent via ShareFetch are stored in this map.
+        // Process both acknowledgement maps and sends them in the next ShareFetch.
+        processAcknowledgementsMap(acknowledgementsMap);
+        processAcknowledgementsMap(controlRecordAcknowledgements);
+    }
+
+    private void processAcknowledgementsMap(Map<TopicIdPartition, NodeAcknowledgements> acknowledgementsMap) {
         acknowledgementsMap.forEach((tip, nodeAcks) -> {
             int nodeId = nodeAcks.nodeId();
             Map<TopicIdPartition, Acknowledgements> currentNodeAcknowledgementsMap = fetchAcknowledgementsToSend.get(nodeId);
@@ -965,9 +971,11 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
                                       AtomicBoolean shouldRetry) {
         if (partitionError.exception() != null) {
             boolean retry = false;
-            if (partitionError == Errors.NOT_LEADER_OR_FOLLOWER || partitionError == Errors.FENCED_LEADER_EPOCH) {
+            if (partitionError == Errors.NOT_LEADER_OR_FOLLOWER || partitionError == Errors.FENCED_LEADER_EPOCH || partitionError == Errors.UNKNOWN_TOPIC_OR_PARTITION) {
                 // If the leader has changed, there's no point in retrying the operation because the acquisition locks
                 // will have been released.
+                // If the topic or partition has been deleted, we do not retry the failed acknowledgements.
+                // Instead, these records will be re-delivered once they get timed out on the broker.
                 updateLeaderInfoMap(partitionData, partitionsWithUpdatedLeaderInfo, partitionError, tip.topicPartition());
             } else if (partitionError.exception() instanceof RetriableException) {
                 retry = true;
@@ -1473,5 +1481,9 @@ public class ShareConsumeRequestManager implements RequestManager, MemberStateLi
         public String toString() {
             return super.toString().toLowerCase(Locale.ROOT);
         }
+    }
+
+    Map<TopicIdPartition, Acknowledgements> getFetchAcknowledgementsToSend(Integer nodeId) {
+        return fetchAcknowledgementsToSend.get(nodeId);
     }
 }

@@ -31,7 +31,7 @@ import org.junit.jupiter.params.ParameterizedTest;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
@@ -62,7 +62,7 @@ public class LeaveGroupResponseTest {
 
     @Test
     public void testConstructorWithMemberResponses() {
-        Map<Errors, Integer> expectedErrorCounts = new HashMap<>();
+        Map<Errors, Integer> expectedErrorCounts = new EnumMap<>(Errors.class);
         expectedErrorCounts.put(Errors.NONE, 1); // top level
         expectedErrorCounts.put(Errors.UNKNOWN_MEMBER_ID, 1);
         expectedErrorCounts.put(Errors.FENCED_INSTANCE_ID, 1);
@@ -111,9 +111,9 @@ public class LeaveGroupResponseTest {
                 .setThrottleTimeMs(throttleTimeMs);
         for (short version : ApiKeys.LEAVE_GROUP.allVersions()) {
             LeaveGroupResponse primaryResponse = LeaveGroupResponse.parse(
-                MessageUtil.toByteBuffer(responseData, version), version);
+                MessageUtil.toByteBufferAccessor(responseData, version).buffer(), version);
             LeaveGroupResponse secondaryResponse = LeaveGroupResponse.parse(
-                MessageUtil.toByteBuffer(responseData, version), version);
+                MessageUtil.toByteBufferAccessor(responseData, version).buffer(), version);
 
             assertEquals(primaryResponse, primaryResponse);
             assertEquals(primaryResponse, secondaryResponse);
@@ -130,7 +130,7 @@ public class LeaveGroupResponseTest {
             .setThrottleTimeMs(throttleTimeMs);
 
         for (short version : ApiKeys.LEAVE_GROUP.allVersions()) {
-            ByteBuffer buffer = MessageUtil.toByteBuffer(data, version);
+            ByteBuffer buffer = MessageUtil.toByteBufferAccessor(data, version).buffer();
             LeaveGroupResponse leaveGroupResponse = LeaveGroupResponse.parse(buffer, version);
             assertEquals(expectedErrorCounts, leaveGroupResponse.errorCounts());
 

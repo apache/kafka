@@ -3662,9 +3662,8 @@ public class FetcherTest {
         LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData = fetchResponse.responseData(topicNames, version);
         assertEquals(topicNames.size(), responseData.size());
         responseData.forEach((topicPartition, partitionData) -> assertEquals(records, partitionData.records()));
-        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> nonResponseData = fetchResponse.responseData(emptyMap(), version);
-        assertEquals(emptyMap().size(), nonResponseData.size());
-        nonResponseData.forEach((topicPartition, partitionData) -> assertEquals(MemoryRecords.EMPTY, partitionData.records()));
+        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> nonResponseData = fetchResponse.responseData(Map.of(), version);
+        assertTrue(nonResponseData.isEmpty());
     }
 
     private OffsetsForLeaderEpochResponse prepareOffsetsForLeaderEpochResponse(

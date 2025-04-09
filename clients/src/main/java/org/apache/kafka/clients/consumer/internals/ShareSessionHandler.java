@@ -180,7 +180,7 @@ public class ShareSessionHandler {
         return ShareFetchRequest.Builder.forConsumer(
                 groupId, nextMetadata, fetchConfig.maxWaitMs,
                 fetchConfig.minBytes, fetchConfig.maxBytes, fetchConfig.maxPollRecords,
-                added, removed, acknowledgementBatches);
+                fetchConfig.maxPollRecords, added, removed, acknowledgementBatches);
     }
 
     public ShareAcknowledgeRequest.Builder newShareAcknowledgeBuilder(String groupId, FetchConfig fetchConfig) {

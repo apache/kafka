@@ -29,7 +29,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, UnifiedLog}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogCleanerManager, LogConfig, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.extension.ExtensionContext
 import org.junit.jupiter.params.ParameterizedTest
@@ -86,7 +86,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     // and make sure its gone from checkpoint file
     cleaner.logs.remove(topicPartitions(0))
     cleaner.updateCheckpoints(logDir, partitionToRemove = Option(topicPartitions(0)))
-    val checkpoints = new OffsetCheckpointFile(new File(logDir, cleaner.cleanerManager.offsetCheckpointFile), null).read()
+    val checkpoints = new OffsetCheckpointFile(new File(logDir, LogCleanerManager.OFFSET_CHECKPOINT_FILE), null).read()
     // we expect partition 0 to be gone
     assertFalse(checkpoints.containsKey(topicPartitions(0)))
   }
@@ -318,7 +318,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     // TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG
     val topicPartition = new TopicPartition(topic, partitionId)
     cleaner.awaitCleaned(topicPartition, firstDirty)
-    val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints(topicPartition)
+    val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints.get(topicPartition)
     assertTrue(lastCleaned >= firstDirty, s"log cleaner should have processed up to offset $firstDirty, but lastCleaned=$lastCleaned")
   }
 

@@ -14,36 +14,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.purgatory;
+package org.apache.kafka.storage.internals.log;
 
-import java.util.Objects;
+import org.apache.kafka.common.KafkaException;
 
 /**
- * Used by delayed-sync operations
+ * An exception indicating a failure during log cleaning operations.
+ * This exception typically wraps the root cause of the cleaning failure and provides
+ * additional context about the partition and log being cleaned.
  */
-public class GroupSyncKey implements DelayedOperationKey {
+public class LogCleaningException extends KafkaException {
+    public final UnifiedLog log;
 
-    private final String groupId;
+    public LogCleaningException(UnifiedLog log, String message, Throwable cause) {
+        super(message, cause);
 
-    public GroupSyncKey(String groupId) {
-        this.groupId = groupId;
-    }
-
-    @Override
-    public String keyLabel() {
-        return "sync-" + groupId;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        GroupSyncKey that = (GroupSyncKey) o;
-        return Objects.equals(groupId, that.groupId);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(groupId);
+        this.log = log;
     }
 }

@@ -39,7 +39,6 @@ import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
@@ -399,7 +398,7 @@ public class MockLog implements ReplicatedLog {
 
         long maxOffset = maxOffsetOpt.orElse(endOffset().offset());
         if (startOffset == maxOffset) {
-            return Collections.emptyList();
+            return List.of();
         }
 
         return batches.stream()
@@ -514,7 +513,7 @@ public class MockLog implements ReplicatedLog {
             );
         }
 
-        long baseOffset = read(snapshotId.offset(), Isolation.COMMITTED).startOffsetMetadata().offset();
+        long baseOffset = read(snapshotId.offset(), Isolation.COMMITTED).startOffsetMetadata.offset();
         if (snapshotId.offset() != baseOffset) {
             throw new IllegalArgumentException(
                 String.format(
