@@ -24,7 +24,7 @@ import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.Meter;
 
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -82,7 +82,7 @@ public class RequestMetrics {
     private final Map<String, String> tags;
     private final ConcurrentMap<Short, Meter> requestRateInternal = new ConcurrentHashMap<>();
     private final ConcurrentMap<DeprecatedRequestRateKey, Meter> deprecatedRequestRateInternal = new ConcurrentHashMap<>();
-    private final Map<Errors, ErrorMeter> errorMeters = new HashMap<>();
+    private final Map<Errors, ErrorMeter> errorMeters = new EnumMap<>(Errors.class);
 
     public RequestMetrics(String name) {
         this.name = name;
