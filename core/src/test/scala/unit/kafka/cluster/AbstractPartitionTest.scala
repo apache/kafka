@@ -69,7 +69,7 @@ class AbstractPartitionTest {
     TestUtils.clearYammerMetrics()
 
     val logProps = createLogProperties(Map.empty)
-    logConfig = new LogConfig(logProps)
+    logConfig = new LogConfig(logProps, logProps.get(TopicConfig.SEGMENT_BYTES_CONFIG).asInstanceOf[Int])
     configRepository = MockConfigRepository.forTopic(topicPartition.topic, logProps)
 
     tmpDir = TestUtils.tempDir()

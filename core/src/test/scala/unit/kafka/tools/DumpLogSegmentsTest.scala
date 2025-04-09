@@ -538,23 +538,26 @@ class DumpLogSegmentsTest {
           setPartitionId(0).setIsr(util.Arrays.asList(0, 1, 2)), 0.toShort)
     )
 
+    val metadataLogConfig = new MetadataLogConfig(
+      100 * 1024,
+      100 * 1024,
+      10 * 1000,
+      100 * 1024,
+      60 * 1000,
+      KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+      KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
+      ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
+      1
+    )
+
     val metadataLog = KafkaMetadataLog(
       KafkaRaftServer.MetadataPartition,
       KafkaRaftServer.MetadataTopicId,
       logDir,
       time,
       time.scheduler,
-      new MetadataLogConfig(
-        100 * 1024,
-        100 * 1024,
-        10 * 1000,
-        100 * 1024,
-        60 * 1000,
-        KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-        KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-        ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
-        1
-      )
+      metadataLogConfig,
+      metadataLogConfig.logSegmentBytes()
     )
 
     val lastContainedLogTimestamp = 10000

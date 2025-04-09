@@ -65,7 +65,7 @@ class LogManagerTest {
   logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
   logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 4096: java.lang.Integer)
   logProps.put(TopicConfig.RETENTION_MS_CONFIG, maxLogAgeMs: java.lang.Integer)
-  val logConfig = new LogConfig(logProps)
+  val logConfig = new LogConfig(logProps, 1024)
   var logDir: File = _
   var logManager: LogManager = _
   val name = "kafka"
