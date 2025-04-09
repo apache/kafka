@@ -43,6 +43,8 @@ import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData.{DescribedGroup, TopicPartitions}
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsResponseData.{DeleteShareGroupOffsetsResponsePartition, DeleteShareGroupOffsetsResponseTopic}
 import org.apache.kafka.common.message.DescribeShareGroupOffsetsRequestData.{DescribeShareGroupOffsetsRequestGroup, DescribeShareGroupOffsetsRequestTopic}
 import org.apache.kafka.common.message.DescribeShareGroupOffsetsResponseData.{DescribeShareGroupOffsetsResponseGroup, DescribeShareGroupOffsetsResponsePartition, DescribeShareGroupOffsetsResponseTopic}
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource => IAlterConfigsResource, AlterConfigsResourceCollection => IAlterConfigsResourceCollection, AlterableConfig => IAlterableConfig, AlterableConfigCollection => IAlterableConfigCollection}
@@ -11807,6 +11809,358 @@ class KafkaApisTest extends Logging {
     future.complete(describeShareGroupOffsetsResponseGroup)
     val response = verifyNoThrottling[DescribeShareGroupOffsetsResponse](requestChannelRequest)
     assertEquals(describeShareGroupOffsetsResponse, response.data)
+  }
+
+  @Test
+  def testDeleteShareGroupOffsetsReturnsUnsupportedVersion(): Unit = {
+    val deleteShareGroupOffsetsRequest = new DeleteShareGroupOffsetsRequestData()
+      .setGroupId("group")
+      .setTopics(util.List.of(new DeleteShareGroupOffsetsRequestTopic().setTopicName("topic-1").setPartitions(util.List.of(1))))
+
+    val requestChannelRequest = buildRequest(new DeleteShareGroupOffsetsRequest.Builder(deleteShareGroupOffsetsRequest, true).build())
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val response = verifyNoThrottling[DeleteShareGroupOffsetsResponse](requestChannelRequest)
+    response.data.responses.forEach(topic => topic.partitions.forEach(partition => assertEquals(Errors.UNSUPPORTED_VERSION.code, partition.errorCode)))
+  }
+
+  @Test
+  def testDeleteShareGroupOffsetsRequestsGroupAuthorizationFailed(): Unit = {
+    val deleteShareGroupOffsetsRequest = new DeleteShareGroupOffsetsRequestData()
+      .setGroupId("group")
+      .setTopics(util.List.of(new DeleteShareGroupOffsetsRequestTopic().setTopicName("topic-1").setPartitions(util.List.of(1))))
+
+    val requestChannelRequest = buildRequest(new DeleteShareGroupOffsetsRequest.Builder(deleteShareGroupOffsetsRequest, true).build)
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(util.List.of(AuthorizationResult.DENIED))
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    kafkaApis = createKafkaApis(
+      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
+      authorizer = Some(authorizer),
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val response = verifyNoThrottling[DeleteShareGroupOffsetsResponse](requestChannelRequest)
+    assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code, response.data.errorCode)
+  }
+
+  @Test
+  def testDeleteShareGroupOffsetsRequestsTopicAuthorizationFailed(): Unit = {
+
+    def buildExpectedActionsTopic(topic: String): util.List[Action] = {
+      val pattern = new ResourcePattern(ResourceType.TOPIC, topic, PatternType.LITERAL)
+      val action = new Action(AclOperation.READ, pattern, 1, true, true)
+      Collections.singletonList(action)
+    }
+
+    def buildExpectedActionsGroup(topic: String): util.List[Action] = {
+      val pattern = new ResourcePattern(ResourceType.GROUP, topic, PatternType.LITERAL)
+      val action = new Action(AclOperation.DELETE, pattern, 1, true, true)
+      Collections.singletonList(action)
+    }
+
+    val groupId = "group"
+
+    val topicName1 = "topic-1"
+    val topicId1 = Uuid.randomUuid
+    val topicName2 = "topic-2"
+    val topicId2 = Uuid.randomUuid
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    addTopicToMetadataCache(topicName1, 2, topicId = topicId1)
+    addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
+
+    val deleteShareGroupOffsetsRequestTopic1 = new DeleteShareGroupOffsetsRequestTopic()
+      .setTopicName(topicName1)
+      .setPartitions(util.List.of(0, 1))
+
+    val deleteShareGroupOffsetsRequestTopic2 = new DeleteShareGroupOffsetsRequestTopic()
+      .setTopicName(topicName2)
+      .setPartitions(util.List.of(0, 1))
+
+    val deleteShareGroupOffsetsRequestData = new DeleteShareGroupOffsetsRequestData()
+      .setGroupId(groupId)
+      .setTopics(util.List.of(deleteShareGroupOffsetsRequestTopic1, deleteShareGroupOffsetsRequestTopic2))
+
+    val deleteShareGroupOffsetsGroupCoordinatorRequestData = new DeleteShareGroupOffsetsRequestData()
+      .setGroupId(groupId)
+      .setTopics(util.List.of(deleteShareGroupOffsetsRequestTopic2))
+
+    val requestChannelRequest = buildRequest(new DeleteShareGroupOffsetsRequest.Builder(deleteShareGroupOffsetsRequestData, true).build)
+
+    val resultFuture = new CompletableFuture[DeleteShareGroupOffsetsResponseData]
+    when(groupCoordinator.deleteShareGroupOffsets(
+      requestChannelRequest.context,
+      deleteShareGroupOffsetsGroupCoordinatorRequestData
+    )).thenReturn(resultFuture)
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(buildExpectedActionsGroup(groupId))))
+      .thenReturn(util.List.of(AuthorizationResult.ALLOWED))
+    when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(buildExpectedActionsTopic(topicName1))))
+      .thenReturn(util.List.of(AuthorizationResult.DENIED))
+    when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(buildExpectedActionsTopic(topicName2))))
+      .thenReturn(util.List.of(AuthorizationResult.ALLOWED))
+
+    kafkaApis = createKafkaApis(
+      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
+      authorizer = Some(authorizer)
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val deleteShareGroupOffsetsResponseData = new DeleteShareGroupOffsetsResponseData()
+      .setErrorMessage(null)
+      .setErrorCode(Errors.NONE.code())
+      .setResponses(util.List.of(
+        new DeleteShareGroupOffsetsResponseTopic()
+          .setTopicName(topicName2)
+          .setTopicId(topicId2)
+          .setPartitions(util.List.of(
+            new DeleteShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorMessage(null)
+              .setErrorCode(Errors.NONE.code()),
+            new DeleteShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorMessage(null)
+              .setErrorCode(Errors.NONE.code())
+          ))
+      ))
+
+    val expectedResponseTopics: util.List[DeleteShareGroupOffsetsResponseTopic] = new util.ArrayList[DeleteShareGroupOffsetsResponseTopic]()
+
+    expectedResponseTopics.add(
+      new DeleteShareGroupOffsetsResponseTopic()
+        .setTopicName(topicName1)
+        .setPartitions(util.List.of(
+          new DeleteShareGroupOffsetsResponsePartition()
+            .setPartitionIndex(0)
+            .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+            .setErrorMessage(Errors.TOPIC_AUTHORIZATION_FAILED.message()),
+          new DeleteShareGroupOffsetsResponsePartition()
+            .setPartitionIndex(1)
+            .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+            .setErrorMessage(Errors.TOPIC_AUTHORIZATION_FAILED.message())
+        ))
+    )
+
+    deleteShareGroupOffsetsResponseData.responses.forEach{ topic => {
+      expectedResponseTopics.add(topic)
+    }}
+
+    val expectedResponseData: DeleteShareGroupOffsetsResponseData = new DeleteShareGroupOffsetsResponseData()
+      .setErrorCode(Errors.NONE.code())
+      .setErrorMessage(null)
+      .setResponses(expectedResponseTopics)
+
+    resultFuture.complete(deleteShareGroupOffsetsResponseData)
+    val response = verifyNoThrottling[DeleteShareGroupOffsetsResponse](requestChannelRequest)
+    assertEquals(expectedResponseData, response.data)
+  }
+
+  @Test
+  def testDeleteShareGroupOffsetsRequestSuccess(): Unit = {
+    val topicName1 = "topic-1"
+    val topicId1 = Uuid.randomUuid
+    val topicName2 = "topic-2"
+    val topicId2 = Uuid.randomUuid
+    val topicName3 = "topic-3"
+    val topicId3 = Uuid.randomUuid
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
+    addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
+    addTopicToMetadataCache(topicName3, 3, topicId = topicId3)
+
+    val deleteShareGroupOffsetsRequestTopic1 = new DeleteShareGroupOffsetsRequestTopic()
+      .setTopicName(topicName1)
+      .setPartitions(util.List.of(0))
+
+    val deleteShareGroupOffsetsRequestTopic2 = new DeleteShareGroupOffsetsRequestTopic()
+      .setTopicName(topicName2)
+      .setPartitions(util.List.of(0, 1))
+
+    val deleteShareGroupOffsetsRequestTopic3 = new DeleteShareGroupOffsetsRequestTopic()
+      .setTopicName(topicName3)
+      .setPartitions(util.List.of(0, 1, 2))
+
+    val deleteShareGroupOffsetsRequestData = new DeleteShareGroupOffsetsRequestData()
+      .setGroupId("group")
+      .setTopics(util.List.of(deleteShareGroupOffsetsRequestTopic1, deleteShareGroupOffsetsRequestTopic2, deleteShareGroupOffsetsRequestTopic3))
+
+    val requestChannelRequest = buildRequest(new DeleteShareGroupOffsetsRequest.Builder(deleteShareGroupOffsetsRequestData, true).build)
+
+    val resultFuture = new CompletableFuture[DeleteShareGroupOffsetsResponseData]
+    when(groupCoordinator.deleteShareGroupOffsets(
+      requestChannelRequest.context,
+      deleteShareGroupOffsetsRequestData
+    )).thenReturn(resultFuture)
+
+    kafkaApis = createKafkaApis(
+      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val deleteShareGroupOffsetsResponseData = new DeleteShareGroupOffsetsResponseData()
+      .setErrorMessage(null)
+      .setErrorCode(Errors.NONE.code())
+      .setResponses(util.List.of(
+        new DeleteShareGroupOffsetsResponseTopic()
+          .setTopicName(topicName1)
+          .setTopicId(topicId1)
+          .setPartitions(util.List.of(
+            new DeleteShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorMessage(null)
+              .setErrorCode(Errors.NONE.code())
+          )),
+        new DeleteShareGroupOffsetsResponseTopic()
+          .setTopicName(topicName2)
+          .setTopicId(topicId2)
+          .setPartitions(util.List.of(
+            new DeleteShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorMessage(null)
+              .setErrorCode(Errors.NONE.code()),
+            new DeleteShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorMessage(null)
+              .setErrorCode(Errors.NONE.code())
+          )),
+        new DeleteShareGroupOffsetsResponseTopic()
+          .setTopicName(topicName3)
+          .setTopicId(topicId3)
+          .setPartitions(util.List.of(
+            new DeleteShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(0)
+              .setErrorMessage(null)
+              .setErrorCode(Errors.NONE.code()),
+            new DeleteShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(1)
+              .setErrorMessage(null)
+              .setErrorCode(Errors.NONE.code()),
+            new DeleteShareGroupOffsetsResponsePartition()
+              .setPartitionIndex(2)
+              .setErrorMessage(null)
+              .setErrorCode(Errors.NONE.code())
+          ))
+      ))
+
+    resultFuture.complete(deleteShareGroupOffsetsResponseData)
+    val response = verifyNoThrottling[DeleteShareGroupOffsetsResponse](requestChannelRequest)
+    assertEquals(deleteShareGroupOffsetsResponseData, response.data)
+  }
+
+  @Test
+  def testDeleteShareGroupOffsetsRequestGroupCoordinatorThrowsError(): Unit = {
+    val topicName1 = "topic-1"
+    val topicId1 = Uuid.randomUuid
+    val topicName2 = "topic-2"
+    val topicId2 = Uuid.randomUuid
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
+    addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
+
+    val deleteShareGroupOffsetsRequestTopic1 = new DeleteShareGroupOffsetsRequestTopic()
+      .setTopicName(topicName1)
+      .setPartitions(util.List.of(0))
+
+    val deleteShareGroupOffsetsRequestTopic2 = new DeleteShareGroupOffsetsRequestTopic()
+      .setTopicName(topicName2)
+      .setPartitions(util.List.of(0, 1))
+
+    val deleteShareGroupOffsetsRequestData = new DeleteShareGroupOffsetsRequestData()
+      .setGroupId("group")
+      .setTopics(util.List.of(deleteShareGroupOffsetsRequestTopic1, deleteShareGroupOffsetsRequestTopic2))
+
+    val requestChannelRequest = buildRequest(new DeleteShareGroupOffsetsRequest.Builder(deleteShareGroupOffsetsRequestData, true).build)
+
+    when(groupCoordinator.deleteShareGroupOffsets(
+      requestChannelRequest.context,
+      deleteShareGroupOffsetsRequestData
+    )).thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception))
+
+    kafkaApis = createKafkaApis(
+      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val deleteShareGroupOffsetsResponseData = new DeleteShareGroupOffsetsResponseData()
+      .setErrorMessage(Errors.UNKNOWN_SERVER_ERROR.message())
+      .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+
+    val response = verifyNoThrottling[DeleteShareGroupOffsetsResponse](requestChannelRequest)
+    assertEquals(deleteShareGroupOffsetsResponseData, response.data)
+  }
+
+  @Test
+  def testDeleteShareGroupOffsetsRequestGroupCoordinatorErrorResponse(): Unit = {
+    val topicName1 = "topic-1"
+    val topicId1 = Uuid.randomUuid
+    val topicName2 = "topic-2"
+    val topicId2 = Uuid.randomUuid
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
+    addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
+
+    val deleteShareGroupOffsetsRequestTopic1 = new DeleteShareGroupOffsetsRequestTopic()
+      .setTopicName(topicName1)
+      .setPartitions(util.List.of(0))
+
+    val deleteShareGroupOffsetsRequestTopic2 = new DeleteShareGroupOffsetsRequestTopic()
+      .setTopicName(topicName2)
+      .setPartitions(util.List.of(0, 1))
+
+    val deleteShareGroupOffsetsRequestData = new DeleteShareGroupOffsetsRequestData()
+      .setGroupId("group")
+      .setTopics(util.List.of(deleteShareGroupOffsetsRequestTopic1, deleteShareGroupOffsetsRequestTopic2))
+
+    val requestChannelRequest = buildRequest(new DeleteShareGroupOffsetsRequest.Builder(deleteShareGroupOffsetsRequestData, true).build)
+
+    val groupCoordinatorResponse: DeleteShareGroupOffsetsResponseData = new DeleteShareGroupOffsetsResponseData()
+      .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+      .setErrorMessage(Errors.UNKNOWN_SERVER_ERROR.message())
+
+    when(groupCoordinator.deleteShareGroupOffsets(
+      requestChannelRequest.context,
+      deleteShareGroupOffsetsRequestData
+    )).thenReturn(CompletableFuture.completedFuture(groupCoordinatorResponse))
+
+    kafkaApis = createKafkaApis(
+      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val deleteShareGroupOffsetsResponseData = new DeleteShareGroupOffsetsResponseData()
+      .setErrorMessage(Errors.UNKNOWN_SERVER_ERROR.message())
+      .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+
+    val response = verifyNoThrottling[DeleteShareGroupOffsetsResponse](requestChannelRequest)
+    assertEquals(deleteShareGroupOffsetsResponseData, response.data)
+  }
+
+  @Test
+  def testDeleteShareGroupOffsetsRequestEmptyTopicsSuccess(): Unit = {
+    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+
+    val deleteShareGroupOffsetsRequest = new DeleteShareGroupOffsetsRequestData()
+      .setGroupId("group")
+
+    val requestChannelRequest = buildRequest(new DeleteShareGroupOffsetsRequest.Builder(deleteShareGroupOffsetsRequest, true).build)
+
+    val resultFuture = new CompletableFuture[DeleteShareGroupOffsetsResponseData]
+    kafkaApis = createKafkaApis(
+      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
+    )
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val deleteShareGroupOffsetsResponse = new DeleteShareGroupOffsetsResponseData()
+
+    resultFuture.complete(deleteShareGroupOffsetsResponse)
+    val response = verifyNoThrottling[DeleteShareGroupOffsetsResponse](requestChannelRequest)
+    assertEquals(deleteShareGroupOffsetsResponse, response.data)
   }
 
   @Test

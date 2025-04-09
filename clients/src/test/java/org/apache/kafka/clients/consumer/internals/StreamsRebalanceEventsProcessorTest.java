@@ -74,7 +74,8 @@ public class StreamsRebalanceEventsProcessorTest {
     @Test
     public void shouldInvokeOnTasksAssignedCallback() {
         final StreamsRebalanceEventsProcessor rebalanceEventsProcessor =
-            new StreamsRebalanceEventsProcessor(rebalanceData, rebalanceCallbacks);
+            new StreamsRebalanceEventsProcessor(rebalanceData);
+        rebalanceEventsProcessor.setRebalanceCallbacks(rebalanceCallbacks);
         rebalanceEventsProcessor.setApplicationEventHandler(applicationEventHandler);
         final Set<StreamsRebalanceData.TaskId> activeTasks = Set.of(
             new StreamsRebalanceData.TaskId(SUBTOPOLOGY_0, 0),
@@ -109,7 +110,8 @@ public class StreamsRebalanceEventsProcessorTest {
     @Test
     public void shouldReThrowErrorFromOnTasksAssignedCallbackAndPassErrorToBackground() {
         final StreamsRebalanceEventsProcessor rebalanceEventsProcessor =
-            new StreamsRebalanceEventsProcessor(rebalanceData, rebalanceCallbacks);
+            new StreamsRebalanceEventsProcessor(rebalanceData);
+        rebalanceEventsProcessor.setRebalanceCallbacks(rebalanceCallbacks);
         rebalanceEventsProcessor.setApplicationEventHandler(applicationEventHandler);
         final Set<StreamsRebalanceData.TaskId> activeTasks = Set.of(
             new StreamsRebalanceData.TaskId(SUBTOPOLOGY_0, 0),
@@ -148,7 +150,8 @@ public class StreamsRebalanceEventsProcessorTest {
     @Test
     public void shouldInvokeOnTasksRevokedCallback() {
         final StreamsRebalanceEventsProcessor rebalanceEventsProcessor =
-            new StreamsRebalanceEventsProcessor(rebalanceData, rebalanceCallbacks);
+            new StreamsRebalanceEventsProcessor(rebalanceData);
+        rebalanceEventsProcessor.setRebalanceCallbacks(rebalanceCallbacks);
         rebalanceEventsProcessor.setApplicationEventHandler(applicationEventHandler);
         final Set<StreamsRebalanceData.TaskId> activeTasks = Set.of(
             new StreamsRebalanceData.TaskId(SUBTOPOLOGY_0, 0),
@@ -172,7 +175,8 @@ public class StreamsRebalanceEventsProcessorTest {
     @Test
     public void shouldReThrowErrorFromOnTasksRevokedCallbackAndPassErrorToBackground() {
         final StreamsRebalanceEventsProcessor rebalanceEventsProcessor =
-            new StreamsRebalanceEventsProcessor(rebalanceData, rebalanceCallbacks);
+            new StreamsRebalanceEventsProcessor(rebalanceData);
+        rebalanceEventsProcessor.setRebalanceCallbacks(rebalanceCallbacks);
         rebalanceEventsProcessor.setApplicationEventHandler(applicationEventHandler);
         final Set<StreamsRebalanceData.TaskId> activeTasks = Set.of(
             new StreamsRebalanceData.TaskId(SUBTOPOLOGY_0, 0),
@@ -199,7 +203,8 @@ public class StreamsRebalanceEventsProcessorTest {
     @Test
     public void shouldInvokeOnAllTasksLostCallback() {
         final StreamsRebalanceEventsProcessor rebalanceEventsProcessor =
-            new StreamsRebalanceEventsProcessor(rebalanceData, rebalanceCallbacks);
+            new StreamsRebalanceEventsProcessor(rebalanceData);
+        rebalanceEventsProcessor.setRebalanceCallbacks(rebalanceCallbacks);
         rebalanceEventsProcessor.setApplicationEventHandler(applicationEventHandler);
         final Set<StreamsRebalanceData.TaskId> activeTasks = Set.of(
             new StreamsRebalanceData.TaskId(SUBTOPOLOGY_0, 0),
@@ -238,7 +243,8 @@ public class StreamsRebalanceEventsProcessorTest {
     @Test
     public void shouldReThrowErrorFromOnAllTasksLostCallbackAndPassErrorToBackground() {
         final StreamsRebalanceEventsProcessor rebalanceEventsProcessor =
-            new StreamsRebalanceEventsProcessor(rebalanceData, rebalanceCallbacks);
+            new StreamsRebalanceEventsProcessor(rebalanceData);
+        rebalanceEventsProcessor.setRebalanceCallbacks(rebalanceCallbacks);
         rebalanceEventsProcessor.setApplicationEventHandler(applicationEventHandler);
         final Set<StreamsRebalanceData.TaskId> activeTasks = Set.of(
             new StreamsRebalanceData.TaskId(SUBTOPOLOGY_0, 0),
