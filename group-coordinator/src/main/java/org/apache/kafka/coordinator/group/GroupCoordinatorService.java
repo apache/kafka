@@ -1067,18 +1067,17 @@ public class GroupCoordinatorService implements GroupCoordinator {
         });
 
         groupsByTopicPartition.forEach((topicPartition, groupList) -> {
-            CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future = deleteShareGroups(topicPartition, groupList)
-                .thenCompose(groupErrMap -> {
-                    DeleteGroupsResponseData.DeletableGroupResultCollection collection = new DeleteGroupsResponseData.DeletableGroupResultCollection();
-                    List<String> retainedGroupIds = deleteCandidateGroupIds(groupErrMap, groupList, collection);
-                    if (retainedGroupIds.isEmpty()) {
-                        return CompletableFuture.completedFuture(collection);
-                    }
+            CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future = deleteShareGroups(topicPartition, groupList).thenCompose(groupErrMap -> {
+                DeleteGroupsResponseData.DeletableGroupResultCollection collection = new DeleteGroupsResponseData.DeletableGroupResultCollection();
+                List<String> retainedGroupIds = deleteCandidateGroupIds(groupErrMap, groupList, collection);
+                if (retainedGroupIds.isEmpty()) {
+                    return CompletableFuture.completedFuture(collection);
+                }
 
-                    return handleDeleteGroups(context, topicPartition, retainedGroupIds)
-                        .whenComplete((resp, __) -> resp.forEach(result -> collection.add(result.duplicate())))
-                        .thenApply(__ -> collection);
-                });
+                return handleDeleteGroups(context, topicPartition, retainedGroupIds)
+                    .whenComplete((resp, __) -> resp.forEach(result -> collection.add(result.duplicate())))
+                    .thenApply(__ -> collection);
+            });
             // deleteShareGroups has its own exceptionally block, so we don't need one here.
 
             // This future object has the following stages:

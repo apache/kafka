@@ -579,7 +579,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * <p></p>
      * The groupIds are first filtered by type to restrict the list to share groups.
      * @param groupIds - A list of groupIds as string
-     * @return Map keyed on groupId and value pair (req, error)
+     * @return {@link CoordinatorResult } containing a Map keyed on groupId and value pair (req, error) and related coordinator records.
      */
     public CoordinatorResult<Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>>, CoordinatorRecord> sharePartitionDeleteRequests(List<String> groupIds) {
         Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>> responseMap = new HashMap<>();
