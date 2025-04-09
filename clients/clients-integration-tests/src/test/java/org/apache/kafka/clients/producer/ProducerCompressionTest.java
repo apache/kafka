@@ -132,16 +132,14 @@ class ProducerCompressionTest {
                 assertEquals(offset, record.offset(), errorMessage(compression));
             } else if (flag.get() == 1) {
                 //  verify message with key, without header
-                assertEquals(String.valueOf(messageValue.length()), new String(record.key()),
-                    errorMessage(compression));
+                assertEquals(String.valueOf(messageValue.length()), new String(record.key()), errorMessage(compression));
                 assertEquals(messageValue, new String(record.value()), errorMessage(compression));
                 assertEquals(0, record.headers().toArray().length, errorMessage(compression));
                 assertEquals(now, record.timestamp(), errorMessage(compression));
                 assertEquals(offset, record.offset(), errorMessage(compression));
             } else if (flag.get() == 2) {
                 //  verify message with key and header
-                assertEquals(String.valueOf(messageValue.length()), new String(record.key()),
-                    errorMessage(compression));
+                assertEquals(String.valueOf(messageValue.length()), new String(record.key()), errorMessage(compression));
                 assertEquals(messageValue, new String(record.value()), errorMessage(compression));
                 assertEquals(1, record.headers().toArray().length, errorMessage(compression));
                 assertEquals(headerArr[0], record.headers().toArray()[0], errorMessage(compression));
