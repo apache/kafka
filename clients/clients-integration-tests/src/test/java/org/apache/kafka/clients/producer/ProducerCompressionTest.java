@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.producer;
 
 
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.TopicPartition;
@@ -60,19 +61,15 @@ class ProducerCompressionTest {
      * Compressed messages should be able to sent and consumed correctly
      */
     @ClusterTest
-    void testCompression(ClusterInstance cluster) {
+    void testCompression(ClusterInstance cluster) throws ExecutionException, InterruptedException {
         for (CompressionType compression : CompressionType.values()) {
-            try {
-                processCompressionTest(cluster, compression);
-            } catch (InterruptedException | ExecutionException e) {
-                fail(e);
-            }
+            processCompressionTest(cluster, compression);
         }
     }
 
 
     void processCompressionTest(ClusterInstance cluster, CompressionType compression) throws InterruptedException,
-            ExecutionException {
+        ExecutionException {
         String compressionTopic = topicName + "_" + compression.name;
         cluster.createTopic(compressionTopic, 1, (short) 1);
         Map<String, Object> producerProps = new HashMap<>();
@@ -94,24 +91,25 @@ class ProducerCompressionTest {
             messages.forEach(message -> {
                 // 1. send message without key and header
                 responses.add(producer.send(new ProducerRecord<>(compressionTopic, null, now, null,
-                        message.getBytes())));
+                    message.getBytes())));
                 // 2. send message with key, without header
                 responses.add(producer.send(new ProducerRecord<>(compressionTopic, null, now,
-                        String.valueOf(message.length()).getBytes(), message.getBytes())));
+                    String.valueOf(message.length()).getBytes(), message.getBytes())));
                 // 3. send message with key and header
                 responses.add(producer.send(new ProducerRecord<>(compressionTopic, null, now,
-                        String.valueOf(message.length()).getBytes(), message.getBytes(), headers)));
+                    String.valueOf(message.length()).getBytes(), message.getBytes(), headers)));
             });
             for (int offset = 0; offset < responses.size(); offset++) {
                 assertEquals(offset, responses.get(offset).get().offset(), compression.name);
             }
             verifyConsumerRecords(consumer, messages, now, headerArr, partition, compressionTopic, compression.name);
-            verifyConsumerRecords(classicConsumer, messages, now, headerArr, partition, compressionTopic, compression.name);
+            verifyConsumerRecords(classicConsumer, messages, now, headerArr, partition, compressionTopic,
+                compression.name);
         } finally {
             //  This consumer close very slowly, which may cause the entire test to time out, and we can't wait for 
             //  it to  auto close 
-            consumer.close(Duration.ofSeconds(1));
-            classicConsumer.close(Duration.ofSeconds(1));
+            consumer.close(CloseOptions.timeout(Duration.ofSeconds(1)));
+            classicConsumer.close(CloseOptions.timeout(Duration.ofSeconds(1)));
         }
     }
 
@@ -135,7 +133,7 @@ class ProducerCompressionTest {
             } else if (flag.get() == 1) {
                 //  verify message with key, without header
                 assertEquals(String.valueOf(messageValue.length()), new String(record.key()),
-                        errorMessage(compression));
+                    errorMessage(compression));
                 assertEquals(messageValue, new String(record.value()), errorMessage(compression));
                 assertEquals(0, record.headers().toArray().length, errorMessage(compression));
                 assertEquals(now, record.timestamp(), errorMessage(compression));
@@ -143,7 +141,7 @@ class ProducerCompressionTest {
             } else if (flag.get() == 2) {
                 //  verify message with key and header
                 assertEquals(String.valueOf(messageValue.length()), new String(record.key()),
-                        errorMessage(compression));
+                    errorMessage(compression));
                 assertEquals(messageValue, new String(record.value()), errorMessage(compression));
                 assertEquals(1, record.headers().toArray().length, errorMessage(compression));
                 assertEquals(headerArr[0], record.headers().toArray()[0], errorMessage(compression));
@@ -169,10 +167,10 @@ class ProducerCompressionTest {
     private String messageValue(int length) {
         Random random = new Random();
         return IntStream.range(0, length)
-                .map(i -> random.nextInt(TestUtils.LETTERS_AND_DIGITS.length()))
-                .mapToObj(TestUtils.LETTERS_AND_DIGITS::charAt)
-                .map(String::valueOf)
-                .collect(Collectors.joining());
+            .map(i -> random.nextInt(TestUtils.LETTERS_AND_DIGITS.length()))
+            .mapToObj(TestUtils.LETTERS_AND_DIGITS::charAt)
+            .map(String::valueOf)
+            .collect(Collectors.joining());
     }
 
     private String errorMessage(String compression) {

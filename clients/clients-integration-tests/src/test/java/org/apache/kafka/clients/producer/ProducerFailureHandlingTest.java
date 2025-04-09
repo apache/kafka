@@ -154,13 +154,6 @@ public class ProducerFailureHandlingTest {
 
     /**
      * With incorrect broker-list the future metadata should return ExecutionException caused by TimeoutException
-     * <p>
-     * TODO: other exceptions that can be thrown in ExecutionException:
-     *    UnknownTopicOrPartitionException
-     *    NotLeaderOrFollowerException
-     *    LeaderNotAvailableException
-     *    CorruptRecordException
-     *    TimeoutException
      */
     @ClusterTest
     void testWrongBrokerList(ClusterInstance clusterInstance) throws InterruptedException {

@@ -23,6 +23,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.ProducerState;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
@@ -66,14 +67,14 @@ import static org.apache.kafka.test.TestUtils.assertFutureThrows;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.fail;
 
 @ClusterTestDefaults(
     brokers = 3,
     serverProperties = {
         @ClusterConfigProperty(key = AUTO_CREATE_TOPICS_ENABLE_CONFIG, value = "false"),
         // Set a smaller value for the number of partitions for the __consumer_offsets topic
-        // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively long.
+        // so that the creation of that topic/partition(s) and subsequent leader assignment doesn't take relatively 
+        // long.
         @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
         @ClusterConfigProperty(key = TRANSACTIONS_TOPIC_PARTITIONS_CONFIG, value = "3"),
         @ClusterConfigProperty(key = TRANSACTIONS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "2"),
@@ -83,9 +84,11 @@ import static org.junit.jupiter.api.Assertions.fail;
         @ClusterConfigProperty(key = "unclean.leader.election.enable", value = "false"),
         @ClusterConfigProperty(key = AUTO_LEADER_REBALANCE_ENABLE_CONFIG, value = "false"),
         @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "0"),
-        @ClusterConfigProperty(key = TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, value = "200"),
+        @ClusterConfigProperty(key = TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, value = 
+            "200"),
         @ClusterConfigProperty(key = TRANSACTIONAL_ID_EXPIRATION_MS_CONFIG, value = "5000"),
-        @ClusterConfigProperty(key = TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_CONFIG, value = "500"),
+        @ClusterConfigProperty(key = TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_CONFIG, value =
+            "500"),
         @ClusterConfigProperty(key = PRODUCER_ID_EXPIRATION_MS_CONFIG, value = "10000"),
         @ClusterConfigProperty(key = PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_CONFIG, value = "500")
     }
@@ -99,7 +102,7 @@ public class ProducerIdExpirationTest {
     private final ConfigResource configResource = new ConfigResource(ConfigResource.Type.BROKER, "");
 
     @ClusterTest
-    void testProducerIdExpirationWithNoTransactions(ClusterInstance cluster) throws InterruptedException {
+    void testProducerIdExpirationWithNoTransactions(ClusterInstance cluster) throws InterruptedException, ExecutionException {
         cluster.createTopic(topic1, numPartitions, replicationFactor);
         Producer<byte[], byte[]> producer = cluster.producer(Map.of(ENABLE_IDEMPOTENCE_CONFIG, true));
         // Send records to populate producer state cache.
@@ -120,7 +123,7 @@ public class ProducerIdExpirationTest {
     }
 
     @ClusterTest
-    void testTransactionAfterTransactionIdExpiresButProducerIdRemains(ClusterInstance cluster) throws InterruptedException {
+    void testTransactionAfterTransactionIdExpiresButProducerIdRemains(ClusterInstance cluster) throws InterruptedException, ExecutionException {
         cluster.createTopic(topic1, numPartitions, replicationFactor);
         Producer<byte[], byte[]> producer = cluster.producer(transactionalProducerConfig());
         producer.initTransactions();
@@ -133,8 +136,13 @@ public class ProducerIdExpirationTest {
 
         try (Admin admin = cluster.admin()) {
             // Ensure producer IDs are added.
-            TestUtils.waitUntilTrue(() -> producerStates(admin).size() == 1, () -> "Producer IDs were not added.",
-                    DEFAULT_MAX_WAIT_MS, 100);
+            TestUtils.waitUntilTrue(() -> {
+                try {
+                    return producerStates(admin).size() == 1;
+                } catch (ExecutionException | InterruptedException e) {
+                    throw new RuntimeException(e);
+                }
+            }, () -> "Producer IDs were not added.", DEFAULT_MAX_WAIT_MS, 100);
 
             producer.abortTransaction();
 
@@ -148,9 +156,9 @@ public class ProducerIdExpirationTest {
             // due to the expired transactional ID, resulting in a fatal error.
             producer.beginTransaction();
             Future<RecordMetadata> failedFuture =
-                    producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "1", "1", false));
+                producer.send(TestUtils.producerRecordWithExpectedTransactionStatus(topic1, 0, "1", "1", false));
             TestUtils.waitUntilTrue(failedFuture::isDone, () -> "Producer future never completed.",
-                    DEFAULT_MAX_WAIT_MS, 100);
+                DEFAULT_MAX_WAIT_MS, 100);
             assertFutureThrows(InvalidPidMappingException.class, failedFuture);
 
             // Assert that aborting the transaction throws a KafkaException due to the fatal error.
@@ -175,7 +183,7 @@ public class ProducerIdExpirationTest {
             consumeRecords(consumer, 2, DEFAULT_MAX_WAIT_MS).foreach(TestUtils::assertCommittedAndGetValue);
         } finally {
             producer.close();
-            consumer.close(Duration.ofSeconds(1));
+            consumer.close(CloseOptions.timeout(Duration.ofSeconds(1)));
         }
     }
 
@@ -198,7 +206,7 @@ public class ProducerIdExpirationTest {
 
             cluster.brokers().values().forEach(broker -> {
                 TestUtils.waitUntilTrue(() -> broker.logManager().producerStateManagerConfig().producerIdExpirationMs() == 100000,
-                        () -> "Configuration was not updated.", DEFAULT_MAX_WAIT_MS, 100);
+                    () -> "Configuration was not updated.", DEFAULT_MAX_WAIT_MS, 100);
             });
             // Send more records to send producer ID back to brokers.
             producer.send(new ProducerRecord<>(topic1, 0, null, "key".getBytes(), "value".getBytes()));
@@ -220,7 +228,7 @@ public class ProducerIdExpirationTest {
             cluster.waitForReadyBrokers();
             cluster.brokers().values().forEach(broker -> {
                 TestUtils.waitUntilTrue(() -> broker.logManager().producerStateManagerConfig().producerIdExpirationMs() == 100,
-                        () -> "Configuration was not updated.", DEFAULT_MAX_WAIT_MS, 100);
+                    () -> "Configuration was not updated.", DEFAULT_MAX_WAIT_MS, 100);
             });
 
             // Ensure producer ID expires quickly again.
@@ -234,7 +242,13 @@ public class ProducerIdExpirationTest {
     }
 
     private void waitProducerIdExpire(Admin admin, long timeout) {
-        TestUtils.waitUntilTrue(() -> producerStates(admin).isEmpty(), () -> "Producer ID expired.", timeout, 100);
+        TestUtils.waitUntilTrue(() -> {
+            try {
+                return producerStates(admin).isEmpty();
+            } catch (ExecutionException | InterruptedException e) {
+                throw new RuntimeException(e);
+            }
+        }, () -> "Producer ID expired.", timeout, 100);
     }
 
     private Map<ConfigResource, Collection<AlterConfigOp>> producerIdExpirationConfig(String configValue) {
@@ -248,8 +262,8 @@ public class ProducerIdExpirationTest {
             boolean removedTransactionState = false;
             try {
                 admin.describeTransactions(List.of(transactionalId))
-                        .description(transactionalId)
-                        .get();
+                    .description(transactionalId)
+                    .get();
             } catch (Exception e) {
                 removedTransactionState = e.getCause() instanceof TransactionalIdNotFoundException;
             }
@@ -259,19 +273,15 @@ public class ProducerIdExpirationTest {
 
     private Map<String, Object> transactionalProducerConfig() {
         return Map.of(
-                ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId,
-                ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true,
-                ProducerConfig.ACKS_CONFIG, "all");
+            ProducerConfig.TRANSACTIONAL_ID_CONFIG, transactionalId,
+            ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true,
+            ProducerConfig.ACKS_CONFIG, "all");
     }
 
-    private List<ProducerState> producerStates(Admin admin) {
-        try {
-            return admin.describeProducers(Collections.singletonList(tp0))
-                    .partitionResult(tp0)
-                    .get()
-                    .activeProducers();
-        } catch (InterruptedException | ExecutionException e) {
-            return fail(e);
-        }
+    private List<ProducerState> producerStates(Admin admin) throws ExecutionException, InterruptedException {
+        return admin.describeProducers(Collections.singletonList(tp0))
+            .partitionResult(tp0)
+            .get()
+            .activeProducers();
     }
 }
