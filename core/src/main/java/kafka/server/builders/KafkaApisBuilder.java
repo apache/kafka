@@ -21,7 +21,6 @@ import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.server.ApiVersionManager;
 import kafka.server.AutoTopicCreationManager;
-import kafka.server.DelegationTokenManager;
 import kafka.server.FetchManager;
 import kafka.server.ForwardingManager;
 import kafka.server.KafkaApis;
@@ -65,7 +64,6 @@ public class KafkaApisBuilder {
     private BrokerTopicStats brokerTopicStats = null;
     private String clusterId = "clusterId";
     private Time time = Time.SYSTEM;
-    private DelegationTokenManager tokenManager = null;
     private ApiVersionManager apiVersionManager = null;
     private ClientMetricsManager clientMetricsManager = null;
     private Optional<ShareCoordinator> shareCoordinator = Optional.empty();
@@ -166,11 +164,6 @@ public class KafkaApisBuilder {
         return this;
     }
 
-    public KafkaApisBuilder setTokenManager(DelegationTokenManager tokenManager) {
-        this.tokenManager = tokenManager;
-        return this;
-    }
-
     public KafkaApisBuilder setApiVersionManager(ApiVersionManager apiVersionManager) {
         this.apiVersionManager = apiVersionManager;
         return this;
@@ -226,7 +219,7 @@ public class KafkaApisBuilder {
                              brokerTopicStats,
                              clusterId,
                              time,
-                             tokenManager,
+                             null,
                              apiVersionManager,
                              clientMetricsManager,
                              groupConfigManager);

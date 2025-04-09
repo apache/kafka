@@ -203,7 +203,6 @@ public class KRaftMetadataRequestBenchmark {
                 setBrokerTopicStats(brokerTopicStats).
                 setClusterId("clusterId").
                 setTime(Time.SYSTEM).
-                setTokenManager(null).
                 setApiVersionManager(new SimpleApiVersionManager(
                         ApiMessageType.ListenerType.BROKER,
                         false,

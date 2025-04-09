@@ -1173,14 +1173,15 @@ class KafkaConfigTest {
     assertEquals(123L, config.logFlushIntervalMs)
     assertEquals(CompressionType.SNAPPY, config.groupCoordinatorConfig.offsetTopicCompressionType)
     assertEquals(Sensor.RecordingLevel.DEBUG.toString, config.metricRecordingLevel)
-    assertEquals(false, config.tokenAuthEnabled)
-    assertEquals(7 * 24 * 60L * 60L * 1000L, config.delegationTokenMaxLifeMs)
-    assertEquals(24 * 60L * 60L * 1000L, config.delegationTokenExpiryTimeMs)
-    assertEquals(1 * 60L * 1000L * 60, config.delegationTokenExpiryCheckIntervalMs)
+    val delegationTokenManagerConfigs = new DelegationTokenManagerConfigs(config)
+    assertEquals(false, delegationTokenManagerConfigs.tokenAuthEnabled)
+    assertEquals(7 * 24 * 60L * 60L * 1000L, delegationTokenManagerConfigs.delegationTokenMaxLifeMs)
+    assertEquals(24 * 60L * 60L * 1000L, delegationTokenManagerConfigs.delegationTokenExpiryTimeMs)
+    assertEquals(1 * 60L * 1000L * 60, delegationTokenManagerConfigs.delegationTokenExpiryCheckIntervalMs)
 
     defaults.setProperty(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG, "1234567890")
-    val config1 = KafkaConfig.fromProps(defaults)
-    assertEquals(true, config1.tokenAuthEnabled)
+    val delegationTokenManagerConfigs1 = new DelegationTokenManagerConfigs(KafkaConfig.fromProps(defaults))
+    assertEquals(true, delegationTokenManagerConfigs1.tokenAuthEnabled)
   }
 
   @Test
