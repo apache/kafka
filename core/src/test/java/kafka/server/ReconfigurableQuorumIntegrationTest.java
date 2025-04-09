@@ -29,10 +29,10 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -119,7 +119,7 @@ public class ReconfigurableQuorumIntegrationTest {
             try (Admin admin = Admin.create(cluster.clientProperties())) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
-                    assertEquals(new HashSet<>(Arrays.asList(3000, 3001, 3002)), voters.keySet());
+                    assertEquals(new HashSet<>(List.of(3000, 3001, 3002)), voters.keySet());
                     for (int replicaId : new int[] {3000, 3001, 3002}) {
                         assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
                     }
@@ -144,7 +144,7 @@ public class ReconfigurableQuorumIntegrationTest {
             try (Admin admin = Admin.create(cluster.clientProperties())) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
-                    assertEquals(new HashSet<>(Arrays.asList(3000, 3001, 3002, 3003)), voters.keySet());
+                    assertEquals(new HashSet<>(List.of(3000, 3001, 3002, 3003)), voters.keySet());
                     for (int replicaId : new int[] {3000, 3001, 3002, 3003}) {
                         assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
                     }
@@ -153,7 +153,7 @@ public class ReconfigurableQuorumIntegrationTest {
                 admin.removeRaftVoter(3000, dirId).all().get();
                 TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
-                    assertEquals(new HashSet<>(Arrays.asList(3001, 3002, 3003)), voters.keySet());
+                    assertEquals(new HashSet<>(List.of(3001, 3002, 3003)), voters.keySet());
                     for (int replicaId : new int[] {3001, 3002, 3003}) {
                         assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
                     }
@@ -161,7 +161,7 @@ public class ReconfigurableQuorumIntegrationTest {
                 admin.addRaftVoter(
                     3000,
                     dirId,
-                    Collections.singleton(new RaftVoterEndpoint("CONTROLLER", "example.com", 8080))
+                    Set.of(new RaftVoterEndpoint("CONTROLLER", "example.com", 8080))
                 ).all().get();
             }
         }

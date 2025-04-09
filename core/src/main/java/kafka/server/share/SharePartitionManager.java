@@ -63,7 +63,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -352,12 +351,12 @@ public class SharePartitionManager implements AutoCloseable {
             log.error("Share session error for {}: no such share session found", key);
             return FutureUtils.failedFuture(Errors.SHARE_SESSION_NOT_FOUND.exception());
         } else {
-            log.debug("Removed share session with key " + key);
+            log.debug("Removed share session with key {}", key);
         }
 
         // Additionally release the acquired records for the respective member.
         if (topicIdPartitions.isEmpty()) {
-            return CompletableFuture.completedFuture(Collections.emptyMap());
+            return CompletableFuture.completedFuture(Map.of());
         }
 
         Map<TopicIdPartition, CompletableFuture<Throwable>> futuresMap = new HashMap<>();
@@ -537,7 +536,7 @@ public class SharePartitionManager implements AutoCloseable {
         ShareSessionKey key = shareSessionKey(groupId, memberId);
         ShareSession shareSession = cache.get(key);
         if (shareSession == null) {
-            return Collections.emptyList();
+            return List.of();
         }
         List<TopicIdPartition> cachedTopicIdPartitions = new ArrayList<>();
         shareSession.partitionMap().forEach(cachedSharePartition -> cachedTopicIdPartitions.add(
@@ -570,7 +569,7 @@ public class SharePartitionManager implements AutoCloseable {
     void processShareFetch(ShareFetch shareFetch) {
         if (shareFetch.topicIdPartitions().isEmpty()) {
             // If there are no partitions to fetch then complete the future with an empty map.
-            shareFetch.maybeComplete(Collections.emptyMap());
+            shareFetch.maybeComplete(Map.of());
             return;
         }
 
@@ -633,7 +632,7 @@ public class SharePartitionManager implements AutoCloseable {
 
         // If all the partitions in the request errored out, then complete the fetch request with an exception.
         if (shareFetch.errorInAllPartitions()) {
-            shareFetch.maybeComplete(Collections.emptyMap());
+            shareFetch.maybeComplete(Map.of());
             // Do not proceed with share fetch processing as all the partitions errored out.
             return;
         }
@@ -654,7 +653,7 @@ public class SharePartitionManager implements AutoCloseable {
                     // to identify the respective share partition.
                     SharePartitionListener listener = new SharePartitionListener(sharePartitionKey, replicaManager, partitionCacheMap);
                     replicaManager.maybeAddListener(sharePartitionKey.topicIdPartition().topicPartition(), listener);
-                    SharePartition partition = new SharePartition(
+                    return new SharePartition(
                             sharePartitionKey.groupId(),
                             sharePartitionKey.topicIdPartition(),
                             leaderEpoch,
@@ -668,7 +667,6 @@ public class SharePartitionManager implements AutoCloseable {
                             groupConfigManager,
                             listener
                     );
-                    return partition;
                 });
     }
 
