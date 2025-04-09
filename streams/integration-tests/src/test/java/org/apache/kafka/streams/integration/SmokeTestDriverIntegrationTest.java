@@ -116,10 +116,10 @@ public class SmokeTestDriverIntegrationTest {
     // (1) 10 min timeout, (2) 30 tries of polling without getting any data
     @ParameterizedTest
     @CsvSource({
-//        "false, false, true",
+        "false, false, true",
         "true, false, true",
-//        "false, false, false",
-//        "true, false, false",
+        "false, false, false",
+        "true, false, false"
     })
     public void shouldWorkWithRebalance(
         final boolean stateUpdaterEnabled,
