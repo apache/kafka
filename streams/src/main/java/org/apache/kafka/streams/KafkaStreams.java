@@ -1498,7 +1498,7 @@ public class KafkaStreams implements AutoCloseable {
             });
 
             if (leaveGroup) {
-                processStreamThread(streamThreadLeaveConsumerGroup(timeoutMs));
+                processStreamThread(thread -> thread.closeConsumer(timeoutMs, true));
             }
 
             log.info("Shutdown {} stream threads complete", numStreamThreads);
@@ -1638,33 +1638,6 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         return close(Optional.of(timeoutMs), options.leaveGroup);
-    }
-
-    private Consumer<StreamThread> streamThreadLeaveConsumerGroup(final long remainingTimeMs) {
-        return thread -> {
-            final Optional<String> groupInstanceId = thread.groupInstanceID();
-            if (groupInstanceId.isPresent()) {
-                log.debug("Sending leave group trigger to removing instance from consumer group: {}.",
-                    groupInstanceId.get());
-                final MemberToRemove memberToRemove = new MemberToRemove(groupInstanceId.get());
-                final Collection<MemberToRemove> membersToRemove = Collections.singletonList(memberToRemove);
-
-                final RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroupResult = adminClient
-                    .removeMembersFromConsumerGroup(
-                        applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG),
-                        new RemoveMembersFromConsumerGroupOptions(membersToRemove)
-                    );
-
-                try {
-                    removeMembersFromConsumerGroupResult.memberResult(memberToRemove)
-                        .get(remainingTimeMs, TimeUnit.MILLISECONDS);
-                } catch (final Exception e) {
-                    final String msg = String.format("Could not remove static member %s from consumer group %s.",
-                                                     groupInstanceId.get(), applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG));
-                    log.error(msg, e);
-                }
-            }
-        };
     }
 
     /**

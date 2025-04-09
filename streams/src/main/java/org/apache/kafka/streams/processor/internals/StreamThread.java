@@ -1789,6 +1789,13 @@ public class StreamThread extends Thread implements ProcessingThread {
         return result;
     }
 
+    public void closeConsumer(final long timeoutMs, final boolean leaveGroup) {
+        final CloseOptions.GroupMembershipOperation operation = leaveGroup ? LEAVE_GROUP : REMAIN_IN_GROUP;
+        final CloseOptions closeOptions = CloseOptions.timeout(Duration.ofMillis(timeoutMs))
+            .withGroupMembershipOperation(operation);
+        mainConsumer.close(closeOptions);
+    }
+
     // the following are for testing only
     void setNow(final long now) {
         this.now = now;
