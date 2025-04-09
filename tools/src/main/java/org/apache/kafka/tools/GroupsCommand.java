@@ -17,10 +17,6 @@
 
 package org.apache.kafka.tools;
 
-import joptsimple.ArgumentAcceptingOptionSpec;
-import joptsimple.OptionException;
-import joptsimple.OptionSpec;
-import joptsimple.OptionSpecBuilder;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.GroupListing;
@@ -29,6 +25,7 @@ import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandDefaultOptions;
 import org.apache.kafka.server.util.CommandLineUtils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -41,6 +38,11 @@ import java.util.Properties;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Stream;
+
+import joptsimple.ArgumentAcceptingOptionSpec;
+import joptsimple.OptionException;
+import joptsimple.OptionSpec;
+import joptsimple.OptionSpecBuilder;
 
 public class GroupsCommand {
     private static final Logger LOG = LoggerFactory.getLogger(GroupsCommand.class);
