@@ -14,36 +14,26 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.purgatory;
 
-import java.util.Objects;
+package org.apache.kafka.clients.admin;
+
+import org.apache.kafka.common.KafkaFuture;
 
 /**
- * Used by delayed-join operations
+ * The result of the {@link Admin#forceTerminateTransaction(String)} call.
  */
-public class GroupJoinKey implements DelayedOperationKey {
+public class TerminateTransactionResult {
 
-    private final String groupId;
+    private final KafkaFuture<Void> future;
 
-    public GroupJoinKey(String groupId) {
-        this.groupId = groupId;
+    TerminateTransactionResult(KafkaFuture<Void> future) {
+        this.future = future;
     }
 
-    @Override
-    public String keyLabel() {
-        return "join-" + groupId;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        GroupJoinKey that = (GroupJoinKey) o;
-        return Objects.equals(groupId, that.groupId);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(groupId);
+    /**
+     * Return a future which indicates whether the transaction was successfully terminated.
+     */
+    public KafkaFuture<Void> result() {
+        return future;
     }
 }

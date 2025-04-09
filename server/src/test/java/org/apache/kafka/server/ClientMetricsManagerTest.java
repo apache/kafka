@@ -945,7 +945,7 @@ public class ClientMetricsManagerTest {
 
         try (
                 Metrics kafkaMetrics = new Metrics();
-                ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, 100, time, kafkaMetrics);
+                ClientMetricsManager newClientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, 100, time, kafkaMetrics)
         ) {
 
             Thread thread = new Thread(() -> {

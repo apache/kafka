@@ -203,7 +203,7 @@ class RemoteLeaderEndPoint(logPrefix: String,
       None
     } else {
       val metadataVersion = metadataVersionSupplier()
-      val version: Short = if (metadataVersion.fetchRequestVersion >= 13 && !fetchData.canUseTopicIds) {
+      val version: Short = if (!fetchData.canUseTopicIds) {
         12
       } else {
         metadataVersion.fetchRequestVersion
