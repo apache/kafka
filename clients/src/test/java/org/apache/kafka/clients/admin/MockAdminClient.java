@@ -1383,6 +1383,11 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public TerminateTransactionResult forceTerminateTransaction(String transactionalId, TerminateTransactionOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
     public ListTransactionsResult listTransactions(ListTransactionsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }

@@ -315,12 +315,7 @@ public class ShareGroupCommand {
             TreeMap<String, Entry<ShareGroupDescription, Collection<SharePartitionOffsetInformation>>> groupOffsets = new TreeMap<>();
 
             shareGroups.forEach((groupId, shareGroup) -> {
-                Set<TopicPartition> allTp = new HashSet<>();
-                for (ShareMemberDescription memberDescription : shareGroup.members()) {
-                    allTp.addAll(memberDescription.assignment().topicPartitions());
-                }
-
-                ListShareGroupOffsetsSpec offsetsSpec = new ListShareGroupOffsetsSpec().topicPartitions(allTp);
+                ListShareGroupOffsetsSpec offsetsSpec = new ListShareGroupOffsetsSpec();
                 Map<String, ListShareGroupOffsetsSpec> groupSpecs = new HashMap<>();
                 groupSpecs.put(groupId, offsetsSpec);
 
@@ -349,37 +344,34 @@ public class ShareGroupCommand {
 
         private void printOffsets(TreeMap<String, Entry<ShareGroupDescription, Collection<SharePartitionOffsetInformation>>> offsets, boolean verbose) {
             offsets.forEach((groupId, tuple) -> {
-                ShareGroupDescription description = tuple.getKey();
                 Collection<SharePartitionOffsetInformation> offsetsInfo = tuple.getValue();
-                if (maybePrintEmptyGroupState(groupId, description.groupState(), offsetsInfo.size())) {
-                    String fmt = printOffsetFormat(groupId, offsetsInfo, verbose);
+                String fmt = printOffsetFormat(groupId, offsetsInfo, verbose);
 
-                    if (verbose) {
-                        System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "LEADER-EPOCH", "START-OFFSET");
-                    } else {
-                        System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "START-OFFSET");
-                    }
-
-                    for (SharePartitionOffsetInformation info : offsetsInfo) {
-                        if (verbose) {
-                            System.out.printf(fmt,
-                                groupId,
-                                info.topic,
-                                info.partition,
-                                MISSING_COLUMN_VALUE, // Temporary
-                                info.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE)
-                            );
-                        } else {
-                            System.out.printf(fmt,
-                                groupId,
-                                info.topic,
-                                info.partition,
-                                info.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE)
-                            );
-                        }
-                    }
-                    System.out.println();
+                if (verbose) {
+                    System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "LEADER-EPOCH", "START-OFFSET");
+                } else {
+                    System.out.printf(fmt, "GROUP", "TOPIC", "PARTITION", "START-OFFSET");
                 }
+
+                for (SharePartitionOffsetInformation info : offsetsInfo) {
+                    if (verbose) {
+                        System.out.printf(fmt,
+                            groupId,
+                            info.topic,
+                            info.partition,
+                            MISSING_COLUMN_VALUE, // Temporary
+                            info.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE)
+                        );
+                    } else {
+                        System.out.printf(fmt,
+                            groupId,
+                            info.topic,
+                            info.partition,
+                            info.offset.map(Object::toString).orElse(MISSING_COLUMN_VALUE)
+                        );
+                    }
+                }
+                System.out.println();
             });
         }
 

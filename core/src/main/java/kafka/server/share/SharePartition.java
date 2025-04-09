@@ -63,7 +63,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -79,6 +78,7 @@ import java.util.concurrent.locks.ReentrantReadWriteLock;
 import static kafka.server.share.ShareFetchUtils.offsetForEarliestTimestamp;
 import static kafka.server.share.ShareFetchUtils.offsetForLatestTimestamp;
 import static kafka.server.share.ShareFetchUtils.offsetForTimestamp;
+import static kafka.server.share.ShareFetchUtils.recordLockDurationMsOrDefault;
 
 /**
  * The SharePartition is used to track the state of a partition that is shared between multiple
@@ -174,18 +174,13 @@ public class SharePartition {
         }
 
         public static RecordState forId(byte id) {
-            switch (id) {
-                case 0:
-                    return AVAILABLE;
-                case 1:
-                    return ACQUIRED;
-                case 2:
-                    return ACKNOWLEDGED;
-                case 4:
-                    return ARCHIVED;
-                default:
-                    throw new IllegalArgumentException("Unknown record state id: " + id);
-            }
+            return switch (id) {
+                case 0 -> AVAILABLE;
+                case 1 -> ACQUIRED;
+                case 2 -> ACKNOWLEDGED;
+                case 4 -> ARCHIVED;
+                default -> throw new IllegalArgumentException("Unknown record state id: " + id);
+            };
         }
 
         public byte id() {
@@ -439,8 +434,8 @@ public class SharePartition {
         persister.readState(new ReadShareGroupStateParameters.Builder()
             .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdLeaderEpochData>()
                 .setGroupId(this.groupId)
-                .setTopicsData(Collections.singletonList(new TopicData<>(topicIdPartition.topicId(),
-                    Collections.singletonList(PartitionFactory.newPartitionIdLeaderEpochData(topicIdPartition.partition(), leaderEpoch)))))
+                .setTopicsData(List.of(new TopicData<>(topicIdPartition.topicId(),
+                    List.of(PartitionFactory.newPartitionIdLeaderEpochData(topicIdPartition.partition(), leaderEpoch)))))
                 .build())
             .build()
         ).whenComplete((result, exception) -> {
@@ -580,8 +575,10 @@ public class SharePartition {
                     // offset removed from batch, which is the next offset to be fetched.
                     // 2. When startOffset has moved beyond the in-flight records, startOffset and
                     // endOffset point to the LSO, which is the next offset to be fetched.
+                    log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, endOffset);
                     return endOffset;
                 } else {
+                    log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, endOffset + 1);
                     return endOffset + 1;
                 }
             }
@@ -592,6 +589,7 @@ public class SharePartition {
                 // Same case when startOffset has moved beyond the in-flight records, startOffset and endOffset point to the LSO
                 // and the cached state is fresh.
                 findNextFetchOffset.set(false);
+                log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, endOffset);
                 return endOffset;
             }
 
@@ -638,6 +636,7 @@ public class SharePartition {
                 findNextFetchOffset.set(false);
                 nextFetchOffset = endOffset + 1;
             }
+            log.trace("The next fetch offset for the share partition {}-{} is {}", groupId, topicIdPartition, nextFetchOffset);
             return nextFetchOffset;
         } finally {
             lock.writeLock().unlock();
@@ -1670,17 +1669,12 @@ public class SharePartition {
     }
 
     private static RecordState fetchRecordState(byte acknowledgeType) {
-        switch (acknowledgeType) {
-            case 1 /* ACCEPT */:
-                return RecordState.ACKNOWLEDGED;
-            case 2 /* RELEASE */:
-                return RecordState.AVAILABLE;
-            case 3 /* REJECT */:
-            case 0 /* GAP */:
-                return RecordState.ARCHIVED;
-            default:
-                throw new IllegalArgumentException("Invalid acknowledge type: " + acknowledgeType);
-        }
+        return switch (acknowledgeType) {
+            case 1 /* ACCEPT */ -> RecordState.ACKNOWLEDGED;
+            case 2 /* RELEASE */ -> RecordState.AVAILABLE;
+            case 3, 0 /* REJECT / GAP */ -> RecordState.ARCHIVED;
+            default -> throw new IllegalArgumentException("Invalid acknowledge type: " + acknowledgeType);
+        };
     }
 
     private NavigableMap<Long, InFlightBatch> fetchSubMapForAcknowledgementBatch(
@@ -2234,8 +2228,8 @@ public class SharePartition {
         persister.writeState(new WriteShareGroupStateParameters.Builder()
             .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionStateBatchData>()
                 .setGroupId(this.groupId)
-                .setTopicsData(Collections.singletonList(new TopicData<>(topicIdPartition.topicId(),
-                    Collections.singletonList(PartitionFactory.newPartitionStateBatchData(
+                .setTopicsData(List.of(new TopicData<>(topicIdPartition.topicId(),
+                    List.of(PartitionFactory.newPartitionStateBatchData(
                         topicIdPartition.partition(), stateEpoch, startOffset, leaderEpoch, stateBatches))))
                 ).build()).build())
             .whenComplete((result, exception) -> {
@@ -2279,22 +2273,20 @@ public class SharePartition {
 
     private KafkaException fetchPersisterError(short errorCode, String errorMessage) {
         Errors error = Errors.forCode(errorCode);
-        switch (error) {
-            case NOT_COORDINATOR:
-            case COORDINATOR_NOT_AVAILABLE:
-            case COORDINATOR_LOAD_IN_PROGRESS:
-                return new CoordinatorNotAvailableException(errorMessage);
-            case GROUP_ID_NOT_FOUND:
-                return new GroupIdNotFoundException(errorMessage);
-            case UNKNOWN_TOPIC_OR_PARTITION:
-                return new UnknownTopicOrPartitionException(errorMessage);
-            case FENCED_STATE_EPOCH:
-                return new FencedStateEpochException(errorMessage);
-            case FENCED_LEADER_EPOCH:
-                return new NotLeaderOrFollowerException(errorMessage);
-            default:
-                return new UnknownServerException(errorMessage);
-        }
+        return switch (error) {
+            case NOT_COORDINATOR, COORDINATOR_NOT_AVAILABLE, COORDINATOR_LOAD_IN_PROGRESS ->
+                new CoordinatorNotAvailableException(errorMessage);
+            case GROUP_ID_NOT_FOUND ->
+                new GroupIdNotFoundException(errorMessage);
+            case UNKNOWN_TOPIC_OR_PARTITION ->
+                new UnknownTopicOrPartitionException(errorMessage);
+            case FENCED_STATE_EPOCH ->
+                new FencedStateEpochException(errorMessage);
+            case FENCED_LEADER_EPOCH ->
+                new NotLeaderOrFollowerException(errorMessage);
+            default ->
+                new UnknownServerException(errorMessage);
+        };
     }
 
     // Visible for testing
@@ -2302,12 +2294,7 @@ public class SharePartition {
         // The recordLockDuration value would depend on whether the dynamic config SHARE_RECORD_LOCK_DURATION_MS in
         // GroupConfig.java is set or not. If dynamic config is set, then that is used, otherwise the value of
         // SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG defined in ShareGroupConfig is used
-        int recordLockDurationMs;
-        if (groupConfigManager.groupConfig(groupId).isPresent()) {
-            recordLockDurationMs = groupConfigManager.groupConfig(groupId).get().shareRecordLockDurationMs();
-        } else {
-            recordLockDurationMs = defaultRecordLockDurationMs;
-        }
+        int recordLockDurationMs = recordLockDurationMsOrDefault(groupConfigManager, groupId, defaultRecordLockDurationMs);
         return scheduleAcquisitionLockTimeout(memberId, firstOffset, lastOffset, recordLockDurationMs);
     }
 
@@ -2466,7 +2453,7 @@ public class SharePartition {
         }
     }
 
-    private long startOffsetDuringInitialization(long partitionDataStartOffset) throws Exception {
+    private long startOffsetDuringInitialization(long partitionDataStartOffset) {
         // Set the state epoch and end offset from the persisted state.
         if (partitionDataStartOffset != PartitionFactory.UNINITIALIZED_START_OFFSET) {
             return partitionDataStartOffset;

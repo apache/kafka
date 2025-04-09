@@ -29,9 +29,9 @@ import scala.jdk.CollectionConverters._
 @Timeout(600)
 class PlaintextConsumerAssignTest extends AbstractConsumerTest {
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testAssignAndCommitAsyncNotCommitted(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testAssignAndCommitAsyncNotCommitted(groupProtocol: String): Unit = {
     val props = new Properties()
     val consumer = createConsumer(configOverrides = props)
     val producer = createProducer()
@@ -51,9 +51,9 @@ class PlaintextConsumerAssignTest extends AbstractConsumerTest {
     assertTrue(consumer.assignment.contains(tp))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testAssignAndCommitSyncNotCommitted(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testAssignAndCommitSyncNotCommitted(groupProtocol: String): Unit = {
     val props = new Properties()
     val consumer = createConsumer(configOverrides = props)
     val producer = createProducer()
@@ -70,9 +70,9 @@ class PlaintextConsumerAssignTest extends AbstractConsumerTest {
     assertTrue(consumer.assignment.contains(tp))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testAssignAndCommitSyncAllConsumed(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testAssignAndCommitSyncAllConsumed(groupProtocol: String): Unit = {
     val numRecords = 10000
 
     val producer = createProducer()
@@ -92,9 +92,9 @@ class PlaintextConsumerAssignTest extends AbstractConsumerTest {
     assertEquals(numRecords, committedOffset.get(tp).offset())
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testAssignAndConsume(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testAssignAndConsume(groupProtocol: String): Unit = {
     val numRecords = 10
 
     val producer = createProducer()
@@ -110,9 +110,9 @@ class PlaintextConsumerAssignTest extends AbstractConsumerTest {
     assertEquals(numRecords, consumer.position(tp))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testAssignAndConsumeSkippingPosition(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testAssignAndConsumeSkippingPosition(groupProtocol: String): Unit = {
     val numRecords = 10
 
     val producer = createProducer()
@@ -131,9 +131,9 @@ class PlaintextConsumerAssignTest extends AbstractConsumerTest {
     assertEquals(numRecords, consumer.position(tp))
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testAssignAndFetchCommittedOffsets(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testAssignAndFetchCommittedOffsets(groupProtocol: String): Unit = {
     val numRecords = 100
     val startingTimestamp = System.currentTimeMillis()
     val producer = createProducer()
@@ -153,9 +153,9 @@ class PlaintextConsumerAssignTest extends AbstractConsumerTest {
     assertEquals(numRecords, anotherConsumer.committed(Set(tp).asJava).get(tp).offset)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testAssignAndConsumeFromCommittedOffsets(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testAssignAndConsumeFromCommittedOffsets(groupProtocol: String): Unit = {
     val producer = createProducer()
     val numRecords = 100
     val startingTimestamp = System.currentTimeMillis()
@@ -181,9 +181,9 @@ class PlaintextConsumerAssignTest extends AbstractConsumerTest {
       startingTimestamp = startingTimestamp + offset)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testAssignAndRetrievingCommittedOffsetsMultipleTimes(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testAssignAndRetrievingCommittedOffsetsMultipleTimes(groupProtocol: String): Unit = {
     val numRecords = 100
     val startingTimestamp = System.currentTimeMillis()
     val producer = createProducer()

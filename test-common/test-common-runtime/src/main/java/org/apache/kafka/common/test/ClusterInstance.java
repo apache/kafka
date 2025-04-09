@@ -314,7 +314,7 @@ public interface ClusterInstance {
         if (partitions == 0) {
             List<TopicPartition> topicPartitions = IntStream.range(0, 1)
                 .mapToObj(partition -> new TopicPartition(topic, partition))
-                .collect(Collectors.toList());
+                .toList();
 
             // Ensure that the topic-partition has been deleted from all brokers' replica managers
             TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
@@ -365,10 +365,10 @@ public interface ClusterInstance {
         List<Authorizer> authorizers = new ArrayList<>();
         authorizers.addAll(brokers().values().stream()
                 .filter(server -> server.authorizer().isDefined())
-                .map(server -> server.authorizer().get()).collect(Collectors.toList()));
+                .map(server -> server.authorizer().get()).toList());
         authorizers.addAll(controllers().values().stream()
                 .filter(server -> server.authorizer().isDefined())
-                .map(server -> server.authorizer().get()).collect(Collectors.toList()));
+                .map(server -> server.authorizer().get()).toList());
         return authorizers;
     }
 

@@ -151,8 +151,8 @@ public class TierStateMachine {
 
     private List<EpochEntry> readLeaderEpochCheckpoint(RemoteLogManager rlm,
                                                        RemoteLogSegmentMetadata remoteLogSegmentMetadata) throws IOException, RemoteStorageException {
-        InputStream inputStream = rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.LEADER_EPOCH);
-        try (BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
+        try (InputStream inputStream = rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.LEADER_EPOCH);
+             BufferedReader bufferedReader = new BufferedReader(new InputStreamReader(inputStream, StandardCharsets.UTF_8))) {
             CheckpointFile.CheckpointReadBuffer<EpochEntry> readBuffer = new CheckpointFile.CheckpointReadBuffer<>("", bufferedReader, 0, LeaderEpochCheckpointFile.FORMATTER);
             return readBuffer.read();
         }
@@ -166,8 +166,9 @@ public class TierStateMachine {
         File snapshotFile = LogFileUtils.producerSnapshotFile(unifiedLog.dir(), nextOffset);
         Path tmpSnapshotFile = Paths.get(snapshotFile.getAbsolutePath() + ".tmp");
         // Copy it to snapshot file in atomic manner.
-        Files.copy(rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.PRODUCER_SNAPSHOT),
-                tmpSnapshotFile, StandardCopyOption.REPLACE_EXISTING);
+        try (InputStream inputStream = rlm.storageManager().fetchIndex(remoteLogSegmentMetadata, RemoteStorageManager.IndexType.PRODUCER_SNAPSHOT)) {
+            Files.copy(inputStream, tmpSnapshotFile, StandardCopyOption.REPLACE_EXISTING);
+        }
         Utils.atomicMoveWithFallback(tmpSnapshotFile, snapshotFile.toPath(), false);
 
         // Reload producer snapshots.
