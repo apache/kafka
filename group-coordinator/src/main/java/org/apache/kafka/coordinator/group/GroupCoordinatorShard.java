@@ -576,10 +576,10 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * Method returns a Map keyed on groupId and value as pair of {@link DeleteShareGroupStateParameters}
      * and any ERRORS while building the request corresponding
      * to the valid share groups passed as the input.
-     * <p></p>
+     * <p>
      * The groupIds are first filtered by type to restrict the list to share groups.
      * @param groupIds - A list of groupIds as string
-     * @return {@link CoordinatorResult } containing a Map keyed on groupId and value pair (req, error) and related coordinator records.
+     * @return A result object containing a map keyed on groupId and value pair (req, error) and related coordinator records.
      */
     public CoordinatorResult<Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>>, CoordinatorRecord> sharePartitionDeleteRequests(List<String> groupIds) {
         Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>> responseMap = new HashMap<>();

@@ -820,7 +820,9 @@ public class GroupCoordinatorRecordHelpers {
      * @param groupId   The share group id.
      * @return The record.
      */
-    public static CoordinatorRecord newShareGroupStatePartitionMetadataTombstoneRecord(String groupId) {
+    public static CoordinatorRecord newShareGroupStatePartitionMetadataTombstoneRecord(
+        String groupId
+    ) {
         return CoordinatorRecord.tombstone(
             new ShareGroupStatePartitionMetadataKey()
                 .setGroupId(groupId)

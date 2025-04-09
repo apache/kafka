@@ -979,7 +979,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new DeleteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)))));
 
-        // Apply a record in to verify delete.
+        // Apply a record to the state machine so that delete can be verified.
         CoordinatorRecord record = ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
             GROUP_ID,
             TOPIC_ID,
