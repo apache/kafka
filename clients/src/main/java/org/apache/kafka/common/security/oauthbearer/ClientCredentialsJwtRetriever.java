@@ -16,15 +16,11 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.SslResource;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
-import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -32,20 +28,19 @@ import java.net.http.HttpResponse;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
-import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CONNECT_TIMEOUT_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MAX_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOFF_MS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.configOrJaas;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUrlencodeHeader;
 
 /**
  * A {@link JwtRetriever} that will communicate with an OAuth/OIDC provider directly via HTTP to post client
@@ -76,21 +71,15 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
-        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
+        OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, saslMechanism);
+        OAuthBearerJaasConfig jaasConfig = new OAuthBearerJaasConfig(saslMechanism, jaasConfigEntries);
 
-        retryBackoffMs =  cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS);
-        retryBackoffMaxMs = cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
+        retryBackoffMs = oauthConfig.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS);
+        retryBackoffMaxMs = oauthConfig.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
 
-        URI tokenEndpoint = cu.validateUri(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
-
-        try {
-            sslResource = jou.maybeCreateSslResource(tokenEndpoint.toURL());
-        } catch (MalformedURLException e) {
-            throw new ConfigException("An error occurred parsing the OAuth token endpoint URL", e);
-        }
-
-        Optional<Integer> connectTimeoutMs = Optional.ofNullable(cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false));
+        URI tokenEndpoint = oauthConfig.validateUri(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+        sslResource = OAuthBearerUtils.maybeCreateSslResource(tokenEndpoint, jaasConfig);
+        Optional<Integer> connectTimeoutMs = Optional.ofNullable(oauthConfig.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false));
 
         HttpClient.Builder clientBuilder = HttpClient.newBuilder();
 
@@ -103,30 +92,27 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
         client = clientBuilder.build();
 
         String clientId = configOrJaas(
-            configs,
-            cu,
-            jou,
+            oauthConfig,
+            jaasConfig,
             SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID,
             CLIENT_ID_JAAS,
             true
         );
         String clientSecret = configOrJaas(
-            configs,
-            cu,
-            jou,
+            oauthConfig,
+            jaasConfig,
             SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET,
             CLIENT_SECRET_JAAS,
             true
         );
         String scope = configOrJaas(
-            configs,
-            cu,
-            jou,
+            oauthConfig,
+            jaasConfig,
             SASL_OAUTHBEARER_SCOPE,
             SCOPE_JAAS,
             false
         );
-        boolean urlencodeHeader = validateUrlencodeHeader(cu);
+        boolean urlencodeHeader = validateUrlencodeHeader(oauthConfig);
 
         requestGenerator = new ClientCredentialsRequestGenerator(
             tokenEndpoint,
@@ -150,34 +136,6 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
             retryBackoffMs,
             retryBackoffMaxMs
         );
-    }
-
-    /**
-     * In some cases, the incoming {@link Map} doesn't contain a value for
-     * {@link SaslConfigs#SASL_OAUTHBEARER_HEADER_URLENCODE}. Returning {@code null} from {@link Map#get(Object)}
-     * will cause a {@link NullPointerException} when it is later unboxed.
-     *
-     * <p/>
-     *
-     * This utility method ensures that we have a non-{@code null} value to use in the
-     * {@link ClientCredentialsJwtRetriever} constructor.
-     */
-    public static boolean validateUrlencodeHeader(ConfigurationUtils cu) {
-        Boolean urlencodeHeader = cu.validateBoolean(SASL_OAUTHBEARER_HEADER_URLENCODE, false);
-        return Objects.requireNonNullElse(urlencodeHeader, DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE);
-    }
-
-    private String configOrJaas(Map<String, ?> configs,
-                                ConfigurationUtils cu,
-                                JaasOptionsUtils jou,
-                                String configName,
-                                String jaasName,
-                                boolean isRequired) {
-        if (configs.containsKey(configName)) {
-            return cu.validateString(configName, isRequired);
-        } else {
-            return jou.validateString(jaasName, isRequired);
-        }
     }
 
     @Override

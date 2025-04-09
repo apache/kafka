@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import org.apache.kafka.common.security.oauthbearer.ClientCredentialsJwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.ClientCredentialsRequestGenerator;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerConfig;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -32,6 +32,7 @@ import java.util.stream.Stream;
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUrlencodeHeader;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
@@ -100,8 +101,8 @@ public class ClientCredentialsRequestGeneratorTest extends HttpRequestGeneratorT
     @ParameterizedTest
     @MethodSource("urlencodeHeaderSupplier")
     public void testUrlencodeHeader(Map<String, Object> configs, boolean expectedValue) {
-        ConfigurationUtils cu = new ConfigurationUtils(configs, OAUTHBEARER_MECHANISM);
-        boolean actualValue = ClientCredentialsJwtRetriever.validateUrlencodeHeader(cu);
+        OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, OAUTHBEARER_MECHANISM);
+        boolean actualValue = validateUrlencodeHeader(oauthConfig);
         assertEquals(expectedValue, actualValue);
     }
 

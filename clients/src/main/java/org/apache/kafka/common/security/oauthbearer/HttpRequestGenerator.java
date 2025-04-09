@@ -31,5 +31,4 @@ public interface HttpRequestGenerator extends Closeable {
     default void close() {
         // Do nothing...
     }
-
 }

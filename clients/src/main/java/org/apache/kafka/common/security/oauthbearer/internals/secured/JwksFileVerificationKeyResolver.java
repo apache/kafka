@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerConfig;
 import org.apache.kafka.common.utils.Utils;
 
 import org.jose4j.jwk.JsonWebKeySet;
@@ -89,8 +90,8 @@ public class JwksFileVerificationKeyResolver implements CloseableVerificationKey
     private final VerificationKeyResolver delegate;
 
     public JwksFileVerificationKeyResolver(Map<String, ?> configs, String saslMechanism) {
-        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        File jwksFile = cu.validateFile(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
+        OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, saslMechanism);
+        File jwksFile = oauthConfig.validateFile(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
         log.debug("Starting creation of new VerificationKeyResolver from {}", jwksFile.getPath());
         JsonWebKeySet jwks;
 

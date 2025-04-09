@@ -17,7 +17,6 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 
 import java.io.File;
 import java.util.List;
@@ -37,8 +36,8 @@ public class FileJwtRetriever implements JwtRetriever {
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-        File fileName = cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+        OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, saslMechanism);
+        File fileName = oauthConfig.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
         try {
             // always non-null; to remove any newline chars or backend will report err

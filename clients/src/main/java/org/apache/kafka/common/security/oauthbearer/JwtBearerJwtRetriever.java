@@ -16,15 +16,11 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.SslResource;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.File;
-import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -65,22 +61,15 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
-        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
+        OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, saslMechanism);
+        OAuthBearerJaasConfig jaasConfig = new OAuthBearerJaasConfig(saslMechanism, jaasConfigEntries);
 
-        URI tokenEndpoint = cu.validateUri(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
-        retryBackoffMs =  cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS);
-        retryBackoffMaxMs = cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
+        URI tokenEndpoint = oauthConfig.validateUri(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+        retryBackoffMs =  oauthConfig.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS);
+        retryBackoffMaxMs = oauthConfig.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
+        sslResource = OAuthBearerUtils.maybeCreateSslResource(tokenEndpoint, jaasConfig);
 
-        Optional<SslResource> sslResource;
-
-        try {
-            sslResource = jou.maybeCreateSslResource(tokenEndpoint.toURL());
-        } catch (MalformedURLException e) {
-            throw new ConfigException("An error occurred parsing the OAuth token endpoint URL", e);
-        }
-
-        Optional<Integer> connectTimeoutMs = Optional.ofNullable(cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false));
+        Optional<Integer> connectTimeoutMs = Optional.ofNullable(oauthConfig.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false));
         HttpClient.Builder clientBuilder = HttpClient.newBuilder();
 
         if (connectTimeoutMs.isPresent())
@@ -94,26 +83,16 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
         AssertionCreator assertionCreator;
         AssertionJwtTemplate assertionJwtTemplate;
 
-        if (cu.validateString(SASL_OAUTHBEARER_ASSERTION_FILE, false) != null) {
-            File assertionFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_FILE);
+        if (oauthConfig.validateString(SASL_OAUTHBEARER_ASSERTION_FILE, false) != null) {
+            File assertionFile = oauthConfig.validateFile(SASL_OAUTHBEARER_ASSERTION_FILE);
             assertionCreator = new FileAssertionCreator(assertionFile);
-            assertionJwtTemplate = new AssertionJwtTemplate() {
-                @Override
-                public Map<String, Object> header() {
-                    return Map.of();
-                }
-
-                @Override
-                public Map<String, Object> payload() {
-                    return Map.of();
-                }
-            };
+            assertionJwtTemplate = new StaticAssertionJwtTemplate(Map.of());
         } else {
-            String algorithm = cu.validateString(SASL_OAUTHBEARER_ASSERTION_ALGORITHM);
-            File privateKeyFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE);
+            String algorithm = oauthConfig.validateString(SASL_OAUTHBEARER_ASSERTION_ALGORITHM);
+            File privateKeyFile = oauthConfig.validateFile(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE);
             assertionCreator = new DefaultAssertionCreator(time, algorithm, privateKeyFile);
 
-            File assertionTemplateFile = cu.validateFile(SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE);
+            File assertionTemplateFile = oauthConfig.validateFile(SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE);
             assertionJwtTemplate = new FileAssertionJwtTemplate(assertionTemplateFile);
         }
 

@@ -24,8 +24,6 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
@@ -185,10 +183,10 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        moduleOptions = JaasOptionsUtils.getOptions(saslMechanism, jaasConfigEntries);
+        moduleOptions = OAuthBearerJaasConfig.create(saslMechanism, jaasConfigEntries);
 
         try {
-            this.jwtRetriever = ConfigurationUtils.getConfiguredInstanceOrDefault(
+            this.jwtRetriever = OAuthBearerUtils.getConfiguredInstanceOrDefault(
                 configs,
                 saslMechanism,
                 jaasConfigEntries,
@@ -196,7 +194,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
                 JwtRetriever.class
             );
 
-            this.jwtValidator = ConfigurationUtils.getConfiguredInstanceOrDefault(
+            this.jwtValidator = OAuthBearerUtils.getConfiguredInstanceOrDefault(
                 configs,
                 saslMechanism,
                 jaasConfigEntries,

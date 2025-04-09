@@ -20,7 +20,6 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
 import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
@@ -105,7 +104,7 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         try {
-            this.jwtValidator = ConfigurationUtils.getConfiguredInstanceOrDefault(
+            this.jwtValidator = OAuthBearerUtils.getConfiguredInstanceOrDefault(
                 configs,
                 saslMechanism,
                 jaasConfigEntries,

@@ -26,19 +26,16 @@ import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 
-/**
- *
- */
-
 public class DefaultJwtValidator implements JwtValidator {
 
     private JwtValidator delegate;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, saslMechanism);
         JwtValidator validator;
 
-        if (configs.get(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL) != null)
+        if (oauthConfig.get(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL) != null)
             validator = new BrokerJwtValidator();
         else
             validator = new ClientJwtValidator();

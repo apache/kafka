@@ -17,10 +17,7 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ClaimValidationUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JwksFileVerificationKeyResolver;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.RefCountingMap;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwks;
@@ -41,7 +38,7 @@ import org.jose4j.jwt.consumer.JwtContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URL;
+import java.net.URI;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -127,19 +124,21 @@ public class BrokerJwtValidator implements JwtValidator {
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         Function<VerificationKeyResolverKey, CloseableVerificationKeyResolver> wrapResolverFn = k -> {
-            ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
-            URL jwksEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
+            OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, saslMechanism);
+            URI jwksEndpointUri = oauthConfig.validateUri(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
 
-            if (jwksEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {
+            if (jwksEndpointUri.getScheme().toLowerCase(Locale.ROOT).equals("file")) {
                 return new JwksFileVerificationKeyResolver(configs, saslMechanism);
             } else {
-                JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
-                HttpsJwks httpsJwks = new HttpsJwks(jwksEndpointUrl.toString());
-                sslResource = jou.maybeCreateSslResource(jwksEndpointUrl);
+                HttpsJwks httpsJwks = new HttpsJwks(jwksEndpointUri.toString());
+                sslResource = OAuthBearerUtils.maybeCreateSslResource(
+                    jwksEndpointUri,
+                    new OAuthBearerJaasConfig(saslMechanism, jaasConfigEntries)
+                );
                 Optional<SSLContext> sslContext = sslResource.map(SslResource::sslContext);
-                long refreshMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, true, 0L);
-                long refreshRetryBackoffMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS);
-                long refreshRetryBackoffMaxMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS);
+                long refreshMs = oauthConfig.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, true, 0L);
+                long refreshRetryBackoffMs = oauthConfig.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS);
+                long refreshRetryBackoffMaxMs = oauthConfig.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS);
 
                 RefreshingHttpsJwks refreshingHttpsJwks = new RefreshingHttpsJwks(
                     time,
@@ -169,17 +168,17 @@ public class BrokerJwtValidator implements JwtValidator {
                           String saslMechanism) {
         this.verificationKeyResolver = verificationKeyResolver;
 
-        ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
+        OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, saslMechanism);
         Set<String> expectedAudiences = null;
-        List<String> l = cu.get(SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
+        List<String> l = oauthConfig.get(SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
 
         if (l != null)
             expectedAudiences = Set.copyOf(l);
 
-        Integer clockSkew = cu.validateInteger(SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, false);
-        String expectedIssuer = cu.validateString(SASL_OAUTHBEARER_EXPECTED_ISSUER, false);
-        String scopeClaimName = cu.validateString(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
-        String subClaimName = cu.validateString(SASL_OAUTHBEARER_SUB_CLAIM_NAME);
+        Integer clockSkew = oauthConfig.validateInteger(SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, false);
+        String expectedIssuer = oauthConfig.validateString(SASL_OAUTHBEARER_EXPECTED_ISSUER, false);
+        String scopeClaimName = oauthConfig.validateString(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
+        String subClaimName = oauthConfig.validateString(SASL_OAUTHBEARER_SUB_CLAIM_NAME);
 
         final JwtConsumerBuilder jwtConsumerBuilder = new JwtConsumerBuilder();
 
@@ -216,6 +215,7 @@ public class BrokerJwtValidator implements JwtValidator {
      * @return {@link OAuthBearerToken}
      * @throws JwtValidatorException Thrown on errors performing validation of given token
      */
+    @Override
     @SuppressWarnings("unchecked")
     public OAuthBearerToken validate(String jwt) throws JwtValidatorException {
         SerializedJwt serializedJwt = new SerializedJwt(jwt);
@@ -244,12 +244,16 @@ public class BrokerJwtValidator implements JwtValidator {
         String subRaw = getClaim(() -> claims.getStringClaimValue(subClaimName), subClaimName);
         NumericDate issuedAtRaw = getClaim(claims::getIssuedAt, ReservedClaimNames.ISSUED_AT);
 
-        Set<String> scopes = ClaimValidationUtils.validateScopes(scopeClaimName, scopeRawCollection);
-        long expiration = ClaimValidationUtils.validateExpiration(ReservedClaimNames.EXPIRATION_TIME,
-            expirationRaw != null ? expirationRaw.getValueInMillis() : null);
-        String sub = ClaimValidationUtils.validateSubject(subClaimName, subRaw);
-        Long issuedAt = ClaimValidationUtils.validateIssuedAt(ReservedClaimNames.ISSUED_AT,
-            issuedAtRaw != null ? issuedAtRaw.getValueInMillis() : null);
+        Set<String> scopes = OAuthBearerUtils.validateScopes(scopeClaimName, scopeRawCollection);
+        long expiration = OAuthBearerUtils.validateExpiration(
+            ReservedClaimNames.EXPIRATION_TIME,
+            expirationRaw != null ? expirationRaw.getValueInMillis() : null
+        );
+        String sub = OAuthBearerUtils.validateSubject(subClaimName, subRaw);
+        Long issuedAt = OAuthBearerUtils.validateIssuedAt(
+            ReservedClaimNames.ISSUED_AT,
+            issuedAtRaw != null ? issuedAtRaw.getValueInMillis() : null
+        );
 
         return new BasicOAuthBearerToken(
             jwt,

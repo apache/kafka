@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
@@ -145,8 +146,8 @@ public class JwtBuilder {
     }
 
     public JwtBuilder addCustomClaim(String name, String value) {
-        String validatedName = ClaimValidationUtils.validateClaimNameOverride("claim name", name);
-        String validatedValue = ClaimValidationUtils.validateClaimNameOverride(validatedName, value);
+        String validatedName = OAuthBearerUtils.validateClaimNameOverride("claim name", name);
+        String validatedValue = OAuthBearerUtils.validateClaimNameOverride(validatedName, value);
 
         customClaims.put(validatedName, validatedValue);
         return this;
