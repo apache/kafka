@@ -41,7 +41,7 @@ import org.apache.kafka.server.ClientMetricsManager;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
-import java.util.Collections;
+import java.util.Map;
 import java.util.Optional;
 
 import scala.jdk.javaapi.OptionConverters;
@@ -195,7 +195,7 @@ public class KafkaApisBuilder {
         if (txnCoordinator == null) throw new RuntimeException("You must set txnCoordinator");
         if (autoTopicCreationManager == null)
             throw new RuntimeException("You must set autoTopicCreationManager");
-        if (config == null) config = new KafkaConfig(Collections.emptyMap());
+        if (config == null) config = new KafkaConfig(Map.of());
         if (configRepository == null) throw new RuntimeException("You must set configRepository");
         if (metadataCache == null) throw new RuntimeException("You must set metadataCache");
         if (metrics == null) throw new RuntimeException("You must set metrics");

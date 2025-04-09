@@ -27,6 +27,7 @@ import org.apache.kafka.common.quota.ClientQuotaEntity;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -74,7 +75,7 @@ public class AlterClientQuotasResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> counts = new HashMap<>();
+        Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
         data.entries().forEach(entry ->
             updateErrorCounts(counts, Errors.forCode(entry.errorCode()))
         );

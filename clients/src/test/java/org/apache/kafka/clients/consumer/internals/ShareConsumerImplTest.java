@@ -34,6 +34,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.WakeupException;
@@ -328,6 +329,16 @@ public class ShareConsumerImplTest {
         backgroundEventQueue.add(new ErrorEvent(new TopicAuthorizationException(Set.of("test-topic"))));
         completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
         assertDoesNotThrow(() -> consumer.unsubscribe());
+        assertDoesNotThrow(() -> consumer.close());
+    }
+
+    @Test
+    public void testCloseWithInvalidTopicException() {
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
+        backgroundEventQueue.add(new ErrorEvent(new InvalidTopicException(Set.of("!test-topic"))));
+        completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
         assertDoesNotThrow(() -> consumer.close());
     }
 
