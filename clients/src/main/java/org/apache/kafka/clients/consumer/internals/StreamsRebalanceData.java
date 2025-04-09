@@ -75,10 +75,7 @@ public class StreamsRebalanceData {
 
         @Override
         public String toString() {
-            return "TaskId{" +
-                "subtopologyId=" + subtopologyId +
-                ", partitionId=" + partitionId +
-                '}';
+            return subtopologyId + "_" + partitionId;
         }
     }
 
