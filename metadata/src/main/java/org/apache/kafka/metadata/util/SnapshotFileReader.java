@@ -98,7 +98,7 @@ public final class SnapshotFileReader implements AutoCloseable {
         FileChannelRecordBatch batch = batchIterator.next();
         lastOffset = batch.lastOffset();
         if (!batchIterator.hasNext()) {
-            // Expose the high watermark only once we've shut down.
+            //  Ensure the high watermark is updated before the MetadataLoader handles its final batch
             highWaterMark = OptionalLong.of(lastOffset);
         }
         if (batch.isControlBatch()) {
