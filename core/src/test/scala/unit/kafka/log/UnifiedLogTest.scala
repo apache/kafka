@@ -3668,7 +3668,7 @@ class UnifiedLogTest {
       new SimpleRecord("b".getBytes),
       new SimpleRecord("c".getBytes))
 
-    val logConfig = LogTestUtils.createLogConfig()
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = records.sizeInBytes)
     val log = createLog(logDir, logConfig)
 
     val firstAppendInfo = log.appendAsLeader(records, 0)
@@ -4681,7 +4681,7 @@ class UnifiedLogTest {
     val log = LogTestUtils.createLog(dir, config, brokerTopicStats, scheduler, time, logStartOffset, recoveryPoint,
       maxTransactionTimeoutMs, producerStateManagerConfig, producerIdExpirationCheckIntervalMs,
       lastShutdownClean, topicId, new ConcurrentHashMap[String, Integer],
-      remoteStorageSystemEnable, logOffsetsListener)
+      remoteStorageSystemEnable, remoteLogManager, logOffsetsListener)
     logsToClose = logsToClose :+ log
     log
   }

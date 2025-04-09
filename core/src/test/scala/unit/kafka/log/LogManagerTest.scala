@@ -62,7 +62,7 @@ class LogManagerTest {
   val maxRollInterval = 100
   val maxLogAgeMs: Int = 10 * 60 * 1000
   val logProps = new Properties()
-  logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024 * 1024: java.lang.Integer)
+  logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
   logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 4096: java.lang.Integer)
   logProps.put(TopicConfig.RETENTION_MS_CONFIG, maxLogAgeMs: java.lang.Integer)
   val logConfig = new LogConfig(logProps)
@@ -147,7 +147,7 @@ class LogManagerTest {
     assertEquals(1, logManager.liveLogDirs.size)
     val logFile = new File(logDir, name + "-0")
     assertTrue(logFile.exists)
-    assertFalse(logManager.directoryId(logFile.getParent).get.equals(DirectoryId.random()))
+    assertFalse(logManager.directoryId(logFile.getParent).equals(DirectoryId.random()))
     log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), 0)
   }
 
@@ -868,7 +868,8 @@ class LogManagerTest {
     logMetrics.foreach { gauge => assertEquals(0, gauge.value()) }
   }
 
-  private def verifyRemainingSegmentsToRecoverMetric(logDirs: Seq[File],
+  private def verifyRemainingSegmentsToRecoverMetric(spyLogManager: LogManager,
+                                                     logDirs: Seq[File],
                                                      recoveryThreadsPerDataDir: Int,
                                                      mockMap: ConcurrentHashMap[String, Integer],
                                                      expectedParams: Map[String, Int]): Unit = {
@@ -993,7 +994,7 @@ class LogManagerTest {
 
     val expectedRemainingSegmentsParams = Map[String, Int](
       logDir1.getAbsolutePath -> expectedSegmentsPerLog, logDir2.getAbsolutePath -> expectedSegmentsPerLog)
-    verifyRemainingSegmentsToRecoverMetric(logDirs, recoveryThreadsPerDataDir, mockMap, expectedRemainingSegmentsParams)
+    verifyRemainingSegmentsToRecoverMetric(spyLogManager, logDirs, recoveryThreadsPerDataDir, mockMap, expectedRemainingSegmentsParams)
   }
 
   @Test
