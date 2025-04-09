@@ -32,7 +32,7 @@ import org.mockito.Mockito
 
 import scala.jdk.CollectionConverters._
 
-class ApiVersionManagerTest {
+class DefaultApiVersionManagerTest {
   private val brokerFeatures = BrokerFeatures.createDefault(true)
   private val metadataCache = {
     val cache = new KRaftMetadataCache(1, () => KRaftVersion.LATEST_PRODUCTION)
