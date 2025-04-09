@@ -36,14 +36,13 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.DigestException;
 import java.util.ArrayList;
-import java.util.Collection;
-import java.util.Collections;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
+import java.util.stream.IntStream;
 
 /**
  * This class holds the actual logic for cleaning a log.
@@ -61,10 +60,14 @@ public class Cleaner {
     private final Time time;
     private final Consumer<TopicPartition> checkDone;
 
-    /* buffer used for read i/o */
+    /**
+     * Buffer used for read i/o
+     */
     private ByteBuffer readBuffer;
 
-    /* buffer used for write i/o */
+    /**
+     * Buffer used for write i/o
+     */
     private ByteBuffer writeBuffer;
 
     /**
@@ -114,7 +117,7 @@ public class Cleaner {
     }
 
     /**
-     * Clean the given log
+     * Clean the given log.
      *
      * @param cleanable The log to be cleaned
      *
@@ -125,7 +128,7 @@ public class Cleaner {
     }
 
     /**
-     * Clean the given log
+     * Clean the given log.
      *
      * @param cleanable The log to be cleaned
      * @param currentTime The current timestamp for doing cleaning
@@ -133,21 +136,22 @@ public class Cleaner {
      * @return The first offset not cleaned and the statistics for this round of cleaning
      * */
     public Map.Entry<Long, CleanerStats> doClean(LogToClean cleanable, long currentTime) throws IOException, DigestException {
-        logger.info("Beginning cleaning of log {}", cleanable.log().name());
+        UnifiedLog log = cleanable.log();
+
+        logger.info("Beginning cleaning of log {}", log.name());
 
         // figure out the timestamp below which it is safe to remove delete tombstones
         // this position is defined to be a configurable time beneath the last modified time of the last clean segment
         // this timestamp is only used on the older message formats older than MAGIC_VALUE_V2
-        long legacyDeleteHorizonMs = cleanable.log().logSegments(0, cleanable.firstDirtyOffset()).stream()
-                .reduce((first, second) -> second)
-                .map(segment -> segment.lastModified() - cleanable.log().config().deleteRetentionMs)
-                .orElse(0L);
+        List<LogSegment> segments = log.logSegments(0, cleanable.firstDirtyOffset());
+        long legacyDeleteHorizonMs = segments.isEmpty()
+                ? 0L
+                : segments.get(segments.size() - 1).lastModified() - log.config().deleteRetentionMs;
 
-        UnifiedLog log = cleanable.log();
         CleanerStats stats = new CleanerStats(Time.SYSTEM);
 
         // build the offset map
-        logger.info("Building offset map for {}...", cleanable.log().name());
+        logger.info("Building offset map for {}...", log.name());
         long upperBoundOffset = cleanable.firstUncleanableOffset();
         buildOffsetMap(log, cleanable.firstDirtyOffset(), upperBoundOffset, offsetMap, stats);
         long endOffset = offsetMap.latestOffset() + 1;
@@ -185,7 +189,7 @@ public class Cleaner {
     }
 
     /**
-     * Clean a group of segments into a single replacement segment
+     * Clean a group of segments into a single replacement segment.
      *
      * @param log The log being cleaned
      * @param segments The group of segments being cleaned
@@ -208,7 +212,7 @@ public class Cleaner {
                                long upperBoundOffsetOfCleaningRound) throws IOException {
         // create a new segment with a suffix appended to the name of the log and indexes
         LogSegment cleaned = UnifiedLog.createNewCleanedSegment(log.dir(), log.config(), segments.get(0).baseOffset());
-        transactionMetadata.cleanedIndex = Optional.of(cleaned.txnIndex());
+        transactionMetadata.setCleanedIndex(Optional.of(cleaned.txnIndex()));
 
         try {
             // clean segments into the new destination segment
@@ -284,7 +288,7 @@ public class Cleaner {
 
     /**
      * Clean the given source log segment into the destination segment using the key=>offset mapping
-     * provided
+     * provided.
      *
      * @param topicPartition The topic and partition of the log segment to clean
      * @param sourceRecords The dirty log segment
@@ -415,8 +419,10 @@ public class Cleaner {
      * Grow buffers to process next batch of records from `sourceRecords.` Buffers are doubled in size
      * up to a maximum of `maxLogMessageSize`. In some scenarios, a record could be bigger than the
      * current maximum size configured for the log. For example:
-     *   1. A compacted topic using compression may contain a message set slightly larger than max.message.bytes
-     *   2. max.message.bytes of a topic could have been reduced after writing larger messages
+     * <ol>
+     *   <li>A compacted topic using compression may contain a message set slightly larger than max.message.bytes</li>
+     *   <li>max.message.bytes of a topic could have been reduced after writing larger messages</li>
+     * </ol>
      * In these cases, grow the buffer to hold the next batch.
      *
      * @param sourceRecords The dirty log segment records to process
@@ -456,7 +462,7 @@ public class Cleaner {
     }
 
     /**
-     * Check if a batch should be discard by cleaned transaction state.
+     * Check if a batch should be discarded by cleaned transaction state.
      *
      * @param batch The batch of records to check
      * @param transactionMetadata The maintained transaction state about cleaning
@@ -472,7 +478,7 @@ public class Cleaner {
     }
 
     /**
-     * Check if a record should be retained
+     * Check if a record should be retained.
      *
      * @param map The offset map(key=>offset) to use for cleaning segments
      * @param retainDeletesForLegacyRecords Should tombstones (lower than version 2) and markers be retained while cleaning this segment
@@ -500,7 +506,7 @@ public class Cleaner {
             /* First,the message must have the latest offset for the key
              * then there are two cases in which we can retain a message:
              *   1) The message has value
-             *   2) The message doesn't has value but it can't be deleted now.
+             *   2) The message doesn't have value but it can't be deleted now.
              */
             boolean latestOffsetForKey = record.offset() >= foundOffset;
             boolean legacyRecord = batch.magic() < RecordBatch.MAGIC_VALUE_V2;
@@ -521,7 +527,7 @@ public class Cleaner {
     }
 
     /**
-     * Double the I/O buffer capacity
+     * Double the I/O buffer capacity.
      *
      * @param maxLogMessageSize The maximum record size in bytes allowed
      */
@@ -536,7 +542,7 @@ public class Cleaner {
     }
 
     /**
-     * Restore the I/O buffer capacity to its original size
+     * Restore the I/O buffer capacity to its original size.
      */
     private void restoreBuffers() {
         if (readBuffer.capacity() > ioBufferSize)
@@ -547,8 +553,8 @@ public class Cleaner {
 
     /**
      * Group the segments in a log into groups totaling less than a given size. the size is enforced separately for the log data and the index data.
-     * We collect a group of such segments together into a single
-     * destination segment. This prevents segment sizes from shrinking too much.
+     * We collect a group of such segments together into a single destination segment.
+     * This prevents segment sizes from shrinking too much.
      *
      * @param segments The log segments to group
      * @param maxSize the maximum size in bytes for the total of all log data in a group
@@ -557,44 +563,45 @@ public class Cleaner {
      *
      * @return A list of grouped segments
      */
-    public List<List<LogSegment>> groupSegmentsBySize(Collection<LogSegment> segments, int maxSize, int maxIndexSize, long firstUncleanableOffset) throws IOException {
+    public List<List<LogSegment>> groupSegmentsBySize(List<LogSegment> segments, int maxSize, int maxIndexSize, long firstUncleanableOffset) throws IOException {
         List<List<LogSegment>> grouped = new ArrayList<>();
-        List<LogSegment> segs = new ArrayList<>(segments);
 
-        while (!segs.isEmpty()) {
+        while (!segments.isEmpty()) {
             List<LogSegment> group = new ArrayList<>();
-            group.add(segs.get(0));
+            group.add(segments.get(0));
 
-            long logSize = segs.get(0).size();
-            long indexSize = segs.get(0).offsetIndex().sizeInBytes();
-            long timeIndexSize = segs.get(0).timeIndex().sizeInBytes();
+            long logSize = segments.get(0).size();
+            long indexSize = segments.get(0).offsetIndex().sizeInBytes();
+            long timeIndexSize = segments.get(0).timeIndex().sizeInBytes();
 
-            segs = segs.subList(1, segs.size());
+            segments = segments.subList(1, segments.size());
 
-            while (!segs.isEmpty() &&
-                    logSize + segs.get(0).size() <= maxSize &&
-                    indexSize + segs.get(0).offsetIndex().sizeInBytes() <= maxIndexSize &&
-                    timeIndexSize + segs.get(0).timeIndex().sizeInBytes() <= maxIndexSize &&
+            while (!segments.isEmpty() &&
+                    logSize + segments.get(0).size() <= maxSize &&
+                    indexSize + segments.get(0).offsetIndex().sizeInBytes() <= maxIndexSize &&
+                    timeIndexSize + segments.get(0).timeIndex().sizeInBytes() <= maxIndexSize &&
                     //if first segment size is 0, we don't need to do the index offset range check.
                     //this will avoid empty log left every 2^31 message.
-                    (segs.get(0).size() == 0 ||
-                            lastOffsetForFirstSegment(segs, firstUncleanableOffset) - group.get(group.size() - 1).baseOffset() <= Integer.MAX_VALUE)) {
-                group.add(0, segs.get(0));
-                logSize += segs.get(0).size();
-                indexSize += segs.get(0).offsetIndex().sizeInBytes();
-                timeIndexSize += segs.get(0).timeIndex().sizeInBytes();
-                segs = segs.subList(1, segs.size());
+                    (segments.get(0).size() == 0 ||
+                            lastOffsetForFirstSegment(segments, firstUncleanableOffset) - group.get(group.size() - 1).baseOffset() <= Integer.MAX_VALUE)) {
+                group.add(0, segments.get(0));
+                logSize += segments.get(0).size();
+                indexSize += segments.get(0).offsetIndex().sizeInBytes();
+                timeIndexSize += segments.get(0).timeIndex().sizeInBytes();
+                segments = segments.subList(1, segments.size());
             }
 
-            List<LogSegment> reversedGroup = new ArrayList<>(group);
-            Collections.reverse(reversedGroup);
+            List<LogSegment> reversedGroup = IntStream.range(0, group.size())
+                    .map(i -> group.size() - 1 - i)
+                    .mapToObj(group::get)
+                    .toList();
             grouped.add(0, reversedGroup);
         }
 
-        List<List<LogSegment>> reversedGrouped = new ArrayList<>(grouped);
-        Collections.reverse(reversedGrouped);
-
-        return reversedGrouped;
+        return IntStream.range(0, grouped.size())
+                .map(i -> grouped.size() - 1 - i)
+                .mapToObj(grouped::get)
+                .toList();
     }
 
     /**
@@ -605,7 +612,7 @@ public class Cleaner {
      * the base offset of the next segment in the list.
      * If the next segment doesn't exist, first Uncleanable Offset will be used.
      *
-     * @param segs Remaining segments to group.
+     * @param segs Remaining segments to group
      * @param firstUncleanableOffset The upper(exclusive) offset to clean to
      * @return The estimated last offset for the first segment in segs
      */
@@ -622,6 +629,7 @@ public class Cleaner {
 
     /**
      * Build a map of key_hash => offset for the keys in the cleanable dirty portion of the log to use in cleaning.
+     *
      * @param log The log to use
      * @param start The offset at which dirty messages begin
      * @param end The ending offset for the map that is being built
@@ -677,7 +685,7 @@ public class Cleaner {
     }
 
     /**
-     * Add the messages in the given segment to the offset map
+     * Add the messages in the given segment to the offset map.
      *
      * @param topicPartition The topic and partition of the log segment to build offset
      * @param segment The segment to index

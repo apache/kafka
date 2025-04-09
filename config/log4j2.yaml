@@ -133,7 +133,7 @@ Configuration:
         AppenderRef:
           ref: ControllerAppender
       # LogCleaner logger
-      - name: kafka.log.LogCleaner
+      - name: org.apache.kafka.storage.internals.log.LogCleaner
         level: INFO
         additivity: false
         AppenderRef:

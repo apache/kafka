@@ -2010,7 +2010,7 @@ class LogCleanerTest extends Logging {
     val oldKafkaProps = TestUtils.createBrokerConfig(1)
     oldKafkaProps.setProperty(CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP, "10000000")
 
-    val logCleaner = new LogCleaner(LogCleaner.cleanerConfig(new KafkaConfig(oldKafkaProps)),
+    val logCleaner = new LogCleaner(new CleanerConfig(new KafkaConfig(oldKafkaProps)),
       util.List.of(TestUtils.tempDir()),
       new util.concurrent.ConcurrentHashMap[TopicPartition, UnifiedLog](),
       new LogDirFailureChannel(1),

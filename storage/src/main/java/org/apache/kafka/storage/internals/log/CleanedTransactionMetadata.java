@@ -38,11 +38,6 @@ import java.util.Set;
  * for updating the cleaned transaction index accordingly.
  */
 public class CleanedTransactionMetadata {
-    /**
-     * Output cleaned index to write retained aborted transactions
-     */
-    Optional<TransactionIndex> cleanedIndex = Optional.empty();
-
     private final Set<Long> ongoingCommittedTxns = new HashSet<>();
     private final Map<Long, AbortedTransactionMetadata> ongoingAbortedTxns = new HashMap<>();
 
@@ -52,6 +47,20 @@ public class CleanedTransactionMetadata {
     private final PriorityQueue<AbortedTxn> abortedTransactions = new PriorityQueue<>(
             Comparator.comparingLong(AbortedTxn::firstOffset)
     );
+
+    /**
+     * Output cleaned index to write retained aborted transactions
+     */
+    private Optional<TransactionIndex> cleanedIndex = Optional.empty();
+
+    /**
+     * Update the cleaned index.
+     *
+     * @param cleanedIndex The new cleaned index
+     */
+    public void setCleanedIndex(Optional<TransactionIndex> cleanedIndex) {
+        this.cleanedIndex = cleanedIndex;
+    }
 
     /**
      * Update the cleaned transaction state with the new found aborted transactions that has just been traversed.

@@ -895,7 +895,7 @@ class LogManager(logDirs: Seq[File],
    */
   private def resumeCleaning(topicPartition: TopicPartition): Unit = {
     if (cleaner != null) {
-      cleaner.resumeCleaning(util.List.of(topicPartition))
+      cleaner.resumeCleaning(util.Set.of(topicPartition))
       info(s"Cleaning for partition $topicPartition is resumed")
     }
   }
@@ -1383,7 +1383,7 @@ class LogManager(logDirs: Seq[File],
     val startMs = time.milliseconds
 
     // clean current logs.
-    val deletableLogs = {
+    val deletableLogs: util.Map[TopicPartition, UnifiedLog] = {
       if (cleaner != null) {
         // prevent cleaner from working on same partitions when changing cleanup policy
         cleaner.pauseCleaningForNonCompactedPartitions()
@@ -1412,7 +1412,7 @@ class LogManager(logDirs: Seq[File],
       }
     } finally {
       if (cleaner != null) {
-        cleaner.resumeCleaning(deletableLogs.keySet().stream().collect(Collectors.toList[TopicPartition]))
+        cleaner.resumeCleaning(deletableLogs.keySet())
       }
     }
 
@@ -1552,7 +1552,7 @@ object LogManager {
     LogConfig.validateBrokerLogConfigValues(defaultProps, config.remoteLogManagerConfig.isRemoteStorageSystemEnabled)
     val defaultLogConfig = new LogConfig(defaultProps)
 
-    val cleanerConfig = LogCleaner.cleanerConfig(config)
+    val cleanerConfig = new CleanerConfig(config)
     val transactionLogConfig = new TransactionLogConfig(config)
 
     new LogManager(logDirs = config.logDirs.map(new File(_).getAbsoluteFile),

@@ -96,7 +96,7 @@ import java.util.stream.IntStream;
  * </ol>
  */
 public class LogCleaner implements BrokerReconfigurable {
-    private static final Logger LOG = LoggerFactory.getLogger("kafka.log.LogCleaner");
+    private static final Logger LOG = LoggerFactory.getLogger(LogCleaner.class);
 
     public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
             CleanerConfig.LOG_CLEANER_THREADS_PROP,
@@ -194,10 +194,6 @@ public class LogCleaner implements BrokerReconfigurable {
         metricsGroup.newGauge(DEAD_THREAD_COUNT_METRIC_NAME, this::deadThreadCount);
     }
 
-    public static CleanerConfig cleanerConfig(AbstractConfig config) {
-        return new CleanerConfig(config);
-    }
-
     /**
      * Start the background cleaner threads.
      */
@@ -263,7 +259,7 @@ public class LogCleaner implements BrokerReconfigurable {
      */
     @Override
     public void validateReconfiguration(AbstractConfig newConfig) {
-        int numThreads = LogCleaner.cleanerConfig(newConfig).numThreads;
+        int numThreads = new CleanerConfig(newConfig).numThreads;
         int currentThreads = config.numThreads;
         if (numThreads < 1)
             throw new ConfigException("Log cleaner threads should be at least 1");
@@ -276,8 +272,10 @@ public class LogCleaner implements BrokerReconfigurable {
 
     /**
      * Reconfigure log clean config. The will:
-     * 1. update desiredRatePerSec in Throttler with logCleanerIoMaxBytesPerSecond, if necessary
-     * 2. stop current log cleaners and create new ones.
+     * <ol>
+     *   <li>update desiredRatePerSec in Throttler with logCleanerIoMaxBytesPerSecond, if necessary</li>
+     *   <li>stop current log cleaners and create new ones.</li>
+     * </ol>
      * That ensures that if any of the cleaners had failed, new cleaners are created to match the new config.
      *
      * @param oldConfig the old log cleaner config
@@ -285,7 +283,7 @@ public class LogCleaner implements BrokerReconfigurable {
      */
     @Override
     public void reconfigure(AbstractConfig oldConfig, AbstractConfig newConfig) {
-        config = LogCleaner.cleanerConfig(newConfig);
+        config = new CleanerConfig(newConfig);
 
         double maxIoBytesPerSecond = config.maxIoBytesPerSecond;
         if (maxIoBytesPerSecond != oldConfig.getDouble(CleanerConfig.LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP)) {
@@ -311,15 +309,15 @@ public class LogCleaner implements BrokerReconfigurable {
      * Update checkpoint file to remove partitions if necessary.
      *
      * @param dataDir The data dir to be updated if necessary
-     * @param partitionToRemove The topicPartition to be removed, default none
+     * @param partitionToRemove The topicPartition to be removed
      */
     public void updateCheckpoints(File dataDir, Optional<TopicPartition> partitionToRemove) {
         cleanerManager.updateCheckpoints(dataDir, Optional.empty(), partitionToRemove);
     }
 
     /**
-     * Alter the checkpoint directory for the `topicPartition`, to remove the data in `sourceLogDir`, and add the data in `destLogDir`
-     * Generally occurs when the disk balance ends and replaces the previous file with the future file
+     * Alter the checkpoint directory for the `topicPartition`, to remove the data in `sourceLogDir`, and add the data in `destLogDir`.
+     * Generally occurs when the disk balance ends and replaces the previous file with the future file.
      *
      * @param topicPartition The topic and partition to alter checkpoint
      * @param sourceLogDir The source log dir to remove checkpoint
@@ -364,13 +362,13 @@ public class LogCleaner implements BrokerReconfigurable {
      *
      *  @param topicPartitions The collection of topicPartitions to be resumed cleaning
      */
-    public void resumeCleaning(List<TopicPartition> topicPartitions) {
+    public void resumeCleaning(Set<TopicPartition> topicPartitions) {
         cleanerManager.resumeCleaning(topicPartitions);
     }
 
     /**
      * For testing, a way to know when work has completed. This method waits until the
-     * cleaner has processed up to the given offset on the specified topic/partition
+     * cleaner has processed up to the given offset on the specified topic/partition.
      *
      * @param topicPartition The topic and partition to be cleaned
      * @param offset The first dirty offset that the cleaner doesn't have to clean
