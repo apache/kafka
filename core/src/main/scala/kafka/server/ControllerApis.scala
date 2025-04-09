@@ -56,6 +56,7 @@ import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.metadata.{BrokerHeartbeatReply, BrokerRegistrationReply}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, RequestLocal}
 
@@ -84,7 +85,7 @@ class ControllerApis(
   val configHelper = new ConfigHelper(metadataCache, config, metadataCache)
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   val runtimeLoggerManager = new RuntimeLoggerManager(config.nodeId, logger.underlying)
-  private val aclApis = new AclApis(authHelper, authorizer, requestHelper, "controller", config)
+  private val aclApis = new AclApis(authHelper, authorizer, requestHelper, ProcessRole.ControllerRole, config)
 
   def isClosed: Boolean = aclApis.isClosed
 
