@@ -74,13 +74,13 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         // Fields of StreamsGroupHeartbeatRequest sent in the most recent request
         static class LastSentFields {
 
-            private StreamsRebalanceData.Assignment assignment = StreamsRebalanceData.Assignment.EMPTY;
+            private StreamsRebalanceData.Assignment assignment = null;
 
             LastSentFields() {
             }
 
             void reset() {
-                assignment = StreamsRebalanceData.Assignment.EMPTY;
+                assignment = null;
             }
         }
 
@@ -402,6 +402,10 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         return EMPTY;
     }
 
+    public StreamsMembershipManager membershipManager() {
+        return membershipManager;
+    }
+
     /**
      * Returns the delay for which the application thread can safely wait before it should be responsive
      * to results from the request managers. For example, the subscription state can change when heartbeats
@@ -423,6 +427,17 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             return 0L;
         }
         return Math.min(pollTimer.remainingMs() / 2, heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
+    }
+
+    public void resetPollTimer(final long pollMs) {
+        pollTimer.update(pollMs);
+        if (pollTimer.isExpired()) {
+            logger.warn("Time between subsequent calls to poll() was longer than the configured " +
+                    "max.poll.interval.ms, exceeded approximately by {} ms. Member {} will rejoin the group now.",
+                pollTimer.isExpiredBy(), membershipManager.memberId());
+            membershipManager.maybeRejoinStaleMember();
+        }
+        pollTimer.reset(maxPollIntervalMs);
     }
 
     /**
@@ -508,7 +523,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             String statusDetails = statuses.stream()
                 .map(status -> "(" + status.statusCode() + ") " + status.statusDetail())
                 .collect(Collectors.joining(", "));
-            logger.warn("Membership is in the following statuses: {}.", statusDetails);
+            logger.warn("Membership is in the following statuses: {}", statusDetails);
         }
 
         membershipManager.onHeartbeatSuccess(response);

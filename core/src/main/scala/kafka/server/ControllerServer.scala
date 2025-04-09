@@ -40,6 +40,7 @@ import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.metadata.publisher.{AclPublisher, FeaturesPublisher}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.CredentialProvider
+import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.config.ServerLogConfigs.{ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion, NodeToControllerChannelManager}
@@ -266,7 +267,7 @@ class ControllerServer(
       quotaManagers = QuotaFactory.instantiate(config,
         metrics,
         time,
-        s"controller-${config.nodeId}-")
+        s"controller-${config.nodeId}-", ProcessRole.ControllerRole.toString)
       clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizer,
