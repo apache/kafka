@@ -19,6 +19,7 @@ package kafka.server
 import kafka.network.RequestChannel
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
+import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.QuotaViolationException
 import org.apache.kafka.common.metrics.Sensor
@@ -165,7 +166,7 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
                                      private val metrics: Metrics,
                                      private val time: Time,
                                      private val threadNamePrefix: String,
-                                     private val quotaCallback: Option[ClientQuotaCallback])
+                                     private val quotaCallback: Option[Plugin[ClientQuotaCallback]])
     extends ClientQuotaManager(config, metrics, QuotaType.CONTROLLER_MUTATION, time, threadNamePrefix, quotaCallback) {
 
   override protected def clientQuotaMetricName(quotaMetricTags: Map[String, String]): MetricName = {

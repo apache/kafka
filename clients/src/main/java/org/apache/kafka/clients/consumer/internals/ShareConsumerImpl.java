@@ -57,6 +57,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
+import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
@@ -937,7 +938,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
             // If users have fatal error, they will get some exceptions in the background queue.
             // When running unsubscribe, these exceptions should be ignored, or users can't unsubscribe successfully.
             processBackgroundEvents(unsubscribeEvent.future(), timer, e -> (e instanceof GroupAuthorizationException
-                || e instanceof TopicAuthorizationException));
+                || e instanceof TopicAuthorizationException || e instanceof InvalidTopicException));
             log.info("Completed releasing assignment and leaving group to close consumer.");
         } catch (TimeoutException e) {
             log.warn("Consumer triggered an unsubscribe event to leave the group but couldn't " +
