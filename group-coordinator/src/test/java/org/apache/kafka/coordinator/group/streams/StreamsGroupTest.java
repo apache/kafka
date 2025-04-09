@@ -1106,4 +1106,36 @@ public class StreamsGroupTest {
         assertTrue(streamsGroup.isSubscribedToTopic("test-topic2"));
         assertFalse(streamsGroup.isSubscribedToTopic("non-existent-topic"));
     }
+
+    @Test
+    public void testShutdownRequestedMethods() {
+        String memberId1 = "test-member-id1";
+        String memberId2 = "test-member-id2";
+        LogContext logContext = new LogContext();
+        SnapshotRegistry snapshotRegistry = new SnapshotRegistry(logContext);
+        GroupCoordinatorMetricsShard metricsShard = mock(GroupCoordinatorMetricsShard.class);
+        StreamsGroup streamsGroup = new StreamsGroup(logContext, snapshotRegistry, "test-group", metricsShard);
+
+        streamsGroup.updateMember(streamsGroup.getOrCreateDefaultMember(memberId1));
+        streamsGroup.updateMember(streamsGroup.getOrCreateDefaultMember(memberId2));
+
+        // Initially, shutdown should not be requested
+        assertTrue(streamsGroup.getShutdownRequestMemberId().isEmpty());
+
+        // Set shutdown requested
+        streamsGroup.setShutdownRequestMemberId(memberId1);
+        assertEquals(Optional.of(memberId1), streamsGroup.getShutdownRequestMemberId());
+
+        // Setting shutdown requested again will be ignored
+        streamsGroup.setShutdownRequestMemberId(memberId2);
+        assertEquals(Optional.of(memberId1), streamsGroup.getShutdownRequestMemberId());
+
+        // As long as group not empty, remain in shutdown requested state
+        streamsGroup.removeMember(memberId1);
+        assertEquals(Optional.of(memberId1), streamsGroup.getShutdownRequestMemberId());
+
+        // As soon as the group is empty, clear the shutdown requested state
+        streamsGroup.removeMember(memberId2);
+        assertEquals(Optional.empty(), streamsGroup.getShutdownRequestMemberId());
+    }
 }

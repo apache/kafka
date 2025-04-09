@@ -25,7 +25,7 @@ import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
 import java.util.Collection;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
 import java.util.Objects;
 import java.util.function.Function;
@@ -241,7 +241,7 @@ public class DescribeConfigsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errorCounts = new HashMap<>();
+        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
         data.results().forEach(response ->
             updateErrorCounts(errorCounts, Errors.forCode(response.errorCode()))
         );
