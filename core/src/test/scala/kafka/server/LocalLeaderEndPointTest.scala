@@ -62,7 +62,7 @@ class LocalLeaderEndPointTest extends Logging {
     val mockLogMgr = TestUtils.createLogManager(config.logDirs.map(new File(_)))
     val alterPartitionManager = mock(classOf[AlterPartitionManager])
     val metrics = new Metrics
-    quotaManager = QuotaFactory.instantiate(config, metrics, time, "")
+    quotaManager = QuotaFactory.instantiate(config, metrics, time, "", "")
     replicaManager = new ReplicaManager(
       metrics = metrics,
       config = config,

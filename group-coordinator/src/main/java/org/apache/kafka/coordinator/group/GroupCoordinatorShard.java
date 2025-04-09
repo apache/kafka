@@ -400,7 +400,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param context The request context.
      * @param request The actual StreamsGroupHeartbeat request.
      *
-     * @return A result containing the StreamsGroupHeartbeat response, a list of internal topics to be created and
+     * @return A Result containing the StreamsGroupHeartbeat response, a list of internal topics to be created and
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
@@ -440,6 +440,43 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         Map<Uuid, Set<Integer>> topicPartitionMap
     ) {
         return groupMetadataManager.initializeShareGroupState(groupId, topicPartitionMap);
+    }
+
+    /**
+     * Removes specific topic partitions from the initializing state for a share group. This is usually part of
+     * shareGroupHeartbeat code flow, specifically, if there is a persister exception.
+     * @param groupId The group id corresponding to the share group whose share partitions have been initialized.
+     * @param topicPartitionMap Map representing topic partition data to be cleaned from the share state partition metadata.
+     *
+     * @return A Result containing ShareGroupStatePartitionMetadata records and Void response.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> uninitializeShareGroupState(
+        String groupId,
+        Map<Uuid, Set<Integer>> topicPartitionMap
+    ) {
+        return groupMetadataManager.uninitializeShareGroupState(groupId, topicPartitionMap);
+    }
+
+    /**
+     * Reconcile initializing and initialized tps in share group state metadata records.
+     *
+     * @return A Result containing ShareGroupStatePartitionMetadata records and Void response.
+     */
+    public List<InitializeShareGroupStateParameters> reconcileShareGroupStateInitializingState(long offset) {
+        return groupMetadataManager.reconcileShareGroupStateInitializingState(offset);
+    }
+
+    /**
+     * Returns the set of share-partitions whose share-group state has been initialized in the persister.
+     *
+     * @param groupId The group id corresponding to the share group whose share partitions have been initialized.
+     *
+     * @return A map representing the initialized share-partitions for the share group.
+     */
+    public Map<Uuid, Set<Integer>> initializedShareGroupPartitions(
+        String groupId
+    ) {
+        return groupMetadataManager.initializedShareGroupPartitions(groupId);
     }
 
     /**

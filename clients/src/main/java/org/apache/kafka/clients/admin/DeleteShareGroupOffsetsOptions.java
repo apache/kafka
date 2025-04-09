@@ -14,36 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.purgatory;
 
-import java.util.Objects;
+package org.apache.kafka.clients.admin;
+
+import org.apache.kafka.common.annotation.InterfaceStability;
+
+import java.util.Set;
 
 /**
- * Used by delayed-sync operations
+ * Options for the {@link Admin#deleteShareGroupOffsets(String, Set, DeleteShareGroupOffsetsOptions)} call.
+ * <p>
+ * The API of this class is evolving, see {@link Admin} for details.
  */
-public class GroupSyncKey implements DelayedOperationKey {
-
-    private final String groupId;
-
-    public GroupSyncKey(String groupId) {
-        this.groupId = groupId;
-    }
-
-    @Override
-    public String keyLabel() {
-        return "sync-" + groupId;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        GroupSyncKey that = (GroupSyncKey) o;
-        return Objects.equals(groupId, that.groupId);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(groupId);
-    }
+@InterfaceStability.Evolving
+public class DeleteShareGroupOffsetsOptions extends AbstractOptions<DeleteShareGroupOffsetsOptions> {
 }

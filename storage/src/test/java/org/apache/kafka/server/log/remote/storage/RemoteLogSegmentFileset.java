@@ -219,7 +219,7 @@ public final class RemoteLogSegmentFileset {
     public List<Record> getRecords() throws IOException {
         return StreamSupport
                 .stream(FileRecords.open(files.get(SEGMENT)).records().spliterator(), false)
-                .collect(Collectors.toList());
+                .toList();
     }
 
     public void copy(final Transferer transferer, final LogSegmentData data) throws IOException {
