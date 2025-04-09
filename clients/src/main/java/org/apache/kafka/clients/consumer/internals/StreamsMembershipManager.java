@@ -149,11 +149,11 @@ public class StreamsMembershipManager implements RequestManager {
     private final Logger log;
 
     /**
-     * The processor that handles events of the Streams rebalance protocol.
+     * The processor that handles events from the background thread (a.k.a. ConsumerNetworkThread).
      * For example, requests for invocation of assignment/revocation callbacks.
      */
-    private final StreamsRebalanceEventsProcessor streamsRebalanceEventsProcessor;
     private final BackgroundEventHandler backgroundEventHandler;
+
     /**
      * Data needed to participate in the Streams rebalance protocol.
      */
@@ -273,27 +273,24 @@ public class StreamsMembershipManager implements RequestManager {
     /**
      * Constructs the Streams membership manager.
      *
-     * @param groupId                           The ID of the group.
-     * @param streamsRebalanceEventsProcessor   The processor that handles Streams rebalance events like requests for
-     *                                          invocation of assignment/revocation callbacks.
-     * @param streamsRebalanceData              Data needed to participate in the Streams rebalance protocol.
-     * @param subscriptionState                 The subscription state of the member.
-     * @param logContext                        The log context.
-     * @param time                              The time.
-     * @param metrics                           The metrics.
+     * @param groupId                The ID of the group.
+     * @param streamsRebalanceData   Data needed to participate in the Streams rebalance protocol.
+     * @param subscriptionState      The subscription state of the member.
+     * @param backgroundEventHandler The handler that handles events from the background thread.
+     * @param logContext             The log context.
+     * @param time                   The time.
+     * @param metrics                The metrics.
      */
     public StreamsMembershipManager(final String groupId,
-                                    final BackgroundEventHandler backgroundEventHandler,
-                                    final StreamsRebalanceEventsProcessor streamsRebalanceEventsProcessor,
                                     final StreamsRebalanceData streamsRebalanceData,
                                     final SubscriptionState subscriptionState,
+                                    final BackgroundEventHandler backgroundEventHandler,
                                     final LogContext logContext,
                                     final Time time,
                                     final Metrics metrics) {
         log = logContext.logger(StreamsMembershipManager.class);
         this.state = MemberState.UNSUBSCRIBED;
         this.groupId = groupId;
-        this.streamsRebalanceEventsProcessor = streamsRebalanceEventsProcessor;
         this.backgroundEventHandler = backgroundEventHandler;
         this.streamsRebalanceData = streamsRebalanceData;
         this.subscriptionState = subscriptionState;
@@ -454,8 +451,8 @@ public class StreamsMembershipManager implements RequestManager {
     private void transitionToStale() {
         transitionTo(MemberState.STALE);
 
-        final CompletableFuture<Void> onAllTasksLostCallbackExecution = requestOnAllTasksLostCallbackInvocation();
-        staleMemberAssignmentRelease = onAllTasksLostCallbackExecution.whenComplete((result, error) -> {
+        final CompletableFuture<Void> onAllTasksLostCallbackExecuted = requestOnAllTasksLostCallbackInvocation();
+        staleMemberAssignmentRelease = onAllTasksLostCallbackExecuted.whenComplete((result, error) -> {
             if (error != null) {
                 log.error("Task revocation callback invocation failed " +
                     "after member left group due to expired poll timer.", error);
@@ -768,8 +765,8 @@ public class StreamsMembershipManager implements RequestManager {
         log.debug("Member {} with epoch {} transitioned to {} state. It will release its " +
             "assignment and rejoin the group.", memberId, memberEpoch, MemberState.FENCED);
 
-        CompletableFuture<Void> callbackResult = requestOnAllTasksLostCallbackInvocation();
-        callbackResult.whenComplete((result, error) -> {
+        CompletableFuture<Void> onAllTasksLostCallbackExecuted = requestOnAllTasksLostCallbackInvocation();
+        onAllTasksLostCallbackExecuted.whenComplete((result, error) -> {
             if (error != null) {
                 log.error("onAllTasksLost callback invocation failed while releasing assignment" +
                     " after member got fenced. Member will rejoin the group anyways.", error);
@@ -1228,6 +1225,24 @@ public class StreamsMembershipManager implements RequestManager {
         rejoinedWhileReconciliationInProgress = false;
     }
 
+    private CompletableFuture<Void> requestOnTasksAssignedCallbackInvocation(final StreamsRebalanceData.Assignment assignment) {
+        final StreamsOnTasksAssignedCallbackNeededEvent onTasksAssignedCallbackNeededEvent = new StreamsOnTasksAssignedCallbackNeededEvent(assignment);
+        backgroundEventHandler.add(onTasksAssignedCallbackNeededEvent);
+        return onTasksAssignedCallbackNeededEvent.future();
+    }
+
+    private CompletableFuture<Void> requestOnAllTasksLostCallbackInvocation() {
+        final StreamsOnAllTasksLostCallbackNeededEvent onAllTasksLostCallbackNeededEvent = new StreamsOnAllTasksLostCallbackNeededEvent();
+        backgroundEventHandler.add(onAllTasksLostCallbackNeededEvent);
+        return onAllTasksLostCallbackNeededEvent.future();
+    }
+
+    public CompletableFuture<Void> requestOnTasksRevokedCallbackInvocation(final Set<StreamsRebalanceData.TaskId> activeTasksToRevoke) {
+        final StreamsOnTasksRevokedCallbackNeededEvent onTasksRevokedCallbackNeededEvent = new StreamsOnTasksRevokedCallbackNeededEvent(activeTasksToRevoke);
+        backgroundEventHandler.add(onTasksRevokedCallbackNeededEvent);
+        return onTasksRevokedCallbackNeededEvent.future();
+    }
+
     /**
      * Completes the future that marks the completed execution of the onTasksRevoked callback.
 
@@ -1289,23 +1304,5 @@ public class StreamsMembershipManager implements RequestManager {
             log.debug("The onAllTasksLost callback completed successfully; signaling to continue to the next phase of rebalance");
             future.complete(null);
         }
-    }
-
-    private CompletableFuture<Void> requestOnTasksAssignedCallbackInvocation(final StreamsRebalanceData.Assignment assignment) {
-        final StreamsOnTasksAssignedCallbackNeededEvent onTasksAssignedCallbackNeededEvent = new StreamsOnTasksAssignedCallbackNeededEvent(assignment);
-        backgroundEventHandler.add(onTasksAssignedCallbackNeededEvent);
-        return onTasksAssignedCallbackNeededEvent.future();
-    }
-
-    private CompletableFuture<Void> requestOnAllTasksLostCallbackInvocation() {
-        final StreamsOnAllTasksLostCallbackNeededEvent onAllTasksLostCallbackNeededEvent = new StreamsOnAllTasksLostCallbackNeededEvent();
-        backgroundEventHandler.add(onAllTasksLostCallbackNeededEvent);
-        return onAllTasksLostCallbackNeededEvent.future();
-    }
-
-    public CompletableFuture<Void> requestOnTasksRevokedCallbackInvocation(final Set<StreamsRebalanceData.TaskId> activeTasksToRevoke) {
-        final StreamsOnTasksRevokedCallbackNeededEvent onTasksRevokedCallbackNeededEvent = new StreamsOnTasksRevokedCallbackNeededEvent(activeTasksToRevoke);
-        backgroundEventHandler.add(onTasksRevokedCallbackNeededEvent);
-        return onTasksRevokedCallbackNeededEvent.future();
     }
 }

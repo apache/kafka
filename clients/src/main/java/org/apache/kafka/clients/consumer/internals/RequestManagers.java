@@ -223,10 +223,7 @@ public class RequestManagers implements Closeable {
                     if (streamsRebalanceEventsProcessor.isPresent()) {
                         streamsMembershipManager = new StreamsMembershipManager(
                             groupRebalanceConfig.groupId,
-                            backgroundEventHandler,
-                            streamsRebalanceEventsProcessor.get(),
-                            streamsRebalanceData.get(),
-                            subscriptions,
+                            streamsRebalanceData.get(), subscriptions, backgroundEventHandler,
                             logContext,
                             time,
                             metrics);
