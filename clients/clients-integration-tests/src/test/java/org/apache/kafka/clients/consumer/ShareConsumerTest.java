@@ -103,7 +103,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -326,12 +325,12 @@ public class ShareConsumerTest {
             // Waiting for heartbeat to propagate the subscription change.
             TestUtils.waitForCondition(() -> {
                 shareConsumer.poll(Duration.ofMillis(500));
-                return partitionExceptionMap.containsKey(tp) && partitionExceptionMap.containsKey(tp2);
+                return partitionOffsetsMap.containsKey(tp) && partitionOffsetsMap.containsKey(tp2);
             }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume records from the updated subscription");
 
             // Verifying if the callback was invoked without exceptions for the partitions for both topics.
-            assertNull(partitionExceptionMap.get(tp));
-            assertNull(partitionExceptionMap.get(tp2));
+            assertFalse(partitionExceptionMap.containsKey(tp));
+            assertFalse(partitionExceptionMap.containsKey(tp2));
             verifyShareGroupStateTopicRecordsProduced();
         }
     }
@@ -357,11 +356,11 @@ public class ShareConsumerTest {
 
             TestUtils.waitForCondition(() -> {
                 shareConsumer.poll(Duration.ofMillis(500));
-                return partitionExceptionMap.containsKey(tp);
+                return partitionOffsetsMap.containsKey(tp);
             }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to receive call to callback");
 
-            // We expect null exception as the acknowledgment error code is null.
-            assertNull(partitionExceptionMap.get(tp));
+            // We expect no exception as the acknowledgment error code is null.
+            assertFalse(partitionExceptionMap.containsKey(tp));
             verifyShareGroupStateTopicRecordsProduced();
         }
     }
@@ -389,9 +388,8 @@ public class ShareConsumerTest {
             shareConsumer.poll(Duration.ofMillis(1000));
             shareConsumer.close();
 
-            // We expect null exception as the acknowledgment error code is null.
-            assertTrue(partitionExceptionMap.containsKey(tp));
-            assertNull(partitionExceptionMap.get(tp));
+            // We expect no exception as the acknowledgment error code is null.
+            assertFalse(partitionExceptionMap.containsKey(tp));
             verifyShareGroupStateTopicRecordsProduced();
         }
     }
@@ -424,6 +422,11 @@ public class ShareConsumerTest {
         }
     }
 
+    /**
+     * Whenever using this class, if we create this class's objects multiple times in a single test, make sure that we have different instances of
+     * partitionExceptionMap passed to those objects so that we can capture the exception for the correct object and not override
+     * the partitionExceptionMap results in different calls.
+     */
     private static class TestableAcknowledgementCommitCallback implements AcknowledgementCommitCallback {
         private final Map<TopicPartition, Set<Long>> partitionOffsetsMap;
         private final Map<TopicPartition, Exception> partitionExceptionMap;
@@ -443,7 +446,7 @@ public class ShareConsumerTest {
                     mergedOffsets.addAll(newOffsets);
                     return mergedOffsets;
                 });
-                if (!partitionExceptionMap.containsKey(partition.topicPartition())) {
+                if (!partitionExceptionMap.containsKey(partition.topicPartition()) && exception != null) {
                     partitionExceptionMap.put(partition.topicPartition(), exception);
                 }
             });
@@ -677,10 +680,10 @@ public class ShareConsumerTest {
             // The callback will receive the acknowledgement responses asynchronously after the next poll.
             TestUtils.waitForCondition(() -> {
                 shareConsumer1.poll(Duration.ofMillis(1000));
-                return partitionExceptionMap1.containsKey(tp);
+                return partitionOffsetsMap1.containsKey(tp);
             }, 30000, 100L, () -> "Didn't receive call to callback");
 
-            assertNull(partitionExceptionMap1.get(tp));
+            assertFalse(partitionExceptionMap1.containsKey(tp));
             verifyShareGroupStateTopicRecordsProduced();
         }
     }
@@ -694,8 +697,7 @@ public class ShareConsumerTest {
             shareConsumer.subscribe(Set.of(tp.topic()));
 
             Map<TopicPartition, Set<Long>> partitionOffsetsMap1 = new HashMap<>();
-            Map<TopicPartition, Exception> partitionExceptionMap1 = new HashMap<>();
-            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap1, partitionExceptionMap1));
+            shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap1, Map.of()));
 
             // The acknowledgement mode moves to PENDING from UNKNOWN.
             ConsumerRecords<byte[], byte[]> records = shareConsumer.poll(Duration.ofMillis(5000));
@@ -716,7 +718,7 @@ public class ShareConsumerTest {
 
             TestUtils.waitForCondition(() -> {
                 shareConsumer.poll(Duration.ofMillis(500));
-                return partitionExceptionMap1.containsKey(tp);
+                return partitionOffsetsMap1.containsKey(tp);
             }, 30000, 100L, () -> "Didn't receive call to callback");
             verifyShareGroupStateTopicRecordsProduced();
         }
@@ -779,8 +781,7 @@ public class ShareConsumerTest {
 
             shareConsumer1.close();
 
-            assertTrue(partitionExceptionMap.containsKey(tp));
-            assertNull(partitionExceptionMap.get(tp));
+            assertFalse(partitionExceptionMap.containsKey(tp));
             verifyShareGroupStateTopicRecordsProduced();
         }
     }
@@ -953,10 +954,10 @@ public class ShareConsumerTest {
             // The callback will receive the acknowledgement responses after the next poll.
             TestUtils.waitForCondition(() -> {
                 shareConsumer.poll(Duration.ofMillis(1000));
-                return partitionExceptionMap1.containsKey(tp);
+                return partitionOffsetsMap1.containsKey(tp);
             }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Acknowledgement commit callback did not receive the response yet");
 
-            assertNull(partitionExceptionMap1.get(tp));
+            assertFalse(partitionExceptionMap1.containsKey(tp));
             verifyShareGroupStateTopicRecordsProduced();
         }
     }
@@ -2250,7 +2251,7 @@ public class ShareConsumerTest {
 
                 // Setting the acknowledgement commit callback to verify acknowledgement completion.
                 Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
-                shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, new HashMap<>()));
+                shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, Map.of()));
 
                 // We will not receive any records since the transaction for Message 2 was aborted. Wait for the
                 // aborted marker offset for Message 2 (3L) to be fetched and acknowledged by the consumer.
@@ -2266,7 +2267,7 @@ public class ShareConsumerTest {
 
                 // Setting the acknowledgement commit callback to verify acknowledgement completion.
                 Map<TopicPartition, Set<Long>> partitionOffsetsMap2 = new HashMap<>();
-                shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap2, new HashMap<>()));
+                shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap2, Map.of()));
 
                 records = waitedPoll(shareConsumer, 5000L, 1);
                 // Message 3 would be returned by this poll.
@@ -2349,7 +2350,7 @@ public class ShareConsumerTest {
 
                 // Setting the acknowledgement commit callback to verify acknowledgement completion.
                 Map<TopicPartition, Set<Long>> partitionOffsetsMap = new HashMap<>();
-                shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, new HashMap<>()));
+                shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap, Map.of()));
 
                 // We will not receive any records since the transaction for Message 2 was aborted. Wait for the
                 // aborted marker offset for Message 2 (3L) to be fetched and acknowledged by the consumer.
@@ -2365,7 +2366,7 @@ public class ShareConsumerTest {
 
                 // Setting the acknowledgement commit callback to verify acknowledgement completion.
                 Map<TopicPartition, Set<Long>> partitionOffsetsMap2 = new HashMap<>();
-                shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap2, new HashMap<>()));
+                shareConsumer.setAcknowledgementCommitCallback(new TestableAcknowledgementCommitCallback(partitionOffsetsMap2, Map.of()));
 
                 records = waitedPoll(shareConsumer, 5000L, 1);
                 // Message 3 would be returned by this poll.
