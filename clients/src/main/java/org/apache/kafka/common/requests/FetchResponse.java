@@ -31,7 +31,7 @@ import org.apache.kafka.common.record.Records;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -129,7 +129,7 @@ public class FetchResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errorCounts = new HashMap<>();
+        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
         updateErrorCounts(errorCounts, error());
         data.responses().forEach(topicResponse ->
             topicResponse.partitions().forEach(partition ->
