@@ -1069,7 +1069,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         groupsByTopicPartition.forEach((topicPartition, groupList) -> {
             CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> future = deleteShareGroups(topicPartition, groupList).thenCompose(groupErrMap -> {
                 DeleteGroupsResponseData.DeletableGroupResultCollection deletableGroupResults = new DeleteGroupsResponseData.DeletableGroupResultCollection();
-                List<String> retainedGroupIds = updateResponseAndGetCombinedGroupList(groupErrMap, groupList, deletableGroupResults);
+                List<String> retainedGroupIds = updateResponseAndGetNonErrorGroupList(groupErrMap, groupList, deletableGroupResults);
                 if (retainedGroupIds.isEmpty()) {
                     return CompletableFuture.completedFuture(deletableGroupResults);
                 }
@@ -1106,7 +1106,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * @param deletableGroupResults Collection of responses for delete groups request.
      * @return A list of all non-error groupIds
      */
-    private List<String> updateResponseAndGetCombinedGroupList(
+    private List<String> updateResponseAndGetNonErrorGroupList(
         Map<String, Errors> shareGroupErrMap,
         List<String> groupList,
         DeleteGroupsResponseData.DeletableGroupResultCollection deletableGroupResults
