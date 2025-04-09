@@ -423,9 +423,11 @@ public class ShareConsumerTest {
     }
 
     /**
-     * Whenever using this class, if we create this class's objects multiple times in a single test, make sure that we have different instances of
-     * partitionExceptionMap passed to those objects so that we can capture the exception for the correct object and not override
-     * the partitionExceptionMap results in different calls.
+     * Test implementation of AcknowledgementCommitCallback to track the completed acknowledgements.
+     * partitionOffsetsMap is used to track the offsets acknowledged for each partition.
+     * partitionExceptionMap is used to track the exception encountered for each partition if any.
+     * Note - Multiple calls to {@link #onComplete(Map, Exception)} will not update the partitionExceptionMap for any existing partitions,
+     * so please ensure to clear the partitionExceptionMap after every call to onComplete() in a single test.
      */
     private static class TestableAcknowledgementCommitCallback implements AcknowledgementCommitCallback {
         private final Map<TopicPartition, Set<Long>> partitionOffsetsMap;
