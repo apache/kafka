@@ -1074,35 +1074,37 @@ public class ClusterControlManagerTest {
             contactTime(new BrokerIdAndEpoch(1, 200)));
 
         time.sleep(brokerSessionTimeoutMs / 2);
-        assertThrows(DuplicateBrokerRegistrationException.class, () ->
-            clusterControl.registerBroker(new BrokerRegistrationRequestData().
-                    setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
-                    setBrokerId(0).
-                    setLogDirs(List.of(Uuid.fromString("yJGxmjfbQZSVFAlNM3uXZg"))).
-                    setFeatures(new BrokerRegistrationRequestData.FeatureCollection(
-                        Set.of(new BrokerRegistrationRequestData.Feature().
-                            setName(MetadataVersion.FEATURE_NAME).
-                            setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
-                            setMaxSupportedVersion(MetadataVersion.LATEST_PRODUCTION.featureLevel())).iterator())).
-                    setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")),
-                101L,
-                finalizedFeatures,
-                false));
-        // new registration should succeed immediatelly only if the broker is in controlled shutdown, 
-        // even if the last heartbeat was within the session timeout 
+        // new registration should succeed immediately only if the broker is fenced. (brokers which completed
+        // controlled shutdown will end up in fenced state)
         clusterControl.registerBroker(new BrokerRegistrationRequestData().
                 setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
-                setBrokerId(1).
-                setLogDirs(List.of(Uuid.fromString("b66ybsWIQoygs01vdjH07A"))).
+                setBrokerId(0).
+                setLogDirs(List.of(Uuid.fromString("yJGxmjfbQZSVFAlNM3uXZg"))).
                 setFeatures(new BrokerRegistrationRequestData.FeatureCollection(
                     Set.of(new BrokerRegistrationRequestData.Feature().
                         setName(MetadataVersion.FEATURE_NAME).
                         setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
                         setMaxSupportedVersion(MetadataVersion.LATEST_PRODUCTION.featureLevel())).iterator())).
-                setIncarnationId(Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")),
-            201L,
+                setIncarnationId(Uuid.fromString("0H4fUu1xQEKXFYwB1aBjhg")),
+            101L,
             finalizedFeatures,
             false);
+        // there is no guarantee a broker that was in controlled shutdown state finished shutting down.
+        // controller should wait the session timeout before allowing re-registrations
+        assertThrows(DuplicateBrokerRegistrationException.class, () ->
+            clusterControl.registerBroker(new BrokerRegistrationRequestData().
+                    setClusterId("pjvUwj3ZTEeSVQmUiH3IJw").
+                    setBrokerId(1).
+                    setLogDirs(List.of(Uuid.fromString("b66ybsWIQoygs01vdjH07A"))).
+                    setFeatures(new BrokerRegistrationRequestData.FeatureCollection(
+                        Set.of(new BrokerRegistrationRequestData.Feature().
+                            setName(MetadataVersion.FEATURE_NAME).
+                            setMinSupportedVersion(MetadataVersion.MINIMUM_VERSION.featureLevel()).
+                            setMaxSupportedVersion(MetadataVersion.LATEST_PRODUCTION.featureLevel())).iterator())).
+                    setIncarnationId(Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q")),
+                201L,
+                finalizedFeatures,
+                false));
     }
 
     private FeatureControlManager createFeatureControlManager() {
