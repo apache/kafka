@@ -27,7 +27,6 @@ import java.util.function.BiFunction;
 
 import static org.apache.kafka.common.security.oauthbearer.CachedFile.staticCacheRefreshPolicy;
 
-
 /**
  * {@code AssertionJwtTemplateFile} is used by the user to specify a JSON file on disk that contains static values
  * that can be loaded and used to construct the assertion. The file structure is a JSON containing optionally a
