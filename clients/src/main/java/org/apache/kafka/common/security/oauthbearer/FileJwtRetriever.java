@@ -18,7 +18,6 @@ package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingCachedFile;
 
 import java.io.File;
 import java.util.List;
@@ -27,13 +26,14 @@ import java.util.Map;
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
+import static org.apache.kafka.common.security.oauthbearer.CachedFile.staticCacheRefreshPolicy;
 
 /**
  * A {@link JwtRetriever} that will load the contents of a file, interpreting them as a JWT in serialized form.
  */
 public class FileJwtRetriever implements JwtRetriever {
 
-    private RefreshingCachedFile<String> jwtFile;
+    private CachedFile<String> jwtFile;
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
@@ -42,9 +42,10 @@ public class FileJwtRetriever implements JwtRetriever {
 
         try {
             // always non-null; to remove any newline chars or backend will report err
-            jwtFile = new RefreshingCachedFile<>(
+            jwtFile = new CachedFile<>(
                 fileName,
-                (file, contents) -> contents.trim()
+                (file, contents) -> contents.trim(),
+                staticCacheRefreshPolicy()
             );
         } catch (Exception e) {
             throw new KafkaException("An error occurred reading the OAuth JWT from " + fileName);

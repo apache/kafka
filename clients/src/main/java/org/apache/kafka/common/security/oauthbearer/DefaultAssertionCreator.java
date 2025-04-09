@@ -17,7 +17,6 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingCachedFile;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
@@ -38,6 +37,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.BiFunction;
 
+import static org.apache.kafka.common.security.oauthbearer.CachedFile.staticCacheRefreshPolicy;
+
 public class DefaultAssertionCreator implements AssertionCreator {
 
     static final String TOKEN_SIGNING_ALGORITHM_RS256 = "RS256";
@@ -56,12 +57,16 @@ public class DefaultAssertionCreator implements AssertionCreator {
 
     private final Time time;
     private final String algorithm;
-    private final RefreshingCachedFile<PrivateKey> privateKeyFile;
+    private final CachedFile<PrivateKey> privateKeyFile;
 
     public DefaultAssertionCreator(Time time, String algorithm, File privateKeyFile) {
         this.time = time;
         this.algorithm = algorithm;
-        this.privateKeyFile = new RefreshingCachedFile<>(privateKeyFile, PRIVATE_KEY_TRANSFORMER);
+        this.privateKeyFile = new CachedFile<>(
+            privateKeyFile,
+            PRIVATE_KEY_TRANSFORMER,
+            staticCacheRefreshPolicy()
+        );
     }
 
     @Override

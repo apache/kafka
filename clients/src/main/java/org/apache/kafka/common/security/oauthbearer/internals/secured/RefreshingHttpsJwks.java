@@ -19,7 +19,6 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 
 import org.jose4j.http.Get;
 import org.jose4j.jwk.HttpsJwks;
@@ -40,6 +39,8 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
+
+import javax.net.ssl.SSLContext;
 
 /**
  * Implementation of {@link HttpsJwks} that will periodically refresh the JWKS cache to reduce or
@@ -92,8 +93,6 @@ public class RefreshingHttpsJwks implements Closeable {
 
     private final ScheduledExecutorService executorService;
 
-    private final Optional<SslResource> sslResource;
-
     private final long refreshRetryBackoffMs;
 
     private final long refreshRetryBackoffMaxMs;
@@ -119,14 +118,13 @@ public class RefreshingHttpsJwks implements Closeable {
 
     public RefreshingHttpsJwks(Time time,
                                HttpsJwks httpsJwks,
-                               Optional<SslResource> sslResource,
+                               Optional<SSLContext> sslContext,
                                ScheduledExecutorService executorService,
                                long refreshMs,
                                long refreshRetryBackoffMs,
                                long refreshRetryBackoffMaxMs) {
         this.time = time;
         this.httpsJwks = httpsJwks;
-        this.sslResource = sslResource;
         this.executorService = executorService;
         this.refreshRetryBackoffMs = refreshRetryBackoffMs;
         this.refreshRetryBackoffMaxMs = refreshRetryBackoffMaxMs;
@@ -137,9 +135,9 @@ public class RefreshingHttpsJwks implements Closeable {
             }
         };
 
-        sslResource.ifPresent(r -> {
+        sslContext.ifPresent(c -> {
             Get get = new Get();
-            get.setSslSocketFactory(r.sslSocketFactory());
+            get.setSslSocketFactory(c.getSocketFactory());
             httpsJwks.setSimpleHttpGet(get);
         });
 
@@ -186,8 +184,6 @@ public class RefreshingHttpsJwks implements Closeable {
             }
         } catch (Exception e) {
             log.warn("JWKS validation key refresh thread error during close", e);
-        } finally {
-            sslResource.ifPresent(sslResource -> Utils.closeQuietly(sslResource, "sslResource"));
         }
     }
 

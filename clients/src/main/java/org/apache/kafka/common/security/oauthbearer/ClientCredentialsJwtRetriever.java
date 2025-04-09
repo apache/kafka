@@ -16,14 +16,15 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsRequestGenerator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ConfigurationUtils;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestGenerator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.SslResource;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
+import java.net.MalformedURLException;
 import java.net.URI;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
@@ -59,6 +60,7 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
 
     private final Time time;
 
+    private Optional<SslResource> sslResource = Optional.empty();
     private HttpRequestGenerator requestGenerator;
     private long retryBackoffMs;
     private long retryBackoffMaxMs;
@@ -80,7 +82,14 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
         retryBackoffMs =  cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS);
         retryBackoffMaxMs = cu.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
 
-//        Optional<SslResource> sslResource = jou.maybeCreateSslResource(url);
+        URI tokenEndpoint = cu.validateUri(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+
+        try {
+            sslResource = jou.maybeCreateSslResource(tokenEndpoint.toURL());
+        } catch (MalformedURLException e) {
+            throw new ConfigException("An error occurred parsing the OAuth token endpoint URL", e);
+        }
+
         Optional<Integer> connectTimeoutMs = Optional.ofNullable(cu.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false));
 
         HttpClient.Builder clientBuilder = HttpClient.newBuilder();
@@ -88,12 +97,11 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
         if (connectTimeoutMs.isPresent())
             clientBuilder = clientBuilder.connectTimeout(Duration.ofMillis(connectTimeoutMs.get()));
 
-//        if (sslResource.isPresent())
-//            clientBuilder = clientBuilder.sslContext(sslResource.get());
+        if (sslResource.isPresent())
+            clientBuilder = clientBuilder.sslContext(sslResource.get().sslContext());
 
         client = clientBuilder.build();
 
-        URI tokenEndpoint = cu.validateUri(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
         String clientId = configOrJaas(
             configs,
             cu,
@@ -175,5 +183,6 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
     @Override
     public void close() {
         Utils.closeQuietly(requestGenerator, "requestGenerator");
+        sslResource.ifPresent(r -> Utils.closeQuietly(r, "sslResource"));
     }
 }

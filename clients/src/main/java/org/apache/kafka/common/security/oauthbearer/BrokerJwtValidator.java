@@ -54,6 +54,7 @@ import java.util.concurrent.Executors;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
+import javax.net.ssl.SSLContext;
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS;
@@ -107,6 +108,8 @@ public class BrokerJwtValidator implements JwtValidator {
 
     private CloseableVerificationKeyResolver verificationKeyResolver;
 
+    private Optional<SslResource> sslResource = Optional.empty();
+
     private JwtConsumer jwtConsumer;
 
     private String scopeClaimName;
@@ -132,7 +135,8 @@ public class BrokerJwtValidator implements JwtValidator {
             } else {
                 JaasOptionsUtils jou = new JaasOptionsUtils(saslMechanism, jaasConfigEntries);
                 HttpsJwks httpsJwks = new HttpsJwks(jwksEndpointUrl.toString());
-                Optional<SslResource> sslResourceOpt = jou.maybeCreateSslResource(jwksEndpointUrl);
+                sslResource = jou.maybeCreateSslResource(jwksEndpointUrl);
+                Optional<SSLContext> sslContext = sslResource.map(SslResource::sslContext);
                 long refreshMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, true, 0L);
                 long refreshRetryBackoffMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS);
                 long refreshRetryBackoffMaxMs = cu.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS);
@@ -140,7 +144,7 @@ public class BrokerJwtValidator implements JwtValidator {
                 RefreshingHttpsJwks refreshingHttpsJwks = new RefreshingHttpsJwks(
                     time,
                     httpsJwks,
-                    sslResourceOpt,
+                    sslContext,
                     Executors.newSingleThreadScheduledExecutor(),
                     refreshMs,
                     refreshRetryBackoffMs,
@@ -201,6 +205,7 @@ public class BrokerJwtValidator implements JwtValidator {
     @Override
     public void close() {
         Utils.closeQuietly(verificationKeyResolver, "verificationKeyResolver");
+        sslResource.ifPresent(r -> Utils.closeQuietly(r, "sslResource"));
     }
 
     /**

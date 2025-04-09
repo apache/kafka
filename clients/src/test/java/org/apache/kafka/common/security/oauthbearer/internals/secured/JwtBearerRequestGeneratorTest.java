@@ -18,6 +18,7 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.security.oauthbearer.AssertionCreator;
 import org.apache.kafka.common.security.oauthbearer.AssertionJwtTemplate;
+import org.apache.kafka.common.security.oauthbearer.JwtBearerRequestGenerator;
 
 import org.junit.jupiter.api.Test;
 
@@ -26,7 +27,7 @@ import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
-import static org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBearerRequestGenerator.GRANT_TYPE;
+import static org.apache.kafka.common.security.oauthbearer.JwtBearerRequestGenerator.GRANT_TYPE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class JwtBearerRequestGeneratorTest extends HttpRequestGeneratorTest {

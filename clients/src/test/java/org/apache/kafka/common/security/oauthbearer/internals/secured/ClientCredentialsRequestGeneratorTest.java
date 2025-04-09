@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.security.oauthbearer.ClientCredentialsJwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.ClientCredentialsRequestGenerator;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

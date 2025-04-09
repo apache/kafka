@@ -17,7 +17,6 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingCachedFile;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -25,6 +24,8 @@ import java.io.File;
 import java.util.Collections;
 import java.util.Map;
 import java.util.function.BiFunction;
+
+import static org.apache.kafka.common.security.oauthbearer.CachedFile.staticCacheRefreshPolicy;
 
 
 /**
@@ -115,7 +116,7 @@ import java.util.function.BiFunction;
  * }
  * </pre>
  */
-public class AssertionJwtTemplateFile implements AssertionJwtTemplate {
+public class FileAssertionJwtTemplate implements AssertionJwtTemplate {
 
     @SuppressWarnings("unchecked")
     private static final BiFunction<File, String, CachedTemplate> JSON_TRANSFORMER = (file, json) -> {
@@ -132,10 +133,10 @@ public class AssertionJwtTemplateFile implements AssertionJwtTemplate {
         }
     };
 
-    private final RefreshingCachedFile<CachedTemplate> jsonFile;
+    private final CachedFile<CachedTemplate> jsonFile;
 
-    public AssertionJwtTemplateFile(File jsonFile) {
-        this.jsonFile = new RefreshingCachedFile<>(jsonFile, JSON_TRANSFORMER);
+    public FileAssertionJwtTemplate(File jsonFile) {
+        this.jsonFile = new CachedFile<>(jsonFile, JSON_TRANSFORMER, staticCacheRefreshPolicy());
     }
 
     @Override

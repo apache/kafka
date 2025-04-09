@@ -19,10 +19,7 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
-import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
-import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
-import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.Utils;
 
 import org.slf4j.Logger;
@@ -35,7 +32,6 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 
-import javax.net.ssl.SSLSocketFactory;
 import javax.security.auth.login.AppConfigurationEntry;
 
 /**
@@ -69,11 +65,8 @@ public class JaasOptionsUtils {
     public Optional<SslResource> maybeCreateSslResource(URL url) {
         if (url.getProtocol().equalsIgnoreCase("https")) {
             Map<String, ?> sslClientConfig = getSslClientConfig();
-            SslFactory sslFactory = new SslFactory(ConnectionMode.CLIENT);
-            sslFactory.configure(sslClientConfig);
-            SSLSocketFactory sslSocketFactory = ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext().getSocketFactory();
-            log.debug("Created SSLSocketFactory from: {}", sslClientConfig);
-            return Optional.of(new SslResource(sslFactory, sslSocketFactory));
+            log.debug("Creating SSLSocketFactory from JAAS configuration: {}", sslClientConfig);
+            return Optional.of(SslResource.create(sslClientConfig));
         } else {
             return Optional.empty();
         }

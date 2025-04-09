@@ -16,32 +16,56 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.network.ConnectionMode;
+import org.apache.kafka.common.security.ssl.DefaultSslEngineFactory;
 import org.apache.kafka.common.security.ssl.SslFactory;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.Closeable;
 import java.io.IOException;
+import java.util.Map;
 
-import javax.net.ssl.SSLSocketFactory;
+import javax.net.ssl.SSLContext;
 
 /**
- * {@code SslResource} couples the {@link SslFactory} and {@link SSLSocketFactory} so that
+ * {@code SslResource} couples the {@link SslFactory} and {@link SSLContext} so that
  * {@link #sslFactory} can be properly {@link SslFactory#close() closed} during closing of the overall
- * OAuth login/validation module.
+ * OAuth login/validation module. The {@link SSLContext} API is what the HTTP clients use, so the two
+ * need to be kept closely together.
  */
 public class SslResource implements Closeable {
 
     private final SslFactory sslFactory;
 
-    private final SSLSocketFactory sslSocketFactory;
+    private final SSLContext sslContext;
 
-    public SslResource(SslFactory sslFactory, SSLSocketFactory sslSocketFactory) {
+    public SslResource(SslFactory sslFactory, SSLContext sslContext) {
         this.sslFactory = sslFactory;
-        this.sslSocketFactory = sslSocketFactory;
+        this.sslContext = sslContext;
     }
 
-    public SSLSocketFactory sslSocketFactory() {
-        return sslSocketFactory;
+    public static SslResource create(Map<String, ?> configs) {
+        SslFactory sslFactory = new SslFactory(ConnectionMode.CLIENT);
+        sslFactory.configure(configs);
+
+        if (!((sslFactory.sslEngineFactory()) instanceof DefaultSslEngineFactory)) {
+            String message = String.format(
+                "The OAuth %s configuration includes a custom SSL factory class (%s) which is not a supported JAAS option for OAuth",
+                SaslConfigs.SASL_JAAS_CONFIG,
+                SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG
+            );
+            throw new ConfigException(message);
+        }
+
+        SSLContext sslContext = ((DefaultSslEngineFactory) sslFactory.sslEngineFactory()).sslContext();
+        return new SslResource(sslFactory, sslContext);
+    }
+
+    public SSLContext sslContext() {
+        return sslContext;
     }
 
     @Override

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
+import org.apache.kafka.common.security.oauthbearer.HttpRequestGenerator;
+
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
