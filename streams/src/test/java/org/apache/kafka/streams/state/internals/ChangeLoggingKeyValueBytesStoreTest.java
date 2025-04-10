@@ -74,7 +74,7 @@ import static org.mockito.Mockito.when;
 @SuppressWarnings("rawtypes")
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
-class ChangeLoggingKeyValueBytesStoreTest {
+public class ChangeLoggingKeyValueBytesStoreTest {
 
     private final MockRecordCollector collector = new MockRecordCollector();
     @Mock
@@ -190,7 +190,7 @@ class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    void shouldDelegateInit() {
+    public void shouldDelegateInit() {
         final InternalMockProcessorContext mockContext = mockContext();
         final StateStore outer = new ChangeLoggingKeyValueBytesStore(innerMock);
         outer.init(mockContext, outer);
@@ -198,7 +198,7 @@ class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    void shouldWriteKeyValueBytesToInnerStoreOnPut() {
+    public void shouldWriteKeyValueBytesToInnerStoreOnPut() {
         final Map<Bytes, byte[]> mockMap = new HashMap<>();
         mockPut(mockMap);
         mockGet(mockMap);
@@ -212,7 +212,7 @@ class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    void shouldWriteAllKeyValueToInnerStoreOnPutAll() {
+    public void shouldWriteAllKeyValueToInnerStoreOnPutAll() {
         final Map<Bytes, byte[]> mockMap = new HashMap<>();
         mockPutAll(mockMap);
         mockGet(mockMap);
@@ -231,7 +231,7 @@ class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    void shouldPropagateDelete() {
+    public void shouldPropagateDelete() {
         final Map<Bytes, byte[]> mockMap = new HashMap<>();
         mockPut(mockMap);
         mockGet(mockMap);
@@ -246,7 +246,7 @@ class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    void shouldReturnOldValueOnDelete() {
+    public void shouldReturnOldValueOnDelete() {
         final Map<Bytes, byte[]> mockMap = new HashMap<>();
         mockPut(mockMap);
         mockDelete(mockMap);
@@ -257,7 +257,7 @@ class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    void shouldLogKeyNullOnDelete() {
+    public void shouldLogKeyNullOnDelete() {
         final Map<Bytes, byte[]> mockMap = new HashMap<>();
         mockPut(mockMap);
         mockDelete(mockMap);
@@ -274,7 +274,7 @@ class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    void shouldWriteToInnerOnPutIfAbsentNoPreviousValue() {
+    public void shouldWriteToInnerOnPutIfAbsentNoPreviousValue() {
         final Map<Bytes, byte[]> mockMap = new HashMap<>();
         mockPutIfAbsent(mockMap);
         mockGet(mockMap);
@@ -285,7 +285,7 @@ class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    void shouldNotWriteToInnerOnPutIfAbsentWhenValueForKeyExists() {
+    public void shouldNotWriteToInnerOnPutIfAbsentWhenValueForKeyExists() {
         final Map<Bytes, byte[]> mockMap = new HashMap<>();
         mockPut(mockMap);
         mockPutIfAbsent(mockMap);
@@ -298,7 +298,7 @@ class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    void shouldWriteToChangelogOnPutIfAbsentWhenNoPreviousValue() {
+    public void shouldWriteToChangelogOnPutIfAbsentWhenNoPreviousValue() {
         final Map<Bytes, byte[]> mockMap = new HashMap<>();
         mockPutIfAbsent(mockMap);
         mockPosition();
@@ -311,7 +311,7 @@ class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    void shouldNotWriteToChangeLogOnPutIfAbsentWhenValueForKeyExists() {
+    public void shouldNotWriteToChangeLogOnPutIfAbsentWhenValueForKeyExists() {
         final Map<Bytes, byte[]> mockMap = new HashMap<>();
         mockPut(mockMap);
         mockPutIfAbsent(mockMap);
@@ -326,7 +326,7 @@ class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    void shouldReturnCurrentValueOnPutIfAbsent() {
+    public void shouldReturnCurrentValueOnPutIfAbsent() {
         final Map<Bytes, byte[]> mockMap = new HashMap<>();
         mockPut(mockMap);
         mockPutIfAbsent(mockMap);
@@ -337,7 +337,7 @@ class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    void shouldReturnNullOnPutIfAbsentWhenNoPreviousValue() {
+    public void shouldReturnNullOnPutIfAbsentWhenNoPreviousValue() {
         final Map<Bytes, byte[]> mockMap = new HashMap<>();
         mockPutIfAbsent(mockMap);
         mockPosition();
@@ -346,7 +346,7 @@ class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    void shouldReturnValueOnGetWhenExists() {
+    public void shouldReturnValueOnGetWhenExists() {
         final Map<Bytes, byte[]> mockMap = new HashMap<>();
         mockPut(mockMap);
         mockGet(mockMap);
@@ -357,7 +357,7 @@ class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    void shouldGetRecordsWithPrefixKey() {
+    public void shouldGetRecordsWithPrefixKey() {
         final Map<Bytes, byte[]> mockMap = new HashMap<>();
         mockPut(mockMap);
         mockPrefixScan(mockMap);
@@ -385,7 +385,7 @@ class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    void shouldReturnNullOnGetWhenDoesntExist() {
+    public void shouldReturnNullOnGetWhenDoesntExist() {
         final Map<Bytes, byte[]> mockMap = new HashMap<>();
         mockGet(mockMap);
 
@@ -393,7 +393,7 @@ class ChangeLoggingKeyValueBytesStoreTest {
     }
 
     @Test
-    void shouldLogPositionOnPut() {
+    public void shouldLogPositionOnPut() {
         final Map<Bytes, byte[]> mockMap = new HashMap<>();
         mockPut(mockMap);
         mockPosition();
