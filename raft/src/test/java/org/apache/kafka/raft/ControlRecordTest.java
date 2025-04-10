@@ -34,24 +34,24 @@ public final class ControlRecordTest {
     @Test
     void testCtr() {
         // Valid constructions
-        new ControlRecord(ControlRecordType.LEADER_CHANGE, new LeaderChangeMessage());
-        new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord());
-        new ControlRecord(ControlRecordType.SNAPSHOT_FOOTER, new SnapshotFooterRecord());
-        new ControlRecord(ControlRecordType.KRAFT_VERSION, new KRaftVersionRecord());
-        new ControlRecord(ControlRecordType.KRAFT_VOTERS, new VotersRecord());
+        ControlRecord.of(ControlRecordType.LEADER_CHANGE, new LeaderChangeMessage());
+        ControlRecord.of(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord());
+        ControlRecord.of(ControlRecordType.SNAPSHOT_FOOTER, new SnapshotFooterRecord());
+        ControlRecord.of(ControlRecordType.KRAFT_VERSION, new KRaftVersionRecord());
+        ControlRecord.of(ControlRecordType.KRAFT_VOTERS, new VotersRecord());
 
         // Invalid constructions
         assertThrows(
             IllegalArgumentException.class,
-            () -> new ControlRecord(ControlRecordType.ABORT, new SnapshotFooterRecord())
+            () -> ControlRecord.of(ControlRecordType.ABORT, new SnapshotFooterRecord())
         );
         assertThrows(
             IllegalArgumentException.class,
-            () -> new ControlRecord(ControlRecordType.LEADER_CHANGE, new SnapshotHeaderRecord())
+            () -> ControlRecord.of(ControlRecordType.LEADER_CHANGE, new SnapshotHeaderRecord())
         );
         assertThrows(
             IllegalArgumentException.class,
-            () -> new ControlRecord(ControlRecordType.SNAPSHOT_FOOTER, Mockito.mock(ApiMessage.class))
+            () -> ControlRecord.of(ControlRecordType.SNAPSHOT_FOOTER, Mockito.mock(ApiMessage.class))
         );
     }
 

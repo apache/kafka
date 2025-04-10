@@ -253,7 +253,7 @@ public class MetadataLoaderTest {
                             100,
                             4000,
                             10,
-                            List.of(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
+                            List.of(ControlRecord.of(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
                         ),
                         Batch.data(0, 0, 0, 0,
                             List.of(new ApiMessageAndVersion(new FeatureLevelRecord().
@@ -386,7 +386,7 @@ public class MetadataLoaderTest {
                     100,
                     4000,
                     10,
-                    List.of(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
+                    List.of(ControlRecord.of(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
                 )
             )
         );
@@ -485,7 +485,7 @@ public class MetadataLoaderTest {
                         100,
                         4000,
                         10,
-                        List.of(new ControlRecord(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
+                        List.of(ControlRecord.of(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord()))
                     )
                 )
             ).setTime(time);

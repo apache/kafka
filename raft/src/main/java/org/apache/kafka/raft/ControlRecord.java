@@ -23,8 +23,11 @@ import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.record.ControlRecordUtils;
 
+import java.nio.ByteBuffer;
 import java.util.Objects;
+import java.util.Optional;
 
 public final class ControlRecord {
     private final ControlRecordType recordType;
@@ -40,16 +43,21 @@ public final class ControlRecord {
         );
     }
 
-    public static ControlRecord build(ControlRecordType recordType, ApiMessage message) {
-        validate(recordType, message);
-        return buildValidated(recordType, message);
-    }
-
-    public static ControlRecord buildValidated(ControlRecordType recordType, ApiMessage message) {
+    public static ControlRecord of(Optional<ByteBuffer> key, Optional<ByteBuffer> value) {
+        ControlRecordType recordType = ControlRecordType.parse(key.get());
+        final ApiMessage message = switch (recordType) {
+            case LEADER_CHANGE -> ControlRecordUtils.deserializeLeaderChangeMessage(value.get());
+            case SNAPSHOT_HEADER -> ControlRecordUtils.deserializeSnapshotHeaderRecord(value.get());
+            case SNAPSHOT_FOOTER -> ControlRecordUtils.deserializeSnapshotFooterRecord(value.get());
+            case KRAFT_VERSION -> ControlRecordUtils.deserializeKRaftVersionRecord(value.get());
+            case KRAFT_VOTERS -> ControlRecordUtils.deserializeVotersRecord(value.get());
+            default -> throw new IllegalArgumentException(String.format("Unknown control record type %s", recordType));
+        };
         return new ControlRecord(recordType, message);
     }
 
-    private static void validate(ControlRecordType recordType, ApiMessage message) {
+    //this is for test only
+    public static ControlRecord of(ControlRecordType recordType, ApiMessage message) {
         switch (recordType) {
             case LEADER_CHANGE:
                 if (!(message instanceof LeaderChangeMessage)) {
@@ -79,9 +87,10 @@ public final class ControlRecord {
             default:
                 throw new IllegalArgumentException(String.format("Unknown control record type %s", recordType));
         }
+        return new ControlRecord(recordType, message);
     }
 
-    public ControlRecord(ControlRecordType recordType, ApiMessage message) {
+    private ControlRecord(ControlRecordType recordType, ApiMessage message) {
         this.recordType = recordType;
         this.message = message;
     }
