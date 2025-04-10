@@ -914,11 +914,10 @@ class KafkaRaftClientTest {
         RecordBatch batch = records.batches().iterator().next();
         assertTrue(batch.isControlBatch());
 
-
         Record expectedRecord = batch.iterator().next();
         assertEquals(electionTimestamp, expectedRecord.timestamp());
-        RaftClientTestContext.verifyLeaderChangeMessage(localId, Arrays.asList(localId, otherNodeId),
-            Arrays.asList(otherNodeId, localId), expectedRecord.key(), expectedRecord.value());
+        RaftClientTestContext.verifyLeaderChangeMessage(localId, List.of(localId, otherNodeId),
+                List.of(otherNodeId, localId), expectedRecord.key(), expectedRecord.value());
     }
 
     @ParameterizedTest
@@ -966,8 +965,8 @@ class KafkaRaftClientTest {
 
         Record expectedRecord = batch.iterator().next();
         assertEquals(electionTimestamp, expectedRecord.timestamp());
-        RaftClientTestContext.verifyLeaderChangeMessage(localId, Arrays.asList(localId, firstNodeId, secondNodeId),
-            Arrays.asList(voterId, localId), expectedRecord.key(), expectedRecord.value());
+        RaftClientTestContext.verifyLeaderChangeMessage(localId, List.of(localId, firstNodeId, secondNodeId),
+                List.of(voterId, localId), expectedRecord.key(), expectedRecord.value());
     }
 
     @ParameterizedTest
@@ -3965,8 +3964,8 @@ class KafkaRaftClientTest {
 
         Record expectedRecord = readRecords.get(0);
         assertEquals(now, expectedRecord.timestamp());
-        RaftClientTestContext.verifyLeaderChangeMessage(localId, Collections.singletonList(localId),
-            Collections.singletonList(localId), expectedRecord.key(), expectedRecord.value());
+        RaftClientTestContext.verifyLeaderChangeMessage(localId, List.of(localId),
+                List.of(localId), expectedRecord.key(), expectedRecord.value());
 
         MutableRecordBatch batch = batches.get(1);
         assertEquals(1, batch.partitionLeaderEpoch());
