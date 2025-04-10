@@ -171,12 +171,24 @@ public class TransactionManager {
      *
      * See KAFKA-14831 for more detail.
      */
-    public interface InvalidTransitionPolicy {
-        boolean shouldPoisonState();
+    public interface InvalidTransitionAttemptPolicy {
+
+        /**
+         * Callback to determine if the transaction manager's {@link #currentState} should be set to
+         * {@link State#FATAL_ERROR} to prevent possible transaction corruption.
+         *
+         * @return {@code true} to set state to {@link State#FATAL_ERROR} before throwing an exception,
+         *         {@code false} to throw an exception without first changing the state
+         */
+        boolean isFatalState();
     }
 
-    public static final InvalidTransitionPolicy DEFAULT_INVALID_TRANSITION_POLICY = () -> Thread.currentThread() instanceof Sender.SenderThread;
-    private final InvalidTransitionPolicy invalidTransitionPolicy;
+    /**
+     * The default policy is to poison the internal {@link #currentState state} if an invalid state transition is
+     * attempted on the {@link Sender.SenderThread sender's thread}.
+     */
+    public static final InvalidTransitionAttemptPolicy DEFAULT_INVALID_TRANSITION_ATTEMPT_POLICY = () -> Thread.currentThread() instanceof Sender.SenderThread;
+    private final InvalidTransitionAttemptPolicy invalidTransitionAttemptPolicy;
 
     private PendingStateTransition pendingTransition;
 
@@ -262,7 +274,7 @@ public class TransactionManager {
                               final int transactionTimeoutMs,
                               final long retryBackoffMs,
                               final ApiVersions apiVersions) {
-        this(logContext, transactionalId, transactionTimeoutMs, retryBackoffMs, apiVersions, DEFAULT_INVALID_TRANSITION_POLICY);
+        this(logContext, transactionalId, transactionTimeoutMs, retryBackoffMs, apiVersions, DEFAULT_INVALID_TRANSITION_ATTEMPT_POLICY);
     }
 
     public TransactionManager(final LogContext logContext,
@@ -270,7 +282,7 @@ public class TransactionManager {
                               final int transactionTimeoutMs,
                               final long retryBackoffMs,
                               final ApiVersions apiVersions,
-                              final InvalidTransitionPolicy invalidTransitionPolicy) {
+                              final InvalidTransitionAttemptPolicy invalidTransitionAttemptPolicy) {
         this.producerIdAndEpoch = ProducerIdAndEpoch.NONE;
         this.transactionalId = transactionalId;
         this.log = logContext.logger(TransactionManager.class);
@@ -287,7 +299,7 @@ public class TransactionManager {
         this.retryBackoffMs = retryBackoffMs;
         this.txnPartitionMap = new TxnPartitionMap(logContext);
         this.apiVersions = apiVersions;
-        this.invalidTransitionPolicy = invalidTransitionPolicy;
+        this.invalidTransitionAttemptPolicy = invalidTransitionAttemptPolicy;
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
@@ -1074,7 +1086,7 @@ public class TransactionManager {
             String message = idString + "Invalid transition attempted from state "
                     + currentState.name() + " to state " + target.name();
 
-            if (invalidTransitionPolicy.shouldPoisonState()) {
+            if (invalidTransitionAttemptPolicy.isFatalState()) {
                 currentState = State.FATAL_ERROR;
                 lastError = new IllegalStateException(message);
                 throw lastError;
