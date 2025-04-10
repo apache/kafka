@@ -21,7 +21,6 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBeare
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.Collections;
@@ -37,12 +36,11 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
 
 public class FileJwtRetrieverTest extends OAuthBearerTest {
 
     @Test
-    public void testFileTokenRetrieverHandlesNewline() throws IOException {
+    public void testFileTokenRetrieverHandlesNewline() throws Exception {
         Calendar cal = Calendar.getInstance(TimeZone.getTimeZone("UTC"));
         long cur = cal.getTimeInMillis() / 1000;
         String exp = "" + (cur + 60 * 60);  // 1 hour in future
@@ -64,8 +62,6 @@ public class FileJwtRetrieverTest extends OAuthBearerTest {
             OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
             handler.handle(new Callback[]{callback});
             assertEquals(callback.token().value(), expected);
-        } catch (Exception e) {
-            fail(e);
         }
     }
 }

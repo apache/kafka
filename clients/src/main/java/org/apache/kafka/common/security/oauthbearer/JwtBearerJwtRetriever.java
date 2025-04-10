@@ -40,6 +40,9 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERT
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateFile;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateInteger;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUri;
 
 public class JwtBearerJwtRetriever implements JwtRetriever {
 
@@ -64,12 +67,12 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
         OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, saslMechanism);
         OAuthBearerJaasConfig jaasConfig = new OAuthBearerJaasConfig(saslMechanism, jaasConfigEntries);
 
-        URI tokenEndpoint = oauthConfig.validateUri(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
-        retryBackoffMs =  oauthConfig.validateLong(SASL_LOGIN_RETRY_BACKOFF_MS);
-        retryBackoffMaxMs = oauthConfig.validateLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
+        URI tokenEndpoint = validateUri(oauthConfig, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+        retryBackoffMs =  oauthConfig.getLong(SASL_LOGIN_RETRY_BACKOFF_MS);
+        retryBackoffMaxMs = oauthConfig.getLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
         sslResource = OAuthBearerUtils.maybeCreateSslResource(tokenEndpoint, jaasConfig);
 
-        Optional<Integer> connectTimeoutMs = Optional.ofNullable(oauthConfig.validateInteger(SASL_LOGIN_CONNECT_TIMEOUT_MS, false));
+        Optional<Integer> connectTimeoutMs = Optional.ofNullable(validateInteger(oauthConfig, SASL_LOGIN_CONNECT_TIMEOUT_MS, false));
         HttpClient.Builder clientBuilder = HttpClient.newBuilder();
 
         if (connectTimeoutMs.isPresent())
@@ -83,16 +86,16 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
         AssertionCreator assertionCreator;
         AssertionJwtTemplate assertionJwtTemplate;
 
-        if (oauthConfig.validateString(SASL_OAUTHBEARER_ASSERTION_FILE, false) != null) {
-            File assertionFile = oauthConfig.validateFile(SASL_OAUTHBEARER_ASSERTION_FILE);
+        if (oauthConfig.containsKey(SASL_OAUTHBEARER_ASSERTION_FILE)) {
+            File assertionFile = validateFile(oauthConfig, SASL_OAUTHBEARER_ASSERTION_FILE);
             assertionCreator = new FileAssertionCreator(assertionFile);
             assertionJwtTemplate = new StaticAssertionJwtTemplate(Map.of());
         } else {
-            String algorithm = oauthConfig.validateString(SASL_OAUTHBEARER_ASSERTION_ALGORITHM);
-            File privateKeyFile = oauthConfig.validateFile(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE);
+            String algorithm = oauthConfig.getString(SASL_OAUTHBEARER_ASSERTION_ALGORITHM);
+            File privateKeyFile = validateFile(oauthConfig, SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE);
             assertionCreator = new DefaultAssertionCreator(time, algorithm, privateKeyFile);
 
-            File assertionTemplateFile = oauthConfig.validateFile(SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE);
+            File assertionTemplateFile = validateFile(oauthConfig, SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE);
             assertionJwtTemplate = new FileAssertionJwtTemplate(assertionTemplateFile);
         }
 

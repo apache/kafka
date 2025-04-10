@@ -185,27 +185,23 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         moduleOptions = OAuthBearerJaasConfig.create(saslMechanism, jaasConfigEntries);
 
-        try {
-            this.jwtRetriever = OAuthBearerUtils.getConfiguredInstanceOrDefault(
-                configs,
-                saslMechanism,
-                jaasConfigEntries,
-                SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS,
-                JwtRetriever.class
-            );
+        this.jwtRetriever = OAuthBearerUtils.getConfiguredInstanceOrDefault(
+            configs,
+            saslMechanism,
+            jaasConfigEntries,
+            SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS,
+            JwtRetriever.class
+        );
 
-            this.jwtValidator = OAuthBearerUtils.getConfiguredInstanceOrDefault(
-                configs,
-                saslMechanism,
-                jaasConfigEntries,
-                SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS,
-                JwtValidator.class
-            );
+        this.jwtValidator = OAuthBearerUtils.getConfiguredInstanceOrDefault(
+            configs,
+            saslMechanism,
+            jaasConfigEntries,
+            SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS,
+            JwtValidator.class
+        );
 
-            this.isInitialized = true;
-        } catch (Throwable t) {
-            throw new ConfigException("The OAuth login configuration encountered an error during initialization", t);
-        }
+        this.isInitialized = true;
     }
 
     void configure(JwtRetriever jwtRetriever,

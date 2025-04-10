@@ -26,6 +26,7 @@ import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 import static org.apache.kafka.common.security.oauthbearer.CachedFile.staticCacheRefreshPolicy;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateFile;
 
 /**
  * A {@link JwtRetriever} that will load the contents of a file, interpreting them as a JWT in serialized form.
@@ -37,7 +38,7 @@ public class FileJwtRetriever implements JwtRetriever {
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, saslMechanism);
-        File fileName = oauthConfig.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+        File fileName = validateFile(oauthConfig, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
         try {
             // always non-null; to remove any newline chars or backend will report err

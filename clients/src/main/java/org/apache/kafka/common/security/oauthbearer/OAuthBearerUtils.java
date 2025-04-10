@@ -25,15 +25,17 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.SslResourc
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.File;
+import java.net.MalformedURLException;
 import java.net.URI;
+import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -59,7 +61,7 @@ public class OAuthBearerUtils {
 //
 //        }
 //
-        File assertionTemplateFile = oauthConfig.validateFile(SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE);
+        File assertionTemplateFile = validateFile(oauthConfig, SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE);
         return new FileAssertionJwtTemplate(assertionTemplateFile);
     }
 
@@ -154,8 +156,10 @@ public class OAuthBearerUtils {
      * {@link ClientCredentialsJwtRetriever} constructor.
      */
     public static boolean validateUrlencodeHeader(OAuthBearerConfig oauthConfig) {
-        Boolean urlencodeHeader = oauthConfig.validateBoolean(SASL_OAUTHBEARER_HEADER_URLENCODE, false);
-        return Objects.requireNonNullElse(urlencodeHeader, DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE);
+        if (oauthConfig.containsKey(SASL_OAUTHBEARER_HEADER_URLENCODE))
+            return oauthConfig.getBoolean(SASL_OAUTHBEARER_HEADER_URLENCODE);
+        else
+            return DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
     }
 
     public static String configOrJaas(OAuthBearerConfig oauthConfig,
@@ -163,11 +167,14 @@ public class OAuthBearerUtils {
                                       String configName,
                                       String jaasName,
                                       boolean isRequired) {
-        if (oauthConfig.get(configName) != null) {
-            return oauthConfig.validateString(configName, isRequired);
-        } else {
-            return jaasConfig.validateString(jaasName, isRequired);
-        }
+        if (oauthConfig.containsKey(configName))
+            return oauthConfig.getString(configName);
+        else if (jaasConfig.containsKey(jaasName))
+            return jaasConfig.getString(jaasName);
+        else if (isRequired)
+            throw new ConfigException("Could not find OAuth configuration for " + configName + " or OAuth JAAS configuration for " + jaasName);
+        else
+            return null;
     }
 
     /**
@@ -310,5 +317,143 @@ public class OAuthBearerUtils {
             throw new JwtValidatorException(String.format("%s value must be non-null, non-empty, and non-whitespace", name));
 
         return value.trim();
+    }
+
+
+
+
+    /**
+     * Validates that, if a value is supplied, is a file that:
+     *
+     * <li>
+     *     <ul>exists</ul>
+     *     <ul>has read permission</ul>
+     *     <ul>points to a file</ul>
+     * </li>
+     *
+     * If the value is null or an empty string, it is assumed to be an "empty" value and thus.
+     * ignored. Any whitespace is trimmed off of the beginning and end.
+     */
+    public static File validateFile(OAuthBearerAbstractConfig config, String key) {
+        URL url = validateUrl(config, key);
+        File file;
+
+        try {
+            file = new File(url.toURI().getRawPath()).getAbsoluteFile();
+        } catch (URISyntaxException e) {
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that is malformed: %s", key, url, e.getMessage()));
+        }
+
+        if (!file.exists())
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a file (%s) that doesn't exist", key, file));
+
+        if (!file.canRead())
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a file (%s) that doesn't have read permission", key, file));
+
+        if (file.isDirectory())
+            throw new ConfigException(String.format("The OAuth configuration option %s references a directory (%s), not a file", key, file));
+
+        return file;
+    }
+
+    /**
+     * Validates that, if a value is supplied, is a value that:
+     *
+     * <li>
+     *     <ul>is an Integer</ul>
+     *     <ul>has a value that is not less than the provided minimum value</ul>
+     * </li>
+     *
+     * If the value is null or an empty string, it is assumed to be an "empty" value and thus
+     * ignored. Any whitespace is trimmed off of the beginning and end.
+     */
+
+    public static Integer validateInteger(OAuthBearerConfig config, String key, boolean isRequired) {
+        if (!isRequired && !config.containsKey(key))
+            return null;
+
+        return config.getInt(key);
+    }
+
+    /**
+     * Validates that, if a value is supplied, is a value that:
+     *
+     * <li>
+     *     <ul>is a Long</ul>
+     *     <ul>has a value that is not less than the provided minimum value</ul>
+     * </li>
+     *
+     * If the value is null or an empty string, it is assumed to be an "empty" value and thus
+     * ignored. Any whitespace is trimmed off of the beginning and end.
+     */
+    public static Long validateLong(OAuthBearerConfig config, String key, Long min) {
+        long value = config.getLong(key);
+
+        if (min != null && value < min)
+            throw new ConfigException(String.format("The OAuth configuration option %s value must be at least %s", key, min));
+
+        return value;
+    }
+
+    /**
+     * Validates that the configured URL that:
+     *
+     * <ul>
+     *     <li>is well-formed</li>
+     *     <li>contains a scheme</li>
+     *     <li>uses either HTTP, HTTPS, or file protocols</li>
+     *     <li>is in the allow-list</li>
+     * </ul>
+     *
+     * No effort is made to connect to the URL in the validation step.
+     */
+    public static URL validateUrl(OAuthBearerAbstractConfig config, String key) {
+        String value = config.getString(key);
+        URL url;
+
+        try {
+            url = new URL(value);
+        } catch (MalformedURLException e) {
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that is malformed: %s", key, value, e.getMessage()));
+        }
+
+        String protocol = url.getProtocol();
+
+        if (protocol == null || protocol.trim().isEmpty())
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that is missing the protocol", key, value));
+
+        protocol = protocol.toLowerCase(Locale.ROOT);
+
+        if (!(protocol.equals("http") || protocol.equals("https") || protocol.equals("file")))
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that contains an invalid protocol (%s); only \"http\", \"https\", and \"file\" protocol are supported", key, value, protocol));
+
+        throwIfURLIsNotAllowed(value);
+
+        return url;
+    }
+
+    public static URI validateUri(OAuthBearerAbstractConfig config, String key) {
+        String value = config.getString(key);
+
+        try {
+            URL url = validateUrl(config, key);
+            return url.toURI();
+        } catch (URISyntaxException e) {
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a URI (%s) that is malformed: %s", key, value, e.getMessage()));
+        }
+    }
+
+    public static String validateString(OAuthBearerAbstractConfig config, String key, boolean isRequired) {
+        if (!isRequired && !config.containsKey(key))
+            return null;
+
+        return config.getString(key).trim();
+    }
+
+    public static Boolean validateBoolean(OAuthBearerConfig config, String key, boolean isRequired) {
+        if (!isRequired && !config.containsKey(key))
+            return null;
+
+        return config.getBoolean(key);
     }
 }

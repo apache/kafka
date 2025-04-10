@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collections;
 import java.util.List;
@@ -24,6 +25,8 @@ import java.util.Map;
 import java.util.Objects;
 
 import javax.security.auth.login.AppConfigurationEntry;
+
+import static org.apache.kafka.common.config.SaslConfigs.SASL_JAAS_CONFIG;
 
 /**
  * <code>OAuthBearerJaasConfig</code> is a utility class to perform logic for the JAAS options and
@@ -56,8 +59,29 @@ public class OAuthBearerJaasConfig extends OAuthBearerAbstractConfig {
     }
 
     @Override
+    public String getString(String key) {
+        String s = get(key);
+
+        if (Utils.isBlank(s)) {
+            throw new ConfigException("No value was found for the OAuth option " + key + " in " + SASL_JAAS_CONFIG);
+        } else {
+            return s.trim();
+        }
+    }
+
+    @Override
+    public boolean containsKey(String key) {
+        return options.get(key) != null;
+    }
+
+    @Override
     @SuppressWarnings("unchecked")
-    public <T> T get(String name) {
-        return (T) options.get(name);
+    public <T> T get(String key) {
+        T value = (T) options.get(key);
+
+        if (value != null)
+            return value;
+
+        throw new ConfigException("No value was found for the OAuth option " + key + " in " + SASL_JAAS_CONFIG);
     }
 }

@@ -63,6 +63,10 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_E
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateInteger;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateLong;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateString;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUri;
 import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
 
 /**
@@ -125,7 +129,7 @@ public class BrokerJwtValidator implements JwtValidator {
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         Function<VerificationKeyResolverKey, CloseableVerificationKeyResolver> wrapResolverFn = k -> {
             OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, saslMechanism);
-            URI jwksEndpointUri = oauthConfig.validateUri(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
+            URI jwksEndpointUri = validateUri(oauthConfig, SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
 
             if (jwksEndpointUri.getScheme().toLowerCase(Locale.ROOT).equals("file")) {
                 return new JwksFileVerificationKeyResolver(configs, saslMechanism);
@@ -136,9 +140,9 @@ public class BrokerJwtValidator implements JwtValidator {
                     new OAuthBearerJaasConfig(saslMechanism, jaasConfigEntries)
                 );
                 Optional<SSLContext> sslContext = sslResource.map(SslResource::sslContext);
-                long refreshMs = oauthConfig.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, true, 0L);
-                long refreshRetryBackoffMs = oauthConfig.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS);
-                long refreshRetryBackoffMaxMs = oauthConfig.validateLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS);
+                long refreshMs = validateLong(oauthConfig, SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, 0L);
+                long refreshRetryBackoffMs = oauthConfig.getLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS);
+                long refreshRetryBackoffMaxMs = oauthConfig.getLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS);
 
                 RefreshingHttpsJwks refreshingHttpsJwks = new RefreshingHttpsJwks(
                     time,
@@ -170,15 +174,18 @@ public class BrokerJwtValidator implements JwtValidator {
 
         OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, saslMechanism);
         Set<String> expectedAudiences = null;
-        List<String> l = oauthConfig.get(SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
 
-        if (l != null)
-            expectedAudiences = Set.copyOf(l);
+        if (oauthConfig.containsKey(SASL_OAUTHBEARER_EXPECTED_AUDIENCE)) {
+            List<String> l = oauthConfig.get(SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
 
-        Integer clockSkew = oauthConfig.validateInteger(SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, false);
-        String expectedIssuer = oauthConfig.validateString(SASL_OAUTHBEARER_EXPECTED_ISSUER, false);
-        String scopeClaimName = oauthConfig.validateString(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
-        String subClaimName = oauthConfig.validateString(SASL_OAUTHBEARER_SUB_CLAIM_NAME);
+            if (l != null)
+                expectedAudiences = Set.copyOf(l);
+        }
+
+        Integer clockSkew = validateInteger(oauthConfig, SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, false);
+        String expectedIssuer = validateString(oauthConfig, SASL_OAUTHBEARER_EXPECTED_ISSUER, false);
+        String scopeClaimName = oauthConfig.getString(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
+        String subClaimName = oauthConfig.getString(SASL_OAUTHBEARER_SUB_CLAIM_NAME);
 
         final JwtConsumerBuilder jwtConsumerBuilder = new JwtConsumerBuilder();
 

@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
@@ -103,19 +102,15 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        try {
-            this.jwtValidator = OAuthBearerUtils.getConfiguredInstanceOrDefault(
-                configs,
-                saslMechanism,
-                jaasConfigEntries,
-                SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS,
-                JwtValidator.class
-            );
+        this.jwtValidator = OAuthBearerUtils.getConfiguredInstanceOrDefault(
+            configs,
+            saslMechanism,
+            jaasConfigEntries,
+            SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS,
+            JwtValidator.class
+        );
 
-            this.isInitialized = true;
-        } catch (Throwable t) {
-            throw new KafkaException("The OAuth validator configuration encountered an error during initialization", t);
-        }
+        this.isInitialized = true;
     }
 
     void configure(JwtValidator jwtValidator,

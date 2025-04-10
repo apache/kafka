@@ -28,6 +28,8 @@ import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_GRANT_TYPE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateString;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUri;
 
 public class DefaultJwtRetriever implements JwtRetriever {
 
@@ -46,12 +48,12 @@ public class DefaultJwtRetriever implements JwtRetriever {
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, saslMechanism);
-        URI tokenEndpointUri = oauthConfig.validateUri(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+        URI tokenEndpointUri = validateUri(oauthConfig, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
         if (OAuthBearerUtils.schemeMatches(tokenEndpointUri, "file")) {
             delegate = new FileJwtRetriever();
         } else {
-            String grantType = oauthConfig.validateString(SASL_OAUTHBEARER_GRANT_TYPE, false);
+            String grantType = validateString(oauthConfig, SASL_OAUTHBEARER_GRANT_TYPE, false);
 
             if (grantType != null && grantType.equalsIgnoreCase(JwtBearerRequestGenerator.GRANT_TYPE)) {
                 delegate = new JwtBearerJwtRetriever(time);

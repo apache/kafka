@@ -37,6 +37,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateFile;
 
 /**
  * <code>JwksFileVerificationKeyResolver</code> is a {@link VerificationKeyResolver} implementation
@@ -91,7 +92,7 @@ public class JwksFileVerificationKeyResolver implements CloseableVerificationKey
 
     public JwksFileVerificationKeyResolver(Map<String, ?> configs, String saslMechanism) {
         OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, saslMechanism);
-        File jwksFile = oauthConfig.validateFile(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
+        File jwksFile = validateFile(oauthConfig, SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
         log.debug("Starting creation of new VerificationKeyResolver from {}", jwksFile.getPath());
         JsonWebKeySet jwks;
 

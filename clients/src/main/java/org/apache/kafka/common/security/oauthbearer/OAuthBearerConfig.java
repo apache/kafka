@@ -16,9 +16,11 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
 
+import java.util.List;
 import java.util.Map;
 
 /**
@@ -40,14 +42,60 @@ public class OAuthBearerConfig extends OAuthBearerAbstractConfig {
             this.prefix = null;
     }
 
+    public Short getShort(String key) {
+        return (Short) get(key);
+    }
+
+    public Integer getInt(String key) {
+        return (Integer) get(key);
+    }
+
+    public Long getLong(String key) {
+        return (Long) get(key);
+    }
+
+    public Double getDouble(String key) {
+        return (Double) get(key);
+    }
+
+    @SuppressWarnings("unchecked")
+    public List<String> getList(String key) {
+        return (List<String>) get(key);
+    }
+
+    public Boolean getBoolean(String key) {
+        return (Boolean) get(key);
+    }
+
+    @Override
+    public String getString(String key) {
+        String s = get(key);
+
+        if (Utils.isBlank(s)) {
+            throw new ConfigException("No value was found for the OAuth configuration " + key);
+        } else {
+            return s.trim();
+        }
+    }
+
+    @Override
+    public boolean containsKey(String key) {
+        return configs.get(key) != null || configs.get(prefix + key) != null;
+    }
+
     @Override
     @SuppressWarnings("unchecked")
-    public <T> T get(String name) {
-        T value = (T) configs.get(prefix + name);
+    public <T> T get(String key) {
+        T value = (T) configs.get(prefix + key);
 
         if (value != null)
             return value;
 
-        return (T) configs.get(name);
+        value = (T) configs.get(key);
+
+        if (value != null)
+            return value;
+
+        throw new ConfigException("No value was found for the OAuth configuration " + key);
     }
 }

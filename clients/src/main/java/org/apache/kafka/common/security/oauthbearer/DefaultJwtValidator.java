@@ -35,7 +35,7 @@ public class DefaultJwtValidator implements JwtValidator {
         OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, saslMechanism);
         JwtValidator validator;
 
-        if (oauthConfig.get(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL) != null)
+        if (oauthConfig.containsKey(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL))
             validator = new BrokerJwtValidator();
         else
             validator = new ClientJwtValidator();

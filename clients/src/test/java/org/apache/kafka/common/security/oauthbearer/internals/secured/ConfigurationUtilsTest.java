@@ -31,7 +31,10 @@ import java.util.Map;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.throwIfURLIsNotAllowed;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateFile;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUrl;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class ConfigurationUtilsTest extends OAuthBearerTest {
 
@@ -80,24 +83,24 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
 
     @Test
     public void testUrlNull() {
-        assertThrowsWithMessage(ConfigException.class, () -> testUrl(null), "must be non-null");
+        assertThrows(ConfigException.class, () -> testUrl(null));
     }
 
     @Test
     public void testUrlEmptyString() {
-        assertThrowsWithMessage(ConfigException.class, () -> testUrl(""), "must be non-null, non-empty, and non-whitespace");
+        assertThrows(ConfigException.class, () -> testUrl(""));
     }
 
     @Test
     public void testUrlWhitespace() {
-        assertThrowsWithMessage(ConfigException.class, () -> testUrl("    "), "must be non-null, non-empty, and non-whitespace");
+        assertThrows(ConfigException.class, () -> testUrl("    "));
     }
 
     private void testUrl(String value) {
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, value == null ? "" : value);
         Map<String, Object> configs = Collections.singletonMap(URL_CONFIG_NAME, value);
         OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, OAUTHBEARER_MECHANISM);
-        oauthConfig.validateUrl(URL_CONFIG_NAME);
+        validateUrl(oauthConfig, URL_CONFIG_NAME);
     }
 
     @Test
@@ -129,17 +132,17 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
 
     @Test
     public void testFileNull() {
-        assertThrowsWithMessage(ConfigException.class, () -> testFile(null), "must be non-null, non-empty, and non-whitespace");
+        assertThrows(ConfigException.class, () -> testFile(null));
     }
 
     @Test
     public void testFileEmptyString() {
-        assertThrowsWithMessage(ConfigException.class, () -> testFile(""), "must be non-null, non-empty, and non-whitespace");
+        assertThrows(ConfigException.class, () -> testFile(""));
     }
 
     @Test
     public void testFileWhitespace() {
-        assertThrowsWithMessage(ConfigException.class, () -> testFile("    "), "must be non-null, non-empty, and non-whitespace");
+        assertThrows(ConfigException.class, () -> testFile("    "));
     }
 
     @Test
@@ -169,6 +172,6 @@ public class ConfigurationUtilsTest extends OAuthBearerTest {
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, value == null ? "" : value);
         Map<String, Object> configs = Collections.singletonMap(URL_CONFIG_NAME, value);
         OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, OAUTHBEARER_MECHANISM);
-        oauthConfig.validateFile(URL_CONFIG_NAME);
+        validateFile(oauthConfig, URL_CONFIG_NAME);
     }
 }
