@@ -209,14 +209,14 @@ public class DelegationTokenCommand {
             String bootstrapServerDoc = "REQUIRED: server(s) to use for bootstrapping. When the --bootstrap-controller argument is used --bootstrap-servers must not be specified.";
             String commandConfigDoc = "REQUIRED: A property file containing configs to be passed to Admin Client. Token management" +
                     " operations are allowed in secure mode only. This config file is used to pass security related configs.";
+            String bootstrapControllerDoc = "REQUIRED: A comma-separated list of bootstrap.controllers that can be supplied instead of bootstrap-servers."
+                                            + " This is useful for administrators who wish to bypass the brokers.";
 
             this.bootstrapServerOpt = parser.accepts("bootstrap-server", bootstrapServerDoc)
                     .withRequiredArg()
                     .ofType(String.class);
 
-            this.bootstrapControllerOpt = parser.accepts("bootstrap-controller",
-                                                         "REQUIRED: A comma-separated list of bootstrap.controllers that can be supplied instead of bootstrap-servers."
-                                                         + " This is useful for administrators who wish to bypass the brokers.")
+            this.bootstrapControllerOpt = parser.accepts("bootstrap-controller", bootstrapControllerDoc)
                                             .withRequiredArg()
                                             .ofType(String.class);
 
@@ -294,7 +294,7 @@ public class DelegationTokenCommand {
         
         public void checkArgs() {
             // check required args
-            CommandLineUtils.checkRequiredArgs(parser, options, bootstrapServerOpt, commandConfigOpt);
+            CommandLineUtils.checkRequiredArgs(parser, options, commandConfigOpt);
 
             if (options.has(createOpt)) {
                 CommandLineUtils.checkRequiredArgs(parser, options, maxLifeTimeOpt);

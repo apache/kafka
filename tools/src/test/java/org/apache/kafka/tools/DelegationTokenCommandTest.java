@@ -30,7 +30,11 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.SecurityUtils;
 
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collections;
@@ -90,6 +94,15 @@ public class DelegationTokenCommandTest {
         // try describing tokens for unknown owner
         assertTrue(DelegationTokenCommand.describeToken(adminClient, getDescribeOpts("User:Unknown")).isEmpty());
 
+    }
+
+    @Test
+    public void testSetBootstrapServerAndBootstrapController(@TempDir Path configPath) throws IOException {
+        Path testFile = Files.createFile(configPath.resolve("testfile"));
+        assertThrows(RuntimeException.class,
+                     () -> DelegationTokenCommand.execute("--bootstrap-server", "localhost:9092",
+                                                          "--bootstrap-controller", "localhost:9092",
+                                                          "--command-config", testFile.toString(), "--describe"));
     }
 
     @ClusterTest(types = { Type.KRAFT },
