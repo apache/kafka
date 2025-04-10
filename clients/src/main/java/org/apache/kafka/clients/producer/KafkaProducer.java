@@ -25,6 +25,7 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.clients.producer.internals.BufferPool;
 import org.apache.kafka.clients.producer.internals.BuiltInPartitioner;
 import org.apache.kafka.clients.producer.internals.KafkaProducerMetrics;
@@ -659,34 +660,33 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
-     * Performs initialization of transactions functionality in this producer instance. This method bootstraps
-     * the producer with a {@code producerId} and also resets the internal state of the producer following a previous
-     * fatal error. Additionally, it allows setting the {@code keepPreparedTxn} flag which, if set to true, puts the producer
-     * into a restricted state that only allows transaction completion operations.
-     * 
+     * Initialize the transactional state for this producer, similar to {@link #initTransactions()} but
+     * with additional handling for two-phase commit (2PC). Must be called before any send operations
+     * that require a {@code transactionalId}.
      * <p>
-     * When {@code keepPreparedTxn} is set to {@code true}, the producer will be able to complete in-flight prepared
-     * transactions, but will only allow calling {@link #commitTransaction()}, {@link #abortTransaction()}, or
-     * the to-be-added {@code completeTransaction()} methods. This is to support recovery of prepared transactions 
-     * after a producer restart.
-     *
+     * Unlike the standard {@link #initTransactions()}, when {@code keepPreparedTxn} is set to
+     * {@code true}, the producer does <em>not</em> automatically abort existing transactions
+     * in the “prepare” phase. Instead, it enters a recovery mode allowing only finalization
+     * of those previously prepared transactions. This behavior is crucial for 2PC scenarios,
+     * where transactions should remain intact until the external transaction manager decides
+     * whether to commit or abort.
      * <p>
-     * Note that this method should only be called once during the lifetime of a producer instance, and must be
-     * called before any other methods which require a {@code transactionalId} to be specified.
+     * When {@code keepPreparedTxn} is {@code false}, this behaves like the normal transactional
+     * initialization, aborting any unfinished transactions and resetting the producer for
+     * new writes.
      *
-     * @param keepPreparedTxn whether to keep prepared transactions, restricting the producer to only support completion of
-     *                        prepared transactions. When set to true, the producer will only allow transaction completion
-     *                        operations after initialization.
+     * @param keepPreparedTxn true to retain any in-flight prepared transactions (necessary for 2PC
+     *                        recovery), false to abort existing transactions and behave like
+     *                        the standard initTransactions
      *
-     * @throws IllegalStateException if no {@code transactional.id} has been configured for the producer
-     * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating that the broker
-     *         does not support transactions (i.e. if its version is lower than 0.11.0.0). If this is encountered,
-     *         the producer cannot be used for transactional messaging.
-     * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
-     *         {@code transactional.id} is not authorized. If this is encountered, the producer cannot be used for
-     *         transactional messaging.
-     * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
-     * @see #initTransactions()
+     * @throws IllegalStateException if no {@code transactional.id} is configured
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException if the broker does not
+     *         support transactions (broker version < 0.11.0.0)
+     * @throws org.apache.kafka.common.errors.TransactionalIdAuthorizationException if the configured
+     *         {@code transactional.id} is unauthorized either for normal transaction writes or 2PC.
+     * @throws KafkaException if the producer encounters a fatal error or any other unexpected error
+     * @throws TimeoutException if the time taken for initialize the transaction has surpassed <code>max.block.ms</code>.
+     * @throws InterruptException if the thread is interrupted while blocked
      */
     public void initTransactions(boolean keepPreparedTxn) {
         throwIfNoTransactionManager();
@@ -746,7 +746,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * <p>
      * Note, that the consumer should have {@code enable.auto.commit=false} and should
      * also not commit offsets manually (via {@link KafkaConsumer#commitSync(Map) sync} or
-     * {@link KafkaConsumer#commitAsync()} (Map, OffsetCommitCallback) async} commits).
+     * {@link KafkaConsumer#commitAsync(Map, OffsetCommitCallback) async} commits).
      * This method will raise {@link TimeoutException} if the producer cannot send offsets before expiration of {@code max.block.ms}.
      * Additionally, it will raise {@link InterruptException} if interrupted.
      *

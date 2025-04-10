@@ -319,7 +319,7 @@ public class TransactionManager {
                     .setKeepPreparedTxn(keepPreparedTxn);
 
             InitProducerIdHandler handler = new InitProducerIdHandler(new InitProducerIdRequest.Builder(requestData),
-                isEpochBump);
+                    isEpochBump);
             enqueueRequest(handler);
             return handler.result;
         }, State.INITIALIZING, "initTransactions");

@@ -358,7 +358,7 @@ public class ProducerConfig extends AbstractConfig {
     /** <code> transaction.two.phase.commit.enable </code> */
     public static final String TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG = "transaction.two.phase.commit.enable";
     private static final String TRANSACTION_TWO_PHASE_COMMIT_ENABLE_DOC = "If set to true, then the broker is informed that the client is participating in " +
-        "two phase commit protocol and transactions that this client starts never expire.";
+            "two phase commit protocol and transactions that this client starts never expire.";
 
     /**
      * <code>security.providers</code>
@@ -620,7 +620,10 @@ public class ProducerConfig extends AbstractConfig {
             throw new ConfigException("Cannot set a " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " without also enabling idempotence.");
         }
 
-        // validate that transaction.timeout.ms is not set when transaction.two.phase.commit.enable is true
+        // Validate that transaction.timeout.ms is not set when transaction.two.phase.commit.enable is true
+        // In standard Kafka transactions, the broker enforces transaction.timeout.ms and aborts any
+        // transaction that isn't completed in time. With two-phase commit (2PC), an external coordinator
+        // decides when to finalize, so broker-side timeouts don't apply. Disallow using both.
         boolean enable2PC = this.getBoolean(TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG);
         boolean userConfiguredTransactionTimeout = originalConfigs.containsKey(TRANSACTION_TIMEOUT_CONFIG);
         if (enable2PC && userConfiguredTransactionTimeout) {
