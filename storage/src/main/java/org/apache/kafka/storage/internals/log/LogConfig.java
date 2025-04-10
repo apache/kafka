@@ -301,53 +301,6 @@ public class LogConfig extends AbstractConfig {
         this(props, Set.of());
     }
 
-    // visible for testing
-    public LogConfig(Map<?, ?> props, Integer segmentBytes) {
-        super(CONFIG, props, false);
-        if (props.containsKey(TopicConfig.SEGMENT_BYTES_CONFIG)) {
-            throw new IllegalArgumentException("This constructor should not be used when " +
-                    TopicConfig.SEGMENT_BYTES_CONFIG + " is present in the properties");
-        }
-        this.props = Collections.unmodifiableMap(props);
-        this.overriddenConfigs = Set.of();
-
-        this.segmentSize = segmentBytes;
-        this.segmentMs = getLong(TopicConfig.SEGMENT_MS_CONFIG);
-        this.segmentJitterMs = getLong(TopicConfig.SEGMENT_JITTER_MS_CONFIG);
-        this.maxIndexSize = getInt(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG);
-        this.flushInterval = getLong(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG);
-        this.flushMs = getLong(TopicConfig.FLUSH_MS_CONFIG);
-        this.retentionSize = getLong(TopicConfig.RETENTION_BYTES_CONFIG);
-        this.retentionMs = getLong(TopicConfig.RETENTION_MS_CONFIG);
-        this.maxMessageSize = getInt(TopicConfig.MAX_MESSAGE_BYTES_CONFIG);
-        this.indexInterval = getInt(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG);
-        this.fileDeleteDelayMs = getLong(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG);
-        this.deleteRetentionMs = getLong(TopicConfig.DELETE_RETENTION_MS_CONFIG);
-        this.compactionLagMs = getLong(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG);
-        this.maxCompactionLagMs = getLong(TopicConfig.MAX_COMPACTION_LAG_MS_CONFIG);
-        this.minCleanableRatio = getDouble(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG);
-        this.compact = getList(TopicConfig.CLEANUP_POLICY_CONFIG).stream()
-                .map(c -> c.toLowerCase(Locale.ROOT))
-                .toList()
-                .contains(TopicConfig.CLEANUP_POLICY_COMPACT);
-        this.delete = getList(TopicConfig.CLEANUP_POLICY_CONFIG).stream()
-                .map(c -> c.toLowerCase(Locale.ROOT))
-                .toList()
-                .contains(TopicConfig.CLEANUP_POLICY_DELETE);
-        this.uncleanLeaderElectionEnable = getBoolean(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
-        this.minInSyncReplicas = getInt(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG);
-        this.compressionType = BrokerCompressionType.forName(getString(TopicConfig.COMPRESSION_TYPE_CONFIG));
-        this.compression = getCompression();
-        this.preallocate = getBoolean(TopicConfig.PREALLOCATE_CONFIG);
-        this.messageTimestampType = TimestampType.forName(getString(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG));
-        this.messageTimestampBeforeMaxMs = getLong(TopicConfig.MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG);
-        this.messageTimestampAfterMaxMs = getLong(TopicConfig.MESSAGE_TIMESTAMP_AFTER_MAX_MS_CONFIG);
-        this.leaderReplicationThrottledReplicas = Collections.unmodifiableList(getList(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
-        this.followerReplicationThrottledReplicas = Collections.unmodifiableList(getList(QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG));
-
-        remoteLogConfig = new RemoteLogConfig(this);
-    }
-
     @SuppressWarnings({"this-escape"})
     public LogConfig(Map<?, ?> props, Set<String> overriddenConfigs) {
         super(CONFIG, props, false);
