@@ -18,8 +18,6 @@ package org.apache.kafka.streams.integration;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.utils.Exit;
-import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
-import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
@@ -53,21 +51,17 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(600)
 @Tag("integration")
 public class SmokeTestDriverIntegrationTest {
-    public static EmbeddedKafkaCluster cluster;
+    public static final EmbeddedKafkaCluster CLUSTER = EmbeddedKafkaCluster.withStreamsRebalanceProtocol(3);
     public TestInfo testInfo;
 
     @BeforeAll
     public static void startCluster() throws IOException {
-        final Properties props = new Properties();
-        props.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,streams");
-        props.setProperty(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true");
-        cluster = new EmbeddedKafkaCluster(3, props);
-        cluster.start();
+        CLUSTER.start();
     }
 
     @AfterAll
     public static void closeCluster() {
-        cluster.stop();
+        CLUSTER.stop();
     }
 
     @BeforeEach
@@ -135,9 +129,9 @@ public class SmokeTestDriverIntegrationTest {
         int numClientsCreated = 0;
         final ArrayList<SmokeTestClient> clients = new ArrayList<>();
 
-        IntegrationTestUtils.cleanStateBeforeTest(cluster, SmokeTestDriver.topics());
+        IntegrationTestUtils.cleanStateBeforeTest(CLUSTER, SmokeTestDriver.topics());
 
-        final String bootstrapServers = cluster.bootstrapServers();
+        final String bootstrapServers = CLUSTER.bootstrapServers();
         final Driver driver = new Driver(bootstrapServers, 10, 1000);
         driver.start();
         System.out.println("started driver");

@@ -82,6 +82,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     private final TimelineHashMap<SharePartitionKey, Integer> stateEpochMap;
     private MetadataImage metadataImage;
     private final ShareCoordinatorOffsetsManager offsetsManager;
+    private final Time time;
 
     public static final Exception NULL_TOPIC_ID = new Exception("The topic id cannot be null.");
     public static final Exception NEGATIVE_PARTITION_ID = new Exception("The partition id cannot be a negative number.");
@@ -92,6 +93,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         private SnapshotRegistry snapshotRegistry;
         private CoordinatorMetrics coordinatorMetrics;
         private TopicPartition topicPartition;
+        private Time time;
 
         public Builder(ShareCoordinatorConfig config) {
             this.config = config;
@@ -111,7 +113,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
         @Override
         public CoordinatorShardBuilder<ShareCoordinatorShard, CoordinatorRecord> withTime(Time time) {
-            // method is required due to interface
+            this.time = time;
             return this;
         }
 
@@ -160,7 +162,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 config,
                 coordinatorMetrics,
                 metricsShard,
-                snapshotRegistry
+                snapshotRegistry,
+                time
             );
         }
     }
@@ -170,9 +173,10 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         ShareCoordinatorConfig config,
         CoordinatorMetrics coordinatorMetrics,
         CoordinatorMetricsShard metricsShard,
-        SnapshotRegistry snapshotRegistry
+        SnapshotRegistry snapshotRegistry,
+        Time time
     ) {
-        this(logContext, config, coordinatorMetrics, metricsShard, snapshotRegistry, new ShareCoordinatorOffsetsManager(snapshotRegistry));
+        this(logContext, config, coordinatorMetrics, metricsShard, snapshotRegistry, new ShareCoordinatorOffsetsManager(snapshotRegistry), time);
     }
 
     ShareCoordinatorShard(
@@ -181,7 +185,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         CoordinatorMetrics coordinatorMetrics,
         CoordinatorMetricsShard metricsShard,
         SnapshotRegistry snapshotRegistry,
-        ShareCoordinatorOffsetsManager offsetsManager
+        ShareCoordinatorOffsetsManager offsetsManager,
+        Time time
     ) {
         this.log = logContext.logger(ShareCoordinatorShard.class);
         this.config = config;
@@ -192,6 +197,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         this.snapshotUpdateCount = new TimelineHashMap<>(snapshotRegistry, 0);
         this.stateEpochMap = new TimelineHashMap<>(snapshotRegistry, 0);
         this.offsetsManager = offsetsManager;
+        this.time = time;
     }
 
     @Override
@@ -584,6 +590,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     .setLeaderEpoch(partitionData.leaderEpoch())
                     .setStateEpoch(partitionData.stateEpoch())
                     .setStateBatches(mergeBatches(List.of(), partitionData))
+                    .setCreateTimestamp(time.milliseconds())
+                    .setWriteTimestamp(time.milliseconds())
                     .build());
         } else if (snapshotUpdateCount.getOrDefault(key, 0) >= config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot()) {
             ShareGroupOffset currentState = shareStateMap.get(key); // shareStateMap will have the entry as containsKey is true
@@ -602,6 +610,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     .setLeaderEpoch(newLeaderEpoch)
                     .setStateEpoch(newStateEpoch)
                     .setStateBatches(mergeBatches(currentState.stateBatches(), partitionData, newStartOffset))
+                    .setCreateTimestamp(time.milliseconds())
+                    .setWriteTimestamp(time.milliseconds())
                     .build());
         } else {
             ShareGroupOffset currentState = shareStateMap.get(key); // shareStateMap will have the entry as containsKey is true.
@@ -616,6 +626,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     .setStartOffset(partitionData.startOffset())
                     .setLeaderEpoch(partitionData.leaderEpoch())
                     .setStateBatches(mergeBatches(List.of(), partitionData))
+                    .setCreateTimestamp(currentState.createTimestamp())
+                    .setWriteTimestamp(currentState.writeTimestamp())
                     .build());
         }
     }
@@ -642,7 +654,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             key.groupId(),
             key.topicId(),
             key.partition(),
-            ShareGroupOffset.fromRequest(partitionData, snapshotEpoch)
+            ShareGroupOffset.fromRequest(partitionData, snapshotEpoch, time.milliseconds())
         );
     }
 
@@ -914,6 +926,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .map(ShareCoordinatorShard::toPersisterStateBatch)
                 .toList(), newStartOffset)
                 .combineStateBatches())
+            .setCreateTimestamp(soFar.createTimestamp())
+            .setWriteTimestamp(soFar.writeTimestamp())
             .build();
     }
 

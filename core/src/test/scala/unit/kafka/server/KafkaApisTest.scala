@@ -5733,7 +5733,7 @@ class KafkaApisTest extends Logging {
       0,
       Errors.TOPIC_AUTHORIZATION_FAILED.code,
       Errors.NONE.code,
-      null,
+      MemoryRecords.EMPTY,
       Collections.emptyList[AcquiredRecords](),
       partitionData1
     )
@@ -5772,7 +5772,7 @@ class KafkaApisTest extends Logging {
       0,
       Errors.UNKNOWN_TOPIC_OR_PARTITION.code,
       Errors.NONE.code,
-      null,
+      MemoryRecords.EMPTY,
       Collections.emptyList[AcquiredRecords](),
       partitionData4
     )

@@ -1037,6 +1037,7 @@ class DumpLogSegmentsTest {
   @Test
   def testShareGroupStateMessageParser(): Unit = {
     val parser = new ShareGroupStateMessageParser()
+    val timestamp = System.currentTimeMillis
 
     // The key is mandatory.
     assertEquals(
@@ -1051,7 +1052,7 @@ class DumpLogSegmentsTest {
     assertEquals(
       (
         Some("{\"type\":\"0\",\"data\":{\"groupId\":\"gs1\",\"topicId\":\"Uj5wn_FqTXirEASvVZRY1w\",\"partition\":0}}"),
-        Some("{\"version\":\"0\",\"data\":{\"snapshotEpoch\":0,\"stateEpoch\":0,\"leaderEpoch\":0,\"startOffset\":0,\"stateBatches\":[{\"firstOffset\":0,\"lastOffset\":4,\"deliveryState\":2,\"deliveryCount\":1}]}}")
+        Some(s"{\"version\":\"0\",\"data\":{\"snapshotEpoch\":0,\"stateEpoch\":0,\"leaderEpoch\":0,\"startOffset\":0,\"createTimestamp\":$timestamp,\"writeTimestamp\":$timestamp,\"stateBatches\":[{\"firstOffset\":0,\"lastOffset\":4,\"deliveryState\":2,\"deliveryCount\":1}]}}")
       ),
       parser.parse(serializedRecord(
         new ShareSnapshotKey()
@@ -1063,6 +1064,8 @@ class DumpLogSegmentsTest {
           .setStateEpoch(0)
           .setLeaderEpoch(0)
           .setStartOffset(0)
+          .setCreateTimestamp(timestamp)
+          .setWriteTimestamp(timestamp)
           .setStateBatches(List[ShareSnapshotValue.StateBatch](
             new ShareSnapshotValue.StateBatch()
               .setFirstOffset(0)
