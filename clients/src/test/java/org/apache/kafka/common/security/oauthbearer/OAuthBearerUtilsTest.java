@@ -36,6 +36,7 @@ import java.util.TreeSet;
 
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.getSslClientConfig;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.maybeCreateSslResource;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.throwIfURLIsNotAllowed;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateClaimExpiration;
@@ -317,7 +318,7 @@ public class OAuthBearerUtilsTest extends OAuthBearerTest {
         options.put(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG, sslTruststore);
 
         OAuthBearerJaasConfig jaasConfig = new OAuthBearerJaasConfig(options);
-        Map<String, ?> sslClientConfig = OAuthBearerUtils.getSslClientConfig(jaasConfig);
+        Map<String, ?> sslClientConfig = getSslClientConfig(jaasConfig);
         assertNotNull(sslClientConfig);
         assertEquals(sslKeystore, sslClientConfig.get(SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG));
         assertEquals(sslTruststore, sslClientConfig.get(SslConfigs.SSL_TRUSTSTORE_LOCATION_CONFIG));

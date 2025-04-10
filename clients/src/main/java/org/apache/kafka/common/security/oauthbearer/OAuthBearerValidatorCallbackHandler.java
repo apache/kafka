@@ -34,6 +34,7 @@ import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.getConfiguredInstanceOrDefault;
 
 /**
  * <p>
@@ -102,7 +103,7 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        this.jwtValidator = OAuthBearerUtils.getConfiguredInstanceOrDefault(
+        this.jwtValidator = getConfiguredInstanceOrDefault(
             configs,
             saslMechanism,
             jaasConfigEntries,
