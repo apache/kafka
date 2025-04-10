@@ -57,7 +57,7 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.security.token.delegation.{DelegationToken, TokenInformation}
 import org.apache.kafka.common.utils.{ProducerIdAndEpoch, Time}
 import org.apache.kafka.common.{Node, TopicIdPartition, TopicPartition, Uuid}
-import org.apache.kafka.coordinator.group.{Group, GroupConfigManager, GroupCoordinator}
+import org.apache.kafka.coordinator.group.{Group, GroupConfig, GroupConfigManager, GroupCoordinator}
 import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
 import org.apache.kafka.server.{ClientMetricsManager, ProcessRole}
@@ -3210,7 +3210,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         shareFetchRequest.maxWait,
         fetchMinBytes,
         fetchMaxBytes,
-        FetchIsolation.HIGH_WATERMARK,
+        FetchIsolation.of(FetchRequest.CONSUMER_REPLICA_ID, groupConfigManager.groupConfig(groupId).map(_.shareIsolationLevel()).orElse(GroupConfig.defaultShareIsolationLevel)),
         clientMetadata,
         true
       )
