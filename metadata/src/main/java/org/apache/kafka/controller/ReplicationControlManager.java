@@ -1625,9 +1625,14 @@ public class ReplicationControlManager {
                     break;
             }
         }
-        heartbeatManager.touch(brokerId,
+        // skip updating session if broker is about to shutdown
+        if (states.current().equals(CONTROLLED_SHUTDOWN) && states.next().equals(SHUTDOWN_NOW)) {
+            // do nothing
+        } else {
+            heartbeatManager.touch(brokerId,
             states.next().fenced(),
             request.currentMetadataOffset());
+        }
         if (featureControl.metadataVersionOrThrow().isDirectoryAssignmentSupported()) {
             handleDirectoriesOffline(brokerId, brokerEpoch, request.offlineLogDirs(), records);
         }
