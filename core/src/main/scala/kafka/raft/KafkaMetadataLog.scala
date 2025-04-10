@@ -577,13 +577,13 @@ final class KafkaMetadataLog private (
 object KafkaMetadataLog extends Logging {
 
   def apply(
-             topicPartition: TopicPartition,
-             topicId: Uuid,
-             dataDir: File,
-             time: Time,
-             scheduler: Scheduler,
-             config: MetadataLogConfig
-           ): KafkaMetadataLog = {
+    topicPartition: TopicPartition,
+    topicId: Uuid,
+    dataDir: File,
+    time: Time,
+    scheduler: Scheduler,
+    config: MetadataLogConfig
+  ): KafkaMetadataLog = {
     val props: Properties = settingLogProperties(config)
     LogConfig.validate(props)
     val defaultLogConfig = new LogConfig(props)
@@ -592,11 +592,7 @@ object KafkaMetadataLog extends Logging {
 
     val metadataLog: KafkaMetadataLog = createKafkaMetadataLog(topicPartition, topicId, dataDir, time, scheduler, config, defaultLogConfig)
 
-    // Print a warning if users have overridden the internal config
-    if (config.logSegmentMinBytes != KafkaRaftClient.MAX_BATCH_SIZE_BYTES) {
-      metadataLog.error(s"Overriding ${KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG} is only supported for testing. Setting " +
-        s"this value too low may lead to an inability to write batches of metadata records.")
-    }
+    printWarningMessage(config, metadataLog)
 
     // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower
     // when the follower crashes after downloading a snapshot from the leader but before it could truncate the log fully.
@@ -604,7 +600,15 @@ object KafkaMetadataLog extends Logging {
 
     metadataLog
   }
-  
+
+  private def printWarningMessage(config: MetadataLogConfig, metadataLog: KafkaMetadataLog): Unit = {
+    // Print a warning if users have overridden the internal config
+    if (config.logSegmentMinBytes != KafkaRaftClient.MAX_BATCH_SIZE_BYTES) {
+      metadataLog.error(s"Overriding ${KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG} is only supported for testing. Setting " +
+        s"this value too low may lead to an inability to write batches of metadata records.")
+    }
+  }
+
   // visible for testing
   def internalApply(
     topicPartition: TopicPartition,
@@ -625,10 +629,7 @@ object KafkaMetadataLog extends Logging {
     val metadataLog: KafkaMetadataLog = createKafkaMetadataLog(topicPartition, topicId, dataDir, time, scheduler, config, defaultLogConfig)
 
     // Print a warning if users have overridden the internal config
-    if (config.logSegmentMinBytes != KafkaRaftClient.MAX_BATCH_SIZE_BYTES) {
-      metadataLog.error(s"Overriding ${KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG} is only supported for testing. Setting " +
-        s"this value too low may lead to an inability to write batches of metadata records.")
-    }
+    printWarningMessage(config, metadataLog)
 
     // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower
     // when the follower crashes after downloading a snapshot from the leader but before it could truncate the log fully.
