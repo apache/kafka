@@ -147,6 +147,12 @@ public class EmbeddedKafkaCluster {
         return new EmbeddedKafkaCluster(numBrokers, props);
     }
 
+    public static EmbeddedKafkaCluster withStreamsRebalanceProtocol(final int numBrokers, Properties props) {
+        props.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,streams");
+        props.setProperty(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true");
+        return new EmbeddedKafkaCluster(numBrokers, props);
+    }
+
     public void start() {
         try {
             cluster.format();
