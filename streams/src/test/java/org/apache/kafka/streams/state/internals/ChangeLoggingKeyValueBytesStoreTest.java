@@ -98,12 +98,15 @@ public class ChangeLoggingKeyValueBytesStoreTest {
         store = new ChangeLoggingKeyValueBytesStore(innerMock);
         store.init(context, store);
     }
+
     private void mockPosition() {
         when(innerMock.getPosition()).thenReturn(Position.emptyPosition());
     }
+
     private void mockGet(final Map<Bytes, byte[]> mockMap) {
         when(innerMock.get(any(Bytes.class))).thenAnswer(invocation -> mockMap.get(invocation.getArgument(0)));
     }
+
     private void mockPut(final Map<Bytes, byte[]> mockMap) {
         doAnswer(invocation -> {
             mockMap.put(invocation.getArgument(0), invocation.getArgument(1));
@@ -111,6 +114,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
             return null;
         }).when(innerMock).put(any(Bytes.class), any(byte[].class));
     }
+
     private void mockPutAll(final Map<Bytes, byte[]> mockMap) {
         doAnswer(invocation -> {
             final List<KeyValue<Bytes, byte[]>> entries = invocation.getArgument(0);
