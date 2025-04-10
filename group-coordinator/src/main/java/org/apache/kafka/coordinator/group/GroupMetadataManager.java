@@ -61,7 +61,6 @@ import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.Endpoint;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.KeyValue;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.TaskIds;
-import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.TaskOffset;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.Topology;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData.Status;
@@ -867,7 +866,7 @@ public class GroupMetadataManager {
      * @param groupId           The group ID.
      *
      * @return A StreamsGroup.
-     * @throws GroupIdNotFoundException if the group does not exist
+     * @throws GroupIdNotFoundException if the group does not exist or is not a streams group.
      *
      * Package private for testing.
      */
@@ -1173,8 +1172,8 @@ public class GroupMetadataManager {
      * @param groupId           The group id.
      * @param committedOffset   A specified committed offset corresponding to this shard.
      *
-     * @return A ConsumerGroup.
-     * @throws GroupIdNotFoundException if the group does not exist or is not a consumer group.
+     * @return A ShareGroup.
+     * @throws GroupIdNotFoundException if the group does not exist or is not a share group.
      */
     public ShareGroup shareGroup(
         String groupId,
@@ -1589,7 +1588,7 @@ public class GroupMetadataManager {
             }
         } else if (request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             throwIfNull(request.instanceId(), "InstanceId can't be null.");
-        } else if (request.memberEpoch() <  LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
+        } else if (request.memberEpoch() < LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             throw new InvalidRequestException(String.format("MemberEpoch is %d, but must be greater than or equal to -2.",
                 request.memberEpoch()));
         }
@@ -1811,6 +1810,25 @@ public class GroupMetadataManager {
     private void throwIfStaticMemberIsUnknown(ConsumerGroupMember staticMember, String receivedInstanceId) {
         if (staticMember == null) {
             throw Errors.UNKNOWN_MEMBER_ID.exception("Instance id " + receivedInstanceId + " is unknown.");
+        }
+    }
+
+    /**
+     * Checks whether the streams group can accept a new member or not based on the
+     * max group size defined.
+     *
+     * @param group     The streams group.
+     *
+     * @throws GroupMaxSizeReachedException if the maximum capacity has been reached.
+     */
+    private void throwIfStreamsGroupIsFull(
+        StreamsGroup group
+    ) throws GroupMaxSizeReachedException {
+        // If the streams group has reached its maximum capacity, the member is rejected if it is not
+        // already a member of the streams group.
+        if (group.numMembers() >= config.streamsGroupMaxSize()) {
+            throw new GroupMaxSizeReachedException("The streams group has reached its maximum capacity of "
+                + config.streamsGroupMaxSize() + " members.");
         }
     }
 
@@ -2049,8 +2067,6 @@ public class GroupMetadataManager {
      * @param ownedWarmupTasks    The list of owned warmup tasks from the request or null.
      * @param userEndpoint        User-defined endpoint for Interactive Queries, or null.
      * @param clientTags          Used for rack-aware assignment algorithm, or null.
-     * @param taskEndOffsets      Cumulative changelog offsets for tasks, or null.
-     * @param taskOffsets         Cumulative changelog end-offsets for tasks, or null.
      * @param shutdownApplication Whether all Streams clients in the group should shut down.
      * @return A result containing the StreamsGroupHeartbeat response and a list of records to update the state machine.
      */
@@ -2070,8 +2086,6 @@ public class GroupMetadataManager {
         String processId,
         Endpoint userEndpoint,
         List<KeyValue> clientTags,
-        List<TaskOffset> taskOffsets,
-        List<TaskOffset> taskEndOffsets,
         boolean shutdownApplication
     ) throws ApiException {
         final long currentTimeMs = time.milliseconds();
@@ -2080,7 +2094,13 @@ public class GroupMetadataManager {
 
         // Get or create the streams group.
         boolean isJoining = memberEpoch == 0;
-        final StreamsGroup group = isJoining ? getOrCreateStreamsGroup(groupId) : getStreamsGroupOrThrow(groupId);
+        StreamsGroup group;
+        if (isJoining) {
+            group = getOrCreateStreamsGroup(groupId);
+            throwIfStreamsGroupIsFull(group);
+        } else {
+            group = getStreamsGroupOrThrow(groupId);
+        }
 
         // Get or create the member.
         StreamsGroupMember member;
@@ -2199,6 +2219,9 @@ public class GroupMetadataManager {
         );
 
         scheduleStreamsGroupSessionTimeout(groupId, memberId);
+        if (shutdownApplication) {
+            group.setShutdownRequestMemberId(memberId);
+        }
 
         // Prepare the response.
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
@@ -2225,6 +2248,15 @@ public class GroupMetadataManager {
                     .setStatusDetail(exception.getMessage())
             );
         }
+
+        group.getShutdownRequestMemberId().ifPresent(requestingMemberId -> returnedStatus.add(
+            new Status()
+                .setStatusCode(StreamsGroupHeartbeatResponse.Status.SHUTDOWN_APPLICATION.code())
+                .setStatusDetail(
+                    String.format("Streams group member %s encountered a fatal error and requested a shutdown for the entire application.",
+                        requestingMemberId)
+                )
+        ));
 
         if (!returnedStatus.isEmpty()) {
             response.setStatus(returnedStatus);
@@ -3037,7 +3069,7 @@ public class GroupMetadataManager {
         }
         return member;
     }
-    
+
     /**
      * Gets or subscribes a static consumer group member. This method also replaces the
      * previous static member if allowed.
@@ -3385,7 +3417,6 @@ public class GroupMetadataManager {
 
         resolvedRegexes.forEach((__, topicNames) -> topicNames.removeAll(deniedTopics));
     }
-
 
     /**
      * Handle the result of the asynchronous tasks which resolves the regular expressions.
@@ -4115,7 +4146,8 @@ public class GroupMetadataManager {
         return shareGroupFenceMember(group, member, response);
     }
 
-    /** Fences a member from a consumer group and maybe downgrade the consumer group to a classic group.
+    /**
+      * Fences a member from a consumer group and maybe downgrade the consumer group to a classic group.
      *
      * @param group     The group.
      * @param member    The member.
@@ -4817,8 +4849,6 @@ public class GroupMetadataManager {
                 request.processId(),
                 request.userEndpoint(),
                 request.clientTags(),
-                request.taskOffsets(),
-                request.taskEndOffsets(),
                 request.shutdownApplication()
             );
         }
@@ -5028,7 +5058,7 @@ public class GroupMetadataManager {
     }
 
     private Map<Uuid, Map.Entry<String, Set<Integer>>> attachTopicName(Map<Uuid, Set<Integer>> initMap) {
-        TopicsImage topicsImage = metadataImage.topics(); 
+        TopicsImage topicsImage = metadataImage.topics();
         Map<Uuid, Map.Entry<String, Set<Integer>>> finalMap = new HashMap<>();
         for (Map.Entry<Uuid, Set<Integer>> entry : initMap.entrySet()) {
             Uuid topicId = entry.getKey();
@@ -5036,6 +5066,28 @@ public class GroupMetadataManager {
             finalMap.put(topicId, Map.entry(topicName, entry.getValue()));
         }
         return Collections.unmodifiableMap(finalMap);
+    }
+
+    /**
+     * Returns the set of share partitions whose state has been initialized.
+     *
+     * @param groupId The group id corresponding to the share group whose share partitions have been initialized.
+     *
+     * @return A map representing the initialized share-partitions for the share group.
+     */
+    public Map<Uuid, Set<Integer>> initializedShareGroupPartitions(
+        String groupId
+    ) {
+        Map<Uuid, Set<Integer>> resultMap = new HashMap<>();
+
+        ShareGroupStatePartitionMetadataInfo currentMap = shareGroupPartitionMetadata.get(groupId);
+        if (currentMap != null) {
+            currentMap.initializedTopics().forEach((topicId, partitions) -> {
+                resultMap.put(topicId, new HashSet<>(partitions));
+            });
+        }
+
+        return resultMap;
     }
 
     /**
@@ -8266,14 +8318,18 @@ public class GroupMetadataManager {
      * Get the session timeout of the provided streams group.
      */
     private int streamsGroupSessionTimeoutMs(String groupId) {
-        return 45000;
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.map(GroupConfig::streamsSessionTimeoutMs)
+            .orElse(config.streamsGroupSessionTimeoutMs());
     }
 
     /**
      * Get the heartbeat interval of the provided streams group.
      */
     private int streamsGroupHeartbeatIntervalMs(String groupId) {
-        return 5000;
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        return groupConfig.map(GroupConfig::streamsHeartbeatIntervalMs)
+            .orElse(config.streamsGroupHeartbeatIntervalMs());
     }
 
     /**
@@ -8287,9 +8343,12 @@ public class GroupMetadataManager {
      * Get the assignor of the provided streams group.
      */
     private Map<String, String> streamsGroupAssignmentConfigs(String groupId) {
-        return Map.of("group.streams.num.standby.replicas", "0");
+        Optional<GroupConfig> groupConfig = groupConfigManager.groupConfig(groupId);
+        final Integer numStandbyReplicas = groupConfig.map(GroupConfig::streamsNumStandbyReplicas)
+            .orElse(config.streamsGroupNumStandbyReplicas());
+        return Map.of("num.standby.replicas", numStandbyReplicas.toString());
     }
-    
+
     /**
      * Generate a classic group heartbeat key for the timer.
      *

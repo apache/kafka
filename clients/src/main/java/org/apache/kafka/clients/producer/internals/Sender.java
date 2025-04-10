@@ -71,8 +71,6 @@ import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
-import static org.apache.kafka.common.requests.ProduceResponse.INVALID_OFFSET;
-
 /**
  * The background thread that handles the sending of produce requests to the Kafka cluster. This thread makes metadata
  * requests to renew its view of the cluster and then sends produce requests to the appropriate nodes.
@@ -608,7 +606,6 @@ public class Sender implements Runnable {
                     ProduceResponse.PartitionResponse partResp = new ProduceResponse.PartitionResponse(
                             Errors.forCode(p.errorCode()),
                             p.baseOffset(),
-                            INVALID_OFFSET,
                             p.logAppendTimeMs(),
                             p.logStartOffset(),
                             p.recordErrors()
