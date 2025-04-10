@@ -460,7 +460,7 @@ public class LogCleaner implements BrokerReconfigurable {
      * choosing the dirtiest log, cleaning it, and then swapping in the cleaned segments.
      */
     public class CleanerThread extends ShutdownableThread {
-        private final Logger logger = new LogContext(logPrefix).logger(LogCleaner.class);
+        private final Logger logger = new LogContext(logPrefix).logger(CleanerThread.class);
 
         private final Cleaner cleaner;
 

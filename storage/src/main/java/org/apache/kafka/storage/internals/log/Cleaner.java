@@ -36,13 +36,13 @@ import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.security.DigestException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.Date;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Consumer;
-import java.util.stream.IntStream;
 
 /**
  * This class holds the actual logic for cleaning a log.
@@ -97,7 +97,7 @@ public class Cleaner {
         this.throttler = throttler;
         this.time = time;
         this.checkDone = checkDone;
-        logger = new LogContext("Cleaner " + id + ": ").logger(LogCleaner.class);
+        logger = new LogContext("Cleaner " + id + ": ").logger(Cleaner.class);
 
         readBuffer = ByteBuffer.allocate(ioBufferSize);
         writeBuffer = ByteBuffer.allocate(ioBufferSize);
@@ -159,10 +159,10 @@ public class Cleaner {
 
         // determine the timestamp up to which the log will be cleaned
         // this is the lower of the last active segment and the compaction lag
-        long cleanableHorizonMs = log.logSegments(0, cleanable.firstUncleanableOffset()).stream()
-                .reduce((first, second) -> second)
-                .map(LogSegment::lastModified)
-                .orElse(0L);
+        segments = log.logSegments(0, cleanable.firstUncleanableOffset());
+        long cleanableHorizonMs = segments.isEmpty()
+                ? 0L
+                : segments.get(segments.size() - 1).lastModified();
 
         // group the segments and clean the groups
         logger.info("Cleaning log {} (cleaning prior to {}, discarding tombstones prior to upper bound deletion horizon {})...",
@@ -591,17 +591,13 @@ public class Cleaner {
                 segments = segments.subList(1, segments.size());
             }
 
-            List<LogSegment> reversedGroup = IntStream.range(0, group.size())
-                    .map(i -> group.size() - 1 - i)
-                    .mapToObj(group::get)
-                    .toList();
-            grouped.add(0, reversedGroup);
+            Collections.reverse(group);
+            grouped.add(0, group);
         }
 
-        return IntStream.range(0, grouped.size())
-                .map(i -> grouped.size() - 1 - i)
-                .mapToObj(grouped::get)
-                .toList();
+        Collections.reverse(grouped);
+
+        return grouped;
     }
 
     /**
