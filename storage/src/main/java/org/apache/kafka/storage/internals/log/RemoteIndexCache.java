@@ -44,7 +44,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -318,7 +317,7 @@ public class RemoteIndexCache implements Closeable {
                         internalCache.put(uuid, entry);
                     } else {
                         // Delete all of them if any one of those indexes is not available for a specific segment id
-                        tryAll(Arrays.asList(
+                        tryAll(List.of(
                                 () -> {
                                     Files.deleteIfExists(offsetIndexFile.toPath());
                                     return null;
@@ -598,7 +597,7 @@ public class RemoteIndexCache implements Closeable {
                 if (!cleanStarted) {
                     cleanStarted = true;
 
-                    List<StorageAction<Void, Exception>> actions = Arrays.asList(() -> {
+                    List<StorageAction<Void, Exception>> actions = List.of(() -> {
                         offsetIndex.deleteIfExists();
                         return null;
                     }, () -> {
