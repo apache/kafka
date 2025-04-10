@@ -61,7 +61,6 @@ import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.Endpoint;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.KeyValue;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.TaskIds;
-import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.TaskOffset;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData.Topology;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData.Status;
@@ -867,7 +866,7 @@ public class GroupMetadataManager {
      * @param groupId           The group ID.
      *
      * @return A StreamsGroup.
-     * @throws GroupIdNotFoundException if the group does not exist
+     * @throws GroupIdNotFoundException if the group does not exist or is not a streams group.
      *
      * Package private for testing.
      */
@@ -1173,8 +1172,8 @@ public class GroupMetadataManager {
      * @param groupId           The group id.
      * @param committedOffset   A specified committed offset corresponding to this shard.
      *
-     * @return A ConsumerGroup.
-     * @throws GroupIdNotFoundException if the group does not exist or is not a consumer group.
+     * @return A ShareGroup.
+     * @throws GroupIdNotFoundException if the group does not exist or is not a share group.
      */
     public ShareGroup shareGroup(
         String groupId,
@@ -1589,7 +1588,7 @@ public class GroupMetadataManager {
             }
         } else if (request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             throwIfNull(request.instanceId(), "InstanceId can't be null.");
-        } else if (request.memberEpoch() <  LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
+        } else if (request.memberEpoch() < LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             throw new InvalidRequestException(String.format("MemberEpoch is %d, but must be greater than or equal to -2.",
                 request.memberEpoch()));
         }
@@ -2068,8 +2067,6 @@ public class GroupMetadataManager {
      * @param ownedWarmupTasks    The list of owned warmup tasks from the request or null.
      * @param userEndpoint        User-defined endpoint for Interactive Queries, or null.
      * @param clientTags          Used for rack-aware assignment algorithm, or null.
-     * @param taskEndOffsets      Cumulative changelog offsets for tasks, or null.
-     * @param taskOffsets         Cumulative changelog end-offsets for tasks, or null.
      * @param shutdownApplication Whether all Streams clients in the group should shut down.
      * @return A result containing the StreamsGroupHeartbeat response and a list of records to update the state machine.
      */
@@ -2089,8 +2086,6 @@ public class GroupMetadataManager {
         String processId,
         Endpoint userEndpoint,
         List<KeyValue> clientTags,
-        List<TaskOffset> taskOffsets,
-        List<TaskOffset> taskEndOffsets,
         boolean shutdownApplication
     ) throws ApiException {
         final long currentTimeMs = time.milliseconds();
@@ -2224,6 +2219,9 @@ public class GroupMetadataManager {
         );
 
         scheduleStreamsGroupSessionTimeout(groupId, memberId);
+        if (shutdownApplication) {
+            group.setShutdownRequestMemberId(memberId);
+        }
 
         // Prepare the response.
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
@@ -2250,6 +2248,15 @@ public class GroupMetadataManager {
                     .setStatusDetail(exception.getMessage())
             );
         }
+
+        group.getShutdownRequestMemberId().ifPresent(requestingMemberId -> returnedStatus.add(
+            new Status()
+                .setStatusCode(StreamsGroupHeartbeatResponse.Status.SHUTDOWN_APPLICATION.code())
+                .setStatusDetail(
+                    String.format("Streams group member %s encountered a fatal error and requested a shutdown for the entire application.",
+                        requestingMemberId)
+                )
+        ));
 
         if (!returnedStatus.isEmpty()) {
             response.setStatus(returnedStatus);
@@ -3410,7 +3417,6 @@ public class GroupMetadataManager {
 
         resolvedRegexes.forEach((__, topicNames) -> topicNames.removeAll(deniedTopics));
     }
-
 
     /**
      * Handle the result of the asynchronous tasks which resolves the regular expressions.
@@ -4843,8 +4849,6 @@ public class GroupMetadataManager {
                 request.processId(),
                 request.userEndpoint(),
                 request.clientTags(),
-                request.taskOffsets(),
-                request.taskEndOffsets(),
                 request.shutdownApplication()
             );
         }

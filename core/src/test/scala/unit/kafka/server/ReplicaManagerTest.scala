@@ -139,7 +139,7 @@ class ReplicaManagerTest {
     val props = TestUtils.createBrokerConfig(1)
     config = KafkaConfig.fromProps(props)
     alterPartitionManager = mock(classOf[AlterPartitionManager])
-    quotaManager = QuotaFactory.instantiate(config, metrics, time, "")
+    quotaManager = QuotaFactory.instantiate(config, metrics, time, "", "")
     mockRemoteLogManager = mock(classOf[RemoteLogManager])
     when(mockRemoteLogManager.fetchThrottleTimeSensor()).thenReturn(
       new RLMQuotaMetrics(metrics,
