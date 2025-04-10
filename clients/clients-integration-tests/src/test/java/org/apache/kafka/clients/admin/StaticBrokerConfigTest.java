@@ -53,7 +53,7 @@ public class StaticBrokerConfigTest {
             Admin adminUsingBootstrapController = cluster.admin(Map.of(), true)
         ) {
             ConfigEntry configEntry = admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) 1)))
-                .config(TOPIC).get().get(TopicConfig.SEGMENT_BYTES_CONFIG);
+                .config(TOPIC).get().get(TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG);
             assertEquals(ConfigEntry.ConfigSource.STATIC_BROKER_CONFIG, configEntry.source());
             assertEquals(CUSTOM_VALUE, configEntry.value(), "Config value should be custom value since controller has related static config");
 
@@ -86,7 +86,7 @@ public class StaticBrokerConfigTest {
             Admin adminUsingBootstrapController = cluster.admin(Map.of(), true)
         ) {
             ConfigEntry configEntry = admin.createTopics(List.of(new NewTopic(TOPIC, 1, (short) 1)))
-                .config(TOPIC).get().get(TopicConfig.SEGMENT_BYTES_CONFIG);
+                .config(TOPIC).get().get(TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG);
             assertEquals(ConfigEntry.ConfigSource.DEFAULT_CONFIG, configEntry.source());
             assertNotEquals(CUSTOM_VALUE,
                 configEntry.value(),

@@ -1086,7 +1086,7 @@ class KafkaConfigTest {
           assertDynamic(kafkaConfigProp, "5", () => config.lz4CompressionLevel)
         case TopicConfig.COMPRESSION_ZSTD_LEVEL_CONFIG =>
           assertDynamic(kafkaConfigProp, "5", () => config.zstdCompressionLevel)
-        case TopicConfig.SEGMENT_BYTES_CONFIG =>
+        case TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG =>
           assertDynamic(kafkaConfigProp, 1048576, () => config.logSegmentBytes)
         case TopicConfig.SEGMENT_MS_CONFIG =>
           assertDynamic(kafkaConfigProp, 10001L, () => config.logRollTimeMillis)

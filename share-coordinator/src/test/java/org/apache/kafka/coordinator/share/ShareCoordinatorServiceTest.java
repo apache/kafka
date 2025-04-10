@@ -1892,7 +1892,7 @@ class ShareCoordinatorServiceTest {
         List<String> propNames = List.of(
             TopicConfig.CLEANUP_POLICY_CONFIG,
             TopicConfig.COMPRESSION_TYPE_CONFIG,
-            TopicConfig.SEGMENT_BYTES_CONFIG,
+            TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG,
             TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG
         );
         Properties actual = service.shareGroupStateTopicConfigs();

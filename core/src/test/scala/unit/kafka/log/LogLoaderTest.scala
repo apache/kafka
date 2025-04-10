@@ -245,7 +245,7 @@ class LogLoaderTest {
   @Test
   def testProducerSnapshotsRecoveryAfterUncleanShutdown(): Unit = {
     val logProps = new Properties()
-    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, "640")
+    logProps.put(TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "640")
     val logConfig = new LogConfig(logProps)
     var log = createLog(logDir, logConfig)
     assertEquals(OptionalLong.empty(), log.oldestProducerSnapshotOffset)

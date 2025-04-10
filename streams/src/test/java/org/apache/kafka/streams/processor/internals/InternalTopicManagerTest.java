@@ -923,7 +923,7 @@ public class InternalTopicManagerTest {
                 new NewTopic(topic1, Optional.of(1), Optional.of((short) 1))
             .configs(mkMap(mkEntry(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE),
                 mkEntry(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, "CreateTime"),
-                mkEntry(TopicConfig.SEGMENT_BYTES_CONFIG, "52428800"),
+                mkEntry(TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "52428800"),
                 mkEntry(TopicConfig.RETENTION_MS_CONFIG, "-1"))))))
             .thenAnswer(answer -> new MockCreateTopicsResult(Collections.singletonMap(topic1, topicCreationFuture)));
 

@@ -20,7 +20,7 @@ package kafka.server
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, CLIENT_METRICS, GROUP, TOPIC}
-import org.apache.kafka.common.config.TopicConfig.{REMOTE_LOG_STORAGE_ENABLE_CONFIG, SEGMENT_BYTES_CONFIG, SEGMENT_JITTER_MS_CONFIG, SEGMENT_MS_CONFIG}
+import org.apache.kafka.common.config.TopicConfig.{REMOTE_LOG_STORAGE_ENABLE_CONFIG, INTERNAL_SEGMENT_BYTES_CONFIG, SEGMENT_JITTER_MS_CONFIG, SEGMENT_MS_CONFIG}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException, InvalidTopicException}
 import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
@@ -62,7 +62,7 @@ class ControllerConfigurationValidatorTest {
   def testNullTopicConfigValue(): Unit = {
     val config = new util.TreeMap[String, String]()
     config.put(SEGMENT_JITTER_MS_CONFIG, "10")
-    config.put(SEGMENT_BYTES_CONFIG, null)
+    config.put(INTERNAL_SEGMENT_BYTES_CONFIG, null)
     config.put(SEGMENT_MS_CONFIG, null)
     assertEquals("Null value not supported for topic configs: segment.bytes,segment.ms",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
@@ -73,7 +73,7 @@ class ControllerConfigurationValidatorTest {
   def testValidTopicConfig(): Unit = {
     val config = new util.TreeMap[String, String]()
     config.put(SEGMENT_JITTER_MS_CONFIG, "1000")
-    config.put(SEGMENT_BYTES_CONFIG, "67108864")
+    config.put(INTERNAL_SEGMENT_BYTES_CONFIG, "67108864")
     validator.validate(new ConfigResource(TOPIC, "foo"), config, emptyMap())
   }
 
@@ -81,7 +81,7 @@ class ControllerConfigurationValidatorTest {
   def testInvalidTopicConfig(): Unit = {
     val config = new util.TreeMap[String, String]()
     config.put(SEGMENT_JITTER_MS_CONFIG, "1000")
-    config.put(SEGMENT_BYTES_CONFIG, "67108864")
+    config.put(INTERNAL_SEGMENT_BYTES_CONFIG, "67108864")
     config.put("foobar", "abc")
     assertEquals("Unknown topic config name: foobar",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(

@@ -62,7 +62,7 @@ class LogManagerTest {
   val maxRollInterval = 100
   val maxLogAgeMs: Int = 10 * 60 * 1000
   val logProps = new Properties()
-  logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
+  logProps.put(TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
   logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 4096: java.lang.Integer)
   logProps.put(TopicConfig.RETENTION_MS_CONFIG, maxLogAgeMs: java.lang.Integer)
   val logConfig = new LogConfig(logProps)
@@ -393,7 +393,7 @@ class LogManagerTest {
     logManager.shutdown()
     val segmentBytes = 10 * setSize
     val properties = new Properties()
-    properties.put(TopicConfig.SEGMENT_BYTES_CONFIG, segmentBytes.toString)
+    properties.put(TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG, segmentBytes.toString)
     properties.put(TopicConfig.RETENTION_BYTES_CONFIG, (5L * 10L * setSize + 10L).toString)
     val configRepository = MockConfigRepository.forTopic(name, properties)
 
