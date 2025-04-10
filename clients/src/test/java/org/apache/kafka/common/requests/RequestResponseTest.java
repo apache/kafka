@@ -315,7 +315,7 @@ import static org.apache.kafka.common.protocol.ApiKeys.OFFSET_FETCH;
 import static org.apache.kafka.common.protocol.ApiKeys.PRODUCE;
 import static org.apache.kafka.common.protocol.ApiKeys.SASL_AUTHENTICATE;
 import static org.apache.kafka.common.protocol.ApiKeys.SYNC_GROUP;
-import static org.apache.kafka.common.protocol.ApiKeys.WRITE_TXN_MARKERS;
+import static org.apache.kafka.common.protocol.ApiKeys.UNREGISTER_BROKER;
 import static org.apache.kafka.common.requests.EndTxnRequest.LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2;
 import static org.apache.kafka.common.requests.FetchMetadata.INVALID_SESSION_ID;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -336,11 +336,13 @@ public class RequestResponseTest {
     public void testSerialization() {
         Map<ApiKeys, List<Short>> toSkip = new HashMap<>();
         // It's not possible to create a MetadataRequest v0 via the builder
-        toSkip.put(METADATA, singletonList((short) 0));
+        toSkip.put(METADATA, List.of((short) 0));
         // DescribeLogDirsResponse v0, v1 and v2 don't have a top level error field
-        toSkip.put(DESCRIBE_LOG_DIRS, Arrays.asList((short) 0, (short) 1, (short) 2));
+        toSkip.put(DESCRIBE_LOG_DIRS, List.of((short) 0, (short) 1, (short) 2));
         // ElectLeaders v0 does not have a top level error field, when accessing it, it defaults to NONE
-        toSkip.put(ELECT_LEADERS, singletonList((short) 0));
+        toSkip.put(ELECT_LEADERS, List.of((short) 0));
+        // UnregisterBroker v0 contains the error message in the response
+        toSkip.put(UNREGISTER_BROKER, List.of((short) 0));
 
         for (ApiKeys apikey : ApiKeys.values()) {
             for (short version : apikey.allVersions()) {
@@ -527,11 +529,6 @@ public class RequestResponseTest {
     public void fetchResponseVersionTest() {
         Uuid id = Uuid.randomUuid();
         MemoryRecords records = MemoryRecords.readableRecords(ByteBuffer.allocate(10));
-        FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
-                .setPartitionIndex(0)
-                .setHighWatermark(1000000)
-                .setLogStartOffset(-1)
-                .setRecords(records);
         LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> idResponseData = new LinkedHashMap<>();
         idResponseData.put(new TopicIdPartition(id, new TopicPartition("test", 0)),
                 new FetchResponseData.PartitionData()
@@ -698,7 +695,7 @@ public class RequestResponseTest {
         assertEquals(requestHeader, parsedHeader);
 
         RequestAndSize parsedRequest = AbstractRequest.parseRequest(
-            CREATE_TOPICS, requestVersion, serializedRequest);
+            CREATE_TOPICS, requestVersion, new ByteBufferAccessor(serializedRequest));
 
         assertEquals(createTopicsRequest.data(), parsedRequest.request.data());
     }
@@ -841,6 +838,23 @@ public class RequestResponseTest {
             assertEquals(response.data().errorCode(), Errors.INVALID_REQUEST.code());
             assertTrue(response.data().apiKeys().isEmpty());
         }
+    }
+
+    @Test
+    public void testUnregisterBrokerResponseWithUnknownServerError() {
+        UnregisterBrokerRequest request = new UnregisterBrokerRequest.Builder(
+            new UnregisterBrokerRequestData()
+        ).build((short) 0);
+        String customerErrorMessage = "customer error message";
+        
+        UnregisterBrokerResponse response = request.getErrorResponse(
+            0, 
+            new RuntimeException(customerErrorMessage)
+        );
+
+        assertEquals(0, response.throttleTimeMs());
+        assertEquals(Errors.UNKNOWN_SERVER_ERROR.code(), response.data().errorCode());
+        assertEquals(customerErrorMessage, response.data().errorMessage());
     }
 
     private ApiVersionsResponse defaultApiVersionsResponse() {
@@ -1923,11 +1937,11 @@ public class RequestResponseTest {
         // Check for equality of the ByteBuffer only if indicated (it is likely to fail if any of the fields
         // in the request is a HashMap with multiple elements since ordering of the elements may vary)
         try {
-            ByteBuffer serializedBytes = req.serialize();
+            ByteBufferAccessor serializedBytes = req.serialize();
             AbstractRequest deserialized = AbstractRequest.parseRequest(req.apiKey(), req.version(), serializedBytes).request;
-            ByteBuffer serializedBytes2 = deserialized.serialize();
-            serializedBytes.rewind();
-            assertEquals(serializedBytes, serializedBytes2, "Request " + req + "failed equality test");
+            ByteBufferAccessor serializedBytes2 = deserialized.serialize();
+            serializedBytes.buffer().rewind();
+            assertEquals(serializedBytes.buffer(), serializedBytes2.buffer(), "Request " + req + "failed equality test");
         } catch (Exception e) {
             throw new RuntimeException("Failed to deserialize request " + req + " with type " + req.getClass(), e);
         }
@@ -3802,9 +3816,9 @@ public class RequestResponseTest {
     public void testInvalidSaslHandShakeRequest() {
         AbstractRequest request = new SaslHandshakeRequest.Builder(
                 new SaslHandshakeRequestData().setMechanism("PLAIN")).build();
-        ByteBuffer serializedBytes = request.serialize();
+        ByteBufferAccessor serializedBytes = request.serialize();
         // corrupt the length of the sasl mechanism string
-        serializedBytes.putShort(0, Short.MAX_VALUE);
+        serializedBytes.buffer().putShort(0, Short.MAX_VALUE);
 
         String msg = assertThrows(RuntimeException.class, () -> AbstractRequest.
             parseRequest(request.apiKey(), request.version(), serializedBytes)).getMessage();
@@ -3823,10 +3837,10 @@ public class RequestResponseTest {
         };
         SaslAuthenticateRequestData data = new SaslAuthenticateRequestData().setAuthBytes(b);
         AbstractRequest request = new SaslAuthenticateRequest(data, version);
-        ByteBuffer serializedBytes = request.serialize();
+        ByteBufferAccessor serializedBytes = request.serialize();
 
         // corrupt the length of the bytes array
-        serializedBytes.putInt(0, Integer.MAX_VALUE);
+        serializedBytes.buffer().putInt(0, Integer.MAX_VALUE);
 
         String msg = assertThrows(RuntimeException.class, () -> AbstractRequest.
                 parseRequest(request.apiKey(), request.version(), serializedBytes)).getMessage();
@@ -3855,7 +3869,7 @@ public class RequestResponseTest {
         accessor.flip();
 
         SaslAuthenticateRequest saslAuthenticateRequest = (SaslAuthenticateRequest) AbstractRequest.
-                parseRequest(SASL_AUTHENTICATE, SASL_AUTHENTICATE.latestVersion(), accessor.buffer()).request;
+                parseRequest(SASL_AUTHENTICATE, SASL_AUTHENTICATE.latestVersion(), accessor).request;
         Assertions.assertArrayEquals(authBytes, saslAuthenticateRequest.data().authBytes());
         assertEquals(1, saslAuthenticateRequest.data().unknownTaggedFields().size());
         assertEquals(taggedField, saslAuthenticateRequest.data().unknownTaggedFields().get(0));
@@ -3883,7 +3897,7 @@ public class RequestResponseTest {
         accessor.flip();
 
         String msg = assertThrows(RuntimeException.class, () -> AbstractRequest.
-                parseRequest(SASL_AUTHENTICATE, SASL_AUTHENTICATE.latestVersion(), accessor.buffer())).getMessage();
+                parseRequest(SASL_AUTHENTICATE, SASL_AUTHENTICATE.latestVersion(), accessor)).getMessage();
         assertEquals("Error reading byte array of 32767 byte(s): only 3 byte(s) available", msg);
     }
 }

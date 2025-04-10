@@ -25,6 +25,7 @@ import org.apache.kafka.server.common.{DirectoryEventHandler, OffsetAndEpoch, To
 import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogStartOffsetIncrementReason}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
+import java.util.Optional
 import java.util.concurrent.ConcurrentHashMap
 import scala.collection.{Map, Set}
 
@@ -49,7 +50,7 @@ class ReplicaAlterLogDirsThread(name: String,
   // Visible for testing
   private[server] val promotionStates: ConcurrentHashMap[TopicPartition, PromotionState] = new ConcurrentHashMap()
 
-  override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
+  override protected def latestEpoch(topicPartition: TopicPartition): Optional[Integer] = {
     replicaMgr.futureLocalLogOrException(topicPartition).latestEpoch
   }
 
@@ -61,7 +62,7 @@ class ReplicaAlterLogDirsThread(name: String,
     replicaMgr.futureLocalLogOrException(topicPartition).logEndOffset
   }
 
-  override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = {
+  override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Optional[OffsetAndEpoch] = {
     replicaMgr.futureLocalLogOrException(topicPartition).endOffsetForEpoch(epoch)
   }
 

@@ -454,7 +454,7 @@ public final class RemoteLogManagerConfig {
 
     public Map<String, Object> getConfigProps(String configPrefixProp) {
         String prefixProp = config.getString(configPrefixProp);
-        return prefixProp == null ? Collections.emptyMap() : Collections.unmodifiableMap(config.originalsWithPrefix(prefixProp));
+        return prefixProp == null ? Map.of() : Collections.unmodifiableMap(config.originalsWithPrefix(prefixProp));
     }
 
     public int remoteLogManagerCopyNumQuotaSamples() {

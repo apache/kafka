@@ -23,7 +23,9 @@ import java.util.Set;
 /**
  * The task assignment for a Streams group member.
  *
- * @param activeTasks The target tasks assigned to this member keyed by subtopologyId.
+ * @param activeTasks  The active tasks assigned to this member keyed by subtopologyId.
+ * @param standbyTasks The standby tasks assigned to this member keyed by subtopologyId.
+ * @param warmupTasks  The warm-up tasks assigned to this member keyed by subtopologyId.
  */
 public record MemberAssignment(Map<String, Set<Integer>> activeTasks,
                                Map<String, Set<Integer>> standbyTasks,

@@ -27,6 +27,7 @@ import org.apache.kafka.metadata.VersionRange;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.Feature;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.mutable.BoundedList;
 import org.apache.kafka.timeline.SnapshotRegistry;
@@ -54,7 +55,6 @@ public class FeatureControlManager {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private QuorumFeatures quorumFeatures = null;
-        private MetadataVersion metadataVersion = MetadataVersion.latestProduction();
         private ClusterFeatureSupportDescriber clusterSupportDescriber = new ClusterFeatureSupportDescriber() {
             @Override
             public Iterator<Entry<Integer, Map<String, VersionRange>>> brokerSupported() {
@@ -82,11 +82,6 @@ public class FeatureControlManager {
             return this;
         }
 
-        Builder setMetadataVersion(MetadataVersion metadataVersion) {
-            this.metadataVersion = metadataVersion;
-            return this;
-        }
-
         Builder setClusterFeatureSupportDescriber(ClusterFeatureSupportDescriber clusterSupportDescriber) {
             this.clusterSupportDescriber = clusterSupportDescriber;
             return this;
@@ -100,13 +95,12 @@ public class FeatureControlManager {
                 localSupportedFeatures.put(MetadataVersion.FEATURE_NAME, VersionRange.of(
                         MetadataVersion.MINIMUM_VERSION.featureLevel(),
                         MetadataVersion.latestProduction().featureLevel()));
-                quorumFeatures = new QuorumFeatures(0, localSupportedFeatures, Collections.singletonList(0));
+                quorumFeatures = new QuorumFeatures(0, localSupportedFeatures, List.of(0));
             }
             return new FeatureControlManager(
                 logContext,
                 quorumFeatures,
                 snapshotRegistry,
-                metadataVersion,
                 clusterSupportDescriber
             );
         }
@@ -127,7 +121,7 @@ public class FeatureControlManager {
     /**
      * The current metadata version
      */
-    private final TimelineObject<MetadataVersion> metadataVersion;
+    private final TimelineObject<Optional<MetadataVersion>> metadataVersion;
 
     /**
      * Gives information about the supported versions in the cluster.
@@ -138,13 +132,12 @@ public class FeatureControlManager {
         LogContext logContext,
         QuorumFeatures quorumFeatures,
         SnapshotRegistry snapshotRegistry,
-        MetadataVersion metadataVersion,
         ClusterFeatureSupportDescriber clusterSupportDescriber
     ) {
         this.log = logContext.logger(FeatureControlManager.class);
         this.quorumFeatures = quorumFeatures;
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
-        this.metadataVersion = new TimelineObject<>(snapshotRegistry, metadataVersion);
+        this.metadataVersion = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.clusterSupportDescriber = clusterSupportDescriber;
     }
 
@@ -157,26 +150,35 @@ public class FeatureControlManager {
                 BoundedList.newArrayBacked(MAX_RECORDS_PER_USER_OP);
 
         Map<String, Short> proposedUpdatedVersions = new HashMap<>(finalizedVersions);
-        proposedUpdatedVersions.put(MetadataVersion.FEATURE_NAME, metadataVersion.get().featureLevel());
+        proposedUpdatedVersions.put(MetadataVersion.FEATURE_NAME, metadataVersionOrThrow().featureLevel());
         proposedUpdatedVersions.putAll(updates);
 
         for (Entry<String, Short> entry : updates.entrySet()) {
             ApiError error = updateFeature(entry.getKey(), entry.getValue(),
                 upgradeTypes.getOrDefault(entry.getKey(), FeatureUpdate.UpgradeType.UPGRADE), records, proposedUpdatedVersions);
             if (!error.error().equals(Errors.NONE)) {
-                return ControllerResult.of(Collections.emptyList(), error);
+                return ControllerResult.of(List.of(), error);
             }
         }
 
         if (validateOnly) {
-            return ControllerResult.of(Collections.emptyList(), ApiError.NONE);
+            return ControllerResult.of(List.of(), ApiError.NONE);
         } else {
             return ControllerResult.atomicOf(records, ApiError.NONE);
         }
     }
 
-    MetadataVersion metadataVersion() {
+    Optional<MetadataVersion> metadataVersion() {
         return metadataVersion.get();
+    }
+
+    MetadataVersion metadataVersionOrThrow() {
+        return metadataVersionOrThrow(SnapshotRegistry.LATEST_EPOCH);
+    }
+
+    private MetadataVersion metadataVersionOrThrow(long epoch) {
+        return metadataVersion.get(epoch).orElseThrow(() ->
+            new IllegalStateException("Unknown metadata version for FeatureControlManager"));
     }
 
     private ApiError updateFeature(
@@ -193,7 +195,7 @@ public class FeatureControlManager {
 
         final short currentVersion;
         if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
-            currentVersion = metadataVersion.get().featureLevel();
+            currentVersion = metadataVersionOrThrow().featureLevel();
         } else {
             currentVersion = finalizedVersions.getOrDefault(featureName, (short) 0);
         }
@@ -262,7 +264,7 @@ public class FeatureControlManager {
         String registrationSuffix = "";
         HashSet<Integer> foundControllers = new HashSet<>();
         foundControllers.add(quorumFeatures.nodeId());
-        if (metadataVersion.get().isControllerRegistrationSupported()) {
+        if (metadataVersionOrThrow().isControllerRegistrationSupported()) {
             for (Iterator<Entry<Integer, Map<String, VersionRange>>> iter =
                  clusterSupportDescriber.controllerSupported();
                  iter.hasNext(); ) {
@@ -309,7 +311,7 @@ public class FeatureControlManager {
         boolean allowUnsafeDowngrade,
         Consumer<ApiMessageAndVersion> recordConsumer
     ) {
-        MetadataVersion currentVersion = metadataVersion();
+        MetadataVersion currentVersion = metadataVersionOrThrow();
         final MetadataVersion newVersion;
         try {
             newVersion = MetadataVersion.fromFeatureLevel(newVersionLevel);
@@ -352,20 +354,11 @@ public class FeatureControlManager {
 
     FinalizedControllerFeatures finalizedFeatures(long epoch) {
         Map<String, Short> features = new HashMap<>();
-        features.put(MetadataVersion.FEATURE_NAME, metadataVersion.get(epoch).featureLevel());
+        features.put(MetadataVersion.FEATURE_NAME, metadataVersionOrThrow(epoch).featureLevel());
         for (Entry<String, Short> entry : finalizedVersions.entrySet(epoch)) {
             features.put(entry.getKey(), entry.getValue());
         }
         return new FinalizedControllerFeatures(features, epoch);
-    }
-
-    FinalizedControllerFeatures latestFinalizedFeatures() {
-        Map<String, Short> features = new HashMap<>();
-        features.put(MetadataVersion.FEATURE_NAME, metadataVersion.get().featureLevel());
-        for (Entry<String, Short> entry : finalizedVersions.entrySet()) {
-            features.put(entry.getKey(), entry.getValue());
-        }
-        return new FinalizedControllerFeatures(features, -1);
     }
 
     public void replay(FeatureLevelRecord record) {
@@ -376,8 +369,12 @@ public class FeatureControlManager {
         }
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
             MetadataVersion mv = MetadataVersion.fromFeatureLevel(record.featureLevel());
-            metadataVersion.set(mv);
+            metadataVersion.set(Optional.of(mv));
             log.info("Replayed a FeatureLevelRecord setting metadata.version to {}", mv);
+        } else if (record.name().equals(KRaftVersion.FEATURE_NAME)) {
+            // KAFKA-18979 - Skip any feature level record for kraft.version. This has two benefits:
+            // 1. It removes from snapshots any FeatureLevelRecord for kraft.version that was incorrectly written to the log
+            // 2. Allows ApiVersions to report the correct finalized kraft.version
         } else {
             if (record.featureLevel() == 0) {
                 finalizedVersions.remove(record.name());
@@ -395,7 +392,7 @@ public class FeatureControlManager {
     }
 
     boolean isElrFeatureEnabled() {
-        return latestFinalizedFeatures().versionOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 0) >=
+        return finalizedVersions.getOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 0) >=
             EligibleLeaderReplicasVersion.ELRV_1.featureLevel();
     }
 }

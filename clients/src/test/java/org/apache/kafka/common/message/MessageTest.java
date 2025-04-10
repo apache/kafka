@@ -944,7 +944,7 @@ public final class MessageTest {
     @Test
     public void defaultValueShouldBeWritable() {
         for (short version = SimpleExampleMessageData.LOWEST_SUPPORTED_VERSION; version <= SimpleExampleMessageData.HIGHEST_SUPPORTED_VERSION; ++version) {
-            MessageUtil.toByteBuffer(new SimpleExampleMessageData(), version);
+            MessageUtil.toByteBufferAccessor(new SimpleExampleMessageData(), version).buffer();
         }
     }
 

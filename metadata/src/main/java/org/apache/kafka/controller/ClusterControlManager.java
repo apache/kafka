@@ -353,10 +353,10 @@ public class ClusterControlManager {
         if (existing != null) {
             prevIncarnationId = existing.incarnationId();
             storedBrokerEpoch = existing.epoch();
-            if (heartbeatManager.hasValidSession(brokerId, existing.epoch())) {
+            if (heartbeatManager.hasValidSession(brokerId, existing.epoch()) && !existing.inControlledShutdown()) {
                 if (!request.incarnationId().equals(prevIncarnationId)) {
-                    throw new DuplicateBrokerRegistrationException("Another broker is " +
-                        "registered with that broker id.");
+                    throw new DuplicateBrokerRegistrationException("Another broker is registered with that broker id. If the broker " + 
+                            "was recently restarted this should self-resolve once the heartbeat manager expires the broker's session.");
                 }
             }
         }
@@ -365,7 +365,7 @@ public class ClusterControlManager {
             throw new BrokerIdNotRegisteredException("Controller does not support registering ZK brokers.");
         }
 
-        if (featureControl.metadataVersion().isDirectoryAssignmentSupported()) {
+        if (featureControl.metadataVersionOrThrow().isDirectoryAssignmentSupported()) {
             if (request.logDirs().isEmpty()) {
                 throw new InvalidRegistrationException("No directories specified in request");
             }
@@ -415,7 +415,7 @@ public class ClusterControlManager {
                         setMaxSupportedVersion((short) 0));
             }
         });
-        if (featureControl.metadataVersion().isDirectoryAssignmentSupported()) {
+        if (featureControl.metadataVersionOrThrow().isDirectoryAssignmentSupported()) {
             record.setLogDirs(request.logDirs());
         }
 
@@ -444,7 +444,7 @@ public class ClusterControlManager {
             record.setInControlledShutdown(existing.inControlledShutdown());
             record.setBrokerEpoch(existing.epoch());
         }
-        records.add(new ApiMessageAndVersion(record, featureControl.metadataVersion().
+        records.add(new ApiMessageAndVersion(record, featureControl.metadataVersionOrThrow().
             registerBrokerRecordVersion()));
 
         if (!request.incarnationId().equals(prevIncarnationId)) {
@@ -461,7 +461,7 @@ public class ClusterControlManager {
     }
 
     ControllerResult<Void> registerController(ControllerRegistrationRequestData request) {
-        if (!featureControl.metadataVersion().isControllerRegistrationSupported()) {
+        if (!featureControl.metadataVersionOrThrow().isControllerRegistrationSupported()) {
             throw new UnsupportedVersionException("The current MetadataVersion is too old to " +
                     "support controller registrations.");
         }
@@ -521,7 +521,7 @@ public class ClusterControlManager {
      * @param brokerId      The broker id to track.
      * @param brokerEpoch   The broker epoch to track.
      *
-     * @returns             True only if the ClusterControlManager is active.
+     * @return              True only if the ClusterControlManager is active.
      */
     boolean trackBrokerHeartbeat(int brokerId, long brokerEpoch) {
         BrokerHeartbeatManager manager = heartbeatManager;
@@ -830,7 +830,7 @@ public class ClusterControlManager {
     }
 
     Iterator<Entry<Integer, Map<String, VersionRange>>> controllerSupportedFeatures() {
-        if (!featureControl.metadataVersion().isControllerRegistrationSupported()) {
+        if (!featureControl.metadataVersionOrThrow().isControllerRegistrationSupported()) {
             throw new UnsupportedVersionException("The current MetadataVersion is too old to " +
                     "support controller registrations.");
         }

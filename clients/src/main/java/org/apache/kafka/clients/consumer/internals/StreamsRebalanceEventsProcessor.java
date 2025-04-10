@@ -45,20 +45,17 @@ import java.util.concurrent.LinkedBlockingQueue;
 public class StreamsRebalanceEventsProcessor {
 
     private final BlockingQueue<BackgroundEvent> onCallbackRequests = new LinkedBlockingQueue<>();
-    private ApplicationEventHandler applicationEventHandler = null;
-    private final StreamsGroupRebalanceCallbacks rebalanceCallbacks;
     private final StreamsRebalanceData streamsRebalanceData;
+    private ApplicationEventHandler applicationEventHandler;
+    private StreamsGroupRebalanceCallbacks rebalanceCallbacks;
 
     /**
      * Constructs the Streams rebalance processor.
      *
      * @param streamsRebalanceData
-     * @param rebalanceCallbacks
      */
-    public StreamsRebalanceEventsProcessor(StreamsRebalanceData streamsRebalanceData,
-                                           StreamsGroupRebalanceCallbacks rebalanceCallbacks) {
+    public StreamsRebalanceEventsProcessor(StreamsRebalanceData streamsRebalanceData) {
         this.streamsRebalanceData = streamsRebalanceData;
-        this.rebalanceCallbacks = rebalanceCallbacks;
     }
 
     /**
@@ -105,6 +102,10 @@ public class StreamsRebalanceEventsProcessor {
      */
     public void setApplicationEventHandler(final ApplicationEventHandler applicationEventHandler) {
         this.applicationEventHandler = applicationEventHandler;
+    }
+
+    public void setRebalanceCallbacks(final StreamsGroupRebalanceCallbacks rebalanceCallbacks) {
+        this.rebalanceCallbacks = rebalanceCallbacks;
     }
 
     private void process(final BackgroundEvent event) {

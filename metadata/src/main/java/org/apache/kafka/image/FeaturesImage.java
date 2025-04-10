@@ -38,7 +38,7 @@ import java.util.Optional;
  */
 public final class FeaturesImage {
     public static final FeaturesImage EMPTY = new FeaturesImage(
-        Collections.emptyMap(),
+        Map.of(),
         Optional.empty()
     );
 

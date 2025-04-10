@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.coordinator.group.streams;
 
+import org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.TopicInfo;
@@ -103,6 +104,22 @@ public class StreamsTopologyTest {
         assertEquals(mkSubtopology2(), topology.subtopologies().get(SUBTOPOLOGY_ID_2));
     }
 
+    @Test
+    public void fromHeartbeatRequestShouldCreateCorrectTopology() {
+        StreamsGroupHeartbeatRequestData.Topology requestTopology = new StreamsGroupHeartbeatRequestData.Topology()
+            .setEpoch(1)
+            .setSubtopologies(List.of(mkRequestSubtopology1(), mkRequestSubtopology2()));
+
+        StreamsTopology topology = StreamsTopology.fromHeartbeatRequest(requestTopology);
+
+        assertEquals(1, topology.topologyEpoch());
+        assertEquals(2, topology.subtopologies().size());
+        assertTrue(topology.subtopologies().containsKey(SUBTOPOLOGY_ID_1));
+        assertEquals(mkSubtopology1(), topology.subtopologies().get(SUBTOPOLOGY_ID_1));
+        assertTrue(topology.subtopologies().containsKey(SUBTOPOLOGY_ID_2));
+        assertEquals(mkSubtopology2(), topology.subtopologies().get(SUBTOPOLOGY_ID_2));
+    }
+
     private Subtopology mkSubtopology1() {
         return new Subtopology()
             .setSubtopologyId(SUBTOPOLOGY_ID_1)
@@ -145,6 +162,51 @@ public class StreamsTopologyTest {
             ))
             .setStateChangelogTopics(List.of(
                 new TopicInfo().setName(CHANGELOG_TOPIC_3)
+            ));
+    }
+
+    private StreamsGroupHeartbeatRequestData.Subtopology mkRequestSubtopology1() {
+        return new StreamsGroupHeartbeatRequestData.Subtopology()
+            .setSubtopologyId(SUBTOPOLOGY_ID_1)
+            .setSourceTopics(List.of(
+                SOURCE_TOPIC_1,
+                SOURCE_TOPIC_2,
+                REPARTITION_TOPIC_1,
+                REPARTITION_TOPIC_2
+            ))
+            .setRepartitionSourceTopics(List.of(
+                new StreamsGroupHeartbeatRequestData.TopicInfo().setName(REPARTITION_TOPIC_1),
+                new StreamsGroupHeartbeatRequestData.TopicInfo().setName(REPARTITION_TOPIC_2)
+            ))
+            .setRepartitionSinkTopics(List.of(
+                REPARTITION_TOPIC_3
+            ))
+            .setStateChangelogTopics(List.of(
+                new StreamsGroupHeartbeatRequestData.TopicInfo().setName(CHANGELOG_TOPIC_1),
+                new StreamsGroupHeartbeatRequestData.TopicInfo().setName(CHANGELOG_TOPIC_2)
+            ))
+            .setCopartitionGroups(List.of(
+                new StreamsGroupHeartbeatRequestData.CopartitionGroup()
+                    .setRepartitionSourceTopics(List.of((short) 0))
+                    .setSourceTopics(List.of((short) 0)),
+                new StreamsGroupHeartbeatRequestData.CopartitionGroup()
+                    .setRepartitionSourceTopics(List.of((short) 1))
+                    .setSourceTopics(List.of((short) 1))
+            ));
+    }
+
+    private StreamsGroupHeartbeatRequestData.Subtopology mkRequestSubtopology2() {
+        return new StreamsGroupHeartbeatRequestData.Subtopology()
+            .setSubtopologyId(SUBTOPOLOGY_ID_2)
+            .setSourceTopics(List.of(
+                SOURCE_TOPIC_3,
+                REPARTITION_TOPIC_3
+            ))
+            .setRepartitionSourceTopics(List.of(
+                new StreamsGroupHeartbeatRequestData.TopicInfo().setName(REPARTITION_TOPIC_3)
+            ))
+            .setStateChangelogTopics(List.of(
+                new StreamsGroupHeartbeatRequestData.TopicInfo().setName(CHANGELOG_TOPIC_3)
             ));
     }
 }

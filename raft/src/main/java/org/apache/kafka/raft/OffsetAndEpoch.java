@@ -16,48 +16,7 @@
  */
 package org.apache.kafka.raft;
 
-public class OffsetAndEpoch implements Comparable<OffsetAndEpoch> {
-    private final long offset;
-    private final int epoch;
-
-    public OffsetAndEpoch(long offset, int epoch) {
-        this.offset = offset;
-        this.epoch = epoch;
-    }
-
-    public long offset() {
-        return offset;
-    }
-
-    public int epoch() {
-        return epoch;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-
-        OffsetAndEpoch that = (OffsetAndEpoch) o;
-
-        if (offset != that.offset) return false;
-        return epoch == that.epoch;
-    }
-
-    @Override
-    public int hashCode() {
-        int result = (int) (offset ^ (offset >>> 32));
-        result = 31 * result + epoch;
-        return result;
-    }
-
-    @Override
-    public String toString() {
-        return "OffsetAndEpoch(" +
-                "offset=" + offset +
-                ", epoch=" + epoch +
-                ')';
-    }
+public record OffsetAndEpoch(long offset, int epoch) implements Comparable<OffsetAndEpoch> {
 
     @Override
     public int compareTo(OffsetAndEpoch o) {
