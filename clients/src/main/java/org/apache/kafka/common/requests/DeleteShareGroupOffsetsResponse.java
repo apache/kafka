@@ -42,6 +42,7 @@ public class DeleteShareGroupOffsetsResponse extends AbstractResponse {
     @Override
     public Map<Errors, Integer> errorCounts() {
         Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
+        updateErrorCounts(counts, Errors.forCode(data.errorCode()));
         data.responses().forEach(
             topicResult -> topicResult.partitions().forEach(
                 partitionResult -> updateErrorCounts(counts, Errors.forCode(partitionResult.errorCode()))
