@@ -488,7 +488,7 @@ public class DelayedShareFetchTest {
         delayedShareFetch.forceComplete();
         assertTrue(delayedShareFetch.isCompleted());
         // Verifying that the first forceComplete calls acquirablePartitions method in DelayedShareFetch.
-        Mockito.verify(delayedShareFetch, times(1)).acquirablePartitions();
+        Mockito.verify(delayedShareFetch, times(1)).acquirablePartitions(sharePartitions);
         assertEquals(0, future.join().size());
         assertTrue(delayedShareFetch.lock().tryLock());
         delayedShareFetch.lock().unlock();
@@ -498,7 +498,7 @@ public class DelayedShareFetchTest {
         delayedShareFetch.forceComplete();
         assertTrue(delayedShareFetch.isCompleted());
         // Verifying that the second forceComplete does not call acquirablePartitions method in DelayedShareFetch.
-        Mockito.verify(delayedShareFetch, times(1)).acquirablePartitions();
+        Mockito.verify(delayedShareFetch, times(1)).acquirablePartitions(sharePartitions);
         Mockito.verify(delayedShareFetch, times(0)).releasePartitionLocks(any());
         assertTrue(delayedShareFetch.lock().tryLock());
         // Assert both metrics shall be recorded only once.
@@ -1195,6 +1195,7 @@ public class DelayedShareFetchTest {
         private LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = mock(LinkedHashMap.class);
         private PartitionMaxBytesStrategy partitionMaxBytesStrategy = mock(PartitionMaxBytesStrategy.class);
         private Time time = new MockTime();
+        private Optional<DelayedShareFetch.RemoteFetch> remoteFetch = Optional.empty();
         private ShareGroupMetrics shareGroupMetrics = mock(ShareGroupMetrics.class);
 
         DelayedShareFetchBuilder withShareFetchData(ShareFetch shareFetch) {
@@ -1232,6 +1233,11 @@ public class DelayedShareFetchTest {
             return this;
         }
 
+        private DelayedShareFetchBuilder withRemoteFetch(DelayedShareFetch.RemoteFetch remoteFetch) {
+            this.remoteFetch = Optional.of(remoteFetch);
+            return this;
+        }
+
         public static DelayedShareFetchBuilder builder() {
             return new DelayedShareFetchBuilder();
         }
@@ -1244,7 +1250,8 @@ public class DelayedShareFetchTest {
                 sharePartitions,
                 partitionMaxBytesStrategy,
                 shareGroupMetrics,
-                time);
+                time,
+                remoteFetch);
         }
     }
 }
