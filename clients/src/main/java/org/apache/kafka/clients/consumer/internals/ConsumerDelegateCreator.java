@@ -61,7 +61,7 @@ public class ConsumerDelegateCreator {
             GroupProtocol groupProtocol = GroupProtocol.valueOf(config.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG).toUpperCase(Locale.ROOT));
 
             if (groupProtocol == GroupProtocol.CONSUMER)
-                return new AsyncKafkaConsumer<>(config, keyDeserializer, valueDeserializer, Optional.empty(), Optional.empty());
+                return new AsyncKafkaConsumer<>(config, keyDeserializer, valueDeserializer, Optional.empty());
             else
                 return new ClassicKafkaConsumer<>(config, keyDeserializer, valueDeserializer);
         } catch (KafkaException e) {
