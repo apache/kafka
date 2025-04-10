@@ -32,6 +32,8 @@ import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, SHARE
 import org.apache.kafka.common.internals.{FatalExitError, Topic}
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.{AddPartitionsToTxnResult, AddPartitionsToTxnResultCollection}
 import org.apache.kafka.common.message.DeleteRecordsResponseData.{DeleteRecordsPartitionResult, DeleteRecordsTopicResult}
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic
 import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData.ClientMetricsResource
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
@@ -75,6 +77,7 @@ import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.stream.Collectors
 import java.util.{Collections, Optional}
 import scala.annotation.nowarn
+import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
@@ -3625,8 +3628,64 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   def handleDeleteShareGroupOffsetsRequest(request: RequestChannel.Request): Unit = {
     val deleteShareGroupOffsetsRequest = request.body[DeleteShareGroupOffsetsRequest]
-    requestHelper.sendMaybeThrottle(request, deleteShareGroupOffsetsRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
-    CompletableFuture.completedFuture[Unit](())
+
+    val groupId = deleteShareGroupOffsetsRequest.data.groupId
+
+    if (!isShareGroupProtocolEnabled) {
+      requestHelper.sendMaybeThrottle(request, deleteShareGroupOffsetsRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.UNSUPPORTED_VERSION.exception))
+      return
+    } else if (!authHelper.authorize(request.context, DELETE, GROUP, groupId)) {
+      requestHelper.sendMaybeThrottle(request, deleteShareGroupOffsetsRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, Errors.GROUP_AUTHORIZATION_FAILED.exception))
+      return
+    }
+
+    val deleteShareGroupOffsetsResponseTopics: util.List[DeleteShareGroupOffsetsResponseTopic] = new util.ArrayList[DeleteShareGroupOffsetsResponseTopic]()
+
+    val authorizedTopics: util.List[DeleteShareGroupOffsetsRequestTopic] =
+      new util.ArrayList[DeleteShareGroupOffsetsRequestTopic]
+
+    deleteShareGroupOffsetsRequest.data.topics.forEach{ topic =>
+      if (!authHelper.authorize(request.context, READ, TOPIC, topic.topicName)) {
+        deleteShareGroupOffsetsResponseTopics.add(
+          new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+            .setTopicName(topic.topicName)
+            .setPartitions(topic.partitions.map(partition => {
+              new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
+                .setPartitionIndex(partition)
+                .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+                .setErrorMessage(Errors.TOPIC_AUTHORIZATION_FAILED.message())
+            }).toList.asJava)
+        )
+      } else {
+        authorizedTopics.add(topic)
+      }
+    }
+
+    if (authorizedTopics.isEmpty) {
+      requestHelper.sendMaybeThrottle(request, new DeleteShareGroupOffsetsResponse(new DeleteShareGroupOffsetsResponseData()))
+      return
+    }
+
+    groupCoordinator.deleteShareGroupOffsets(
+      request.context,
+      new DeleteShareGroupOffsetsRequestData().setGroupId(groupId).setTopics(authorizedTopics)
+    ).handle[Unit] {(responseData, exception) => {
+      if (exception != null) {
+        requestHelper.sendMaybeThrottle(request, deleteShareGroupOffsetsRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
+      } else if (responseData.errorCode() != Errors.NONE.code) {
+        requestHelper.sendMaybeThrottle(
+          request,
+          deleteShareGroupOffsetsRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, responseData.errorCode(), responseData.errorMessage())
+        )
+      } else {
+        responseData.responses.forEach { topic => {
+          deleteShareGroupOffsetsResponseTopics.add(topic)
+        }}
+        val deleteShareGroupStateResponse = new DeleteShareGroupOffsetsResponse(new DeleteShareGroupOffsetsResponseData()
+          .setResponses(deleteShareGroupOffsetsResponseTopics))
+        requestHelper.sendMaybeThrottle(request, deleteShareGroupStateResponse)
+      }
+    }}
   }
 
   // Visible for Testing
