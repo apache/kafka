@@ -18,7 +18,6 @@ package org.apache.kafka.tools.consumer;
 
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.MessageUtil;
-
 import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataKey;
@@ -33,6 +32,7 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMe
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataValue;
+
 import org.junit.jupiter.params.provider.Arguments;
 
 import java.util.List;
