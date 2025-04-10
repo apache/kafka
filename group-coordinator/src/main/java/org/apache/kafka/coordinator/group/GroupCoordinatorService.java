@@ -1248,29 +1248,118 @@ public class GroupCoordinatorService implements GroupCoordinator {
         });
     }
 
-    private void populateDeleteShareGroupOffsetsFuture(
+    private CompletableFuture<DeleteShareGroupOffsetsResponseData> checkInitializedSharePartitionsAndProcess(
+        String groupId,
+        DeleteShareGroupOffsetsRequestData requestData
+    ) {
+        Map<Uuid, String> requestTopicIdToNameMapping = new HashMap<>();
+        List<DeleteShareGroupStateRequestData.DeleteStateData> deleteShareGroupStateRequestTopicsData = new ArrayList<>();
+        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> deleteShareGroupOffsetsResponseTopicList =
+            new ArrayList<>(requestData.topics().size());
+
+        return runtime.scheduleReadOperation(
+            "share-group-initialized-partitions",
+            topicPartitionFor(groupId),
+            (coordinator, offset) -> coordinator.initializedShareGroupPartitions(groupId)
+        ).thenCompose(topicPartitionMap -> {
+            requestData.topics().forEach(topic -> {
+                Uuid topicId = metadataImage.topics().topicNameToIdView().get(topic.topicName());
+                if (topicId != null) {
+                    // A deleteState request to persister should only be sent with those topic partitions for which corresponding
+                    // share partitions are initialized for the group.
+                    if (topicPartitionMap.containsKey(topicId)) {
+                        requestTopicIdToNameMapping.put(topicId, topic.topicName());
+                        List<DeleteShareGroupStateRequestData.PartitionData> partitions = new ArrayList<>();
+                        topic.partitions().forEach(partition -> {
+                            if (topicPartitionMap.get(topicId).contains(partition)) {
+                                partitions.add(new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition));
+                            }
+                        });
+                        deleteShareGroupStateRequestTopicsData.add(new DeleteShareGroupStateRequestData.DeleteStateData()
+                            .setTopicId(topicId)
+                            .setPartitions(partitions));
+                    }
+                } else {
+                    deleteShareGroupOffsetsResponseTopicList.add(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                        .setTopicName(topic.topicName())
+                        .setPartitions(topic.partitions().stream().map(
+                            partition -> new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
+                                .setPartitionIndex(partition)
+                                .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                                .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
+                        ).toList()));
+                }
+            });
+
+            // If the request for the persister is empty, just complete the operation right away.
+            if (deleteShareGroupStateRequestTopicsData.isEmpty()) {
+                return CompletableFuture.completedFuture(new DeleteShareGroupOffsetsResponseData().setResponses(deleteShareGroupOffsetsResponseTopicList));
+            }
+
+            return sendPersisterDeleteStateRequest(
+                requestData,
+                requestTopicIdToNameMapping,
+                deleteShareGroupStateRequestTopicsData,
+                deleteShareGroupOffsetsResponseTopicList
+            );
+        }).exceptionally(throwable -> {
+            log.error("Failed to get initialized topic partitions for the group {}", groupId, throwable);
+            return DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.forException(throwable));
+        });
+    }
+
+    private CompletableFuture<DeleteShareGroupOffsetsResponseData> checkIfGroupIsEmptyAndProcess(
+        String groupId,
+        DeleteShareGroupOffsetsRequestData requestData
+    ) {
+        // This is done to make sure the provided group is empty. Offsets can be deleted only for an empty share group.
+        CompletableFuture<List<ShareGroupDescribeResponseData.DescribedGroup>> describeGroupFuture =
+            runtime.scheduleReadOperation(
+                "share-group-describe",
+                topicPartitionFor(groupId),
+                (coordinator, lastCommittedOffset) -> coordinator.shareGroupDescribe(List.of(groupId), lastCommittedOffset)
+            ).exceptionally(exception -> handleOperationException(
+                "share-group-describe",
+                List.of(groupId),
+                exception,
+                (error, __) -> ShareGroupDescribeRequest.getErrorDescribedGroupList(List.of(groupId), error),
+                log
+            ));
+
+        return describeGroupFuture.thenCompose(groups -> {
+            if (groups == null || groups.isEmpty()) {
+                log.error("Describe share group resulted in empty response for group {}", groupId);
+                return CompletableFuture.completedFuture(DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.GROUP_ID_NOT_FOUND));
+            } else if (groups.get(0).errorCode() != Errors.NONE.code()) {
+                log.error("Failed to describe the share group {}", groupId);
+                return CompletableFuture.completedFuture(DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(groups.get(0).errorCode(), groups.get(0).errorMessage()));
+            } else if (groups.get(0).members() != null && !groups.get(0).members().isEmpty()) {
+                log.error("Provided group {} is not empty", groupId);
+                return CompletableFuture.completedFuture(DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.NON_EMPTY_GROUP));
+            } else {
+                return checkInitializedSharePartitionsAndProcess(groupId, requestData);
+            }
+        }).exceptionally(throwable -> {
+            log.error("Failed to describe the share group {}", groupId, throwable);
+            return DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.forException(throwable));
+        });
+    }
+
+    private CompletableFuture<DeleteShareGroupOffsetsResponseData> sendPersisterDeleteStateRequest(
         DeleteShareGroupOffsetsRequestData requestData,
-        CompletableFuture<DeleteShareGroupOffsetsResponseData> future,
         Map<Uuid, String> requestTopicIdToNameMapping,
         List<DeleteShareGroupStateRequestData.DeleteStateData> deleteShareGroupStateRequestTopicsData,
         List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> deleteShareGroupOffsetsResponseTopicList
-
     ) {
         DeleteShareGroupStateRequestData deleteShareGroupStateRequestData = new DeleteShareGroupStateRequestData()
             .setGroupId(requestData.groupId())
             .setTopics(deleteShareGroupStateRequestTopicsData);
 
-        persister.deleteState(DeleteShareGroupStateParameters.from(deleteShareGroupStateRequestData))
-            .whenComplete((result, error) -> {
-                if (error != null) {
-                    log.error("Failed to delete share group state");
-                    future.completeExceptionally(error);
-                    return;
-                }
+        return persister.deleteState(DeleteShareGroupStateParameters.from(deleteShareGroupStateRequestData))
+            .thenCompose(result -> {
                 if (result == null || result.topicsData() == null) {
                     log.error("Result is null for the delete share group state");
-                    future.completeExceptionally(new IllegalStateException("Result is null for the delete share group state"));
-                    return;
+                    return CompletableFuture.failedFuture(new IllegalStateException("Result is null for the delete share group state"));
                 }
                 result.topicsData().forEach(topicData ->
                     deleteShareGroupOffsetsResponseTopicList.add(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
@@ -1284,9 +1373,10 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         ).toList())
                     ));
 
-                future.complete(
-                    new DeleteShareGroupOffsetsResponseData()
-                        .setResponses(deleteShareGroupOffsetsResponseTopicList));
+                return CompletableFuture.completedFuture(new DeleteShareGroupOffsetsResponseData().setResponses(deleteShareGroupOffsetsResponseTopicList));
+            }).exceptionally(throwable -> {
+                log.error("Failed to delete share group state");
+                return DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.forException(throwable));
             });
     }
 
@@ -1580,83 +1670,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.INVALID_GROUP_ID));
         }
 
-        Map<Uuid, String> requestTopicIdToNameMapping = new HashMap<>();
-        List<DeleteShareGroupStateRequestData.DeleteStateData> deleteShareGroupStateRequestTopicsData = new ArrayList<>(requestData.topics().size());
-        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> deleteShareGroupOffsetsResponseTopicList = new ArrayList<>(requestData.topics().size());
-
-        requestData.topics().forEach(topic -> {
-            Uuid topicId = metadataImage.topics().topicNameToIdView().get(topic.topicName());
-            if (topicId != null) {
-                requestTopicIdToNameMapping.put(topicId, topic.topicName());
-                deleteShareGroupStateRequestTopicsData.add(new DeleteShareGroupStateRequestData.DeleteStateData()
-                    .setTopicId(topicId)
-                    .setPartitions(
-                        topic.partitions().stream().map(
-                            partitionIndex -> new DeleteShareGroupStateRequestData.PartitionData().setPartition(partitionIndex)
-                        ).toList()
-                    ));
-            } else {
-                deleteShareGroupOffsetsResponseTopicList.add(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
-                    .setTopicName(topic.topicName())
-                    .setPartitions(topic.partitions().stream().map(
-                        partition -> new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
-                            .setPartitionIndex(partition)
-                            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                            .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
-                    ).toList()));
-            }
-        });
-
-        // If the request for the persister is empty, just complete the operation right away.
-        if (deleteShareGroupStateRequestTopicsData.isEmpty()) {
-            return CompletableFuture.completedFuture(
-                new DeleteShareGroupOffsetsResponseData()
-                    .setResponses(deleteShareGroupOffsetsResponseTopicList));
-        }
-
-        CompletableFuture<DeleteShareGroupOffsetsResponseData> future = new CompletableFuture<>();
-
-        TopicPartition topicPartition = topicPartitionFor(groupId);
-
-        // This is done to make sure the provided group is empty. Offsets can be deleted only for an empty share group.
-        CompletableFuture<List<ShareGroupDescribeResponseData.DescribedGroup>> describeGroupFuture =
-            runtime.scheduleReadOperation(
-                "share-group-describe",
-                topicPartition,
-                (coordinator, lastCommittedOffset) -> coordinator.shareGroupDescribe(List.of(groupId), lastCommittedOffset)
-            ).exceptionally(exception -> handleOperationException(
-                "share-group-describe",
-                List.of(groupId),
-                exception,
-                (error, __) -> ShareGroupDescribeRequest.getErrorDescribedGroupList(List.of(groupId), error),
-                log
-            ));
-
-        describeGroupFuture.whenComplete((groups, throwable) -> {
-            if (throwable != null) {
-                log.error("Failed to describe the share group {}", groupId, throwable);
-                future.complete(DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.forException(throwable)));
-            } else if (groups == null || groups.isEmpty()) {
-                log.error("Describe share group resulted in empty response for group {}", groupId);
-                future.complete(DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.GROUP_ID_NOT_FOUND));
-            } else if (groups.get(0).errorCode() != Errors.NONE.code()) {
-                log.error("Failed to describe the share group {}", groupId);
-                future.complete(DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(groups.get(0).errorCode(), groups.get(0).errorMessage()));
-            } else if (groups.get(0).members() != null && !groups.get(0).members().isEmpty()) {
-                log.error("Provided group {} is not empty", groupId);
-                future.complete(DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.NON_EMPTY_GROUP));
-            } else {
-                populateDeleteShareGroupOffsetsFuture(
-                    requestData,
-                    future,
-                    requestTopicIdToNameMapping,
-                    deleteShareGroupStateRequestTopicsData,
-                    deleteShareGroupOffsetsResponseTopicList
-                );
-            }
-        });
-
-        return future;
+        return checkIfGroupIsEmptyAndProcess(groupId, requestData);
     }
 
     /**
