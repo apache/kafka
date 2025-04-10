@@ -186,7 +186,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      */
     private class BackgroundEventProcessor implements EventProcessor<BackgroundEvent> {
 
-        private StreamsGroupRebalanceCallbacks streamsGroupRebalanceCallbacks;
+        private Optional<StreamsRebalanceListener> streamsGroupRebalanceCallbacks = Optional.empty();
         private final Optional<StreamsRebalanceData> streamsRebalanceData;
 
         public BackgroundEventProcessor() {
@@ -197,11 +197,12 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             this.streamsRebalanceData = streamsRebalanceData;
         }
 
-        public void setStreamsGroupRebalanceCallbacks(final StreamsGroupRebalanceCallbacks streamsGroupRebalanceCallbacks) {
+        private void setStreamsRebalanceListener(final StreamsRebalanceListener streamsRebalanceListener) {
             if (streamsRebalanceData.isEmpty()) {
-                throw new IllegalStateException("StreamsRebalanceData is not set");
+                throw new IllegalStateException("Background event processor was not created to be used with Streams " +
+                    "rebalance protocol events");
             }
-            this.streamsGroupRebalanceCallbacks = streamsGroupRebalanceCallbacks;
+            this.streamsGroupRebalanceCallbacks = Optional.of(streamsRebalanceListener);
         }
 
         @Override
@@ -277,7 +278,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         private StreamsOnTasksRevokedCallbackCompletedEvent invokeOnTasksRevokedCallback(final Set<StreamsRebalanceData.TaskId> activeTasksToRevoke,
                                                                                          final CompletableFuture<Void> future) {
             final Optional<KafkaException> error;
-            final Optional<Exception> exceptionFromCallback = streamsGroupRebalanceCallbacks.onTasksRevoked(activeTasksToRevoke);
+            final Optional<Exception> exceptionFromCallback = streamsGroupRebalanceCallbacks().onTasksRevoked(activeTasksToRevoke);
             if (exceptionFromCallback.isPresent()) {
                 error = Optional.of(ConsumerUtils.maybeWrapAsKafkaException(exceptionFromCallback.get(), "Task revocation callback throws an error"));
             } else {
@@ -289,7 +290,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         private StreamsOnTasksAssignedCallbackCompletedEvent invokeOnTasksAssignedCallback(final StreamsRebalanceData.Assignment assignment,
                                                                                            final CompletableFuture<Void> future) {
             final Optional<KafkaException> error;
-            final Optional<Exception> exceptionFromCallback = streamsGroupRebalanceCallbacks.onTasksAssigned(assignment);
+            final Optional<Exception> exceptionFromCallback = streamsGroupRebalanceCallbacks().onTasksAssigned(assignment);
             if (exceptionFromCallback.isPresent()) {
                 error = Optional.of(ConsumerUtils.maybeWrapAsKafkaException(exceptionFromCallback.get(), "Task assignment callback throws an error"));
             } else {
@@ -301,7 +302,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         private StreamsOnAllTasksLostCallbackCompletedEvent invokeOnAllTasksLostCallback(final CompletableFuture<Void> future) {
             final Optional<KafkaException> error;
-            final Optional<Exception> exceptionFromCallback = streamsGroupRebalanceCallbacks.onAllTasksLost();
+            final Optional<Exception> exceptionFromCallback = streamsGroupRebalanceCallbacks().onAllTasksLost();
             if (exceptionFromCallback.isPresent()) {
                 error = Optional.of(ConsumerUtils.maybeWrapAsKafkaException(exceptionFromCallback.get(), "All tasks lost callback throws an error"));
             } else {
@@ -312,7 +313,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         }
 
         private StreamsRebalanceData streamsRebalanceData() {
-            return streamsRebalanceData.orElseThrow(() -> new IllegalStateException("StreamsRebalanceData is not set"));
+            return streamsRebalanceData.orElseThrow(
+                () -> new IllegalStateException("Background event processor was not created to be used with Streams " +
+                    "rebalance protocol events"));
+        }
+
+        private StreamsRebalanceListener streamsGroupRebalanceCallbacks() {
+            return streamsGroupRebalanceCallbacks.orElseThrow(
+                () -> new IllegalStateException("Background event processor was not created to be used with Streams " +
+                    "rebalance protocol events"));
         }
     }
 
@@ -385,8 +394,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     public AsyncKafkaConsumer(final ConsumerConfig config,
                               final Deserializer<K> keyDeserializer,
                               final Deserializer<V> valueDeserializer,
-                              final Optional<StreamsRebalanceData> streamsRebalanceData,
-                              final Optional<StreamsRebalanceEventsProcessor> streamsRebalanceEventsProcessor) {
+                              final Optional<StreamsRebalanceData> streamsRebalanceData) {
         this(
             config,
             keyDeserializer,
@@ -397,8 +405,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             FetchCollector::new,
             ConsumerMetadata::new,
             new LinkedBlockingQueue<>(),
-            streamsRebalanceData,
-            streamsRebalanceEventsProcessor
+            streamsRebalanceData
         );
     }
 
@@ -413,8 +420,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        final FetchCollectorFactory<K, V> fetchCollectorFactory,
                        final ConsumerMetadataFactory metadataFactory,
                        final LinkedBlockingQueue<BackgroundEvent> backgroundEventQueue,
-                       final Optional<StreamsRebalanceData> streamsRebalanceData,
-                       final Optional<StreamsRebalanceEventsProcessor> streamsRebalanceEventsProcessor) {
+                       final Optional<StreamsRebalanceData> streamsRebalanceData) {
         try {
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(
                 config,
@@ -491,8 +497,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     metrics,
                     offsetCommitCallbackInvoker,
                     memberStateListener,
-                    streamsRebalanceData,
-                    streamsRebalanceEventsProcessor
+                    streamsRebalanceData
             );
             final Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(logContext,
                     metadata,
@@ -508,10 +513,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     requestManagersSupplier,
                     kafkaConsumerMetrics
             );
-            streamsRebalanceEventsProcessor.ifPresent(
-                processor -> processor.setApplicationEventHandler(applicationEventHandler)
-            );
-
             this.rebalanceListenerInvoker = new ConsumerRebalanceListenerInvoker(
                     logContext,
                     subscriptions,
@@ -682,7 +683,6 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             metrics,
             offsetCommitCallbackInvoker,
             memberStateListener,
-            Optional.empty(),
             Optional.empty()
         );
         Supplier<ApplicationEventProcessor> applicationEventProcessorSupplier = ApplicationEventProcessor.supplier(
@@ -1958,9 +1958,9 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         subscribeInternal(topics, Optional.of(listener));
     }
 
-    public void subscribe(Collection<String> topics, StreamsGroupRebalanceCallbacks streamsGroupRebalanceCallbacks) {
+    public void subscribe(Collection<String> topics, StreamsRebalanceListener streamsRebalanceListener) {
         subscribeInternal(topics, Optional.empty());
-        backgroundEventProcessor.setStreamsGroupRebalanceCallbacks(streamsGroupRebalanceCallbacks);
+        backgroundEventProcessor.setStreamsRebalanceListener(streamsRebalanceListener);
     }
 
     @Override
