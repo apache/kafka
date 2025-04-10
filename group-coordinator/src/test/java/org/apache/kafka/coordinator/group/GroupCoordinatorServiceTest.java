@@ -418,7 +418,7 @@ public class GroupCoordinatorServiceTest {
         Properties expectedProperties = new Properties();
         expectedProperties.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT);
         expectedProperties.put(TopicConfig.COMPRESSION_TYPE_CONFIG, BrokerCompressionType.PRODUCER.name);
-        expectedProperties.put(TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "1000");
+        expectedProperties.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1000");
 
         assertEquals(expectedProperties, service.groupMetadataTopicConfigs());
     }
