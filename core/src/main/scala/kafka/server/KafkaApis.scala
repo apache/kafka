@@ -2629,16 +2629,15 @@ class KafkaApis(val requestChannel: RequestChannel,
 
   }
 
-  private def isStreamsGroupProtocolEnabled(): Boolean = {
+  private def isStreamsGroupProtocolEnabled: Boolean = {
       config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.STREAMS)
   }
 
   def handleStreamsGroupHeartbeat(request: RequestChannel.Request): CompletableFuture[Unit] = {
     val streamsGroupHeartbeatRequest = request.body[StreamsGroupHeartbeatRequest]
 
-    if (!isStreamsGroupProtocolEnabled()) {
-      // The API is not supported by the "old" group coordinator (the default). If the
-      // new one is not enabled, we fail directly here.
+    if (!isStreamsGroupProtocolEnabled) {
+      // The API is not enabled by default. If it is not enabled, we fail directly here.
       requestHelper.sendMaybeThrottle(request, streamsGroupHeartbeatRequest.getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       CompletableFuture.completedFuture[Unit](())
     } else if (!authHelper.authorize(request.context, READ, GROUP, streamsGroupHeartbeatRequest.data.groupId)) {
@@ -2729,9 +2728,8 @@ class KafkaApis(val requestChannel: RequestChannel,
     val streamsGroupDescribeRequest = request.body[StreamsGroupDescribeRequest]
     val includeAuthorizedOperations = streamsGroupDescribeRequest.data.includeAuthorizedOperations
 
-    if (!isStreamsGroupProtocolEnabled()) {
-      // The API is not supported by the "old" group coordinator (the default). If the
-      // new one is not enabled, we fail directly here.
+    if (!isStreamsGroupProtocolEnabled) {
+      // The API is not enabled by default. If it is not enabled, we fail directly here.
       requestHelper.sendMaybeThrottle(request, request.body[StreamsGroupDescribeRequest].getErrorResponse(Errors.UNSUPPORTED_VERSION.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
