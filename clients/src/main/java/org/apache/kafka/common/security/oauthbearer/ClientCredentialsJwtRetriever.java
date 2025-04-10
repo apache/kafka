@@ -40,6 +40,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.jaasOptions;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.urlencodeHeader;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUrl;
 
@@ -73,7 +74,7 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, saslMechanism);
-        OAuthBearerJaasConfig jaasConfig = new OAuthBearerJaasConfig(saslMechanism, jaasConfigEntries);
+        OAuthBearerJaasConfig jaasConfig = new OAuthBearerJaasConfig(jaasOptions(saslMechanism, jaasConfigEntries));
 
         retryBackoffMs = oauthConfig.getLong(SASL_LOGIN_RETRY_BACKOFF_MS);
         retryBackoffMaxMs = oauthConfig.getLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS);

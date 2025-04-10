@@ -42,6 +42,7 @@ import javax.security.sasl.SaslException;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.jaasOptions;
 
 /**
  * <p>
@@ -183,7 +184,7 @@ public class OAuthBearerLoginCallbackHandler implements AuthenticateCallbackHand
 
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        moduleOptions = OAuthBearerJaasConfig.create(saslMechanism, jaasConfigEntries);
+        moduleOptions = jaasOptions(saslMechanism, jaasConfigEntries);
 
         this.jwtRetriever = OAuthBearerUtils.getConfiguredInstanceOrDefault(
             configs,

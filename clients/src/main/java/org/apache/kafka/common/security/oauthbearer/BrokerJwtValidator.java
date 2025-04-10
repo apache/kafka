@@ -63,6 +63,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_E
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.jaasOptions;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.protocolMatches;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUrl;
 import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
@@ -132,10 +133,11 @@ public class BrokerJwtValidator implements JwtValidator {
             if (protocolMatches(jwksEndpoint, "file")) {
                 return new JwksFileVerificationKeyResolver(configs, saslMechanism);
             } else {
+                OAuthBearerJaasConfig jaasConfig = new OAuthBearerJaasConfig(jaasOptions(saslMechanism, jaasConfigEntries));
                 HttpsJwks httpsJwks = new HttpsJwks(jwksEndpoint.toString());
                 sslResource = OAuthBearerUtils.maybeCreateSslResource(
                     jwksEndpoint,
-                    new OAuthBearerJaasConfig(saslMechanism, jaasConfigEntries)
+                    jaasConfig
                 );
                 Optional<SSLContext> sslContext = sslResource.map(SslResource::sslContext);
                 long refreshMs = oauthConfig.getLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS);

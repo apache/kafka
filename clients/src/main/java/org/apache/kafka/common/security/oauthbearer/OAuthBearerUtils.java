@@ -34,6 +34,7 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -46,6 +47,16 @@ import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALL
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT;
 
 public class OAuthBearerUtils {
+
+    public static Map<String, Object> jaasOptions(String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
+        if (!OAuthBearerLoginModule.OAUTHBEARER_MECHANISM.equals(saslMechanism))
+            throw new ConfigException(String.format("Unexpected SASL mechanism: %s", saslMechanism));
+
+        if (Objects.requireNonNull(jaasConfigEntries).size() != 1 || jaasConfigEntries.get(0) == null)
+            throw new ConfigException(String.format("Must supply exactly 1 non-null JAAS mechanism configuration (size was %d)", jaasConfigEntries.size()));
+
+        return Collections.unmodifiableMap(jaasConfigEntries.get(0).getOptions());
+    }
 
     public static boolean protocolMatches(URL url, String protocol) {
         return protocol.equalsIgnoreCase(url.getProtocol());

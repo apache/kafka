@@ -20,11 +20,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.utils.Utils;
 
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
-import java.util.Objects;
-
-import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_JAAS_CONFIG;
 
@@ -40,22 +36,8 @@ public class OAuthBearerJaasConfig extends OAuthBearerAbstractConfig {
         this.options = Collections.unmodifiableMap(options);
     }
 
-    public OAuthBearerJaasConfig(String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        this.options = create(saslMechanism, jaasConfigEntries);
-    }
-
     public Map<String, Object> options() {
         return options;
-    }
-
-    public static Map<String, Object> create(String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
-        if (!OAuthBearerLoginModule.OAUTHBEARER_MECHANISM.equals(saslMechanism))
-            throw new ConfigException(String.format("Unexpected SASL mechanism: %s", saslMechanism));
-
-        if (Objects.requireNonNull(jaasConfigEntries).size() != 1 || jaasConfigEntries.get(0) == null)
-            throw new ConfigException(String.format("Must supply exactly 1 non-null JAAS mechanism configuration (size was %d)", jaasConfigEntries.size()));
-
-        return Collections.unmodifiableMap(jaasConfigEntries.get(0).getOptions());
     }
 
     @Override

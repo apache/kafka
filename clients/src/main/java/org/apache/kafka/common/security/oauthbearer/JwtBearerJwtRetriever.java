@@ -40,6 +40,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERT
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.jaasOptions;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateFile;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUrl;
 
@@ -64,7 +65,7 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, saslMechanism);
-        OAuthBearerJaasConfig jaasConfig = new OAuthBearerJaasConfig(saslMechanism, jaasConfigEntries);
+        OAuthBearerJaasConfig jaasConfig = new OAuthBearerJaasConfig(jaasOptions(saslMechanism, jaasConfigEntries));
 
         URL tokenEndpoint = validateUrl(oauthConfig, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
         retryBackoffMs =  oauthConfig.getLong(SASL_LOGIN_RETRY_BACKOFF_MS);
