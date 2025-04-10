@@ -33,11 +33,7 @@ public class ReadShareGroupStateRequest extends AbstractRequest {
         private final ReadShareGroupStateRequestData data;
 
         public Builder(ReadShareGroupStateRequestData data) {
-            this(data, false);
-        }
-
-        public Builder(ReadShareGroupStateRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.READ_SHARE_GROUP_STATE, enableUnstableLastVersion);
+            super(ApiKeys.READ_SHARE_GROUP_STATE);
             this.data = data;
         }
 

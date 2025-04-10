@@ -22,11 +22,11 @@
   //
   // Version 1 is the initial stable version (KIP-932).
   "validVersions": "1",
-  "flexibleVersions": "1+",
+  "flexibleVersions": "0+",
   "fields": [
-    { "name": "GroupIds", "type": "[]string", "versions": "1+", "entityType": "groupId",
+    { "name": "GroupIds", "type": "[]string", "versions": "0+", "entityType": "groupId",
       "about": "The ids of the groups to describe." },
-    { "name": "IncludeAuthorizedOperations", "type": "bool", "versions": "1+",
+    { "name": "IncludeAuthorizedOperations", "type": "bool", "versions": "0+",
       "about": "Whether to include authorized operations." }
   ]
 }

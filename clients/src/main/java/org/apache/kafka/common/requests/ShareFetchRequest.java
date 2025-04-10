@@ -37,11 +37,7 @@ public class ShareFetchRequest extends AbstractRequest {
         private final ShareFetchRequestData data;
 
         public Builder(ShareFetchRequestData data) {
-            this(data, false);
-        }
-
-        public Builder(ShareFetchRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.SHARE_FETCH, enableUnstableLastVersion);
+            super(ApiKeys.SHARE_FETCH);
             this.data = data;
         }
 
@@ -104,7 +100,7 @@ public class ShareFetchRequest extends AbstractRequest {
                 });
             }
 
-            Builder builder = new Builder(data, true);
+            Builder builder = new Builder(data);
             // And finally, forget the topic-partitions that are no longer in the session
             if (!forget.isEmpty()) {
                 data.setForgottenTopicsData(new ArrayList<>());
