@@ -221,7 +221,7 @@ public class StreamsGroupCommand {
         }
 
         private void printTaskType(List<StreamsGroupMemberAssignment.TaskIds> tasks, String taskType) {
-            System.out.printf("%s\n", taskType + ": " + tasks.stream().map(taskId -> taskId.subtopologyId() + ": [" + taskId.partitions()).collect(Collectors.joining(",")) + "] ");
+            System.out.printf("%s%n", taskType + ": " + tasks.stream().map(taskId -> taskId.subtopologyId() + ": [" + taskId.partitions()).collect(Collectors.joining(",")) + "] ");
         }
 
         private void printTasks(StreamsGroupMemberAssignment assignment, boolean isTarget) {
