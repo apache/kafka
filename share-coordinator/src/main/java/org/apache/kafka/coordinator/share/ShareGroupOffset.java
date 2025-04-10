@@ -34,6 +34,8 @@ import java.util.Objects;
  */
 public class ShareGroupOffset {
     public static final int NO_TIMESTAMP = -1;
+    public static final int UNINITIALIZED_EPOCH = -1;
+    public static final int DEFAULT_EPOCH = 0;
 
     private final int snapshotEpoch;
     private final int stateEpoch;
@@ -104,7 +106,7 @@ public class ShareGroupOffset {
             record.leaderEpoch(),
             record.startOffset(),
             record.stateBatches().stream()
-            .map(ShareGroupOffset::toPersisterOffsetsStateBatch)
+                .map(ShareGroupOffset::toPersisterOffsetsStateBatch)
                 .toList(),
             record.createTimestamp(),
             record.writeTimestamp()
@@ -114,10 +116,11 @@ public class ShareGroupOffset {
     public static ShareGroupOffset fromRecord(ShareUpdateValue record) {
         return new ShareGroupOffset(
             record.snapshotEpoch(),
-            -1, record.leaderEpoch(),
+            UNINITIALIZED_EPOCH,
+            record.leaderEpoch(),
             record.startOffset(),
             record.stateBatches().stream()
-            .map(ShareGroupOffset::toPersisterOffsetsStateBatch)
+                .map(ShareGroupOffset::toPersisterOffsetsStateBatch)
                 .toList(),
             NO_TIMESTAMP,
             NO_TIMESTAMP
@@ -125,7 +128,7 @@ public class ShareGroupOffset {
     }
 
     public static ShareGroupOffset fromRequest(WriteShareGroupStateRequestData.PartitionData data, long timestamp) {
-        return fromRequest(data, 0, timestamp);
+        return fromRequest(data, DEFAULT_EPOCH, timestamp);
     }
 
     public static ShareGroupOffset fromRequest(WriteShareGroupStateRequestData.PartitionData data, int snapshotEpoch, long timestamp) {
@@ -143,14 +146,14 @@ public class ShareGroupOffset {
     }
 
     public static ShareGroupOffset fromRequest(InitializeShareGroupStateRequestData.PartitionData data, long timestamp) {
-        return fromRequest(data, 0, timestamp);
+        return fromRequest(data, DEFAULT_EPOCH, timestamp);
     }
 
     public static ShareGroupOffset fromRequest(InitializeShareGroupStateRequestData.PartitionData data, int snapshotEpoch, long timestamp) {
         return new ShareGroupOffset(
             snapshotEpoch,
             data.stateEpoch(),
-            -1,
+            UNINITIALIZED_EPOCH,
             data.startOffset(),
             List.of(),
             timestamp,
@@ -237,9 +240,9 @@ public class ShareGroupOffset {
             ", stateEpoch=" + stateEpoch +
             ", leaderEpoch=" + leaderEpoch +
             ", startOffset=" + startOffset +
-            ", stateBatches=" + stateBatches +
             ", createTimestamp=" + createTimestamp +
             ", writeTimestamp=" + writeTimestamp +
+            ", stateBatches=" + stateBatches +
             '}';
     }
 }
