@@ -171,7 +171,13 @@ public class TransactionManager {
      *
      * See KAFKA-14831 for more detail.
      */
-    private final ThreadLocal<Boolean> shouldPoisonStateOnInvalidTransition;
+    public interface InvalidTransitionPolicy {
+        boolean shouldPoisonState();
+    }
+
+    public static final InvalidTransitionPolicy DEFAULT_INVALID_TRANSITION_POLICY = () -> Thread.currentThread() instanceof Sender.SenderThread;
+    private final InvalidTransitionPolicy invalidTransitionPolicy;
+
     private PendingStateTransition pendingTransition;
 
     // This is used by the TxnRequestHandlers to control how long to back off before a given request is retried.
@@ -256,6 +262,15 @@ public class TransactionManager {
                               final int transactionTimeoutMs,
                               final long retryBackoffMs,
                               final ApiVersions apiVersions) {
+        this(logContext, transactionalId, transactionTimeoutMs, retryBackoffMs, apiVersions, DEFAULT_INVALID_TRANSITION_POLICY);
+    }
+
+    public TransactionManager(final LogContext logContext,
+                              final String transactionalId,
+                              final int transactionTimeoutMs,
+                              final long retryBackoffMs,
+                              final ApiVersions apiVersions,
+                              final InvalidTransitionPolicy invalidTransitionPolicy) {
         this.producerIdAndEpoch = ProducerIdAndEpoch.NONE;
         this.transactionalId = transactionalId;
         this.log = logContext.logger(TransactionManager.class);
@@ -265,7 +280,6 @@ public class TransactionManager {
         this.newPartitionsInTransaction = new HashSet<>();
         this.pendingPartitionsInTransaction = new HashSet<>();
         this.partitionsInTransaction = new HashSet<>();
-        this.shouldPoisonStateOnInvalidTransition = ThreadLocal.withInitial(() -> false);
         this.pendingRequests = new PriorityQueue<>(10, Comparator.comparingInt(o -> o.priority().priority));
         this.pendingTxnOffsetCommits = new HashMap<>();
         this.partitionsWithUnresolvedSequences = new HashMap<>();
@@ -273,10 +287,7 @@ public class TransactionManager {
         this.retryBackoffMs = retryBackoffMs;
         this.txnPartitionMap = new TxnPartitionMap(logContext);
         this.apiVersions = apiVersions;
-    }
-
-    void setPoisonStateOnInvalidTransition(boolean shouldPoisonState) {
-        shouldPoisonStateOnInvalidTransition.set(shouldPoisonState);
+        this.invalidTransitionPolicy = invalidTransitionPolicy;
     }
 
     public synchronized TransactionalRequestResult initializeTransactions() {
@@ -1063,7 +1074,7 @@ public class TransactionManager {
             String message = idString + "Invalid transition attempted from state "
                     + currentState.name() + " to state " + target.name();
 
-            if (shouldPoisonStateOnInvalidTransition.get()) {
+            if (invalidTransitionPolicy.shouldPoisonState()) {
                 currentState = State.FATAL_ERROR;
                 lastError = new IllegalStateException(message);
                 throw lastError;

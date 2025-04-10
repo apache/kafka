@@ -108,6 +108,7 @@ import java.util.function.Supplier;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
 import static java.util.Collections.singletonMap;
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -163,6 +164,12 @@ public class TransactionManagerTest {
     }
 
     private void initializeTransactionManager(Optional<String> transactionalId, boolean transactionV2Enabled) {
+        initializeTransactionManager(transactionalId, transactionV2Enabled, TransactionManager.DEFAULT_INVALID_TRANSITION_POLICY);
+    }
+
+    private void initializeTransactionManager(Optional<String> transactionalId,
+                                              boolean transactionV2Enabled,
+                                              TransactionManager.InvalidTransitionPolicy invalidTransitionPolicy) {
         Metrics metrics = new Metrics(time);
 
         apiVersions.update("0", new NodeApiVersions(Arrays.asList(
@@ -189,7 +196,7 @@ public class TransactionManagerTest {
             finalizedFeaturesEpoch));
         finalizedFeaturesEpoch += 1;
         this.transactionManager = new TransactionManager(logContext, transactionalId.orElse(null),
-                transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions);
+                transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions, invalidTransitionPolicy);
 
         int batchSize = 16 * 1024;
         int deliveryTimeoutMs = 3000;
@@ -3799,10 +3806,12 @@ public class TransactionManagerTest {
 
     @Test
     public void testBackgroundInvalidStateTransitionIsFatal() {
+        // Usually the policy is the poison the transaction manager only by the Sender thread, but for the
+        // test the policy is forced to true to mimic it being called from the Sender.
+        TransactionManager.InvalidTransitionPolicy policy = () -> true;
+        initializeTransactionManager(Optional.of(transactionalId), true, policy);
         doInitTransactions();
         assertTrue(transactionManager.isTransactional());
-
-        transactionManager.setPoisonStateOnInvalidTransition(true);
 
         // Intentionally perform an operation that will cause an invalid state transition. The detection of this
         // will result in a poisoning of the transaction manager for all subsequent transactional operations since
