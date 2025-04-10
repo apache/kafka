@@ -1127,7 +1127,7 @@ object KafkaMetadataLogTest {
       UnifiedLog.logDirName(KafkaRaftServer.MetadataPartition)
     )
 
-    val metadataLog = KafkaMetadataLog(
+    val metadataLog = KafkaMetadataLog.internalApply(
       KafkaRaftServer.MetadataPartition,
       KafkaRaftServer.MetadataTopicId,
       logDir,

@@ -538,7 +538,7 @@ class DumpLogSegmentsTest {
           setPartitionId(0).setIsr(util.Arrays.asList(0, 1, 2)), 0.toShort)
     )
 
-    val metadataLog = KafkaMetadataLog(
+    val metadataLog = KafkaMetadataLog.internalApply(
       KafkaRaftServer.MetadataPartition,
       KafkaRaftServer.MetadataTopicId,
       logDir,

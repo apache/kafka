@@ -575,7 +575,38 @@ final class KafkaMetadataLog private (
 }
 
 object KafkaMetadataLog extends Logging {
+
   def apply(
+             topicPartition: TopicPartition,
+             topicId: Uuid,
+             dataDir: File,
+             time: Time,
+             scheduler: Scheduler,
+             config: MetadataLogConfig
+           ): KafkaMetadataLog = {
+    val props: Properties = settingLogProperties(config)
+    LogConfig.validate(props)
+    val defaultLogConfig = new LogConfig(props)
+
+    validateConfig(config, defaultLogConfig)
+
+    val metadataLog: KafkaMetadataLog = createKafkaMetadataLog(topicPartition, topicId, dataDir, time, scheduler, config, defaultLogConfig)
+
+    // Print a warning if users have overridden the internal config
+    if (config.logSegmentMinBytes != KafkaRaftClient.MAX_BATCH_SIZE_BYTES) {
+      metadataLog.error(s"Overriding ${KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG} is only supported for testing. Setting " +
+        s"this value too low may lead to an inability to write batches of metadata records.")
+    }
+
+    // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower
+    // when the follower crashes after downloading a snapshot from the leader but before it could truncate the log fully.
+    metadataLog.truncateToLatestSnapshot()
+
+    metadataLog
+  }
+  
+  // visible for testing
+  def internalApply(
     topicPartition: TopicPartition,
     topicId: Uuid,
     dataDir: File,
@@ -583,35 +614,41 @@ object KafkaMetadataLog extends Logging {
     scheduler: Scheduler,
     config: MetadataLogConfig
   ): KafkaMetadataLog = {
-    val props = new Properties()
-    props.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, config.maxBatchSizeInBytes.toString)
-    props.setProperty(TopicConfig.SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
-    props.setProperty(TopicConfig.SEGMENT_MS_CONFIG, config.logSegmentMillis.toString)
-    props.setProperty(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT.toString)
-
-    // Disable time and byte retention when deleting segments
-    props.setProperty(TopicConfig.RETENTION_MS_CONFIG, "-1")
-    props.setProperty(TopicConfig.RETENTION_BYTES_CONFIG, "-1")
+    val props: Properties = settingLogProperties(config)
+    props.remove(TopicConfig.SEGMENT_BYTES_CONFIG);
+    props.put(TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
     LogConfig.validate(props)
     val defaultLogConfig = new LogConfig(props)
 
-    if (config.logSegmentBytes < config.logSegmentMinBytes) {
-      throw new InvalidConfigurationException(
-        s"Cannot set ${KRaftConfigs.METADATA_LOG_SEGMENT_BYTES_CONFIG} below ${config.logSegmentMinBytes}: ${config.logSegmentBytes}"
-      )
-    } else if (defaultLogConfig.retentionMs >= 0) {
-      throw new InvalidConfigurationException(
-        s"Cannot set ${TopicConfig.RETENTION_MS_CONFIG} above -1: ${defaultLogConfig.retentionMs}."
-      )
-    } else if (defaultLogConfig.retentionSize >= 0) {
-      throw new InvalidConfigurationException(
-        s"Cannot set ${TopicConfig.RETENTION_BYTES_CONFIG} above -1: ${defaultLogConfig.retentionSize}."
-      )
+    validateConfig(config, defaultLogConfig)
+
+    val metadataLog: KafkaMetadataLog = createKafkaMetadataLog(topicPartition, topicId, dataDir, time, scheduler, config, defaultLogConfig)
+
+    // Print a warning if users have overridden the internal config
+    if (config.logSegmentMinBytes != KafkaRaftClient.MAX_BATCH_SIZE_BYTES) {
+      metadataLog.error(s"Overriding ${KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG} is only supported for testing. Setting " +
+        s"this value too low may lead to an inability to write batches of metadata records.")
     }
 
+    // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower
+    // when the follower crashes after downloading a snapshot from the leader but before it could truncate the log fully.
+    metadataLog.truncateToLatestSnapshot()
+
+    metadataLog
+  }
+
+  private def createKafkaMetadataLog(
+    topicPartition: TopicPartition, 
+    topicId: Uuid, 
+    dataDir: File, 
+    time: Time, 
+    scheduler: Scheduler, 
+    metadataLogConfig: MetadataLogConfig, 
+    logConfig: LogConfig
+  ): KafkaMetadataLog = {
     val log = UnifiedLog.create(
       dataDir,
-      defaultLogConfig,
+      logConfig,
       0L,
       0L,
       scheduler,
@@ -631,20 +668,38 @@ object KafkaMetadataLog extends Logging {
       scheduler,
       recoverSnapshots(log),
       topicPartition,
-      config
+      metadataLogConfig
     )
-
-    // Print a warning if users have overridden the internal config
-    if (config.logSegmentMinBytes != KafkaRaftClient.MAX_BATCH_SIZE_BYTES) {
-      metadataLog.error(s"Overriding ${KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG} is only supported for testing. Setting " +
-        s"this value too low may lead to an inability to write batches of metadata records.")
-    }
-
-    // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower
-    // when the follower crashes after downloading a snapshot from the leader but before it could truncate the log fully.
-    metadataLog.truncateToLatestSnapshot()
-
     metadataLog
+  }
+
+  private def validateConfig(config: MetadataLogConfig, defaultLogConfig: LogConfig): Unit = {
+    if (config.logSegmentBytes < config.logSegmentMinBytes) {
+      throw new InvalidConfigurationException(
+        s"Cannot set ${KRaftConfigs.METADATA_LOG_SEGMENT_BYTES_CONFIG} below ${config.logSegmentMinBytes}: ${config.logSegmentBytes}"
+      )
+    } else if (defaultLogConfig.retentionMs >= 0) {
+      throw new InvalidConfigurationException(
+        s"Cannot set ${TopicConfig.RETENTION_MS_CONFIG} above -1: ${defaultLogConfig.retentionMs}."
+      )
+    } else if (defaultLogConfig.retentionSize >= 0) {
+      throw new InvalidConfigurationException(
+        s"Cannot set ${TopicConfig.RETENTION_BYTES_CONFIG} above -1: ${defaultLogConfig.retentionSize}."
+      )
+    }
+  }
+
+  private def settingLogProperties(config: MetadataLogConfig) = {
+    val props = new Properties()
+    props.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, config.maxBatchSizeInBytes.toString)
+    props.setProperty(TopicConfig.SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
+    props.setProperty(TopicConfig.SEGMENT_MS_CONFIG, config.logSegmentMillis.toString)
+    props.setProperty(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT.toString)
+
+    // Disable time and byte retention when deleting segments
+    props.setProperty(TopicConfig.RETENTION_MS_CONFIG, "-1")
+    props.setProperty(TopicConfig.RETENTION_BYTES_CONFIG, "-1")
+    props
   }
 
   private def recoverSnapshots(
