@@ -220,6 +220,10 @@ public class BrokerHeartbeatManager {
         }
     }
 
+    void removeSession(BrokerIdAndEpoch brokerIdAndEpoch) {
+        tracker.removeSession(brokerIdAndEpoch);
+    }
+
     /**
      * Stop tracking the broker in the unfenced list and active set, if it was tracked
      * in either of these.

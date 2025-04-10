@@ -120,6 +120,10 @@ class BrokerHeartbeatTracker {
         return Optional.empty();
     }
 
+    void removeSession(BrokerIdAndEpoch idAndEpoch) {
+        contactTimes.remove(idAndEpoch);
+    }
+
     /**
      * Return true if the given time is outside the expiration window.
      * If the timestamp has undergone 64-bit rollover, we will not expire anything.
