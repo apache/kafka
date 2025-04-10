@@ -41,7 +41,6 @@ import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
 import java.util.Arrays;
 import java.util.Optional;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static java.util.Collections.emptyMap;
@@ -105,6 +104,8 @@ public class ShareGroupStateMessageFormatterTest extends CoordinatorRecordMessag
         .setStateEpoch(SHARE_GROUP_OFFSET_1.stateEpoch())
         .setLeaderEpoch(SHARE_GROUP_OFFSET_1.leaderEpoch())
         .setStartOffset(SHARE_GROUP_OFFSET_1.startOffset())
+        .setCreateTimestamp(1744279603)
+        .setWriteTimestamp(1744279603)
         .setStateBatches(
             SHARE_GROUP_OFFSET_1.stateBatches().stream()
                 .map(batch -> new ShareSnapshotValue.StateBatch()
@@ -112,7 +113,7 @@ public class ShareGroupStateMessageFormatterTest extends CoordinatorRecordMessag
                     .setLastOffset(batch.lastOffset())
                     .setDeliveryState(batch.deliveryState())
                     .setDeliveryCount(batch.deliveryCount()))
-                .collect(Collectors.toList())
+                .toList()
         );
 
     private static final ShareUpdateKey SHARE_UPDATE_KEY = new ShareUpdateKey()
@@ -131,7 +132,7 @@ public class ShareGroupStateMessageFormatterTest extends CoordinatorRecordMessag
                     .setLastOffset(batch.lastOffset())
                     .setDeliveryState(batch.deliveryState())
                     .setDeliveryCount(batch.deliveryCount()))
-                .collect(Collectors.toList())
+                .toList()
         );
 
     @Override
@@ -152,6 +153,8 @@ public class ShareGroupStateMessageFormatterTest extends CoordinatorRecordMessag
                                       "stateEpoch":1,
                                       "leaderEpoch":20,
                                       "startOffset":50,
+                                      "createTimestamp": 1744279603,
+                                      "writeTimestamp": 1744279603,
                                       "stateBatches":[{"firstOffset":100,"lastOffset":200,"deliveryState":1,"deliveryCount":10},
                                                       {"firstOffset":201,"lastOffset":210,"deliveryState":2,"deliveryCount":10}]}}}
                 """
