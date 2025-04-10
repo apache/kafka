@@ -26,7 +26,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -61,7 +61,7 @@ public class DescribeTopicPartitionsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errorCounts = new HashMap<>();
+        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
         data.topics().forEach(topicResponse -> {
             topicResponse.partitions().forEach(p -> updateErrorCounts(errorCounts, Errors.forCode(p.errorCode())));
             updateErrorCounts(errorCounts, Errors.forCode(topicResponse.errorCode()));

@@ -31,6 +31,7 @@ import org.apache.kafka.common.protocol.Errors;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -325,7 +326,7 @@ public class OffsetFetchResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> counts = new HashMap<>();
+        Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
         if (!groupLevelErrors.isEmpty()) {
             // built response with v8 or above
             for (Map.Entry<String, Errors> entry : groupLevelErrors.entrySet()) {

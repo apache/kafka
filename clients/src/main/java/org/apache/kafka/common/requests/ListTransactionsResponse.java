@@ -22,7 +22,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
 
 public class ListTransactionsResponse extends AbstractResponse {
@@ -39,7 +39,7 @@ public class ListTransactionsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errorCounts = new HashMap<>();
+        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
         updateErrorCounts(errorCounts, Errors.forCode(data.errorCode()));
         return errorCounts;
     }
