@@ -1133,8 +1133,7 @@ object KafkaMetadataLogTest {
       logDir,
       time,
       time.scheduler,
-      metadataLogConfig,
-      metadataLogConfig.maxBatchSizeInBytes
+      metadataLogConfig
     )
 
     (logDir.toPath, metadataLog, metadataLogConfig)

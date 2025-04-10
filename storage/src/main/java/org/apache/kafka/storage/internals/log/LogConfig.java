@@ -302,16 +302,14 @@ public class LogConfig extends AbstractConfig {
     }
 
     // visible for testing
-    @SuppressWarnings({"this-escape", "unchecked"})
+    @SuppressWarnings({"this-escape"})
     public LogConfig(Map<?, ?> props, Integer segmentBytes) {
         super(CONFIG, props, false);
         if (props.containsKey(TopicConfig.SEGMENT_BYTES_CONFIG)) {
             throw new IllegalArgumentException("This constructor should not be used when " +
                     TopicConfig.SEGMENT_BYTES_CONFIG + " is present in the properties");
         }
-        Map<String, Object> typedProps = (Map<String, Object>) props;
-        typedProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, segmentBytes);
-        this.props = Map.copyOf(typedProps);
+        this.props = Collections.unmodifiableMap(props);
         this.overriddenConfigs = Set.of();
 
         this.segmentSize = segmentBytes;
