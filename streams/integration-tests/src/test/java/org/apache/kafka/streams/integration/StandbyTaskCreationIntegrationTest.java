@@ -90,7 +90,7 @@ public class StandbyTaskCreationIntegrationTest {
         client2.close(Duration.ofSeconds(60));
     }
 
-    private Properties streamsConfiguration(boolean streamsProtocolEnabled) {
+    private Properties streamsConfiguration(final boolean streamsProtocolEnabled) {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, "app-" + safeTestName);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
@@ -108,7 +108,7 @@ public class StandbyTaskCreationIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldNotCreateAnyStandByTasksForStateStoreWithLoggingDisabled(boolean streamsProtocolEnabled) throws Exception {
+    public void shouldNotCreateAnyStandByTasksForStateStoreWithLoggingDisabled(final boolean streamsProtocolEnabled) throws Exception {
         final StreamsBuilder builder = new StreamsBuilder();
         final String stateStoreName = "myTransformState";
         final StoreBuilder<KeyValueStore<Integer, Integer>> keyValueStoreBuilder =
@@ -140,7 +140,7 @@ public class StandbyTaskCreationIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void shouldCreateStandByTasksForMaterializedAndOptimizedSourceTables(boolean streamsProtocolEnabled) throws Exception {
+    public void shouldCreateStandByTasksForMaterializedAndOptimizedSourceTables(final boolean streamsProtocolEnabled) throws Exception {
         final Properties streamsConfiguration1 = streamsConfiguration(streamsProtocolEnabled);
         streamsConfiguration1.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
         final Properties streamsConfiguration2 = streamsConfiguration(streamsProtocolEnabled);
