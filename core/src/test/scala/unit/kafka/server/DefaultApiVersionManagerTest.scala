@@ -56,7 +56,7 @@ class DefaultApiVersionManagerTest {
       metadataCache = metadataCache,
       enableUnstableLastVersion = true
     )
-    assertEquals(ApiKeys.apisForListener(apiScope).asScala, versionManager.enabledApis)
+    assertEquals(ApiKeys.apisForListener(apiScope), versionManager.enabledApis)
     assertTrue(ApiKeys.apisForListener(apiScope).asScala.forall { apiKey =>
       apiKey.allVersions.asScala.forall { version =>
         versionManager.isApiEnabled(apiKey, version)
