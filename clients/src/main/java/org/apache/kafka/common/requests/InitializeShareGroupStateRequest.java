@@ -20,10 +20,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.InitializeShareGroupStateRequestData;
 import org.apache.kafka.common.message.InitializeShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -34,7 +33,7 @@ public class InitializeShareGroupStateRequest extends AbstractRequest {
         private final InitializeShareGroupStateRequestData data;
 
         public Builder(InitializeShareGroupStateRequestData data) {
-            this(data, false);
+            this(data, true);
         }
 
         public Builder(InitializeShareGroupStateRequestData data, boolean enableUnstableLastVersion) {
@@ -64,15 +63,15 @@ public class InitializeShareGroupStateRequest extends AbstractRequest {
     public InitializeShareGroupStateResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         List<InitializeShareGroupStateResponseData.InitializeStateResult> results = new ArrayList<>();
         data.topics().forEach(
-                topicResult -> results.add(new InitializeShareGroupStateResponseData.InitializeStateResult()
-                        .setTopicId(topicResult.topicId())
-                        .setPartitions(topicResult.partitions().stream()
-                                .map(partitionData -> new InitializeShareGroupStateResponseData.PartitionResult()
-                                        .setPartition(partitionData.partition())
-                                        .setErrorCode(Errors.forException(e).code()))
-                                .collect(Collectors.toList()))));
+            topicResult -> results.add(new InitializeShareGroupStateResponseData.InitializeStateResult()
+                .setTopicId(topicResult.topicId())
+                .setPartitions(topicResult.partitions().stream()
+                    .map(partitionData -> new InitializeShareGroupStateResponseData.PartitionResult()
+                        .setPartition(partitionData.partition())
+                        .setErrorCode(Errors.forException(e).code()))
+                    .collect(Collectors.toList()))));
         return new InitializeShareGroupStateResponse(new InitializeShareGroupStateResponseData()
-                .setResults(results));
+            .setResults(results));
     }
 
     @Override
@@ -80,10 +79,10 @@ public class InitializeShareGroupStateRequest extends AbstractRequest {
         return data;
     }
 
-    public static InitializeShareGroupStateRequest parse(ByteBuffer buffer, short version) {
+    public static InitializeShareGroupStateRequest parse(Readable readable, short version) {
         return new InitializeShareGroupStateRequest(
-                new InitializeShareGroupStateRequestData(new ByteBufferAccessor(buffer), version),
-                version
+            new InitializeShareGroupStateRequestData(readable, version),
+            version
         );
     }
 }

@@ -76,7 +76,7 @@ public class SslVersionsTransportLayerTest {
      * Tests that connection success with the default TLS version.
      * Note that debug mode for javax.net.ssl can be enabled via {@code System.setProperty("javax.net.debug", "ssl:handshake");}
      */
-    @ParameterizedTest(name = "tlsServerProtocol = {0}, tlsClientProtocol = {1}")
+    @ParameterizedTest(name = "testTlsDefaults(tlsServerProtocol = {0}, tlsClientProtocol = {1})")
     @MethodSource("parameters")
     public void testTlsDefaults(List<String> serverProtocols, List<String> clientProtocols) throws Exception {
         // Create certificates for use by client and server. Add server cert to client truststore and vice versa.

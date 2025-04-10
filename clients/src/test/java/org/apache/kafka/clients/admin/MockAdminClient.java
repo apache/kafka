@@ -21,6 +21,7 @@ import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.ElectionType;
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
@@ -646,7 +647,7 @@ public class MockAdminClient extends AdminClient {
         }
 
         String tokenId = Uuid.randomUuid().toString();
-        TokenInformation tokenInfo = new TokenInformation(tokenId, options.renewers().get(0), options.renewers(), System.currentTimeMillis(), options.maxlifeTimeMs(), -1);
+        TokenInformation tokenInfo = new TokenInformation(tokenId, options.renewers().get(0), options.renewers(), System.currentTimeMillis(), options.maxLifetimeMs(), -1);
         DelegationToken token = new DelegationToken(tokenInfo, tokenId.getBytes());
         allTokens.add(token);
         future.complete(token);
@@ -724,7 +725,7 @@ public class MockAdminClient extends AdminClient {
     @Override
     public synchronized ListGroupsResult listGroups(ListGroupsOptions options) {
         KafkaFutureImpl<Collection<Object>> future = new KafkaFutureImpl<>();
-        future.complete(groupConfigs.keySet().stream().map(g -> new GroupListing(g, Optional.of(GroupType.CONSUMER), ConsumerProtocol.PROTOCOL_TYPE)).collect(Collectors.toList()));
+        future.complete(groupConfigs.keySet().stream().map(g -> new GroupListing(g, Optional.of(GroupType.CONSUMER), ConsumerProtocol.PROTOCOL_TYPE, Optional.of(GroupState.STABLE))).collect(Collectors.toList()));
         return new ListGroupsResult(future);
     }
 
@@ -756,12 +757,32 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public synchronized ListStreamsGroupOffsetsResult listStreamsGroupOffsets(Map<String, ListStreamsGroupOffsetsSpec> groupSpecs, ListStreamsGroupOffsetsOptions options) {
+        Map<String, ListConsumerGroupOffsetsSpec> consumerGroupSpecs = groupSpecs.entrySet().stream()
+            .collect(Collectors.toMap(
+                Map.Entry::getKey,
+                entry -> new ListConsumerGroupOffsetsSpec().topicPartitions(entry.getValue().topicPartitions())
+            ));
+        return new ListStreamsGroupOffsetsResult(listConsumerGroupOffsets(consumerGroupSpecs, new ListConsumerGroupOffsetsOptions()));
+    }
+
+    @Override
     public synchronized DeleteConsumerGroupsResult deleteConsumerGroups(Collection<String> groupIds, DeleteConsumerGroupsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
+    public synchronized DeleteStreamsGroupsResult deleteStreamsGroups(Collection<String> groupIds, DeleteStreamsGroupsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
     public synchronized DeleteConsumerGroupOffsetsResult deleteConsumerGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteConsumerGroupOffsetsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public synchronized DeleteStreamsGroupOffsetsResult deleteStreamsGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteStreamsGroupOffsetsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
@@ -868,12 +889,6 @@ public class MockAdminClient extends AdminClient {
             configEntries.add(new ConfigEntry(entry.getKey(), entry.getValue()));
         }
         return new Config(configEntries);
-    }
-
-    @Override
-    @Deprecated
-    public synchronized AlterConfigsResult alterConfigs(Map<ConfigResource, Config> configs, AlterConfigsOptions options) {
-        throw new UnsupportedOperationException("Not implemented yet");
     }
 
     @Override
@@ -1200,6 +1215,11 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    public synchronized AlterStreamsGroupOffsetsResult alterStreamsGroupOffsets(String groupId, Map<TopicPartition, OffsetAndMetadata> offsets, AlterStreamsGroupOffsetsOptions options) {
+        throw new UnsupportedOperationException("Not implement yet");
+    }
+
+    @Override
     public synchronized ListOffsetsResult listOffsets(Map<TopicPartition, OffsetSpec> topicPartitionOffsets, ListOffsetsOptions options) {
         Map<TopicPartition, KafkaFuture<ListOffsetsResult.ListOffsetsResultInfo>> futures = new HashMap<>();
 
@@ -1395,10 +1415,25 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public synchronized ListShareGroupsResult listShareGroups(ListShareGroupsOptions options) {
+    public AlterShareGroupOffsetsResult alterShareGroupOffsets(String groupId, Map<TopicPartition, Long> offsets, AlterShareGroupOffsetsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
+    @Override
+    public synchronized ListShareGroupOffsetsResult listShareGroupOffsets(Map<String, ListShareGroupOffsetsSpec> groupSpecs, ListShareGroupOffsetsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public synchronized DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds, DeleteShareGroupsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+
+    @Override
+    public synchronized DescribeStreamsGroupsResult describeStreamsGroups(Collection<String> groupIds, DescribeStreamsGroupsOptions options) {
+        throw new UnsupportedOperationException("Not implemented yet");
+    }
+    
     @Override
     public synchronized DescribeClassicGroupsResult describeClassicGroups(Collection<String> groupIds, DescribeClassicGroupsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");

@@ -923,8 +923,7 @@ public class IncrementalCooperativeAssignorTest {
         assignor.handleLostAssignments(lostAssignments, new ConnectorsAndTasks.Builder(),
                 new ArrayList<>(configuredAssignment.values()));
 
-        Set<String> expectedWorkers = new HashSet<>();
-        expectedWorkers.addAll(Arrays.asList(newWorker, flakyWorker));
+        Set<String> expectedWorkers = new HashSet<>(Arrays.asList(newWorker, flakyWorker));
         assertEquals(expectedWorkers,
             assignor.candidateWorkersForReassignment,
             "Wrong set of workers for reassignments");

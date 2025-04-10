@@ -27,7 +27,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -88,7 +87,7 @@ public class DelayedOperationPurgatory<T extends DelayedOperation> {
         for (int i = 0; i < SHARDS; i++) {
             watcherLists.add(new WatcherList());
         }
-        metricsTags = Collections.singletonMap("delayedOperation", purgatoryName);
+        metricsTags = Map.of("delayedOperation", purgatoryName);
         metricsGroup.newGauge("PurgatorySize", this::watched, metricsTags);
         metricsGroup.newGauge("NumDelayedOperations", this::numDelayed, metricsTags);
         if (reaperEnabled) {
@@ -147,7 +146,10 @@ public class DelayedOperationPurgatory<T extends DelayedOperation> {
         // any exclusive lock. Since DelayedOperationPurgatory.checkAndComplete() completes delayed operations asynchronously,
         // holding an exclusive lock to make the call is often unnecessary.
         if (operation.safeTryCompleteOrElse(() -> {
-            watchKeys.forEach(key -> watchForOperation(key, operation));
+            watchKeys.forEach(key -> {
+                if (!operation.isCompleted())
+                    watchForOperation(key, operation);
+            });
             if (!watchKeys.isEmpty())
                 estimatedTotalOperations.incrementAndGet();
         })) {
@@ -220,7 +222,7 @@ public class DelayedOperationPurgatory<T extends DelayedOperation> {
             if (watchers != null)
                 return watchers.cancel();
             else
-                return Collections.emptyList();
+                return List.of();
         } finally {
             wl.watchersLock.unlock();
         }

@@ -23,7 +23,7 @@ from ducktape.cluster.remoteaccount import RemoteCommandError
 
 from kafkatest.directory_layout.kafka_path import KafkaPathResolverMixin
 from kafkatest.services.security.security_config import SecurityConfig
-from kafkatest.version import DEV_BRANCH
+from kafkatest.version import LATEST_3_9
 
 
 class ZookeeperService(KafkaPathResolverMixin, Service):
@@ -43,8 +43,9 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
             "collect_default": True}
     }
 
+    # After 4.0, zookeeper service is removed from source code. Using LATEST_3_9 for compatibility test cases.
     def __init__(self, context, num_nodes, zk_sasl = False, zk_client_port = True, zk_client_secure_port = False,
-                 zk_tls_encrypt_only = False, version=DEV_BRANCH):
+                 zk_tls_encrypt_only = False, version=LATEST_3_9):
         """
         :type context
         """
@@ -186,7 +187,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
 
         chroot_path = ('' if chroot is None else chroot) + path
 
-        kafka_run_class = self.path.script("kafka-run-class.sh", DEV_BRANCH)
+        kafka_run_class = self.path.script("kafka-run-class.sh", LATEST_3_9)
         cmd = "%s %s -server %s %s get %s" % \
               (kafka_run_class, self.java_cli_class_name(), self.connect_setting(force_tls=self.zk_client_secure_port),
                self.zkTlsConfigFileOption(True),
@@ -211,7 +212,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
 
         chroot_path = ('' if chroot is None else chroot) + path
 
-        kafka_run_class = self.path.script("kafka-run-class.sh", DEV_BRANCH)
+        kafka_run_class = self.path.script("kafka-run-class.sh", LATEST_3_9)
         cmd = "%s %s -server %s %s ls %s" % \
               (kafka_run_class, self.java_cli_class_name(), self.connect_setting(force_tls=self.zk_client_secure_port),
                self.zkTlsConfigFileOption(True),
@@ -239,7 +240,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
 
         chroot_path = ('' if chroot is None else chroot) + path
 
-        kafka_run_class = self.path.script("kafka-run-class.sh", DEV_BRANCH)
+        kafka_run_class = self.path.script("kafka-run-class.sh", LATEST_3_9)
         if recursive:
             op = "deleteall"
         else:
@@ -261,7 +262,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
 
         chroot_path = ('' if chroot is None else chroot) + path
 
-        kafka_run_class = self.path.script("kafka-run-class.sh", DEV_BRANCH)
+        kafka_run_class = self.path.script("kafka-run-class.sh", LATEST_3_9)
         cmd = "%s %s -server %s %s create %s '%s'" % \
               (kafka_run_class, self.java_cli_class_name(), self.connect_setting(force_tls=self.zk_client_secure_port),
                self.zkTlsConfigFileOption(True),
@@ -275,7 +276,7 @@ class ZookeeperService(KafkaPathResolverMixin, Service):
         Describe the default user using the ConfigCommand CLI
         """
 
-        kafka_run_class = self.path.script("kafka-run-class.sh", DEV_BRANCH)
+        kafka_run_class = self.path.script("kafka-run-class.sh", LATEST_3_9)
         cmd = "%s kafka.admin.ConfigCommand --zookeeper %s %s --describe --entity-type users --entity-default" % \
               (kafka_run_class, self.connect_setting(force_tls=self.zk_client_secure_port),
                self.zkTlsConfigFileOption())

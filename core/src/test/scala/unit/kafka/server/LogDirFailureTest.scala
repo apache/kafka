@@ -17,26 +17,25 @@
 package kafka.server
 
 import java.io.File
+import java.util
 import java.util.Collections
 import java.util.concurrent.{ExecutionException, TimeUnit}
 import kafka.api.IntegrationTestHarness
-import kafka.controller.{OfflineReplica, PartitionAndReplica}
 import kafka.utils.TestUtils.{Checkpoint, LogDirFailureType, Roll, waitUntilTrue}
-import kafka.utils.{CoreUtils, TestUtils}
+import kafka.utils.{CoreUtils, TestInfoUtils, TestUtils}
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.errors.{KafkaStorageException, NotLeaderOrFollowerException}
-import org.apache.kafka.common.utils.{Exit, Utils}
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
+import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.params.ParameterizedTest
 
 import java.nio.file.Files
-import scala.annotation.nowarn
 import scala.jdk.CollectionConverters._
 
 /**
@@ -63,15 +62,15 @@ class LogDirFailureTest extends IntegrationTestHarness {
     ensureConsistentKRaftMetadata()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testProduceErrorFromFailureOnLogRoll(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProduceErrorFromFailureOnLogRoll(groupProtocol: String): Unit = {
     testProduceErrorsFromLogDirFailureOnLeader(Roll)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testLogDirNotificationTimeout(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testLogDirNotificationTimeout(groupProtocol: String): Unit = {
     // Disable retries to allow exception to bubble up for validation
     this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
     this.producerConfig.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
@@ -94,58 +93,27 @@ class LogDirFailureTest extends IntegrationTestHarness {
     leaderServer.awaitShutdown()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testIOExceptionDuringLogRoll(quorum: String): Unit = {
-    testProduceAfterLogDirFailureOnLeader(Roll, quorum)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testIOExceptionDuringLogRoll(groupProtocol: String): Unit = {
+    testProduceAfterLogDirFailureOnLeader(Roll)
   }
 
-  // Broker should halt on any log directory failure if inter-broker protocol < 1.0
-  @nowarn("cat=deprecation")
-  @Test
-  def testZkBrokerWithOldInterBrokerProtocolShouldHaltOnLogDirFailure(): Unit = {
-    @volatile var statusCodeOption: Option[Int] = None
-    Exit.setHaltProcedure { (statusCode, _) =>
-      statusCodeOption = Some(statusCode)
-      throw new IllegalArgumentException
-    }
-
-    var server: KafkaServer = null
-    try {
-      val props = TestUtils.createBrokerConfig(brokerCount, zkConnect, logDirCount = 3)
-      props.put(ReplicationConfigs.INTER_BROKER_PROTOCOL_VERSION_CONFIG, "0.11.0")
-      props.put(ServerLogConfigs.LOG_MESSAGE_FORMAT_VERSION_CONFIG, "0.11.0")
-      val kafkaConfig = KafkaConfig.fromProps(props)
-      val logDir = new File(kafkaConfig.logDirs.head)
-      // Make log directory of the partition on the leader broker inaccessible by replacing it with a file
-      CoreUtils.swallow(Utils.delete(logDir), this)
-      Files.createFile(logDir.toPath)
-      assertTrue(logDir.isFile)
-
-      server = TestUtils.createServer(kafkaConfig)
-      TestUtils.waitUntilTrue(() => statusCodeOption.contains(1), "timed out waiting for broker to halt")
-    } finally {
-      Exit.resetHaltProcedure()
-      if (server != null)
-        TestUtils.shutdownServers(List(server))
-    }
-  }
-
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testProduceErrorFromFailureOnCheckpoint(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProduceErrorFromFailureOnCheckpoint(groupProtocol: String): Unit = {
     testProduceErrorsFromLogDirFailureOnLeader(Checkpoint)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testIOExceptionDuringCheckpoint(quorum: String): Unit = {
-    testProduceAfterLogDirFailureOnLeader(Checkpoint, quorum)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testIOExceptionDuringCheckpoint(groupProtocol: String): Unit = {
+    testProduceAfterLogDirFailureOnLeader(Checkpoint)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
-  def testReplicaFetcherThreadAfterLogDirFailureOnFollower(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testReplicaFetcherThreadAfterLogDirFailureOnFollower(groupProtocol: String): Unit = {
     this.producerConfig.setProperty(ProducerConfig.RETRIES_CONFIG, "0")
     this.producerConfig.setProperty(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, "false")
     val producer = createProducer()
@@ -197,7 +165,7 @@ class LogDirFailureTest extends IntegrationTestHarness {
       e.getCause.isInstanceOf[NotLeaderOrFollowerException])
   }
 
-  def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType, quorum: String): Unit = {
+  def testProduceAfterLogDirFailureOnLeader(failureType: LogDirFailureType): Unit = {
     val consumer = createConsumer()
     subscribeAndWaitForAssignment(topic, consumer)
 
@@ -227,26 +195,19 @@ class LogDirFailureTest extends IntegrationTestHarness {
     // Consumer should receive some messages
     TestUtils.pollUntilAtLeastNumRecords(consumer, 1)
 
-    if (quorum == "kraft") {
-      waitUntilTrue(() => {
-        // get the broker with broker.nodeId == originalLeaderServerId
-        val brokerWithDirFail = brokers.find(_.config.nodeId == originalLeaderServerId).map(_.asInstanceOf[BrokerServer])
-        // check if the broker has the offline log dir
-        val hasOfflineDir = brokerWithDirFail.exists(_.logDirFailureChannel.hasOfflineLogDir(failedLogDir.toPath.toString))
-        // check if the broker has the offline replica
-        hasOfflineDir && brokerWithDirFail.exists(broker =>
-          broker.replicaManager.metadataCache
-            .getClusterMetadata(broker.clusterId, broker.config.interBrokerListenerName)
-            .partition(new TopicPartition(topic, 0)).offlineReplicas().map(_.id()).contains(originalLeaderServerId))
-      }, "Expected to find an offline log dir")
-    } else {
-      // There should be no remaining LogDirEventNotification znode
-      assertTrue(zkClient.getAllLogDirEventNotifications.isEmpty)
-      // The controller should have marked the replica on the original leader as offline
-      val controllerServer = servers.find(_.kafkaController.isActive).get
-      val offlineReplicas = controllerServer.kafkaController.controllerContext.replicasInState(topic, OfflineReplica)
-      assertTrue(offlineReplicas.contains(PartitionAndReplica(new TopicPartition(topic, 0), originalLeaderServerId)))
-    }
+    waitUntilTrue(() => {
+      // get the broker with broker.nodeId == originalLeaderServerId
+      val brokerWithDirFail = brokers.find(_.config.nodeId == originalLeaderServerId).map(_.asInstanceOf[BrokerServer])
+      // check if the broker has the offline log dir
+      val hasOfflineDir = brokerWithDirFail.exists(_.logDirFailureChannel.hasOfflineLogDir(failedLogDir.toPath.toString))
+      // check if the broker has the offline replica
+      hasOfflineDir && brokerWithDirFail.exists(broker =>
+        broker.replicaManager.metadataCache
+          .getTopicMetadata(util.Set.of(topic), broker.config.interBrokerListenerName, false, false)
+          .stream()
+          .flatMap(t => t.partitions().stream())
+          .anyMatch(p => p.partitionIndex() == 0 && p.offlineReplicas().contains(originalLeaderServerId)))
+    }, "Expected to find an offline log dir")
   }
 
 

@@ -29,6 +29,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.serialization.Serializer;
@@ -120,31 +121,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     /**
-     * Create a new mock producer with invented metadata the given autoComplete setting and key\value serializers.
-     *
-     * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer) new MockProducer(Cluster.empty(), autoComplete, new DefaultPartitioner(), keySerializer, valueSerializer)}
-     */
-    @SuppressWarnings("deprecation")
-    public MockProducer(final boolean autoComplete,
-                        final Serializer<K> keySerializer,
-                        final Serializer<V> valueSerializer) {
-        this(Cluster.empty(), autoComplete, new org.apache.kafka.clients.producer.internals.DefaultPartitioner(), keySerializer, valueSerializer);
-    }
-
-    /**
-     * Create a new mock producer with invented metadata the given autoComplete setting and key\value serializers.
-     *
-     * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer) new MockProducer(cluster, autoComplete, new DefaultPartitioner(), keySerializer, valueSerializer)}
-     */
-    @SuppressWarnings("deprecation")
-    public MockProducer(final Cluster cluster,
-                        final boolean autoComplete,
-                        final Serializer<K> keySerializer,
-                        final Serializer<V> valueSerializer) {
-        this(cluster, autoComplete, new org.apache.kafka.clients.producer.internals.DefaultPartitioner(), keySerializer, valueSerializer);
-    }
-
-    /**
      * Create a new mock producer with invented metadata the given autoComplete setting, partitioner and key\value serializers.
      *
      * Equivalent to {@link #MockProducer(Cluster, boolean, Partitioner, Serializer, Serializer) new MockProducer(Cluster.empty(), autoComplete, partitioner, keySerializer, valueSerializer)}
@@ -200,14 +176,6 @@ public class MockProducer<K, V> implements Producer<K, V> {
         this.transactionCommitted = false;
         this.transactionAborted = false;
         this.sentOffsets = false;
-    }
-
-    @Deprecated
-    @Override
-    public void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
-                                         String consumerGroupId) throws ProducerFencedException {
-        Objects.requireNonNull(consumerGroupId);
-        sendOffsetsToTransaction(offsets, new ConsumerGroupMetadata(consumerGroupId));
     }
 
     @Override
@@ -334,8 +302,8 @@ public class MockProducer<K, V> implements Producer<K, V> {
             partition = partition(record, this.cluster);
         else {
             //just to throw ClassCastException if serializers are not the proper ones to serialize key/value
-            keySerializer.serialize(record.topic(), record.key());
-            valueSerializer.serialize(record.topic(), record.value());
+            keySerializer.serialize(record.topic(), new RecordHeaders(), record.key());
+            valueSerializer.serialize(record.topic(), new RecordHeaders(), record.value());
         }
 
         TopicPartition topicPartition = new TopicPartition(record.topic(), partition);
@@ -571,6 +539,9 @@ public class MockProducer<K, V> implements Producer<K, V> {
         }
         byte[] keyBytes = keySerializer.serialize(topic, record.headers(), record.key());
         byte[] valueBytes = valueSerializer.serialize(topic, record.headers(), record.value());
+        if (partitioner == null) {
+            return this.cluster.partitionsForTopic(record.topic()).get(0).partition();
+        }
         return this.partitioner.partition(topic, record.key(), keyBytes, record.value(), valueBytes, cluster);
     }
 

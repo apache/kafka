@@ -149,7 +149,7 @@ public final class StandaloneHerder extends AbstractHerder {
     public synchronized void connectors(Callback<Collection<String>> callback) {
         callback.onCompletion(null, connectors());
     }
-    
+
     @Override
     public synchronized void connectorInfo(String connName, Callback<ConnectorInfo> callback) {
         ConnectorInfo connectorInfo = connectorInfo(connName);
@@ -378,7 +378,7 @@ public final class StandaloneHerder extends AbstractHerder {
         }
 
         Optional<RestartPlan> maybePlan = buildRestartPlan(request);
-        if (!maybePlan.isPresent()) {
+        if (maybePlan.isEmpty()) {
             cb.onCompletion(new NotFoundException("Status for connector " + connectorName + " not found", null), null);
             return;
         }
@@ -463,7 +463,7 @@ public final class StandaloneHerder extends AbstractHerder {
     private void startConnector(String connName, Callback<TargetState> onStart) {
         Map<String, String> connConfigs = configState.connectorConfig(connName);
         TargetState targetState = configState.targetState(connName);
-        worker.startConnector(connName, connConfigs, new HerderConnectorContext(this, connName), this, targetState, onStart);
+        worker.startConnector(connName, connConfigs, new HerderConnectorContext(this, connName, worker.metrics().connectorPluginMetrics(connName)), this, targetState, onStart);
     }
 
     private List<Map<String, String>> recomputeTaskConfigs(String connName) {
@@ -624,9 +624,8 @@ public final class StandaloneHerder extends AbstractHerder {
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (!(o instanceof StandaloneHerderRequest))
+            if (!(o instanceof StandaloneHerderRequest other))
                 return false;
-            StandaloneHerderRequest other = (StandaloneHerderRequest) o;
             return seq == other.seq;
         }
 
@@ -635,15 +634,4 @@ public final class StandaloneHerder extends AbstractHerder {
             return Objects.hash(seq);
         }
     }
-
-    @Override
-    public void tasksConfig(String connName, Callback<Map<ConnectorTaskId, Map<String, String>>> callback) {
-        Map<ConnectorTaskId, Map<String, String>> tasksConfig = buildTasksConfig(connName);
-        if (tasksConfig.isEmpty()) {
-            callback.onCompletion(new NotFoundException("Connector " + connName + " not found"), null);
-            return;
-        }
-        callback.onCompletion(null, tasksConfig);
-    }
-
 }

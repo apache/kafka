@@ -20,6 +20,7 @@ package org.apache.kafka.image;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metadata.ClearElrRecord;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.metadata.PartitionRegistration;
@@ -27,6 +28,7 @@ import org.apache.kafka.metadata.Replicas;
 
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -83,6 +85,31 @@ public final class TopicDelta {
         partitionChanges.put(record.partitionId(), partition.merge(record));
     }
 
+    public void replay(ClearElrRecord record) {
+        // Some partitions are not added to the image yet, let's check the partitionChanges first.
+        partitionChanges.forEach((partitionId, partition) -> {
+            maybeClearElr(partitionId, partition);
+        });
+
+        image.partitions().forEach((partitionId, partition) -> {
+            if (!partitionChanges.containsKey(partitionId)) {
+                maybeClearElr(partitionId, partition);
+            }
+        });
+    }
+
+    void maybeClearElr(int partitionId, PartitionRegistration partition) {
+        if (partition.elr.length != 0 || partition.lastKnownElr.length != 0) {
+            partitionChanges.put(partitionId, partition.merge(
+                new PartitionChangeRecord().
+                    setPartitionId(partitionId).
+                    setTopicId(image.id()).
+                    setEligibleLeaderReplicas(List.of()).
+                    setLastKnownElr(List.of())
+            ));
+        }
+    }
+
     public TopicImage apply() {
         Map<Integer, PartitionRegistration> newPartitions = new HashMap<>();
         for (Entry<Integer, PartitionRegistration> entry : image.partitions().entrySet()) {
@@ -100,20 +127,6 @@ public final class TopicDelta {
             }
         }
         return new TopicImage(image.name(), image.id(), newPartitions);
-    }
-
-    public boolean hasPartitionsWithAssignmentChanges() {
-        for (Entry<Integer, PartitionRegistration> entry : partitionChanges.entrySet()) {
-            int partitionId = entry.getKey();
-            // New Partition.
-            if (!image.partitions().containsKey(partitionId))
-                return true;
-            PartitionRegistration previousPartition = image.partitions().get(partitionId);
-            PartitionRegistration currentPartition = entry.getValue();
-            if (!previousPartition.hasSameAssignment(currentPartition))
-                return true;
-        }
-        return false;
     }
 
     /**

@@ -26,7 +26,7 @@ import org.slf4j.Logger;
 
 public final class StreamStreamJoinUtil {
 
-    private StreamStreamJoinUtil(){
+    private StreamStreamJoinUtil() {
     }
 
     public static <KIn, VIn, KOut, VOut> boolean skipRecord(

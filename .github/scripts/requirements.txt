@@ -13,3 +13,5 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 PyYAML~=6.0
+pytz==2024.2
+requests==2.32.3

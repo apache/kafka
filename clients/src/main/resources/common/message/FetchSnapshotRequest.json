@@ -23,31 +23,33 @@
   "flexibleVersions": "0+",
   "fields": [
     { "name": "ClusterId", "type": "string", "versions": "0+", "nullableVersions": "0+", "default": "null", "taggedVersions": "0+", "tag": 0,
-      "about": "The clusterId if known, this is used to validate metadata fetches prior to broker registration" },
+      "about": "The clusterId if known, this is used to validate metadata fetches prior to broker registration." },
     { "name": "ReplicaId", "type": "int32", "versions": "0+", "default": "-1", "entityType": "brokerId",
-      "about": "The broker ID of the follower" },
+      "about": "The broker ID of the follower." },
     { "name": "MaxBytes", "type": "int32", "versions": "0+", "default": "0x7fffffff",
-      "about": "The maximum bytes to fetch from all of the snapshots" },
+      "about": "The maximum bytes to fetch from all of the snapshots." },
     { "name": "Topics", "type": "[]TopicSnapshot", "versions": "0+",
-      "about": "The topics to fetch", "fields": [
+      "about": "The topics to fetch.", "fields": [
         { "name": "Name", "type": "string", "versions": "0+", "entityType": "topicName",
-          "about": "The name of the topic to fetch" },
+          "about": "The name of the topic to fetch." },
         { "name": "Partitions", "type": "[]PartitionSnapshot", "versions": "0+",
-          "about": "The partitions to fetch", "fields": [
+          "about": "The partitions to fetch.", "fields": [
             { "name": "Partition", "type": "int32", "versions": "0+",
-              "about": "The partition index" },
+              "about": "The partition index." },
             { "name": "CurrentLeaderEpoch", "type": "int32", "versions": "0+",
-              "about": "The current leader epoch of the partition, -1 for unknown leader epoch" },
+              "about": "The current leader epoch of the partition, -1 for unknown leader epoch." },
             { "name": "SnapshotId", "type": "SnapshotId", "versions": "0+",
-              "about": "The snapshot endOffset and epoch to fetch", "fields": [
-                { "name": "EndOffset", "type": "int64", "versions": "0+" },
-                { "name": "Epoch", "type": "int32", "versions": "0+" }
+              "about": "The snapshot endOffset and epoch to fetch.", "fields": [
+                { "name": "EndOffset", "type": "int64", "versions": "0+",
+                  "about": "The end offset of the snapshot."},
+                { "name": "Epoch", "type": "int32", "versions": "0+",
+                  "about": "The epoch of the snapshot."}
               ]
             },
             { "name": "Position", "type": "int64", "versions": "0+",
-              "about": "The byte position within the snapshot to start fetching from" },
+              "about": "The byte position within the snapshot to start fetching from." },
             { "name": "ReplicaDirectoryId", "type": "uuid", "versions": "1+", "taggedVersions": "1+", "tag": 0, "ignorable": true,
-              "about": "The directory id of the follower fetching" }
+              "about": "The directory id of the follower fetching." }
           ]
         }
       ]

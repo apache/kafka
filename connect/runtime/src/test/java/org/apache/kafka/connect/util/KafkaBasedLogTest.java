@@ -20,7 +20,7 @@ import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -141,7 +141,7 @@ public class KafkaBasedLogTest {
 
     @BeforeEach
     public void setUp() {
-        store = new KafkaBasedLog<String, String>(TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, topicAdminSupplier, consumedCallback, time, initializer) {
+        store = new KafkaBasedLog<>(TOPIC, PRODUCER_PROPS, CONSUMER_PROPS, topicAdminSupplier, consumedCallback, time, initializer) {
             @Override
             protected KafkaProducer<String, String> createProducer() {
                 return producer;
@@ -152,7 +152,7 @@ public class KafkaBasedLogTest {
                 return consumer;
             }
         };
-        consumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
         consumer.updatePartitions(TOPIC, Arrays.asList(TPINFO0, TPINFO1));
         Map<TopicPartition, Long> beginningOffsets = new HashMap<>();
         beginningOffsets.put(TP0, 0L);

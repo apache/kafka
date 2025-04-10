@@ -17,7 +17,7 @@
 package kafka.api
 
 import kafka.utils.TestInfoUtils
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, GroupProtocol}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig}
 import org.apache.kafka.common.header.Headers
 import org.apache.kafka.common.{ClusterResource, ClusterResourceListener, PartitionInfo}
@@ -25,9 +25,9 @@ import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{Arguments, MethodSource}
+import org.junit.jupiter.params.provider.MethodSource
 
-import java.util.{Properties, stream}
+import java.util.Properties
 import java.util.concurrent.atomic.AtomicInteger
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -37,9 +37,9 @@ import scala.collection.Seq
  */
 abstract class BaseConsumerTest extends AbstractConsumerTest {
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testSimpleConsumption(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testSimpleConsumption(groupProtocol: String): Unit = {
     val numRecords = 10000
     val producer = createProducer()
     val startingTimestamp = System.currentTimeMillis()
@@ -57,9 +57,9 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     sendAndAwaitAsyncCommit(consumer)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testClusterResourceListener(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testClusterResourceListener(groupProtocol: String): Unit = {
     val numRecords = 100
     val producerProps = new Properties()
     producerProps.put(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, classOf[BaseConsumerTest.TestClusterResourceListenerSerializer])
@@ -79,12 +79,14 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
     assertNotEquals(0, BaseConsumerTest.updateConsumerCount.get())
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testCoordinatorFailover(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testCoordinatorFailover(groupProtocol: String): Unit = {
     val listener = new TestConsumerReassignmentListener()
-    this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5001")
-    this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
+    if (groupProtocol.equals(GroupProtocol.CLASSIC.name)) {
+      this.consumerConfig.setProperty(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, "5001")
+      this.consumerConfig.setProperty(ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG, "1000")
+    }
     // Use higher poll timeout to avoid consumer leaving the group due to timeout
     this.consumerConfig.setProperty(ConsumerConfig.MAX_POLL_INTERVAL_MS_CONFIG, "15000")
     val consumer = createConsumer()
@@ -112,31 +114,6 @@ abstract class BaseConsumerTest extends AbstractConsumerTest {
 }
 
 object BaseConsumerTest {
-  // We want to test the following combinations:
-  // * KRaft and the classic group protocol
-  // * KRaft and the consumer group protocol
-  def getTestQuorumAndGroupProtocolParametersAll() : java.util.stream.Stream[Arguments] = {
-    stream.Stream.of(
-      Arguments.of("kraft", "classic"),
-      Arguments.of("kraft", "consumer")
-    )
-  }
-
-  // For tests that only work with the classic group protocol, we want to test the following combinations:
-  // * KRaft and the classic group protocol
-  def getTestQuorumAndGroupProtocolParametersClassicGroupProtocolOnly() : java.util.stream.Stream[Arguments] = {
-    stream.Stream.of(
-      Arguments.of("kraft", "classic")
-    )
-  }
-
-  // For tests that only work with the consumer group protocol, we want to test the following combination:
-  // * KRaft and the consumer group protocol
-  def getTestQuorumAndGroupProtocolParametersConsumerGroupProtocolOnly(): stream.Stream[Arguments] = {
-    stream.Stream.of(
-      Arguments.of("kraft", "consumer")
-    )
-  }
 
   val updateProducerCount = new AtomicInteger()
   val updateConsumerCount = new AtomicInteger()

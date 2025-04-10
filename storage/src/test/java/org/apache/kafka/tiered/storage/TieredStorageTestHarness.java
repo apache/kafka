@@ -35,7 +35,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -105,10 +105,10 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
         context = new TieredStorageTestContext(this);
     }
 
-    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedQuorumName() in the ParameterizedTest name.
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
-    @ValueSource(strings = {"zk", "kraft"})
-    public void executeTieredStorageTest(String quorum) {
+    // NOTE: Not able to refer TestInfoUtils#TestWithParameterizedGroupProtocolNames() in the ParameterizedTest name.
+    @ParameterizedTest(name = "{displayName}.groupProtocol={0}")
+    @MethodSource("getTestGroupProtocolParametersAll")
+    public void executeTieredStorageTest(String groupProtocol) {
         TieredStorageTestBuilder builder = new TieredStorageTestBuilder();
         writeTestSpecifications(builder);
         try {
@@ -138,9 +138,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
             if (broker.remoteLogManagerOpt().isDefined()) {
                 RemoteLogManager remoteLogManager = broker.remoteLogManagerOpt().get();
                 RemoteStorageManager storageManager = remoteLogManager.storageManager();
-                if (storageManager instanceof ClassLoaderAwareRemoteStorageManager) {
-                    ClassLoaderAwareRemoteStorageManager loaderAwareRSM =
-                            (ClassLoaderAwareRemoteStorageManager) storageManager;
+                if (storageManager instanceof ClassLoaderAwareRemoteStorageManager loaderAwareRSM) {
                     if (loaderAwareRSM.delegate() instanceof LocalTieredStorage) {
                         storages.add((LocalTieredStorage) loaderAwareRSM.delegate());
                     }

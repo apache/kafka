@@ -33,6 +33,7 @@ import org.apache.kafka.common.errors.AuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.WakeupException;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.LogContext;
@@ -139,6 +140,8 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *     thrown by a failure to commit the acknowledgements.</li>
  *     <li>The application calls {@link #close()}  which releases any acquired records without acknowledgement.</li>
  * </ul>
+ * <p>The consumer can optionally use the {@code internal.share.acknowledgement.mode} configuration property to choose
+ * between implicit and explicit acknowledgement, specifying <code>"implicit"</code> or <code>"explicit"</code> as required.
  * <p>
  * The consumer guarantees that the records returned in the {@code ConsumerRecords} object for a specific topic-partition
  * are in order of increasing offset. For each topic-partition, Kafka guarantees that acknowledgements for the records
@@ -402,11 +405,11 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
     public KafkaShareConsumer(Map<String, Object> configs,
                               Deserializer<K> keyDeserializer,
                               Deserializer<V> valueDeserializer) {
-        this(new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
+        this(new ShareConsumerConfig(ShareConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
                 keyDeserializer, valueDeserializer);
     }
 
-    public KafkaShareConsumer(ConsumerConfig config,
+    KafkaShareConsumer(ShareConsumerConfig config,
                               Deserializer<K> keyDeserializer,
                               Deserializer<V> valueDeserializer) {
         delegate = CREATOR.create(config, keyDeserializer, valueDeserializer);
@@ -415,7 +418,7 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
     KafkaShareConsumer(final LogContext logContext,
                        final String clientId,
                        final String groupId,
-                       final ConsumerConfig config,
+                       final ShareConsumerConfig config,
                        final Deserializer<K> keyDeserializer,
                        final Deserializer<V> valueDeserializer,
                        final Time time,
@@ -646,6 +649,41 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
     }
 
     /**
+     * Add the provided application metric for subscription. This metric will be added to this client's metrics
+     * that are available for subscription and sent as telemetry data to the broker.
+     * The provided metric must map to an OTLP metric data point type in the OpenTelemetry v1 metrics protobuf message types.
+     * Specifically, the metric should be one of the following:
+     * <ul>
+     *  <li>
+     *     Sum: Monotonic total count meter (Counter). Suitable for metrics like total number of X, e.g., total bytes sent.
+     *  </li>
+     *  <li>
+     *     Gauge: Non-monotonic current value meter (UpDownCounter). Suitable for metrics like current value of Y, e.g., current queue count.
+     *  </li>
+     * </ul>
+     * Metrics not matching these types are silently ignored. Executing this method for a previously registered metric
+     * is a benign operation and results in updating that metric's entry.
+     *
+     * @param metric The application metric to register
+     */
+    @Override
+    public void registerMetricForSubscription(KafkaMetric metric) {
+        delegate.registerMetricForSubscription(metric);
+    }
+
+    /**
+     * Remove the provided application metric for subscription. This metric is removed from this client's metrics
+     * and will not be available for subscription any longer. Executing this method with a metric that has not been registered is a
+     * benign operation and does not result in any action taken (no-op).
+     *
+     * @param metric The application metric to remove
+     */
+    @Override
+    public void unregisterMetricFromSubscription(KafkaMetric metric) {
+        delegate.unregisterMetricFromSubscription(metric);
+    }
+
+    /**
      * Close the consumer, waiting for up to the default timeout of 30 seconds for any needed cleanup.
      * This will commit acknowledgements if possible within the default timeout.
      * See {@link #close(Duration)} for details. Note that {@link #wakeup()} cannot be used to interrupt close.
@@ -665,6 +703,12 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      * If the consumer is unable to complete acknowledgements and gracefully leave the group
      * before the timeout expires, the consumer is force closed. Note that {@link #wakeup()} cannot be
      * used to interrupt close.
+     * <p>
+     * The actual maximum wait time is bounded by the {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} setting, which
+     * only applies to operations performed with the broker (coordinator-related requests).
+     * Even if a larger timeout is specified, the consumer will not wait longer than
+     * {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} for these requests to complete during the close operation.
+     * Note that the execution time of callbacks (such as {@link AcknowledgementCommitCallback}) do not consume time from the close timeout.
      *
      * @param timeout The maximum time to wait for consumer to close gracefully. The value must be
      *                non-negative. Specifying a timeout of zero means do not wait for pending requests to complete.

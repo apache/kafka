@@ -73,7 +73,7 @@ public class SourceConnectorConfigTest {
             TOPIC_CREATION_GROUP_1, TOPIC_CREATION_GROUP_2));
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + REPLICATION_FACTOR_CONFIG, "1");
         props.put(DEFAULT_TOPIC_CREATION_PREFIX + PARTITIONS_CONFIG, "1");
-        SourceConnectorConfig config = new SourceConnectorConfig(MOCK_PLUGINS, props, true);
+        new SourceConnectorConfig(MOCK_PLUGINS, props, true);
     }
 
     @Test

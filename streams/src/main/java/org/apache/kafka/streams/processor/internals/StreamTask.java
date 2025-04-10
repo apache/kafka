@@ -52,8 +52,6 @@ import org.apache.kafka.streams.processor.internals.metrics.ThreadMetrics;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import java.io.IOException;
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -744,7 +742,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         }
         final boolean readyToProcess = partitionGroup.readyToProcess(wallClockTime);
         if (!readyToProcess) {
-            if (!timeCurrentIdlingStarted.isPresent()) {
+            if (timeCurrentIdlingStarted.isEmpty()) {
                 timeCurrentIdlingStarted = Optional.of(wallClockTime);
             }
         } else {
@@ -788,7 +786,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
 
             // after processing this record, if its partition queue's buffered size has been
             // decreased to the threshold, we can then resume the consumption on this partition
-            if (recordInfo.queue().size() == maxBufferedSize) {
+            if (recordInfo.queue().size() <= maxBufferedSize) {
                 partitionsToResume.add(partition);
             }
 
@@ -863,8 +861,8 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         final Record<Object, Object> toProcess = new Record<>(
             record.key(),
             record.value(),
-            processorContext.timestamp(),
-            processorContext.headers()
+            processorContext.recordContext().timestamp(),
+            processorContext.recordContext().headers()
         );
         maybeMeasureLatency(() -> currNode.process(toProcess), time, processLatencySensor);
 
@@ -881,18 +879,6 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         bufferedRecordsSensor.record(partitionGroup.numBuffered());
         processRatioSensor.record((double) processTimeMs / allTaskProcessMs, now);
         processTimeMs = 0L;
-    }
-
-    private String getStacktraceString(final Throwable e) {
-        String stacktrace = null;
-        try (final StringWriter stringWriter = new StringWriter();
-             final PrintWriter printWriter = new PrintWriter(stringWriter)) {
-            e.printStackTrace(printWriter);
-            stacktrace = stringWriter.toString();
-        } catch (final IOException ioe) {
-            log.error("Encountered error extracting stacktrace from this exception", ioe);
-        }
-        return stacktrace;
     }
 
     /**
@@ -937,7 +923,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             throw createStreamsException(node.name(), e.getCause());
         } catch (final TaskCorruptedException | TaskMigratedException e) {
             throw e;
-        } catch (final RuntimeException processingException) {
+        } catch (final Exception processingException) {
+            // while Java distinguishes checked vs unchecked exceptions, other languages
+            // like Scala or Kotlin do not, and thus we need to catch `Exception`
+            // (instead of `RuntimeException`) to work well with those languages
             final ErrorHandlerContext errorHandlerContext = new DefaultErrorHandlerContext(
                 null,
                 recordContext.topic(),
@@ -955,7 +944,10 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     processingExceptionHandler.handle(errorHandlerContext, null, processingException),
                     "Invalid ProcessingExceptionHandler response."
                 );
-            } catch (final RuntimeException fatalUserException) {
+            } catch (final Exception fatalUserException) {
+                // while Java distinguishes checked vs unchecked exceptions, other languages
+                // like Scala or Kotlin do not, and thus we need to catch `Exception`
+                // (instead of `RuntimeException`) to work well with those languages
                 log.error(
                     "Processing error callback failed after processing error for record: {}",
                     errorHandlerContext,
@@ -1032,7 +1024,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
             log.warn(
                 "Encountered {} while trying to fetch committed offsets, will retry initializing the metadata in the next loop." +
                     "\nConsider overwriting consumer config {} to a larger value to avoid timeout errors",
-                time.toString(),
+                timeoutException.toString(),
                 ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
 
             // re-throw to trigger `task.timeout.ms`

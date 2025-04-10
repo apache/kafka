@@ -16,17 +16,18 @@
  */
 package org.apache.kafka.server.common;
 
-import java.util.Collections;
 import java.util.Map;
 
 public enum KRaftVersion implements FeatureVersion {
     // Version 0 is the initial version of KRaft.
-    KRAFT_VERSION_0(0, MetadataVersion.MINIMUM_KRAFT_VERSION),
+    KRAFT_VERSION_0(0, MetadataVersion.MINIMUM_VERSION),
 
     // Version 1 enables KIP-853.
     KRAFT_VERSION_1(1, MetadataVersion.IBP_3_9_IV0);
 
     public static final String FEATURE_NAME = "kraft.version";
+
+    public static final KRaftVersion LATEST_PRODUCTION = KRAFT_VERSION_1;
 
     private final short featureLevel;
     private final MetadataVersion bootstrapMetadataVersion;
@@ -72,9 +73,9 @@ public enum KRaftVersion implements FeatureVersion {
     @Override
     public Map<String, Short> dependencies() {
         if (this.featureLevel == 0) {
-            return Collections.emptyMap();
+            return Map.of();
         } else {
-            return Collections.singletonMap(
+            return Map.of(
                 MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_9_IV0.featureLevel());
         }
     }

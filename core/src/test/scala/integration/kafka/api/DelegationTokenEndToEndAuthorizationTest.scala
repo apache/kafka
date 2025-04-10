@@ -28,7 +28,7 @@ import org.apache.kafka.common.security.token.delegation.DelegationToken
 import org.apache.kafka.metadata.storage.Formatter
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
+import org.junit.jupiter.params.provider.MethodSource
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 
 import scala.jdk.CollectionConverters._
@@ -99,9 +99,9 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
     superuserClientConfig.put(SaslConfigs.SASL_JAAS_CONFIG, privilegedClientLoginContext)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
-  def testCreateUserWithDelegationToken(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testCreateUserWithDelegationToken(groupProtocol: String): Unit = {
     val privilegedAdminClient = Admin.create(privilegedAdminClientConfig)
     try {
       val user = "user"
@@ -117,7 +117,7 @@ class DelegationTokenEndToEndAuthorizationTest extends EndToEndAuthorizationTest
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-      startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism), KafkaSasl))
+      startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism)))
       super.setUp(testInfo)
       privilegedAdminClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())
   }

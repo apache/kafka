@@ -25,7 +25,7 @@ import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
+import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.Arrays;
 import java.util.List;
@@ -44,14 +44,13 @@ public class ListOffsetsTest extends TieredStorageTestHarness {
 
     /**
      * We are running this test only for the Kraft mode, since ZK mode is deprecated now. Note that:
-     * 1. In ZK mode, the leader-epoch gets bumped during reassignment (0 -> 1 -> 2) and leader-election (2 -> 3).
-     * 2. In Kraft mode, the leader-epoch gets bumped only for leader-election (0 -> 1) and not for reassignment.
-     * @param quorum The quorum to use for the test.
+     * 1. In Kraft mode, the leader-epoch gets bumped only for leader-election (0 -> 1) and not for reassignment.
      */
-    @ParameterizedTest(name = "{displayName}.quorum={0}")
-    @ValueSource(strings = {"kraft"})
-    public void executeTieredStorageTest(String quorum) {
-        super.executeTieredStorageTest(quorum);
+    @ParameterizedTest(name = "{displayName}.groupProtocol={0}")
+    @MethodSource("getTestGroupProtocolParametersAll")
+    @Override
+    public void executeTieredStorageTest(String groupProtocol) {
+        super.executeTieredStorageTest(groupProtocol);
     }
 
     @Override

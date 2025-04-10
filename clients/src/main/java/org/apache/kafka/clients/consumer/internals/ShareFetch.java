@@ -138,14 +138,15 @@ public class ShareFetch<K, V> {
      * to send. If some records were not acknowledged, the in-flight records will not be empty after this
      * method.
      *
-     * @return The map of acknowledgements to send
+     * @return The map of acknowledgements to send, along with node information
      */
-    public Map<TopicIdPartition, Acknowledgements> takeAcknowledgedRecords() {
-        Map<TopicIdPartition, Acknowledgements> acknowledgementMap = new LinkedHashMap<>();
+    public Map<TopicIdPartition, NodeAcknowledgements> takeAcknowledgedRecords() {
+        Map<TopicIdPartition, NodeAcknowledgements> acknowledgementMap = new LinkedHashMap<>();
         batches.forEach((tip, batch) -> {
+            int nodeId = batch.nodeId();
             Acknowledgements acknowledgements = batch.takeAcknowledgedRecords();
             if (!acknowledgements.isEmpty())
-                acknowledgementMap.put(tip, acknowledgements);
+                acknowledgementMap.put(tip, new NodeAcknowledgements(nodeId, acknowledgements));
         });
         return acknowledgementMap;
     }

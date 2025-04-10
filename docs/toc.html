@@ -27,7 +27,9 @@
                 <li><a href="#quickstart">1.3 Quick Start</a>
                 <li><a href="#ecosystem">1.4 Ecosystem</a>
                 <li><a href="#upgrade">1.5 Upgrading</a>
-                <li><a href="#docker">1.6 Docker</a>
+                <li><a href="#zk2kraft-summary">1.6 KRaft vs ZooKeeper</a>
+                <li><a href="#compatibility-summary">1.7 Compatibility</a>
+                <li><a href="#docker">1.8 Docker</a>
             </ul>
         
         <li><a href="#api">2. APIs</a>
@@ -74,9 +76,10 @@
                 <li><a href="#theproducer">4.4 The Producer</a>
                 <li><a href="#theconsumer">4.5 The Consumer</a>
                 <li><a href="#semantics">4.6 Message Delivery Semantics</a>
-                <li><a href="#replication">4.7 Replication</a>
-                <li><a href="#compaction">4.8 Log Compaction</a>
-                <li><a href="#design_quotas">4.9 Quotas</a>
+                <li><a href="#usingtransactions">4.7 Using Transactions</a>
+                <li><a href="#replication">4.8 Replication</a>
+                <li><a href="#compaction">4.9 Log Compaction</a>
+                <li><a href="#design_quotas">4.10 Quotas</a>
             </ul>
         
         <li><a href="#implementation">5. Implementation</a>
@@ -131,14 +134,8 @@
                         <li><a href="#multitenancy-more">Further considerations</a>
                     </ul>
                 
-                <li><a href="#config">6.5 Important Configs</a>
-                    <ul>
-                        <li><a href="#clientconfig">Important Client Configs</a>
-                        <li><a href="#prodconfig">A Production Server Configs</a>
-                    </ul>
-                
-                <li><a href="#java">6.6 Java Version</a>
-                <li><a href="#hwandos">6.7 Hardware and OS</a>
+                <li><a href="#java">6.5 Java Version</a>
+                <li><a href="#hwandos">6.6 Hardware and OS</a>
                     <ul>
                         <li><a href="#os">OS</a>
                         <li><a href="#diskandfs">Disks and Filesystems</a>
@@ -148,7 +145,7 @@
                         <li><a href="#replace_disk">Replace KRaft Controller Disk</a>
                     </ul>
                 
-                <li><a href="#monitoring">6.8 Monitoring</a>
+                <li><a href="#monitoring">6.7 Monitoring</a>
                     <ul>
                         <li><a href="#remote_jmx">Security Considerations for Remote Monitoring using JMX</a>
                         <li><a href="#tiered_storage_monitoring">Tiered Storage Monitoring</a>
@@ -162,31 +159,25 @@
                         <li><a href="#others_monitoring">Others</a>
                     </ul>
                 
-                <li><a href="#zk">6.9 ZooKeeper</a>
-                    <ul>
-                        <li><a href="#zkversion">Stable Version</a>
-                        <li><a href="#zk_depr">ZooKeeper Deprecation</a>
-                        <li><a href="#zkops">Operationalization</a>
-                    </ul>
-                
-                <li><a href="#kraft">6.10 KRaft</a>
+                <li><a href="#kraft">6.8 KRaft</a>
                     <ul>
                         <li><a href="#kraft_config">Configuration</a>
                         <li><a href="#kraft_storage">Storage Tool</a>
                         <li><a href="#kraft_debug">Debugging</a>
                         <li><a href="#kraft_deployment">Deploying Considerations</a>
-                        <li><a href="#kraft_missing">Missing Features</a>
                         <li><a href="#kraft_zk_migration">ZooKeeper to KRaft Migration</a>
                     </ul>
                 
-                <li><a href="#tiered_storage">6.11 Tiered Storage</a>
+                <li><a href="#tiered_storage">6.9 Tiered Storage</a>
                     <ul>
                         <li><a href="#tiered_storage_overview">Tiered Storage Overview</a>
                         <li><a href="#tiered_storage_config">Configuration</a>
                         <li><a href="#tiered_storage_config_ex">Quick Start Example</a>
                         <li><a href="#tiered_storage_limitation">Limitations</a>
                     </ul>
-                
+                <li><a href="#consumer_rebalance_protocol">6.10 Consumer Rebalance Protocol</a>
+                <li><a href="#transaction_protocol">6.11 Transaction Protocol</a>
+                <li><a href="#eligible_leader_replicas">6.12 Eligible Leader Replicas</a>
             </ul>
         
         <li><a href="#security">7. Security</a>
@@ -197,20 +188,6 @@
                 <li><a href="#security_sasl">7.4 Authentication using SASL</a>
                 <li><a href="#security_authz">7.5 Authorization and ACLs</a>
                 <li><a href="#security_rolling_upgrade">7.6 Incorporating Security Features in a Running Cluster</a>
-                <li><a href="#zk_authz">7.7 ZooKeeper Authentication</a>
-                    <ul>
-                        <li><a href="#zk_authz_new">New Clusters</a>
-                            <ul>
-                                <li><a href="#zk_authz_new_sasl">ZooKeeper SASL Authentication</a>
-                                <li><a href="#zk_authz_new_mtls">ZooKeeper Mutual TLS Authentication</a>
-                            </ul>
-                        
-                        <li><a href="#zk_authz_migration">Migrating Clusters</a>
-                        <li><a href="#zk_authz_ensemble">Migrating the ZooKeeper Ensemble</a>
-                        <li><a href="#zk_authz_quorum">ZooKeeper Quorum Mutual TLS Authentication</a>
-                    </ul>
-                
-                <li><a href="#zk_encryption">7.8 ZooKeeper Encryption</a>
             </ul>
         
         <li><a href="#connect">8. Kafka Connect</a>

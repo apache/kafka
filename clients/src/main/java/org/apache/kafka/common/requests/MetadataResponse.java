@@ -104,6 +104,10 @@ public class MetadataResponse extends AbstractResponse {
         return errors;
     }
 
+    public Errors topLevelError() {
+        return Errors.forCode(data.errorCode());
+    }
+
     /**
      * Get a map of the topicIds which had metadata errors
      * @return the map

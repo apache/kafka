@@ -18,7 +18,6 @@ package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.Configurable;
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.io.Closeable;
 import java.util.Iterator;
@@ -49,7 +48,6 @@ import java.util.concurrent.CompletableFuture;
  * (default value is "rlmm.config.") are passed when {@link #configure(Map)} is invoked on this instance.
  * <p>
  */
-@InterfaceStability.Evolving
 public interface RemoteLogMetadataManager extends Configurable, Closeable {
 
     /**
@@ -229,5 +227,15 @@ public interface RemoteLogMetadataManager extends Configurable, Closeable {
                                                                        int epoch,
                                                                        long offset) throws RemoteStorageException {
         return remoteLogSegmentMetadata(topicIdPartition, epoch, offset);
+    }
+
+    /**
+     * Denotes whether the partition metadata is ready to serve.
+     *
+     * @param topicIdPartition topic partition
+     * @return True if the partition is ready to serve for remote storage operations.
+     */
+    default boolean isReady(TopicIdPartition topicIdPartition) {
+        return true;
     }
 }

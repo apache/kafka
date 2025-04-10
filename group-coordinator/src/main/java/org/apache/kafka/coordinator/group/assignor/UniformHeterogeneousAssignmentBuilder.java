@@ -24,13 +24,9 @@ import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignorExceptio
 import org.apache.kafka.coordinator.group.api.assignor.SubscribedTopicDescriber;
 import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -55,7 +51,6 @@ import java.util.Set;
  *      Balance > Stickiness.
  */
 public class UniformHeterogeneousAssignmentBuilder {
-    private static final Logger LOG = LoggerFactory.getLogger(UniformHeterogeneousAssignmentBuilder.class);
 
     /**
      * The maximum number of iterations to perform in the final iterative balancing phase.
@@ -181,50 +176,44 @@ public class UniformHeterogeneousAssignmentBuilder {
             }
         }
 
-        this.topicComparator = new Comparator<Uuid>() {
-            @Override
-            public int compare(final Uuid topic1Id, final Uuid topic2Id) {
-                int topic1PartitionCount = subscribedTopicDescriber.numPartitions(topic1Id);
-                int topic2PartitionCount = subscribedTopicDescriber.numPartitions(topic2Id);
-                int topic1SubscriberCount = topicSubscribers.get(topic1Id).size();
-                int topic2SubscriberCount = topicSubscribers.get(topic2Id).size();
+        this.topicComparator = (topic1Id, topic2Id) -> {
+            int topic1PartitionCount = subscribedTopicDescriber.numPartitions(topic1Id);
+            int topic2PartitionCount = subscribedTopicDescriber.numPartitions(topic2Id);
+            int topic1SubscriberCount = topicSubscribers.get(topic1Id).size();
+            int topic2SubscriberCount = topicSubscribers.get(topic2Id).size();
 
-                // Order by partitions per subscriber, descending.
-                int order = Double.compare(
-                    (double) topic2PartitionCount / topic2SubscriberCount,
-                    (double) topic1PartitionCount / topic1SubscriberCount
-                );
+            // Order by partitions per subscriber, descending.
+            int order = Double.compare(
+                (double) topic2PartitionCount / topic2SubscriberCount,
+                (double) topic1PartitionCount / topic1SubscriberCount
+            );
 
-                // Then order by subscriber count, ascending.
-                if (order == 0) {
-                    order = Integer.compare(topic1SubscriberCount, topic2SubscriberCount);
-                }
-
-                // Then order by topic id, ascending.
-                if (order == 0) {
-                    order = topic1Id.compareTo(topic2Id);
-                }
-
-                return order;
+            // Then order by subscriber count, ascending.
+            if (order == 0) {
+                order = Integer.compare(topic1SubscriberCount, topic2SubscriberCount);
             }
+
+            // Then order by topic id, ascending.
+            if (order == 0) {
+                order = topic1Id.compareTo(topic2Id);
+            }
+
+            return order;
         };
 
-        this.memberComparator = new Comparator<Integer>() {
-            @Override
-            public int compare(final Integer memberIndex1, final Integer memberIndex2) {
-                // Order by number of assigned partitions, ascending.
-                int order = Integer.compare(
-                    memberTargetAssignmentSizes[memberIndex1],
-                    memberTargetAssignmentSizes[memberIndex2]
-                );
+        this.memberComparator = (memberIndex1, memberIndex2) -> {
+            // Order by number of assigned partitions, ascending.
+            int order = Integer.compare(
+                memberTargetAssignmentSizes[memberIndex1],
+                memberTargetAssignmentSizes[memberIndex2]
+            );
 
-                // Then order by member index, ascending.
-                if (order == 0) {
-                    order = memberIndex1.compareTo(memberIndex2);
-                }
-
-                return order;
+            // Then order by member index, ascending.
+            if (order == 0) {
+                order = memberIndex1.compareTo(memberIndex2);
             }
+
+            return order;
         };
 
         // Initialize partition owners for the target assignments.
@@ -248,7 +237,7 @@ public class UniformHeterogeneousAssignmentBuilder {
      */
     public GroupAssignment build() {
         if (subscribedTopicIds.isEmpty()) {
-            return new GroupAssignment(Collections.emptyMap());
+            return new GroupAssignment(Map.of());
         }
 
         maybeRevokePartitions();
@@ -849,14 +838,6 @@ public class UniformHeterogeneousAssignmentBuilder {
         }
 
         addPartitionToTargetAssignment(topicId, partition, memberIndex);
-    }
-
-    /**
-     * @param memberIndex   The member index.
-     * @return The current assignment size for the given member.
-     */
-    private int targetAssignmentSize(int memberIndex) {
-        return memberTargetAssignmentSizes[memberIndex];
     }
 
     /**

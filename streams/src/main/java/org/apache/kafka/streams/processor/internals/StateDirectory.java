@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -48,8 +49,8 @@ import java.nio.file.attribute.PosixFilePermission;
 import java.nio.file.attribute.PosixFilePermissions;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -105,7 +106,7 @@ public class StateDirectory implements AutoCloseable {
     private final boolean hasPersistentStores;
     private final boolean hasNamedTopologies;
 
-    private final HashMap<TaskId, Thread> lockedTasksToOwner = new HashMap<>();
+    private final ConcurrentMap<TaskId, Thread> lockedTasksToOwner = new ConcurrentHashMap<>();
 
     private FileChannel stateDirLockChannel;
     private FileLock stateDirLock;
@@ -215,12 +216,17 @@ public class StateDirectory implements AutoCloseable {
                 // because it's possible that the topology has changed since that data was written, and is now stateless
                 // this therefore prevents us from creating unnecessary Tasks just because of some left-over state
                 if (subTopology.hasStateWithChangelogs()) {
+                    final Set<TopicPartition> inputPartitions = topologyMetadata.nodeToSourceTopics(id).values().stream()
+                            .flatMap(Collection::stream)
+                            .map(t -> new TopicPartition(t, id.partition()))
+                            .collect(Collectors.toSet());
                     final ProcessorStateManager stateManager = ProcessorStateManager.createStartupTaskStateManager(
                         id,
                         eosEnabled,
                         logContext,
                         this,
                         subTopology.storeToChangelogTopic(),
+                        inputPartitions,
                         stateUpdaterEnabled
                     );
 
@@ -234,7 +240,7 @@ public class StateDirectory implements AutoCloseable {
 
                     final Task task = new StandbyTask(
                         id,
-                        new HashSet<>(),
+                        inputPartitions,
                         subTopology,
                         topologyMetadata.taskConfig(id),
                         streamsMetrics,
@@ -279,7 +285,7 @@ public class StateDirectory implements AutoCloseable {
             // "drain" Tasks first to ensure that we don't try to close Tasks that another thread is attempting to close
             final Set<Task> drainedTasks = new HashSet<>(tasksForLocalState.size());
             for (final Map.Entry<TaskId, Task> entry : tasksForLocalState.entrySet()) {
-                if (predicate.test(entry.getValue()) && tasksForLocalState.remove(entry.getKey()) != null) {
+                if (predicate.test(entry.getValue()) && removeStartupTask(entry.getKey()) != null) {
                     // only add to our list of drained Tasks if we exclusively "claimed" a Task from tasksForLocalState
                     // to ensure we don't accidentally try to drain the same Task multiple times from concurrent threads
                     drainedTasks.add(entry.getValue());
@@ -475,7 +481,6 @@ public class StateDirectory implements AutoCloseable {
             throw new IllegalStateException("The state directory has been deleted");
         } else {
             lockedTasksToOwner.put(taskId, Thread.currentThread());
-            // make sure the task directory actually exists, and create it if not
             return true;
         }
     }

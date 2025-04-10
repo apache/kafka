@@ -23,8 +23,8 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.MockConsumer;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.clients.consumer.RangeAssignor;
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
@@ -34,9 +34,8 @@ import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.serialization.ByteArraySerializer;
-import org.apache.kafka.common.test.api.ClusterInstance;
+import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterTest;
-import org.apache.kafka.common.test.api.ClusterTestExtensions;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataKeyJsonConverter;
@@ -57,7 +56,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
@@ -96,7 +94,6 @@ import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@ExtendWith(ClusterTestExtensions.class)
 public class ConsoleConsumerTest {
 
     private final String topic = "test-topic";
@@ -143,7 +140,7 @@ public class ConsoleConsumerTest {
         int totalMessages = 700;
         long startOffset = 0L;
 
-        MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(OffsetResetStrategy.EARLIEST);
+        MockConsumer<byte[], byte[]> mockConsumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name());
         TopicPartition tp1 = new TopicPartition(topic, 0);
         TopicPartition tp2 = new TopicPartition(topic, 1);
 
@@ -295,7 +292,7 @@ public class ConsoleConsumerTest {
 
     @ClusterTest(brokers = 3)
     public void testTransactionLogMessageFormatter(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.createAdminClient()) {
+        try (Admin admin = cluster.admin()) {
 
             NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
             admin.createTopics(singleton(newTopic));
@@ -334,7 +331,7 @@ public class ConsoleConsumerTest {
 
     @ClusterTest(brokers = 3)
     public void testOffsetsMessageFormatter(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.createAdminClient()) {
+        try (Admin admin = cluster.admin()) {
 
             NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
             admin.createTopics(singleton(newTopic));
@@ -376,7 +373,7 @@ public class ConsoleConsumerTest {
 
     @ClusterTest(brokers = 3)
     public void testGroupMetadataMessageFormatter(ClusterInstance cluster) throws Exception {
-        try (Admin admin = cluster.createAdminClient()) {
+        try (Admin admin = cluster.admin()) {
 
             NewTopic newTopic = new NewTopic(topic, 1, (short) 1);
             admin.createTopics(singleton(newTopic));
@@ -396,42 +393,22 @@ public class ConsoleConsumerTest {
 
                 JsonNode jsonNode = objectMapper.reader().readTree(out.toByteArray());
 
-                // The new group coordinator writes an empty group metadata record when the group is created for
-                // the first time whereas the old group coordinator only writes a group metadata record when
-                // the first rebalance completes.
-                if (cluster.isKRaftTest()) {
-                    JsonNode keyNode = jsonNode.get("key");
-                    GroupMetadataKey groupMetadataKey =
-                        GroupMetadataKeyJsonConverter.read(keyNode.get("data"), GroupMetadataKey.HIGHEST_SUPPORTED_VERSION);
-                    assertNotNull(groupMetadataKey);
-                    assertEquals(groupId, groupMetadataKey.group());
+                // The group coordinator writes an empty group metadata record when the group is created for the first time
+                JsonNode keyNode = jsonNode.get("key");
+                GroupMetadataKey groupMetadataKey =
+                    GroupMetadataKeyJsonConverter.read(keyNode.get("data"), GroupMetadataKey.HIGHEST_SUPPORTED_VERSION);
+                assertNotNull(groupMetadataKey);
+                assertEquals(groupId, groupMetadataKey.group());
 
-                    JsonNode valueNode = jsonNode.get("value");
-                    GroupMetadataValue groupMetadataValue =
-                        GroupMetadataValueJsonConverter.read(valueNode.get("data"), GroupMetadataValue.HIGHEST_SUPPORTED_VERSION);
-                    assertNotNull(groupMetadataValue);
-                    assertEquals("", groupMetadataValue.protocolType());
-                    assertEquals(0, groupMetadataValue.generation());
-                    assertNull(groupMetadataValue.protocol());
-                    assertNull(groupMetadataValue.leader());
-                    assertEquals(0, groupMetadataValue.members().size());
-                } else {
-                    JsonNode keyNode = jsonNode.get("key");
-                    GroupMetadataKey groupMetadataKey =
-                        GroupMetadataKeyJsonConverter.read(keyNode.get("data"), GroupMetadataKey.HIGHEST_SUPPORTED_VERSION);
-                    assertNotNull(groupMetadataKey);
-                    assertEquals(groupId, groupMetadataKey.group());
-
-                    JsonNode valueNode = jsonNode.get("value");
-                    GroupMetadataValue groupMetadataValue =
-                        GroupMetadataValueJsonConverter.read(valueNode.get("data"), GroupMetadataValue.HIGHEST_SUPPORTED_VERSION);
-                    assertNotNull(groupMetadataValue);
-                    assertEquals("consumer", groupMetadataValue.protocolType());
-                    assertEquals(1, groupMetadataValue.generation());
-                    assertEquals("range", groupMetadataValue.protocol());
-                    assertNotNull(groupMetadataValue.leader());
-                    assertEquals(1, groupMetadataValue.members().size());
-                }
+                JsonNode valueNode = jsonNode.get("value");
+                GroupMetadataValue groupMetadataValue =
+                    GroupMetadataValueJsonConverter.read(valueNode.get("data"), GroupMetadataValue.HIGHEST_SUPPORTED_VERSION);
+                assertNotNull(groupMetadataValue);
+                assertEquals("", groupMetadataValue.protocolType());
+                assertEquals(0, groupMetadataValue.generation());
+                assertNull(groupMetadataValue.protocol());
+                assertNull(groupMetadataValue.leader());
+                assertEquals(0, groupMetadataValue.members().size());
             } finally {
                 consumerWrapper.cleanup();
             }

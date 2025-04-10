@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.tools.other;
 
-import kafka.log.UnifiedLog;
 import kafka.server.BrokerServer;
 import kafka.server.KafkaBroker;
 import kafka.utils.TestUtils;
@@ -39,9 +38,10 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.quota.QuotaType;
+import org.apache.kafka.storage.internals.log.UnifiedLog;
 import org.apache.kafka.tools.reassign.ReassignPartitionsCommand;
 
-import org.apache.log4j.PropertyConfigurator;
+import org.apache.logging.log4j.core.config.Configurator;
 import org.jfree.chart.ChartFactory;
 import org.jfree.chart.ChartFrame;
 import org.jfree.chart.JFreeChart;
@@ -95,7 +95,7 @@ public class ReplicationQuotasTestRig {
     private static final String DIR;
 
     static {
-        PropertyConfigurator.configure("core/src/test/resources/log4j.properties");
+        Configurator.reconfigure();
 
         new File("Experiments").mkdir();
         DIR = "Experiments/Run" + Long.valueOf(System.currentTimeMillis()).toString().substring(8);
@@ -249,7 +249,7 @@ public class ReplicationQuotasTestRig {
 
             ReassignPartitionsCommand.executeAssignment(adminClient, false,
                 ReassignPartitionsCommand.formatAsReassignmentJson(newAssignment, Collections.emptyMap()),
-                config.throttle, -1L, 10000L, Time.SYSTEM);
+                config.throttle, -1L, 10000L, Time.SYSTEM, false);
 
             //Await completion
             waitForReassignmentToComplete();

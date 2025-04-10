@@ -29,7 +29,6 @@ import java.util.Map;
 import java.util.Properties;
 
 import static org.apache.kafka.tiered.storage.specs.RemoteFetchCount.FetchCountAndOp;
-import static org.apache.kafka.tiered.storage.specs.RemoteFetchCount.OperationType.EQUALS_TO;
 import static org.apache.kafka.tiered.storage.specs.RemoteFetchCount.OperationType.LESS_THAN_OR_EQUALS_TO;
 
 /**
@@ -95,7 +94,10 @@ public final class OffloadAndTxnConsumeFromLeaderTest extends TieredStorageTestH
     }
 
     private static RemoteFetchCount getRemoteFetchCount() {
-        FetchCountAndOp segmentFetchCountAndOp = new FetchCountAndOp(6, EQUALS_TO);
+        // Ideally, each remote-log segment should be fetched only once. For 6 segments, we would have 6 fetch-counts.
+        // But, the client can retry the FETCH request, to make the test deterministic, increasing the fetch-count
+        // to be at-max of 12 (2 times of fetch-count).
+        FetchCountAndOp segmentFetchCountAndOp = new FetchCountAndOp(12, LESS_THAN_OR_EQUALS_TO);
         // RemoteIndexCache might evict the entries much before reaching the maximum size.
         // To make the test deterministic, we are using the operation type as LESS_THAN_OR_EQUALS_TO which equals to the
         // number of times the RemoteIndexCache gets accessed. The RemoteIndexCache gets accessed twice for each read.

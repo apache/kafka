@@ -173,12 +173,13 @@ public class TopicConfig {
     public static final String MIN_IN_SYNC_REPLICAS_DOC = "When a producer sets acks to \"all\" (or \"-1\"), " +
         "this configuration specifies the minimum number of replicas that must acknowledge " +
         "a write for the write to be considered successful. If this minimum cannot be met, " +
-        "then the producer will raise an exception (either NotEnoughReplicas or " +
-        "NotEnoughReplicasAfterAppend).<br>When used together, <code>min.insync.replicas</code> and <code>acks</code> " +
-        "allow you to enforce greater durability guarantees. A typical scenario would be to " +
-        "create a topic with a replication factor of 3, set <code>min.insync.replicas</code> to 2, and " +
-        "produce with <code>acks</code> of \"all\". This will ensure that the producer raises an exception " +
-        "if a majority of replicas do not receive a write.";
+        "then the producer will raise an exception (either <code>NotEnoughReplicas</code> or <code>NotEnoughReplicasAfterAppend</code>).<br> " +
+        "Regardless of the <code>acks</code> setting, the messages will not be visible to the consumers until " +
+        "they are replicated to all in-sync replicas and the <code>min.insync.replicas</code> condition is met.<br> " +
+        "When used together, <code>min.insync.replicas</code> and <code>acks</code> allow you to enforce greater durability guarantees. " +
+        "A typical scenario would be to create a topic with a replication factor of 3, " +
+        "set <code>min.insync.replicas</code> to 2, and produce with <code>acks</code> of \"all\". " +
+        "This will ensure that a majority of replicas must persist a write before it's considered successful by the producer and it's visible to consumers.";
 
     public static final String COMPRESSION_TYPE_CONFIG = "compression.type";
     public static final String COMPRESSION_TYPE_DOC = "Specify the final compression type for a given topic. " +
@@ -198,46 +199,9 @@ public class TopicConfig {
     public static final String PREALLOCATE_DOC = "True if we should preallocate the file on disk when " +
         "creating a new log segment.";
 
-    /**
-     * @deprecated since 3.0, removal planned in 4.0. The default value for this config is appropriate
-     * for most situations.
-     */
-    @Deprecated
-    public static final String MESSAGE_FORMAT_VERSION_CONFIG = "message.format.version";
-
-    /**
-     * @deprecated since 3.0, removal planned in 4.0. The default value for this config is appropriate
-     * for most situations.
-     */
-    @Deprecated
-    public static final String MESSAGE_FORMAT_VERSION_DOC = "[DEPRECATED] Specify the message format version the broker " +
-        "will use to append messages to the logs. The value of this config is always assumed to be `3.0` if " +
-        "`inter.broker.protocol.version` is 3.0 or higher (the actual config value is ignored). Otherwise, the value should " +
-        "be a valid ApiVersion. Some examples are: 0.10.0, 1.1, 2.8, 3.0. By setting a particular message format version, the " +
-        "user is certifying that all the existing messages on disk are smaller or equal than the specified version. Setting " +
-        "this value incorrectly will cause consumers with older versions to break as they will receive messages with a format " +
-        "that they don't understand.";
-
     public static final String MESSAGE_TIMESTAMP_TYPE_CONFIG = "message.timestamp.type";
     public static final String MESSAGE_TIMESTAMP_TYPE_DOC = "Define whether the timestamp in the message is " +
-        "message create time or log append time. The value should be either `CreateTime` or `LogAppendTime`";
-
-    /**
-     * @deprecated since 3.6, removal planned in 4.0.
-     * Use message.timestamp.before.max.ms and message.timestamp.after.max.ms instead
-     */
-    @Deprecated
-    public static final String MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG = "message.timestamp.difference.max.ms";
-
-    /**
-     * @deprecated since 3.6, removal planned in 4.0.
-     * Use message.timestamp.before.max.ms and message.timestamp.after.max.ms instead
-     */
-    @Deprecated
-    public static final String MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC = "[DEPRECATED] The maximum difference allowed between " +
-        "the timestamp when a broker receives a message and the timestamp specified in the message. If " +
-        "message.timestamp.type=CreateTime, a message will be rejected if the difference in timestamp " +
-        "exceeds this threshold. This configuration is ignored if message.timestamp.type=LogAppendTime.";
+        "message create time or log append time.";
 
     public static final String MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG = "message.timestamp.before.max.ms";
     public static final String MESSAGE_TIMESTAMP_BEFORE_MAX_MS_DOC = "This configuration sets the allowable timestamp " +
@@ -251,10 +215,18 @@ public class TopicConfig {
         "or equal to the broker's timestamp, with the maximum allowable difference determined by the value set in this " +
         "configuration. If message.timestamp.type=CreateTime, the message will be rejected if the difference in " +
         "timestamps exceeds this specified threshold. This configuration is ignored if message.timestamp.type=LogAppendTime.";
+
+    /**
+     * @deprecated down-conversion is not possible in Apache Kafka 4.0 and newer, hence this configuration is a no-op,
+     *             and it is deprecated for removal in Apache Kafka 5.0.
+     */
+    @Deprecated
     public static final String MESSAGE_DOWNCONVERSION_ENABLE_CONFIG = "message.downconversion.enable";
-    public static final String MESSAGE_DOWNCONVERSION_ENABLE_DOC = "This configuration controls whether " +
-        "down-conversion of message formats is enabled to satisfy consume requests. When set to <code>false</code>, " +
-        "broker will not perform down-conversion for consumers expecting an older message format. The broker responds " +
-        "with <code>UNSUPPORTED_VERSION</code> error for consume requests from such older clients. This configuration" +
-        "does not apply to any message format conversion that might be required for replication to followers.";
+
+    /**
+     * @deprecated see {@link #MESSAGE_DOWNCONVERSION_ENABLE_CONFIG}.
+     */
+    @Deprecated
+    public static final String MESSAGE_DOWNCONVERSION_ENABLE_DOC = "Down-conversion is not possible in Apache Kafka 4.0 and newer, " +
+        "hence this configuration is no-op and it is deprecated for removal in Apache Kafka 5.0.";
 }

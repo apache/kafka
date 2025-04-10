@@ -1,13 +1,22 @@
-Apache Kafka
-=================
-See our [web site](https://kafka.apache.org) for details on the project.
+<p align="center">
+<picture>
+  <source media="(prefers-color-scheme: light)" srcset="docs/images/kafka-logo-readme-light.svg">
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/kafka-logo-readme-dark.svg">
+  <img src="docs/images/kafka-logo-readme-light.svg" alt="Kafka Logo" width="50%"> 
+</picture>
+</p>
+
+[![CI](https://github.com/apache/kafka/actions/workflows/ci.yml/badge.svg?branch=trunk&event=push)](https://github.com/apache/kafka/actions/workflows/ci.yml?query=event%3Apush+branch%3Atrunk)
+[![Flaky Test Report](https://github.com/apache/kafka/actions/workflows/generate-reports.yml/badge.svg?branch=trunk&event=schedule)](https://github.com/apache/kafka/actions/workflows/generate-reports.yml?query=event%3Aschedule+branch%3Atrunk)
+
+[**Apache Kafka**](https://kafka.apache.org) is an open-source distributed event streaming platform used by thousands of companies for high-performance data pipelines, streaming analytics, data integration, and mission-critical applications.
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
-We build and test Apache Kafka with 11, 17 and 21. We set the `release` parameter in javac and scalac
-to `11` to ensure the generated binaries are compatible with Java 11 or higher (independently of the Java version
-used for compilation). Java 11 support for the broker and tools has been deprecated since Apache Kafka 3.7 and removal 
-of both is planned for Apache Kafka 4.0.([KIP-1013](https://cwiki.apache.org/confluence/pages/viewpage.action?pageId=284789510) for more details).
+We build and test Apache Kafka with 17 and 23. The `release` parameter in javac is set to `11` for the clients 
+and streams modules, and `17` for the rest, ensuring compatibility with their respective
+minimum Java versions. Similarly, the `release` parameter in scalac is set to `11` for the streams modules and `17`
+for the rest.
 
 Scala 2.13 is the only supported version in Apache Kafka.
 
@@ -33,7 +42,7 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew test  # runs both unit and integration tests
     ./gradlew unitTest
     ./gradlew integrationTest
-    ./gradlew quarantinedTest  # runs the quarantined tests
+    ./gradlew test -Pkafka.test.run.flaky=true  # runs tests that are marked as flaky
 
     
 ### Force re-running tests without code change ###
@@ -52,10 +61,10 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew clients:test --tests org.apache.kafka.clients.MetadataTest.testTimeToNextUpdate
 
 ### Running a particular unit/integration test with log4j output ###
-By default, there will be only small number of logs output while testing. You can adjust it by changing the `log4j.properties` file in the module's `src/test/resources` directory.
+By default, there will be only small number of logs output while testing. You can adjust it by changing the `log4j2.yaml` file in the module's `src/test/resources` directory.
 
-For example, if you want to see more logs for clients project tests, you can modify [the line](https://github.com/apache/kafka/blob/trunk/clients/src/test/resources/log4j.properties#L21) in `clients/src/test/resources/log4j.properties` 
-to `log4j.logger.org.apache.kafka=INFO` and then run:
+For example, if you want to see more logs for clients project tests, you can modify [the line](https://github.com/apache/kafka/blob/trunk/clients/src/test/resources/log4j2.yaml#L35) in `clients/src/test/resources/log4j2.yaml` 
+to `level: INFO` and then run:
     
     ./gradlew cleanTest clients:test --tests NetworkClientTest   
 
@@ -67,10 +76,6 @@ Retries are disabled by default, but you can set maxTestRetryFailures and maxTes
 The following example declares -PmaxTestRetries=1 and -PmaxTestRetryFailures=3 to enable a failed test to be retried once, with a total retry limit of 3.
 
     ./gradlew test -PmaxTestRetries=1 -PmaxTestRetryFailures=3
-
-The quarantinedTest task also has no retries by default, but you can set maxQuarantineTestRetries and maxQuarantineTestRetryFailures to enable retries, similar to the test task.
-
-    ./gradlew quarantinedTest -PmaxQuarantineTestRetries=3 -PmaxQuarantineTestRetryFailures=20
 
 See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) for and [build.yml](.github/workflows/build.yml) more details.
 
@@ -94,13 +99,13 @@ fail due to code changes. You can just run:
  
     ./gradlew processMessages processTestMessages
 
-### Running a Kafka broker in KRaft mode
+### Running a Kafka broker
 
 Using compiled files:
 
     KAFKA_CLUSTER_ID="$(./bin/kafka-storage.sh random-uuid)"
-    ./bin/kafka-storage.sh format -t $KAFKA_CLUSTER_ID -c config/kraft/reconfig-server.properties
-    ./bin/kafka-server-start.sh config/kraft/reconfig-server.properties
+    ./bin/kafka-storage.sh format --standalone -t $KAFKA_CLUSTER_ID -c config/server.properties
+    ./bin/kafka-server-start.sh config/server.properties
 
 Using docker image:
 
@@ -123,10 +128,14 @@ Streams has multiple sub-projects, but you can run all the tests:
     ./gradlew tasks
 
 ### Building IDE project ####
-*Note that this is not strictly necessary (IntelliJ IDEA has good built-in support for Gradle projects, for example).*
+*Note Please ensure that JDK17 is used when developing Kafka.*
+
+IntelliJ supports Gradle natively and it will automatically check Java syntax and compatibility for each module, even if
+the Java version shown in the `Structure > Project Settings > Modules` may not be the correct one.
+
+When it comes to Eclipse, run:
 
     ./gradlew eclipse
-    ./gradlew idea
 
 The `eclipse` task has been configured to use `${project_dir}/build_eclipse` as Eclipse's build directory. Eclipse's default
 build directory (`${project_dir}/bin`) clashes with Kafka's scripts directory and we don't use Gradle's build directory
@@ -161,6 +170,10 @@ Please note for this to work you should create/update user maven settings (typic
      </servers>
      ...
 
+### Installing all projects to the local Maven repository ###
+
+    ./gradlew -PskipSigning=true publishToMavenLocal
+
 ### Installing specific projects to the local Maven repository ###
 
     ./gradlew -PskipSigning=true :streams:publishToMavenLocal
@@ -179,6 +192,7 @@ You can run checkstyle using:
 
 The checkstyle warnings will be found in `reports/checkstyle/reports/main.html` and `reports/checkstyle/reports/test.html` files in the
 subproject build directories. They are also printed to the console. The build will fail if Checkstyle fails.
+For experiments (or regression testing purposes) add `-PcheckstyleVersion=X.y.z` switch (to override project-defined checkstyle version).
 
 #### Spotless ####
 The import order is a part of static check. please call `spotlessApply` to optimize the imports of Java codes before filing pull request.

@@ -120,7 +120,7 @@ class TestQuorumReconfiguration(ProduceConsumeValidateTest):
                                            message_validator=is_int, compression_types=["none"],
                                            version=DEV_BRANCH, offline_nodes=[inactive_controller])
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,
-                                        self.topic, new_consumer=True, consumer_timeout_ms=30000,
+                                        self.topic, consumer_timeout_ms=30000,
                                         message_validator=is_int, version=DEV_BRANCH)
         # Perform reconfigurations
         self.run_produce_consume_validate(
@@ -161,7 +161,7 @@ class TestQuorumReconfiguration(ProduceConsumeValidateTest):
                                            message_validator=is_int, compression_types=["none"],
                                            version=DEV_BRANCH)
         self.consumer = ConsoleConsumer(self.test_context, self.num_consumers, self.kafka,
-                                        self.topic, new_consumer=True, consumer_timeout_ms=30000,
+                                        self.topic, consumer_timeout_ms=30000,
                                         message_validator=is_int, version=DEV_BRANCH)
         # Perform reconfigurations
         self.run_produce_consume_validate(

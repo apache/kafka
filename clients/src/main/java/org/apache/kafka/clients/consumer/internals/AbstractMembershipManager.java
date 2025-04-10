@@ -30,7 +30,6 @@ import org.slf4j.Logger;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -130,7 +129,8 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      * requests in cases where a currently assigned topic is in the target assignment (new
      * partition assigned, or revoked), but it is not present the Metadata cache at that moment.
      * The cache is cleared when the subscription changes ({@link #transitionToJoining()}, the
-     * member fails ({@link #transitionToFatal()} or leaves the group ({@link #leaveGroup()}).
+     * member fails ({@link #transitionToFatal()} or leaves the group
+     * ({@link #leaveGroup()}/{@link #leaveGroupOnClose()}).
      */
     private final Map<Uuid, String> assignedTopicNamesCache;
 
@@ -144,7 +144,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
     /**
      * If there is a reconciliation running (triggering commit, callbacks) for the
-     * assignmentReadyToReconcile. This will be true if {@link #maybeReconcile()} has been triggered
+     * assignmentReadyToReconcile. This will be true if {@link #maybeReconcile(boolean)} has been triggered
      * after receiving a heartbeat response, or a metadata update.
      */
     private boolean reconciliationInProgress;
@@ -157,9 +157,9 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     private boolean rejoinedWhileReconciliationInProgress;
 
     /**
-     * If the member is currently leaving the group after a call to {@link #leaveGroup()}}, this
-     * will have a future that will complete when the ongoing leave operation completes
-     * (callbacks executed and heartbeat request to leave is sent out). This will be empty is the
+     * If the member is currently leaving the group after a call to {@link #leaveGroup()} or
+     * {@link #leaveGroupOnClose()}, this will have a future that will complete when the ongoing leave operation
+     * completes (callbacks executed and heartbeat request to leave is sent out). This will be empty if the
      * member is not leaving.
      */
     private Optional<CompletableFuture<Void>> leaveGroupInProgress = Optional.empty();
@@ -199,12 +199,15 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      */
     private boolean isPollTimerExpired;
 
+    private final boolean autoCommitEnabled;
+
     AbstractMembershipManager(String groupId,
                               SubscriptionState subscriptions,
                               ConsumerMetadata metadata,
                               Logger log,
                               Time time,
-                              RebalanceMetricsManager metricsManager) {
+                              RebalanceMetricsManager metricsManager,
+                              boolean autoCommitEnabled) {
         this.groupId = groupId;
         this.state = MemberState.UNSUBSCRIBED;
         this.subscriptions = subscriptions;
@@ -216,6 +219,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         this.stateUpdatesListeners = new ArrayList<>();
         this.time = time;
         this.metricsManager = metricsManager;
+        this.autoCommitEnabled = autoCommitEnabled;
     }
 
     /**
@@ -481,6 +485,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     private void clearAssignment() {
         if (subscriptions.hasAutoAssignedPartitions()) {
             subscriptions.assignFromSubscribed(Collections.emptySet());
+            notifyAssignmentChange(Collections.emptySet());
         }
         currentAssignment = LocalAssignment.NONE;
         clearPendingAssignmentsAndLocalNamesCache();
@@ -496,8 +501,9 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      */
     private void updateSubscriptionAwaitingCallback(SortedSet<TopicIdPartition> assignedPartitions,
                                                     SortedSet<TopicPartition> addedPartitions) {
-        Collection<TopicPartition> assignedTopicPartitions = toTopicPartitionSet(assignedPartitions);
+        Set<TopicPartition> assignedTopicPartitions = toTopicPartitionSet(assignedPartitions);
         subscriptions.assignFromSubscribedAwaitingCallback(assignedTopicPartitions, addedPartitions);
+        notifyAssignmentChange(assignedTopicPartitions);
     }
 
     /**
@@ -523,18 +529,45 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
     /**
      * Transition to {@link MemberState#PREPARE_LEAVING} to release the assignment. Once completed,
      * transition to {@link MemberState#LEAVING} to send the heartbeat request and leave the group.
-     * This is expected to be invoked when the user calls the unsubscribe API.
+     * This is expected to be invoked when the user calls the {@link Consumer#close()} API.
+     *
+     * @return Future that will complete when the heartbeat to leave the group has been sent out.
+     */
+    public CompletableFuture<Void> leaveGroupOnClose() {
+        return leaveGroup(false);
+    }
+
+    /**
+     * Transition to {@link MemberState#PREPARE_LEAVING} to release the assignment. Once completed,
+     * transition to {@link MemberState#LEAVING} to send the heartbeat request and leave the group.
+     * This is expected to be invoked when the user calls the {@link Consumer#unsubscribe()} API.
      *
      * @return Future that will complete when the callback execution completes and the heartbeat
      * to leave the group has been sent out.
      */
     public CompletableFuture<Void> leaveGroup() {
+        return leaveGroup(true);
+    }
+
+    /**
+     * Transition to {@link MemberState#PREPARE_LEAVING} to release the assignment. Once completed,
+     * transition to {@link MemberState#LEAVING} to send the heartbeat request and leave the group.
+     * This is expected to be invoked when the user calls the unsubscribe API or is closing the consumer.
+     *
+     * @param runCallbacks {@code true} to insert the step to execute the {@link ConsumerRebalanceListener} callback,
+     *                     {@code false} to skip
+     *
+     * @return Future that will complete when the callback execution completes and the heartbeat
+     * to leave the group has been sent out.
+     */
+    protected CompletableFuture<Void> leaveGroup(boolean runCallbacks) {
         if (isNotInGroup()) {
             if (state == MemberState.FENCED) {
                 clearAssignment();
                 transitionTo(MemberState.UNSUBSCRIBED);
             }
             subscriptions.unsubscribe();
+            notifyAssignmentChange(Collections.emptySet());
             return CompletableFuture.completedFuture(null);
         }
 
@@ -549,29 +582,37 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
         CompletableFuture<Void> leaveResult = new CompletableFuture<>();
         leaveGroupInProgress = Optional.of(leaveResult);
 
-        CompletableFuture<Void> callbackResult = signalMemberLeavingGroup();
-        callbackResult.whenComplete((result, error) -> {
-            if (error != null) {
-                log.error("Member {} callback to release assignment failed. It will proceed " +
-                    "to clear its assignment and send a leave group heartbeat", memberId, error);
-            } else {
-                log.info("Member {} completed callback to release assignment. It will proceed " +
-                    "to clear its assignment and send a leave group heartbeat", memberId);
-            }
+        if (runCallbacks) {
+            CompletableFuture<Void> callbackResult = signalMemberLeavingGroup();
+            callbackResult.whenComplete((result, error) -> {
+                if (error != null) {
+                    log.error("Member {} callback to release assignment failed. It will proceed " +
+                        "to clear its assignment and send a leave group heartbeat", memberId, error);
+                } else {
+                    log.info("Member {} completed callback to release assignment. It will proceed " +
+                        "to clear its assignment and send a leave group heartbeat", memberId);
+                }
 
-            // Clear the subscription, no matter if the callback execution failed or succeeded.
-            subscriptions.unsubscribe();
-            clearAssignment();
-
-            // Transition to ensure that a heartbeat request is sent out to effectively leave the
-            // group (even in the case where the member had no assignment to release or when the
-            // callback execution failed.)
-            transitionToSendingLeaveGroup(false);
-        });
+                // Clear the assignment, no matter if the callback execution failed or succeeded.
+                clearAssignmentAndLeaveGroup();
+            });
+        } else {
+            clearAssignmentAndLeaveGroup();
+        }
 
         // Return future to indicate that the leave group is done when the callbacks
         // complete, and the transition to send the heartbeat has been made.
         return leaveResult;
+    }
+
+    private void clearAssignmentAndLeaveGroup() {
+        subscriptions.unsubscribe();
+        clearAssignment();
+
+        // Transition to ensure that a heartbeat request is sent out to effectively leave the
+        // group (even in the case where the member had no assignment to release or when the
+        // callback execution failed.)
+        transitionToSendingLeaveGroup(false);
     }
 
     /**
@@ -614,6 +655,15 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      */
     void notifyEpochChange(Optional<Integer> epoch) {
         stateUpdatesListeners.forEach(stateListener -> stateListener.onMemberEpochUpdated(epoch, memberId));
+    }
+
+    /**
+     * Invokes the {@link MemberStateListener#onGroupAssignmentUpdated(Set)} callback for each listener when the
+     * set of assigned partitions changes. This includes on assignment changes, unsubscribe, and when leaving
+     * the group.
+     */
+    void notifyAssignmentChange(Set<TopicPartition> partitions) {
+        stateUpdatesListeners.forEach(stateListener -> stateListener.onGroupAssignmentUpdated(partitions));
     }
 
     /**
@@ -745,8 +795,16 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      *  - Another reconciliation is already in progress.
      *  - There are topics that haven't been added to the current assignment yet, but all their topic IDs
      *    are missing from the target assignment.
+     *
+     * @param canCommit Controls whether reconciliation can proceed when auto-commit is enabled.
+     *                  Set to true only when the current offset positions are safe to commit.
+     *                  If false and auto-commit enabled, the reconciliation will be skipped.
      */
-    void maybeReconcile() {
+    public void maybeReconcile(boolean canCommit) {
+        if (state != MemberState.RECONCILING) {
+            return;
+        }
+
         if (targetAssignmentReconciled()) {
             log.trace("Ignoring reconciliation attempt. Target assignment is equal to the " +
                     "current assignment.");
@@ -772,6 +830,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
             return;
         }
 
+        if (autoCommitEnabled && !canCommit) return;
         markReconciliationInProgress();
 
         // Keep copy of assigned TopicPartitions created from the TopicIdPartitions that are
@@ -804,6 +863,10 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
                 addedPartitions,
                 revokedPartitions
         );
+
+        // Mark partitions as pending revocation to stop fetching from the partitions (no new
+        // fetches sent out, and no in-flight fetches responses processed).
+        markPendingRevocationToPauseFetching(revokedPartitions);
 
         // Commit offsets if auto-commit enabled before reconciling a new assignment. Request will
         // be retried until it succeeds, fails with non-retriable error, or timer expires.
@@ -1125,10 +1188,16 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
         // Invoke user call back.
         CompletableFuture<Void> result = signalPartitionsAssigned(addedPartitions);
+        // Enable newly added partitions to start fetching and updating positions for them.
         result.whenComplete((__, exception) -> {
             if (exception == null) {
-                // Enable newly added partitions to start fetching and updating positions for them.
-                subscriptions.enablePartitionsAwaitingCallback(addedPartitions);
+                // Enable assigned partitions to start fetching and updating positions for them.
+                // We use assignedPartitions here instead of addedPartitions because there's a chance that the callback
+                // might throw an exception, leaving addedPartitions empty. This would result in the poll operation
+                // returning no records, as no topic partitions are marked as fetchable. In contrast, with the classic consumer,
+                // if the first callback fails but the next one succeeds, polling can still retrieve data. To align with
+                // this behavior, we rely on assignedPartitions to avoid such scenarios.
+                subscriptions.enablePartitionsAwaitingCallback(toTopicPartitionSet(assignedPartitions));
             } else {
                 // Keeping newly added partitions as non-fetchable after the callback failure.
                 // They will be retried on the next reconciliation loop, until it succeeds or the
@@ -1291,7 +1360,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
 
     /**
      * @return If there is a reconciliation in process now. Note that reconciliation is triggered
-     * by a call to {@link #maybeReconcile()}. Visible for testing.
+     * by a call to {@link #maybeReconcile(boolean)}. Visible for testing.
      */
     boolean reconciliationInProgress() {
         return reconciliationInProgress;
@@ -1327,9 +1396,7 @@ public abstract class AbstractMembershipManager<R extends AbstractResponse> impl
      *                      time-sensitive operations should be performed
      */
     public NetworkClientDelegate.PollResult poll(final long currentTimeMs) {
-        if (state == MemberState.RECONCILING) {
-            maybeReconcile();
-        }
+        maybeReconcile(false);
         return NetworkClientDelegate.PollResult.EMPTY;
     }
 

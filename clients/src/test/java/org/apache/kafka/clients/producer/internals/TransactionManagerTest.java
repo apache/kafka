@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.errors.TransactionAbortableException;
+import org.apache.kafka.common.errors.TransactionAbortedException;
 import org.apache.kafka.common.errors.TransactionalIdAuthorizationException;
 import org.apache.kafka.common.errors.UnsupportedForMessageFormatException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
@@ -172,12 +173,15 @@ public class TransactionManagerTest {
             new ApiVersion()
                 .setApiKey(ApiKeys.PRODUCE.id)
                 .setMinVersion((short) 0)
-                .setMaxVersion((short) 7)),
+                .setMaxVersion(transactionV2Enabled ? ApiKeys.PRODUCE.latestVersion() : (short) 11),
+            new ApiVersion()
+                .setApiKey(ApiKeys.TXN_OFFSET_COMMIT.id)
+                .setMinVersion((short) 0)
+                .setMaxVersion(transactionV2Enabled ? ApiKeys.TXN_OFFSET_COMMIT.latestVersion() : (short) 4)),
             Arrays.asList(new ApiVersionsResponseData.SupportedFeatureKey()
                 .setName("transaction.version")
                 .setMaxVersion(transactionV2Enabled ? (short) 2 : (short) 1)
                 .setMinVersion((short) 0)),
-            false,
             Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
                 .setName("transaction.version")
                 .setMaxVersionLevel(transactionV2Enabled ? (short) 2 : (short) 1)
@@ -230,7 +234,7 @@ public class TransactionManagerTest {
 
         transactionManager.maybeAddPartition(tp0);
         prepareAddPartitionsToTxn(tp0, Errors.NONE);
-        runUntil(() -> transactionManager.isPartitionAdded(tp0));
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));
 
         transactionManager.beginCommit();
         assertNull(transactionManager.nextRequest(true));
@@ -293,7 +297,7 @@ public class TransactionManagerTest {
         runUntil(transactionManager::hasOngoingTransaction);
 
         prepareAddPartitionsToTxn(partition, Errors.NONE);
-        runUntil(() -> transactionManager.isPartitionAdded(partition));
+        runUntil(() -> transactionManager.transactionContainsPartition(partition));
 
         transactionManager.beginAbort();
         assertTrue(transactionManager.hasOngoingTransaction());
@@ -317,7 +321,7 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasOngoingTransaction());
 
         prepareAddPartitionsToTxn(partition, Errors.NONE);
-        runUntil(() -> transactionManager.isPartitionAdded(partition));
+        runUntil(() -> transactionManager.transactionContainsPartition(partition));
 
         transactionManager.beginCommit();
         assertTrue(transactionManager.hasOngoingTransaction());
@@ -341,7 +345,7 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasOngoingTransaction());
 
         prepareAddPartitionsToTxn(partition, Errors.NONE);
-        runUntil(() -> transactionManager.isPartitionAdded(partition));
+        runUntil(() -> transactionManager.transactionContainsPartition(partition));
 
         transactionManager.transitionToAbortableError(new KafkaException());
         assertTrue(transactionManager.hasOngoingTransaction());
@@ -368,7 +372,7 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasOngoingTransaction());
 
         prepareAddPartitionsToTxn(partition, Errors.NONE);
-        runUntil(() -> transactionManager.isPartitionAdded(partition));
+        runUntil(() -> transactionManager.transactionContainsPartition(partition));
 
         transactionManager.transitionToFatalError(new KafkaException());
         assertFalse(transactionManager.hasOngoingTransaction());
@@ -382,20 +386,40 @@ public class TransactionManagerTest {
 
         transactionManager.maybeAddPartition(partition);
         assertTrue(transactionManager.hasPartitionsToAdd());
-        assertFalse(transactionManager.isPartitionAdded(partition));
+        assertFalse(transactionManager.transactionContainsPartition(partition));
         assertTrue(transactionManager.isPartitionPendingAdd(partition));
 
         prepareAddPartitionsToTxn(partition, Errors.NONE);
         assertTrue(transactionManager.hasPartitionsToAdd());
 
-        runUntil(() -> transactionManager.isPartitionAdded(partition));
+        runUntil(() -> transactionManager.transactionContainsPartition(partition));
         assertFalse(transactionManager.hasPartitionsToAdd());
         assertFalse(transactionManager.isPartitionPendingAdd(partition));
 
         // adding the partition again should not have any effect
         transactionManager.maybeAddPartition(partition);
         assertFalse(transactionManager.hasPartitionsToAdd());
-        assertTrue(transactionManager.isPartitionAdded(partition));
+        assertTrue(transactionManager.transactionContainsPartition(partition));
+        assertFalse(transactionManager.isPartitionPendingAdd(partition));
+    }
+
+    @Test
+    public void testMaybeAddPartitionToTransactionInTransactionV2() {
+        initializeTransactionManager(Optional.of(transactionalId), true);
+        TopicPartition partition = new TopicPartition("foo", 0);
+        doInitTransactions();
+        transactionManager.beginTransaction();
+
+        transactionManager.maybeAddPartition(partition);
+        // In V2, the maybeAddPartition should not add the partition to the pending list.
+        assertFalse(transactionManager.hasPartitionsToAdd());
+        assertTrue(transactionManager.transactionContainsPartition(partition));
+        assertFalse(transactionManager.isPartitionPendingAdd(partition));
+
+        // Adding the partition again should not have any effect
+        transactionManager.maybeAddPartition(partition);
+        assertFalse(transactionManager.hasPartitionsToAdd());
+        assertTrue(transactionManager.transactionContainsPartition(partition));
         assertFalse(transactionManager.isPartitionPendingAdd(partition));
     }
 
@@ -407,7 +431,7 @@ public class TransactionManagerTest {
 
         transactionManager.maybeAddPartition(partition);
         assertTrue(transactionManager.hasPartitionsToAdd());
-        assertFalse(transactionManager.isPartitionAdded(partition));
+        assertFalse(transactionManager.transactionContainsPartition(partition));
         assertTrue(transactionManager.isPartitionPendingAdd(partition));
 
         prepareAddPartitionsToTxn(partition, Errors.CONCURRENT_TRANSACTIONS);
@@ -426,7 +450,7 @@ public class TransactionManagerTest {
 
         transactionManager.maybeAddPartition(partition);
         assertTrue(transactionManager.hasPartitionsToAdd());
-        assertFalse(transactionManager.isPartitionAdded(partition));
+        assertFalse(transactionManager.transactionContainsPartition(partition));
         assertTrue(transactionManager.isPartitionPendingAdd(partition));
 
         prepareAddPartitionsToTxn(partition, Errors.COORDINATOR_NOT_AVAILABLE);
@@ -445,11 +469,11 @@ public class TransactionManagerTest {
 
         transactionManager.maybeAddPartition(partition);
         assertTrue(transactionManager.hasPartitionsToAdd());
-        assertFalse(transactionManager.isPartitionAdded(partition));
+        assertFalse(transactionManager.transactionContainsPartition(partition));
         assertTrue(transactionManager.isPartitionPendingAdd(partition));
 
         prepareAddPartitionsToTxn(partition, Errors.NONE);
-        runUntil(() -> transactionManager.isPartitionAdded(partition));
+        runUntil(() -> transactionManager.transactionContainsPartition(partition));
 
         TopicPartition otherPartition = new TopicPartition("foo", 1);
         transactionManager.maybeAddPartition(otherPartition);
@@ -678,7 +702,7 @@ public class TransactionManagerTest {
         assertEquals(2, transactionManager.sequenceNumber(tp0));
 
         // The producerId might be reset due to a failure on another partition
-        transactionManager.requestEpochBumpForPartition(tp1);
+        transactionManager.requestIdempotentEpochBumpForPartition(tp1);
         transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
         initializeIdempotentProducerId(producerId + 1, (short) 0);
 
@@ -723,7 +747,7 @@ public class TransactionManagerTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         Future<RecordMetadata> responseFuture1 = accumulator.append(tp0.topic(), tp0.partition(), time.milliseconds(),
-                "1".getBytes(), "1".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false, time.milliseconds(),
+                "1".getBytes(), "1".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, time.milliseconds(),
                 TestUtils.singletonCluster()).future;
         sender.runOnce();
         assertEquals(1, transactionManager.sequenceNumber(tp0));
@@ -745,7 +769,7 @@ public class TransactionManagerTest {
         // is reached even though the delivery timeout has expired and the
         // future has completed exceptionally.
         assertTrue(responseFuture1.isDone());
-        TestUtils.assertFutureThrows(responseFuture1, TimeoutException.class);
+        TestUtils.assertFutureThrows(TimeoutException.class, responseFuture1);
         assertFalse(transactionManager.hasInFlightRequest());
         assertEquals(1, client.inFlightRequestCount());
 
@@ -754,7 +778,7 @@ public class TransactionManagerTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0));
 
         Future<RecordMetadata> responseFuture2 = accumulator.append(tp0.topic(), tp0.partition(), time.milliseconds(),
-                "2".getBytes(), "2".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, false, time.milliseconds(),
+                "2".getBytes(), "2".getBytes(), Record.EMPTY_HEADERS, null, MAX_BLOCK_TIMEOUT, time.milliseconds(),
                 TestUtils.singletonCluster()).future;
         sender.runOnce();
         sender.runOnce();
@@ -775,6 +799,21 @@ public class TransactionManagerTest {
         manager.incrementSequenceNumber(tp, 1);
         ProducerBatch batch = batchWithValue(tp, value);
         batch.setProducerState(manager.producerIdAndEpoch(), seq, false);
+        manager.addInFlightBatch(batch);
+        batch.close();
+        return batch;
+    }
+
+    private ProducerBatch writeTransactionalBatchWithValue(
+        TransactionManager manager,
+        TopicPartition tp,
+        String value
+    ) {
+        manager.maybeUpdateProducerIdAndEpoch(tp);
+        int seq = manager.sequenceNumber(tp);
+        manager.incrementSequenceNumber(tp, 1);
+        ProducerBatch batch = batchWithValue(tp, value);
+        batch.setProducerState(manager.producerIdAndEpoch(), seq, true);
         manager.addInFlightBatch(batch);
         batch.close();
         return batch;
@@ -814,7 +853,7 @@ public class TransactionManagerTest {
         transactionManager.incrementSequenceNumber(tp1, 3);
         assertEquals(transactionManager.sequenceNumber(tp1), 3);
 
-        transactionManager.requestEpochBumpForPartition(tp0);
+        transactionManager.requestIdempotentEpochBumpForPartition(tp0);
         transactionManager.bumpIdempotentEpochAndResetIdIfNeeded();
         assertEquals(transactionManager.sequenceNumber(tp0), 0);
         assertEquals(transactionManager.sequenceNumber(tp1), 3);
@@ -890,7 +929,6 @@ public class TransactionManagerTest {
                 .setName("transaction.version")
                 .setMaxVersion((short) 2)
                 .setMinVersion((short) 0)),
-            false,
             Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
                 .setName("transaction.version")
                 .setMaxVersionLevel((short) 2)
@@ -904,22 +942,121 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasOngoingTransaction());
 
         prepareAddPartitionsToTxn(tp1, Errors.NONE);
-        runUntil(() -> transactionManager.isPartitionAdded(tp1));
+        runUntil(() -> transactionManager.transactionContainsPartition(tp1));
 
         TransactionalRequestResult retryResult = transactionManager.beginCommit();
         assertTrue(transactionManager.hasOngoingTransaction());
-        assertFalse(transactionManager.isTransactionV2Enabled());
+        assertTrue(transactionManager.isTransactionV2Enabled());
 
         prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, producerId, epoch);
+        prepareInitPidResponse(Errors.NONE, false, producerId, (short) (epoch + 1));
         runUntil(() -> !transactionManager.hasOngoingTransaction());
         runUntil(retryResult::isCompleted);
         retryResult.await();
         runUntil(retryResult::isAcked);
         assertFalse(transactionManager.hasOngoingTransaction());
 
-        // After restart the transaction, the V2 is enabled.
+        // After restart the transaction, the V2 is still enabled and epoch is bumped.
         transactionManager.beginTransaction();
         assertTrue(transactionManager.isTransactionV2Enabled());
+        assertEquals(epoch + 1, transactionManager.producerIdAndEpoch().epoch);
+    }
+
+    @Test
+    public void testTransactionV2AddPartitionAndOffsets() throws InterruptedException {
+        initializeTransactionManager(Optional.of(transactionalId), true);
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
+
+        assertFalse(responseFuture.isDone());
+
+        prepareProduceResponse(Errors.NONE, producerId, epoch);
+        transactionManager.maybeAddPartition(tp0);
+        assertTrue(transactionManager.transactionContainsPartition(tp0));
+        assertTrue(transactionManager.isSendToPartitionAllowed(tp0));
+        assertFalse(responseFuture.isDone());
+        runUntil(responseFuture::isDone);
+
+        // Now, test adding the offsets.
+        Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
+        offsets.put(tp1, new OffsetAndMetadata(1));
+
+        TransactionalRequestResult addOffsetsResult = transactionManager.sendOffsetsToTransaction(
+            offsets, new ConsumerGroupMetadata(consumerGroupId));
+
+        assertTrue(transactionManager.hasPendingOffsetCommits());
+
+        // the result doesn't complete until TxnOffsetCommit returns
+        assertFalse(addOffsetsResult.isCompleted());
+
+        Map<TopicPartition, Errors> txnOffsetCommitResponse = new HashMap<>();
+        txnOffsetCommitResponse.put(tp1, Errors.NONE);
+
+        prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.GROUP, consumerGroupId);
+        prepareTxnOffsetCommitResponse(consumerGroupId, producerId, epoch, txnOffsetCommitResponse);
+
+        assertNull(transactionManager.coordinator(CoordinatorType.GROUP));
+        runUntil(() -> transactionManager.coordinator(CoordinatorType.GROUP) != null);
+        assertTrue(transactionManager.hasPendingOffsetCommits());
+
+        runUntil(() -> !transactionManager.hasPendingOffsetCommits());
+        // We should only be done after both RPCs complete.
+        assertTrue(addOffsetsResult.isCompleted());
+
+        transactionManager.beginCommit();
+        prepareEndTxnResponse(Errors.NONE, TransactionResult.COMMIT, producerId, epoch, producerId, (short) (epoch + 1), false);
+        runUntil(() -> !transactionManager.hasOngoingTransaction());
+        assertFalse(transactionManager.isCompleting());
+    }
+
+    @Test
+    public void testTransactionManagerDisablesV2() {
+        Metrics metrics = new Metrics(time);
+
+        apiVersions.update("0", new NodeApiVersions(Arrays.asList(
+            new ApiVersion()
+                .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
+                .setMinVersion((short) 0)
+                .setMaxVersion((short) 3),
+            new ApiVersion()
+                .setApiKey(ApiKeys.PRODUCE.id)
+                .setMinVersion((short) 5)
+                .setMaxVersion((short) (ProduceRequest.LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2 + 1)),
+            new ApiVersion()
+                .setApiKey(ApiKeys.TXN_OFFSET_COMMIT.id)
+                .setMinVersion((short) 1)
+                .setMaxVersion((short) (TxnOffsetCommitRequest.LAST_STABLE_VERSION_BEFORE_TRANSACTION_V2 + 1))),
+            Arrays.asList(new ApiVersionsResponseData.SupportedFeatureKey()
+                .setName("transaction.version")
+                .setMaxVersion((short) 1)
+                .setMinVersion((short) 0)),
+            Arrays.asList(new ApiVersionsResponseData.FinalizedFeatureKey()
+                .setName("transaction.version")
+                .setMaxVersionLevel((short) 1)
+                .setMinVersionLevel((short) 1)),
+            0));
+        this.transactionManager = new TransactionManager(logContext, transactionalId,
+            transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions);
+
+        int batchSize = 16 * 1024;
+        int deliveryTimeoutMs = 3000;
+        long totalSize = 1024 * 1024;
+        String metricGrpName = "producer-metrics";
+
+        this.brokerNode = new Node(0, "localhost", 2211);
+        this.accumulator = new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
+            deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
+            new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
+
+        this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, true,
+            MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics), this.time, REQUEST_TIMEOUT,
+            50, transactionManager, apiVersions);
+
+        doInitTransactions();
+        assertFalse(transactionManager.isTransactionV2Enabled());
     }
 
     @Test
@@ -1277,6 +1414,22 @@ public class TransactionManagerTest {
     }
 
     @Test
+    public void testFatalErrorWhenProduceResponseWithInvalidPidMapping() throws InterruptedException {
+        initializeTransactionManager(Optional.of(transactionalId), true);
+        doInitTransactions();
+
+        transactionManager.beginTransaction();
+        Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
+        transactionManager.maybeAddPartition(tp0);
+        assertFalse(responseFuture.isDone());
+
+        prepareProduceResponse(Errors.INVALID_PRODUCER_ID_MAPPING, producerId, epoch);
+        assertFalse(responseFuture.isDone());
+        runUntil(responseFuture::isDone);
+        assertTrue(transactionManager.hasFatalError());
+    }
+
+    @Test
     public void testTransactionalIdAuthorizationFailureInAddOffsetsToTxn() {
         final TopicPartition tp = new TopicPartition("foo", 0);
 
@@ -1365,8 +1518,8 @@ public class TransactionManagerTest {
         assertInstanceOf(TopicAuthorizationException.class, transactionManager.lastError());
         assertFalse(transactionManager.isPartitionPendingAdd(tp0));
         assertFalse(transactionManager.isPartitionPendingAdd(tp1));
-        assertFalse(transactionManager.isPartitionAdded(tp0));
-        assertFalse(transactionManager.isPartitionAdded(tp1));
+        assertFalse(transactionManager.transactionContainsPartition(tp0));
+        assertFalse(transactionManager.transactionContainsPartition(tp1));
         assertFalse(transactionManager.hasPartitionsToAdd());
 
         TopicAuthorizationException exception = (TopicAuthorizationException) transactionManager.lastError();
@@ -1374,8 +1527,8 @@ public class TransactionManagerTest {
         assertAbortableError(TopicAuthorizationException.class);
         sender.runOnce();
 
-        TestUtils.assertFutureThrows(firstPartitionAppend, KafkaException.class);
-        TestUtils.assertFutureThrows(secondPartitionAppend, KafkaException.class);
+        TestUtils.assertFutureThrows(TransactionAbortedException.class, firstPartitionAppend);
+        TestUtils.assertFutureThrows(TransactionAbortedException.class, secondPartitionAppend);
     }
 
     @Test
@@ -1422,8 +1575,8 @@ public class TransactionManagerTest {
         // the pending transaction commit.
         sender.runOnce();
         assertTrue(commitResult.isCompleted());
-        TestUtils.assertFutureThrows(firstPartitionAppend, KafkaException.class);
-        TestUtils.assertFutureThrows(secondPartitionAppend, KafkaException.class);
+        TestUtils.assertFutureThrows(TopicAuthorizationException.class, firstPartitionAppend);
+        TestUtils.assertFutureThrows(TopicAuthorizationException.class, secondPartitionAppend);
         assertInstanceOf(TopicAuthorizationException.class, commitResult.error());
     }
 
@@ -1461,7 +1614,7 @@ public class TransactionManagerTest {
         responseFuture = appendToAccumulator(tp0);
 
         prepareAddPartitionsToTxn(singletonMap(tp0, Errors.NONE));
-        runUntil(() -> transactionManager.isPartitionAdded(tp0));
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));
         assertFalse(transactionManager.hasPartitionsToAdd());
 
         transactionManager.beginCommit();
@@ -1482,7 +1635,7 @@ public class TransactionManagerTest {
 
         prepareAddPartitionsToTxn(tp0, Errors.NONE);
         appendToAccumulator(tp0);
-        runUntil(() -> transactionManager.isPartitionAdded(tp0));
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));
 
         TransactionalRequestResult result = transactionManager.beginAbort();
         assertThrows(TimeoutException.class, () -> result.await(0, TimeUnit.MILLISECONDS));
@@ -1516,7 +1669,7 @@ public class TransactionManagerTest {
         prepareProduceResponse(Errors.NONE, producerId, epoch);
 
         appendToAccumulator(tp0);
-        runUntil(() -> transactionManager.isPartitionAdded(tp0));
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));
 
         TransactionalRequestResult result = transactionManager.beginCommit();
         assertThrows(TimeoutException.class, () -> result.await(0, TimeUnit.MILLISECONDS));
@@ -1582,14 +1735,14 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxn(tp0, Errors.NONE);
 
         Future<RecordMetadata> authorizedTopicProduceFuture = appendToAccumulator(unauthorizedPartition);
-        runUntil(() -> transactionManager.isPartitionAdded(tp0));
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));
 
         transactionManager.maybeAddPartition(unauthorizedPartition);
         Future<RecordMetadata> unauthorizedTopicProduceFuture = appendToAccumulator(unauthorizedPartition);
         prepareAddPartitionsToTxn(singletonMap(unauthorizedPartition, Errors.TOPIC_AUTHORIZATION_FAILED));
         runUntil(transactionManager::hasAbortableError);
-        assertTrue(transactionManager.isPartitionAdded(tp0));
-        assertFalse(transactionManager.isPartitionAdded(unauthorizedPartition));
+        assertTrue(transactionManager.transactionContainsPartition(tp0));
+        assertFalse(transactionManager.transactionContainsPartition(unauthorizedPartition));
         assertFalse(authorizedTopicProduceFuture.isDone());
         assertFalse(unauthorizedTopicProduceFuture.isDone());
 
@@ -1612,7 +1765,7 @@ public class TransactionManagerTest {
         FutureRecordMetadata nextTransactionFuture = appendToAccumulator(tp0);
 
         prepareAddPartitionsToTxn(singletonMap(tp0, Errors.NONE));
-        runUntil(() -> transactionManager.isPartitionAdded(tp0));
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));
         assertFalse(transactionManager.hasPartitionsToAdd());
 
         transactionManager.beginCommit();
@@ -1635,7 +1788,7 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxn(tp0, Errors.NONE);
 
         Future<RecordMetadata> authorizedTopicProduceFuture = appendToAccumulator(tp0);
-        runUntil(() -> transactionManager.isPartitionAdded(tp0));
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));
 
         accumulator.beginFlush();
         prepareProduceResponse(Errors.REQUEST_TIMED_OUT, producerId, epoch);
@@ -1647,8 +1800,8 @@ public class TransactionManagerTest {
         Future<RecordMetadata> unauthorizedTopicProduceFuture = appendToAccumulator(unauthorizedPartition);
         prepareAddPartitionsToTxn(singletonMap(unauthorizedPartition, Errors.TOPIC_AUTHORIZATION_FAILED));
         runUntil(transactionManager::hasAbortableError);
-        assertTrue(transactionManager.isPartitionAdded(tp0));
-        assertFalse(transactionManager.isPartitionAdded(unauthorizedPartition));
+        assertTrue(transactionManager.transactionContainsPartition(tp0));
+        assertFalse(transactionManager.transactionContainsPartition(unauthorizedPartition));
         assertFalse(authorizedTopicProduceFuture.isDone());
 
         prepareProduceResponse(Errors.NONE, producerId, epoch);
@@ -1676,7 +1829,7 @@ public class TransactionManagerTest {
         FutureRecordMetadata nextTransactionFuture = appendToAccumulator(tp0);
 
         prepareAddPartitionsToTxn(singletonMap(tp0, Errors.NONE));
-        runUntil(() -> transactionManager.isPartitionAdded(tp0));
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));
         assertFalse(transactionManager.hasPartitionsToAdd());
 
         transactionManager.beginCommit();
@@ -1800,10 +1953,10 @@ public class TransactionManagerTest {
 
     @ParameterizedTest
     @EnumSource(names = {
-            "UNKNOWN_TOPIC_OR_PARTITION",
-            "REQUEST_TIMED_OUT",
-            "COORDINATOR_LOAD_IN_PROGRESS",
-            "CONCURRENT_TRANSACTIONS"
+        "UNKNOWN_TOPIC_OR_PARTITION",
+        "REQUEST_TIMED_OUT",
+        "COORDINATOR_LOAD_IN_PROGRESS",
+        "CONCURRENT_TRANSACTIONS"
     })
     public void testRetriableErrors(Errors error) {
         // Ensure FindCoordinator retries.
@@ -2031,7 +2184,7 @@ public class TransactionManagerTest {
         runUntil(commitResult::isCompleted);  // commit should be cancelled with exception without being sent.
 
         assertThrows(KafkaException.class, commitResult::await);
-        TestUtils.assertFutureThrows(responseFuture, OutOfOrderSequenceException.class);
+        TestUtils.assertFutureThrows(OutOfOrderSequenceException.class, responseFuture);
 
         // Commit is not allowed, so let's abort and try again.
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
@@ -2220,7 +2373,7 @@ public class TransactionManagerTest {
         assertTrue(abortResult.isSuccessful());
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
-        TestUtils.assertFutureThrows(responseFuture, KafkaException.class);
+        TestUtils.assertFutureThrows(TransactionAbortedException.class, responseFuture);
     }
 
     @Test
@@ -2246,7 +2399,7 @@ public class TransactionManagerTest {
         assertTrue(abortResult.isSuccessful());
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
-        TestUtils.assertFutureThrows(responseFuture, KafkaException.class);
+        TestUtils.assertFutureThrows(TransactionAbortedException.class, responseFuture);
     }
 
     @Test
@@ -2806,7 +2959,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testTransitionToFatalErrorWhenRetriedBatchIsExpired() throws InterruptedException {
-        apiVersions.update("0", NodeApiVersions.create(Arrays.asList(
+        apiVersions.update("0", new NodeApiVersions(Arrays.asList(
                 new ApiVersion()
                     .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
                     .setMinVersion((short) 0)
@@ -2814,7 +2967,10 @@ public class TransactionManagerTest {
                 new ApiVersion()
                     .setApiKey(ApiKeys.PRODUCE.id)
                     .setMinVersion((short) 0)
-                    .setMaxVersion((short) 7))));
+                    .setMaxVersion((short) 7)),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                0));
 
         doInitTransactions();
 
@@ -2948,7 +3104,7 @@ public class TransactionManagerTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {true, false})
-    public void testEpochBumpAfterLastInflightBatchFails(boolean transactionV2Enabled) {
+    public void testEpochBumpAfterLastInFlightBatchFailsIdempotentProducer(boolean transactionV2Enabled) {
         initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, epoch);
         initializeIdempotentProducerId(producerId, epoch);
@@ -2980,6 +3136,39 @@ public class TransactionManagerTest {
         assertEquals(0, transactionManager.sequenceNumber(tp0));
     }
 
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testMaybeResolveSequencesTransactionalProducer(boolean transactionV2Enabled) throws Exception {
+        initializeTransactionManager(Optional.of(transactionalId), transactionV2Enabled);
+
+        // Initialize transaction with initial producer ID and epoch.
+        doInitTransactions(producerId, epoch);
+
+        transactionManager.beginTransaction();
+        transactionManager.maybeAddPartition(tp0);
+        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));
+
+        ProducerBatch b1 = writeTransactionalBatchWithValue(transactionManager, tp0, "1");
+        assertEquals(Integer.valueOf(1), transactionManager.sequenceNumber(tp0));
+
+        transactionManager.markSequenceUnresolved(b1);
+        assertTrue(transactionManager.hasUnresolvedSequences());
+
+        transactionManager.handleFailedBatch(b1, new TimeoutException(), false);
+        // Call maybeResolveSequences to trigger resolution logic
+        transactionManager.maybeResolveSequences();
+
+        // Verify the type of error state the transaction is in.
+        if (transactionManager.isTransactionV2Enabled() || transactionManager.needToTriggerEpochBumpFromClient()) {
+            // Expected to throw an abortable error when epoch bumping is allowed
+            assertTrue(transactionManager.hasAbortableError());
+        } else {
+            // Expected to throw a fatal error when epoch bumping is not allowed
+            assertTrue(transactionManager.hasFatalError());
+        }
+    }
+
     @Test
     public void testEpochUpdateAfterBumpFromEndTxnResponseInV2() throws InterruptedException {
         initializeTransactionManager(Optional.of(transactionalId), true);
@@ -2989,8 +3178,6 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartition(tp0);
-        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
-        runUntil(() -> transactionManager.isPartitionAdded(tp0));
 
         // Append record with initial producer ID and epoch.
         Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
@@ -3017,12 +3204,9 @@ public class TransactionManagerTest {
         doInitTransactions(producerId, epoch);
 
         transactionManager.beginTransaction();
-        transactionManager.maybeAddPartition(tp0);
-        prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
-        runUntil(() -> transactionManager.isPartitionAdded(tp0));
-
         // Append record with initial producer ID and epoch
         Future<RecordMetadata> responseFuture = appendToAccumulator(tp0);
+        transactionManager.maybeAddPartition(tp0);
         prepareProduceResponse(Errors.NONE, producerId, epoch);
         runUntil(responseFuture::isDone);
 
@@ -3065,7 +3249,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testAbortTransactionAndReuseSequenceNumberOnError() throws InterruptedException {
-        apiVersions.update("0", NodeApiVersions.create(Arrays.asList(
+        apiVersions.update("0", new NodeApiVersions(Arrays.asList(
                 new ApiVersion()
                         .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
                         .setMinVersion((short) 0)
@@ -3077,8 +3261,10 @@ public class TransactionManagerTest {
                 new ApiVersion()
                         .setApiKey(ApiKeys.PRODUCE.id)
                         .setMinVersion((short) 0)
-                        .setMaxVersion((short) 7)
-        )));
+                        .setMaxVersion((short) 7)),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                0));
 
         doInitTransactions();
 
@@ -3088,7 +3274,7 @@ public class TransactionManagerTest {
         Future<RecordMetadata> responseFuture0 = appendToAccumulator(tp0);
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
         prepareProduceResponse(Errors.NONE, producerId, epoch);
-        runUntil(() -> transactionManager.isPartitionAdded(tp0));  // Send AddPartitionsRequest
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));  // Send AddPartitionsRequest
         runUntil(responseFuture0::isDone);
 
         Future<RecordMetadata> responseFuture1 = appendToAccumulator(tp0);
@@ -3112,7 +3298,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartition(tp0);
 
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
-        runUntil(() -> transactionManager.isPartitionAdded(tp0));  // Send AddPartitionsRequest
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));  // Send AddPartitionsRequest
 
         assertEquals(2, transactionManager.sequenceNumber(tp0));
     }
@@ -3123,7 +3309,7 @@ public class TransactionManagerTest {
         // where the sequence number is reset on an UnknownProducerId error, allowing subsequent transactions to
         // append to the log successfully
         // Set the EndTxn version such that sequence is not reset on every end txn.
-        apiVersions.update("0", NodeApiVersions.create(Arrays.asList(
+        apiVersions.update("0", new NodeApiVersions(Arrays.asList(
                 new ApiVersion()
                     .setApiKey(ApiKeys.INIT_PRODUCER_ID.id)
                     .setMinVersion((short) 0)
@@ -3135,8 +3321,10 @@ public class TransactionManagerTest {
                 new ApiVersion()
                      .setApiKey(ApiKeys.END_TXN.id)
                      .setMinVersion((short) 0)
-                     .setMaxVersion((short) 4)
-        )));
+                     .setMaxVersion((short) 4)),
+                Collections.emptyList(),
+                Collections.emptyList(),
+                0));
 
         doInitTransactions();
 
@@ -3147,14 +3335,14 @@ public class TransactionManagerTest {
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp1, epoch, producerId);
         prepareProduceResponse(Errors.NONE, producerId, epoch, tp1);
         runUntil(successPartitionResponseFuture::isDone);
-        assertTrue(transactionManager.isPartitionAdded(tp1));
+        assertTrue(transactionManager.transactionContainsPartition(tp1));
 
         transactionManager.maybeAddPartition(tp0);
         Future<RecordMetadata> responseFuture0 = appendToAccumulator(tp0);
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
         prepareProduceResponse(Errors.NONE, producerId, epoch);
         runUntil(responseFuture0::isDone);
-        assertTrue(transactionManager.isPartitionAdded(tp0));
+        assertTrue(transactionManager.transactionContainsPartition(tp0));
 
         Future<RecordMetadata> responseFuture1 = appendToAccumulator(tp0);
         prepareProduceResponse(Errors.NONE, producerId, epoch);
@@ -3178,7 +3366,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartition(tp0);
 
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, epoch, producerId);
-        runUntil(() -> transactionManager.isPartitionAdded(tp0));
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));
 
         assertEquals(0, transactionManager.sequenceNumber(tp0));
         assertEquals(1, transactionManager.sequenceNumber(tp1));
@@ -3196,7 +3384,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartition(tp0);
 
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, initialEpoch, producerId);
-        runUntil(() -> transactionManager.isPartitionAdded(tp0));
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));
 
         Future<RecordMetadata> responseFuture0 = appendToAccumulator(tp0);
         prepareProduceResponse(Errors.NONE, producerId, initialEpoch);
@@ -3226,7 +3414,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartition(tp0);
 
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, bumpedEpoch, producerId);
-        runUntil(() -> transactionManager.isPartitionAdded(tp0));
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));
 
         assertEquals(0, transactionManager.sequenceNumber(tp0));
     }
@@ -3242,7 +3430,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartition(tp0);
 
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, initialEpoch, producerId);
-        runUntil(() -> transactionManager.isPartitionAdded(tp0));
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));
 
         Future<RecordMetadata> responseFuture0 = appendToAccumulator(tp0);
         prepareProduceResponse(Errors.NONE, producerId, initialEpoch);
@@ -3273,7 +3461,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartition(tp0);
 
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, bumpedEpoch, producerId);
-        runUntil(() -> transactionManager.isPartitionAdded(tp0));
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));
 
         assertEquals(0, transactionManager.sequenceNumber(tp0));
     }
@@ -3289,7 +3477,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartition(tp0);
 
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, initialEpoch, producerId);
-        runUntil(() -> transactionManager.isPartitionAdded(tp0));
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));
 
         Future<RecordMetadata> responseFuture0 = appendToAccumulator(tp0);
         prepareProduceResponse(Errors.NONE, producerId, initialEpoch);
@@ -3332,7 +3520,7 @@ public class TransactionManagerTest {
         transactionManager.maybeAddPartition(tp0);
 
         prepareAddPartitionsToTxnResponse(Errors.NONE, tp0, bumpedEpoch, producerId);
-        runUntil(() -> transactionManager.isPartitionAdded(tp0));
+        runUntil(() -> transactionManager.transactionContainsPartition(tp0));
 
         assertEquals(0, transactionManager.sequenceNumber(tp0));
     }
@@ -3346,7 +3534,7 @@ public class TransactionManagerTest {
 
         transactionManager.beginTransaction();
         transactionManager.maybeAddPartition(tp0);
-        prepareAddPartitionsToTxnResponse(Errors.INVALID_PRODUCER_ID_MAPPING, tp0, initialEpoch, producerId);
+        prepareAddPartitionsToTxnResponse(Errors.UNKNOWN_PRODUCER_ID, tp0, initialEpoch, producerId);
         runUntil(transactionManager::hasAbortableError);
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
 
@@ -3378,7 +3566,7 @@ public class TransactionManagerTest {
         offsets.put(tp0, new OffsetAndMetadata(1));
         transactionManager.sendOffsetsToTransaction(offsets, new ConsumerGroupMetadata(consumerGroupId));
         assertFalse(transactionManager.hasPendingOffsetCommits());
-        prepareAddOffsetsToTxnResponse(Errors.INVALID_PRODUCER_ID_MAPPING, consumerGroupId, producerId, initialEpoch);
+        prepareAddOffsetsToTxnResponse(Errors.UNKNOWN_PRODUCER_ID, consumerGroupId, producerId, initialEpoch);
         runUntil(transactionManager::hasAbortableError);  // Send AddOffsetsRequest
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
 
@@ -3506,13 +3694,13 @@ public class TransactionManagerTest {
     }
 
     @Test
-    public void testCanBumpEpochDuringCoordinatorDisconnect() {
+    public void testNeedToTriggerEpochBumpFromClientDuringCoordinatorDisconnect() {
         doInitTransactions(0, (short) 0);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
-        assertTrue(transactionManager.canBumpEpoch());
+        assertTrue(transactionManager.needToTriggerEpochBumpFromClient());
 
         apiVersions.remove(transactionManager.coordinator(CoordinatorType.TRANSACTION).idString());
-        assertTrue(transactionManager.canBumpEpoch());
+        assertTrue(transactionManager.needToTriggerEpochBumpFromClient());
     }
 
     @ParameterizedTest
@@ -3649,7 +3837,7 @@ public class TransactionManagerTest {
         assertTrue(transactionManager.hasOngoingTransaction());
 
         prepareAddPartitionsToTxn(tp1, Errors.NONE);
-        runUntil(() -> transactionManager.isPartitionAdded(tp1));
+        runUntil(() -> transactionManager.transactionContainsPartition(tp1));
 
         TransactionalRequestResult retryResult = transactionManager.beginCommit();
         assertTrue(transactionManager.hasOngoingTransaction());
@@ -3785,7 +3973,7 @@ public class TransactionManagerTest {
     private FutureRecordMetadata appendToAccumulator(TopicPartition tp) throws InterruptedException {
         final long nowMs = time.milliseconds();
         return accumulator.append(tp.topic(), tp.partition(), nowMs, "key".getBytes(), "value".getBytes(), Record.EMPTY_HEADERS,
-                null, MAX_BLOCK_TIMEOUT, false, nowMs, TestUtils.singletonCluster()).future;
+                null, MAX_BLOCK_TIMEOUT, nowMs, TestUtils.singletonCluster()).future;
     }
 
     private void verifyCommitOrAbortTransactionRetriable(TransactionResult firstTransactionResult,
@@ -4128,6 +4316,7 @@ public class TransactionManagerTest {
 
         prepareInitPidResponse(Errors.NONE, false, producerId, epoch);
         runUntil(transactionManager::hasProducerId);
+        transactionManager.maybeUpdateTransactionV2Enabled(true);
 
         result.await();
         assertTrue(result.isSuccessful());

@@ -55,7 +55,7 @@ import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager;
 import org.apache.kafka.streams.processor.internals.testutil.DummyStreamsConfig;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
 
-import org.apache.log4j.Level;
+import org.apache.logging.log4j.Level;
 import org.hamcrest.Matchers;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -1822,9 +1822,6 @@ public class TaskManagerTest {
         final StandbyTask standbyTask = standbyTask(taskId02, taskId02ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId02Partitions).build();
-        final StandbyTask unassignedStandbyTask = standbyTask(taskId03, taskId03ChangelogPartitions)
-            .inState(State.CREATED)
-            .withInputPartitions(taskId03Partitions).build();
         final TasksRegistry tasks = mock(TasksRegistry.class);
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, tasks, true);
         when(tasks.allTasksPerId()).thenReturn(mkMap(mkEntry(taskId00, runningStatefulTask)));
@@ -3054,12 +3051,80 @@ public class TaskManagerTest {
 
         assertThat(task00.commitNeeded, is(false));
         assertThat(task00.commitPrepared, is(true));
-        assertThat(task00.commitNeeded, is(false));
+        assertThat(task01.commitNeeded, is(false));
         assertThat(task01.commitPrepared, is(true));
         assertThat(task02.commitPrepared, is(false));
         assertThat(task10.commitPrepared, is(false));
 
         verify(consumer).commitSync(expectedCommittedOffsets);
+    }
+
+    @Test
+    public void shouldNotCommitIfNoRevokedTasksNeedCommitting() {
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
+
+        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager);
+        task01.setCommitNeeded();
+
+        final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true, stateManager);
+
+        final Map<TaskId, Set<TopicPartition>> assignmentActive = mkMap(
+            mkEntry(taskId00, taskId00Partitions),
+            mkEntry(taskId01, taskId01Partitions),
+            mkEntry(taskId02, taskId02Partitions)
+        );
+
+        when(consumer.assignment()).thenReturn(assignment);
+
+        when(activeTaskCreator.createTasks(any(), eq(assignmentActive)))
+            .thenReturn(asList(task00, task01, task02));
+
+        taskManager.handleAssignment(assignmentActive, Collections.emptyMap());
+        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
+        assertThat(task00.state(), is(Task.State.RUNNING));
+        assertThat(task01.state(), is(Task.State.RUNNING));
+        assertThat(task02.state(), is(Task.State.RUNNING));
+
+        taskManager.handleRevocation(taskId00Partitions);
+
+        assertThat(task00.commitPrepared, is(false));
+        assertThat(task01.commitPrepared, is(false));
+        assertThat(task02.commitPrepared, is(false));
+    }
+
+    @Test
+    public void shouldNotCommitIfNoRevokedTasksNeedCommittingWithEOSv2() {
+        final TaskManager taskManager = setUpTaskManager(ProcessingMode.EXACTLY_ONCE_V2, false);
+
+        final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
+
+        final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, true, stateManager);
+        task01.setCommitNeeded();
+
+        final StateMachineTask task02 = new StateMachineTask(taskId02, taskId02Partitions, true, stateManager);
+
+        final Map<TaskId, Set<TopicPartition>> assignmentActive = mkMap(
+            mkEntry(taskId00, taskId00Partitions),
+            mkEntry(taskId01, taskId01Partitions),
+            mkEntry(taskId02, taskId02Partitions)
+        );
+
+        when(consumer.assignment()).thenReturn(assignment);
+
+        when(activeTaskCreator.createTasks(any(), eq(assignmentActive)))
+            .thenReturn(asList(task00, task01, task02));
+
+        taskManager.handleAssignment(assignmentActive, Collections.emptyMap());
+        assertThat(taskManager.tryToCompleteRestoration(time.milliseconds(), null), is(true));
+        assertThat(task00.state(), is(Task.State.RUNNING));
+        assertThat(task01.state(), is(Task.State.RUNNING));
+        assertThat(task02.state(), is(Task.State.RUNNING));
+
+        taskManager.handleRevocation(taskId00Partitions);
+
+        assertThat(task00.commitPrepared, is(false));
+        assertThat(task01.commitPrepared, is(false));
+        assertThat(task02.commitPrepared, is(false));
     }
 
     @Test
@@ -4684,7 +4749,7 @@ public class TaskManagerTest {
         verifyNoMoreInteractions(activeTaskCreator);
         verifyNoMoreInteractions(standbyTaskCreator);
 
-        // verify the recycled task is now being used as an assiged Active
+        // verify the recycled task is now being used as an assigned Active
         assertEquals(Collections.singletonMap(taskId00, activeTask), taskManager.activeTaskMap());
         assertEquals(Collections.emptyMap(), taskManager.standbyTaskMap());
     }
@@ -4745,7 +4810,7 @@ public class TaskManagerTest {
         verifyNoMoreInteractions(activeTaskCreator);
         verifyNoMoreInteractions(standbyTaskCreator);
 
-        // verify the recycled task is now being used as an assiged Active
+        // verify the recycled task is now being used as an assigned Active
         assertEquals(Collections.singletonMap(taskId00, activeTask), taskManager.activeTaskMap());
         assertEquals(Collections.emptyMap(), taskManager.standbyTaskMap());
     }

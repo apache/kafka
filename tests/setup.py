@@ -15,27 +15,24 @@
 
 import re
 import sys
-from setuptools import find_packages, setup
-from setuptools.command.test import test as TestCommand
+from setuptools import find_packages, setup, Command
 
 version = ''
 with open('kafkatest/__init__.py', 'r') as fd:
     version = re.search(r'^__version__\s*=\s*[\'"]([^\'"]*)[\'"]', fd.read(), re.MULTILINE).group(1)
 
 
-class PyTest(TestCommand):
+class PyTest(Command):
     user_options = [('pytest-args=', 'a', "Arguments to pass to py.test")]
 
     def initialize_options(self):
-        TestCommand.initialize_options(self)
         self.pytest_args = []
 
     def finalize_options(self):
-        TestCommand.finalize_options(self)
         self.test_args = []
         self.test_suite = True
 
-    def run_tests(self):
+    def run(self):
         # import here, cause outside the eggs aren't loaded
         import pytest
         print(self.pytest_args)
@@ -51,8 +48,7 @@ setup(name="kafkatest",
       license="apache2.0",
       packages=find_packages(),
       include_package_data=True,
-      install_requires=["ducktape==0.12.0", "requests==2.31.0", "psutil==5.7.2"],
-      tests_require=["pytest", "mock"],
+      install_requires=["ducktape==0.12.0", "requests==2.31.0", "psutil==5.7.2", "pytest==8.3.3", "mock==5.1.0"],
       cmdclass={'test': PyTest},
       zip_safe=False
       )

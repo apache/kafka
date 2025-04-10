@@ -65,8 +65,8 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
   private val describeTokenFailPassword = "describe-token-fail-password"
 
   override def configureSecurityAfterServersStart(): Unit = {
-    // Create the Acls before calling super which will create the additiona tokens
-    Using(createPrivilegedAdminClient()) { superuserAdminClient =>
+    // Create the Acls before calling super which will create the additional tokens
+    Using.resource(createPrivilegedAdminClient()) { superuserAdminClient =>
       superuserAdminClient.createAcls(List(AclTokenOtherDescribe, AclTokenCreate, AclTokenDescribe).asJava).values
 
       brokers.foreach { s =>
@@ -106,8 +106,8 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testDescribeTokenForOtherUserFails(quorum: String): Unit = {
-    Using(createScramAdminClient(kafkaClientSaslMechanism, describeTokenFailPrincipal.getName, describeTokenFailPassword)) { describeTokenFailAdminClient =>
-      Using(createScramAdminClient(kafkaClientSaslMechanism, otherClientPrincipal.getName, otherClientPassword)) { otherClientAdminClient =>
+    Using.resource(createScramAdminClient(kafkaClientSaslMechanism, describeTokenFailPrincipal.getName, describeTokenFailPassword)) { describeTokenFailAdminClient =>
+      Using.resource(createScramAdminClient(kafkaClientSaslMechanism, otherClientPrincipal.getName, otherClientPassword)) { otherClientAdminClient =>
         otherClientAdminClient.createDelegationToken().delegationToken().get()
         val tokens = describeTokenFailAdminClient.describeDelegationToken(
           new DescribeDelegationTokenOptions().owners(Collections.singletonList(otherClientPrincipal))

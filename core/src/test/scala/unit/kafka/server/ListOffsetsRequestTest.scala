@@ -44,7 +44,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testListOffsetsErrorCodes(quorum: String): Unit = {
     val targetTimes = List(new ListOffsetsTopic()
       .setName(topic)
@@ -109,7 +109,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testCurrentEpochValidation(quorum: String): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)
@@ -165,18 +165,11 @@ class ListOffsetsRequestTest extends BaseRequestTest {
 
   private[this] def fetchOffsetAndEpochWithError(serverId: Int, timestamp: Long, version: Short): (Long, Int, Short) = {
     val partitionData = sendRequest(serverId, timestamp, version)
-
-    if (version == 0) {
-      if (partitionData.oldStyleOffsets().isEmpty)
-        (-1, partitionData.leaderEpoch, partitionData.errorCode())
-      else
-        (partitionData.oldStyleOffsets().asScala.head, partitionData.leaderEpoch, partitionData.errorCode())
-    } else
-      (partitionData.offset, partitionData.leaderEpoch, partitionData.errorCode())
+    (partitionData.offset, partitionData.leaderEpoch, partitionData.errorCode())
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testResponseIncludesLeaderEpoch(quorum: String): Unit = {
     val partitionToLeader = createTopic(numPartitions = 1, replicationFactor = 3)
     val firstLeaderId = partitionToLeader(partition.partition)
@@ -217,7 +210,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def testResponseDefaultOffsetAndLeaderEpochForAllVersions(quorum: String): Unit = {
     val partitionToLeader = createTopic(numPartitions = 1, replicationFactor = 3)
     val firstLeaderId = partitionToLeader(partition.partition)

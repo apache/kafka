@@ -24,8 +24,8 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -37,7 +37,7 @@ public class BrokerToElrsTest {
     };
 
     private static Set<TopicIdPartition> toSet(TopicIdPartition... partitions) {
-        return new HashSet<>(Arrays.asList(partitions));
+        return new HashSet<>(List.of(partitions));
     }
 
     private static Set<TopicIdPartition> toSet(BrokersToIsrs.PartitionsOnReplicaIterator iterator) {

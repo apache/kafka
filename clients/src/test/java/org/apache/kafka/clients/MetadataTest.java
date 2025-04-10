@@ -209,7 +209,7 @@ public class MetadataTest {
                 .setBrokers(new MetadataResponseBrokerCollection());
 
         for (short version = ApiKeys.METADATA.oldestVersion(); version < 9; version++) {
-            ByteBuffer buffer = MessageUtil.toByteBuffer(data, version);
+            ByteBuffer buffer = MessageUtil.toByteBufferAccessor(data, version).buffer();
             MetadataResponse response = MetadataResponse.parse(buffer, version);
             assertFalse(response.hasReliableLeaderEpochs());
             metadata.updateWithCurrentRequestVersion(response, false, 100);
@@ -219,7 +219,7 @@ public class MetadataTest {
         }
 
         for (short version = 9; version <= ApiKeys.METADATA.latestVersion(); version++) {
-            ByteBuffer buffer = MessageUtil.toByteBuffer(data, version);
+            ByteBuffer buffer = MessageUtil.toByteBufferAccessor(data, version).buffer();
             MetadataResponse response = MetadataResponse.parse(buffer, version);
             assertTrue(response.hasReliableLeaderEpochs());
             metadata.updateWithCurrentRequestVersion(response, false, 100);

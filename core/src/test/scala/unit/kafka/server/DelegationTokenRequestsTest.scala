@@ -16,7 +16,7 @@
   */
 package kafka.server
 
-import kafka.api.{IntegrationTestHarness, KafkaSasl, SaslSetup}
+import kafka.api.{IntegrationTestHarness, SaslSetup}
 import kafka.security.JaasTestUtils
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, AdminClientConfig, CreateDelegationTokenOptions, DescribeDelegationTokenOptions}
@@ -52,7 +52,7 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), KafkaSasl, JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
+    startSasl(jaasSections(kafkaServerSaslMechanisms, Some(kafkaClientSaslMechanism), JaasTestUtils.KAFKA_SERVER_CONTEXT_NAME))
     super.setUp(testInfo)
   }
 
@@ -66,7 +66,7 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
+  @ValueSource(strings = Array("kraft"))
   def testDelegationTokenRequests(quorum: String): Unit = {
     adminClient = Admin.create(createAdminConfig)
 
@@ -151,7 +151,7 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
     // Create a DelegationToken with a short lifetime to validate the expire code
     val createResult5 = adminClient.createDelegationToken(new CreateDelegationTokenOptions()
       .renewers(renewer1)
-      .maxlifeTimeMs(1 * 1000))
+      .maxLifetimeMs(1 * 1000))
     val token5 = createResult5.delegationToken().get()
 
     TestUtils.waitUntilTrue(() => brokers.forall(server => server.tokenCache.tokens().size() == 1),

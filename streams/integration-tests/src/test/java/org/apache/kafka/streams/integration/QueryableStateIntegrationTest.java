@@ -982,10 +982,11 @@ public class QueryableStateIntegrationTest {
                 streamOne,
                 batch1,
                 TestUtils.producerConfig(
-                CLUSTER.bootstrapServers(),
-                StringSerializer.class,
-                StringSerializer.class,
-                new Properties()),
+                        CLUSTER.bootstrapServers(),
+                        StringSerializer.class,
+                        StringSerializer.class,
+                        new Properties()
+                ),
                 mockTime);
 
         final KStream<String, String> s1 = builder.stream(streamOne);

@@ -37,6 +37,9 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
     private final Map<TopicPartition, List<ConsumerRecord<K, V>>> records;
     private final Map<TopicPartition, OffsetAndMetadata> nextOffsets;
 
+    /**
+     * @deprecated Since 4.0. Use {@link #ConsumerRecords(Map, Map)} instead.
+     */
     @Deprecated
     public ConsumerRecords(Map<TopicPartition, List<ConsumerRecord<K, V>>> records) {
         this(records, Map.of());
@@ -115,7 +118,7 @@ public class ConsumerRecords<K, V> implements Iterable<ConsumerRecord<K, V>> {
 
         @Override
         public Iterator<ConsumerRecord<K, V>> iterator() {
-            return new AbstractIterator<ConsumerRecord<K, V>>() {
+            return new AbstractIterator<>() {
                 final Iterator<? extends Iterable<ConsumerRecord<K, V>>> iters = iterables.iterator();
                 Iterator<ConsumerRecord<K, V>> current;
 

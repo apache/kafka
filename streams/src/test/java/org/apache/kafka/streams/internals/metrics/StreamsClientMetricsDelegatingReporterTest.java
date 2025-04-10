@@ -26,7 +26,6 @@ import org.apache.kafka.common.utils.Time;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
-import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
@@ -75,26 +74,25 @@ class StreamsClientMetricsDelegatingReporterTest {
     }
 
     @Test
-    @DisplayName("Should register metrics from init method")
     public void shouldInitMetrics() {
         final List<KafkaMetric> metrics = Arrays.asList(streamClientMetricOne, streamClientMetricTwo, streamClientMetricThree, kafkaMetricWithThreadIdTag);
         streamsClientMetricsDelegatingReporter.init(metrics);
         final List<KafkaMetric> expectedMetrics = Arrays.asList(streamClientMetricOne, streamClientMetricTwo, streamClientMetricThree);
-        assertEquals(expectedMetrics, mockAdminClient.addedMetrics());
+        assertEquals(expectedMetrics, mockAdminClient.addedMetrics(),
+            "Should register metrics from init method");
     }
 
     @Test
-    @DisplayName("Should register client instance metrics only")
     public void shouldRegisterCorrectMetrics() {
         streamsClientMetricsDelegatingReporter.metricChange(kafkaMetricWithThreadIdTag);
         assertEquals(0, mockAdminClient.addedMetrics().size());
 
         streamsClientMetricsDelegatingReporter.metricChange(streamClientMetricOne);
-        assertEquals(1, mockAdminClient.addedMetrics().size());
+        assertEquals(1, mockAdminClient.addedMetrics().size(),
+            "Should register client instance metrics only");
     }
 
     @Test
-    @DisplayName("Should remove client instance metrics")
     public void metricRemoval() {
         streamsClientMetricsDelegatingReporter.metricChange(streamClientMetricOne);
         streamsClientMetricsDelegatingReporter.metricChange(streamClientMetricTwo);
@@ -102,6 +100,7 @@ class StreamsClientMetricsDelegatingReporterTest {
         assertEquals(3, mockAdminClient.addedMetrics().size());
 
         streamsClientMetricsDelegatingReporter.metricRemoval(streamClientMetricOne);
-        assertEquals(2, mockAdminClient.addedMetrics().size());
+        assertEquals(2, mockAdminClient.addedMetrics().size(),
+            "Should remove client instance metrics");
     }
 }

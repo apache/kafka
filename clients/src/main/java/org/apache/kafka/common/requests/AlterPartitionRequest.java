@@ -21,10 +21,9 @@ import org.apache.kafka.common.message.AlterPartitionRequestData;
 import org.apache.kafka.common.message.AlterPartitionRequestData.BrokerState;
 import org.apache.kafka.common.message.AlterPartitionResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -54,8 +53,8 @@ public class AlterPartitionRequest extends AbstractRequest {
             .setErrorCode(Errors.forException(e).code()));
     }
 
-    public static AlterPartitionRequest parse(ByteBuffer buffer, short version) {
-        return new AlterPartitionRequest(new AlterPartitionRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static AlterPartitionRequest parse(Readable readable, short version) {
+        return new AlterPartitionRequest(new AlterPartitionRequestData(readable, version), version);
     }
 
     public static class Builder extends AbstractRequest.Builder<AlterPartitionRequest> {
@@ -68,14 +67,12 @@ public class AlterPartitionRequest extends AbstractRequest {
          * @param data The data to be sent. Note that because the version of the
          *             request is not known at this time, it is expected that all
          *             topics have a topic id and a topic name set.
-         * @param canUseTopicIds True if version 2 and above can be used.
          */
-        public Builder(AlterPartitionRequestData data, boolean canUseTopicIds) {
+        public Builder(AlterPartitionRequestData data) {
             super(
                 ApiKeys.ALTER_PARTITION,
                 ApiKeys.ALTER_PARTITION.oldestVersion(),
-                // Version 1 is the maximum version that can be used without topic ids.
-                canUseTopicIds ? ApiKeys.ALTER_PARTITION.latestVersion() : 1
+                ApiKeys.ALTER_PARTITION.latestVersion()
             );
             this.data = data;
         }
