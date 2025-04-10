@@ -1088,6 +1088,10 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     private void subscribeConsumer() {
         if (topologyMetadata.usesPatternSubscription()) {
+            if (streamsRebalanceData.isPresent()) {
+                throw new IllegalArgumentException("Pattern subscription is not yet supported with the Streams rebalance " +
+                    "protocol");
+            }
             mainConsumer.subscribe(topologyMetadata.sourceTopicPattern(), rebalanceListener);
         } else {
             if (streamsRebalanceData.isPresent()) {
@@ -1139,7 +1143,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         pollLatency = pollPhase();
         totalPolledSinceLastSummary += 1;
 
-        maybeHandleStreamsRebalanceProtocol();
+        handleStreamsRebalanceData();
 
         // Shutdown hook could potentially be triggered and transit the thread state to PENDING_SHUTDOWN during #pollRequests().
         // The task manager internal states could be uninitialized if the state transition happens during #onPartitionsAssigned().
@@ -1290,7 +1294,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         taskManager.resumePollingForPartitionsWithAvailableSpace();
         pollLatency = pollPhase();
 
-        maybeHandleStreamsRebalanceProtocol();
+        handleStreamsRebalanceData();
 
         // Shutdown hook could potentially be triggered and transit the thread state to PENDING_SHUTDOWN during #pollRequests().
         // The task manager internal states could be uninitialized if the state transition happens during #onPartitionsAssigned().
@@ -1473,7 +1477,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         return records;
     }
 
-    public void maybeHandleStreamsRebalanceProtocol() {
+    public void handleStreamsRebalanceData() {
         if (streamsRebalanceData.isPresent()) {
 
             if (streamsRebalanceData.get().shutdownRequested()) {
