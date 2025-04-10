@@ -1259,7 +1259,8 @@ public class SharePartition {
     private boolean archivePerOffsetBatchRecords(InFlightBatch inFlightBatch,
                                                  long startOffsetToArchive,
                                                  long endOffsetToArchive,
-                                                 RecordState initialState) {
+                                                 RecordState initialState
+    ) {
         lock.writeLock().lock();
         try {
             boolean isAnyOffsetArchived = false;
@@ -2541,11 +2542,11 @@ public class SharePartition {
         List<AcquiredRecords> acquiredRecordsList,
         List<RecordBatch> batchesToArchive
     ) {
-        List<AcquiredRecords> result = new ArrayList<>();
-        Iterator<AcquiredRecords> acquiredRecordsListIter = acquiredRecordsList.iterator();
         Iterator<RecordBatch> batchesToArchiveIterator = batchesToArchive.iterator();
         if (!batchesToArchiveIterator.hasNext())
             return acquiredRecordsList;
+        List<AcquiredRecords> result = new ArrayList<>();
+        Iterator<AcquiredRecords> acquiredRecordsListIter = acquiredRecordsList.iterator();
         RecordBatch batchToArchive = batchesToArchiveIterator.next();
         AcquiredRecords unresolvedAcquiredRecords = null;
 
