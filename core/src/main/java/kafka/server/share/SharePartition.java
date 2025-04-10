@@ -1011,6 +1011,8 @@ public class SharePartition {
                 return Optional.empty();
             }
             if (offsetState.getValue().state == RecordState.ACQUIRED) {
+                // These records were fetched but they were not actually delivered to the client.
+                offsetState.getValue().tryReleaseDeliveryCount();
                 InFlightState updateResult = offsetState.getValue().startStateTransition(
                         offsetState.getKey() < startOffset ? RecordState.ARCHIVED : recordState,
                         false,
@@ -1057,6 +1059,7 @@ public class SharePartition {
                 inFlightBatch, groupId, topicIdPartition);
 
         if (inFlightBatch.batchState() == RecordState.ACQUIRED) {
+            inFlightBatch.tryReleaseDeliveryCount();
             InFlightState updateResult = inFlightBatch.startBatchStateTransition(
                     inFlightBatch.lastOffset() < startOffset ? RecordState.ARCHIVED : recordState,
                     false,
@@ -2642,6 +2645,13 @@ public class SharePartition {
             return batchState.deliveryCount;
         }
 
+        void tryReleaseDeliveryCount() {
+            if (batchState == null) {
+                throw new IllegalStateException("The batch delivery count is not available as the offset state is maintained");
+            }
+            batchState.tryReleaseDeliveryCount();
+        }
+
         // Visible for testing.
         AcquisitionLockTimerTask batchAcquisitionLockTimeoutTask() {
             return inFlightState().acquisitionLockTimeoutTask;
@@ -2825,6 +2835,12 @@ public class SharePartition {
         private InFlightState startStateTransition(RecordState newState, boolean incrementDeliveryCount, int maxDeliveryCount, String newMemberId) {
             rollbackState = new InFlightState(state, deliveryCount, memberId, acquisitionLockTimeoutTask);
             return tryUpdateState(newState, incrementDeliveryCount, maxDeliveryCount, newMemberId);
+        }
+
+        private void tryReleaseDeliveryCount() {
+            if (deliveryCount > 0 && state != RecordState.ARCHIVED) {
+                deliveryCount--;
+            }
         }
 
         private void completeStateTransition(boolean commit) {
