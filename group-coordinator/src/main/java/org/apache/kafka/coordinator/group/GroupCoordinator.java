@@ -21,6 +21,8 @@ import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeShareGroupOffsetsRequestData;
 import org.apache.kafka.common.message.DescribeShareGroupOffsetsResponseData;
@@ -309,6 +311,20 @@ public interface GroupCoordinator {
     CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> describeShareGroupAllOffsets(
         RequestContext context,
         DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup request
+    );
+
+    /**
+     * Delete the Share Group Offsets for a given group.
+     *
+     * @param context           The request context
+     * @param request           The DeleteShareGroupOffsetsRequestGroup request.
+     *
+     * @return  A future yielding the results.
+     *          The error codes of the response are set to indicate the errors occurred during the execution.
+     */
+    CompletableFuture<DeleteShareGroupOffsetsResponseData> deleteShareGroupOffsets(
+        RequestContext context,
+        DeleteShareGroupOffsetsRequestData request
     );
 
     /**

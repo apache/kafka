@@ -68,6 +68,7 @@ import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Properties;
@@ -608,6 +609,16 @@ public class StreamsConfig extends AbstractConfig {
         " topics (e.g., changelog and repartition topics) and their associated state stores." +
         " When enabled, the application will refuse to start if any internal resource has an auto-generated name.";
 
+    /**
+     * <code>group.protocol</code>
+     */
+    public static final String GROUP_PROTOCOL_CONFIG = "group.protocol";
+    public static final String DEFAULT_GROUP_PROTOCOL = GroupProtocol.CLASSIC.name().toLowerCase(
+        Locale.ROOT);
+    private static final String GROUP_PROTOCOL_DOC = "The group protocol streams should use. We currently " +
+        "support \"classic\" or \"streams\". If \"streams\" is specified, then the streams rebalance protocol will be " +
+        "used. Otherwise, the classic group protocol will be used.";
+
     /** {@code log.summary.interval.ms} */
     public static final String LOG_SUMMARY_INTERVAL_MS_CONFIG = "log.summary.interval.ms";
     private static final String LOG_SUMMARY_INTERVAL_MS_DOC = "The output interval in milliseconds for logging summary information.\n" +
@@ -1042,6 +1053,12 @@ public class StreamsConfig extends AbstractConfig {
                         TOPOLOGY_OPTIMIZATION_CONFIGS::toString),
                     Importance.MEDIUM,
                     TOPOLOGY_OPTIMIZATION_DOC)
+            .define(GROUP_PROTOCOL_CONFIG,
+                    Type.STRING,
+                    DEFAULT_GROUP_PROTOCOL,
+                    ConfigDef.CaseInsensitiveValidString.in(Utils.enumOptions(GroupProtocol.class)),
+                    Importance.MEDIUM,
+                    GROUP_PROTOCOL_DOC)
 
             // LOW
 
@@ -1505,6 +1522,11 @@ public class StreamsConfig extends AbstractConfig {
         }
         verifyTopologyOptimizationConfigs(getString(TOPOLOGY_OPTIMIZATION_CONFIG));
         verifyClientTelemetryConfigs();
+
+        if (doLog && getString(GROUP_PROTOCOL_CONFIG).equals(GroupProtocol.STREAMS.name().toLowerCase(Locale.ROOT))) {
+            log.warn("The streams rebalance protocol is still in development and should not be used in production. "
+                + "Please set group.protocol=classic (default) in all production use cases.");
+        }
     }
 
     private void verifyEOSTransactionTimeoutCompatibility() {
@@ -1626,6 +1648,8 @@ public class StreamsConfig extends AbstractConfig {
 
     private Map<String, Object> getCommonConsumerConfigs() {
         final Map<String, Object> clientProvidedProps = getClientPropsWithPrefix(CONSUMER_PREFIX, ConsumerConfig.configNames());
+
+        clientProvidedProps.remove(GROUP_PROTOCOL_CONFIG);
 
         checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_DEFAULT_CONFIGS);
         checkIfUnexpectedUserSpecifiedConsumerConfig(clientProvidedProps, NON_CONFIGURABLE_CONSUMER_EOS_CONFIGS);
