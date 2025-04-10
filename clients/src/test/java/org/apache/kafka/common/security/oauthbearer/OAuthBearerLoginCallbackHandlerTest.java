@@ -22,7 +22,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBuilder;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 
 import org.jose4j.jws.AlgorithmIdentifiers;
 import org.junit.jupiter.api.AfterEach;

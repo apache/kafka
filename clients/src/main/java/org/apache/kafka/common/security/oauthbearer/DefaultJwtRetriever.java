@@ -19,17 +19,18 @@ package org.apache.kafka.common.security.oauthbearer;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
-import java.net.URI;
+import java.net.URL;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
 import javax.security.auth.login.AppConfigurationEntry;
 
+import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_GRANT_TYPE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_GRANT_TYPE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateString;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUri;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.protocolMatches;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUrl;
 
 public class DefaultJwtRetriever implements JwtRetriever {
 
@@ -48,14 +49,14 @@ public class DefaultJwtRetriever implements JwtRetriever {
     @Override
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, saslMechanism);
-        URI tokenEndpointUri = validateUri(oauthConfig, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+        URL tokenEndpoint = validateUrl(oauthConfig, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
-        if (OAuthBearerUtils.schemeMatches(tokenEndpointUri, "file")) {
+        if (protocolMatches(tokenEndpoint, "file")) {
             delegate = new FileJwtRetriever();
         } else {
-            String grantType = validateString(oauthConfig, SASL_OAUTHBEARER_GRANT_TYPE, false);
+            String grantType = oauthConfig.maybeGetString(SASL_OAUTHBEARER_GRANT_TYPE).orElse(DEFAULT_SASL_OAUTHBEARER_GRANT_TYPE);
 
-            if (grantType != null && grantType.equalsIgnoreCase(JwtBearerRequestGenerator.GRANT_TYPE)) {
+            if (grantType.equalsIgnoreCase(JwtBearerRequestGenerator.GRANT_TYPE)) {
                 delegate = new JwtBearerJwtRetriever(time);
             } else {
                 delegate = new ClientCredentialsJwtRetriever(time);

@@ -14,16 +14,19 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
+package org.apache.kafka.common.security.oauthbearer;
 
-import org.apache.kafka.common.security.oauthbearer.ClientJwtValidator;
-import org.apache.kafka.common.security.oauthbearer.JwtValidator;
-import org.apache.kafka.common.security.oauthbearer.JwtValidatorTest;
+import java.util.Map;
 
-public class ClientJwtValidatorTest extends JwtValidatorTest {
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
-    @Override
-    protected JwtValidator createValidator(JwtBuilder builder) {
-        return new ClientJwtValidator();
+public abstract class HttpRequestGeneratorTest extends OAuthBearerTest {
+
+    protected void assertBodyEquals(HttpRequestGenerator requestGenerator, String expected) {
+        assertEquals(expected, requestGenerator.generateBody());
+    }
+
+    protected void assertHeadersEqual(HttpRequestGenerator requestGenerator, Map<String, String> expected) {
+        assertEquals(expected, requestGenerator.generateHeaders());
     }
 }

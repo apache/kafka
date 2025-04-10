@@ -21,7 +21,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.File;
-import java.net.URI;
+import java.net.URL;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -41,8 +41,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERT
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateFile;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateInteger;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUri;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUrl;
 
 public class JwtBearerJwtRetriever implements JwtRetriever {
 
@@ -67,20 +66,14 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
         OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, saslMechanism);
         OAuthBearerJaasConfig jaasConfig = new OAuthBearerJaasConfig(saslMechanism, jaasConfigEntries);
 
-        URI tokenEndpoint = validateUri(oauthConfig, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+        URL tokenEndpoint = validateUrl(oauthConfig, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
         retryBackoffMs =  oauthConfig.getLong(SASL_LOGIN_RETRY_BACKOFF_MS);
         retryBackoffMaxMs = oauthConfig.getLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
         sslResource = OAuthBearerUtils.maybeCreateSslResource(tokenEndpoint, jaasConfig);
 
-        Optional<Integer> connectTimeoutMs = Optional.ofNullable(validateInteger(oauthConfig, SASL_LOGIN_CONNECT_TIMEOUT_MS, false));
         HttpClient.Builder clientBuilder = HttpClient.newBuilder();
-
-        if (connectTimeoutMs.isPresent())
-            clientBuilder = clientBuilder.connectTimeout(Duration.ofMillis(connectTimeoutMs.get()));
-
-        if (sslResource.isPresent())
-            clientBuilder = clientBuilder.sslContext(sslResource.get().sslContext());
-
+        oauthConfig.maybeGetInt(SASL_LOGIN_CONNECT_TIMEOUT_MS).ifPresent(ms -> clientBuilder.connectTimeout(Duration.ofMillis(ms)));
+        sslResource.ifPresent(r -> clientBuilder.sslContext(r.sslContext()));
         client = clientBuilder.build();
 
         AssertionCreator assertionCreator;

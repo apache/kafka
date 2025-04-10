@@ -14,17 +14,14 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
-
-import org.apache.kafka.common.security.oauthbearer.ClientCredentialsRequestGenerator;
-import org.apache.kafka.common.security.oauthbearer.OAuthBearerConfig;
+package org.apache.kafka.common.security.oauthbearer;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.net.URI;
+import java.net.URL;
 import java.util.Collections;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -32,14 +29,14 @@ import java.util.stream.Stream;
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUrlencodeHeader;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.urlencodeHeader;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class ClientCredentialsRequestGeneratorTest extends HttpRequestGeneratorTest {
 
     @Test
-    public void testFormatAuthorizationHeader() {
+    public void testFormatAuthorizationHeader() throws Exception {
         ClientCredentialsRequestGenerator requestGenerator = new Builder()
             .setClientId("id")
             .setClientSecret("secret")
@@ -48,7 +45,7 @@ public class ClientCredentialsRequestGeneratorTest extends HttpRequestGeneratorT
     }
 
     @Test
-    public void testFormatAuthorizationHeaderEncoding() {
+    public void testFormatAuthorizationHeaderEncoding() throws Exception {
         ClientCredentialsRequestGenerator requestGenerator = new Builder()
             .setClientId("SOME_RANDOM_LONG_USER_01234")
             .setClientSecret("9Q|0`8i~ute-n9ksjLWb\\50\"AX@UUED5E")
@@ -66,7 +63,7 @@ public class ClientCredentialsRequestGeneratorTest extends HttpRequestGeneratorT
     }
 
     @Test
-    public void testFormatRequestBody() {
+    public void testFormatRequestBody() throws Exception {
         ClientCredentialsRequestGenerator requestGenerator = new Builder()
             .setScope("test")
             .build();
@@ -74,7 +71,7 @@ public class ClientCredentialsRequestGeneratorTest extends HttpRequestGeneratorT
     }
 
     @Test
-    public void testFormatRequestBodyWithEscaped() {
+    public void testFormatRequestBodyWithEscaped() throws Exception {
         String questionMark = "%3F";
         String exclamationMark = "%21";
 
@@ -89,7 +86,7 @@ public class ClientCredentialsRequestGeneratorTest extends HttpRequestGeneratorT
     }
 
     @Test
-    public void testFormatRequestBodyMissingValues() {
+    public void testFormatRequestBodyMissingValues() throws Exception {
         Builder builder = new Builder();
 
         String expected = "grant_type=client_credentials";
@@ -102,7 +99,7 @@ public class ClientCredentialsRequestGeneratorTest extends HttpRequestGeneratorT
     @MethodSource("urlencodeHeaderSupplier")
     public void testUrlencodeHeader(Map<String, Object> configs, boolean expectedValue) {
         OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, OAUTHBEARER_MECHANISM);
-        boolean actualValue = validateUrlencodeHeader(oauthConfig);
+        boolean actualValue = urlencodeHeader(oauthConfig);
         assertEquals(expectedValue, actualValue);
     }
 
@@ -148,9 +145,9 @@ public class ClientCredentialsRequestGeneratorTest extends HttpRequestGeneratorT
             return this;
         }
 
-        private ClientCredentialsRequestGenerator build() {
+        private ClientCredentialsRequestGenerator build() throws Exception {
             return new ClientCredentialsRequestGenerator(
-                URI.create("http://www.example.com"),
+                new URL("http://www.example.com"),
                 clientId,
                 clientSecret,
                 scope,

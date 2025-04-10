@@ -29,7 +29,6 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -39,9 +38,6 @@ import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
 
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwks.MISSING_KEY_ID_CACHE_IN_FLIGHT_MS;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwks.MISSING_KEY_ID_MAX_KEY_LENGTH;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -51,7 +47,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 
-public class RefreshingHttpsJwksTest extends OAuthBearerTest {
+public class RefreshingHttpsJwksTest {
 
     private static final long REFRESH_MS = 5000;
 
@@ -310,22 +306,12 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
                 try {
                     callable.call();
                 } catch (Throwable e) {
-                    e.printStackTrace();
+                    e.printStackTrace(System.err);
                 }
                 return null;
             });
             addWaiter(delayMs, period, waiter);
             return null;
         }
-    }
-
-    @Override
-    protected Map<String, ?> getSaslConfigs() {
-        Map<String, Object> configs = new HashMap<>(super.getSaslConfigs());
-        configs.put(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, REFRESH_MS);
-        configs.put(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS, RETRY_BACKOFF_MS);
-        configs.put(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS, RETRY_BACKOFF_MAX_MS);
-        configs.put("fo", "bar");
-        return configs;
     }
 }

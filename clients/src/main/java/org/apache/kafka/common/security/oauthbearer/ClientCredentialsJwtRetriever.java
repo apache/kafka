@@ -16,12 +16,13 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.SslResource;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
-import java.net.URI;
+import java.net.URL;
 import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
@@ -39,10 +40,8 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.configOrJaas;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateInteger;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUri;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUrlencodeHeader;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.urlencodeHeader;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUrl;
 
 /**
  * A {@link JwtRetriever} that will communicate with an OAuth/OIDC provider directly via HTTP to post client
@@ -79,18 +78,12 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
         retryBackoffMs = oauthConfig.getLong(SASL_LOGIN_RETRY_BACKOFF_MS);
         retryBackoffMaxMs = oauthConfig.getLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
 
-        URI tokenEndpoint = validateUri(oauthConfig, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+        URL tokenEndpoint = validateUrl(oauthConfig, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
         sslResource = OAuthBearerUtils.maybeCreateSslResource(tokenEndpoint, jaasConfig);
-        Optional<Integer> connectTimeoutMs = Optional.ofNullable(validateInteger(oauthConfig, SASL_LOGIN_CONNECT_TIMEOUT_MS, false));
 
         HttpClient.Builder clientBuilder = HttpClient.newBuilder();
-
-        if (connectTimeoutMs.isPresent())
-            clientBuilder = clientBuilder.connectTimeout(Duration.ofMillis(connectTimeoutMs.get()));
-
-        if (sslResource.isPresent())
-            clientBuilder = clientBuilder.sslContext(sslResource.get().sslContext());
-
+        oauthConfig.maybeGetInt(SASL_LOGIN_CONNECT_TIMEOUT_MS).ifPresent(ms -> clientBuilder.connectTimeout(Duration.ofMillis(ms)));
+        sslResource.ifPresent(r -> clientBuilder.sslContext(r.sslContext()));
         client = clientBuilder.build();
 
         String clientId = configOrJaas(
@@ -114,7 +107,7 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
             SCOPE_JAAS,
             false
         );
-        boolean urlencodeHeader = validateUrlencodeHeader(oauthConfig);
+        boolean urlencodeHeader = urlencodeHeader(oauthConfig);
 
         requestGenerator = new ClientCredentialsRequestGenerator(
             tokenEndpoint,
@@ -144,5 +137,20 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
     public void close() {
         Utils.closeQuietly(requestGenerator, "requestGenerator");
         sslResource.ifPresent(r -> Utils.closeQuietly(r, "sslResource"));
+    }
+
+    static String configOrJaas(OAuthBearerConfig oauthConfig,
+                               OAuthBearerJaasConfig jaasConfig,
+                               String configName,
+                               String jaasName,
+                               boolean isRequired) {
+        if (oauthConfig.containsKey(configName))
+            return oauthConfig.getString(configName);
+        else if (jaasConfig.containsKey(jaasName))
+            return jaasConfig.getString(jaasName);
+        else if (isRequired)
+            throw new ConfigException("Could not find OAuth configuration for " + configName + " or OAuth JAAS configuration for " + jaasName);
+        else
+            return null;
     }
 }

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JwksFileVerificationKeyResolver;
@@ -38,11 +39,10 @@ import org.jose4j.jwt.consumer.JwtContext;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.net.URI;
+import java.net.URL;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
@@ -63,10 +63,8 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_E
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateInteger;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateLong;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateString;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUri;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.protocolMatches;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUrl;
 import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
 
 /**
@@ -129,18 +127,22 @@ public class BrokerJwtValidator implements JwtValidator {
     public void configure(Map<String, ?> configs, String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         Function<VerificationKeyResolverKey, CloseableVerificationKeyResolver> wrapResolverFn = k -> {
             OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, saslMechanism);
-            URI jwksEndpointUri = validateUri(oauthConfig, SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
+            URL jwksEndpoint = validateUrl(oauthConfig, SASL_OAUTHBEARER_JWKS_ENDPOINT_URL);
 
-            if (jwksEndpointUri.getScheme().toLowerCase(Locale.ROOT).equals("file")) {
+            if (protocolMatches(jwksEndpoint, "file")) {
                 return new JwksFileVerificationKeyResolver(configs, saslMechanism);
             } else {
-                HttpsJwks httpsJwks = new HttpsJwks(jwksEndpointUri.toString());
+                HttpsJwks httpsJwks = new HttpsJwks(jwksEndpoint.toString());
                 sslResource = OAuthBearerUtils.maybeCreateSslResource(
-                    jwksEndpointUri,
+                    jwksEndpoint,
                     new OAuthBearerJaasConfig(saslMechanism, jaasConfigEntries)
                 );
                 Optional<SSLContext> sslContext = sslResource.map(SslResource::sslContext);
-                long refreshMs = validateLong(oauthConfig, SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, 0L);
+                long refreshMs = oauthConfig.getLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS);
+
+                if (refreshMs < 0)
+                    throw new ConfigException(String.format("The OAuth configuration option %s value must be non-negative", SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS));
+
                 long refreshRetryBackoffMs = oauthConfig.getLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MS);
                 long refreshRetryBackoffMaxMs = oauthConfig.getLong(SASL_OAUTHBEARER_JWKS_ENDPOINT_RETRY_BACKOFF_MAX_MS);
 
@@ -173,30 +175,21 @@ public class BrokerJwtValidator implements JwtValidator {
         this.verificationKeyResolver = verificationKeyResolver;
 
         OAuthBearerConfig oauthConfig = new OAuthBearerConfig(configs, saslMechanism);
-        Set<String> expectedAudiences = null;
-
-        if (oauthConfig.containsKey(SASL_OAUTHBEARER_EXPECTED_AUDIENCE)) {
-            List<String> l = oauthConfig.get(SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
-
-            if (l != null)
-                expectedAudiences = Set.copyOf(l);
-        }
-
-        Integer clockSkew = validateInteger(oauthConfig, SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS, false);
-        String expectedIssuer = validateString(oauthConfig, SASL_OAUTHBEARER_EXPECTED_ISSUER, false);
-        String scopeClaimName = oauthConfig.getString(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
-        String subClaimName = oauthConfig.getString(SASL_OAUTHBEARER_SUB_CLAIM_NAME);
-
         final JwtConsumerBuilder jwtConsumerBuilder = new JwtConsumerBuilder();
 
-        if (clockSkew != null)
-            jwtConsumerBuilder.setAllowedClockSkewInSeconds(clockSkew);
+        if (oauthConfig.containsKey(SASL_OAUTHBEARER_EXPECTED_AUDIENCE)) {
+            // It's a bit convoluted turning the optional list of expected audiences into an array for the jose4j API.
+            List<String> list = oauthConfig.get(SASL_OAUTHBEARER_EXPECTED_AUDIENCE);
 
-        if (expectedAudiences != null && !expectedAudiences.isEmpty())
-            jwtConsumerBuilder.setExpectedAudience(expectedAudiences.toArray(new String[0]));
+            if (!list.isEmpty()) {
+                Set<String> set = Set.copyOf(list);
+                String[] array = set.toArray(new String[0]);
+                jwtConsumerBuilder.setExpectedAudience(array);
+            }
+        }
 
-        if (expectedIssuer != null)
-            jwtConsumerBuilder.setExpectedIssuer(expectedIssuer);
+        oauthConfig.maybeGetInt(SASL_OAUTHBEARER_CLOCK_SKEW_SECONDS).ifPresent(jwtConsumerBuilder::setAllowedClockSkewInSeconds);
+        oauthConfig.maybeGetString(SASL_OAUTHBEARER_EXPECTED_ISSUER).ifPresent(jwtConsumerBuilder::setExpectedIssuer);
 
         this.jwtConsumer = jwtConsumerBuilder
             .setJwsAlgorithmConstraints(DISALLOW_NONE)
@@ -204,8 +197,8 @@ public class BrokerJwtValidator implements JwtValidator {
             .setRequireIssuedAt()
             .setVerificationKeyResolver(verificationKeyResolver)
             .build();
-        this.scopeClaimName = scopeClaimName;
-        this.subClaimName = subClaimName;
+        this.scopeClaimName = oauthConfig.getString(SASL_OAUTHBEARER_SCOPE_CLAIM_NAME);
+        this.subClaimName = oauthConfig.getString(SASL_OAUTHBEARER_SUB_CLAIM_NAME);
     }
 
     @Override
@@ -251,13 +244,13 @@ public class BrokerJwtValidator implements JwtValidator {
         String subRaw = getClaim(() -> claims.getStringClaimValue(subClaimName), subClaimName);
         NumericDate issuedAtRaw = getClaim(claims::getIssuedAt, ReservedClaimNames.ISSUED_AT);
 
-        Set<String> scopes = OAuthBearerUtils.validateScopes(scopeClaimName, scopeRawCollection);
-        long expiration = OAuthBearerUtils.validateExpiration(
+        Set<String> scopes = OAuthBearerUtils.validateClaimScopes(scopeClaimName, scopeRawCollection);
+        long expiration = OAuthBearerUtils.validateClaimExpiration(
             ReservedClaimNames.EXPIRATION_TIME,
             expirationRaw != null ? expirationRaw.getValueInMillis() : null
         );
-        String sub = OAuthBearerUtils.validateSubject(subClaimName, subRaw);
-        Long issuedAt = OAuthBearerUtils.validateIssuedAt(
+        String sub = OAuthBearerUtils.validateClaimSubject(subClaimName, subRaw);
+        Long issuedAt = OAuthBearerUtils.validateClaimIssuedAt(
             ReservedClaimNames.ISSUED_AT,
             issuedAtRaw != null ? issuedAtRaw.getValueInMillis() : null
         );

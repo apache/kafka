@@ -17,6 +17,8 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.config.AbstractConfig;
+import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.test.TestUtils;
 
@@ -25,6 +27,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.File;
+import java.nio.file.Files;
 import java.util.Collections;
 import java.util.Map;
 
@@ -35,7 +38,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-public class JwksFileVerificationKeyResolverTest extends OAuthBearerTest {
+public class JwksFileVerificationKeyResolverTest {
 
     @AfterEach
     public void tearDown() throws Exception {
@@ -44,7 +47,8 @@ public class JwksFileVerificationKeyResolverTest extends OAuthBearerTest {
 
     @Test
     public void testConfigureRefreshingFileVerificationKeyResolver() throws Exception {
-        File file = createTempFile("access-token-", ".json", "{}");
+        File file = TestUtils.tempFile("access-token-", ".json");
+        Files.writeString(file.toPath(), "{}");
         System.setProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, file.toURI().toString());
         Map<String, ?> configs = Collections.singletonMap(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, file.toURI().toString());
         KafkaException error = assertThrows(KafkaException.class, () -> new JwksFileVerificationKeyResolver(configs, OAUTHBEARER_MECHANISM));
@@ -76,5 +80,12 @@ public class JwksFileVerificationKeyResolverTest extends OAuthBearerTest {
         File file = new File("not_allowed.json");
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, file.toURI().toString());
         assertThrows(ConfigException.class, () -> new JwksFileVerificationKeyResolver(configs, OAUTHBEARER_MECHANISM));
+    }
+
+    private Map<String, ?> getSaslConfigs(String name, Object value) {
+        ConfigDef configDef = new ConfigDef();
+        configDef.withClientSaslSupport();
+        AbstractConfig sslClientConfig = new AbstractConfig(configDef, Collections.singletonMap(name, value));
+        return sslClientConfig.values();
     }
 }

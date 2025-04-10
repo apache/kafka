@@ -26,7 +26,6 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.io.File;
 import java.net.MalformedURLException;
-import java.net.URI;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.util.Arrays;
@@ -34,7 +33,6 @@ import java.util.Collection;
 import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -43,43 +41,14 @@ import java.util.stream.Collectors;
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT;
 
 public class OAuthBearerUtils {
 
-    public static AssertionJwtTemplate createAssertionTemplate(OAuthBearerConfig oauthConfig) {
-//        Map<String, Object> payload = new HashMap<>();
-//        Optional.ofNullable(oauthConfig.validateString(SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD, false)).ifPresent(a -> payload.put("aud", a));
-//        Optional.ofNullable(oauthConfig.validateString(SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS, false)).ifPresent(i -> payload.put("iss", i));
-//        Optional.ofNullable(oauthConfig.validateString(SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB, false)).ifPresent(s -> payload.put("sub", s));
-//
-//        if (!payload.isEmpty()) {
-//            StaticAssertionJwtTemplate staticTemplate = new StaticAssertionJwtTemplate(payload);
-//
-//        }
-//
-        File assertionTemplateFile = validateFile(oauthConfig, SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE);
-        return new FileAssertionJwtTemplate(assertionTemplateFile);
-    }
-
-    public static boolean schemeMatches(URI uri, String scheme) {
-        return scheme.equalsIgnoreCase(uri.getScheme());
-    }
-
     public static boolean protocolMatches(URL url, String protocol) {
         return protocol.equalsIgnoreCase(url.getProtocol());
-    }
-
-    public static Optional<SslResource> maybeCreateSslResource(URI uri, OAuthBearerJaasConfig jaasConfig) {
-        if (schemeMatches(uri, "https")) {
-            Map<String, ?> sslClientConfig = getSslClientConfig(jaasConfig);
-            return Optional.of(SslResource.create(sslClientConfig));
-        } else {
-            return Optional.empty();
-        }
     }
 
     public static Optional<SslResource> maybeCreateSslResource(URL url, OAuthBearerJaasConfig jaasConfig) {
@@ -155,26 +124,11 @@ public class OAuthBearerUtils {
      * This utility method ensures that we have a non-{@code null} value to use in the
      * {@link ClientCredentialsJwtRetriever} constructor.
      */
-    public static boolean validateUrlencodeHeader(OAuthBearerConfig oauthConfig) {
+    public static boolean urlencodeHeader(OAuthBearerConfig oauthConfig) {
         if (oauthConfig.containsKey(SASL_OAUTHBEARER_HEADER_URLENCODE))
             return oauthConfig.getBoolean(SASL_OAUTHBEARER_HEADER_URLENCODE);
         else
             return DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
-    }
-
-    public static String configOrJaas(OAuthBearerConfig oauthConfig,
-                                      OAuthBearerJaasConfig jaasConfig,
-                                      String configName,
-                                      String jaasName,
-                                      boolean isRequired) {
-        if (oauthConfig.containsKey(configName))
-            return oauthConfig.getString(configName);
-        else if (jaasConfig.containsKey(jaasName))
-            return jaasConfig.getString(jaasName);
-        else if (isRequired)
-            throw new ConfigException("Could not find OAuth configuration for " + configName + " or OAuth JAAS configuration for " + jaasName);
-        else
-            return null;
     }
 
     /**
@@ -200,14 +154,14 @@ public class OAuthBearerUtils {
      *                           or whitespace only
      */
 
-    public static Set<String> validateScopes(String scopeClaimName, Collection<String> scopes) throws JwtValidatorException {
+    public static Set<String> validateClaimScopes(String scopeClaimName, Collection<String> scopes) throws JwtValidatorException {
         if (scopes == null)
             throw new JwtValidatorException(String.format("%s value must be non-null", scopeClaimName));
 
         Set<String> copy = new HashSet<>();
 
         for (String scope : scopes) {
-            scope = validateString(scopeClaimName, scope);
+            scope = validateClaimValue(scopeClaimName, scope);
 
             if (copy.contains(scope))
                 throw new JwtValidatorException(String.format("%s value must not contain duplicates - %s already present", scopeClaimName, scope));
@@ -234,8 +188,7 @@ public class OAuthBearerUtils {
      *
      * @throws JwtValidatorException Thrown if the value is <code>null</code> or negative
      */
-
-    public static long validateExpiration(String claimName, Long claimValue) throws JwtValidatorException {
+    public static long validateClaimExpiration(String claimName, Long claimValue) throws JwtValidatorException {
         if (claimValue == null)
             throw new JwtValidatorException(String.format("%s value must be non-null", claimName));
 
@@ -263,8 +216,8 @@ public class OAuthBearerUtils {
      * @throws JwtValidatorException Thrown if the value is <code>null</code>, empty, or whitespace only
      */
 
-    public static String validateSubject(String claimName, String claimValue) throws JwtValidatorException {
-        return validateString(claimName, claimValue);
+    public static String validateClaimSubject(String claimName, String claimValue) throws JwtValidatorException {
+        return validateClaimValue(claimName, claimValue);
     }
 
     /**
@@ -283,7 +236,7 @@ public class OAuthBearerUtils {
      * @throws JwtValidatorException Thrown if the value is negative
      */
 
-    public static Long validateIssuedAt(String claimName, Long claimValue) throws JwtValidatorException {
+    public static Long validateClaimIssuedAt(String claimName, Long claimValue) throws JwtValidatorException {
         if (claimValue != null && claimValue < 0)
             throw new JwtValidatorException(String.format("%s value must be null or non-negative; value given was \"%s\"", claimName, claimValue));
 
@@ -309,18 +262,15 @@ public class OAuthBearerUtils {
      */
 
     public static String validateClaimNameOverride(String name, String value) throws JwtValidatorException {
-        return validateString(name, value);
+        return validateClaimValue(name, value);
     }
 
-    private static String validateString(String name, String value) throws JwtValidatorException {
+    public static String validateClaimValue(String name, String value) throws JwtValidatorException {
         if (Utils.isBlank(value))
-            throw new JwtValidatorException(String.format("%s value must be non-null, non-empty, and non-whitespace", name));
+            throw new JwtValidatorException(String.format("The value of the OAuth claim %s must be non-null, non-empty, and non-whitespace", name));
 
         return value.trim();
     }
-
-
-
 
     /**
      * Validates that, if a value is supplied, is a file that:
@@ -335,6 +285,24 @@ public class OAuthBearerUtils {
      * ignored. Any whitespace is trimmed off of the beginning and end.
      */
     public static File validateFile(OAuthBearerAbstractConfig config, String key) {
+        String fileName = config.getString(key);
+        File file = new File(fileName);
+        return validateFile(key, file);
+    }
+
+    /**
+     * Validates that, if a value is supplied, is a file that:
+     *
+     * <li>
+     *     <ul>exists</ul>
+     *     <ul>has read permission</ul>
+     *     <ul>points to a file</ul>
+     * </li>
+     *
+     * If the value is null or an empty string, it is assumed to be an "empty" value and thus.
+     * ignored. Any whitespace is trimmed off of the beginning and end.
+     */
+    public static File validateFileUrl(OAuthBearerAbstractConfig config, String key) {
         URL url = validateUrl(config, key);
         File file;
 
@@ -344,6 +312,19 @@ public class OAuthBearerUtils {
             throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that is malformed: %s", key, url, e.getMessage()));
         }
 
+        return validateFile(key, file);
+    }
+
+    /**
+     * Validates that the file:
+     *
+     * <li>
+     *     <ul>exists</ul>
+     *     <ul>has read permission</ul>
+     *     <ul>points to a file</ul>
+     * </li>
+     */
+    public static File validateFile(String key, File file) {
         if (!file.exists())
             throw new ConfigException(String.format("The OAuth configuration option %s contains a file (%s) that doesn't exist", key, file));
 
@@ -354,45 +335,6 @@ public class OAuthBearerUtils {
             throw new ConfigException(String.format("The OAuth configuration option %s references a directory (%s), not a file", key, file));
 
         return file;
-    }
-
-    /**
-     * Validates that, if a value is supplied, is a value that:
-     *
-     * <li>
-     *     <ul>is an Integer</ul>
-     *     <ul>has a value that is not less than the provided minimum value</ul>
-     * </li>
-     *
-     * If the value is null or an empty string, it is assumed to be an "empty" value and thus
-     * ignored. Any whitespace is trimmed off of the beginning and end.
-     */
-
-    public static Integer validateInteger(OAuthBearerConfig config, String key, boolean isRequired) {
-        if (!isRequired && !config.containsKey(key))
-            return null;
-
-        return config.getInt(key);
-    }
-
-    /**
-     * Validates that, if a value is supplied, is a value that:
-     *
-     * <li>
-     *     <ul>is a Long</ul>
-     *     <ul>has a value that is not less than the provided minimum value</ul>
-     * </li>
-     *
-     * If the value is null or an empty string, it is assumed to be an "empty" value and thus
-     * ignored. Any whitespace is trimmed off of the beginning and end.
-     */
-    public static Long validateLong(OAuthBearerConfig config, String key, Long min) {
-        long value = config.getLong(key);
-
-        if (min != null && value < min)
-            throw new ConfigException(String.format("The OAuth configuration option %s value must be at least %s", key, min));
-
-        return value;
     }
 
     /**
@@ -419,41 +361,11 @@ public class OAuthBearerUtils {
 
         String protocol = url.getProtocol();
 
-        if (protocol == null || protocol.trim().isEmpty())
-            throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that is missing the protocol", key, value));
-
-        protocol = protocol.toLowerCase(Locale.ROOT);
-
-        if (!(protocol.equals("http") || protocol.equals("https") || protocol.equals("file")))
+        if (!protocolMatches(url, "https") && !protocolMatches(url, "http") && !protocolMatches(url, "file"))
             throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that contains an invalid protocol (%s); only \"http\", \"https\", and \"file\" protocol are supported", key, value, protocol));
 
         throwIfURLIsNotAllowed(value);
 
         return url;
-    }
-
-    public static URI validateUri(OAuthBearerAbstractConfig config, String key) {
-        String value = config.getString(key);
-
-        try {
-            URL url = validateUrl(config, key);
-            return url.toURI();
-        } catch (URISyntaxException e) {
-            throw new ConfigException(String.format("The OAuth configuration option %s contains a URI (%s) that is malformed: %s", key, value, e.getMessage()));
-        }
-    }
-
-    public static String validateString(OAuthBearerAbstractConfig config, String key, boolean isRequired) {
-        if (!isRequired && !config.containsKey(key))
-            return null;
-
-        return config.getString(key).trim();
-    }
-
-    public static Boolean validateBoolean(OAuthBearerConfig config, String key, boolean isRequired) {
-        if (!isRequired && !config.containsKey(key))
-            return null;
-
-        return config.getBoolean(key);
     }
 }

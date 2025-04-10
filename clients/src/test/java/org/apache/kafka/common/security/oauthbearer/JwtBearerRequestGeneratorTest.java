@@ -14,15 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.oauthbearer.internals.secured;
-
-import org.apache.kafka.common.security.oauthbearer.AssertionCreator;
-import org.apache.kafka.common.security.oauthbearer.AssertionJwtTemplate;
-import org.apache.kafka.common.security.oauthbearer.JwtBearerRequestGenerator;
+package org.apache.kafka.common.security.oauthbearer;
 
 import org.junit.jupiter.api.Test;
 
-import java.net.URI;
+import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
@@ -48,7 +44,7 @@ public class JwtBearerRequestGeneratorTest extends HttpRequestGeneratorTest {
 
     private static class Builder {
 
-        private JwtBearerRequestGenerator build() {
+        private JwtBearerRequestGenerator build() throws Exception {
             AssertionCreator assertionCreator = t -> FAKE_ASSERTION;
             AssertionJwtTemplate assertionJwtTemplate = new AssertionJwtTemplate() {
                 @Override
@@ -63,7 +59,7 @@ public class JwtBearerRequestGeneratorTest extends HttpRequestGeneratorTest {
             };
 
             return new JwtBearerRequestGenerator(
-                URI.create("http://www.example.com"),
+                new URL("http://www.example.com"),
                 assertionCreator,
                 assertionJwtTemplate
             );

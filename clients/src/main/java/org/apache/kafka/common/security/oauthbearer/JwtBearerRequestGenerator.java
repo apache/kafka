@@ -16,9 +16,12 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.utils.Utils;
 
 import java.net.URI;
+import java.net.URISyntaxException;
+import java.net.URL;
 import java.net.URLEncoder;
 import java.net.http.HttpRequest;
 import java.nio.charset.StandardCharsets;
@@ -29,11 +32,11 @@ public class JwtBearerRequestGenerator implements HttpRequestGenerator {
 
     public static final String GRANT_TYPE = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 
-    private final URI tokenEndpoint;
+    private final URL tokenEndpoint;
     private final AssertionCreator assertionCreator;
     private final AssertionJwtTemplate assertionJwtTemplate;
 
-    public JwtBearerRequestGenerator(URI tokenEndpoint,
+    public JwtBearerRequestGenerator(URL tokenEndpoint,
                                      AssertionCreator assertionCreator,
                                      AssertionJwtTemplate assertionJwtTemplate) {
         this.tokenEndpoint = tokenEndpoint;
@@ -69,8 +72,16 @@ public class JwtBearerRequestGenerator implements HttpRequestGenerator {
     public HttpRequest generateRequest() {
         HttpRequest.BodyPublisher bodyPublisher = HttpRequest.BodyPublishers.ofString(generateBody());
 
+        URI uri;
+
+        try {
+            uri = tokenEndpoint.toURI();
+        } catch (URISyntaxException e) {
+            throw new KafkaException("An error occurred formatting the OAuth token retrieval request", e);
+        }
+
         HttpRequest.Builder builder = HttpRequest.newBuilder()
-            .uri(tokenEndpoint)
+            .uri(uri)
             .POST(bodyPublisher);
 
         for (Map.Entry<String, String> header : generateHeaders().entrySet())

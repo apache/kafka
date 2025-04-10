@@ -22,6 +22,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * <code>OAuthBearerConfig</code> is a utility class to perform basic configuration-related
@@ -50,6 +51,13 @@ public class OAuthBearerConfig extends OAuthBearerAbstractConfig {
         return (Integer) get(key);
     }
 
+    public Optional<Integer> maybeGetInt(String key) {
+        if (containsKey(key))
+            return Optional.of(getInt(key));
+
+        return Optional.empty();
+    }
+
     public Long getLong(String key) {
         return (Long) get(key);
     }
@@ -67,6 +75,13 @@ public class OAuthBearerConfig extends OAuthBearerAbstractConfig {
         return (Boolean) get(key);
     }
 
+    public Optional<Boolean> maybeGetBoolean(String key) {
+        if (containsKey(key))
+            return Optional.of(getBoolean(key));
+
+        return Optional.empty();
+    }
+
     @Override
     public String getString(String key) {
         String s = get(key);
@@ -76,6 +91,13 @@ public class OAuthBearerConfig extends OAuthBearerAbstractConfig {
         } else {
             return s.trim();
         }
+    }
+
+    public Optional<String> maybeGetString(String key) {
+        if (containsKey(key))
+            return Optional.of(getString(key));
+
+        return Optional.empty();
     }
 
     @Override

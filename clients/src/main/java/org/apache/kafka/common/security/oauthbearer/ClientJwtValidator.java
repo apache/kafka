@@ -36,11 +36,11 @@ import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARE
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateClaimExpiration;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateClaimIssuedAt;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateClaimNameOverride;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateExpiration;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateIssuedAt;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateScopes;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateSubject;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateClaimScopes;
+import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateClaimSubject;
 
 /**
  * {@code ClientJwtValidator} is an implementation of {@link JwtValidator} that is used
@@ -118,13 +118,13 @@ public class ClientJwtValidator implements JwtValidator {
         String subRaw = (String) getClaim(payload, subClaimName);
         Number issuedAtRaw = (Number) getClaim(payload, ISSUED_AT_CLAIM_NAME);
 
-        Set<String> scopes = validateScopes(scopeClaimName, scopeRawCollection);
-        long expiration = validateExpiration(
+        Set<String> scopes = validateClaimScopes(scopeClaimName, scopeRawCollection);
+        long expiration = validateClaimExpiration(
             EXPIRATION_CLAIM_NAME,
             expirationRaw != null ? expirationRaw.longValue() * 1000L : null
         );
-        String subject = validateSubject(subClaimName, subRaw);
-        Long issuedAt = validateIssuedAt(
+        String subject = validateClaimSubject(subClaimName, subRaw);
+        Long issuedAt = validateClaimIssuedAt(
             ISSUED_AT_CLAIM_NAME,
             issuedAtRaw != null ? issuedAtRaw.longValue() * 1000L : null
         );
