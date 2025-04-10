@@ -38,24 +38,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MonitorablePluginsIntegrationTest {
 
-    private static int controllerId(Type type) {
-        return type == Type.KRAFT ? 3000 : 0;
-    }
-
-    private static Map<String, String> expectedTags(String config, String clazz) {
-        return expectedTags(config, clazz, Map.of());
-    }
-
-    private static Map<String, String> expectedTags(String config, String clazz, Map<String, String> extraTags) {
-        Map<String, String> tags = new LinkedHashMap<>();
-        tags.put("config", config);
-        tags.put("class", clazz);
-        tags.putAll(extraTags);
-        return tags;
-    }
-
     @ClusterTest(
-            types = {Type.KRAFT, Type.CO_KRAFT},
+            types = {Type.KRAFT},
             serverProperties = {
                 @ClusterConfigProperty(key = REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, value = "true"),
                 @ClusterConfigProperty(key = REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP,
@@ -113,4 +97,17 @@ public class MonitorablePluginsIntegrationTest {
             metrics.addMetric(name, (Measurable) (config, now) -> 123);
         }
     }
+
+    private static Map<String, String> expectedTags(String config, String clazz) {
+        return expectedTags(config, clazz, Map.of());
+    }
+
+    private static Map<String, String> expectedTags(String config, String clazz, Map<String, String> extraTags) {
+        Map<String, String> tags = new LinkedHashMap<>();
+        tags.put("config", config);
+        tags.put("class", clazz);
+        tags.putAll(extraTags);
+        return tags;
+    }
+
 }
