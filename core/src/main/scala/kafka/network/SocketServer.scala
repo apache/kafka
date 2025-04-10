@@ -514,7 +514,7 @@ private[kafka] abstract class Acceptor(val socketServer: SocketServer,
   // Build the metric name explicitly in order to keep the existing name for compatibility
   private val backwardCompatibilityMetricGroup = new KafkaMetricsGroup("kafka.network", "Acceptor")
   private val blockedPercentMeterMetricName = backwardCompatibilityMetricGroup.metricName(
-    s"AcceptorBlockedPercent",
+    "AcceptorBlockedPercent",
     Map(ListenerMetricTag -> endPoint.listenerName.value).asJava)
   private val blockedPercentMeter = metricsGroup.newMeter(blockedPercentMeterMetricName,"blocked time", TimeUnit.NANOSECONDS)
   private var currentProcessorIndex = 0
