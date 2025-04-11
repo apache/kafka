@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.test;
 
-import kafka.log.UnifiedLog;
 import kafka.network.SocketServer;
 import kafka.server.BrokerServer;
 import kafka.server.ControllerServer;
@@ -51,6 +50,7 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile;
+import org.apache.kafka.storage.internals.log.UnifiedLog;
 
 import java.io.File;
 import java.io.IOException;
@@ -199,7 +199,6 @@ public interface ClusterInstance {
         Map<String, Object> props = new HashMap<>(configs);
         props.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-        props.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + TestUtils.randomString(5));
         props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         return new KafkaShareConsumer<>(setClientSaslConfig(props));
@@ -264,7 +263,11 @@ public interface ClusterInstance {
 
     void start();
 
+    boolean started();
+
     void stop();
+
+    boolean stopped();
 
     void shutdownBroker(int brokerId);
 
@@ -291,7 +294,7 @@ public interface ClusterInstance {
         TestUtils.waitForCondition(
             () -> brokers.stream().allMatch(broker -> partitions == 0 ?
                 broker.metadataCache().numPartitions(topic).isEmpty() :
-                broker.metadataCache().numPartitions(topic).contains(partitions)
+                broker.metadataCache().numPartitions(topic).filter(p -> p == partitions).isPresent()
         ), 60000L, topic + " metadata not propagated after 60000 ms");
 
         for (ControllerServer controller : controllers().values()) {
@@ -304,7 +307,7 @@ public interface ClusterInstance {
         if (partitions == 0) {
             List<TopicPartition> topicPartitions = IntStream.range(0, 1)
                 .mapToObj(partition -> new TopicPartition(topic, partition))
-                .collect(Collectors.toList());
+                .toList();
 
             // Ensure that the topic-partition has been deleted from all brokers' replica managers
             TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
@@ -345,7 +348,7 @@ public interface ClusterInstance {
                     topicPartitions.stream().allMatch(tp ->
                         Arrays.stream(Objects.requireNonNull(new File(logDir).list())).noneMatch(partitionDirectoryName ->
                             partitionDirectoryName.startsWith(tp.topic() + "-" + tp.partition()) &&
-                                partitionDirectoryName.endsWith(UnifiedLog.DeleteDirSuffix())))
+                                partitionDirectoryName.endsWith(UnifiedLog.DELETE_DIR_SUFFIX)))
                 )
             ), "Failed to hard-delete the delete directory");
         }
@@ -355,10 +358,10 @@ public interface ClusterInstance {
         List<Authorizer> authorizers = new ArrayList<>();
         authorizers.addAll(brokers().values().stream()
                 .filter(server -> server.authorizer().isDefined())
-                .map(server -> server.authorizer().get()).collect(Collectors.toList()));
+                .map(server -> server.authorizer().get()).toList());
         authorizers.addAll(controllers().values().stream()
                 .filter(server -> server.authorizer().isDefined())
-                .map(server -> server.authorizer().get()).collect(Collectors.toList()));
+                .map(server -> server.authorizer().get()).toList());
         return authorizers;
     }
 

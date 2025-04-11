@@ -33,6 +33,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.network.SocketServerConfigs
+import org.apache.kafka.server.DynamicThreadPool
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
@@ -468,7 +469,7 @@ class DynamicBrokerConfigTest {
     val metrics: Metrics = mock(classOf[Metrics])
     when(kafkaServer.metrics).thenReturn(metrics)
     val quotaManagers: QuotaFactory.QuotaManagers = mock(classOf[QuotaFactory.QuotaManagers])
-    when(quotaManagers.clientQuotaCallback).thenReturn(Optional.empty())
+    when(quotaManagers.clientQuotaCallbackPlugin).thenReturn(Optional.empty())
     when(kafkaServer.quotaManagers).thenReturn(quotaManagers)
     val socketServer: SocketServer = mock(classOf[SocketServer])
     when(socketServer.reconfigurableConfigs).thenReturn(SocketServer.ReconfigurableConfigs)
@@ -514,7 +515,7 @@ class DynamicBrokerConfigTest {
     val metrics: Metrics = mock(classOf[Metrics])
     when(controllerServer.metrics).thenReturn(metrics)
     val quotaManagers: QuotaFactory.QuotaManagers = mock(classOf[QuotaFactory.QuotaManagers])
-    when(quotaManagers.clientQuotaCallback).thenReturn(Optional.empty())
+    when(quotaManagers.clientQuotaCallbackPlugin).thenReturn(Optional.empty())
     when(controllerServer.quotaManagers).thenReturn(quotaManagers)
     val socketServer: SocketServer = mock(classOf[SocketServer])
     when(socketServer.reconfigurableConfigs).thenReturn(SocketServer.ReconfigurableConfigs)
@@ -559,7 +560,7 @@ class DynamicBrokerConfigTest {
     val metrics: Metrics = mock(classOf[Metrics])
     when(controllerServer.metrics).thenReturn(metrics)
     val quotaManagers: QuotaFactory.QuotaManagers = mock(classOf[QuotaFactory.QuotaManagers])
-    when(quotaManagers.clientQuotaCallback).thenReturn(Optional.empty())
+    when(quotaManagers.clientQuotaCallbackPlugin).thenReturn(Optional.empty())
     when(controllerServer.quotaManagers).thenReturn(quotaManagers)
     val socketServer: SocketServer = mock(classOf[SocketServer])
     when(socketServer.reconfigurableConfigs).thenReturn(SocketServer.ReconfigurableConfigs)
@@ -593,7 +594,7 @@ class DynamicBrokerConfigTest {
     config.dynamicConfig.initialize(None)
 
     assertEquals(SocketServerConfigs.MAX_CONNECTIONS_DEFAULT, config.maxConnections)
-    assertEquals(LogConfig.DEFAULT_MAX_MESSAGE_BYTES, config.messageMaxBytes)
+    assertEquals(ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT, config.messageMaxBytes)
 
     var newProps = new Properties()
     newProps.put(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "9999")
@@ -1041,7 +1042,7 @@ class DynamicBrokerConfigTest {
 class TestDynamicThreadPool extends BrokerReconfigurable {
 
   override def reconfigurableConfigs: Set[String] = {
-    DynamicThreadPool.ReconfigurableConfigs
+    DynamicThreadPool.RECONFIGURABLE_CONFIGS.asScala
   }
 
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {

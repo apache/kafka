@@ -26,7 +26,6 @@ import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.server.common.TopicIdPartition;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -109,7 +108,7 @@ public class UniformHomogeneousAssignmentBuilder {
      */
     public GroupAssignment build() throws PartitionAssignorException {
         if (subscribedTopicIds.isEmpty()) {
-            return new GroupAssignment(Collections.emptyMap());
+            return new GroupAssignment(Map.of());
         }
 
         // Compute the list of unassigned partitions.

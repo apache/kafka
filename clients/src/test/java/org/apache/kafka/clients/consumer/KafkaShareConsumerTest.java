@@ -45,17 +45,18 @@ import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.ShareGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
-import org.apache.kafka.common.test.api.Flaky;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
+import org.junit.jupiter.api.Disabled;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.nio.ByteBuffer;
 import java.time.Duration;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
@@ -140,9 +141,11 @@ public class KafkaShareConsumerTest {
         }
     }
 
-    @Flaky("KAFKA-18488")
+    // This test is proving sufficiently flaky that it has been disabled pending investigation
+    @Disabled
+    // @Flaky("KAFKA-18488")
     @Test
-    public void testVerifyFetchAndCommitSyncImplicit() throws InterruptedException {
+    public void testVerifyFetchAndCommitSyncImplicit() {
         ConsumerMetadata metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
             subscription, new LogContext(), new ClusterResourceListeners());
         MockClient client = new MockClient(time, metadata);
@@ -215,8 +218,11 @@ public class KafkaShareConsumerTest {
         }
     }
 
+    // This test is proving sufficiently flaky that it has been disabled pending investigation
+    @Disabled
+    //@Flaky("KAFKA-18794")
     @Test
-    public void testVerifyFetchAndCloseImplicit() throws InterruptedException {
+    public void testVerifyFetchAndCloseImplicit() {
         ConsumerMetadata metadata = new ConsumerMetadata(0, 0, Long.MAX_VALUE, false, false,
             subscription, new LogContext(), new ClusterResourceListeners());
         MockClient client = new MockClient(time, metadata);
@@ -278,7 +284,7 @@ public class KafkaShareConsumerTest {
         LogContext logContext = new LogContext();
         Deserializer<String> keyDeserializer = new StringDeserializer();
         Deserializer<String> valueDeserializer = new StringDeserializer();
-        ConsumerConfig config = newConsumerConfig(clientId);
+        ShareConsumerConfig config = newConsumerConfig(clientId);
 
         return new KafkaShareConsumer<>(
             logContext,
@@ -294,14 +300,14 @@ public class KafkaShareConsumerTest {
         );
     }
 
-    private ConsumerConfig newConsumerConfig(String clientId) {
+    private ShareConsumerConfig newConsumerConfig(String clientId) {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ConsumerConfig.CLIENT_ID_CONFIG, clientId);
         configs.put(ConsumerConfig.GROUP_ID_CONFIG, groupId);
         configs.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         configs.put(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
         configs.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, batchSize);
-        return new ConsumerConfig(configs);
+        return new ShareConsumerConfig(configs);
     }
 
     private void initMetadata(MockClient client, Map<String, Integer> partitions) {
@@ -387,13 +393,7 @@ public class KafkaShareConsumerTest {
             .setPartitionIndex(tip.partition())
             .setRecords(records)
             .setAcquiredRecords(List.of(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(count - 1).setDeliveryCount((short) 1)));
-        ShareFetchResponseData.ShareFetchableTopicResponse topicResponse = new ShareFetchResponseData.ShareFetchableTopicResponse()
-            .setTopicId(tip.topicId())
-            .setPartitions(List.of(partData));
-        return new ShareFetchResponse(
-            new ShareFetchResponseData()
-                .setResponses(List.of(topicResponse))
-        );
+        return ShareFetchResponse.of(Errors.NONE, 0, new LinkedHashMap<>(Map.of(tip, partData)), List.of(), 0);
     }
 
     private ShareAcknowledgeResponse shareAcknowledgeResponse() {

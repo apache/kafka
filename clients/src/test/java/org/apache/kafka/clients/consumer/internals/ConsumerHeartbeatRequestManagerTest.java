@@ -18,9 +18,9 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.Metadata;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.SubscriptionPattern;
-import org.apache.kafka.clients.consumer.internals.AbstractHeartbeatRequestManager.HeartbeatRequestState;
 import org.apache.kafka.clients.consumer.internals.AbstractMembershipManager.LocalAssignment;
 import org.apache.kafka.clients.consumer.internals.ConsumerHeartbeatRequestManager.HeartbeatState;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
@@ -65,7 +65,11 @@ import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
 import java.util.SortedSet;
+import java.util.stream.Stream;
 
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.DEFAULT;
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.LEAVE_GROUP;
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 import static org.apache.kafka.clients.consumer.internals.AbstractHeartbeatRequestManager.CONSUMER_PROTOCOL_NOT_SUPPORTED_MSG;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.REGEX_RESOLUTION_NOT_SUPPORTED_MSG;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
@@ -445,7 +449,7 @@ public class ConsumerHeartbeatRequestManagerTest {
         time.sleep(DEFAULT_HEARTBEAT_INTERVAL_MS);
         NetworkClientDelegate.PollResult result = heartbeatRequestManager.poll(time.milliseconds());
         assertEquals(1, result.unsentRequests.size());
-        ClientResponse response = createHeartbeatResponse(result.unsentRequests.get(0), Errors.GROUP_AUTHORIZATION_FAILED);
+        createHeartbeatResponse(result.unsentRequests.get(0), Errors.GROUP_AUTHORIZATION_FAILED);
         result.unsentRequests.get(0).handler().onFailure(time.milliseconds(), new AuthenticationException("Fatal error in HB"));
 
         // The error should be propagated before notifying the group manager. This ensures that the app thread is aware
@@ -581,6 +585,11 @@ public class ConsumerHeartbeatRequestManagerTest {
             case FENCED_MEMBER_EPOCH:
                 verify(backgroundEventHandler, never()).add(any());
                 assertNextHeartbeatTiming(0);
+                break;
+            case TOPIC_AUTHORIZATION_FAILED:
+                verify(backgroundEventHandler).add(any(ErrorEvent.class));
+                assertNextHeartbeatTiming(DEFAULT_RETRY_BACKOFF_MS);
+                verify(membershipManager, never()).transitionToFatal();
                 break;
             default:
                 if (isFatal) {
@@ -773,6 +782,29 @@ public class ConsumerHeartbeatRequestManagerTest {
         assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
     }
 
+    @ParameterizedTest
+    @MethodSource("pollOnLeavingMatrix")
+    public void testPollOnLeaving(Optional<String> groupInstanceId, CloseOptions.GroupMembershipOperation operation) {
+        heartbeatRequestManager = createHeartbeatRequestManager(
+            coordinatorRequestManager,
+            membershipManager,
+            heartbeatState,
+            heartbeatRequestState,
+            backgroundEventHandler);
+        when(membershipManager.state()).thenReturn(MemberState.LEAVING);
+        when(membershipManager.groupInstanceId()).thenReturn(groupInstanceId);
+        when(membershipManager.leaveGroupOperation()).thenReturn(operation);
+
+        if (groupInstanceId.isEmpty() && REMAIN_IN_GROUP == operation) {
+            assertNoHeartbeat(heartbeatRequestManager);
+            verify(membershipManager, never()).onHeartbeatRequestGenerated();
+        } else {
+            assertHeartbeat(heartbeatRequestManager, DEFAULT_HEARTBEAT_INTERVAL_MS);
+            verify(membershipManager).onHeartbeatRequestGenerated();
+        }
+
+    }
+
     /**
      * This is expected to be the case where a member is already leaving the group and the poll
      * timer expires. The poll timer expiration should not transition the member to STALE, and
@@ -855,6 +887,7 @@ public class ConsumerHeartbeatRequestManagerTest {
         assertEquals(0, result.unsentRequests.size(), "No heartbeat should be sent while a previous one is in-flight");
 
         when(membershipManager.state()).thenReturn(MemberState.LEAVING);
+        when(membershipManager.groupInstanceId()).thenReturn(Optional.empty());
         when(heartbeatState.buildRequestData()).thenReturn(new ConsumerGroupHeartbeatRequestData().setMemberEpoch(-1));
         ConsumerGroupHeartbeatRequest heartbeatToLeave = getHeartbeatRequest(heartbeatRequestManager, version);
         assertEquals(ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH, heartbeatToLeave.data().memberEpoch());
@@ -910,17 +943,26 @@ public class ConsumerHeartbeatRequestManagerTest {
         assertEquals(Collections.singletonList(partition), topicPartitions.partitions());
     }
 
-    @Test
-    public void testPollOnCloseGeneratesRequestIfNeeded() {
-        when(membershipManager.isLeavingGroup()).thenReturn(true);
+    @ParameterizedTest
+    @MethodSource("pollOnLeavingMatrix")
+    public void testPollOnCloseGeneratesRequestIfNeeded(Optional<String> groupInstanceId, CloseOptions.GroupMembershipOperation operation) {
+        if (groupInstanceId.isEmpty() && REMAIN_IN_GROUP == operation)
+            when(membershipManager.isLeavingGroup()).thenReturn(false);
+        else
+            when(membershipManager.isLeavingGroup()).thenReturn(true);
+        when(membershipManager.groupInstanceId()).thenReturn(groupInstanceId);
+        when(membershipManager.leaveGroupOperation()).thenReturn(operation);
+        String membership = groupInstanceId.isEmpty() ? "dynamic" : "static";
         NetworkClientDelegate.PollResult pollResult = heartbeatRequestManager.pollOnClose(time.milliseconds());
-        assertEquals(1, pollResult.unsentRequests.size(),
-            "A request to leave the group should be generated if the member is still leaving when closing the manager");
-
-        when(membershipManager.isLeavingGroup()).thenReturn(false);
-        pollResult = heartbeatRequestManager.pollOnClose(time.milliseconds());
-        assertTrue(pollResult.unsentRequests.isEmpty(),
-            "No requests should be generated on close if the member is not leaving when closing the manager");
+        if (groupInstanceId.isEmpty() && REMAIN_IN_GROUP == operation) {
+            assertTrue(pollResult.unsentRequests.isEmpty(),
+                "A request to leave the group should not be generated if the " + membership + " is still leaving when closing the manager " +
+                    "and GroupMembershipOperation is " + operation.name());
+        } else {
+            assertEquals(1, pollResult.unsentRequests.size(),
+                "A request to leave the group should be generated if the " + membership + " is still leaving when closing the manager " +
+                    "and GroupMembershipOperation is " + operation.name());
+        }
     }
 
     @Test
@@ -1024,7 +1066,8 @@ public class ConsumerHeartbeatRequestManagerTest {
             Arguments.of(Errors.UNSUPPORTED_VERSION, true),
             Arguments.of(Errors.UNRELEASED_INSTANCE_ID, true),
             Arguments.of(Errors.FENCED_INSTANCE_ID, true),
-            Arguments.of(Errors.GROUP_MAX_SIZE_REACHED, true));
+            Arguments.of(Errors.GROUP_MAX_SIZE_REACHED, true),
+            Arguments.of(Errors.TOPIC_AUTHORIZATION_FAILED, false));
     }
 
     private ClientResponse createHeartbeatResponse(NetworkClientDelegate.UnsentRequest request,
@@ -1143,5 +1186,16 @@ public class ConsumerHeartbeatRequestManagerTest {
         when(membershipManager.memberEpoch()).thenReturn(DEFAULT_MEMBER_EPOCH);
         when(membershipManager.groupId()).thenReturn(DEFAULT_GROUP_ID);
         when(membershipManager.serverAssignor()).thenReturn(Optional.of(DEFAULT_REMOTE_ASSIGNOR));
+    }
+
+    private static Stream<Arguments> pollOnLeavingMatrix() {
+        return Stream.of(
+            Arguments.of(Optional.empty(), DEFAULT),
+            Arguments.of(Optional.empty(), LEAVE_GROUP),
+            Arguments.of(Optional.empty(), REMAIN_IN_GROUP),
+            Arguments.of(Optional.of("groupInstanceId"), DEFAULT),
+            Arguments.of(Optional.of("groupInstanceId"), LEAVE_GROUP),
+            Arguments.of(Optional.of("groupInstanceId"), REMAIN_IN_GROUP)
+        );
     }
 }

@@ -29,6 +29,7 @@ import kafka.utils.{CoreUtils, Logging, Pool}
 import org.apache.kafka.common.{DirectoryId, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.utils.{Exit, KafkaThread, Time, Utils}
 import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException, LogDirNotFoundException}
+import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 
 import scala.jdk.CollectionConverters._
 import scala.collection._
@@ -38,15 +39,15 @@ import org.apache.kafka.image.TopicsImage
 import org.apache.kafka.metadata.ConfigRepository
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, PropertiesUtils}
 
-import java.util.{Collections, OptionalLong, Properties}
-import org.apache.kafka.server.common.MetadataVersion
+import java.util.{Collections, Optional, OptionalLong, Properties}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{FileLock, Scheduler}
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, RemoteIndexCache}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogCleaner, LogConfig, LogDirFailureChannel, LogOffsetsListener, ProducerStateManagerConfig, RemoteIndexCache, UnifiedLog}
 import org.apache.kafka.storage.internals.checkpoint.{CleanShutdownFileHandler, OffsetCheckpointFile}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.util
+import java.util.stream.Collectors
 
 /**
  * The entry point to the kafka log management subsystem. The log manager is responsible for log creation, retrieval, and cleaning.
@@ -72,7 +73,6 @@ class LogManager(logDirs: Seq[File],
                  val maxTransactionTimeoutMs: Int,
                  val producerStateManagerConfig: ProducerStateManagerConfig,
                  val producerIdExpirationCheckIntervalMs: Int,
-                 interBrokerProtocolVersion: MetadataVersion,
                  scheduler: Scheduler,
                  brokerTopicStats: BrokerTopicStats,
                  logDirFailureChannel: LogDirFailureChannel,
@@ -85,11 +85,11 @@ class LogManager(logDirs: Seq[File],
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
 
   private val logCreationOrDeletionLock = new Object
-  private val currentLogs = new Pool[TopicPartition, UnifiedLog]()
+  private val currentLogs = new util.concurrent.ConcurrentHashMap[TopicPartition, UnifiedLog]()
   // Future logs are put in the directory with "-future" suffix. Future log is created when user wants to move replica
   // from one log directory to another log directory on the same broker. The directory of the future log will be renamed
   // to replace the current log of the partition after the future log catches up with the current log
-  private val futureLogs = new Pool[TopicPartition, UnifiedLog]()
+  private val futureLogs = new util.concurrent.ConcurrentHashMap[TopicPartition, UnifiedLog]()
   // Each element in the queue contains the log object to be deleted and the time it is scheduled for deletion.
   private val logsToBeDeleted = new LinkedBlockingQueue[(UnifiedLog, Long)]()
 
@@ -232,8 +232,8 @@ class LogManager(logDirs: Seq[File],
       if (cleaner != null)
         cleaner.handleLogDirFailure(dir)
 
-      def removeOfflineLogs(logs: Pool[TopicPartition, UnifiedLog]): Iterable[TopicPartition] = {
-        val offlineTopicPartitions: Iterable[TopicPartition] = logs.collect {
+      def removeOfflineLogs(logs: util.concurrent.ConcurrentMap[TopicPartition, UnifiedLog]): Iterable[TopicPartition] = {
+        val offlineTopicPartitions: Iterable[TopicPartition] = logs.asScala.collect {
           case (tp, log) if log.parentDir == dir => tp
         }
         offlineTopicPartitions.foreach { topicPartition => {
@@ -330,26 +330,27 @@ class LogManager(logDirs: Seq[File],
     val logRecoveryPoint = recoveryPoints.getOrDefault(topicPartition, 0L)
     val logStartOffset = logStartOffsets.getOrDefault(topicPartition, 0L)
 
-    val log = UnifiedLog(
-      dir = logDir,
-      config = config,
-      logStartOffset = logStartOffset,
-      recoveryPoint = logRecoveryPoint,
-      maxTransactionTimeoutMs = maxTransactionTimeoutMs,
-      producerStateManagerConfig = producerStateManagerConfig,
-      producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs,
-      scheduler = scheduler,
-      time = time,
-      brokerTopicStats = brokerTopicStats,
-      logDirFailureChannel = logDirFailureChannel,
-      lastShutdownClean = hadCleanShutdown,
-      topicId = None,
-      numRemainingSegments = numRemainingSegments,
-      remoteStorageSystemEnable = remoteStorageSystemEnable)
+    val log = UnifiedLog.create(
+      logDir,
+      config,
+      logStartOffset,
+      logRecoveryPoint,
+      scheduler,
+      brokerTopicStats,
+      time,
+      maxTransactionTimeoutMs,
+      producerStateManagerConfig,
+      producerIdExpirationCheckIntervalMs,
+      logDirFailureChannel,
+      hadCleanShutdown,
+      Optional.empty,
+      numRemainingSegments,
+      remoteStorageSystemEnable,
+      LogOffsetsListener.NO_OP_OFFSETS_LISTENER)
 
-    if (logDir.getName.endsWith(UnifiedLog.DeleteDirSuffix)) {
+    if (logDir.getName.endsWith(UnifiedLog.DELETE_DIR_SUFFIX)) {
       addLogToBeDeleted(log)
-    } else if (logDir.getName.endsWith(UnifiedLog.StrayDirSuffix)) {
+    } else if (logDir.getName.endsWith(UnifiedLog.STRAY_DIR_SUFFIX)) {
       addStrayLog(topicPartition, log)
       warn(s"Loaded stray log: $logDir")
     } else if (isStray(log)) {
@@ -357,7 +358,7 @@ class LogManager(logDirs: Seq[File],
       // Broker with an offline directory may be unable to detect it still holds a to-be-deleted replica,
       // and can create a conflicting topic partition for a new incarnation of the topic in one of the remaining online directories.
       // So upon a restart in which the offline directory is back online we need to clean up the old replica directory.
-      log.renameDir(UnifiedLog.logStrayDirName(log.topicPartition), shouldReinitialize = false)
+      log.renameDir(UnifiedLog.logStrayDirName(log.topicPartition), false)
       addStrayLog(log.topicPartition, log)
       warn(s"Log in ${logDir.getAbsolutePath} marked stray and renamed to ${log.dir.getAbsolutePath}")
     } else {
@@ -505,7 +506,7 @@ class LogManager(logDirs: Seq[File],
               }
 
               if (remainingLogs == 0) {
-                // loadLog is completed for all logs under the logDdir, mark it.
+                // loadLog is completed for all logs under the logDir, mark it.
                 loadLogsCompletedFlags.put(logDirAbsolutePath, true)
               }
             }
@@ -629,7 +630,7 @@ class LogManager(logDirs: Seq[File],
                          initialTaskDelayMs)
     }
     if (cleanerConfig.enableCleaner) {
-      _cleaner = new LogCleaner(cleanerConfig, liveLogDirs, currentLogs, logDirFailureChannel, time = time)
+      _cleaner = new LogCleaner(cleanerConfig, liveLogDirs.asJava, currentLogs, logDirFailureChannel, time)
       _cleaner.startup()
     }
   }
@@ -760,7 +761,7 @@ class LogManager(logDirs: Seq[File],
   def truncateFullyAndStartAt(topicPartition: TopicPartition,
                               newOffset: Long,
                               isFuture: Boolean,
-                              logStartOffsetOpt: Option[Long] = None): Unit = {
+                              logStartOffsetOpt: Optional[JLong] = Optional.empty): Unit = {
     val log = {
       if (isFuture)
         futureLogs.get(topicPartition)
@@ -894,7 +895,7 @@ class LogManager(logDirs: Seq[File],
    */
   private def resumeCleaning(topicPartition: TopicPartition): Unit = {
     if (cleaner != null) {
-      cleaner.resumeCleaning(Seq(topicPartition))
+      cleaner.resumeCleaning(util.Set.of(topicPartition))
       info(s"Cleaning for partition $topicPartition is resumed")
     }
   }
@@ -1000,14 +1001,14 @@ class LogManager(logDirs: Seq[File],
    * @param isNew Whether the replica should have existed on the broker or not
    * @param isFuture True if the future log of the specified partition should be returned or created
    * @param topicId The topic ID of the partition's topic
-   * @param targetLogDirectoryId The directory Id that should host the the partition's topic.
+   * @param targetLogDirectoryId The directory Id that should host the partition's topic.
    *                             The next selected directory will be picked up if it None or equal {@link DirectoryId.UNASSIGNED}.
    *                             The method assumes provided Id belong to online directory.
    * @throws KafkaStorageException if isNew=false, log is not found in the cache and there is offline log directory on the broker
    * @throws InconsistentTopicIdException if the topic ID in the log does not match the topic ID provided
    */
   def getOrCreateLog(topicPartition: TopicPartition, isNew: Boolean = false, isFuture: Boolean = false,
-                     topicId: Option[Uuid], targetLogDirectoryId: Option[Uuid] = Option.empty): UnifiedLog = {
+                     topicId: Optional[Uuid], targetLogDirectoryId: Option[Uuid] = Option.empty): UnifiedLog = {
     logCreationOrDeletionLock synchronized {
       val log = getLog(topicPartition, isFuture).getOrElse {
         // create the log if it has not already been created in another thread
@@ -1052,20 +1053,23 @@ class LogManager(logDirs: Seq[File],
           .get // If Failure, will throw
 
         val config = fetchLogConfig(topicPartition.topic)
-        val log = UnifiedLog(
-          dir = logDir,
-          config = config,
-          logStartOffset = 0L,
-          recoveryPoint = 0L,
-          maxTransactionTimeoutMs = maxTransactionTimeoutMs,
-          producerStateManagerConfig = producerStateManagerConfig,
-          producerIdExpirationCheckIntervalMs = producerIdExpirationCheckIntervalMs,
-          scheduler = scheduler,
-          time = time,
-          brokerTopicStats = brokerTopicStats,
-          logDirFailureChannel = logDirFailureChannel,
-          topicId = topicId,
-          remoteStorageSystemEnable = remoteStorageSystemEnable)
+        val log = UnifiedLog.create(
+          logDir,
+          config,
+          0L,
+          0L,
+          scheduler,
+          brokerTopicStats,
+          time,
+          maxTransactionTimeoutMs,
+          producerStateManagerConfig,
+          producerIdExpirationCheckIntervalMs,
+          logDirFailureChannel,
+          true,
+          topicId,
+          new ConcurrentHashMap[String, Integer](),
+          remoteStorageSystemEnable,
+          LogOffsetsListener.NO_OP_OFFSETS_LISTENER)
 
         if (isFuture)
           futureLogs.put(topicPartition, log)
@@ -1080,8 +1084,8 @@ class LogManager(logDirs: Seq[File],
       }
       
       // Ensure topic IDs are consistent
-      topicId.foreach { topicId =>
-        log.topicId.foreach { logTopicId =>
+      topicId.ifPresent { topicId =>
+        log.topicId.ifPresent { logTopicId =>
           if (topicId != logTopicId)
             throw new InconsistentTopicIdException(s"Tried to assign topic ID $topicId to log for topic partition $topicPartition," +
               s"but log already contained topic ID $logTopicId")
@@ -1178,15 +1182,16 @@ class LogManager(logDirs: Seq[File],
   }
 
   private def findAbandonedFutureLogs(brokerId: Int, newTopicsImage: TopicsImage): Iterable[(UnifiedLog, Option[UnifiedLog])] = {
-    futureLogs.values.flatMap { futureLog =>
-      val topicId = futureLog.topicId.getOrElse {
-        throw new RuntimeException(s"The log dir $futureLog does not have a topic ID, " +
+    futureLogs.asScala.values.flatMap { futureLog =>
+      val topicId = futureLog.topicId.orElseThrow(() =>
+        new RuntimeException(s"The log dir $futureLog does not have a topic ID, " +
           "which is not allowed when running in KRaft mode.")
-      }
+      )
       val partitionId = futureLog.topicPartition.partition()
       Option(newTopicsImage.getPartition(topicId, partitionId))
         .filter(pr => directoryId(futureLog.parentDir).contains(pr.directory(brokerId)))
-        .map(_ => (futureLog, Option(currentLogs.get(futureLog.topicPartition)).filter(currentLog => currentLog.topicId.contains(topicId))))
+        .map(_ => (futureLog, Option(currentLogs.get(futureLog.topicPartition)).filter(currentLog =>
+          currentLog.topicId.filter(_ == topicId).isPresent)))
     }
   }
 
@@ -1215,7 +1220,7 @@ class LogManager(logDirs: Seq[File],
   def replaceCurrentWithFutureLog(sourceLog: Option[UnifiedLog], destLog: UnifiedLog, updateHighWatermark: Boolean = false): Unit = {
     val topicPartition = destLog.topicPartition
 
-    destLog.renameDir(UnifiedLog.logDirName(topicPartition), shouldReinitialize = true)
+    destLog.renameDir(UnifiedLog.logDirName(topicPartition), true)
     // the metrics tags still contain "future", so we have to remove it.
     // we will add metrics back after sourceLog remove the metrics
     destLog.removeLogMetrics()
@@ -1236,7 +1241,7 @@ class LogManager(logDirs: Seq[File],
 
     try {
       sourceLog.foreach { srcLog =>
-        srcLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition), shouldReinitialize = true)
+        srcLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition), true)
         // Now that replica in source log directory has been successfully renamed for deletion.
         // Close the log, update checkpoint files, and enqueue this log to be deleted.
         srcLog.close()
@@ -1282,15 +1287,15 @@ class LogManager(logDirs: Seq[File],
         if (cleaner != null && !isFuture) {
           cleaner.abortCleaning(topicPartition)
           if (checkpoint) {
-            cleaner.updateCheckpoints(removedLog.parentDirFile, partitionToRemove = Option(topicPartition))
+            cleaner.updateCheckpoints(removedLog.parentDirFile, Optional.of(topicPartition))
           }
         }
         if (isStray) {
           // Move aside stray partitions, don't delete them
-          removedLog.renameDir(UnifiedLog.logStrayDirName(topicPartition), shouldReinitialize = false)
+          removedLog.renameDir(UnifiedLog.logStrayDirName(topicPartition), false)
           warn(s"Log for partition ${removedLog.topicPartition} is marked as stray and renamed to ${removedLog.dir.getAbsolutePath}")
         } else {
-          removedLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition), shouldReinitialize = false)
+          removedLog.renameDir(UnifiedLog.logDeleteDirName(topicPartition), false)
           addLogToBeDeleted(removedLog)
           info(s"Log for partition ${removedLog.topicPartition} is renamed to ${removedLog.dir.getAbsolutePath} and is scheduled for deletion")
         }
@@ -1315,7 +1320,7 @@ class LogManager(logDirs: Seq[File],
    * deletion. Checkpoints are updated once all the directories have been renamed.
    *
    * @param topicPartitions The set of topic-partitions to delete asynchronously
-   * @param errorHandler The error handler that will be called when a exception for a particular
+   * @param errorHandler The error handler that will be called when an exception for a particular
    *                     topic-partition is raised
    */
   def asyncDelete(topicPartitions: Iterable[TopicPartition],
@@ -1340,7 +1345,7 @@ class LogManager(logDirs: Seq[File],
 
     val logsByDirCached = logsByDir
     logDirs.foreach { logDir =>
-      if (cleaner != null) cleaner.updateCheckpoints(logDir)
+      if (cleaner != null) cleaner.updateCheckpoints(logDir, Optional.empty())
       val logsToCheckpoint = logsInDir(logsByDirCached, logDir)
       checkpointRecoveryOffsetsInDir(logDir, logsToCheckpoint)
       checkpointLogStartOffsetsInDir(logDir, logsToCheckpoint)
@@ -1378,19 +1383,22 @@ class LogManager(logDirs: Seq[File],
     val startMs = time.milliseconds
 
     // clean current logs.
-    val deletableLogs = {
+    val deletableLogs: util.Map[TopicPartition, UnifiedLog] = {
       if (cleaner != null) {
         // prevent cleaner from working on same partitions when changing cleanup policy
         cleaner.pauseCleaningForNonCompactedPartitions()
       } else {
-        currentLogs.filter {
-          case (_, log) => !log.config.compact
-        }
+        currentLogs.entrySet().stream()
+          .filter(e => !e.getValue.config.compact)
+          .collect(Collectors.toMap(
+            (e: util.Map.Entry[TopicPartition, UnifiedLog]) => e.getKey,
+            (e: util.Map.Entry[TopicPartition, UnifiedLog]) => e.getValue
+          ))
       }
     }
 
     try {
-      deletableLogs.foreach {
+      deletableLogs.forEach {
         case (topicPartition, log) =>
           debug(s"Garbage collecting '${log.name}'")
           total += log.deleteOldSegments()
@@ -1404,7 +1412,7 @@ class LogManager(logDirs: Seq[File],
       }
     } finally {
       if (cleaner != null) {
-        cleaner.resumeCleaning(deletableLogs.map(_._1))
+        cleaner.resumeCleaning(deletableLogs.keySet())
       }
     }
 
@@ -1415,10 +1423,10 @@ class LogManager(logDirs: Seq[File],
   /**
    * Get all the partition logs
    */
-  def allLogs: Iterable[UnifiedLog] = currentLogs.values ++ futureLogs.values
+  def allLogs: Iterable[UnifiedLog] = currentLogs.asScala.values ++ futureLogs.asScala.values
 
   def logsByTopic(topic: String): Seq[UnifiedLog] = {
-    (currentLogs.toList ++ futureLogs.toList).collect {
+    (currentLogs.asScala.toList ++ futureLogs.asScala.toList).collect {
       case (topicPartition, log) if topicPartition.topic == topic => log
     }
   }
@@ -1434,8 +1442,8 @@ class LogManager(logDirs: Seq[File],
     def addToDir(tp: TopicPartition, log: UnifiedLog): Unit = {
       byDir.getOrElseUpdate(log.parentDir, new mutable.AnyRefMap[TopicPartition, UnifiedLog]()).put(tp, log)
     }
-    currentLogs.foreachEntry(addToDir)
-    futureLogs.foreachEntry(addToDir)
+    currentLogs.asScala.foreachEntry(addToDir)
+    futureLogs.asScala.foreachEntry(addToDir)
     byDir
   }
 
@@ -1463,7 +1471,7 @@ class LogManager(logDirs: Seq[File],
   private def flushDirtyLogs(): Unit = {
     debug("Checking for dirty logs to flush...")
 
-    for ((topicPartition, log) <- currentLogs.toList ++ futureLogs.toList) {
+    for ((topicPartition, log) <- currentLogs.asScala.toList ++ futureLogs.asScala.toList) {
       try {
         val timeSinceLastFlush = time.milliseconds - log.lastFlushTime
         debug(s"Checking if flush is needed on ${topicPartition.topic} flush interval ${log.config.flushMs}" +
@@ -1477,7 +1485,7 @@ class LogManager(logDirs: Seq[File],
     }
   }
 
-  private def removeLogAndMetrics(logs: Pool[TopicPartition, UnifiedLog], tp: TopicPartition): Option[UnifiedLog] = {
+  private def removeLogAndMetrics(logs: util.concurrent.ConcurrentMap[TopicPartition, UnifiedLog], tp: TopicPartition): Option[UnifiedLog] = {
     val removedLog = logs.remove(tp)
     if (removedLog != null) {
       removedLog.removeLogMetrics()
@@ -1541,10 +1549,11 @@ object LogManager {
             logDirFailureChannel: LogDirFailureChannel): LogManager = {
     val defaultProps = config.extractLogConfigMap
 
-    LogConfig.validateBrokerLogConfigValues(defaultProps, config.remoteLogManagerConfig.isRemoteStorageSystemEnabled())
+    LogConfig.validateBrokerLogConfigValues(defaultProps, config.remoteLogManagerConfig.isRemoteStorageSystemEnabled)
     val defaultLogConfig = new LogConfig(defaultProps)
 
-    val cleanerConfig = LogCleaner.cleanerConfig(config)
+    val cleanerConfig = new CleanerConfig(config)
+    val transactionLogConfig = new TransactionLogConfig(config)
 
     new LogManager(logDirs = config.logDirs.map(new File(_).getAbsoluteFile),
       initialOfflineDirs = initialOfflineDirs.map(new File(_).getAbsoluteFile),
@@ -1557,14 +1566,13 @@ object LogManager {
       flushStartOffsetCheckpointMs = config.logFlushStartOffsetCheckpointIntervalMs,
       retentionCheckMs = config.logCleanupIntervalMs,
       maxTransactionTimeoutMs = config.transactionStateManagerConfig.transactionMaxTimeoutMs,
-      producerStateManagerConfig = new ProducerStateManagerConfig(config.transactionLogConfig.producerIdExpirationMs, config.transactionLogConfig.transactionPartitionVerificationEnable),
-      producerIdExpirationCheckIntervalMs = config.transactionLogConfig.producerIdExpirationCheckIntervalMs,
+      producerStateManagerConfig = new ProducerStateManagerConfig(transactionLogConfig.producerIdExpirationMs, transactionLogConfig.transactionPartitionVerificationEnable),
+      producerIdExpirationCheckIntervalMs = transactionLogConfig.producerIdExpirationCheckIntervalMs,
       scheduler = kafkaScheduler,
       brokerTopicStats = brokerTopicStats,
       logDirFailureChannel = logDirFailureChannel,
       time = time,
-      interBrokerProtocolVersion = config.interBrokerProtocolVersion,
-      remoteStorageSystemEnable = config.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
+      remoteStorageSystemEnable = config.remoteLogManagerConfig.isRemoteStorageSystemEnabled,
       initialTaskDelayMs = config.logInitialTaskDelayMs)
   }
 

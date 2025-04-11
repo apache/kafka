@@ -16,9 +16,13 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
+import org.apache.kafka.clients.consumer.internals.events.BackgroundEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackCompletedEvent;
+import org.apache.kafka.clients.consumer.internals.events.StreamsOnAllTasksLostCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksAssignedCallbackCompletedEvent;
+import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksAssignedCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksRevokedCallbackCompletedEvent;
+import org.apache.kafka.clients.consumer.internals.events.StreamsOnTasksRevokedCallbackNeededEvent;
 import org.apache.kafka.clients.consumer.internals.metrics.ConsumerRebalanceMetricsManager;
 import org.apache.kafka.clients.consumer.internals.metrics.RebalanceMetricsManager;
 import org.apache.kafka.common.KafkaException;
@@ -145,10 +149,10 @@ public class StreamsMembershipManager implements RequestManager {
     private final Logger log;
 
     /**
-     * The processor that handles events of the Streams rebalance protocol.
+     * The processor that handles events from the background thread (a.k.a. ConsumerNetworkThread).
      * For example, requests for invocation of assignment/revocation callbacks.
      */
-    private final StreamsRebalanceEventsProcessor streamsRebalanceEventsProcessor;
+    private final BackgroundEventHandler backgroundEventHandler;
 
     /**
      * Data needed to participate in the Streams rebalance protocol.
@@ -269,26 +273,25 @@ public class StreamsMembershipManager implements RequestManager {
     /**
      * Constructs the Streams membership manager.
      *
-     * @param groupId                           The ID of the group.
-     * @param streamsRebalanceEventsProcessor   The processor that handles Streams rebalance events like requests for
-     *                                          invocation of assignment/revocation callbacks.
-     * @param streamsRebalanceData              Data needed to participate in the Streams rebalance protocol.
-     * @param subscriptionState                 The subscription state of the member.
-     * @param logContext                        The log context.
-     * @param time                              The time.
-     * @param metrics                           The metrics.
+     * @param groupId                The ID of the group.
+     * @param streamsRebalanceData   Data needed to participate in the Streams rebalance protocol.
+     * @param subscriptionState      The subscription state of the member.
+     * @param backgroundEventHandler The handler that handles events from the background thread.
+     * @param logContext             The log context.
+     * @param time                   The time.
+     * @param metrics                The metrics.
      */
     public StreamsMembershipManager(final String groupId,
-                                    final StreamsRebalanceEventsProcessor streamsRebalanceEventsProcessor,
                                     final StreamsRebalanceData streamsRebalanceData,
                                     final SubscriptionState subscriptionState,
+                                    final BackgroundEventHandler backgroundEventHandler,
                                     final LogContext logContext,
                                     final Time time,
                                     final Metrics metrics) {
         log = logContext.logger(StreamsMembershipManager.class);
         this.state = MemberState.UNSUBSCRIBED;
         this.groupId = groupId;
-        this.streamsRebalanceEventsProcessor = streamsRebalanceEventsProcessor;
+        this.backgroundEventHandler = backgroundEventHandler;
         this.streamsRebalanceData = streamsRebalanceData;
         this.subscriptionState = subscriptionState;
         metricsManager = new ConsumerRebalanceMetricsManager(metrics);
@@ -448,9 +451,8 @@ public class StreamsMembershipManager implements RequestManager {
     private void transitionToStale() {
         transitionTo(MemberState.STALE);
 
-        final CompletableFuture<Void> onAllTasksLostCallbackExecution =
-            streamsRebalanceEventsProcessor.requestOnAllTasksLostCallbackInvocation();
-        staleMemberAssignmentRelease = onAllTasksLostCallbackExecution.whenComplete((result, error) -> {
+        final CompletableFuture<Void> onAllTasksLostCallbackExecuted = requestOnAllTasksLostCallbackInvocation();
+        staleMemberAssignmentRelease = onAllTasksLostCallbackExecuted.whenComplete((result, error) -> {
             if (error != null) {
                 log.error("Task revocation callback invocation failed " +
                     "after member left group due to expired poll timer.", error);
@@ -487,7 +489,7 @@ public class StreamsMembershipManager implements RequestManager {
             return;
         }
 
-        CompletableFuture<Void> onAllTasksLostCallbackExecuted = streamsRebalanceEventsProcessor.requestOnAllTasksLostCallbackInvocation();
+        CompletableFuture<Void> onAllTasksLostCallbackExecuted = requestOnAllTasksLostCallbackInvocation();
         onAllTasksLostCallbackExecuted.whenComplete((result, error) -> {
             if (error != null) {
                 log.error("onAllTasksLost callback invocation failed while releasing assignment " +
@@ -591,7 +593,7 @@ public class StreamsMembershipManager implements RequestManager {
      * @return True if the member should send heartbeat to the coordinator without waiting for
      * the interval.
      */
-    public boolean shouldHeartbeatNow() {
+    public boolean shouldNotWaitForHeartbeatInterval() {
         return state == MemberState.ACKNOWLEDGING || state == MemberState.LEAVING || state == MemberState.JOINING;
     }
 
@@ -702,14 +704,21 @@ public class StreamsMembershipManager implements RequestManager {
     }
 
     /**
-     * Notify the member that an error heartbeat response was received.
-     *
-     * @param retriable True if the request failed with a retriable error.
+     * Notify the member that a retriable error heartbeat response was received.
      */
-    public void onHeartbeatFailure(boolean retriable) {
-        if (!retriable) {
-            metricsManager.maybeRecordRebalanceFailed();
-        }
+    public void onRetriableHeartbeatFailure() {
+        onHeartbeatFailure();
+    }
+
+    /**
+     * Notify the member that a fatal error heartbeat response was received.
+     */
+    public void onFatalHeartbeatFailure() {
+        metricsManager.maybeRecordRebalanceFailed();
+        onHeartbeatFailure();
+    }
+
+    private void onHeartbeatFailure() {
         // The leave group request is sent out once (not retried), so we should complete the leave
         // operation once the request completes, regardless of the response.
         if (state == MemberState.UNSUBSCRIBED && maybeCompleteLeaveInProgress()) {
@@ -756,8 +765,8 @@ public class StreamsMembershipManager implements RequestManager {
         log.debug("Member {} with epoch {} transitioned to {} state. It will release its " +
             "assignment and rejoin the group.", memberId, memberEpoch, MemberState.FENCED);
 
-        CompletableFuture<Void> callbackResult = streamsRebalanceEventsProcessor.requestOnAllTasksLostCallbackInvocation();
-        callbackResult.whenComplete((result, error) -> {
+        CompletableFuture<Void> onAllTasksLostCallbackExecuted = requestOnAllTasksLostCallbackInvocation();
+        onAllTasksLostCallbackExecuted.whenComplete((result, error) -> {
             if (error != null) {
                 log.error("onAllTasksLost callback invocation failed while releasing assignment" +
                     " after member got fenced. Member will rejoin the group anyways.", error);
@@ -1083,8 +1092,7 @@ public class StreamsMembershipManager implements RequestManager {
         subscriptionState.markPendingRevocation(partitionsToRevoke);
 
         CompletableFuture<Void> tasksRevoked = new CompletableFuture<>();
-        CompletableFuture<Void> onTasksRevokedCallbackExecuted =
-            streamsRebalanceEventsProcessor.requestOnTasksRevokedCallbackInvocation(activeTasksToRevoke);
+        CompletableFuture<Void> onTasksRevokedCallbackExecuted = requestOnTasksRevokedCallbackInvocation(activeTasksToRevoke);
         onTasksRevokedCallbackExecuted.whenComplete((__, callbackError) -> {
             if (callbackError != null) {
                 log.error("onTasksRevoked callback invocation failed for tasks {}",
@@ -1124,7 +1132,7 @@ public class StreamsMembershipManager implements RequestManager {
         notifyAssignmentChange(partitionsToAssign);
 
         CompletableFuture<Void> onTasksAssignedCallbackExecuted =
-            streamsRebalanceEventsProcessor.requestOnTasksAssignedCallbackInvocation(
+            requestOnTasksAssignedCallbackInvocation(
                 new StreamsRebalanceData.Assignment(
                     activeTasksToAssign,
                     standbyTasksToAssign,
@@ -1156,7 +1164,7 @@ public class StreamsMembershipManager implements RequestManager {
         log.debug("Marking lost partitions pending for revocation: {}", partitionsToRelease);
         subscriptionState.markPendingRevocation(partitionsToRelease);
 
-        return streamsRebalanceEventsProcessor.requestOnAllTasksLostCallbackInvocation();
+        return requestOnAllTasksLostCallbackInvocation();
     }
 
     private SortedSet<TopicPartition> partitionsToAssignNotPreviouslyOwned(final SortedSet<TopicPartition> assignedTopicPartitions,
@@ -1215,6 +1223,24 @@ public class StreamsMembershipManager implements RequestManager {
     private void markReconciliationInProgress() {
         reconciliationInProgress = true;
         rejoinedWhileReconciliationInProgress = false;
+    }
+
+    private CompletableFuture<Void> requestOnTasksAssignedCallbackInvocation(final StreamsRebalanceData.Assignment assignment) {
+        final StreamsOnTasksAssignedCallbackNeededEvent onTasksAssignedCallbackNeededEvent = new StreamsOnTasksAssignedCallbackNeededEvent(assignment);
+        backgroundEventHandler.add(onTasksAssignedCallbackNeededEvent);
+        return onTasksAssignedCallbackNeededEvent.future();
+    }
+
+    private CompletableFuture<Void> requestOnAllTasksLostCallbackInvocation() {
+        final StreamsOnAllTasksLostCallbackNeededEvent onAllTasksLostCallbackNeededEvent = new StreamsOnAllTasksLostCallbackNeededEvent();
+        backgroundEventHandler.add(onAllTasksLostCallbackNeededEvent);
+        return onAllTasksLostCallbackNeededEvent.future();
+    }
+
+    public CompletableFuture<Void> requestOnTasksRevokedCallbackInvocation(final Set<StreamsRebalanceData.TaskId> activeTasksToRevoke) {
+        final StreamsOnTasksRevokedCallbackNeededEvent onTasksRevokedCallbackNeededEvent = new StreamsOnTasksRevokedCallbackNeededEvent(activeTasksToRevoke);
+        backgroundEventHandler.add(onTasksRevokedCallbackNeededEvent);
+        return onTasksRevokedCallbackNeededEvent.future();
     }
 
     /**

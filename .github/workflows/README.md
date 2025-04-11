@@ -101,10 +101,35 @@ There are two files related to this workflow:
 
 * [pr-labeled.yml](pr-labeled.yml) approves a pending approval for PRs that have
 been labeled with `ci-approved`
-* [ci-requested.yml](ci-requested.yml) approves future workflow requests automatically
+* [workflow-requested.yml](workflow-requested.yml) approves future workflow requests automatically
 if the PR has the `ci-approved` label
 
 _The pr-labeled.yml workflow includes pull_request_target!_
+
+### PR Linter
+
+To help ensure good commit messages, we have added a "Pull Request Linter" job
+that checks the title and body of the PR. 
+
+There are two files related to this workflow:
+
+* [pr-reviewed.yml](pr-reviewed.yml) runs when a PR is reviewed or has its title
+or body edited. This workflow simply captures the PR number into a text file
+* [pr-linter.yml](pr-linter.yml) runs after pr-reviewed.yml and loads the PR
+using the saved text file. This workflow runs the linter script that checks the
+structure of the PR
+
+Note that the pr-reviewed.yml workflow uses the `ci-approved` mechanism described
+above.
+
+The following checks are performed on our PRs:
+* Title is not too short or too long
+* Title starts with "KAFKA-", "MINOR", or "HOTFIX"
+* Body is not empty
+* Body includes "Reviewers:" if the PR is approved
+
+With the merge queue, our PR title and body will become the commit subject and message.
+This linting step will help to ensure that we have nice looking commits.
 
 ### Stale PRs
 
@@ -121,3 +146,46 @@ some limitations.
 
 - Cannot run more than one step in a composite action (see `workflow_call` instead)
 - Inputs can only be strings, no support for typed parameters. See: https://github.com/actions/runner/issues/2238
+
+## Troubleshooting
+
+### Gradle Cache Misses
+
+If your PR is running for longer than you would expect due to cache misses, there are a
+few things to check. 
+
+First, find the cache that was loaded into your PR build. This is found in the Setup Gradle
+output. Look for a line starting with "Restored Gradle User Home from cache key". 
+For example,
+
+```
+Restored Gradle User Home from cache key: gradle-home-v1|Linux-X64|test[188616818c9a3165053ef8704c27b28e]-5c20aa187aa8f51af4270d7d1b0db4963b0cd10b
+```
+
+The last part of the cache key is the SHA of the commit on trunk where the cache
+was created. If that commit is not on your branch, it means your build loaded a 
+cache that includes changes your PR does not yet have. This is a common way to
+have cache misses. To resolve this, update your PR with the latest cached trunk commit:
+
+```commandline
+git fetch origin
+./committer-tools/update-cache.sh
+git merge trunk-cached
+```
+
+then push your branch.
+
+If your build seems to be using the correct cache, the next thing to check is for
+changes to task inputs. You can find this by locating the trunk Build Scan from 
+the cache commit on trunk and comparing it with the build scan of your PR build.
+This is done in the Develocity UI using the two overlapping circles like `(A()B)`. 
+This will show you differences in the task inputs for the two builds.
+
+Finally, you can run your PR with extra cache debugging. Add this to the gradle invocation in
+[run-gradle/action.yml](../actions/run-gradle/action.yml). 
+
+```
+-Dorg.gradle.caching.debug=true
+```
+
+This will dump out a lot of output, so you may also reduce the test target to one module.

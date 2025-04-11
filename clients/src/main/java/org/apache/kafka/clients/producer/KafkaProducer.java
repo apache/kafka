@@ -394,7 +394,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.valueSerializerPlugin = Plugin.wrapInstance(valueSerializer, metrics, ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG);
 
 
-            List<ProducerInterceptor<K, V>> interceptorList = ClientUtils.configuredInterceptors(config,
+            List<ProducerInterceptor<K, V>> interceptorList = (List<ProducerInterceptor<K, V>>) ClientUtils.configuredInterceptors(config,
                     ProducerConfig.INTERCEPTOR_CLASSES_CONFIG,
                     ProducerInterceptor.class);
             if (interceptors != null)
@@ -435,7 +435,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     metrics,
                     PRODUCER_METRIC_GROUP_NAME,
                     time,
-                    apiVersions,
                     transactionManager,
                     new BufferPool(this.totalMemorySize, batchSize, metrics, time, PRODUCER_METRIC_GROUP_NAME));
 
@@ -538,8 +537,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 time,
                 requestTimeoutMs,
                 producerConfig.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG),
-                this.transactionManager,
-                apiVersions);
+                this.transactionManager);
     }
 
     private static Compression configureCompression(ProducerConfig config) {

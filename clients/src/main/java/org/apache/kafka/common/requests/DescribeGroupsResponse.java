@@ -26,7 +26,7 @@ import org.apache.kafka.common.utils.Utils;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -139,7 +139,7 @@ public class DescribeGroupsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errorCounts = new HashMap<>();
+        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
         data.groups().forEach(describedGroup ->
             updateErrorCounts(errorCounts, Errors.forCode(describedGroup.errorCode())));
         return errorCounts;

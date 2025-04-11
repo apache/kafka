@@ -116,9 +116,10 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
 
     @cluster(num_nodes=10)
     @matrix(
-        metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft]
+        metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft],
+        use_share_groups=[True]
     )
-    def test_share_single_topic_partition(self, metadata_quorum=quorum.isolated_kraft):
+    def test_share_single_topic_partition(self, metadata_quorum=quorum.isolated_kraft, use_share_groups=True):
 
         total_messages = 100000
         producer = self.setup_producer(self.TOPIC1["name"], max_messages=total_messages)
@@ -133,20 +134,21 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         self.await_acknowledged_messages(consumer, min_messages=total_messages, timeout_sec=self.default_timeout_sec)
 
         assert consumer.total_consumed() >= producer.num_acked
-        assert consumer.total_acknowledged() == producer.num_acked
+        assert consumer.total_acknowledged_successfully() == producer.num_acked
 
         for event_handler in consumer.event_handlers.values():
             assert event_handler.total_consumed > 0
-            assert event_handler.total_acknowledged > 0
+            assert event_handler.total_acknowledged_successfully > 0
 
         producer.stop()
         consumer.stop_all()
 
     @cluster(num_nodes=10)
     @matrix(
-        metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft]
+        metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft],
+        use_share_groups=[True]
     )
-    def test_share_multiple_partitions(self, metadata_quorum=quorum.isolated_kraft):
+    def test_share_multiple_partitions(self, metadata_quorum=quorum.isolated_kraft, use_share_groups=True):
 
         total_messages = 1000000
         producer = self.setup_producer(self.TOPIC2["name"], max_messages=total_messages, throughput=5000)
@@ -161,11 +163,11 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         self.await_acknowledged_messages(consumer, min_messages=total_messages, timeout_sec=self.default_timeout_sec)
 
         assert consumer.total_consumed() >= producer.num_acked
-        assert consumer.total_acknowledged() == producer.num_acked
+        assert consumer.total_acknowledged_successfully() == producer.num_acked
 
         for event_handler in consumer.event_handlers.values():
             assert event_handler.total_consumed > 0
-            assert event_handler.total_acknowledged > 0
+            assert event_handler.total_acknowledged_successfully > 0
             for topic_partition in self.get_topic_partitions(self.TOPIC2):
                 assert topic_partition in event_handler.consumed_per_partition
                 assert event_handler.consumed_per_partition[topic_partition] > 0
@@ -178,9 +180,10 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
     @cluster(num_nodes=10)
     @matrix(
         clean_shutdown=[True, False],
-        metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft]
+        metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft],
+        use_share_groups=[True]
     )
-    def test_broker_rolling_bounce(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft):
+    def test_broker_rolling_bounce(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft, use_share_groups=True):
 
         producer = self.setup_producer(self.TOPIC2["name"])
         consumer = self.setup_share_group(self.TOPIC2["name"], offset_reset_strategy="earliest")
@@ -209,14 +212,16 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
     @matrix(
         clean_shutdown=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
-        num_failed_brokers=[1, 2]
+        num_failed_brokers=[1, 2],
+        use_share_groups=[True]
     )
     @matrix(
         clean_shutdown=[True, False],
         metadata_quorum=[quorum.combined_kraft],
-        num_failed_brokers=[1]
+        num_failed_brokers=[1],
+        use_share_groups=[True]
     )
-    def test_broker_failure(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft, num_failed_brokers=1):
+    def test_broker_failure(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft, num_failed_brokers=1, use_share_groups=True):
 
         producer = self.setup_producer(self.TOPIC2["name"])
         consumer = self.setup_share_group(self.TOPIC2["name"], offset_reset_strategy="earliest")
@@ -245,9 +250,10 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
     @matrix(
         clean_shutdown=[True, False],
         bounce_mode=["all", "rolling"],
-        metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft]
+        metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft],
+        use_share_groups=[True]
     )
-    def test_share_consumer_bounce(self, clean_shutdown, bounce_mode, metadata_quorum=quorum.zk):
+    def test_share_consumer_bounce(self, clean_shutdown, bounce_mode, metadata_quorum=quorum.zk, use_share_groups=True):
         """
         Verify correct share consumer behavior when the share consumers in the group are consecutively restarted.
 
@@ -286,9 +292,10 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
     @matrix(
         clean_shutdown=[True, False],
         num_failed_consumers=[1, 2],
-        metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft]
+        metadata_quorum=[quorum.isolated_kraft, quorum.combined_kraft],
+        use_share_groups=[True]
     )
-    def test_share_consumer_failure(self, clean_shutdown, metadata_quorum=quorum.zk, num_failed_consumers=1):
+    def test_share_consumer_failure(self, clean_shutdown, metadata_quorum=quorum.zk, num_failed_consumers=1, use_share_groups=True):
 
         producer = self.setup_producer(self.TOPIC2["name"])
         consumer = self.setup_share_group(self.TOPIC2["name"], offset_reset_strategy="earliest")

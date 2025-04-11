@@ -885,7 +885,10 @@ public class DefaultStateUpdater implements StateUpdater {
                 restoredActiveTasksLock.lock();
                 try {
                     while (restoredActiveTasks.isEmpty() && now <= deadline) {
-                        final boolean elapsed = restoredActiveTasksCondition.await(deadline - now, TimeUnit.MILLISECONDS);
+                        // We can ignore whether the deadline expired during await, as the while loop condition will
+                        // check again for deadline expiration.
+                        @SuppressWarnings("UnusedLocalVariable")
+                        final boolean ignored = restoredActiveTasksCondition.await(deadline - now, TimeUnit.MILLISECONDS);
                         now = time.milliseconds();
                     }
                     result.addAll(restoredActiveTasks);

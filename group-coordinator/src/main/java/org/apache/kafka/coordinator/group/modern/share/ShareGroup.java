@@ -236,6 +236,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         );
 
         records.add(GroupCoordinatorRecordHelpers.newShareGroupSubscriptionMetadataTombstoneRecord(groupId()));
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataTombstoneRecord(groupId()));
         records.add(GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord(groupId()));
     }
 
@@ -286,5 +287,10 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
             )
         );
         return describedGroup;
+    }
+
+    @Override
+    public boolean shouldExpire() {
+        return false;
     }
 }

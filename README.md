@@ -42,7 +42,7 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew test  # runs both unit and integration tests
     ./gradlew unitTest
     ./gradlew integrationTest
-    ./gradlew quarantinedTest  # runs the quarantined tests
+    ./gradlew test -Pkafka.test.run.flaky=true  # runs tests that are marked as flaky
 
     
 ### Force re-running tests without code change ###
@@ -77,10 +77,6 @@ The following example declares -PmaxTestRetries=1 and -PmaxTestRetryFailures=3 t
 
     ./gradlew test -PmaxTestRetries=1 -PmaxTestRetryFailures=3
 
-The quarantinedTest task also has no retries by default, but you can set maxQuarantineTestRetries and maxQuarantineTestRetryFailures to enable retries, similar to the test task.
-
-    ./gradlew quarantinedTest -PmaxQuarantineTestRetries=3 -PmaxQuarantineTestRetryFailures=20
-
 See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) for and [build.yml](.github/workflows/build.yml) more details.
 
 ### Generating test coverage reports ###
@@ -113,7 +109,7 @@ Using compiled files:
 
 Using docker image:
 
-    docker run -p 9092:9092 apache/kafka:3.7.0
+    docker run -p 9092:9092 apache/kafka:latest
 
 ### Cleaning the build ###
     ./gradlew clean

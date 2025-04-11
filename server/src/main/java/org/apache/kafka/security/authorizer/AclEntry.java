@@ -23,7 +23,6 @@ import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -62,7 +61,7 @@ public class AclEntry {
             case TRANSACTIONAL_ID:
                 return new HashSet<>(Arrays.asList(DESCRIBE, WRITE));
             case DELEGATION_TOKEN:
-                return Collections.singleton(DESCRIBE);
+                return Set.of(DESCRIBE);
             case USER:
                 return new HashSet<>(Arrays.asList(CREATE_TOKENS, DESCRIBE_TOKENS));
             default:

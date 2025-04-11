@@ -21,7 +21,7 @@ import java.io.{ByteArrayOutputStream, File, PrintStream}
 import java.nio.charset.StandardCharsets
 import java.nio.file.Files
 import java.util
-import java.util.{Optional, Properties}
+import java.util.Properties
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import net.sourceforge.argparse4j.inf.ArgumentParserException
@@ -325,7 +325,7 @@ Found problem:
     properties.putAll(defaultStaticQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     assertEquals("Unsupported feature: non.existent.feature. Supported features are: " +
-      "eligible.leader.replicas.version, group.version, kraft.version, transaction.version",
+      "eligible.leader.replicas.version, group.version, kraft.version, share.version, transaction.version",
         assertThrows(classOf[FormatterException], () =>
           runFormatCommand(new ByteArrayOutputStream(), properties,
             Seq("--feature", "non.existent.feature=20"))).getMessage)
@@ -537,10 +537,10 @@ Found problem:
   def testVersionMappingWithValidReleaseVersion(): Unit = {
     val stream = new ByteArrayOutputStream()
     // Test with a valid release version
-    assertEquals(0, runVersionMappingCommand(stream, "3.3-IV3"))
+    assertEquals(0, runVersionMappingCommand(stream, MetadataVersion.MINIMUM_VERSION.toString))
 
     val output = stream.toString()
-    val metadataVersion = MetadataVersion.IBP_3_3_IV3
+    val metadataVersion = MetadataVersion.MINIMUM_VERSION
     // Check that the metadata version is correctly included in the output
     assertTrue(output.contains(s"metadata.version=${metadataVersion.featureLevel()} (${metadataVersion.version()})"),
       s"Output did not contain expected Metadata Version: $output"
@@ -589,7 +589,7 @@ Found problem:
     })
 
     assertEquals("Unknown release version '2.9-IV2'." +
-      " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version +
+      " Supported versions are: " + MetadataVersion.MINIMUM_VERSION.version +
       " to " + MetadataVersion.LATEST_PRODUCTION.version, exception.getMessage
     )
 
@@ -598,7 +598,7 @@ Found problem:
     })
 
     assertEquals("Unknown release version 'invalid'." +
-      " Supported versions are: " + MetadataVersion.MINIMUM_BOOTSTRAP_VERSION.version +
+      " Supported versions are: " + MetadataVersion.MINIMUM_VERSION.version +
       " to " + MetadataVersion.LATEST_PRODUCTION.version, exception2.getMessage
     )
   }
@@ -712,7 +712,7 @@ Found problem:
 
     // Not doing full SCRAM record validation since that's covered elsewhere.
     // Just checking that we generate the correct number of records
-    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString, Optional.empty).read
+    val bootstrapMetadata = new BootstrapDirectory(availableDirs.head.toString).read
     val scramRecords = bootstrapMetadata.records().asScala
       .filter(apiMessageAndVersion => apiMessageAndVersion.message().isInstanceOf[UserScramCredentialRecord])
       .map(apiMessageAndVersion => apiMessageAndVersion.message().asInstanceOf[UserScramCredentialRecord])
