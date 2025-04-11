@@ -201,6 +201,11 @@ public class StandbyTask extends AbstractTask implements Task {
     }
 
     @Override
+    public void flush() {
+        throw new UnsupportedOperationException("Flushing behavior is not required for standby tasks.");
+    }
+
+    @Override
     public void postCommit(final boolean enforceCheckpoint) {
         switch (state()) {
             case CREATED:

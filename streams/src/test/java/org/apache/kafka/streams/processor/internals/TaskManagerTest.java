@@ -459,7 +459,7 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
 
-        verify(activeTaskToClose).prepareCommit();
+        verify(activeTaskToClose).flush();
         verify(activeTaskToClose).suspend();
         verify(activeTaskToClose).closeDirty();
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
@@ -500,7 +500,7 @@ public class TaskManagerTest {
 
         taskManager.handleAssignment(Collections.emptyMap(), Collections.emptyMap());
 
-        verify(standbyTaskToClose).prepareCommit();
+        verify(standbyTaskToClose).flush();
         verify(standbyTaskToClose).suspend();
         verify(standbyTaskToClose).closeDirty();
         verify(activeTaskCreator).createTasks(consumer, Collections.emptyMap());
@@ -1536,10 +1536,10 @@ public class TaskManagerTest {
 
         taskManager.handleLostAll();
 
-        verify(task1).prepareCommit();
+        verify(task1).flush();
         verify(task1).suspend();
         verify(task1).closeDirty();
-        verify(task2).prepareCommit();
+        verify(task2).flush();
         verify(task2).suspend();
         verify(task2).closeDirty();
     }
@@ -1569,7 +1569,7 @@ public class TaskManagerTest {
 
         verify(task1).suspend();
         verify(task1).closeClean();
-        verify(task2).prepareCommit();
+        verify(task2).flush();
         verify(task2).suspend();
         verify(task2).closeDirty();
         verify(task3).suspend();
@@ -2179,7 +2179,7 @@ public class TaskManagerTest {
 
         // `handleLostAll`
         taskManager.handleLostAll();
-        assertThat(task00.commitPrepared, is(true));
+        assertThat(task00.flushed, is(true));
         assertThat(task00.state(), is(Task.State.CLOSED));
         assertThat(task01.state(), is(Task.State.RUNNING));
         assertThat(taskManager.activeTaskMap(), Matchers.anEmptyMap());
@@ -3560,7 +3560,7 @@ public class TaskManagerTest {
 
         verify(activeTaskCreator).close();
         verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
-        verify(failedStatefulTask).prepareCommit();
+        verify(failedStatefulTask).flush();
         verify(failedStatefulTask).suspend();
         verify(failedStatefulTask).closeDirty();
     }
@@ -3634,16 +3634,16 @@ public class TaskManagerTest {
         verify(stateUpdater).shutdown(Duration.ofMillis(Long.MAX_VALUE));
         verify(tasks).addTask(removedStatefulTask);
         verify(tasks).addTask(removedStandbyTask);
-        verify(removedFailedStatefulTask).prepareCommit();
+        verify(removedFailedStatefulTask).flush();
         verify(removedFailedStatefulTask).suspend();
         verify(removedFailedStatefulTask).closeDirty();
-        verify(removedFailedStandbyTask).prepareCommit();
+        verify(removedFailedStandbyTask).flush();
         verify(removedFailedStandbyTask).suspend();
         verify(removedFailedStandbyTask).closeDirty();
-        verify(removedFailedStatefulTaskDuringRemoval).prepareCommit();
+        verify(removedFailedStatefulTaskDuringRemoval).flush();
         verify(removedFailedStatefulTaskDuringRemoval).suspend();
         verify(removedFailedStatefulTaskDuringRemoval).closeDirty();
-        verify(removedFailedStandbyTaskDuringRemoval).prepareCommit();
+        verify(removedFailedStandbyTaskDuringRemoval).flush();
         verify(removedFailedStandbyTaskDuringRemoval).suspend();
         verify(removedFailedStandbyTaskDuringRemoval).closeDirty();
     }
@@ -4880,6 +4880,7 @@ public class TaskManagerTest {
         private boolean commitNeeded = false;
         private boolean commitRequested = false;
         private boolean commitPrepared = false;
+        private boolean flushed = false;
         private boolean commitCompleted = false;
         private Map<TopicPartition, OffsetAndMetadata> committableOffsets = Collections.emptyMap();
         private Map<TopicPartition, Long> purgeableOffsets;
@@ -4947,6 +4948,11 @@ public class TaskManagerTest {
             } else {
                 return Collections.emptyMap();
             }
+        }
+
+        @Override
+        public void flush() {
+            flushed = true;
         }
 
         @Override

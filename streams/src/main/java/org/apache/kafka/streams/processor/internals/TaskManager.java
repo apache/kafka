@@ -1479,7 +1479,7 @@ public class TaskManager {
         try {
             // we call this function only to flush the case if necessary
             // before suspending and closing the topology
-            task.prepareCommit();
+            task.flush();
         } catch (final RuntimeException swallow) {
             log.warn("Error flushing cache of dirty task {}. " +
                 "Since the task is closing dirty, the following exception is swallowed: {}",

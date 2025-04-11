@@ -417,7 +417,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
         timeCurrentIdlingStarted = Optional.empty();
     }
 
-
+    @Override
     public void flush() {
         stateMgr.flushCache();
         recordCollector.flush();

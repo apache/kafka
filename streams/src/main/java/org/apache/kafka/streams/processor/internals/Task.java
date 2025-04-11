@@ -203,6 +203,8 @@ public interface Task {
      */
     Map<TopicPartition, OffsetAndMetadata> prepareCommit();
 
+    void flush();
+
     void postCommit(boolean enforceCheckpoint);
 
     default Map<TopicPartition, Long> purgeableOffsets() {

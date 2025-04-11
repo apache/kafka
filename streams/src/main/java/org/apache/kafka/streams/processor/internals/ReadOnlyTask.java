@@ -185,6 +185,11 @@ public class ReadOnlyTask implements Task {
     }
 
     @Override
+    public void flush() {
+        throw new UnsupportedOperationException("This task is read-only");
+    }
+
+    @Override
     public void postCommit(final boolean enforceCheckpoint) {
         throw new UnsupportedOperationException("This task is read-only");
     }
