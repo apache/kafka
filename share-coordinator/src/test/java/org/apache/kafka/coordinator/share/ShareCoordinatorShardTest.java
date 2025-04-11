@@ -994,9 +994,7 @@ class ShareCoordinatorShardTest {
                 .setPartitions(List.of(new DeleteShareGroupStateRequestData.PartitionData()
                     .setPartition(PARTITION)))));
 
-        CoordinatorResult<DeleteShareGroupStateResponseData, CoordinatorRecord> result = shard.deleteState(request);
-
-        // apply a record in to verify delete
+        // Apply a record to the state machine so that delete can be verified.
         CoordinatorRecord record = ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
             GROUP_ID,
             TOPIC_ID,
@@ -1021,7 +1019,9 @@ class ShareCoordinatorShardTest {
         assertNotNull(shard.getLeaderMapValue(shareCoordinatorKey));
         assertNotNull(shard.getStateEpochMapValue(shareCoordinatorKey));
 
-        // apply tombstone
+        CoordinatorResult<DeleteShareGroupStateResponseData, CoordinatorRecord> result = shard.deleteState(request);
+
+        // Apply tombstone.
         shard.replay(0L, 0L, (short) 0, result.records().get(0));
 
         DeleteShareGroupStateResponseData expectedData = DeleteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
@@ -1039,7 +1039,7 @@ class ShareCoordinatorShardTest {
     }
 
     @Test
-    public void testDeleteStateFirstRecordDeleteSuccess() {
+    public void testDeleteStateUnintializedRecord() {
         ShareCoordinatorShard shard = new ShareCoordinatorShardBuilder().build();
 
         SharePartitionKey shareCoordinatorKey = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, PARTITION);
@@ -1057,21 +1057,10 @@ class ShareCoordinatorShardTest {
         assertNull(shard.getLeaderMapValue(shareCoordinatorKey));
         assertNull(shard.getStateEpochMapValue(shareCoordinatorKey));
 
-        // apply tombstone
-        shard.replay(0L, 0L, (short) 0, result.records().get(0));
-
         DeleteShareGroupStateResponseData expectedData = DeleteShareGroupStateResponse.toResponseData(TOPIC_ID, PARTITION);
-        List<CoordinatorRecord> expectedRecords = List.of(
-            ShareCoordinatorRecordHelpers.newShareStateTombstoneRecord(
-                GROUP_ID, TOPIC_ID, PARTITION)
-        );
 
         assertEquals(expectedData, result.response());
-        assertEquals(expectedRecords, result.records());
-
-        assertNull(shard.getShareStateMapValue(shareCoordinatorKey));
-        assertNull(shard.getLeaderMapValue(shareCoordinatorKey));
-        assertNull(shard.getStateEpochMapValue(shareCoordinatorKey));
+        assertEquals(List.of(), result.records());
     }
 
     @Test
