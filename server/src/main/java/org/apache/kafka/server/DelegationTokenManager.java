@@ -33,6 +33,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.function.Function;
+import java.util.function.Predicate;
 
 import javax.crypto.Mac;
 import javax.crypto.SecretKey;
@@ -96,7 +97,7 @@ public class DelegationTokenManager {
         tokenCache.removeCache(tokenId);
     }
 
-    public List<DelegationToken> getTokens(java.util.function.Predicate<TokenInformation> filterToken) {
+    public List<DelegationToken> getTokens(Predicate<TokenInformation> filterToken) {
         return tokenCache.tokens().stream()
             .filter(filterToken)
             .map(this::getDelegationToken)

@@ -37,7 +37,7 @@ import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, Transacti
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.network.EndPoint
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
+import org.apache.kafka.server.config.{KRaftConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.storage.internals.log.CleanerConfig
@@ -958,12 +958,6 @@ class KafkaConfigTest {
         // Security config
         case SecurityConfig.SECURITY_PROVIDERS_CONFIG =>
 
-        //delegation token configs
-        case DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG => // ignore
-        case DelegationTokenManagerConfigs.DELEGATION_TOKEN_MAX_LIFETIME_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_TIME_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-        case DelegationTokenManagerConfigs.DELEGATION_TOKEN_EXPIRY_CHECK_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
-
         //Kafka Yammer metrics reporter configs
         case MetricConfigs.KAFKA_METRICS_REPORTER_CLASSES_CONFIG => // ignore
         case MetricConfigs.KAFKA_METRICS_POLLING_INTERVAL_SECONDS_CONFIG => //ignore
@@ -1173,15 +1167,6 @@ class KafkaConfigTest {
     assertEquals(123L, config.logFlushIntervalMs)
     assertEquals(CompressionType.SNAPPY, config.groupCoordinatorConfig.offsetTopicCompressionType)
     assertEquals(Sensor.RecordingLevel.DEBUG.toString, config.metricRecordingLevel)
-    val delegationTokenManagerConfigs = new DelegationTokenManagerConfigs(config)
-    assertEquals(false, delegationTokenManagerConfigs.tokenAuthEnabled)
-    assertEquals(7 * 24 * 60L * 60L * 1000L, delegationTokenManagerConfigs.delegationTokenMaxLifeMs)
-    assertEquals(24 * 60L * 60L * 1000L, delegationTokenManagerConfigs.delegationTokenExpiryTimeMs)
-    assertEquals(1 * 60L * 1000L * 60, delegationTokenManagerConfigs.delegationTokenExpiryCheckIntervalMs)
-
-    defaults.setProperty(DelegationTokenManagerConfigs.DELEGATION_TOKEN_SECRET_KEY_CONFIG, "1234567890")
-    val delegationTokenManagerConfigs1 = new DelegationTokenManagerConfigs(KafkaConfig.fromProps(defaults))
-    assertEquals(true, delegationTokenManagerConfigs1.tokenAuthEnabled)
   }
 
   @Test
