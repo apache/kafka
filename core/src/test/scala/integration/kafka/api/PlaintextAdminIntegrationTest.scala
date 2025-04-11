@@ -67,7 +67,6 @@ import scala.collection.Seq
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 import scala.jdk.CollectionConverters._
-import scala.jdk.OptionConverters.RichOption
 import scala.util.{Random, Using}
 
 /**
@@ -693,7 +692,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val newTopics = util.List.of(
       new NewTopic("mytopic", util.Map.of(0: Integer, util.List.of[Integer](1, 2), 1: Integer, util.List.of[Integer](2, 0))),
       new NewTopic("mytopic2", 3, 3.toShort),
-      new NewTopic("mytopic3", Option.empty[Integer].toJava, Option.empty[java.lang.Short].toJava)
+      new NewTopic("mytopic3", Optional.empty[Integer], Optional.empty[java.lang.Short])
     )
     val createResult = client.createTopics(newTopics)
     createResult.all.get()
@@ -3914,7 +3913,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       1: Integer, util.List.of[Integer](2, 0))).
       configs(util.Map.of(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "9999999")),
       new NewTopic("bar", 3, 3.toShort),
-      new NewTopic("baz", Option.empty[Integer].toJava, Option.empty[java.lang.Short].toJava)
+      new NewTopic("baz", Optional.empty[Integer], Optional.empty[java.lang.Short])
     )
     val result = client.createTopics(newTopics.asJava)
     result.all.get()

@@ -92,19 +92,19 @@ class RemoteLeaderEndPointTest {
 
     @Test
     def testFetchEpochEndOffsets(): Unit = {
-        val expected = Map(
-            topicPartition -> new EpochEndOffset()
+        val expected = util.Map.of(
+            topicPartition, new EpochEndOffset()
               .setPartition(topicPartition.partition)
               .setErrorCode(Errors.NONE.code)
               .setLeaderEpoch(0)
               .setEndOffset(logEndOffset))
-        blockingSend.setOffsetsForNextResponse(expected.asJava)
+        blockingSend.setOffsetsForNextResponse(expected)
         val result = endPoint.fetchEpochEndOffsets(Map(
             topicPartition -> new OffsetForLeaderPartition()
               .setPartition(topicPartition.partition)
               .setLeaderEpoch(currentLeaderEpoch)))
 
-        assertEquals(expected, result)
+        assertEquals(expected, result.asJava)
     }
 
     @Test

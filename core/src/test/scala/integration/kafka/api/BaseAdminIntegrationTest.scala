@@ -17,7 +17,7 @@
 package kafka.api
 
 import java.util
-import java.util.Properties
+import java.util.{Optional, Properties}
 import java.util.concurrent.ExecutionException
 import kafka.utils.Logging
 import kafka.utils.TestUtils._
@@ -37,7 +37,6 @@ import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
-import scala.jdk.OptionConverters.RichOption
 
 /**
  * Base integration test cases for [[Admin]]. Each test case added here will be executed
@@ -76,7 +75,7 @@ abstract class BaseAdminIntegrationTest extends IntegrationTestHarness with Logg
     val newTopics = util.List.of(
       new NewTopic("mytopic", util.Map.of(0: Integer, util.List.of[Integer](1, 2), 1: Integer, util.List.of[Integer](2, 0))),
       new NewTopic("mytopic2", 3, 3.toShort),
-      new NewTopic("mytopic3", Option.empty[Integer].toJava, Option.empty[java.lang.Short].toJava)
+      new NewTopic("mytopic3", Optional.empty[Integer], Optional.empty[java.lang.Short])
     )
     val validateResult = client.createTopics(newTopics, new CreateTopicsOptions().validateOnly(true))
     validateResult.all.get()

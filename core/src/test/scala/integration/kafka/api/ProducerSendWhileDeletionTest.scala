@@ -28,8 +28,6 @@ import org.junit.jupiter.params.provider.ValueSource
 import java.nio.charset.StandardCharsets
 import java.util
 import java.util.Optional
-import scala.jdk.CollectionConverters._
-
 
 class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
   val producerCount: Int = 1
@@ -59,14 +57,14 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
     // Create topic with leader as 0 for the 2 partitions.
     createTopicWithAssignment(topic, Map(0 -> Seq(0, 1), 1 -> Seq(0, 1)))
 
-    val reassignment = Map(
-      new TopicPartition(topic, 0) -> Optional.of(new NewPartitionReassignment(util.List.of(1, 0))),
-      new TopicPartition(topic, 1) -> Optional.of(new NewPartitionReassignment(util.List.of(1, 0)))
+    val reassignment = util.Map.of(
+      new TopicPartition(topic, 0), Optional.of(new NewPartitionReassignment(util.List.of(1, 0))),
+      new TopicPartition(topic, 1), Optional.of(new NewPartitionReassignment(util.List.of(1, 0)))
     )
 
     // Change leader to 1 for both the partitions to increase leader epoch from 0 -> 1
     val admin = createAdminClient()
-    admin.alterPartitionReassignments(reassignment.asJava).all().get()
+    admin.alterPartitionReassignments(reassignment).all().get()
 
     val producer = createProducer()
 
