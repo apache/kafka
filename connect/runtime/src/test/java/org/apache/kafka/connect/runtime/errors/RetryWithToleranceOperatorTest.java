@@ -397,9 +397,9 @@ public class RetryWithToleranceOperatorTest {
     @Test
     public void testDefaultConfigs() {
         ConnectorConfig configuration = config(emptyMap());
-        assertEquals(configuration.errorRetryTimeout(), ERRORS_RETRY_TIMEOUT_DEFAULT);
-        assertEquals(configuration.errorMaxDelayInMillis(), ERRORS_RETRY_MAX_DELAY_DEFAULT);
-        assertEquals(configuration.errorToleranceType(), ERRORS_TOLERANCE_DEFAULT);
+        assertEquals(ERRORS_RETRY_TIMEOUT_DEFAULT, configuration.errorRetryTimeout());
+        assertEquals(ERRORS_RETRY_MAX_DELAY_DEFAULT, configuration.errorMaxDelayInMillis());
+        assertEquals(ERRORS_TOLERANCE_DEFAULT, configuration.errorToleranceType());
     }
 
     ConnectorConfig config(Map<String, String> connProps) {
@@ -414,13 +414,13 @@ public class RetryWithToleranceOperatorTest {
     public void testSetConfigs() {
         ConnectorConfig configuration;
         configuration = config(singletonMap(ERRORS_RETRY_TIMEOUT_CONFIG, "100"));
-        assertEquals(configuration.errorRetryTimeout(), 100);
+        assertEquals(100, configuration.errorRetryTimeout());
 
         configuration = config(singletonMap(ERRORS_RETRY_MAX_DELAY_CONFIG, "100"));
-        assertEquals(configuration.errorMaxDelayInMillis(), 100);
+        assertEquals(100, configuration.errorMaxDelayInMillis());
 
         configuration = config(singletonMap(ERRORS_TOLERANCE_CONFIG, "none"));
-        assertEquals(configuration.errorToleranceType(), ToleranceType.NONE);
+        assertEquals(ToleranceType.NONE, configuration.errorToleranceType());
     }
 
     @Test
@@ -438,7 +438,7 @@ public class RetryWithToleranceOperatorTest {
         CountDownLatch exitLatch = mock(CountDownLatch.class);
         RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator = new RetryWithToleranceOperator<>(-1, ERRORS_RETRY_MAX_DELAY_DEFAULT, ALL, time, errorHandlingMetrics, exitLatch);
         ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>("t", 0, 0, null, null);
-        List<CompletableFuture<RecordMetadata>> fs = IntStream.range(0, numberOfReports).mapToObj(i -> new CompletableFuture<RecordMetadata>()).collect(Collectors.toList());
+        List<CompletableFuture<RecordMetadata>> fs = IntStream.range(0, numberOfReports).mapToObj(i -> new CompletableFuture<RecordMetadata>()).toList();
         List<ErrorReporter<ConsumerRecord<byte[], byte[]>>> reporters = IntStream.range(0, numberOfReports).mapToObj(i -> (ErrorReporter<ConsumerRecord<byte[], byte[]>>) c -> fs.get(i)).collect(Collectors.toList());
         retryWithToleranceOperator.reporters(reporters);
         ProcessingContext<ConsumerRecord<byte[], byte[]>> context = new ProcessingContext<>(consumerRecord);

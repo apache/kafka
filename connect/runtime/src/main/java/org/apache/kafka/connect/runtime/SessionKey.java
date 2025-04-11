@@ -23,14 +23,12 @@ import javax.crypto.SecretKey;
 /**
  * A session key, which can be used to validate internal REST requests between workers.
  */
-public class SessionKey {
-
-    private final SecretKey key;
-    private final long creationTimestamp;
+public record SessionKey(SecretKey key, long creationTimestamp) {
 
     /**
      * Create a new session key with the given key value and creation timestamp
-     * @param key the actual cryptographic key to use for request validation; may not be null
+     *
+     * @param key               the actual cryptographic key to use for request validation; may not be null
      * @param creationTimestamp the time at which the key was generated
      */
     public SessionKey(SecretKey key, long creationTimestamp) {
@@ -43,6 +41,7 @@ public class SessionKey {
      *
      * @return the cryptographic key; may not be null
      */
+    @Override
     public SecretKey key() {
         return key;
     }
@@ -52,23 +51,9 @@ public class SessionKey {
      *
      * @return the time at which the key was generated
      */
+    @Override
     public long creationTimestamp() {
         return creationTimestamp;
     }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o)
-            return true;
-        if (o == null || getClass() != o.getClass())
-            return false;
-        SessionKey that = (SessionKey) o;
-        return creationTimestamp == that.creationTimestamp
-            && key.equals(that.key);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(key, creationTimestamp);
-    }
 }

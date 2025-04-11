@@ -228,19 +228,17 @@ class SubmittedRecords {
      * Contains a snapshot of offsets that can be committed for a source task and metadata for that offset commit
      * (such as the number of messages for which offsets can and cannot be committed).
      */
-    static class CommittableOffsets {
+    record CommittableOffsets(Map<Map<String, Object>, Map<String, Object>> offsets,
+                              int numCommittableMessages,
+                              int numUncommittableMessages,
+                              int numDeques,
+                              int largestDequeSize,
+                              Map<String, Object> largestDequePartition) {
 
         /**
          * An "empty" snapshot that contains no offsets to commit and whose metadata contains no committable or uncommitable messages.
          */
         public static final CommittableOffsets EMPTY = new CommittableOffsets(Collections.emptyMap(), 0, 0, 0, 0, null);
-
-        private final Map<Map<String, Object>, Map<String, Object>> offsets;
-        private final int numCommittableMessages;
-        private final int numUncommittableMessages;
-        private final int numDeques;
-        private final int largestDequeSize;
-        private final Map<String, Object> largestDequePartition;
 
         CommittableOffsets(
                 Map<Map<String, Object>, Map<String, Object>> offsets,
@@ -261,6 +259,7 @@ class SubmittedRecords {
         /**
          * @return the offsets that can be committed at the time of the snapshot
          */
+        @Override
         public Map<Map<String, Object>, Map<String, Object>> offsets() {
             return Collections.unmodifiableMap(offsets);
         }
@@ -269,6 +268,7 @@ class SubmittedRecords {
          * @return the number of committable messages at the time of the snapshot, where a committable message is both
          * acknowledged and not preceded by any unacknowledged messages in the deque for its source partition
          */
+        @Override
         public int numCommittableMessages() {
             return numCommittableMessages;
         }
@@ -277,6 +277,7 @@ class SubmittedRecords {
          * @return the number of uncommittable messages at the time of the snapshot, where an uncommittable message
          * is either unacknowledged, or preceded in the deque for its source partition by an unacknowledged message
          */
+        @Override
         public int numUncommittableMessages() {
             return numUncommittableMessages;
         }
@@ -284,6 +285,7 @@ class SubmittedRecords {
         /**
          * @return the number of non-empty deques tracking uncommittable messages at the time of the snapshot
          */
+        @Override
         public int numDeques() {
             return numDeques;
         }
@@ -291,15 +293,18 @@ class SubmittedRecords {
         /**
          * @return the size of the largest deque at the time of the snapshot
          */
+        @Override
         public int largestDequeSize() {
             return largestDequeSize;
         }
 
         /**
          * Get the partition for the deque with the most uncommitted messages at the time of the snapshot.
+         *
          * @return the applicable partition, which may be null, or null if there are no uncommitted messages;
          * it is the caller's responsibility to distinguish between these two cases via {@link #hasPending()}
          */
+        @Override
         public Map<String, Object> largestDequePartition() {
             return largestDequePartition;
         }
@@ -323,6 +328,7 @@ class SubmittedRecords {
          * Offsets are combined (giving precedence to the newer snapshot in case of conflict), the total number of
          * committable messages is summed across the two snapshots, and the newer snapshot's information on pending
          * messages (num deques, largest deque size, etc.) is used.
+         *
          * @param newerOffsets the newer snapshot to combine with this snapshot
          * @return the new offset snapshot containing information from this snapshot and the newer snapshot; never null
          */

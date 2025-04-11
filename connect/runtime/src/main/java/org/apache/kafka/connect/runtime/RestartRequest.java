@@ -25,14 +25,12 @@ import java.util.Objects;
  * A request to restart a connector and/or task instances.
  * <p>
  * The natural order is based first upon the connector name and then requested restart behaviors.
- * If two requests have the same connector name, then the requests are ordered based on the 
+ * If two requests have the same connector name, then the requests are ordered based on the
  * probable number of tasks/connector this request is going to restart.
  */
-public class RestartRequest implements Comparable<RestartRequest> {
-
-    private final String connectorName;
-    private final boolean onlyFailed;
-    private final boolean includeTasks;
+public record RestartRequest(String connectorName,
+                             boolean onlyFailed,
+                             boolean includeTasks) implements Comparable<RestartRequest> {
 
     /**
      * Create a new request to restart a connector and optionally its tasks.
@@ -52,6 +50,7 @@ public class RestartRequest implements Comparable<RestartRequest> {
      *
      * @return the connector name; never null
      */
+    @Override
     public String connectorName() {
         return connectorName;
     }
@@ -61,6 +60,7 @@ public class RestartRequest implements Comparable<RestartRequest> {
      *
      * @return true if only failed instances should be restarted, or false if all applicable instances should be restarted
      */
+    @Override
     public boolean onlyFailed() {
         return onlyFailed;
     }
@@ -70,6 +70,7 @@ public class RestartRequest implements Comparable<RestartRequest> {
      *
      * @return true if the connector and task instances should be restarted, or false if just the connector should be restarted
      */
+    @Override
     public boolean includeTasks() {
         return includeTasks;
     }
@@ -108,6 +109,7 @@ public class RestartRequest implements Comparable<RestartRequest> {
         int result = connectorName.compareTo(o.connectorName);
         return result == 0 ? impactRank() - o.impactRank() : result;
     }
+
     //calculates an internal rank for the restart request based on the probable number of tasks/connector this request is going to restart
     private int impactRank() {
         if (onlyFailed && !includeTasks) { //restarts only failed connector so least impactful
@@ -119,23 +121,6 @@ public class RestartRequest implements Comparable<RestartRequest> {
         }
         //onlyFailed==false&&includeTasks  restarts both connector and tasks in any state so highest impact
         return 3;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) {
-            return true;
-        }
-        if (o == null || getClass() != o.getClass()) {
-            return false;
-        }
-        RestartRequest that = (RestartRequest) o;
-        return onlyFailed == that.onlyFailed && includeTasks == that.includeTasks && Objects.equals(connectorName, that.connectorName);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(connectorName, onlyFailed, includeTasks);
     }
 
     @Override
