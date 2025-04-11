@@ -148,6 +148,7 @@ public class LogConfig extends AbstractConfig {
             TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG,
             TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG,
             TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG,
+            TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG,
             QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
             QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
     );
