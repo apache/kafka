@@ -169,8 +169,7 @@ public class RequestManagers implements Closeable {
                                                      final Metrics metrics,
                                                      final OffsetCommitCallbackInvoker offsetCommitCallbackInvoker,
                                                      final MemberStateListener applicationThreadMemberStateListener,
-                                                     final Optional<StreamsRebalanceData> streamsRebalanceData,
-                                                     final Optional<StreamsRebalanceEventsProcessor> streamsRebalanceEventsProcessor
+                                                     final Optional<StreamsRebalanceData> streamsRebalanceData
     ) {
         return new CachedSupplier<>() {
             @Override
@@ -220,12 +219,12 @@ public class RequestManagers implements Closeable {
                         groupRebalanceConfig.groupInstanceId,
                         metrics,
                         metadata);
-                    if (streamsRebalanceEventsProcessor.isPresent()) {
+                    if (streamsRebalanceData.isPresent()) {
                         streamsMembershipManager = new StreamsMembershipManager(
                             groupRebalanceConfig.groupId,
-                            streamsRebalanceEventsProcessor.get(),
                             streamsRebalanceData.get(),
                             subscriptions,
+                            backgroundEventHandler,
                             logContext,
                             time,
                             metrics);
