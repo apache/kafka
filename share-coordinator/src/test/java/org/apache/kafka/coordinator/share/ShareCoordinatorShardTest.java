@@ -1367,7 +1367,7 @@ class ShareCoordinatorShardTest {
         short producerEpoch = 0;
         int leaderEpoch = 0;
 
-        long timestamp = Time.SYSTEM.milliseconds();
+        long timestamp = TIME.milliseconds();
 
         CoordinatorRecord record1 = CoordinatorRecord.record(
             new ShareSnapshotKey()
@@ -1419,6 +1419,8 @@ class ShareCoordinatorShardTest {
         assertNotNull(shard.getShareStateMapValue(SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, 0)));
         assertNotNull(shard.getShareStateMapValue(SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, 1)));
 
+        TIME.sleep(5000);   // Less than config.
+        
         assertEquals(0, shard.snapshotColdPartitions().records().size());
     }
 
@@ -1434,7 +1436,7 @@ class ShareCoordinatorShardTest {
         SharePartitionKey key0 = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, 0);
         SharePartitionKey key1 = SharePartitionKey.getInstance(GROUP_ID, TOPIC_ID, 1);
 
-        long timestamp = Time.SYSTEM.milliseconds();
+        long timestamp = TIME.milliseconds();
         int record1SnapshotEpoch = 0;
 
         CoordinatorRecord record1 = CoordinatorRecord.record(
@@ -1491,7 +1493,8 @@ class ShareCoordinatorShardTest {
         assertEquals(timestamp, shard.getShareStateMapValue(key0).writeTimestamp());
         assertEquals(timestamp + delta, shard.getShareStateMapValue(key1).writeTimestamp());
 
-        TIME.sleep(12000);  // Record 1 is eligible now.
+        long sleep = 12000;
+        TIME.sleep(sleep);  // Record 1 is eligible now.
 
         List<CoordinatorRecord> records = shard.snapshotColdPartitions().records();
 
@@ -1499,8 +1502,8 @@ class ShareCoordinatorShardTest {
 
         shard.replay(offset + 2, producerId, producerEpoch, records.get(0));
 
-        assertTrue(shard.getShareStateMapValue(key0).writeTimestamp() > timestamp);
-        assertTrue(shard.getShareStateMapValue(key0).snapshotEpoch() > record1SnapshotEpoch);
+        assertEquals(timestamp + sleep, shard.getShareStateMapValue(key0).writeTimestamp());
+        assertEquals(record1SnapshotEpoch + 1, shard.getShareStateMapValue(key0).snapshotEpoch());
         assertEquals(timestamp, shard.getShareStateMapValue(key0).createTimestamp());
         assertEquals(timestamp + delta, shard.getShareStateMapValue(key1).writeTimestamp());
     }
