@@ -23,7 +23,7 @@ import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 
 import java.nio.ByteBuffer;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
 
 public class AlterPartitionResponse extends AbstractResponse {
@@ -42,7 +42,7 @@ public class AlterPartitionResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> counts = new HashMap<>();
+        Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
         updateErrorCounts(counts, Errors.forCode(data.errorCode()));
         data.topics().forEach(topicResponse -> topicResponse.partitions().forEach(partitionResponse ->
             updateErrorCounts(counts, Errors.forCode(partitionResponse.errorCode()))

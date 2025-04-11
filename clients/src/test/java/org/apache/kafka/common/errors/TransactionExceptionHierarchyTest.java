@@ -75,4 +75,23 @@ public class TransactionExceptionHierarchyTest {
         assertTrue(RefreshRetriableException.class.isAssignableFrom(exceptionClass),
                 exceptionClass.getSimpleName() + " should extend RefreshRetriableException");
     }
+
+    /**
+     * Verifies that the given exception class extends `ApplicationRecoverableException`
+     *
+     * @param exceptionClass the exception class to check
+     */
+    @ParameterizedTest
+    @ValueSource(classes = {
+        FencedInstanceIdException.class,
+        IllegalGenerationException.class,
+        InvalidPidMappingException.class,
+        InvalidProducerEpochException.class,
+        ProducerFencedException.class,
+        UnknownMemberIdException.class
+    })
+    void testApplicationRecoverableExceptionHierarchy(Class<? extends Exception> exceptionClass) {
+        assertTrue(ApplicationRecoverableException.class.isAssignableFrom(exceptionClass),
+                exceptionClass.getSimpleName() + " should extend ApplicationRecoverableException");
+    }
 }

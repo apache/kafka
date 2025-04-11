@@ -1188,9 +1188,9 @@ class KRaftClusterTest {
     def assertConfigValue(expected: Int): Unit = {
       TestUtils.retry(60000) {
         assertEquals(expected, cluster.controllers().values().iterator().next().
-          quotaManagers.clientQuotaCallback.get.asInstanceOf[DummyClientQuotaCallback].value)
+          quotaManagers.clientQuotaCallbackPlugin.get.get.asInstanceOf[DummyClientQuotaCallback].value)
         assertEquals(expected, cluster.brokers().values().iterator().next().
-          quotaManagers.clientQuotaCallback.get.asInstanceOf[DummyClientQuotaCallback].value)
+          quotaManagers.clientQuotaCallbackPlugin.get.get.asInstanceOf[DummyClientQuotaCallback].value)
       }
     }
 

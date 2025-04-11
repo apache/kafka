@@ -30,6 +30,7 @@ import org.junit.jupiter.api.Test;
 import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -54,7 +55,7 @@ public class OffsetCommitResponseTest {
 
     @BeforeEach
     public void setUp() {
-        expectedErrorCounts = new HashMap<>();
+        expectedErrorCounts = new EnumMap<>(Errors.class);
         expectedErrorCounts.put(errorOne, 1);
         expectedErrorCounts.put(errorTwo, 1);
 
