@@ -20,9 +20,9 @@ import java.util.Optional;
 import java.util.Set;
 
 /**
- * Callbacks for handling Streams group rebalance events in Kafka Streams.
+ * Listener for handling Streams group rebalance events in Kafka Streams.
  */
-public interface StreamsGroupRebalanceCallbacks {
+public interface StreamsRebalanceListener {
 
     /**
      * Called when tasks are revoked from a stream thread.

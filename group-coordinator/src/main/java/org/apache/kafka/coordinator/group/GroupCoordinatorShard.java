@@ -400,7 +400,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param context The request context.
      * @param request The actual StreamsGroupHeartbeat request.
      *
-     * @return A result containing the StreamsGroupHeartbeat response, a list of internal topics to be created and
+     * @return A Result containing the StreamsGroupHeartbeat response, a list of internal topics to be created and
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
@@ -440,6 +440,43 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         Map<Uuid, Set<Integer>> topicPartitionMap
     ) {
         return groupMetadataManager.initializeShareGroupState(groupId, topicPartitionMap);
+    }
+
+    /**
+     * Removes specific topic partitions from the initializing state for a share group. This is usually part of
+     * shareGroupHeartbeat code flow, specifically, if there is a persister exception.
+     * @param groupId The group id corresponding to the share group whose share partitions have been initialized.
+     * @param topicPartitionMap Map representing topic partition data to be cleaned from the share state partition metadata.
+     *
+     * @return A Result containing ShareGroupStatePartitionMetadata records and Void response.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> uninitializeShareGroupState(
+        String groupId,
+        Map<Uuid, Set<Integer>> topicPartitionMap
+    ) {
+        return groupMetadataManager.uninitializeShareGroupState(groupId, topicPartitionMap);
+    }
+
+    /**
+     * Reconcile initializing and initialized tps in share group state metadata records.
+     *
+     * @return A Result containing ShareGroupStatePartitionMetadata records and Void response.
+     */
+    public List<InitializeShareGroupStateParameters> reconcileShareGroupStateInitializingState(long offset) {
+        return groupMetadataManager.reconcileShareGroupStateInitializingState(offset);
+    }
+
+    /**
+     * Returns the set of share-partitions whose share-group state has been initialized in the persister.
+     *
+     * @param groupId The group id corresponding to the share group whose share partitions have been initialized.
+     *
+     * @return A map representing the initialized share-partitions for the share group.
+     */
+    public Map<Uuid, Set<Integer>> initializedShareGroupPartitions(
+        String groupId
+    ) {
+        return groupMetadataManager.initializedShareGroupPartitions(groupId);
     }
 
     /**
@@ -552,18 +589,19 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * Method returns a Map keyed on groupId and value as pair of {@link DeleteShareGroupStateParameters}
      * and any ERRORS while building the request corresponding
      * to the valid share groups passed as the input.
-     * <p></p>
+     * <p>
      * The groupIds are first filtered by type to restrict the list to share groups.
      * @param groupIds - A list of groupIds as string
-     * @return {@link CoordinatorResult} object always containing empty records and Map keyed on groupId and value pair (req, error)
+     * @return A result object containing a map keyed on groupId and value pair (req, error) and related coordinator records.
      */
     public CoordinatorResult<Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>>, CoordinatorRecord> sharePartitionDeleteRequests(List<String> groupIds) {
         Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>> responseMap = new HashMap<>();
+        List<CoordinatorRecord> records = new ArrayList<>();
         for (String groupId : groupIds) {
             try {
                 ShareGroup group = groupMetadataManager.shareGroup(groupId);
                 group.validateDeleteGroup();
-                groupMetadataManager.shareGroupBuildPartitionDeleteRequest(group)
+                groupMetadataManager.shareGroupBuildPartitionDeleteRequest(groupId, records)
                     .ifPresent(req -> responseMap.put(groupId, Map.entry(req, Errors.NONE)));
             } catch (GroupIdNotFoundException exception) {
                 log.debug("GroupId {} not found as a share group.", groupId);
@@ -572,7 +610,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 responseMap.put(groupId, Map.entry(DeleteShareGroupStateParameters.EMPTY_PARAMS, Errors.forException(exception)));
             }
         }
-        return new CoordinatorResult<>(List.of(), responseMap);
+        return new CoordinatorResult<>(records, responseMap);
     }
 
     /**

@@ -14,36 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.purgatory;
 
-import java.util.Objects;
+package org.apache.kafka.clients.admin;
 
 /**
- * Used by delayed-sync operations
+ * Options for {@link Admin#forceTerminateTransaction(String, TerminateTransactionOptions)}.
  */
-public class GroupSyncKey implements DelayedOperationKey {
-
-    private final String groupId;
-
-    public GroupSyncKey(String groupId) {
-        this.groupId = groupId;
-    }
+public class TerminateTransactionOptions extends AbstractOptions<TerminateTransactionOptions> {
 
     @Override
-    public String keyLabel() {
-        return "sync-" + groupId;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        GroupSyncKey that = (GroupSyncKey) o;
-        return Objects.equals(groupId, that.groupId);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(groupId);
+    public String toString() {
+        return "TerminateTransactionOptions{" +
+                "timeoutMs=" + timeoutMs +
+                '}';
     }
 }

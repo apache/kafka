@@ -298,7 +298,7 @@ class ReplicaManagerQuotasTest {
     val alterIsrManager: AlterPartitionManager = mock(classOf[AlterPartitionManager])
 
     val leaderBrokerId = configs.head.brokerId
-    quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
+    quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "", "")
     replicaManager = new ReplicaManager(
       metrics = metrics,
       config = configs.head,
