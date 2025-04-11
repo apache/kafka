@@ -36,7 +36,7 @@ import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -64,7 +64,7 @@ public class InternalTopicsIntegrationTest {
 
     @AfterEach
     public void close() {
-        // stop all Connect, Kafka and Zk threads.
+        // stop the Connect workers and Kafka brokers.
         connect.stop();
     }
 

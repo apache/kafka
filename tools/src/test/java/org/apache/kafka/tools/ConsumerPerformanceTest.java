@@ -64,21 +64,6 @@ public class ConsumerPerformanceTest {
     }
 
     @Test
-    public void testConfigBrokerList() {
-        String[] args = new String[]{
-            "--broker-list", "localhost:9092",
-            "--topic", "test",
-            "--messages", "10"
-        };
-
-        ConsumerPerformance.ConsumerPerfOptions config = new ConsumerPerformance.ConsumerPerfOptions(args);
-
-        assertEquals("localhost:9092", config.brokerHostsAndPorts());
-        assertTrue(config.topic().contains("test"));
-        assertEquals(10, config.numMessages());
-    }
-
-    @Test
     public void testConfigBootStrapServer() {
         String[] args = new String[]{
             "--bootstrap-server", "localhost:9092",
@@ -95,25 +80,9 @@ public class ConsumerPerformanceTest {
     }
 
     @Test
-    public void testBrokerListOverride() {
-        String[] args = new String[]{
-            "--broker-list", "localhost:9094",
-            "--bootstrap-server", "localhost:9092",
-            "--topic", "test",
-            "--messages", "10"
-        };
-
-        ConsumerPerformance.ConsumerPerfOptions config = new ConsumerPerformance.ConsumerPerfOptions(args);
-
-        assertEquals("localhost:9092", config.brokerHostsAndPorts());
-        assertTrue(config.topic().contains("test"));
-        assertEquals(10, config.numMessages());
-    }
-
-    @Test
     public void testConfigWithUnrecognizedOption() {
         String[] args = new String[]{
-            "--broker-list", "localhost:9092",
+            "--bootstrap-server", "localhost:9092",
             "--topic", "test",
             "--messages", "10",
             "--new-consumer"
@@ -133,7 +102,7 @@ public class ConsumerPerformanceTest {
         }
 
         String[] args = new String[]{
-            "--broker-list", "localhost:9092",
+            "--bootstrap-server", "localhost:9092",
             "--topic", "test",
             "--messages", "10",
             "--consumer.config", tempFile.getAbsolutePath()
@@ -147,7 +116,7 @@ public class ConsumerPerformanceTest {
     @Test
     public void testDefaultClientId() throws IOException {
         String[] args = new String[]{
-            "--broker-list", "localhost:9092",
+            "--bootstrap-server", "localhost:9092",
             "--topic", "test",
             "--messages", "10"
         };

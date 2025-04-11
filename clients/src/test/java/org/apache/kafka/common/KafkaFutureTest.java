@@ -17,7 +17,6 @@
 package org.apache.kafka.common;
 
 import org.apache.kafka.common.internals.KafkaFutureImpl;
-import org.apache.kafka.common.utils.Java;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
@@ -606,29 +605,25 @@ public class KafkaFutureTest {
         CompletableFuture<String> comfut = kfut.toCompletionStage().toCompletableFuture();
         assertThrows(UnsupportedOperationException.class, () -> comfut.complete(""));
         assertThrows(UnsupportedOperationException.class, () -> comfut.completeExceptionally(new RuntimeException()));
-        // Annoyingly CompletableFuture added some more methods in Java 9, but the tests need to run on Java 8
-        // so test reflectively
-        if (Java.IS_JAVA9_COMPATIBLE) {
-            Method completeOnTimeout = CompletableFuture.class.getDeclaredMethod("completeOnTimeout", Object.class, Long.TYPE, TimeUnit.class);
-            assertThrows(UnsupportedOperationException.class, () -> invokeOrThrow(completeOnTimeout, comfut, "", 1L, TimeUnit.MILLISECONDS));
+        Method completeOnTimeout = CompletableFuture.class.getDeclaredMethod("completeOnTimeout", Object.class, Long.TYPE, TimeUnit.class);
+        assertThrows(UnsupportedOperationException.class, () -> invokeOrThrow(completeOnTimeout, comfut, "", 1L, TimeUnit.MILLISECONDS));
 
-            Method completeAsync = CompletableFuture.class.getDeclaredMethod("completeAsync", Supplier.class);
-            assertThrows(UnsupportedOperationException.class, () -> invokeOrThrow(completeAsync, comfut, (Supplier<String>) () -> ""));
+        Method completeAsync = CompletableFuture.class.getDeclaredMethod("completeAsync", Supplier.class);
+        assertThrows(UnsupportedOperationException.class, () -> invokeOrThrow(completeAsync, comfut, (Supplier<String>) () -> ""));
 
-            Method obtrudeValue = CompletableFuture.class.getDeclaredMethod("obtrudeValue", Object.class);
-            assertThrows(UnsupportedOperationException.class, () -> invokeOrThrow(obtrudeValue, comfut, ""));
+        Method obtrudeValue = CompletableFuture.class.getDeclaredMethod("obtrudeValue", Object.class);
+        assertThrows(UnsupportedOperationException.class, () -> invokeOrThrow(obtrudeValue, comfut, ""));
 
-            Method obtrudeException = CompletableFuture.class.getDeclaredMethod("obtrudeException", Throwable.class);
-            assertThrows(UnsupportedOperationException.class, () -> invokeOrThrow(obtrudeException, comfut, new RuntimeException()));
+        Method obtrudeException = CompletableFuture.class.getDeclaredMethod("obtrudeException", Throwable.class);
+        assertThrows(UnsupportedOperationException.class, () -> invokeOrThrow(obtrudeException, comfut, new RuntimeException()));
 
-            // Check the CF from a minimal CompletionStage doesn't cause completion of the original KafkaFuture
-            Method minimal = CompletableFuture.class.getDeclaredMethod("minimalCompletionStage");
-            CompletionStage<String> cs = (CompletionStage<String>) invokeOrThrow(minimal, comfut);
-            cs.toCompletableFuture().complete("");
+        // Check the CF from a minimal CompletionStage doesn't cause completion of the original KafkaFuture
+        Method minimal = CompletableFuture.class.getDeclaredMethod("minimalCompletionStage");
+        CompletionStage<String> cs = (CompletionStage<String>) invokeOrThrow(minimal, comfut);
+        cs.toCompletableFuture().complete("");
 
-            assertFalse(kfut.isDone());
-            assertFalse(comfut.isDone());
-        }
+        assertFalse(kfut.isDone());
+        assertFalse(comfut.isDone());
     }
 
 }

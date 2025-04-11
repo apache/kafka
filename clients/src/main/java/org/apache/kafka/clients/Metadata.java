@@ -273,7 +273,7 @@ public class Metadata implements Closeable {
     /**
      * Return the cached partition info if it exists and a newer leader epoch isn't known about.
      */
-    synchronized Optional<MetadataResponse.PartitionMetadata> partitionMetadataIfCurrent(TopicPartition topicPartition) {
+    public synchronized Optional<MetadataResponse.PartitionMetadata> partitionMetadataIfCurrent(TopicPartition topicPartition) {
         Integer epoch = lastSeenLeaderEpochs.get(topicPartition);
         Optional<MetadataResponse.PartitionMetadata> partitionMetadata = metadataSnapshot.partitionMetadata(topicPartition);
         if (epoch == null) {
@@ -294,7 +294,7 @@ public class Metadata implements Closeable {
 
     public synchronized LeaderAndEpoch currentLeader(TopicPartition topicPartition) {
         Optional<MetadataResponse.PartitionMetadata> maybeMetadata = partitionMetadataIfCurrent(topicPartition);
-        if (!maybeMetadata.isPresent())
+        if (maybeMetadata.isEmpty())
             return new LeaderAndEpoch(Optional.empty(), Optional.ofNullable(lastSeenLeaderEpochs.get(topicPartition)));
 
         MetadataResponse.PartitionMetadata partitionMetadata = maybeMetadata.get();
@@ -392,7 +392,7 @@ public class Metadata implements Closeable {
             TopicPartition partition = partitionLeader.getKey();
             Metadata.LeaderAndEpoch currentLeader = currentLeader(partition);
             Metadata.LeaderIdAndEpoch newLeader = partitionLeader.getValue();
-            if (!newLeader.epoch.isPresent() || !newLeader.leaderId.isPresent()) {
+            if (newLeader.epoch.isEmpty() || newLeader.leaderId.isEmpty()) {
                 log.debug("For {}, incoming leader information is incomplete {}", partition, newLeader);
                 continue;
             }
@@ -404,7 +404,7 @@ public class Metadata implements Closeable {
                 log.debug("For {}, incoming leader({}), the corresponding node information for node-id {} is missing, so ignoring.", partition, newLeader, newLeader.leaderId.get());
                 continue;
             }
-            if (!this.metadataSnapshot.partitionMetadata(partition).isPresent()) {
+            if (this.metadataSnapshot.partitionMetadata(partition).isEmpty()) {
                 log.debug("For {}, incoming leader({}), partition metadata is no longer cached, ignoring.", partition, newLeader);
                 continue;
             }

@@ -92,7 +92,7 @@ public class RocksDBTimeOrderedWindowSegmentedBytesStore extends AbstractRocksDB
         for (final ConsumerRecord<byte[], byte[]> record : records) {
             final long timestamp = WindowKeySchema.extractStoreTimestamp(record.key());
             final long segmentId = segments.segmentId(timestamp);
-            final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, context, observedStreamTime);
+            final KeyValueSegment segment = segments.getOrCreateSegmentIfLive(segmentId, internalProcessorContext, observedStreamTime);
             if (segment != null) {
                 ChangelogRecordDeserializationHelper.applyChecksAndUpdatePosition(
                     record,

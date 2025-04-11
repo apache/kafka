@@ -56,7 +56,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
-@SuppressWarnings("deprecation")
 public class SlidingWindowedCogroupedKStreamImplTest {
 
     private static final String TOPIC = "topic";
@@ -82,7 +81,7 @@ public class SlidingWindowedCogroupedKStreamImplTest {
         final KGroupedStream<String, String> groupedStream2 = stream2.groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
         final CogroupedKStream<String, String> cogroupedStream = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER)
                 .cogroup(groupedStream2, MockAggregator.TOSTRING_REMOVER);
-        windowedCogroupedStream = cogroupedStream.windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(
+        windowedCogroupedStream = cogroupedStream.windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(
             WINDOW_SIZE_MS), ofMillis(2000L)));
     }
 
@@ -133,7 +132,7 @@ public class SlidingWindowedCogroupedKStreamImplTest {
                 .with(Serdes.String(), Serdes.String()));
         groupedStream = stream.groupByKey(Grouped.with(Serdes.String(), Serdes.String()));
         groupedStream.cogroup(MockAggregator.TOSTRING_ADDER)
-                .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(WINDOW_SIZE_MS), ofMillis(2000L)))
+                .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(WINDOW_SIZE_MS), ofMillis(2000L)))
                 .aggregate(MockInitializer.STRING_INIT, Named.as("foo"));
 
         assertThat(builder.build().describe().toString(), equalTo(
@@ -210,7 +209,7 @@ public class SlidingWindowedCogroupedKStreamImplTest {
     public void slidingWindowAggregateOverlappingWindowsTest() {
 
         final KTable<Windowed<String>, String> customers = groupedStream.cogroup(MockAggregator.TOSTRING_ADDER)
-                .windowedBy(SlidingWindows.withTimeDifferenceAndGrace(ofMillis(WINDOW_SIZE_MS), ofMillis(2000L))).aggregate(
+                .windowedBy(SlidingWindows.ofTimeDifferenceAndGrace(ofMillis(WINDOW_SIZE_MS), ofMillis(2000L))).aggregate(
                         MockInitializer.STRING_INIT, Materialized.with(Serdes.String(), Serdes.String()));
         customers.toStream().to(OUTPUT);
 

@@ -21,6 +21,7 @@ import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.processor.StateStore;
+import org.apache.kafka.streams.processor.internals.InternalResourcesNaming;
 import org.apache.kafka.streams.state.DslStoreSuppliers;
 import org.apache.kafka.streams.state.StoreSupplier;
 
@@ -28,7 +29,7 @@ import java.time.Duration;
 import java.util.Map;
 import java.util.Optional;
 
-public class MaterializedInternal<K, V, S extends StateStore> extends Materialized<K, V, S> {
+public final class MaterializedInternal<K, V, S extends StateStore> extends Materialized<K, V, S> {
 
     private final boolean queryable;
 
@@ -36,17 +37,30 @@ public class MaterializedInternal<K, V, S extends StateStore> extends Materializ
         this(materialized, null, null);
     }
 
-    @SuppressWarnings("this-escape")
     public MaterializedInternal(final Materialized<K, V, S> materialized,
                                 final InternalNameProvider nameProvider,
                                 final String generatedStorePrefix) {
+        this(materialized, nameProvider, generatedStorePrefix, false);
+    }
+
+    public MaterializedInternal(final Materialized<K, V, S> materialized,
+                                final InternalNameProvider nameProvider,
+                                final String generatedStorePrefix,
+                                final boolean forceQueryable) {
         super(materialized);
 
         // if storeName is not provided, the corresponding KTable would never be queryable;
         // but we still need to provide an internal name for it in case we materialize.
-        queryable = storeName() != null;
-        if (!queryable && nameProvider != null) {
+        queryable = forceQueryable || storeName() != null;
+        if (storeName() == null && nameProvider != null) {
             storeName = nameProvider.newStoreName(generatedStorePrefix);
+            if (nameProvider instanceof InternalStreamsBuilder) {
+                final InternalResourcesNaming.Builder internalResourcesNaming = InternalResourcesNaming.builder().withStateStore(storeName);
+                if (loggingEnabled()) {
+                    internalResourcesNaming.withChangelogTopic(storeName + "-changelog");
+                }
+                ((InternalStreamsBuilder) nameProvider).internalTopologyBuilder().addImplicitInternalNames(internalResourcesNaming.build());
+            }
         }
 
         // if store type is not configured during creating Materialized, then try to get the topologyConfigs from nameProvider

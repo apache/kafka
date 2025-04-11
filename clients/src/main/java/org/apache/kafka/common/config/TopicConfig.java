@@ -93,23 +93,20 @@ public class TopicConfig {
             "deletes the old segments. Default value is -2, it represents `retention.bytes` value to be used. The effective value should always be " +
             "less than or equal to `retention.bytes` value.";
 
-    public static final String REMOTE_LOG_DISABLE_POLICY_RETAIN = "retain";
-    public static final String REMOTE_LOG_DISABLE_POLICY_DELETE = "delete";
+    public static final String REMOTE_LOG_COPY_DISABLE_CONFIG = "remote.log.copy.disable";
+    public static final String REMOTE_LOG_COPY_DISABLE_DOC = "Determines whether tiered data for a topic should become read only," +
+            " and no more data uploading on a topic. Once this config is set to true, the local retention configuration " +
+            "(i.e. local.retention.ms/bytes) becomes irrelevant, and all data expiration follows the topic-wide retention configuration" +
+            "(i.e. retention.ms/bytes).";
 
-    public static final String REMOTE_LOG_DISABLE_POLICY_CONFIG = "remote.log.disable.policy";
-
-    public static final String REMOTE_LOG_DISABLE_POLICY_DOC = String.format("Determines whether tiered data for a topic should be retained or " +
-            "deleted after tiered storage disablement on a topic. The two valid options are \"%s\" and \"%s\". If %s is " +
-            "selected then all data in remote will be kept post-disablement and will only be deleted when it breaches expiration " +
-            "thresholds. If %s is selected then the data will be made inaccessible immediately by advancing the log start offset and will be " +
-            "deleted asynchronously.", REMOTE_LOG_DISABLE_POLICY_RETAIN, REMOTE_LOG_DISABLE_POLICY_DELETE,
-            REMOTE_LOG_DISABLE_POLICY_RETAIN, REMOTE_LOG_DISABLE_POLICY_DELETE);
+    public static final String REMOTE_LOG_DELETE_ON_DISABLE_CONFIG = "remote.log.delete.on.disable";
+    public static final String REMOTE_LOG_DELETE_ON_DISABLE_DOC = "Determines whether tiered data for a topic should be " +
+            "deleted after tiered storage is disabled on a topic. This configuration should be enabled when trying to " +
+            "set `remote.storage.enable` from true to false";
 
     public static final String MAX_MESSAGE_BYTES_CONFIG = "max.message.bytes";
     public static final String MAX_MESSAGE_BYTES_DOC =
         "The largest record batch size allowed by Kafka (after compression if compression is enabled). " +
-        "If this is increased and there are consumers older than 0.10.2, the consumers' fetch " +
-        "size must also be increased so that they can fetch record batches this large. " +
         "In the latest message format version, records are always grouped into batches for efficiency. " +
         "In previous message format versions, uncompressed records are not grouped into batches and this " +
         "limit only applies to a single record in that case.";
@@ -166,18 +163,21 @@ public class TopicConfig {
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = "unclean.leader.election.enable";
     public static final String UNCLEAN_LEADER_ELECTION_ENABLE_DOC = "Indicates whether to enable replicas " +
         "not in the ISR set to be elected as leader as a last resort, even though doing so may result in data " +
-        "loss.";
+        "loss.<p>Note: In KRaft mode, when enabling this config dynamically, it needs to wait for the unclean leader election" +
+        "thread to trigger election periodically (default is 5 minutes). Please run `kafka-leader-election.sh` with `unclean` option " +
+         "to trigger the unclean leader election immediately if needed.</p>";
 
     public static final String MIN_IN_SYNC_REPLICAS_CONFIG = "min.insync.replicas";
     public static final String MIN_IN_SYNC_REPLICAS_DOC = "When a producer sets acks to \"all\" (or \"-1\"), " +
         "this configuration specifies the minimum number of replicas that must acknowledge " +
         "a write for the write to be considered successful. If this minimum cannot be met, " +
-        "then the producer will raise an exception (either NotEnoughReplicas or " +
-        "NotEnoughReplicasAfterAppend).<br>When used together, <code>min.insync.replicas</code> and <code>acks</code> " +
-        "allow you to enforce greater durability guarantees. A typical scenario would be to " +
-        "create a topic with a replication factor of 3, set <code>min.insync.replicas</code> to 2, and " +
-        "produce with <code>acks</code> of \"all\". This will ensure that the producer raises an exception " +
-        "if a majority of replicas do not receive a write.";
+        "then the producer will raise an exception (either <code>NotEnoughReplicas</code> or <code>NotEnoughReplicasAfterAppend</code>).<br> " +
+        "Regardless of the <code>acks</code> setting, the messages will not be visible to the consumers until " +
+        "they are replicated to all in-sync replicas and the <code>min.insync.replicas</code> condition is met.<br> " +
+        "When used together, <code>min.insync.replicas</code> and <code>acks</code> allow you to enforce greater durability guarantees. " +
+        "A typical scenario would be to create a topic with a replication factor of 3, " +
+        "set <code>min.insync.replicas</code> to 2, and produce with <code>acks</code> of \"all\". " +
+        "This will ensure that a majority of replicas must persist a write before it's considered successful by the producer and it's visible to consumers.";
 
     public static final String COMPRESSION_TYPE_CONFIG = "compression.type";
     public static final String COMPRESSION_TYPE_DOC = "Specify the final compression type for a given topic. " +
@@ -197,46 +197,9 @@ public class TopicConfig {
     public static final String PREALLOCATE_DOC = "True if we should preallocate the file on disk when " +
         "creating a new log segment.";
 
-    /**
-     * @deprecated since 3.0, removal planned in 4.0. The default value for this config is appropriate
-     * for most situations.
-     */
-    @Deprecated
-    public static final String MESSAGE_FORMAT_VERSION_CONFIG = "message.format.version";
-
-    /**
-     * @deprecated since 3.0, removal planned in 4.0. The default value for this config is appropriate
-     * for most situations.
-     */
-    @Deprecated
-    public static final String MESSAGE_FORMAT_VERSION_DOC = "[DEPRECATED] Specify the message format version the broker " +
-        "will use to append messages to the logs. The value of this config is always assumed to be `3.0` if " +
-        "`inter.broker.protocol.version` is 3.0 or higher (the actual config value is ignored). Otherwise, the value should " +
-        "be a valid ApiVersion. Some examples are: 0.10.0, 1.1, 2.8, 3.0. By setting a particular message format version, the " +
-        "user is certifying that all the existing messages on disk are smaller or equal than the specified version. Setting " +
-        "this value incorrectly will cause consumers with older versions to break as they will receive messages with a format " +
-        "that they don't understand.";
-
     public static final String MESSAGE_TIMESTAMP_TYPE_CONFIG = "message.timestamp.type";
     public static final String MESSAGE_TIMESTAMP_TYPE_DOC = "Define whether the timestamp in the message is " +
-        "message create time or log append time. The value should be either `CreateTime` or `LogAppendTime`";
-
-    /**
-     * @deprecated since 3.6, removal planned in 4.0.
-     * Use message.timestamp.before.max.ms and message.timestamp.after.max.ms instead
-     */
-    @Deprecated
-    public static final String MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_CONFIG = "message.timestamp.difference.max.ms";
-
-    /**
-     * @deprecated since 3.6, removal planned in 4.0.
-     * Use message.timestamp.before.max.ms and message.timestamp.after.max.ms instead
-     */
-    @Deprecated
-    public static final String MESSAGE_TIMESTAMP_DIFFERENCE_MAX_MS_DOC = "[DEPRECATED] The maximum difference allowed between " +
-        "the timestamp when a broker receives a message and the timestamp specified in the message. If " +
-        "message.timestamp.type=CreateTime, a message will be rejected if the difference in timestamp " +
-        "exceeds this threshold. This configuration is ignored if message.timestamp.type=LogAppendTime.";
+        "message create time or log append time.";
 
     public static final String MESSAGE_TIMESTAMP_BEFORE_MAX_MS_CONFIG = "message.timestamp.before.max.ms";
     public static final String MESSAGE_TIMESTAMP_BEFORE_MAX_MS_DOC = "This configuration sets the allowable timestamp " +
@@ -250,10 +213,18 @@ public class TopicConfig {
         "or equal to the broker's timestamp, with the maximum allowable difference determined by the value set in this " +
         "configuration. If message.timestamp.type=CreateTime, the message will be rejected if the difference in " +
         "timestamps exceeds this specified threshold. This configuration is ignored if message.timestamp.type=LogAppendTime.";
+
+    /**
+     * @deprecated down-conversion is not possible in Apache Kafka 4.0 and newer, hence this configuration is a no-op,
+     *             and it is deprecated for removal in Apache Kafka 5.0.
+     */
+    @Deprecated
     public static final String MESSAGE_DOWNCONVERSION_ENABLE_CONFIG = "message.downconversion.enable";
-    public static final String MESSAGE_DOWNCONVERSION_ENABLE_DOC = "This configuration controls whether " +
-        "down-conversion of message formats is enabled to satisfy consume requests. When set to <code>false</code>, " +
-        "broker will not perform down-conversion for consumers expecting an older message format. The broker responds " +
-        "with <code>UNSUPPORTED_VERSION</code> error for consume requests from such older clients. This configuration" +
-        "does not apply to any message format conversion that might be required for replication to followers.";
+
+    /**
+     * @deprecated see {@link #MESSAGE_DOWNCONVERSION_ENABLE_CONFIG}.
+     */
+    @Deprecated
+    public static final String MESSAGE_DOWNCONVERSION_ENABLE_DOC = "Down-conversion is not possible in Apache Kafka 4.0 and newer, " +
+        "hence this configuration is no-op and it is deprecated for removal in Apache Kafka 5.0.";
 }

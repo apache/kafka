@@ -19,13 +19,11 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ProduceResponseData;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 
 import org.junit.jupiter.api.Test;
 
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -38,36 +36,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ProduceResponseTest {
-
-    @SuppressWarnings("deprecation")
-    @Test
-    public void produceResponseV5Test() {
-        Map<TopicPartition, ProduceResponse.PartitionResponse> responseData = new HashMap<>();
-        TopicPartition tp0 = new TopicPartition("test", 0);
-        responseData.put(tp0, new ProduceResponse.PartitionResponse(Errors.NONE, 10000, RecordBatch.NO_TIMESTAMP, 100));
-
-        ProduceResponse v5Response = new ProduceResponse(responseData, 10);
-        short version = 5;
-
-        ByteBuffer buffer = RequestTestUtils.serializeResponseWithHeader(v5Response, version, 0);
-
-        ResponseHeader.parse(buffer, ApiKeys.PRODUCE.responseHeaderVersion(version)); // throw away.
-        ProduceResponse v5FromBytes = (ProduceResponse) AbstractResponse.parseResponse(ApiKeys.PRODUCE, buffer, version);
-
-        assertEquals(1, v5FromBytes.data().responses().size());
-        ProduceResponseData.TopicProduceResponse topicProduceResponse = v5FromBytes.data().responses().iterator().next();
-        assertEquals(1, topicProduceResponse.partitionResponses().size());  
-        ProduceResponseData.PartitionProduceResponse partitionProduceResponse = topicProduceResponse.partitionResponses().iterator().next();
-        TopicPartition tp = new TopicPartition(topicProduceResponse.name(), partitionProduceResponse.index());
-        assertEquals(tp0, tp);
-
-        assertEquals(100, partitionProduceResponse.logStartOffset());
-        assertEquals(10000, partitionProduceResponse.baseOffset());
-        assertEquals(RecordBatch.NO_TIMESTAMP, partitionProduceResponse.logAppendTimeMs());
-        assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse.errorCode()));
-        assertNull(partitionProduceResponse.errorMessage());
-        assertTrue(partitionProduceResponse.recordErrors().isEmpty());
-    }
 
     @SuppressWarnings("deprecation")
     @Test

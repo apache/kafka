@@ -42,8 +42,11 @@ jobs:
         pip install -r docker/requirements.txt
     - name: Build Docker Official Image Artifact
       working-directory: ./docker
+      env:
+        IMAGE_TYPE: ${{ github.event.inputs.image_type }}
+        KAFKA_VERSION: ${{ github.event.inputs.kafka_version }}
       run: |
-        python prepare_docker_official_image_source.py -type=${{ github.event.inputs.image_type }} -v=${{ github.event.inputs.kafka_version }}
+        python prepare_docker_official_image_source.py -type=$IMAGE_TYPE -v=$KAFKA_VERSION
     - name: Upload Docker Official Image Artifact
       if: success()
       uses: actions/upload-artifact@v4

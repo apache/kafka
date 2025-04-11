@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.utils.ConfigUtils;
 
 import java.time.Duration;
 import java.util.HashMap;
@@ -33,7 +32,6 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
     public static final String GROUPS_DEFAULT = DefaultGroupFilter.GROUPS_INCLUDE_DEFAULT;
     private static final String GROUPS_DOC = "Consumer groups to replicate. Supports comma-separated group IDs and regexes.";
     public static final String GROUPS_EXCLUDE = DefaultGroupFilter.GROUPS_EXCLUDE_CONFIG;
-    public static final String GROUPS_EXCLUDE_ALIAS = DefaultGroupFilter.GROUPS_EXCLUDE_CONFIG_ALIAS;
 
     public static final String GROUPS_EXCLUDE_DEFAULT = DefaultGroupFilter.GROUPS_EXCLUDE_DEFAULT;
     private static final String GROUPS_EXCLUDE_DOC = "Exclude groups. Supports comma-separated group IDs and regexes."
@@ -80,9 +78,7 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
     public static final String CHECKPOINTS_TARGET_CONSUMER_ROLE = "checkpoints-target-consumer";
 
     public MirrorCheckpointConfig(Map<String, String> props) {
-        super(CONNECTOR_CONFIG_DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
-                {GROUPS_EXCLUDE, GROUPS_EXCLUDE_ALIAS},
-        }));
+        super(CONNECTOR_CONFIG_DEF, props);
     }
 
     public MirrorCheckpointConfig(ConfigDef configDef, Map<String, String> props) {
@@ -206,12 +202,6 @@ public class MirrorCheckpointConfig extends MirrorConnectorConfig {
                         GROUPS_EXCLUDE_DEFAULT,
                         ConfigDef.Importance.HIGH,
                         GROUPS_EXCLUDE_DOC)
-                .define(
-                        GROUPS_EXCLUDE_ALIAS,
-                        ConfigDef.Type.LIST,
-                        null,
-                        ConfigDef.Importance.HIGH,
-                        "Deprecated. Use " + GROUPS_EXCLUDE + " instead.")
                 .define(
                         GROUP_FILTER_CLASS,
                         ConfigDef.Type.CLASS,

@@ -62,10 +62,10 @@ RUN apk update ; \
     chown appuser:root -R /etc/kafka /opt/kafka /mnt/shared/config ; \
     chmod -R ug+w /etc/kafka /opt/kafka /mnt/shared/config ;
 
+COPY server.properties /etc/kafka/docker/server.properties
 COPY --chown=appuser:root --from=build-native-image /app/kafka/kafka.Kafka /opt/kafka/
-COPY --chown=appuser:root --from=build-native-image /app/kafka/config/kraft/server.properties /etc/kafka/docker/
-COPY --chown=appuser:root --from=build-native-image /app/kafka/config/log4j.properties /etc/kafka/docker/
-COPY --chown=appuser:root --from=build-native-image /app/kafka/config/tools-log4j.properties /etc/kafka/docker/
+COPY --chown=appuser:root --from=build-native-image /app/kafka/config/log4j2.yaml /etc/kafka/docker/
+COPY --chown=appuser:root --from=build-native-image /app/kafka/config/tools-log4j2.yaml /etc/kafka/docker/
 COPY --chown=appuser:root resources/common-scripts /etc/kafka/docker/
 COPY --chown=appuser:root launch /etc/kafka/docker/
 

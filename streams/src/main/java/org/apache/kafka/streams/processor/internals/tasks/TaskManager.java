@@ -25,6 +25,7 @@ import org.apache.kafka.streams.processor.internals.StreamTask;
 import java.time.Duration;
 import java.util.Map;
 import java.util.Set;
+import java.util.function.Supplier;
 
 public interface TaskManager {
 
@@ -136,7 +137,7 @@ public interface TaskManager {
     /**
      * Blocks until unassigned processable tasks may be available.
      */
-    void awaitProcessableTasks() throws InterruptedException;
+    void awaitProcessableTasks(Supplier<Boolean> isShuttingDown) throws InterruptedException;
 
     /**
      * Starts all threads associated with this task manager.

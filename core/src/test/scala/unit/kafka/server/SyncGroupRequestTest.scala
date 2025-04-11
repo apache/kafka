@@ -16,46 +16,32 @@
  */
 package kafka.server
 
-import kafka.test.ClusterInstance
-import kafka.test.annotation.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
-import kafka.test.junit.ClusterTestExtensions
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol
 import org.apache.kafka.common.message.SyncGroupRequestData
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.test.ClusterInstance
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState
-import org.junit.jupiter.api.Timeout
-import org.junit.jupiter.api.extension.ExtendWith
 
 import java.util.Collections
 import scala.concurrent.ExecutionContext.Implicits.global
 import scala.concurrent.duration.Duration
 import scala.concurrent.{Await, Future}
 
-@Timeout(120)
-@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
-@ClusterTestDefaults(types = Array(Type.KRAFT))
+@ClusterTestDefaults(
+  types = Array(Type.KRAFT),
+  serverProperties = Array(
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+    new ClusterConfigProperty(key = GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000")
+  )
+)
 class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
-  @ClusterTest(serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer"),
-    new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-  ))
-  def testSyncGroupWithOldConsumerGroupProtocolAndNewGroupCoordinator(): Unit = {
-    testSyncGroup()
-  }
-
-  @ClusterTest(types = Array(Type.ZK, Type.KRAFT, Type.CO_KRAFT), serverProperties = Array(
-    new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic"),
-    new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
-    new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
-  ))
-  def testSyncGroupWithOldConsumerGroupProtocolAndOldGroupCoordinator(): Unit = {
-    testSyncGroup()
-  }
-
-  private def testSyncGroup(): Unit = {
+  @ClusterTest
+  def testSyncGroupWithOldConsumerGroupProtocol(): Unit = {
     // Creates the __consumer_offsets topics because it won't be created automatically
     // in this test because it does not use FindCoordinator API.
     createOffsetsTopic()
@@ -68,7 +54,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
 
     for (version <- ApiKeys.SYNC_GROUP.oldestVersion() to ApiKeys.SYNC_GROUP.latestVersion(isUnstableApiEnabled)) {
       // Sync with unknown group id.
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = "grp-unknown",
         memberId = "member-id",
         generationId = -1,
@@ -99,7 +85,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
 
       if (version >= 5) {
         // Sync the leader with unmatched protocolName.
-        syncGroupWithOldProtocol(
+        verifySyncGroupWithOldProtocol(
           groupId = "grp",
           memberId = leaderMemberId,
           generationId = 1,
@@ -115,7 +101,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         )
 
         // Sync the leader with unmatched protocolType.
-        syncGroupWithOldProtocol(
+        verifySyncGroupWithOldProtocol(
           groupId = "grp",
           memberId = leaderMemberId,
           generationId = 1,
@@ -132,7 +118,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       }
 
       // Sync with unknown member id.
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = "grp",
         memberId = "member-id-unknown",
         generationId = -1,
@@ -143,7 +129,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       )
 
       // Sync with illegal generation id.
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = "grp",
         memberId = leaderMemberId,
         generationId = 2,
@@ -154,7 +140,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       )
 
       // Sync the leader with empty protocolType and protocolName if version < 5.
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = "grp",
         memberId = leaderMemberId,
         generationId = 1,
@@ -195,7 +181,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
       val followerMemberId = joinFollowerFutureResponseData.memberId
 
       // Sync the leader ahead of the follower.
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = "grp",
         memberId = leaderMemberId,
         generationId = rejoinLeaderResponseData.generationId,
@@ -211,7 +197,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         version = version.toShort
       )
 
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = "grp",
         memberId = followerMemberId,
         generationId = joinFollowerFutureResponseData.generationId,
@@ -221,7 +207,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
 
       // Sync the follower ahead of the leader.
       val syncFollowerFuture = Future {
-        syncGroupWithOldProtocol(
+        verifySyncGroupWithOldProtocol(
           groupId = "grp",
           memberId = followerMemberId,
           generationId = 2,
@@ -230,7 +216,7 @@ class SyncGroupRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBas
         )
       }
 
-      syncGroupWithOldProtocol(
+      verifySyncGroupWithOldProtocol(
         groupId = "grp",
         memberId = leaderMemberId,
         generationId = 2,

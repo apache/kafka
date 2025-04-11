@@ -33,11 +33,12 @@ import org.apache.kafka.common.utils.LogContext;
 
 import org.junit.jupiter.api.Test;
 
+import java.util.Set;
+
 import static java.util.Collections.emptyList;
 import static java.util.Collections.emptySet;
 import static java.util.Collections.singleton;
 import static java.util.Collections.singletonList;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
@@ -56,9 +57,9 @@ public class AbortTransactionHandlerTest {
         assertThrows(IllegalArgumentException.class, () -> handler.buildRequest(1,
             emptySet()));
         assertThrows(IllegalArgumentException.class, () -> handler.buildRequest(1,
-            mkSet(new TopicPartition("foo", 1))));
+            Set.of(new TopicPartition("foo", 1))));
         assertThrows(IllegalArgumentException.class, () -> handler.buildRequest(1,
-            mkSet(topicPartition, new TopicPartition("foo", 1))));
+            Set.of(topicPartition, new TopicPartition("foo", 1))));
     }
 
     @Test
@@ -85,9 +86,9 @@ public class AbortTransactionHandlerTest {
         assertThrows(IllegalArgumentException.class, () -> handler.handleResponse(node,
             emptySet(), new WriteTxnMarkersResponse(response)));
         assertThrows(IllegalArgumentException.class, () -> handler.handleResponse(node,
-            mkSet(new TopicPartition("foo", 1)), new WriteTxnMarkersResponse(response)));
+            Set.of(new TopicPartition("foo", 1)), new WriteTxnMarkersResponse(response)));
         assertThrows(IllegalArgumentException.class, () -> handler.handleResponse(node,
-            mkSet(topicPartition, new TopicPartition("foo", 1)), new WriteTxnMarkersResponse(response)));
+            Set.of(topicPartition, new TopicPartition("foo", 1)), new WriteTxnMarkersResponse(response)));
     }
 
     @Test

@@ -55,7 +55,7 @@ public class TimestampRecordProcessor implements RecordProcessor {
     private final ByteBuffer buffer;
     private final Histogram histogram;
 
-    private final Logger log = LoggerFactory.getLogger(TimestampRecordProcessor.class);
+    private static final Logger log = LoggerFactory.getLogger(TimestampRecordProcessor.class);
 
     static final float[] PERCENTILES = {0.5f, 0.95f, 0.99f};
 

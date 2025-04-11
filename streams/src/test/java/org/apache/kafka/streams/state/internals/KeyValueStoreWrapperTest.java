@@ -60,15 +60,15 @@ public class KeyValueStoreWrapperTest {
     @Mock
     private VersionedKeyValueStore<String, String> versionedStore;
     @Mock
-    private ProcessorContext context;
+    private ProcessorContext<?, ?> context;
     @Mock
-    private Query query;
+    private Query<?> query;
     @Mock
     private PositionBound positionBound;
     @Mock
     private QueryConfig queryConfig;
     @Mock
-    private QueryResult result;
+    private QueryResult<?> result;
     @Mock
     private Position position;
 
@@ -161,14 +161,14 @@ public class KeyValueStoreWrapperTest {
     public void shouldGetTimestampedStore() {
         givenWrapperWithTimestampedStore();
 
-        assertThat(wrapper.getStore(), equalTo(timestampedStore));
+        assertThat(wrapper.store(), equalTo(timestampedStore));
     }
 
     @Test
     public void shouldGetVersionedStore() {
         givenWrapperWithVersionedStore();
 
-        assertThat(wrapper.getStore(), equalTo(versionedStore));
+        assertThat(wrapper.store(), equalTo(versionedStore));
     }
 
     @Test
@@ -185,30 +185,6 @@ public class KeyValueStoreWrapperTest {
         when(versionedStore.name()).thenReturn(STORE_NAME);
 
         assertThat(wrapper.name(), equalTo(STORE_NAME));
-    }
-
-    @Deprecated
-    @Test
-    public void shouldDeprecatedInitTimestampedStore() {
-        givenWrapperWithTimestampedStore();
-        final org.apache.kafka.streams.processor.ProcessorContext mockContext
-            = mock(org.apache.kafka.streams.processor.ProcessorContext.class);
-
-        wrapper.init(mockContext, wrapper);
-
-        verify(timestampedStore).init(mockContext, wrapper);
-    }
-
-    @Deprecated
-    @Test
-    public void shouldDeprecatedInitVersionedStore() {
-        givenWrapperWithVersionedStore();
-        final org.apache.kafka.streams.processor.ProcessorContext mockContext
-            = mock(org.apache.kafka.streams.processor.ProcessorContext.class);
-
-        wrapper.init(mockContext, wrapper);
-
-        verify(versionedStore).init(mockContext, wrapper);
     }
 
     @Test
@@ -319,20 +295,20 @@ public class KeyValueStoreWrapperTest {
         assertThat(wrapper.isOpen(), equalTo(false));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
     public void shouldQueryTimestampedStore() {
         givenWrapperWithTimestampedStore();
-        when(timestampedStore.query(query, positionBound, queryConfig)).thenReturn(result);
+        when(timestampedStore.query(query, positionBound, queryConfig)).thenReturn((QueryResult) result);
 
         assertThat(wrapper.query(query, positionBound, queryConfig), equalTo(result));
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked"})
     @Test
     public void shouldQueryVersionedStore() {
         givenWrapperWithVersionedStore();
-        when(versionedStore.query(query, positionBound, queryConfig)).thenReturn(result);
+        when(versionedStore.query(query, positionBound, queryConfig)).thenReturn((QueryResult) result);
 
         assertThat(wrapper.query(query, positionBound, queryConfig), equalTo(result));
     }

@@ -72,7 +72,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 @SuppressWarnings("deprecation")
 public class RepartitionOptimizingTest {
 
-    private final Logger log = LoggerFactory.getLogger(RepartitionOptimizingTest.class);
+    private static final Logger log = LoggerFactory.getLogger(RepartitionOptimizingTest.class);
 
     private static final String INPUT_TOPIC = "input";
     private static final String COUNT_TOPIC = "outputTopic_0";

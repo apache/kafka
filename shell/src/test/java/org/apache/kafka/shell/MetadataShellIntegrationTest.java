@@ -17,10 +17,9 @@
 
 package org.apache.kafka.shell;
 
-import kafka.utils.FileLock;
-
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.fault.MockFaultHandler;
+import org.apache.kafka.server.util.FileLock;
 
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
@@ -85,7 +84,7 @@ public class MetadataShellIntegrationTest {
     @ValueSource(booleans = {false, true})
     public void testLock(boolean canLock) throws Exception {
         try (IntegrationEnv env = new IntegrationEnv()) {
-            env.shell = new MetadataShell(null,
+            env.shell = new MetadataShell(
                 new File(new File(env.tempDir, "__cluster_metadata-0"), "00000000000122906351-0000000226.checkpoint").getAbsolutePath(),
                     env.faultHandler);
 

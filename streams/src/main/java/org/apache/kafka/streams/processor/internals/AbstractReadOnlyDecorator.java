@@ -19,7 +19,6 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -49,15 +48,8 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         throw new UnsupportedOperationException(ERROR_MESSAGE);
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context,
-                     final StateStore root) {
-        throw new UnsupportedOperationException(ERROR_MESSAGE);
-    }
-
-    @Override
-    public void init(final StateStoreContext context,
+    public void init(final StateStoreContext stateStoreContext,
                      final StateStore root) {
         throw new UnsupportedOperationException(ERROR_MESSAGE);
     }
@@ -214,7 +206,6 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         }
 
         @Override
-        @Deprecated
         public WindowStoreIterator<V> fetch(final K key,
                                             final long timeFrom,
                                             final long timeTo) {
@@ -229,7 +220,6 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         }
 
         @Override
-        @Deprecated
         public KeyValueIterator<Windowed<K>, V> fetch(final K keyFrom,
                                                       final K keyTo,
                                                       final long timeFrom,
@@ -256,7 +246,6 @@ abstract class AbstractReadOnlyDecorator<T extends StateStore, K, V> extends Wra
         }
 
         @Override
-        @Deprecated
         public KeyValueIterator<Windowed<K>, V> fetchAll(final long timeFrom,
                                                          final long timeTo) {
             return wrapped().fetchAll(timeFrom, timeTo);

@@ -208,7 +208,7 @@ public class JmxTool {
                                                                       List<ObjectName> queries,
                                                                       Set<ObjectName> found) throws Exception {
         Map<ObjectName, Integer> result = new HashMap<>();
-        if (!attributesInclude.isPresent()) {
+        if (attributesInclude.isEmpty()) {
             found.forEach(objectName -> {
                 try {
                     MBeanInfo mBeanInfo = conn.getMBeanInfo(objectName);

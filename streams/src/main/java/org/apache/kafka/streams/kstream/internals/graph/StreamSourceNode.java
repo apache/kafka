@@ -17,7 +17,7 @@
 
 package org.apache.kafka.streams.kstream.internals.graph;
 
-import org.apache.kafka.streams.Topology.AutoOffsetReset;
+import org.apache.kafka.streams.AutoOffsetReset;
 import org.apache.kafka.streams.errors.TopologyException;
 import org.apache.kafka.streams.kstream.internals.ConsumedInternal;
 import org.apache.kafka.streams.processor.internals.InternalTopologyBuilder;
@@ -30,7 +30,7 @@ import java.util.regex.Pattern;
 
 public class StreamSourceNode<K, V> extends SourceGraphNode<K, V> {
 
-    private final Logger log = LoggerFactory.getLogger(StreamSourceNode.class);
+    private static final Logger log = LoggerFactory.getLogger(StreamSourceNode.class);
 
     public StreamSourceNode(final String nodeName,
                             final Collection<String> topicNames,

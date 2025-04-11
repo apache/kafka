@@ -32,12 +32,10 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.Base64;
 import java.util.Base64.Encoder;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
@@ -99,13 +97,12 @@ import javax.security.sasl.SaslException;
  * broker configuration property.
  */
 public class OAuthBearerUnsecuredLoginCallbackHandler implements AuthenticateCallbackHandler {
-    private final Logger log = LoggerFactory.getLogger(OAuthBearerUnsecuredLoginCallbackHandler.class);
+    private static final Logger log = LoggerFactory.getLogger(OAuthBearerUnsecuredLoginCallbackHandler.class);
     private static final String OPTION_PREFIX = "unsecuredLogin";
     private static final String PRINCIPAL_CLAIM_NAME_OPTION = OPTION_PREFIX + "PrincipalClaimName";
     private static final String LIFETIME_SECONDS_OPTION = OPTION_PREFIX + "LifetimeSeconds";
     private static final String SCOPE_CLAIM_NAME_OPTION = OPTION_PREFIX + "ScopeClaimName";
-    private static final Set<String> RESERVED_CLAIMS = Collections
-            .unmodifiableSet(new HashSet<>(Arrays.asList("iat", "exp")));
+    private static final Set<String> RESERVED_CLAIMS = Set.of("iat", "exp");
     private static final String DEFAULT_PRINCIPAL_CLAIM_NAME = "sub";
     private static final String DEFAULT_LIFETIME_SECONDS_ONE_HOUR = "3600";
     private static final String DEFAULT_SCOPE_CLAIM_NAME = "scope";

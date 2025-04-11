@@ -52,7 +52,6 @@ import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
 import static java.util.Collections.emptyMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -72,14 +71,14 @@ class AdminApiDriverTest {
         ));
 
         Map<Set<String>, LookupResult<String>> lookupRequests = map(
-            mkSet("foo", "bar"), mapped("foo", 1, "bar", 2)
+            Set.of("foo", "bar"), mapped("foo", 1, "bar", 2)
         );
 
         ctx.poll(lookupRequests, emptyMap());
 
         Map<Set<String>, ApiResult<String, Long>> fulfillmentResults = map(
-            mkSet("foo"), completed("foo", 15L),
-            mkSet("bar"), completed("bar", 30L)
+            Set.of("foo"), completed("foo", 15L),
+            Set.of("bar"), completed("bar", 30L)
         );
 
         ctx.poll(emptyMap(), fulfillmentResults);
@@ -95,14 +94,14 @@ class AdminApiDriverTest {
         ));
 
         Map<Set<String>, LookupResult<String>> lookupRequests = map(
-            mkSet("foo"), mapped("foo", 1),
-            mkSet("bar"), mapped("bar", 1)
+            Set.of("foo"), mapped("foo", 1),
+            Set.of("bar"), mapped("bar", 1)
         );
 
         ctx.poll(lookupRequests, emptyMap());
 
         Map<Set<String>, ApiResult<String, Long>> fulfillmentResults = map(
-            mkSet("foo", "bar"), completed("foo", 15L, "bar", 30L)
+            Set.of("foo", "bar"), completed("foo", 15L, "bar", 30L)
         );
 
         ctx.poll(emptyMap(), fulfillmentResults);
@@ -124,14 +123,14 @@ class AdminApiDriverTest {
             ));
 
             Map<Set<String>, LookupResult<String>> lookupRequests = map(
-                mkSet("foo"), failedLookup("foo", keyLookupException),
-                mkSet("bar"), mapped("bar", 1)
+                Set.of("foo"), failedLookup("foo", keyLookupException),
+                Set.of("bar"), mapped("bar", 1)
             );
 
             ctx.poll(lookupRequests, emptyMap());
 
             Map<Set<String>, ApiResult<String, Long>> fulfillmentResults = map(
-                mkSet("bar"), completed("bar", 30L)
+                Set.of("bar"), completed("bar", 30L)
             );
 
             ctx.poll(emptyMap(), fulfillmentResults);
@@ -148,24 +147,24 @@ class AdminApiDriverTest {
         ));
 
         Map<Set<String>, LookupResult<String>> lookupRequests = map(
-            mkSet("foo"), emptyLookup(),
-            mkSet("bar"), mapped("bar", 1)
+            Set.of("foo"), emptyLookup(),
+            Set.of("bar"), mapped("bar", 1)
         );
 
         ctx.poll(lookupRequests, emptyMap());
 
         Map<Set<String>, LookupResult<String>> fooRetry = map(
-            mkSet("foo"), mapped("foo", 1)
+            Set.of("foo"), mapped("foo", 1)
         );
 
         Map<Set<String>, ApiResult<String, Long>> barFulfillment = map(
-            mkSet("bar"), completed("bar", 30L)
+            Set.of("bar"), completed("bar", 30L)
         );
 
         ctx.poll(fooRetry, barFulfillment);
 
         Map<Set<String>, ApiResult<String, Long>> fooFulfillment = map(
-            mkSet("foo"), completed("foo", 15L)
+            Set.of("foo"), completed("foo", 15L)
         );
 
         ctx.poll(emptyMap(), fooFulfillment);
@@ -182,8 +181,8 @@ class AdminApiDriverTest {
         ));
 
         Map<Set<String>, ApiResult<String, Long>> fulfillmentResults = map(
-            mkSet("foo"), completed("foo", 15L),
-            mkSet("bar", "baz"), completed("bar", 30L, "baz", 45L)
+            Set.of("foo"), completed("foo", 15L),
+            Set.of("bar", "baz"), completed("bar", 30L, "baz", 45L)
         );
 
         ctx.poll(emptyMap(), fulfillmentResults);
@@ -200,8 +199,8 @@ class AdminApiDriverTest {
         ));
 
         Map<Set<String>, ApiResult<String, Long>> fulfillmentResults = map(
-            mkSet("foo"), failed("foo", new UnknownServerException()),
-            mkSet("bar", "baz"), completed("bar", 30L, "baz", 45L)
+            Set.of("foo"), failed("foo", new UnknownServerException()),
+            Set.of("bar", "baz"), completed("bar", 30L, "baz", 45L)
         );
 
         ctx.poll(emptyMap(), fulfillmentResults);
@@ -218,14 +217,14 @@ class AdminApiDriverTest {
         ));
 
         Map<Set<String>, ApiResult<String, Long>> fulfillmentResults = map(
-            mkSet("foo"), completed("foo", 15L),
-            mkSet("bar", "baz"), completed("bar", 30L)
+            Set.of("foo"), completed("foo", 15L),
+            Set.of("bar", "baz"), completed("bar", 30L)
         );
 
         ctx.poll(emptyMap(), fulfillmentResults);
 
         Map<Set<String>, ApiResult<String, Long>> bazRetry = map(
-            mkSet("baz"), completed("baz", 45L)
+            Set.of("baz"), completed("baz", 45L)
         );
 
         ctx.poll(emptyMap(), bazRetry);
@@ -241,27 +240,27 @@ class AdminApiDriverTest {
         ));
 
         Map<Set<String>, LookupResult<String>> lookupRequests = map(
-            mkSet("foo"), mapped("foo", 0),
-            mkSet("bar"), mapped("bar", 1)
+            Set.of("foo"), mapped("foo", 0),
+            Set.of("bar"), mapped("bar", 1)
         );
 
         ctx.poll(lookupRequests, emptyMap());
 
         Map<Set<String>, ApiResult<String, Long>> fulfillmentResults = map(
-            mkSet("foo"), completed("foo", 15L),
-            mkSet("bar"), unmapped("bar")
+            Set.of("foo"), completed("foo", 15L),
+            Set.of("bar"), unmapped("bar")
         );
 
         ctx.poll(emptyMap(), fulfillmentResults);
 
         Map<Set<String>, LookupResult<String>> barLookupRetry = map(
-            mkSet("bar"), mapped("bar", 1)
+            Set.of("bar"), mapped("bar", 1)
         );
 
         ctx.poll(barLookupRetry, emptyMap());
 
         Map<Set<String>, ApiResult<String, Long>> barFulfillRetry = map(
-            mkSet("bar"), completed("bar", 30L)
+            Set.of("bar"), completed("bar", 30L)
         );
 
         ctx.poll(emptyMap(), barFulfillRetry);
@@ -278,8 +277,8 @@ class AdminApiDriverTest {
         ));
 
         Map<Set<String>, ApiResult<String, Long>> fulfillmentResults = map(
-            mkSet("foo"), failed("foo", new UnsupportedVersionException("")),
-            mkSet("bar", "baz"), completed("bar", 30L, "baz", 45L)
+            Set.of("foo"), failed("foo", new UnsupportedVersionException("")),
+            Set.of("bar", "baz"), completed("bar", 30L, "baz", 45L)
         );
 
         ctx.poll(emptyMap(), fulfillmentResults);
@@ -297,9 +296,9 @@ class AdminApiDriverTest {
         ctx.handler.addRetriableUnsupportedVersionKey("foo");
         // The mapped ApiResults are only used in the onResponse/handleResponse path - anything that needs
         // to be handled in the onFailure path needs to be manually set up later.
-        ctx.handler.expectRequest(mkSet("foo"), failed("foo", new UnsupportedVersionException("")));
-        ctx.handler.expectRequest(mkSet("bar"), failed("bar", new UnsupportedVersionException("")));
-        ctx.handler.expectRequest(mkSet("baz"), completed("baz", 45L));
+        ctx.handler.expectRequest(Set.of("foo"), failed("foo", new UnsupportedVersionException("")));
+        ctx.handler.expectRequest(Set.of("bar"), failed("bar", new UnsupportedVersionException("")));
+        ctx.handler.expectRequest(Set.of("baz"), completed("baz", 45L));
         // Setting up specific fulfillment stage executions requires polling the driver in order to obtain
         // the request specs needed for the onResponse/onFailure callbacks.
         List<RequestSpec<String>> requestSpecs = ctx.driver.poll();
@@ -317,7 +316,7 @@ class AdminApiDriverTest {
         });
         // Verify retry for "foo" but not for "bar" or "baz"
         ctx.poll(emptyMap(), map(
-            mkSet("foo"), failed("foo", new UnsupportedVersionException(""))
+            Set.of("foo"), failed("foo", new UnsupportedVersionException(""))
         ));
         ctx.poll(emptyMap(), emptyMap());
     }
@@ -330,26 +329,26 @@ class AdminApiDriverTest {
         ));
 
         Map<Set<String>, LookupResult<String>> lookupRequests = map(
-            mkSet("foo", "bar"), mapped("foo", 1, "bar", 2)
+            Set.of("foo", "bar"), mapped("foo", 1, "bar", 2)
         );
 
         ctx.poll(lookupRequests, emptyMap());
 
         Map<Set<String>, ApiResult<String, Long>> fulfillment = map(
-            mkSet("foo"), unmapped("foo"),
-            mkSet("bar"), unmapped("bar")
+            Set.of("foo"), unmapped("foo"),
+            Set.of("bar"), unmapped("bar")
         );
 
         ctx.poll(emptyMap(), fulfillment);
 
         Map<Set<String>, LookupResult<String>> retryLookupRequests = map(
-            mkSet("foo", "bar"), mapped("foo", 3, "bar", 3)
+            Set.of("foo", "bar"), mapped("foo", 3, "bar", 3)
         );
 
         ctx.poll(retryLookupRequests, emptyMap());
 
         Map<Set<String>, ApiResult<String, Long>> retryFulfillment = map(
-            mkSet("foo", "bar"), completed("foo", 15L, "bar", 30L)
+            Set.of("foo", "bar"), completed("foo", 15L, "bar", 30L)
         );
 
         ctx.poll(emptyMap(), retryFulfillment);
@@ -366,13 +365,13 @@ class AdminApiDriverTest {
         int initialLeaderId = 1;
 
         Map<Set<String>, LookupResult<String>> initialLookup = map(
-            mkSet("foo"), mapped("foo", initialLeaderId)
+            Set.of("foo"), mapped("foo", initialLeaderId)
         );
 
         ctx.poll(initialLookup, emptyMap());
         assertMappedKey(ctx, "foo", initialLeaderId);
 
-        ctx.handler.expectRequest(mkSet("foo"), completed("foo", 15L));
+        ctx.handler.expectRequest(Set.of("foo"), completed("foo", 15L));
 
         List<RequestSpec<String>> requestSpecs = ctx.driver.poll();
         assertEquals(1, requestSpecs.size());
@@ -385,7 +384,7 @@ class AdminApiDriverTest {
 
         int retryLeaderId = 2;
 
-        ctx.lookupStrategy().expectLookup(mkSet("foo"), mapped("foo", retryLeaderId));
+        ctx.lookupStrategy().expectLookup(Set.of("foo"), mapped("foo", retryLeaderId));
         List<RequestSpec<String>> retryLookupSpecs = ctx.driver.poll();
         assertEquals(1, retryLookupSpecs.size());
 
@@ -450,23 +449,23 @@ class AdminApiDriverTest {
         // fulfillment request for the static key
         LookupResult<String> lookupResult = mapped("foo", 1);
         ctx.lookupStrategy().expectLookup(
-            mkSet("foo"), lookupResult
+            Set.of("foo"), lookupResult
         );
         ctx.handler.expectRequest(
-            mkSet("bar"), completed("bar", 10L)
+            Set.of("bar"), completed("bar", 10L)
         );
 
         List<RequestSpec<String>> requestSpecs = ctx.driver.poll();
         assertEquals(2, requestSpecs.size());
 
         RequestSpec<String> lookupSpec = requestSpecs.get(0);
-        assertEquals(mkSet("foo"), lookupSpec.keys);
+        assertEquals(Set.of("foo"), lookupSpec.keys);
         ctx.assertLookupResponse(lookupSpec, lookupResult);
 
         // Receive a disconnect from the fulfillment request so that
         // we have an opportunity to coalesce the keys.
         RequestSpec<String> fulfillmentSpec = requestSpecs.get(1);
-        assertEquals(mkSet("bar"), fulfillmentSpec.keys);
+        assertEquals(Set.of("bar"), fulfillmentSpec.keys);
         ctx.driver.onFailure(ctx.time.milliseconds(), fulfillmentSpec, new DisconnectException());
 
         // Now we should get two fulfillment requests. One of them will
@@ -474,28 +473,28 @@ class AdminApiDriverTest {
         // should contain the single dynamic key for broker 0.
         ctx.handler.reset();
         ctx.handler.expectRequest(
-            mkSet("foo", "bar"), completed("foo", 15L, "bar", 30L)
+            Set.of("foo", "bar"), completed("foo", 15L, "bar", 30L)
         );
 
         List<RequestSpec<String>> coalescedSpecs = ctx.driver.poll();
         assertEquals(1, coalescedSpecs.size());
         RequestSpec<String> coalescedSpec = coalescedSpecs.get(0);
-        assertEquals(mkSet("foo", "bar"), coalescedSpec.keys);
+        assertEquals(Set.of("foo", "bar"), coalescedSpec.keys);
 
         // Disconnect in order to ensure that only the dynamic key is unmapped.
         // Then complete the remaining requests.
         ctx.driver.onFailure(ctx.time.milliseconds(), coalescedSpec, new DisconnectException());
 
         Map<Set<String>, LookupResult<String>> fooLookupRetry = map(
-            mkSet("foo"), mapped("foo", 3)
+            Set.of("foo"), mapped("foo", 3)
         );
         Map<Set<String>, ApiResult<String, Long>> barFulfillmentRetry = map(
-            mkSet("bar"), completed("bar", 30L)
+            Set.of("bar"), completed("bar", 30L)
         );
         ctx.poll(fooLookupRetry, barFulfillmentRetry);
 
         Map<Set<String>, ApiResult<String, Long>> fooFulfillmentRetry = map(
-            mkSet("foo"), completed("foo", 15L)
+            Set.of("foo"), completed("foo", 15L)
         );
         ctx.poll(emptyMap(), fooFulfillmentRetry);
         ctx.poll(emptyMap(), emptyMap());
@@ -508,7 +507,7 @@ class AdminApiDriverTest {
         ));
 
         LookupResult<String> emptyLookup = emptyLookup();
-        ctx.lookupStrategy().expectLookup(mkSet("foo"), emptyLookup);
+        ctx.lookupStrategy().expectLookup(Set.of("foo"), emptyLookup);
 
         List<RequestSpec<String>> requestSpecs = ctx.driver.poll();
         assertEquals(1, requestSpecs.size());
@@ -531,7 +530,7 @@ class AdminApiDriverTest {
         TestContext ctx = TestContext.staticMapped(map("foo", 0));
 
         ApiResult<String, Long> emptyFulfillment = emptyFulfillment();
-        ctx.handler.expectRequest(mkSet("foo"), emptyFulfillment);
+        ctx.handler.expectRequest(Set.of("foo"), emptyFulfillment);
 
         List<RequestSpec<String>> requestSpecs = ctx.driver.poll();
         assertEquals(1, requestSpecs.size());

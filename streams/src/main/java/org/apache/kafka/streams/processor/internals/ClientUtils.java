@@ -35,7 +35,6 @@ import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.errors.StreamsException;
-import org.apache.kafka.streams.processor.TaskId;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -65,26 +64,20 @@ public class ClientUtils {
         }
     }
 
-
-    // currently admin client is shared among all threads
-    public static String getSharedAdminClientId(final String clientId) {
+    public static String adminClientId(final String clientId) {
         return clientId + "-admin";
     }
 
-    public static String getConsumerClientId(final String threadClientId) {
+    public static String consumerClientId(final String threadClientId) {
         return threadClientId + "-consumer";
     }
 
-    public static String getRestoreConsumerClientId(final String threadClientId) {
+    public static String restoreConsumerClientId(final String threadClientId) {
         return threadClientId + "-restore-consumer";
     }
 
-    public static String getThreadProducerClientId(final String threadClientId) {
+    public static String producerClientId(final String threadClientId) {
         return threadClientId + "-producer";
-    }
-
-    public static String getTaskProducerClientId(final String threadClientId, final TaskId taskId) {
-        return threadClientId + "-" + taskId + "-producer";
     }
 
     public static Map<MetricName, Metric> consumerMetrics(final Consumer<byte[], byte[]> mainConsumer,
@@ -202,11 +195,6 @@ public class ClientUtils {
             return Collections.emptyMap();
         }
         return getEndOffsets(fetchEndOffsetsFuture(partitions, adminClient));
-    }
-
-    public static String extractThreadId(final String fullThreadName) {
-        final int index = fullThreadName.indexOf("StreamThread-");
-        return fullThreadName.substring(index);
     }
 
     public static long producerRecordSizeInBytes(final ProducerRecord<byte[], byte[]> record) {

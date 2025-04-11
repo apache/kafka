@@ -28,15 +28,14 @@ import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.OffsetAndEpoch;
+import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.raft.internals.BatchAccumulator;
 import org.apache.kafka.raft.internals.BatchAccumulator.CompletedBatch;
-import org.apache.kafka.raft.internals.VoterSet;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import java.util.List;
 import java.util.Optional;
-import java.util.OptionalLong;
 
 public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
     private final RawSnapshotWriter snapshot;
@@ -59,6 +58,7 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             0,
             Integer.MAX_VALUE,
             maxBatchSize,
+            10, // maxNumberOfBatches
             memoryPool,
             time,
             compression,
@@ -109,7 +109,7 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
             throw new IllegalStateException(message);
         }
 
-        accumulator.append(snapshot.snapshotId().epoch(), records, OptionalLong.empty(), false);
+        accumulator.append(snapshot.snapshotId().epoch(), records, false);
 
         if (accumulator.needsDrain(time.milliseconds())) {
             appendBatches(accumulator.drain());
@@ -192,7 +192,7 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
         }
 
         public <T> RecordsSnapshotWriter<T> build(RecordSerde<T> serde) {
-            if (!rawSnapshotWriter.isPresent()) {
+            if (rawSnapshotWriter.isEmpty()) {
                 throw new IllegalStateException("Builder::build called without a RawSnapshotWriter");
             } else if (rawSnapshotWriter.get().sizeInBytes() != 0) {
                 throw new IllegalStateException(
@@ -246,12 +246,10 @@ public final class RecordsSnapshotWriter<T> implements SnapshotWriter<T> {
                                 .setKRaftVersion(kraftVersion.featureLevel())
                         );
 
-                        if (voterSet.isPresent()) {
-                            builder.appendVotersMessage(
-                                now,
-                                voterSet.get().toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)
-                            );
-                        }
+                        voterSet.ifPresent(set -> builder.appendVotersMessage(
+                            now,
+                            set.toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)
+                        ));
                     }
 
                     return builder.build();

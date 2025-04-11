@@ -21,11 +21,10 @@ import com.yammer.metrics.core.Gauge
 
 import java.util.{Collections, Properties}
 import java.util.concurrent.ExecutionException
-import kafka.security.authorizer.AclAuthorizer
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import kafka.utils._
 import org.apache.kafka.clients.admin.Admin
-import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecords}
+import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig, ConsumerRecords, GroupProtocol}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.acl._
 import org.apache.kafka.common.acl.AclOperation._
@@ -39,28 +38,27 @@ import org.apache.kafka.common.resource.PatternType.{LITERAL, PREFIXED}
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.security.authorizer.AclEntry.WILDCARD_HOST
-import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs, ServerLogConfigs, ZkConfigs}
+import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{CsvSource, ValueSource}
+import org.junit.jupiter.params.provider.{CsvSource, MethodSource}
 
 import scala.jdk.CollectionConverters._
 
 /**
   * The test cases here verify that a producer authorized to publish to a topic
   * is able to, and that consumers in a group authorized to consume are able to
-  * to do so.
+  * do so.
   *
   * This test relies on a chain of test harness traits to set up. It directly
   * extends IntegrationTestHarness. IntegrationTestHarness creates producers and
   * consumers, and it extends KafkaServerTestHarness. KafkaServerTestHarness starts
-  * brokers, but first it initializes a ZooKeeper server and client, which happens
-  * in QuorumTestHarness.
+  * brokers.
   *
   * To start brokers we need to set a cluster ACL, which happens optionally in KafkaServerTestHarness.
-  * The remaining ACLs to enable access to producers and consumers are set here. To set ACLs, we use AclCommand directly.
+  * The remaining ACLs to enable access to producers and consumers are set here.
   *
   * Finally, we rely on SaslSetup to bootstrap and setup Kerberos. We don't use
   * SaslTestHarness here directly because it extends QuorumTestHarness, and we
@@ -81,7 +79,6 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   val tp = new TopicPartition(topic, part)
 
   override protected lazy val trustStoreFile = Some(TestUtils.tempFile("truststore", ".jks"))
-  protected def authorizerClass: Class[_] = classOf[AclAuthorizer]
 
   val topicResource = new ResourcePattern(TOPIC, topic, LITERAL)
   val groupResource =  new ResourcePattern(GROUP, group, LITERAL)
@@ -148,21 +145,10 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     */
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-
-    if (TestInfoUtils.isKRaft(testInfo)) {
-      this.serverConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, kafkaPrincipal.toString)
-      this.controllerConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, kafkaPrincipal.toString + ";" + "User:ANONYMOUS")
-      this.serverConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
-      this.controllerConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
-    } else {
-      // The next two configuration parameters enable ZooKeeper secure ACLs
-      // and sets the Kafka authorizer, both necessary to enable security.
-      this.serverConfig.setProperty(ZkConfigs.ZK_ENABLE_SECURE_ACLS_CONFIG, "true")
-      this.serverConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, authorizerClass.getName)
-
-      // Set the specific principal that can update ACLs.
-      this.serverConfig.setProperty(AclAuthorizer.SuperUsersProp, kafkaPrincipal.toString)
-    }
+    this.serverConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, kafkaPrincipal.toString)
+    this.controllerConfig.setProperty(StandardAuthorizer.SUPER_USERS_CONFIG, kafkaPrincipal.toString + ";" + "User:ANONYMOUS")
+    this.serverConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
+    this.controllerConfig.setProperty(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, classOf[StandardAuthorizer].getName)
 
     super.setUp(testInfo)
 
@@ -184,9 +170,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
   /**
     * Tests the ability of producing and consuming with the appropriate ACLs set.
     */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testProduceConsumeViaAssign(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProduceConsumeViaAssign(groupProtocol: String): Unit = {
     setAclsAndProduce(tp)
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
@@ -213,9 +199,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
       ._2.asInstanceOf[Gauge[Double]]
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testProduceConsumeViaSubscribe(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProduceConsumeViaSubscribe(groupProtocol: String): Unit = {
     setAclsAndProduce(tp)
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
@@ -223,9 +209,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     confirmReauthenticationMetrics()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testProduceConsumeWithWildcardAcls(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProduceConsumeWithWildcardAcls(groupProtocol: String): Unit = {
     setWildcardResourceAcls()
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
@@ -235,9 +221,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     confirmReauthenticationMetrics()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testProduceConsumeWithPrefixedAcls(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProduceConsumeWithPrefixedAcls(groupProtocol: String): Unit = {
     setPrefixedResourceAcls()
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
@@ -247,9 +233,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     confirmReauthenticationMetrics()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testProduceConsumeTopicAutoCreateTopicCreateAcl(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testProduceConsumeTopicAutoCreateTopicCreateAcl(groupProtocol: String): Unit = {
     // topic2 is not created on setup()
     val tp2 = new TopicPartition("topic2", 0)
     setAclsAndProduce(tp2)
@@ -315,14 +301,14 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * messages and describe topics respectively when the describe ACL isn't set.
     * Also verifies that subsequent publish, consume and describe to authorized topic succeeds.
     */
-  @ParameterizedTest
+  @ParameterizedTest(name = "{displayName}.groupProtocol={0}.isIdempotenceEnabled={1}")
   @CsvSource(value = Array(
-    "kraft, true",
-    "kraft, false",
-    "zk, true",
-    "zk, false"
+    "classic, true",
+    //"consumer, true",
+    "classic, false",
+    //"consumer, false",
   ))
-  def testNoDescribeProduceOrConsumeWithoutTopicDescribeAcl(quorum:String, isIdempotenceEnabled:Boolean): Unit = {
+  def testNoDescribeProduceOrConsumeWithoutTopicDescribeAcl(groupProtocol:String, isIdempotenceEnabled:Boolean): Unit = {
     // Set consumer group acls since we are testing topic authorization
     setConsumerGroupAcls()
 
@@ -388,12 +374,10 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
   @ParameterizedTest
   @CsvSource(value = Array(
-    "kraft, true",
-    "kraft, false",
-    "zk, true",
-    "zk, false"
+    "true",
+    "false",
   ))
-  def testNoProduceWithDescribeAcl(quorum:String, isIdempotenceEnabled:Boolean): Unit = {
+  def testNoProduceWithDescribeAcl(isIdempotenceEnabled:Boolean): Unit = {
     val superuserAdminClient = createSuperuserAdminClient()
     superuserAdminClient.createAcls(List(AclTopicDescribe()).asJava).values
 
@@ -419,9 +403,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Tests that a consumer fails to consume messages without the appropriate
     * ACL set.
     */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testNoConsumeWithoutDescribeAclViaAssign(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testNoConsumeWithoutDescribeAclViaAssign(groupProtocol: String): Unit = {
     noConsumeWithoutDescribeAclSetup()
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
@@ -430,9 +414,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     confirmReauthenticationMetrics()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testNoConsumeWithoutDescribeAclViaSubscribe(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testNoConsumeWithoutDescribeAclViaSubscribe(groupProtocol: String): Unit = {
     noConsumeWithoutDescribeAclSetup()
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
@@ -446,7 +430,18 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
 
     // Verify that records are consumed if all topics are authorized
     consumer.subscribe(List(topic).asJava)
-    consumeRecordsIgnoreOneAuthorizationException(consumer)
+    if (groupProtocol.equals(GroupProtocol.CLASSIC)) {
+      consumeRecordsIgnoreOneAuthorizationException(consumer)
+    } else {
+      TestUtils.waitUntilTrue(() => {
+        try {
+          consumeRecords(consumer, numRecords, 0, topic)
+          true
+        } catch {
+          case _: TopicAuthorizationException => false
+        }
+      }, "Consumer didn't manage to consume the records within timeout.")
+    }
   }
 
   private def noConsumeWithoutDescribeAclSetup(): Unit = {
@@ -471,9 +466,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testNoConsumeWithDescribeAclViaAssign(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testNoConsumeWithDescribeAclViaAssign(groupProtocol: String): Unit = {
     noConsumeWithDescribeAclSetup()
     val consumer = createConsumer()
     consumer.assign(List(tp).asJava)
@@ -483,9 +478,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     confirmReauthenticationMetrics()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testNoConsumeWithDescribeAclViaSubscribe(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testNoConsumeWithDescribeAclViaSubscribe(groupProtocol: String): Unit = {
     noConsumeWithDescribeAclSetup()
     val consumer = createConsumer()
     consumer.subscribe(List(topic).asJava)
@@ -512,9 +507,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     * Tests that a consumer fails to consume messages without the appropriate
     * ACL set.
     */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft", "zk"))
-  def testNoGroupAcl(quorum: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testNoGroupAcl(groupProtocol: String): Unit = {
     val superuserAdminClient = createSuperuserAdminClient()
     superuserAdminClient.createAcls(List(AclTopicWrite(), AclTopicCreate(), AclTopicDescribe()).asJava).values
     brokers.foreach { s =>

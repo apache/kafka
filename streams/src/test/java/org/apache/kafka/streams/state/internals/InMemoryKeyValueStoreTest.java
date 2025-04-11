@@ -21,6 +21,7 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.serialization.UUIDSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.processor.StateStoreContext;
@@ -38,6 +39,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.NoSuchElementException;
 import java.util.UUID;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
@@ -45,8 +47,11 @@ import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.CoreMatchers.nullValue;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
@@ -92,7 +97,6 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         return new InMemoryKeyValueStore("in-memory-store-test");
     }
 
-    @SuppressWarnings("unchecked")
     @Test
     public void shouldRemoveKeysWithNullValues() {
         store.close();
@@ -186,10 +190,11 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         }
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldReturnUUIDsWithStringPrefix() {
         final List<KeyValue<Bytes, byte[]>> entries = new ArrayList<>();
-        final Serializer<UUID> uuidSerializer = Serdes.UUID().serializer();
+        final UUIDSerializer uuidSerializer = new UUIDSerializer();
         final UUID uuid1 = UUID.randomUUID();
         final UUID uuid2 = UUID.randomUUID();
         final String prefix = uuid1.toString().substring(0, 4);
@@ -245,6 +250,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         assertThat(numberOfKeysReturned, is(0));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerIfPrefixKeySerializerIsNull() {
         assertThrows(NullPointerException.class, () -> byteStore.prefixScan("bb", null));
@@ -252,7 +258,7 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
 
     @Test
     public void shouldMatchPositionAfterPut() {
-        inMemoryKeyValueStore.init((StateStoreContext) context, inMemoryKeyValueStore);
+        inMemoryKeyValueStore.init(context, inMemoryKeyValueStore);
 
         context.setRecordContext(new ProcessorRecordContext(0, 1, 0, "", new RecordHeaders()));
         inMemoryKeyValueStore.put(bytesKey("key1"), bytesValue("value1"));
@@ -264,6 +270,172 @@ public class InMemoryKeyValueStoreTest extends AbstractKeyValueStoreTest {
         final Position expected = Position.fromMap(mkMap(mkEntry("", mkMap(mkEntry(0, 3L)))));
         final Position actual = inMemoryKeyValueStore.getPosition();
         assertEquals(expected, actual);
+    }
+
+    @Test
+    public void iteratorHasNextOnEmptyStoreShouldReturnFalse() {
+        inMemoryKeyValueStore.init(context, inMemoryKeyValueStore);
+        try (final KeyValueIterator<Bytes, byte[]> iter = inMemoryKeyValueStore.all()) {
+            assertFalse(iter.hasNext());
+        }
+    }
+
+    @Test
+    public void iteratorHasNextOnDeletedEntryShouldReturnFalse() {
+        inMemoryKeyValueStore.init(context, inMemoryKeyValueStore);
+        inMemoryKeyValueStore.put(bytesKey("key"), bytesValue("value"));
+        final KeyValueIterator<Bytes, byte[]> iter = inMemoryKeyValueStore.all();
+
+        assertTrue(iter.hasNext());
+        inMemoryKeyValueStore.delete(bytesKey("key"));
+        assertFalse(iter.hasNext());
+    }
+
+    @Test
+    public void iteratorHasNextShouldNotAdvanceIterator() {
+        inMemoryKeyValueStore.init(context, inMemoryKeyValueStore);
+        inMemoryKeyValueStore.put(bytesKey("key"), bytesValue("value"));
+        final KeyValueIterator<Bytes, byte[]> iter = inMemoryKeyValueStore.all();
+
+        assertTrue(iter.hasNext());
+        assertTrue(iter.hasNext()); // should still point to the first element
+    }
+
+    @Test
+    public void iteratorHasNextShouldReturnTrueIfElementsRemaining() {
+        inMemoryKeyValueStore.init(context, inMemoryKeyValueStore);
+        inMemoryKeyValueStore.put(bytesKey("key1"), bytesValue("value1"));
+        inMemoryKeyValueStore.put(bytesKey("key2"), bytesValue("value2"));
+        final KeyValueIterator<Bytes, byte[]> iter = inMemoryKeyValueStore.all();
+
+        inMemoryKeyValueStore.delete(bytesKey("key1"));
+        assertTrue(iter.hasNext());
+    }
+
+    @Test
+    public void iteratorNextShouldReturnNextElement() {
+        inMemoryKeyValueStore.init(context, inMemoryKeyValueStore);
+        inMemoryKeyValueStore.put(bytesKey("key"), bytesValue("value"));
+        final KeyValueIterator<Bytes, byte[]> iter = inMemoryKeyValueStore.all();
+
+        final KeyValue<Bytes, byte[]> next = iter.next();
+        assertEquals(bytesKey("key"), next.key);
+        assertArrayEquals(bytesValue("value"), next.value);
+    }
+
+    @Test
+    public void iteratorNextAfterHasNextShouldReturnNextElement() {
+        inMemoryKeyValueStore.init(context, inMemoryKeyValueStore);
+        inMemoryKeyValueStore.put(bytesKey("key"), bytesValue("value"));
+        final KeyValueIterator<Bytes, byte[]> iter = inMemoryKeyValueStore.all();
+
+        assertTrue(iter.hasNext());
+        final KeyValue<Bytes, byte[]> next = iter.next();
+        assertEquals(bytesKey("key"), next.key);
+        assertArrayEquals(bytesValue("value"), next.value);
+    }
+
+    @Test
+    public void iteratorNextOnEmptyStoreShouldThrowException() {
+        inMemoryKeyValueStore.init(context, inMemoryKeyValueStore);
+        final KeyValueIterator<Bytes, byte[]> iter = inMemoryKeyValueStore.all();
+        assertThrows(NoSuchElementException.class, iter::next);
+    }
+
+    @Test
+    public void iteratorNextShouldThrowExceptionIfRemainingElementsDeleted() {
+        inMemoryKeyValueStore.init(context, inMemoryKeyValueStore);
+        inMemoryKeyValueStore.put(bytesKey("key1"), bytesValue("value1"));
+        inMemoryKeyValueStore.put(bytesKey("key2"), bytesValue("value2"));
+        final KeyValueIterator<Bytes, byte[]> iter = inMemoryKeyValueStore.all();
+
+        final KeyValue<Bytes, byte[]> next = iter.next();
+        assertEquals(bytesKey("key1"), next.key);
+        assertArrayEquals(bytesValue("value1"), next.value);
+
+        inMemoryKeyValueStore.delete(bytesKey("key2"));
+        assertThrows(NoSuchElementException.class, iter::next);
+    }
+
+    @Test
+    public void iteratorNextShouldSkipDeletedElements() {
+        inMemoryKeyValueStore.init(context, inMemoryKeyValueStore);
+        inMemoryKeyValueStore.put(bytesKey("key1"), bytesValue("value1"));
+        inMemoryKeyValueStore.put(bytesKey("key2"), bytesValue("value2"));
+        final KeyValueIterator<Bytes, byte[]> iter = inMemoryKeyValueStore.all();
+
+        inMemoryKeyValueStore.delete(bytesKey("key1"));
+        final KeyValue<Bytes, byte[]> next = iter.next();
+        assertEquals(bytesKey("key2"), next.key);
+        assertArrayEquals(bytesValue("value2"), next.value);
+    }
+
+    @Test
+    public void iteratorNextShouldIterateOverAllElements() {
+        inMemoryKeyValueStore.init(context, inMemoryKeyValueStore);
+        inMemoryKeyValueStore.put(bytesKey("key1"), bytesValue("value1"));
+        inMemoryKeyValueStore.put(bytesKey("key2"), bytesValue("value2"));
+        final KeyValueIterator<Bytes, byte[]> iter = inMemoryKeyValueStore.all();
+
+        final KeyValue<Bytes, byte[]> next1 = iter.next();
+        assertEquals(bytesKey("key1"), next1.key);
+        assertArrayEquals(bytesValue("value1"), next1.value);
+
+        final KeyValue<Bytes, byte[]> next2 = iter.next();
+        assertEquals(bytesKey("key2"), next2.key);
+        assertArrayEquals(bytesValue("value2"), next2.value);
+
+        assertThrows(NoSuchElementException.class, iter::next);
+    }
+
+    @Test
+    public void iteratorPeekNextKeyOnEmptyStoreShouldThrowException() {
+        inMemoryKeyValueStore.init(context, inMemoryKeyValueStore);
+        final KeyValueIterator<Bytes, byte[]> iter = inMemoryKeyValueStore.all();
+        assertThrows(NoSuchElementException.class, iter::peekNextKey);
+    }
+
+    @Test
+    public void iteratorPeekNextKeyOnDeletedEntryShouldThrowException() {
+        inMemoryKeyValueStore.init(context, inMemoryKeyValueStore);
+        inMemoryKeyValueStore.put(bytesKey("key"), bytesValue("value"));
+        final KeyValueIterator<Bytes, byte[]> iter = inMemoryKeyValueStore.all();
+
+        assertEquals(bytesKey("key"), iter.peekNextKey());
+        inMemoryKeyValueStore.delete(bytesKey("key"));
+        assertThrows(NoSuchElementException.class, iter::peekNextKey);
+    }
+
+    @Test
+    public void iteratorPeekNextKeyShouldNotAdvanceIterator() {
+        inMemoryKeyValueStore.init(context, inMemoryKeyValueStore);
+        inMemoryKeyValueStore.put(bytesKey("key"), bytesValue("value"));
+        final KeyValueIterator<Bytes, byte[]> iter = inMemoryKeyValueStore.all();
+
+        assertEquals(bytesKey("key"), iter.peekNextKey());
+        assertEquals(bytesKey("key"), iter.peekNextKey());
+    }
+
+    @Test
+    public void iteratorPeekNextKeyShouldSkipDeletedElements() {
+        inMemoryKeyValueStore.init(context, inMemoryKeyValueStore);
+        inMemoryKeyValueStore.put(bytesKey("key1"), bytesValue("value1"));
+        inMemoryKeyValueStore.put(bytesKey("key2"), bytesValue("value2"));
+        final KeyValueIterator<Bytes, byte[]> iter = inMemoryKeyValueStore.all();
+
+        inMemoryKeyValueStore.delete(bytesKey("key1"));
+        assertEquals(bytesKey("key2"), iter.peekNextKey());
+    }
+
+    @Test
+    public void iteratorShouldThrowIllegalStateExceptionIfAlreadyClosed() {
+        inMemoryKeyValueStore.init(context, inMemoryKeyValueStore);
+        final KeyValueIterator<Bytes, byte[]> iter = inMemoryKeyValueStore.all();
+
+        iter.close();
+        assertThrows(IllegalStateException.class, iter::hasNext);
+        assertThrows(IllegalStateException.class, iter::next);
+        assertThrows(IllegalStateException.class, iter::peekNextKey);
     }
 
     private byte[] bytesValue(final String value) {

@@ -26,10 +26,10 @@ import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 import static java.util.Arrays.asList;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.EMPTY_RACK_AWARE_ASSIGNMENT_TAGS;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_1;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.PID_2;
@@ -61,7 +61,7 @@ public class FallbackPriorTaskAssignorTest {
         );
         assertThat(probingRebalanceNeeded, is(true));
 
-        assertThat(c1.activeTasks(), equalTo(mkSet(TASK_0_0, TASK_0_1, TASK_0_2)));
+        assertThat(c1.activeTasks(), equalTo(Set.of(TASK_0_0, TASK_0_1, TASK_0_2)));
         assertThat(c2.activeTasks(), empty());
     }
 
@@ -71,7 +71,7 @@ public class FallbackPriorTaskAssignorTest {
 
     private ClientState createClientWithPreviousActiveTasks(final ProcessId processId, final int capacity, final TaskId... taskIds) {
         final ClientState clientState = new ClientState(capacity);
-        clientState.addPreviousActiveTasks(mkSet(taskIds));
+        clientState.addPreviousActiveTasks(Set.of(taskIds));
         clients.put(processId, clientState);
         return clientState;
     }

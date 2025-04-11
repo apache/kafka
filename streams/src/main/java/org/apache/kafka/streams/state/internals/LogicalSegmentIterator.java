@@ -29,7 +29,7 @@ import java.util.List;
 import java.util.ListIterator;
 import java.util.NoSuchElementException;
 
-public class LogicalSegmentIterator implements VersionedRecordIterator {
+public class LogicalSegmentIterator implements VersionedRecordIterator<byte[]> {
     private final ListIterator<LogicalKeyValueSegment> segmentIterator;
     private final Bytes key;
     private final Long fromTime;
@@ -76,7 +76,7 @@ public class LogicalSegmentIterator implements VersionedRecordIterator {
     }
 
     @Override
-    public Object next() {
+    public VersionedRecord<byte[]> next() {
         if (hasNext()) {
             // since data is stored in descending order in the segments, retrieve previous record, if the order is Ascending.
             return order.equals(ResultOrder.ASCENDING) ? iterator.previous() : iterator.next();
@@ -95,16 +95,16 @@ public class LogicalSegmentIterator implements VersionedRecordIterator {
                 // fact all use the same physical RocksDB under-the-hood.
                 this.snapshotOwner = segment;
                 // take a RocksDB snapshot to return the segments content at the query time (in order to guarantee consistency)
-                this.snapshot = snapshotOwner.getSnapshot();
+                this.snapshot = snapshotOwner.snapshot();
             }
 
             final byte[] rawSegmentValue = segment.get(key, snapshot);
             if (rawSegmentValue != null) { // this segment contains record(s) with the specified key
                 if (segment.id() == -1) { // this is the latestValueStore
-                    final long recordTimestamp = RocksDBVersionedStore.LatestValueFormatter.getTimestamp(rawSegmentValue);
+                    final long recordTimestamp = RocksDBVersionedStore.LatestValueFormatter.timestamp(rawSegmentValue);
                     if (recordTimestamp <= toTime) {
                         // latest value satisfies timestamp bound
-                        queryResults.add(new VersionedRecord<>(RocksDBVersionedStore.LatestValueFormatter.getValue(rawSegmentValue), recordTimestamp));
+                        queryResults.add(new VersionedRecord<>(RocksDBVersionedStore.LatestValueFormatter.value(rawSegmentValue), recordTimestamp));
                     }
                 } else {
                     // this segment contains records with the specified key and time range

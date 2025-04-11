@@ -31,8 +31,8 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
-import static javax.ws.rs.core.Response.Status.BAD_REQUEST;
-import static javax.ws.rs.core.Response.Status.FORBIDDEN;
+import static jakarta.ws.rs.core.Response.Status.BAD_REQUEST;
+import static jakarta.ws.rs.core.Response.Status.FORBIDDEN;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -64,7 +64,7 @@ public class SessionedProtocolIntegrationTest {
         Map<String, String> workerProps = new HashMap<>();
         workerProps.put(CONNECT_PROTOCOL_CONFIG, ConnectProtocolCompatibility.SESSIONED.protocol());
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         connect = new EmbeddedConnectCluster.Builder()
             .name("connect-cluster")
             .numWorkers(2)
@@ -81,7 +81,7 @@ public class SessionedProtocolIntegrationTest {
 
     @AfterEach
     public void close() {
-        // stop all Connect, Kafka and Zk threads.
+        // stop the Connect cluster and its backing Kafka cluster.
         connect.stop();
     }
 
@@ -122,7 +122,7 @@ public class SessionedProtocolIntegrationTest {
         // Create the connector now
         // setup up props for the sink connector
         Map<String, String> connectorProps = new HashMap<>();
-        connectorProps.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+        connectorProps.put(CONNECTOR_CLASS_CONFIG, TestableSinkConnector.class.getSimpleName());
         connectorProps.put(TASKS_MAX_CONFIG, String.valueOf(1));
         connectorProps.put(TOPICS_CONFIG, "test-topic");
         connectorProps.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());

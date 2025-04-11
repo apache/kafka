@@ -24,6 +24,7 @@ import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetCommitCallback;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.header.internals.RecordHeaders;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
@@ -34,6 +35,7 @@ import org.apache.kafka.connect.runtime.errors.ErrorHandlingMetrics;
 import org.apache.kafka.connect.runtime.errors.ProcessingContext;
 import org.apache.kafka.connect.runtime.errors.RetryWithToleranceOperatorTest;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
+import org.apache.kafka.connect.runtime.isolation.TestPlugins;
 import org.apache.kafka.connect.runtime.standalone.StandaloneConfig;
 import org.apache.kafka.connect.sink.SinkConnector;
 import org.apache.kafka.connect.sink.SinkRecord;
@@ -174,11 +176,14 @@ public class WorkerSinkTaskThreadedTest {
         workerProps.put("value.converter", "org.apache.kafka.connect.json.JsonConverter");
         workerProps.put("offset.storage.file.filename", "/tmp/connect.offsets");
         WorkerConfig workerConfig = new StandaloneConfig(workerProps);
+        Plugin<Converter> keyConverterPlugin = metrics.wrap(keyConverter, taskId,  true);
+        Plugin<Converter> valueConverterPlugin = metrics.wrap(valueConverter, taskId,  false);
+        Plugin<HeaderConverter> headerConverterPlugin = metrics.wrap(headerConverter, taskId);
         workerTask = new WorkerSinkTask(
-                taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics, keyConverter,
-                valueConverter, errorHandlingMetrics, headerConverter, transformationChain,
-                consumer, pluginLoader, time, RetryWithToleranceOperatorTest.noopOperator(), null, statusBackingStore,
-                Collections::emptyList);
+                taskId, sinkTask, statusListener, initialState, workerConfig, ClusterConfigState.EMPTY, metrics, keyConverterPlugin,
+                valueConverterPlugin, errorHandlingMetrics, headerConverterPlugin, transformationChain,
+                consumer, pluginLoader, time, RetryWithToleranceOperatorTest.noneOperator(), null, statusBackingStore,
+                Collections::emptyList, TestPlugins.noOpLoaderSwap());
         recordsReturned = 0;
     }
 
@@ -598,7 +603,8 @@ public class WorkerSinkTaskThreadedTest {
 
             TopicPartition topicPartition = new TopicPartition(TOPIC, PARTITION);
             ConsumerRecord<byte[], byte[]> consumerRecord = new ConsumerRecord<>(TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, TIMESTAMP, TIMESTAMP_TYPE, 0, 0, RAW_KEY, RAW_VALUE, emptyHeaders(), Optional.empty());
-            ConsumerRecords<byte[], byte[]> records = new ConsumerRecords<>(Collections.singletonMap(topicPartition, singletonList(consumerRecord)));
+            ConsumerRecords<byte[], byte[]> records = new ConsumerRecords<>(Map.of(topicPartition, List.of(consumerRecord)),
+                Map.of(topicPartition, new OffsetAndMetadata(FIRST_OFFSET + recordsReturned + 1, Optional.empty(), "")));
             recordsReturned++;
             return records;
         });
@@ -629,7 +635,8 @@ public class WorkerSinkTaskThreadedTest {
                     TOPIC, PARTITION, FIRST_OFFSET + recordsReturned, TIMESTAMP, TIMESTAMP_TYPE,
                     0, 0, RAW_KEY, RAW_VALUE, emptyHeaders(), Optional.empty());
             ConsumerRecords<byte[], byte[]> records =
-                    new ConsumerRecords<>(Collections.singletonMap(topicPartition, singletonList(consumerRecord)));
+                    new ConsumerRecords<>(Map.of(topicPartition, List.of(consumerRecord)),
+                        Map.of(topicPartition, new OffsetAndMetadata(FIRST_OFFSET + recordsReturned + 1, Optional.empty(), "")));
             recordsReturned++;
             return records;
         });
@@ -639,7 +646,7 @@ public class WorkerSinkTaskThreadedTest {
     }
 
     private void expectPreCommit(ExpectOffsetCommitCommand... commands) {
-        doAnswer(new Answer<Object>() {
+        doAnswer(new Answer<>() {
             int index = 0;
 
             @Override
@@ -660,7 +667,7 @@ public class WorkerSinkTaskThreadedTest {
     }
     
     private void expectOffsetCommit(ExpectOffsetCommitCommand... commands) {
-        doAnswer(new Answer<Object>() {
+        doAnswer(new Answer<>() {
             int index = 0;
 
             @Override
@@ -716,7 +723,6 @@ public class WorkerSinkTaskThreadedTest {
     private abstract static class TestSinkTask extends SinkTask {
     }
 
-    @SuppressWarnings("NewClassNamingConvention")
     private static class ExpectOffsetCommitCommand {
         final long expectedMessages;
         final RuntimeException error;

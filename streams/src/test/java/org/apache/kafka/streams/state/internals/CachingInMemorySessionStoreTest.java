@@ -19,7 +19,7 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.serialization.Deserializer;
-import org.apache.kafka.common.serialization.Serdes;
+import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogCaptureAppender;
@@ -31,8 +31,6 @@ import org.apache.kafka.streams.kstream.SessionWindowedDeserializer;
 import org.apache.kafka.streams.kstream.Windowed;
 import org.apache.kafka.streams.kstream.internals.Change;
 import org.apache.kafka.streams.kstream.internals.SessionWindow;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -61,7 +59,7 @@ import java.util.Random;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.test.StreamsTestUtils.toList;
+import static org.apache.kafka.test.StreamsTestUtils.toListAndCloseIterator;
 import static org.apache.kafka.test.StreamsTestUtils.verifyKeyValueList;
 import static org.apache.kafka.test.StreamsTestUtils.verifyWindowedKeyValue;
 import static org.hamcrest.CoreMatchers.hasItem;
@@ -79,7 +77,6 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
-@SuppressWarnings("PointlessArithmeticExpression")
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class CachingInMemorySessionStoreTest {
@@ -95,7 +92,7 @@ public class CachingInMemorySessionStoreTest {
     private final Bytes keyB = Bytes.wrap("b".getBytes());
 
     private SessionStore<Bytes, byte[]> underlyingStore;
-    private InternalMockProcessorContext context;
+    private InternalMockProcessorContext<?, ?> context;
     private CachingSessionStore cachingStore;
     private ThreadCache cache;
 
@@ -106,7 +103,7 @@ public class CachingInMemorySessionStoreTest {
         cache = new ThreadCache(new LogContext("testCache "), MAX_CACHE_SIZE_BYTES, new MockStreamsMetrics(new Metrics()));
         context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(DEFAULT_TIMESTAMP, 0, 0, TOPIC, new RecordHeaders()));
-        cachingStore.init((StateStoreContext) context, cachingStore);
+        cachingStore.init(context, cachingStore);
     }
 
     @AfterEach
@@ -114,23 +111,13 @@ public class CachingInMemorySessionStoreTest {
         cachingStore.close();
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        final SessionStore<Bytes, byte[]> inner = mock(InMemorySessionStore.class);
-        final CachingSessionStore outer = new CachingSessionStore(inner, SEGMENT_INTERVAL);
-        when(inner.name()).thenReturn("store");
-        outer.init((ProcessorContext) context, outer);
-        verify(inner).init((ProcessorContext) context, outer);
-    }
-
     @Test
     public void shouldDelegateInit() {
         final SessionStore<Bytes, byte[]> inner = mock(InMemorySessionStore.class);
         final CachingSessionStore outer = new CachingSessionStore(inner, SEGMENT_INTERVAL);
         when(inner.name()).thenReturn("store");
-        outer.init((StateStoreContext) context, outer);
-        verify(inner).init((StateStoreContext) context, outer);
+        outer.init(context, outer);
+        verify(inner).init(context, outer);
     }
 
     @Test
@@ -310,9 +297,9 @@ public class CachingInMemorySessionStoreTest {
         when(underlyingStore.name()).thenReturn("store-name");
         cachingStore = new CachingSessionStore(underlyingStore, SEGMENT_INTERVAL);
         cache = mock(ThreadCache.class);
-        final InternalMockProcessorContext context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
+        final InternalMockProcessorContext<?, ?> context = new InternalMockProcessorContext<>(TestUtils.tempDirectory(), null, null, null, cache);
         context.setRecordContext(new ProcessorRecordContext(10, 0, 0, TOPIC, new RecordHeaders()));
-        cachingStore.init((StateStoreContext) context, cachingStore);
+        cachingStore.init(context, cachingStore);
     }
 
     @Test
@@ -412,7 +399,7 @@ public class CachingInMemorySessionStoreTest {
         // add one that shouldn't appear in the results
         cachingStore.put(new Windowed<>(keyAA, new SessionWindow(0, 0)), "5".getBytes());
 
-        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toList(cachingStore.fetch(keyA));
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(cachingStore.fetch(keyA));
         verifyKeyValueList(expected, results);
     }
 
@@ -431,7 +418,7 @@ public class CachingInMemorySessionStoreTest {
         // add one that shouldn't appear in the results
         cachingStore.put(new Windowed<>(keyAA, new SessionWindow(0, 0)), "5".getBytes());
 
-        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toList(cachingStore.backwardFetch(keyA));
+        final List<KeyValue<Windowed<Bytes>, byte[]>> results = toListAndCloseIterator(cachingStore.backwardFetch(keyA));
         Collections.reverse(results);
         verifyKeyValueList(expected, results);
     }
@@ -450,7 +437,7 @@ public class CachingInMemorySessionStoreTest {
     @Test
     public void shouldQueryItemsInCacheAndStore() {
         final List<KeyValue<Windowed<Bytes>, byte[]>> added = addSessionsUntilOverflow("a");
-        final List<KeyValue<Windowed<Bytes>, byte[]>> actual = toList(cachingStore.findSessions(
+        final List<KeyValue<Windowed<Bytes>, byte[]>> actual = toListAndCloseIterator(cachingStore.findSessions(
                 Bytes.wrap("a".getBytes(StandardCharsets.UTF_8)),
                 0,
                 added.size() * 10L));
@@ -476,8 +463,8 @@ public class CachingInMemorySessionStoreTest {
 
     @Test
     public void shouldFetchCorrectlyAcrossSegments() {
-        final Windowed<Bytes> a1 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 0, SEGMENT_INTERVAL * 0));
-        final Windowed<Bytes> a2 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 1, SEGMENT_INTERVAL * 1));
+        final Windowed<Bytes> a1 = new Windowed<>(keyA, new SessionWindow(0, 0));
+        final Windowed<Bytes> a2 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL, SEGMENT_INTERVAL));
         final Windowed<Bytes> a3 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 2, SEGMENT_INTERVAL * 2));
         final Windowed<Bytes> a4 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 3, SEGMENT_INTERVAL * 3));
         final Windowed<Bytes> a5 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 4, SEGMENT_INTERVAL * 4));
@@ -503,8 +490,8 @@ public class CachingInMemorySessionStoreTest {
 
     @Test
     public void shouldBackwardFetchCorrectlyAcrossSegments() {
-        final Windowed<Bytes> a1 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 0, SEGMENT_INTERVAL * 0));
-        final Windowed<Bytes> a2 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 1, SEGMENT_INTERVAL * 1));
+        final Windowed<Bytes> a1 = new Windowed<>(keyA, new SessionWindow(0,  0));
+        final Windowed<Bytes> a2 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL, SEGMENT_INTERVAL));
         final Windowed<Bytes> a3 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 2, SEGMENT_INTERVAL * 2));
         final Windowed<Bytes> a4 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 3, SEGMENT_INTERVAL * 3));
         final Windowed<Bytes> a5 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 4, SEGMENT_INTERVAL * 4));
@@ -530,9 +517,9 @@ public class CachingInMemorySessionStoreTest {
 
     @Test
     public void shouldFetchRangeCorrectlyAcrossSegments() {
-        final Windowed<Bytes> a1 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 0, SEGMENT_INTERVAL * 0));
-        final Windowed<Bytes> aa1 = new Windowed<>(keyAA, new SessionWindow(SEGMENT_INTERVAL * 0, SEGMENT_INTERVAL * 0));
-        final Windowed<Bytes> a2 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 1, SEGMENT_INTERVAL * 1));
+        final Windowed<Bytes> a1 = new Windowed<>(keyA, new SessionWindow(0, 0));
+        final Windowed<Bytes> aa1 = new Windowed<>(keyAA, new SessionWindow(0, 0));
+        final Windowed<Bytes> a2 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL, SEGMENT_INTERVAL));
         final Windowed<Bytes> a3 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 2, SEGMENT_INTERVAL * 2));
         final Windowed<Bytes> aa3 = new Windowed<>(keyAA, new SessionWindow(SEGMENT_INTERVAL * 2, SEGMENT_INTERVAL * 2));
         cachingStore.put(a1, "1".getBytes());
@@ -553,9 +540,9 @@ public class CachingInMemorySessionStoreTest {
 
     @Test
     public void shouldBackwardFetchRangeCorrectlyAcrossSegments() {
-        final Windowed<Bytes> a1 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 0, SEGMENT_INTERVAL * 0));
-        final Windowed<Bytes> aa1 = new Windowed<>(keyAA, new SessionWindow(SEGMENT_INTERVAL * 0, SEGMENT_INTERVAL * 0));
-        final Windowed<Bytes> a2 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 1, SEGMENT_INTERVAL * 1));
+        final Windowed<Bytes> a1 = new Windowed<>(keyA, new SessionWindow(0, 0));
+        final Windowed<Bytes> aa1 = new Windowed<>(keyAA, new SessionWindow(0, 0));
+        final Windowed<Bytes> a2 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL, SEGMENT_INTERVAL));
         final Windowed<Bytes> a3 = new Windowed<>(keyA, new SessionWindow(SEGMENT_INTERVAL * 2, SEGMENT_INTERVAL * 2));
         final Windowed<Bytes> aa3 = new Windowed<>(keyAA, new SessionWindow(SEGMENT_INTERVAL * 2, SEGMENT_INTERVAL * 2));
         cachingStore.put(a1, "1".getBytes());
@@ -749,12 +736,14 @@ public class CachingInMemorySessionStoreTest {
         assertEquals(0, cache.size());
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowIfTryingToFetchFromClosedCachingStore() {
         cachingStore.close();
         assertThrows(InvalidStateStoreException.class, () -> cachingStore.fetch(keyA));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowIfTryingToFindMergeSessionFromClosedCachingStore() {
         cachingStore.close();
@@ -773,11 +762,13 @@ public class CachingInMemorySessionStoreTest {
         assertThrows(InvalidStateStoreException.class, () -> cachingStore.put(new Windowed<>(keyA, new SessionWindow(0, 0)), "1".getBytes()));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerExceptionOnFindSessionsNullKey() {
         assertThrows(NullPointerException.class, () -> cachingStore.findSessions(null, 1L, 2L));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerExceptionOnFetchNullKey() {
         assertThrows(NullPointerException.class, () -> cachingStore.fetch(null));
@@ -793,10 +784,11 @@ public class CachingInMemorySessionStoreTest {
         assertThrows(NullPointerException.class, () -> cachingStore.put(null, "1".getBytes()));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldNotThrowInvalidRangeExceptionWhenBackwardWithNegativeFromKey() {
-        final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
-        final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
+        final Bytes keyFrom = Bytes.wrap(new IntegerSerializer().serialize("", -1));
+        final Bytes keyTo = Bytes.wrap(new IntegerSerializer().serialize("", 1));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(CachingSessionStore.class);
              final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.backwardFindSessions(keyFrom, keyTo, 0L, 10L)) {
@@ -815,10 +807,11 @@ public class CachingInMemorySessionStoreTest {
         }
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldNotThrowInvalidRangeExceptionWithNegativeFromKey() {
-        final Bytes keyFrom = Bytes.wrap(Serdes.Integer().serializer().serialize("", -1));
-        final Bytes keyTo = Bytes.wrap(Serdes.Integer().serializer().serialize("", 1));
+        final Bytes keyFrom = Bytes.wrap(new IntegerSerializer().serialize("", -1));
+        final Bytes keyTo = Bytes.wrap(new IntegerSerializer().serialize("", 1));
 
         try (final LogCaptureAppender appender = LogCaptureAppender.createAndRegister(CachingSessionStore.class);
              final KeyValueIterator<Windowed<Bytes>, byte[]> iterator = cachingStore.findSessions(keyFrom, keyTo, 0L, 10L)) {

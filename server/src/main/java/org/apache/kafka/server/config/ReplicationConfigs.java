@@ -21,9 +21,9 @@ import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.server.common.MetadataVersionValidator;
 import org.apache.kafka.storage.internals.log.LogConfig;
+
+import java.util.concurrent.TimeUnit;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
@@ -45,8 +45,8 @@ public class ReplicationConfigs {
 
     public static final String REPLICA_LAG_TIME_MAX_MS_CONFIG = "replica.lag.time.max.ms";
     public static final long REPLICA_LAG_TIME_MAX_MS_DEFAULT = 30000L;
-    public static final String REPLICA_LAG_TIME_MAX_MS_DOC = "If a follower hasn't sent any fetch requests or hasn't consumed up to the leaders log end offset for at least this time," +
-            " the leader will remove the follower from isr";
+    public static final String REPLICA_LAG_TIME_MAX_MS_DOC = "If a follower hasn't sent any fetch requests or hasn't consumed up to the leader's log end offset for at least this time," +
+            " the leader will remove the follower from ISR";
 
     public static final String REPLICA_SOCKET_TIMEOUT_MS_CONFIG = "replica.socket.timeout.ms";
     public static final int REPLICA_SOCKET_TIMEOUT_MS_DEFAULT = 30 * 1000;
@@ -107,39 +107,35 @@ public class ReplicationConfigs {
     public static final int DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS_DEFAULT = 1;
     public static final String DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC = "The purge interval (in number of requests) of the delete records request purgatory";
 
-    public static final String LEADER_IMBALANCE_PER_BROKER_PERCENTAGE_CONFIG = "leader.imbalance.per.broker.percentage";
-    public static final int LEADER_IMBALANCE_PER_BROKER_PERCENTAGE_DEFAULT = 10;
-    public static final String LEADER_IMBALANCE_PER_BROKER_PERCENTAGE_DOC = "The ratio of leader imbalance allowed per broker. The controller would trigger a leader balance if it goes above this value per broker. The value is specified in percentage.";
-
     public static final String LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG = "leader.imbalance.check.interval.seconds";
     public static final int LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_DEFAULT = 300;
     public static final String LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_DOC = "The frequency with which the partition rebalance check is triggered by the controller";
 
-    public static final String UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
-    public static final String UNCLEAN_LEADER_ELECTION_ENABLE_DOC = "Indicates whether to enable replicas not in the ISR set to be elected as leader as a last resort, even though doing so may result in data loss";
+    public static final String UNCLEAN_LEADER_ELECTION_INTERVAL_MS_CONFIG = "unclean.leader.election.interval.ms";
+    public static final long UNCLEAN_LEADER_ELECTION_INTERVAL_MS_DEFAULT = TimeUnit.MINUTES.toMillis(5);
+    public static final String UNCLEAN_LEADER_ELECTION_INTERVAL_MS_DOC = "The frequency with which the controller checks if it should perform an unclean leader election for leaderless partitions.";
 
-    public static final String INTER_BROKER_PROTOCOL_VERSION_CONFIG = "inter.broker.protocol.version";
-    public static final String INTER_BROKER_PROTOCOL_VERSION_DEFAULT = MetadataVersion.latestProduction().version();
-    public static final String INTER_BROKER_PROTOCOL_VERSION_DOC = "Specify which version of the inter-broker protocol will be used.\n" +
-           ". This is typically bumped after all brokers were upgraded to a new version.\n" +
-           " Example of some valid values are: 0.8.0, 0.8.1, 0.8.1.1, 0.8.2, 0.8.2.0, 0.8.2.1, 0.9.0.0, 0.9.0.1 Check MetadataVersion for the full list.";
+    public static final String UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG = ServerTopicConfigSynonyms.serverSynonym(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG);
+    public static final String UNCLEAN_LEADER_ELECTION_ENABLE_DOC = "Indicates whether to enable replicas not in the ISR set to be elected as leader as a last resort, even though doing so may result in data loss" +
+            "<p>Note: In KRaft mode, when enabling this config dynamically, it needs to wait for the unclean leader election " +
+            "thread to trigger election periodically (default is 5 minutes). Please run `kafka-leader-election.sh` with `unclean` option " +
+            "to trigger the unclean leader election immediately if needed.</p>";
 
     public static final String INTER_BROKER_SECURITY_PROTOCOL_CONFIG = "security.inter.broker.protocol";
     public static final String INTER_BROKER_SECURITY_PROTOCOL_DEFAULT = SecurityProtocol.PLAINTEXT.toString();
     public static final String INTER_BROKER_LISTENER_NAME_CONFIG = "inter.broker.listener.name";
-    public static final String INTER_BROKER_SECURITY_PROTOCOL_DOC = "Security protocol used to communicate between brokers. Valid values are: " +
-            String.join(", ", SecurityProtocol.names()) + ". It is an error to set this and " + INTER_BROKER_LISTENER_NAME_CONFIG +
-            " properties at the same time.";
+    public static final String INTER_BROKER_SECURITY_PROTOCOL_DOC = "Security protocol used to communicate between brokers. " + 
+            "It is an error to set this and " + INTER_BROKER_LISTENER_NAME_CONFIG + " properties at the same time.";
     public static final String INTER_BROKER_LISTENER_NAME_DOC = "Name of listener used for communication between brokers. If this is unset, the listener name is defined by " + INTER_BROKER_SECURITY_PROTOCOL_CONFIG +
-           "It is an error to set this and " + INTER_BROKER_SECURITY_PROTOCOL_CONFIG + " properties at the same time.";
+           ". It is an error to set this and " + INTER_BROKER_SECURITY_PROTOCOL_CONFIG + " properties at the same time.";
 
     public static final String REPLICA_SELECTOR_CLASS_CONFIG = "replica.selector.class";
     public static final String REPLICA_SELECTOR_CLASS_DOC = "The fully qualified class name that implements ReplicaSelector. This is used by the broker to find the preferred read replica. By default, we use an implementation that returns the leader.";
 
     public static final String AUTO_LEADER_REBALANCE_ENABLE_CONFIG = "auto.leader.rebalance.enable";
     public static final boolean AUTO_LEADER_REBALANCE_ENABLE_DEFAULT = true;
-    public static final String AUTO_LEADER_REBALANCE_ENABLE_DOC = String.format("Enables auto leader balancing. A background thread checks the distribution of partition leaders at regular intervals, configurable by %s. If the leader imbalance exceeds %s, leader rebalance to the preferred leader for partitions is triggered.",
-           LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG, LEADER_IMBALANCE_PER_BROKER_PERCENTAGE_CONFIG);
+    public static final String AUTO_LEADER_REBALANCE_ENABLE_DOC = String.format("Enables auto leader balancing. A background thread checks the distribution of partition leaders at regular intervals, configurable by %s. If the leader is imbalanced, leader rebalance to the preferred leader for partitions is triggered.",
+           LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG);
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
             .define(CONTROLLER_SOCKET_TIMEOUT_MS_CONFIG, INT, CONTROLLER_SOCKET_TIMEOUT_MS_DEFAULT, MEDIUM, CONTROLLER_SOCKET_TIMEOUT_MS_DOC)
             .define(DEFAULT_REPLICATION_FACTOR_CONFIG, INT, REPLICATION_FACTOR_DEFAULT, MEDIUM, DEFAULT_REPLICATION_FACTOR_DOC)
@@ -157,11 +153,10 @@ public class ReplicationConfigs {
             .define(PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG, INT, PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS_DEFAULT, MEDIUM, PRODUCER_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC)
             .define(DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG, INT, DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS_DEFAULT, MEDIUM, DELETE_RECORDS_PURGATORY_PURGE_INTERVAL_REQUESTS_DOC)
             .define(AUTO_LEADER_REBALANCE_ENABLE_CONFIG, BOOLEAN, AUTO_LEADER_REBALANCE_ENABLE_DEFAULT, HIGH, AUTO_LEADER_REBALANCE_ENABLE_DOC)
-            .define(LEADER_IMBALANCE_PER_BROKER_PERCENTAGE_CONFIG, INT, LEADER_IMBALANCE_PER_BROKER_PERCENTAGE_DEFAULT, HIGH, LEADER_IMBALANCE_PER_BROKER_PERCENTAGE_DOC)
             .define(LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_CONFIG, LONG, LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_DEFAULT, atLeast(1), HIGH, LEADER_IMBALANCE_CHECK_INTERVAL_SECONDS_DOC)
+            .defineInternal(UNCLEAN_LEADER_ELECTION_INTERVAL_MS_CONFIG, LONG, UNCLEAN_LEADER_ELECTION_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, UNCLEAN_LEADER_ELECTION_INTERVAL_MS_DOC)
             .define(UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, BOOLEAN, LogConfig.DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE, HIGH, UNCLEAN_LEADER_ELECTION_ENABLE_DOC)
             .define(INTER_BROKER_SECURITY_PROTOCOL_CONFIG, STRING, INTER_BROKER_SECURITY_PROTOCOL_DEFAULT, ConfigDef.ValidString.in(Utils.enumOptions(SecurityProtocol.class)), MEDIUM, INTER_BROKER_SECURITY_PROTOCOL_DOC)
-            .define(INTER_BROKER_PROTOCOL_VERSION_CONFIG, STRING, INTER_BROKER_PROTOCOL_VERSION_DEFAULT, new MetadataVersionValidator(), MEDIUM, INTER_BROKER_PROTOCOL_VERSION_DOC)
             .define(INTER_BROKER_LISTENER_NAME_CONFIG, STRING, null, MEDIUM, INTER_BROKER_LISTENER_NAME_DOC)
             .define(REPLICA_SELECTOR_CLASS_CONFIG, STRING, null, MEDIUM, REPLICA_SELECTOR_CLASS_DOC);
 

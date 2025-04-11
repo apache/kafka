@@ -18,8 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.query.Position;
@@ -45,8 +43,6 @@ import static org.hamcrest.Matchers.equalTo;
 import static org.hamcrest.Matchers.not;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.mockito.Mockito.mock;
-import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
@@ -58,7 +54,7 @@ public class KeyValueSegmentTest {
     @BeforeEach
     public void setUp() {
         metricsRecorder.init(
-            new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, new MockTime()),
+            new StreamsMetricsImpl(new Metrics(), "test-client", "processId", new MockTime()),
             new TaskId(0, 0)
         );
     }
@@ -69,11 +65,7 @@ public class KeyValueSegmentTest {
         final String directoryPath = TestUtils.tempDirectory().getAbsolutePath();
         final File directory = new File(directoryPath);
 
-        final ProcessorContext mockContext = mock(ProcessorContext.class);
-        when(mockContext.appConfigs()).thenReturn(mkMap(mkEntry(METRICS_RECORDING_LEVEL_CONFIG, "INFO")));
-        when(mockContext.stateDir()).thenReturn(directory);
-
-        segment.openDB(mockContext.appConfigs(), mockContext.stateDir());
+        segment.openDB(mkMap(mkEntry(METRICS_RECORDING_LEVEL_CONFIG, "INFO")), directory);
 
         assertTrue(new File(directoryPath, "window").exists());
         assertTrue(new File(directoryPath + File.separator + "window", "segment").exists());

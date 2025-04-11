@@ -33,7 +33,6 @@ import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.SUBTOPOLOGY_0;
 import static org.hamcrest.CoreMatchers.is;
 import static org.hamcrest.MatcherAssert.assertThat;
@@ -55,26 +54,26 @@ public class ChangelogTopicsTest {
         new UnwindowedUnversionedChangelogTopicConfig(CHANGELOG_TOPIC_NAME1, TOPIC_CONFIG);
 
     private static final TopicsInfo TOPICS_INFO1 = new TopicsInfo(
-        mkSet(SINK_TOPIC_NAME),
-        mkSet(SOURCE_TOPIC_NAME),
+        Set.of(SINK_TOPIC_NAME),
+        Set.of(SOURCE_TOPIC_NAME),
         mkMap(mkEntry(REPARTITION_TOPIC_NAME, REPARTITION_TOPIC_CONFIG)),
         mkMap(mkEntry(CHANGELOG_TOPIC_NAME1, CHANGELOG_TOPIC_CONFIG))
     );
     private static final TopicsInfo TOPICS_INFO2 = new TopicsInfo(
-        mkSet(SINK_TOPIC_NAME),
-        mkSet(SOURCE_TOPIC_NAME),
+        Set.of(SINK_TOPIC_NAME),
+        Set.of(SOURCE_TOPIC_NAME),
         mkMap(mkEntry(REPARTITION_TOPIC_NAME, REPARTITION_TOPIC_CONFIG)),
         mkMap()
     );
     private static final TopicsInfo TOPICS_INFO3 = new TopicsInfo(
-        mkSet(SINK_TOPIC_NAME),
-        mkSet(SOURCE_TOPIC_NAME),
+        Set.of(SINK_TOPIC_NAME),
+        Set.of(SOURCE_TOPIC_NAME),
         mkMap(mkEntry(REPARTITION_TOPIC_NAME, REPARTITION_TOPIC_CONFIG)),
         mkMap(mkEntry(SOURCE_TOPIC_NAME, CHANGELOG_TOPIC_CONFIG))
     );
     private static final TopicsInfo TOPICS_INFO4 = new TopicsInfo(
-        mkSet(SINK_TOPIC_NAME),
-        mkSet(SOURCE_TOPIC_NAME),
+        Set.of(SINK_TOPIC_NAME),
+        Set.of(SOURCE_TOPIC_NAME),
         mkMap(mkEntry(REPARTITION_TOPIC_NAME, REPARTITION_TOPIC_CONFIG)),
         mkMap(mkEntry(SOURCE_TOPIC_NAME, null), mkEntry(CHANGELOG_TOPIC_NAME1, CHANGELOG_TOPIC_CONFIG))
     );
@@ -88,7 +87,7 @@ public class ChangelogTopicsTest {
     public void shouldNotContainChangelogsForStatelessTasks() {
         when(internalTopicManager.makeReady(Collections.emptyMap())).thenReturn(Collections.emptySet());
         final Map<Subtopology, TopicsInfo> topicGroups = mkMap(mkEntry(SUBTOPOLOGY_0, TOPICS_INFO2));
-        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(mkEntry(SUBTOPOLOGY_0, mkSet(TASK_0_0, TASK_0_1, TASK_0_2)));
+        final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(mkEntry(SUBTOPOLOGY_0, Set.of(TASK_0_0, TASK_0_1, TASK_0_2)));
 
         final ChangelogTopics changelogTopics =
                 new ChangelogTopics(internalTopicManager, topicGroups, tasksForTopicGroup, "[test] ");
@@ -104,9 +103,9 @@ public class ChangelogTopicsTest {
     @Test
     public void shouldNotContainAnyPreExistingChangelogsIfChangelogIsNewlyCreated() {
         when(internalTopicManager.makeReady(mkMap(mkEntry(CHANGELOG_TOPIC_NAME1, CHANGELOG_TOPIC_CONFIG))))
-            .thenReturn(mkSet(CHANGELOG_TOPIC_NAME1));
+            .thenReturn(Set.of(CHANGELOG_TOPIC_NAME1));
         final Map<Subtopology, TopicsInfo> topicGroups = mkMap(mkEntry(SUBTOPOLOGY_0, TOPICS_INFO1));
-        final Set<TaskId> tasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
+        final Set<TaskId> tasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2);
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(mkEntry(SUBTOPOLOGY_0, tasks));
 
         final ChangelogTopics changelogTopics =
@@ -126,7 +125,7 @@ public class ChangelogTopicsTest {
         when(internalTopicManager.makeReady(mkMap(mkEntry(CHANGELOG_TOPIC_NAME1, CHANGELOG_TOPIC_CONFIG))))
             .thenReturn(Collections.emptySet());
         final Map<Subtopology, TopicsInfo> topicGroups = mkMap(mkEntry(SUBTOPOLOGY_0, TOPICS_INFO1));
-        final Set<TaskId> tasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
+        final Set<TaskId> tasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2);
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(mkEntry(SUBTOPOLOGY_0, tasks));
 
         final ChangelogTopics changelogTopics =
@@ -137,13 +136,13 @@ public class ChangelogTopicsTest {
         final TopicPartition changelogPartition0 = new TopicPartition(CHANGELOG_TOPIC_NAME1, 0);
         final TopicPartition changelogPartition1 = new TopicPartition(CHANGELOG_TOPIC_NAME1, 1);
         final TopicPartition changelogPartition2 = new TopicPartition(CHANGELOG_TOPIC_NAME1, 2);
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_0), is(mkSet(changelogPartition0)));
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_1), is(mkSet(changelogPartition1)));
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_2), is(mkSet(changelogPartition2)));
+        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_0), is(Set.of(changelogPartition0)));
+        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_1), is(Set.of(changelogPartition1)));
+        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_2), is(Set.of(changelogPartition2)));
         assertThat(changelogTopics.preExistingSourceTopicBasedPartitions(), is(Collections.emptySet()));
         assertThat(
             changelogTopics.preExistingNonSourceTopicBasedPartitions(),
-            is(mkSet(changelogPartition0, changelogPartition1, changelogPartition2))
+            is(Set.of(changelogPartition0, changelogPartition1, changelogPartition2))
         );
     }
 
@@ -151,7 +150,7 @@ public class ChangelogTopicsTest {
     public void shouldOnlyContainPreExistingSourceBasedChangelogs() {
         when(internalTopicManager.makeReady(Collections.emptyMap())).thenReturn(Collections.emptySet());
         final Map<Subtopology, TopicsInfo> topicGroups = mkMap(mkEntry(SUBTOPOLOGY_0, TOPICS_INFO3));
-        final Set<TaskId> tasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
+        final Set<TaskId> tasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2);
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(mkEntry(SUBTOPOLOGY_0, tasks));
 
         final ChangelogTopics changelogTopics =
@@ -161,12 +160,12 @@ public class ChangelogTopicsTest {
         final TopicPartition changelogPartition0 = new TopicPartition(SOURCE_TOPIC_NAME, 0);
         final TopicPartition changelogPartition1 = new TopicPartition(SOURCE_TOPIC_NAME, 1);
         final TopicPartition changelogPartition2 = new TopicPartition(SOURCE_TOPIC_NAME, 2);
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_0), is(mkSet(changelogPartition0)));
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_1), is(mkSet(changelogPartition1)));
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_2), is(mkSet(changelogPartition2)));
+        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_0), is(Set.of(changelogPartition0)));
+        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_1), is(Set.of(changelogPartition1)));
+        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_2), is(Set.of(changelogPartition2)));
         assertThat(
             changelogTopics.preExistingSourceTopicBasedPartitions(),
-            is(mkSet(changelogPartition0, changelogPartition1, changelogPartition2))
+            is(Set.of(changelogPartition0, changelogPartition1, changelogPartition2))
         );
         assertThat(changelogTopics.preExistingNonSourceTopicBasedPartitions(), is(Collections.emptySet()));
     }
@@ -176,7 +175,7 @@ public class ChangelogTopicsTest {
         when(internalTopicManager.makeReady(mkMap(mkEntry(CHANGELOG_TOPIC_NAME1, CHANGELOG_TOPIC_CONFIG))))
             .thenReturn(Collections.emptySet());
         final Map<Subtopology, TopicsInfo> topicGroups = mkMap(mkEntry(SUBTOPOLOGY_0, TOPICS_INFO4));
-        final Set<TaskId> tasks = mkSet(TASK_0_0, TASK_0_1, TASK_0_2);
+        final Set<TaskId> tasks = Set.of(TASK_0_0, TASK_0_1, TASK_0_2);
         final Map<Subtopology, Set<TaskId>> tasksForTopicGroup = mkMap(mkEntry(SUBTOPOLOGY_0, tasks));
 
         final ChangelogTopics changelogTopics =
@@ -190,16 +189,16 @@ public class ChangelogTopicsTest {
         final TopicPartition sourcePartition0 = new TopicPartition(SOURCE_TOPIC_NAME, 0);
         final TopicPartition sourcePartition1 = new TopicPartition(SOURCE_TOPIC_NAME, 1);
         final TopicPartition sourcePartition2 = new TopicPartition(SOURCE_TOPIC_NAME, 2);
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_0), is(mkSet(sourcePartition0, changelogPartition0)));
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_1), is(mkSet(sourcePartition1, changelogPartition1)));
-        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_2), is(mkSet(sourcePartition2, changelogPartition2)));
+        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_0), is(Set.of(sourcePartition0, changelogPartition0)));
+        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_1), is(Set.of(sourcePartition1, changelogPartition1)));
+        assertThat(changelogTopics.preExistingPartitionsFor(TASK_0_2), is(Set.of(sourcePartition2, changelogPartition2)));
         assertThat(
             changelogTopics.preExistingSourceTopicBasedPartitions(),
-            is(mkSet(sourcePartition0, sourcePartition1, sourcePartition2))
+            is(Set.of(sourcePartition0, sourcePartition1, sourcePartition2))
         );
         assertThat(
             changelogTopics.preExistingNonSourceTopicBasedPartitions(),
-            is(mkSet(changelogPartition0, changelogPartition1, changelogPartition2))
+            is(Set.of(changelogPartition0, changelogPartition1, changelogPartition2))
         );
     }
 }

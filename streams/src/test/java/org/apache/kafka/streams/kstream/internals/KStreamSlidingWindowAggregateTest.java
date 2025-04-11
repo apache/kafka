@@ -79,7 +79,6 @@ import static java.time.Duration.ofMillis;
 import static java.util.Arrays.asList;
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.CoreMatchers.hasItem;
 import static org.hamcrest.CoreMatchers.hasItems;
@@ -155,63 +154,63 @@ public class KStreamSlidingWindowAggregateTest {
         final Map<Long, Set<ValueAndTimestamp<String>>> expected = new HashMap<>();
 
         if (emitFinal) {
-            expected.put(0L, mkSet(
+            expected.put(0L, Set.of(
                 ValueAndTimestamp.make("0+1+2", 10L)
             ));
-            expected.put(4L, mkSet(
+            expected.put(4L, Set.of(
                 ValueAndTimestamp.make("0+1+2+3", 14L)
             ));
-            expected.put(5L, mkSet(
+            expected.put(5L, Set.of(
                 ValueAndTimestamp.make("0+1+2+3+4", 15L)
             ));
-            expected.put(10L, mkSet(
+            expected.put(10L, Set.of(
                 ValueAndTimestamp.make("0+1+2+3+4+5", 20L)
             ));
-            expected.put(11L, mkSet(
+            expected.put(11L, Set.of(
                 ValueAndTimestamp.make("0+3+4+5", 20L)
             ));
-            expected.put(12L, mkSet(
+            expected.put(12L, Set.of(
                 ValueAndTimestamp.make("0+3+4+5+6", 22L)
             ));
         } else {
-            expected.put(0L, mkSet(
+            expected.put(0L, Set.of(
                 ValueAndTimestamp.make("0+1", 10L),
                 ValueAndTimestamp.make("0+1+2", 10L)
             ));
-            expected.put(4L, mkSet(
+            expected.put(4L, Set.of(
                 ValueAndTimestamp.make("0+1+2+3", 14L)
             ));
-            expected.put(5L, mkSet(
+            expected.put(5L, Set.of(
                 ValueAndTimestamp.make("0+1+2+3+4", 15L)
             ));
-            expected.put(10L, mkSet(
+            expected.put(10L, Set.of(
                 ValueAndTimestamp.make("0+1+2+3+4+5", 20L)
             ));
-            expected.put(11L, mkSet(
+            expected.put(11L, Set.of(
                 ValueAndTimestamp.make("0+3", 14L),
                 ValueAndTimestamp.make("0+3+4", 15L),
                 ValueAndTimestamp.make("0+3+4+5", 20L)
             ));
-            expected.put(12L, mkSet(
+            expected.put(12L, Set.of(
                 ValueAndTimestamp.make("0+3+4+5+6", 22L)
             ));
-            expected.put(15L, mkSet(
+            expected.put(15L, Set.of(
                 ValueAndTimestamp.make("0+4", 15L),
                 ValueAndTimestamp.make("0+4+5", 20L),
                 ValueAndTimestamp.make("0+4+5+6", 22L)
             ));
-            expected.put(16L, mkSet(
+            expected.put(16L, Set.of(
                 ValueAndTimestamp.make("0+5", 20L),
                 ValueAndTimestamp.make("0+5+6", 22L)
             ));
-            expected.put(20L, mkSet(
+            expected.put(20L, Set.of(
                 ValueAndTimestamp.make("0+5+6+7", 30L)
             ));
-            expected.put(21L, mkSet(
+            expected.put(21L, Set.of(
                 ValueAndTimestamp.make("0+6", 22L),
                 ValueAndTimestamp.make("0+6+7", 30L)
             ));
-            expected.put(23L, mkSet(
+            expected.put(23L, Set.of(
                 ValueAndTimestamp.make("0+7", 30L)
             ));
         }
@@ -254,34 +253,34 @@ public class KStreamSlidingWindowAggregateTest {
         final Map<Long, Set<ValueAndTimestamp<String>>> expected = new HashMap<>();
 
         if (emitFinal) {
-            expected.put(0L, mkSet(ValueAndTimestamp.make("1", 10L)));
-            expected.put(4L, mkSet(ValueAndTimestamp.make("1+2", 14L)));
-            expected.put(5L, mkSet(ValueAndTimestamp.make("1+2+3", 15L)));
-            expected.put(11L, mkSet(ValueAndTimestamp.make("2+3", 15L)));
-            expected.put(12L, mkSet(ValueAndTimestamp.make("2+3+4", 22L)));
+            expected.put(0L, Set.of(ValueAndTimestamp.make("1", 10L)));
+            expected.put(4L, Set.of(ValueAndTimestamp.make("1+2", 14L)));
+            expected.put(5L, Set.of(ValueAndTimestamp.make("1+2+3", 15L)));
+            expected.put(11L, Set.of(ValueAndTimestamp.make("2+3", 15L)));
+            expected.put(12L, Set.of(ValueAndTimestamp.make("2+3+4", 22L)));
         } else {
-            expected.put(0L, mkSet(ValueAndTimestamp.make("1", 10L)));
-            expected.put(4L, mkSet(ValueAndTimestamp.make("1+2", 14L)));
-            expected.put(5L, mkSet(ValueAndTimestamp.make("1+2+3", 15L)));
-            expected.put(11L, mkSet(
+            expected.put(0L, Set.of(ValueAndTimestamp.make("1", 10L)));
+            expected.put(4L, Set.of(ValueAndTimestamp.make("1+2", 14L)));
+            expected.put(5L, Set.of(ValueAndTimestamp.make("1+2+3", 15L)));
+            expected.put(11L, Set.of(
                 ValueAndTimestamp.make("2", 14L),
                 ValueAndTimestamp.make("2+3", 15L)
             ));
-            expected.put(12L, mkSet(ValueAndTimestamp.make("2+3+4", 22L)));
-            expected.put(15L, mkSet(
+            expected.put(12L, Set.of(ValueAndTimestamp.make("2+3+4", 22L)));
+            expected.put(15L, Set.of(
                 ValueAndTimestamp.make("3", 15L),
                 ValueAndTimestamp.make("3+4", 22L)
             ));
-            expected.put(16L, mkSet(
+            expected.put(16L, Set.of(
                 ValueAndTimestamp.make("4", 22L),
                 ValueAndTimestamp.make("4+5", 26L)
             ));
-            expected.put(20L, mkSet(ValueAndTimestamp.make("4+5+6", 30L)));
-            expected.put(23L, mkSet(
+            expected.put(20L, Set.of(ValueAndTimestamp.make("4+5+6", 30L)));
+            expected.put(23L, Set.of(
                 ValueAndTimestamp.make("5", 26L),
                 ValueAndTimestamp.make("5+6", 30L)
             ));
-            expected.put(27L, mkSet(ValueAndTimestamp.make("6", 30L)));
+            expected.put(27L, Set.of(ValueAndTimestamp.make("6", 30L)));
         }
         assertEquals(expected, actual);
     }
@@ -697,38 +696,38 @@ public class KStreamSlidingWindowAggregateTest {
 
         if (emitFinal) {
             expected.put(0L,
-                mkSet(
+                Set.of(
                     ValueAndTimestamp.make("0+1+2+3+4+5+6", 13L)
                 )
             );
             expected.put(1L,
-                mkSet(
+                Set.of(
                     ValueAndTimestamp.make("0+2+3+4+5+6", 13L)
                 )
             );
             expected.put(4L,
-                mkSet(
+                Set.of(
                     ValueAndTimestamp.make("0+2+3+5+6", 13L)
                 )
             );
             expected.put(6L,
-                mkSet(
+                Set.of(
                     ValueAndTimestamp.make("0+3+5+6", 13L)
                 )
             );
             expected.put(7L,
-                mkSet(
+                Set.of(
                     ValueAndTimestamp.make("0+5+6", 13L)
                 )
             );
             expected.put(11L,
-                mkSet(
+                Set.of(
                     ValueAndTimestamp.make("0+5", 13L)
                 )
             );
         } else {
             expected.put(0L,
-                mkSet(
+                Set.of(
                     ValueAndTimestamp.make("0+1", 0L),
                     ValueAndTimestamp.make("0+1+2", 5L),
                     ValueAndTimestamp.make("0+1+2+3", 6L),
@@ -738,7 +737,7 @@ public class KStreamSlidingWindowAggregateTest {
                 )
             );
             expected.put(1L,
-                mkSet(
+                Set.of(
                     ValueAndTimestamp.make("0+2", 5L),
                     ValueAndTimestamp.make("0+2+3", 6L),
                     ValueAndTimestamp.make("0+2+3+4", 6L),
@@ -747,32 +746,32 @@ public class KStreamSlidingWindowAggregateTest {
                 )
             );
             expected.put(4L,
-                mkSet(
+                Set.of(
                     ValueAndTimestamp.make("0+2+3", 6L),
                     ValueAndTimestamp.make("0+2+3+5", 13L),
                     ValueAndTimestamp.make("0+2+3+5+6", 13L)
                 )
             );
             expected.put(6L,
-                mkSet(
+                Set.of(
                     ValueAndTimestamp.make("0+3", 6L),
                     ValueAndTimestamp.make("0+3+5", 13L),
                     ValueAndTimestamp.make("0+3+5+6", 13L)
                 )
             );
             expected.put(7L,
-                mkSet(
+                Set.of(
                     ValueAndTimestamp.make("0+5", 13L),
                     ValueAndTimestamp.make("0+5+6", 13L)
                 )
             );
             expected.put(11L,
-                mkSet(
+                Set.of(
                     ValueAndTimestamp.make("0+5", 13L)
                 )
             );
             expected.put(20L,
-                mkSet(
+                Set.of(
                     ValueAndTimestamp.make("0+7", 70L)
                 )
             );
@@ -829,14 +828,14 @@ public class KStreamSlidingWindowAggregateTest {
 
         final Map<Long, Set<ValueAndTimestamp<String>>> expected = new HashMap<>();
         if (emitFinal) {
-            expected.put(0L, mkSet(
+            expected.put(0L, Set.of(
                 ValueAndTimestamp.make("0+1+2+3+4+5+6+7", 4L)
             ));
-            expected.put(1L, mkSet(
+            expected.put(1L, Set.of(
                 ValueAndTimestamp.make("0+2+3+5+6", 4L)
             ));
         } else {
-            expected.put(0L, mkSet(
+            expected.put(0L, Set.of(
                 ValueAndTimestamp.make("0+1", 0L),
                 ValueAndTimestamp.make("0+1+2", 2L),
                 ValueAndTimestamp.make("0+1+2+3+4+5", 4L),
@@ -845,20 +844,20 @@ public class KStreamSlidingWindowAggregateTest {
                 ValueAndTimestamp.make("0+1+2+3+4", 4L),
                 ValueAndTimestamp.make("0+1+2+3+4+5+6+7", 4L)
             ));
-            expected.put(1L, mkSet(
+            expected.put(1L, Set.of(
                 ValueAndTimestamp.make("0+2+3+5+6", 4L),
                 ValueAndTimestamp.make("0+2", 2L),
                 ValueAndTimestamp.make("0+2+3", 4L),
                 ValueAndTimestamp.make("0+2+3+5", 4L)
             ));
-            expected.put(2L, mkSet(
+            expected.put(2L, Set.of(
                 ValueAndTimestamp.make("0+2+3+5+6+8", 7)
             ));
-            expected.put(3L, mkSet(
+            expected.put(3L, Set.of(
                 ValueAndTimestamp.make("0+3", 4L),
                 ValueAndTimestamp.make("0+3+8", 7L)
             ));
-            expected.put(5L, mkSet(
+            expected.put(5L, Set.of(
                 ValueAndTimestamp.make("0+8", 7)
             ));
         }
@@ -1061,26 +1060,26 @@ public class KStreamSlidingWindowAggregateTest {
         final Map<Long, Set<ValueAndTimestamp<String>>> expected = new HashMap<>();
 
         if (emitFinal) {
-            expected.put(0L, mkSet(
+            expected.put(0L, Set.of(
                 ValueAndTimestamp.make("0+1+2+3+4+5+6", 13L)
             ));
-            expected.put(1L, mkSet(
+            expected.put(1L, Set.of(
                 ValueAndTimestamp.make("0+2+3+4+5+6", 13L)
             ));
-            expected.put(4L, mkSet(
+            expected.put(4L, Set.of(
                 ValueAndTimestamp.make("0+2+3+5+6", 13L)
             ));
-            expected.put(6L, mkSet(
+            expected.put(6L, Set.of(
                 ValueAndTimestamp.make("0+3+5+6", 13L)
             ));
-            expected.put(7L, mkSet(
+            expected.put(7L, Set.of(
                 ValueAndTimestamp.make("0+5+6", 13L)
             ));
-            expected.put(11L, mkSet(
+            expected.put(11L, Set.of(
                 ValueAndTimestamp.make("0+5", 13L)
             ));
         } else {
-            expected.put(0L, mkSet(
+            expected.put(0L, Set.of(
                 ValueAndTimestamp.make("0+1", 0L),
                 ValueAndTimestamp.make("0+1+2", 5L),
                 ValueAndTimestamp.make("0+1+2+3", 6L),
@@ -1088,31 +1087,31 @@ public class KStreamSlidingWindowAggregateTest {
                 ValueAndTimestamp.make("0+1+2+3+4+5", 13L),
                 ValueAndTimestamp.make("0+1+2+3+4+5+6", 13L)
             ));
-            expected.put(1L, mkSet(
+            expected.put(1L, Set.of(
                 ValueAndTimestamp.make("0+2", 5L),
                 ValueAndTimestamp.make("0+2+3", 6L),
                 ValueAndTimestamp.make("0+2+3+4", 6L),
                 ValueAndTimestamp.make("0+2+3+4+5", 13L),
                 ValueAndTimestamp.make("0+2+3+4+5+6", 13L)
             ));
-            expected.put(4L, mkSet(
+            expected.put(4L, Set.of(
                 ValueAndTimestamp.make("0+2+3", 6L),
                 ValueAndTimestamp.make("0+2+3+5", 13L),
                 ValueAndTimestamp.make("0+2+3+5+6", 13L)
             ));
-            expected.put(6L, mkSet(
+            expected.put(6L, Set.of(
                 ValueAndTimestamp.make("0+3", 6L),
                 ValueAndTimestamp.make("0+3+5", 13L),
                 ValueAndTimestamp.make("0+3+5+6", 13L)
             ));
-            expected.put(7L, mkSet(
+            expected.put(7L, Set.of(
                 ValueAndTimestamp.make("0+5", 13L),
                 ValueAndTimestamp.make("0+5+6", 13L)
             ));
-            expected.put(11L, mkSet(
+            expected.put(11L, Set.of(
                 ValueAndTimestamp.make("0+5", 13L)
             ));
-            expected.put(20L, mkSet(
+            expected.put(20L, Set.of(
                 ValueAndTimestamp.make("0+6", 70L)
             ));
         }
@@ -1159,52 +1158,52 @@ public class KStreamSlidingWindowAggregateTest {
         final Map<Long, Set<ValueAndTimestamp<String>>> expected = new HashMap<>();
 
         if (emitFinal) {
-            expected.put(50L, mkSet(
+            expected.put(50L, Set.of(
                 ValueAndTimestamp.make("0+1", 100L)
             ));
-            expected.put(55L, mkSet(
+            expected.put(55L, Set.of(
                 ValueAndTimestamp.make("0+1+2", 105L)
             ));
-            expected.put(56L, mkSet(
+            expected.put(56L, Set.of(
                 ValueAndTimestamp.make("0+1+2+3+4", 106L)
             ));
         } else {
-            expected.put(50L, mkSet(
+            expected.put(50L, Set.of(
                 ValueAndTimestamp.make("0+1", 100L)
             ));
-            expected.put(55L, mkSet(
+            expected.put(55L, Set.of(
                 ValueAndTimestamp.make("0+1+2", 105L)
             ));
-            expected.put(56L, mkSet(
+            expected.put(56L, Set.of(
                 ValueAndTimestamp.make("0+1+2+3", 106L),
                 ValueAndTimestamp.make("0+1+2+3+4", 106L)
             ));
-            expected.put(63L, mkSet(
+            expected.put(63L, Set.of(
                 ValueAndTimestamp.make("0+1+2+3+4+5", 113L),
                 ValueAndTimestamp.make("0+1+2+3+4+5+6", 113L)
             ));
-            expected.put(101L, mkSet(
+            expected.put(101L, Set.of(
                 ValueAndTimestamp.make("0+2", 105L),
                 ValueAndTimestamp.make("0+2+3", 106L),
                 ValueAndTimestamp.make("0+2+3+4", 106L),
                 ValueAndTimestamp.make("0+2+3+4+5", 113L),
                 ValueAndTimestamp.make("0+2+3+4+5+6", 113L)
             ));
-            expected.put(104L, mkSet(
+            expected.put(104L, Set.of(
                 ValueAndTimestamp.make("0+2+3", 106L),
                 ValueAndTimestamp.make("0+2+3+5", 113L),
                 ValueAndTimestamp.make("0+2+3+5+6", 113L)
             ));
-            expected.put(106L, mkSet(
+            expected.put(106L, Set.of(
                 ValueAndTimestamp.make("0+3", 106L),
                 ValueAndTimestamp.make("0+3+5", 113L),
                 ValueAndTimestamp.make("0+3+5+6", 113L)
             ));
-            expected.put(107L, mkSet(
+            expected.put(107L, Set.of(
                 ValueAndTimestamp.make("0+5", 113L),
                 ValueAndTimestamp.make("0+5+6", 113L)
             ));
-            expected.put(111L, mkSet(
+            expected.put(111L, Set.of(
                 ValueAndTimestamp.make("0+5", 113L)
             ));
         }

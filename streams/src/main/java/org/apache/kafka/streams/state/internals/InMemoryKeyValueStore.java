@@ -21,12 +21,10 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.RecordBatchingStateRestoreCallback;
-import org.apache.kafka.streams.processor.internals.StoreToProcessorContextAdapter;
 import org.apache.kafka.streams.query.Position;
 import org.apache.kafka.streams.query.PositionBound;
 import org.apache.kafka.streams.query.Query;
@@ -41,6 +39,7 @@ import org.slf4j.LoggerFactory;
 import java.util.Iterator;
 import java.util.List;
 import java.util.NavigableMap;
+import java.util.NoSuchElementException;
 import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
@@ -66,20 +65,19 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         return name;
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context,
+    public void init(final StateStoreContext stateStoreContext,
                      final StateStore root) {
         if (root != null) {
             final boolean consistencyEnabled = StreamsConfig.InternalConfig.getBoolean(
-                context.appConfigs(),
+                stateStoreContext.appConfigs(),
                 IQ_CONSISTENCY_OFFSET_VECTOR_ENABLED,
                 false
             );
             // register the store
             open = true;
 
-            context.register(
+            stateStoreContext.register(
                 root,
                 (RecordBatchingStateRestoreCallback) records -> {
                     synchronized (position) {
@@ -97,13 +95,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         }
 
         open = true;
-    }
-
-    @Override
-    public void init(final StateStoreContext context,
-                     final StateStore root) {
-        init(StoreToProcessorContextAdapter.adapt(context), root);
-        this.context = context;
+        this.context = stateStoreContext;
     }
 
     @Override
@@ -181,10 +173,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
         final Bytes from = Bytes.wrap(prefixKeySerializer.serialize(null, prefix));
         final Bytes to = Bytes.increment(from);
 
-        return new DelegatingPeekingKeyValueIterator<>(
-            name,
-            new InMemoryKeyValueIterator(map.subMap(from, true, to, false).keySet(), true)
-        );
+        return new InMemoryKeyValueIterator(map.subMap(from, true, to, false).keySet(), true);
     }
 
     @Override
@@ -221,7 +210,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
     }
 
     private KeyValueIterator<Bytes, byte[]> getKeyValueIterator(final Set<Bytes> rangeSet, final boolean forward) {
-        return new DelegatingPeekingKeyValueIterator<>(name, new InMemoryKeyValueIterator(rangeSet, forward));
+        return new InMemoryKeyValueIterator(rangeSet, forward);
     }
 
     @Override
@@ -231,9 +220,7 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     @Override
     public synchronized KeyValueIterator<Bytes, byte[]> reverseAll() {
-        return new DelegatingPeekingKeyValueIterator<>(
-            name,
-            new InMemoryKeyValueIterator(map.keySet(), false));
+        return new InMemoryKeyValueIterator(map.keySet(), false);
     }
 
     @Override
@@ -254,6 +241,8 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
     private class InMemoryKeyValueIterator implements KeyValueIterator<Bytes, byte[]> {
         private final Iterator<Bytes> iter;
+        private Bytes currentKey;
+        private Boolean iteratorOpen = true;
 
         private InMemoryKeyValueIterator(final Set<Bytes> keySet, final boolean forward) {
             if (forward) {
@@ -265,23 +254,45 @@ public class InMemoryKeyValueStore implements KeyValueStore<Bytes, byte[]> {
 
         @Override
         public boolean hasNext() {
-            return iter.hasNext();
+            if (!iteratorOpen) {
+                throw new IllegalStateException(String.format("Iterator for store %s has already been closed.", name));
+            }
+            if (currentKey != null) {
+                if (map.containsKey(currentKey)) {
+                    return true;
+                } else {
+                    currentKey = null;
+                    return hasNext();
+                }
+            }
+            if (!iter.hasNext()) {
+                return false;
+            }
+            currentKey = iter.next();
+            return hasNext();
         }
 
         @Override
         public KeyValue<Bytes, byte[]> next() {
-            final Bytes key = iter.next();
-            return new KeyValue<>(key, map.get(key));
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            final KeyValue<Bytes, byte[]> ret = new KeyValue<>(currentKey, map.get(currentKey));
+            currentKey = null;
+            return ret;
         }
 
         @Override
         public void close() {
-            // do nothing
+            iteratorOpen = false;
         }
 
         @Override
         public Bytes peekNextKey() {
-            throw new UnsupportedOperationException("peekNextKey() not supported in " + getClass().getName());
+            if (!hasNext()) {
+                throw new NoSuchElementException();
+            }
+            return currentKey;
         }
     }
 }

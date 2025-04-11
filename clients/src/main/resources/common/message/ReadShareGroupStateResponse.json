@@ -27,9 +27,9 @@
   // - INVALID_REQUEST (version 0+)
   "fields": [
     { "name": "Results", "type": "[]ReadStateResult", "versions": "0+",
-      "about": "The read results", "fields": [
+      "about": "The read results.", "fields": [
       { "name": "TopicId", "type": "uuid", "versions": "0+",
-        "about": "The topic identifier" },
+        "about": "The topic identifier." },
       { "name": "Partitions", "type": "[]PartitionResult", "versions": "0+",
         "about" : "The results for the partitions.", "fields": [
         { "name": "Partition", "type": "int32", "versions": "0+",
@@ -42,7 +42,8 @@
           "about": "The state epoch for this share-partition." },
         { "name": "StartOffset", "type": "int64", "versions": "0+",
           "about": "The share-partition start offset, which can be -1 if it is not yet initialized." },
-        { "name": "StateBatches", "type": "[]StateBatch", "versions": "0+", "fields":[
+        { "name": "StateBatches", "type": "[]StateBatch", "versions": "0+",
+          "about": "The state batches for this share-partition.", "fields":[
           { "name": "FirstOffset", "type": "int64", "versions": "0+",
             "about": "The base offset of this state batch." },
           { "name": "LastOffset", "type": "int64", "versions": "0+",

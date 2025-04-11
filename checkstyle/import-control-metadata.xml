@@ -44,6 +44,7 @@
     <allow pkg="org.apache.kafka.common.utils" />
     <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
     <allow pkg="org.apache.kafka.common.memory" />
+    <allow pkg="org.apache.kafka.common.test.api" />
 
     <!-- persistent collection factories/non-library-specific wrappers -->
     <allow pkg="org.apache.kafka.server.immutable" exact-match="true" />
@@ -143,12 +144,15 @@
     </subpackage>
 
     <subpackage name="metadata">
+        <allow pkg="org.apache.kafka.admin" />
         <allow pkg="org.apache.kafka.clients" />
         <allow pkg="org.apache.kafka.common.acl" />
         <allow pkg="org.apache.kafka.common.annotation" />
         <allow pkg="org.apache.kafka.common.config" />
+        <allow pkg="org.apache.kafka.common.internals" />
         <allow pkg="org.apache.kafka.common.message" />
         <allow pkg="org.apache.kafka.common.metadata" />
+        <allow pkg="org.apache.kafka.common.network" />
         <allow pkg="org.apache.kafka.common.protocol" />
         <allow pkg="org.apache.kafka.common.quota" />
         <allow pkg="org.apache.kafka.common.record" />
@@ -181,6 +185,10 @@
         </subpackage>
         <subpackage name="migration">
             <allow pkg="org.apache.kafka.controller" />
+        </subpackage>
+        <subpackage name="storage">
+            <allow pkg="org.apache.kafka.common.internals" />
+            <allow pkg="org.apache.kafka.snapshot" />
         </subpackage>
         <subpackage name="util">
             <allow class="org.apache.kafka.common.compress.Compression" exact-match="true" />

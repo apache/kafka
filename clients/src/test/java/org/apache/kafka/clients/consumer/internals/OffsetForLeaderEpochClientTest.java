@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.Metadata;
 import org.apache.kafka.clients.MockClient;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
@@ -147,11 +146,11 @@ public class OffsetForLeaderEpochClientTest {
     }
 
     private OffsetsForLeaderEpochClient newOffsetClient() {
-        buildDependencies(OffsetResetStrategy.EARLIEST);
+        buildDependencies(AutoOffsetResetStrategy.EARLIEST);
         return new OffsetsForLeaderEpochClient(consumerClient, new LogContext());
     }
 
-    private void buildDependencies(OffsetResetStrategy offsetResetStrategy) {
+    private void buildDependencies(AutoOffsetResetStrategy offsetResetStrategy) {
         LogContext logContext = new LogContext();
         Time time = new MockTime(1);
         SubscriptionState subscriptions = new SubscriptionState(logContext, offsetResetStrategy);

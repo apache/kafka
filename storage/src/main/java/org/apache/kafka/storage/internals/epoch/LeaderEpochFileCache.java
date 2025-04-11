@@ -26,7 +26,6 @@ import org.slf4j.Logger;
 
 import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -51,7 +50,7 @@ import static org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UND
  * Hence, it is instantiater's responsibility to ensure restoring the cache to the correct state after instantiating
  * this class from checkpoint (which might contain stale epoch entries right after instantiation).
  */
-public class LeaderEpochFileCache {
+public final class LeaderEpochFileCache {
     private final TopicPartition topicPartition;
     private final LeaderEpochCheckpointFile checkpoint;
     private final Scheduler scheduler;
@@ -66,7 +65,6 @@ public class LeaderEpochFileCache {
      * @param checkpoint     the checkpoint file
      * @param scheduler      the scheduler to use for async I/O operations
      */
-    @SuppressWarnings("this-escape")
     public LeaderEpochFileCache(TopicPartition topicPartition, LeaderEpochCheckpointFile checkpoint, Scheduler scheduler) {
         this.checkpoint = checkpoint;
         this.topicPartition = topicPartition;
@@ -201,16 +199,15 @@ public class LeaderEpochFileCache {
      * Returns the current Leader Epoch if one exists. This is the latest epoch
      * which has messages assigned to it.
      */
-    public OptionalInt latestEpoch() {
-        Optional<EpochEntry> entry = latestEntry();
-        return entry.isPresent() ? OptionalInt.of(entry.get().epoch) : OptionalInt.empty();
+    public Optional<Integer> latestEpoch() {
+        return latestEntry().map(epochEntry -> epochEntry.epoch);
     }
 
     public OptionalInt previousEpoch() {
         lock.readLock().lock();
         try {
-            Optional<Map.Entry<Integer, EpochEntry>> lowerEntry = latestEntry().flatMap(entry -> Optional.ofNullable(epochs.lowerEntry(entry.epoch)));
-            return lowerEntry.isPresent() ? OptionalInt.of(lowerEntry.get().getKey()) : OptionalInt.empty();
+            return latestEntry().flatMap(entry -> Optional.ofNullable(epochs.lowerEntry(entry.epoch)))
+                    .map(integerEpochEntryEntry -> OptionalInt.of(integerEpochEntryEntry.getKey())).orElseGet(OptionalInt::empty);
         } finally {
             lock.readLock().unlock();
         }
@@ -222,7 +219,7 @@ public class LeaderEpochFileCache {
     public Optional<EpochEntry> earliestEntry() {
         lock.readLock().lock();
         try {
-            return Optional.ofNullable(epochs.firstEntry()).map(x -> x.getValue());
+            return Optional.ofNullable(epochs.firstEntry()).map(Map.Entry::getValue);
         } finally {
             lock.readLock().unlock();
         }
@@ -287,12 +284,12 @@ public class LeaderEpochFileCache {
     public Map.Entry<Integer, Long> endOffsetFor(int requestedEpoch, long logEndOffset) {
         lock.readLock().lock();
         try {
-            Map.Entry<Integer, Long> epochAndOffset = null;
+            Map.Entry<Integer, Long> epochAndOffset;
             if (requestedEpoch == UNDEFINED_EPOCH) {
                 // This may happen if a bootstrapping follower sends a request with undefined epoch or
                 // a follower is on the older message format where leader epochs are not recorded
                 epochAndOffset = new AbstractMap.SimpleImmutableEntry<>(UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET);
-            } else if (latestEpoch().isPresent() && latestEpoch().getAsInt() == requestedEpoch) {
+            } else if (latestEpoch().isPresent() && latestEpoch().get() == requestedEpoch) {
                 // For the leader, the latest epoch is always the current leader epoch that is still being written to.
                 // Followers should not have any reason to query for the end offset of the current epoch, but a consumer
                 // might if it is verifying its committed offset following a group rebalance. In this case, we return
@@ -408,7 +405,7 @@ public class LeaderEpochFileCache {
         if (endOffset >= 0 && epochEntry.isPresent() && epochEntry.get().startOffset >= endOffset) {
             return removeWhileMatching(epochs.descendingMap().entrySet().iterator(), x -> x.startOffset >= endOffset);
         }
-        return Collections.emptyList();
+        return List.of();
     }
 
     public OptionalInt epochForOffset(long offset) {

@@ -16,10 +16,6 @@
  */
 package org.apache.kafka.tools;
 
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterTest;
-import kafka.test.junit.ClusterTestExtensions;
-
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.NewTopic;
@@ -28,18 +24,20 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.server.common.AdminCommandFailedException;
 import org.apache.kafka.server.common.AdminOperationException;
 
 import com.fasterxml.jackson.core.JsonProcessingException;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.io.IOException;
 import java.nio.file.NoSuchFileException;
 import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
@@ -48,16 +46,15 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-@ExtendWith(value = ClusterTestExtensions.class)
 public class DeleteRecordsCommandTest {
 
     @ClusterTest
     public void testCommand(ClusterInstance cluster) throws Exception {
-        Properties adminProps = new Properties();
+        Map<String, Object> adminProps = new HashMap<>();
 
         adminProps.put(AdminClientConfig.RETRIES_CONFIG, 1);
 
-        try (Admin admin = cluster.createAdminClient(adminProps)) {
+        try (Admin admin = cluster.admin(adminProps)) {
             assertThrows(
                 AdminCommandFailedException.class,
                 () -> DeleteRecordsCommand.execute(admin, "{\"partitions\":[" +

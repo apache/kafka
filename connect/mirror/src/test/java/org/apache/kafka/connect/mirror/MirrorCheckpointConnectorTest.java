@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
+import org.apache.kafka.connect.errors.RetriableException;
 
 import org.junit.jupiter.api.Test;
 
@@ -41,6 +42,7 @@ import static org.apache.kafka.connect.mirror.TestUtils.makeProps;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.doReturn;
 import static org.mockito.Mockito.spy;
@@ -95,6 +97,18 @@ public class MirrorCheckpointConnectorTest {
     }
 
     @Test
+    public void testConsumerGroupInitializeTimeout() {
+        MirrorCheckpointConfig config = new MirrorCheckpointConfig(makeProps());
+        MirrorCheckpointConnector connector = new MirrorCheckpointConnector(null, config);
+
+        assertThrows(
+                RetriableException.class,
+                () -> connector.taskConfigs(1),
+                "taskConfigs should throw exception when initial loading ConsumerGroup timeout"
+        );
+    }
+
+    @Test
     public void testReplicationDisabled() {
         // disable the replication
         MirrorCheckpointConfig config = new MirrorCheckpointConfig(makeProps("enabled", "false"));
@@ -138,7 +152,11 @@ public class MirrorCheckpointConnectorTest {
         doReturn(groups).when(connector).listConsumerGroups();
         doReturn(true).when(connector).shouldReplicateByTopicFilter(anyString());
         doReturn(true).when(connector).shouldReplicateByGroupFilter(anyString());
-        doReturn(offsets).when(connector).listConsumerGroupOffsets(anyString());
+
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> groupToOffsets = new HashMap<>();
+        groupToOffsets.put("g1", offsets);
+        groupToOffsets.put("g2", offsets);
+        doReturn(groupToOffsets).when(connector).listConsumerGroupOffsets(anyList());
         Set<String> groupFound = connector.findConsumerGroups();
 
         Set<String> expectedGroups = groups.stream().map(ConsumerGroupListing::groupId).collect(Collectors.toSet());
@@ -164,13 +182,11 @@ public class MirrorCheckpointConnectorTest {
         Map<TopicPartition, OffsetAndMetadata> offsetsForGroup1 = new HashMap<>();
         Map<TopicPartition, OffsetAndMetadata> offsetsForGroup2 = new HashMap<>();
         Map<TopicPartition, OffsetAndMetadata> offsetsForGroup3 = new HashMap<>();
-        Map<TopicPartition, OffsetAndMetadata> offsetsForGroup4 = new HashMap<>();
         offsetsForGroup1.put(new TopicPartition("t1", 0), new OffsetAndMetadata(0));
         offsetsForGroup1.put(new TopicPartition("t2", 0), new OffsetAndMetadata(0));
         offsetsForGroup2.put(new TopicPartition("t2", 0), new OffsetAndMetadata(0));
         offsetsForGroup2.put(new TopicPartition("t3", 0), new OffsetAndMetadata(0));
         offsetsForGroup3.put(new TopicPartition("t3", 0), new OffsetAndMetadata(0));
-        offsetsForGroup4.put(new TopicPartition("t3", 0), new OffsetAndMetadata(0));
         doReturn(groups).when(connector).listConsumerGroups();
         doReturn(false).when(connector).shouldReplicateByTopicFilter("t1");
         doReturn(true).when(connector).shouldReplicateByTopicFilter("t2");
@@ -179,16 +195,18 @@ public class MirrorCheckpointConnectorTest {
         doReturn(true).when(connector).shouldReplicateByGroupFilter("g2");
         doReturn(true).when(connector).shouldReplicateByGroupFilter("g3");
         doReturn(false).when(connector).shouldReplicateByGroupFilter("g4");
-        doReturn(offsetsForGroup1).when(connector).listConsumerGroupOffsets("g1");
-        doReturn(offsetsForGroup2).when(connector).listConsumerGroupOffsets("g2");
-        doReturn(offsetsForGroup3).when(connector).listConsumerGroupOffsets("g3");
-        doReturn(offsetsForGroup4).when(connector).listConsumerGroupOffsets("g4");
+
+        Map<String, Map<TopicPartition, OffsetAndMetadata>> groupToOffsets = new HashMap<>();
+        groupToOffsets.put("g1", offsetsForGroup1);
+        groupToOffsets.put("g2", offsetsForGroup2);
+        groupToOffsets.put("g3", offsetsForGroup3);
+        doReturn(groupToOffsets).when(connector).listConsumerGroupOffsets(Arrays.asList("g1", "g2", "g3"));
 
         Set<String> groupFound = connector.findConsumerGroups();
         Set<String> verifiedSet = new HashSet<>();
         verifiedSet.add("g1");
         verifiedSet.add("g2");
-        assertEquals(groupFound, verifiedSet);
+        assertEquals(verifiedSet, groupFound);
     }
 
     @Test

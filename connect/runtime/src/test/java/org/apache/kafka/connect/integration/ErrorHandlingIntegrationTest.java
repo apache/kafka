@@ -74,7 +74,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 public class ErrorHandlingIntegrationTest {
     
     private static final Logger log = LoggerFactory.getLogger(ErrorHandlingIntegrationTest.class);
-    private static final int NUM_WORKERS = 1;
     private static final String DLQ_TOPIC = "my-connector-errors";
     private static final String CONNECTOR_NAME = "error-conn";
     private static final String TASK_ID = "error-conn-0";
@@ -111,7 +110,7 @@ public class ErrorHandlingIntegrationTest {
 
         // setup connector config
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSinkConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPICS_CONFIG, "test-topic");
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());

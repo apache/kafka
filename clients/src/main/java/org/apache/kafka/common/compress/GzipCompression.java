@@ -17,8 +17,6 @@
 package org.apache.kafka.common.compress;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferInputStream;
@@ -30,14 +28,11 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.nio.ByteBuffer;
 import java.util.Objects;
-import java.util.zip.Deflater;
 import java.util.zip.GZIPInputStream;
 
-public class GzipCompression implements Compression {
+import static org.apache.kafka.common.record.CompressionType.GZIP;
 
-    public static final int MIN_LEVEL = Deflater.BEST_SPEED;
-    public static final int MAX_LEVEL = Deflater.BEST_COMPRESSION;
-    public static final int DEFAULT_LEVEL = Deflater.DEFAULT_COMPRESSION;
+public class GzipCompression implements Compression {
 
     private final int level;
 
@@ -47,7 +42,7 @@ public class GzipCompression implements Compression {
 
     @Override
     public CompressionType type() {
-        return CompressionType.GZIP;
+        return GZIP;
     }
 
     @Override
@@ -101,10 +96,10 @@ public class GzipCompression implements Compression {
     }
 
     public static class Builder implements Compression.Builder<GzipCompression> {
-        private int level = DEFAULT_LEVEL;
+        private int level = GZIP.defaultLevel();
 
         public Builder level(int level) {
-            if ((level < MIN_LEVEL || MAX_LEVEL < level) && level != DEFAULT_LEVEL) {
+            if ((level < GZIP.minLevel() || GZIP.maxLevel() < level) && level != GZIP.defaultLevel()) {
                 throw new IllegalArgumentException("gzip doesn't support given compression level: " + level);
             }
 
@@ -115,24 +110,6 @@ public class GzipCompression implements Compression {
         @Override
         public GzipCompression build() {
             return new GzipCompression(level);
-        }
-    }
-
-    public static class LevelValidator implements ConfigDef.Validator {
-
-        @Override
-        public void ensureValid(String name, Object o) {
-            if (o == null)
-                throw new ConfigException(name, null, "Value must be non-null");
-            int level = ((Number) o).intValue();
-            if (level > MAX_LEVEL || (level < MIN_LEVEL && level != DEFAULT_LEVEL)) {
-                throw new ConfigException(name, o, "Value must be between " + MIN_LEVEL + " and " + MAX_LEVEL + " or equal to " + DEFAULT_LEVEL);
-            }
-        }
-
-        @Override
-        public String toString() {
-            return "[" + MIN_LEVEL + ",...," + MAX_LEVEL + "] or " + DEFAULT_LEVEL;
         }
     }
 }

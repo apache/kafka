@@ -26,6 +26,7 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.KafkaFuture;
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.SaslAuthenticationException;
@@ -86,12 +87,11 @@ public class ClientAuthenticationFailureTest {
     public void testConsumerWithInvalidCredentials() {
         Map<String, Object> props = new HashMap<>(saslClientConfigs);
         props.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + server.port());
-        props.put(ConsumerConfig.GROUP_ID_CONFIG, "");
         StringDeserializer deserializer = new StringDeserializer();
 
         try (KafkaConsumer<String, String> consumer = new KafkaConsumer<>(props, deserializer, deserializer)) {
             assertThrows(SaslAuthenticationException.class, () -> {
-                consumer.subscribe(Collections.singleton(topic));
+                consumer.assign(Collections.singleton(new TopicPartition(topic, 0)));
                 consumer.poll(Duration.ofSeconds(10));
             });
         }
@@ -106,7 +106,7 @@ public class ClientAuthenticationFailureTest {
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(props, serializer, serializer)) {
             ProducerRecord<String, String> record = new ProducerRecord<>(topic, "message");
             Future<RecordMetadata> future = producer.send(record);
-            TestUtils.assertFutureThrows(future, SaslAuthenticationException.class);
+            TestUtils.assertFutureThrows(SaslAuthenticationException.class, future);
         }
     }
 
@@ -116,7 +116,7 @@ public class ClientAuthenticationFailureTest {
         props.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:" + server.port());
         try (Admin client = Admin.create(props)) {
             KafkaFuture<Map<String, TopicDescription>> future = client.describeTopics(Collections.singleton("test")).allTopicNames();
-            TestUtils.assertFutureThrows(future, SaslAuthenticationException.class);
+            TestUtils.assertFutureThrows(SaslAuthenticationException.class, future);
         }
     }
 

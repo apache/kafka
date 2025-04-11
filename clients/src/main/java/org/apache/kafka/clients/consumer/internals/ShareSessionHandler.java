@@ -25,9 +25,9 @@ import org.apache.kafka.common.message.ShareFetchRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ShareAcknowledgeRequest;
 import org.apache.kafka.common.requests.ShareAcknowledgeResponse;
-import org.apache.kafka.common.requests.ShareFetchMetadata;
 import org.apache.kafka.common.requests.ShareFetchRequest;
 import org.apache.kafka.common.requests.ShareFetchResponse;
+import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.LogContext;
 
 import org.slf4j.Logger;
@@ -61,19 +61,19 @@ public class ShareSessionHandler {
     /**
      * The metadata for the next ShareFetchRequest/ShareAcknowledgeRequest.
      */
-    private ShareFetchMetadata nextMetadata;
+    private ShareRequestMetadata nextMetadata;
 
     /**
      * All the partitions in the share session.
      */
     private final LinkedHashMap<TopicPartition, TopicIdPartition> sessionPartitions;
 
-    /*
+    /**
      * The partitions to be included in the next ShareFetch request.
      */
     private LinkedHashMap<TopicPartition, TopicIdPartition> nextPartitions;
 
-    /*
+    /**
      * The acknowledgements to be included in the next ShareFetch/ShareAcknowledge request.
      */
     private LinkedHashMap<TopicIdPartition, Acknowledgements> nextAcknowledgements;
@@ -82,7 +82,7 @@ public class ShareSessionHandler {
         this.log = logContext.logger(ShareSessionHandler.class);
         this.node = node;
         this.memberId = memberId;
-        this.nextMetadata = ShareFetchMetadata.initialEpoch(memberId);
+        this.nextMetadata = ShareRequestMetadata.initialEpoch(memberId);
         this.sessionPartitions = new LinkedHashMap<>();
         this.nextPartitions = new LinkedHashMap<>();
         this.nextAcknowledgements = new LinkedHashMap<>();
@@ -101,6 +101,14 @@ public class ShareSessionHandler {
         if (partitionAcknowledgements != null) {
             nextAcknowledgements.put(topicIdPartition, partitionAcknowledgements);
         }
+    }
+
+    public void addPartitionToAcknowledgeOnly(TopicIdPartition topicIdPartition, Acknowledgements partitionAcknowledgements) {
+        nextAcknowledgements.put(topicIdPartition, partitionAcknowledgements);
+    }
+
+    public boolean isNewSession() {
+        return nextMetadata.isNewSession();
     }
 
     public ShareFetchRequest.Builder newShareFetchBuilder(String groupId, FetchConfig fetchConfig) {
@@ -171,13 +179,15 @@ public class ShareSessionHandler {
 
         return ShareFetchRequest.Builder.forConsumer(
                 groupId, nextMetadata, fetchConfig.maxWaitMs,
-                fetchConfig.minBytes, fetchConfig.maxBytes, fetchConfig.fetchSize,
-                added, removed, acknowledgementBatches);
+                fetchConfig.minBytes, fetchConfig.maxBytes, fetchConfig.maxPollRecords,
+                fetchConfig.maxPollRecords, added, removed, acknowledgementBatches);
     }
 
     public ShareAcknowledgeRequest.Builder newShareAcknowledgeBuilder(String groupId, FetchConfig fetchConfig) {
         if (nextMetadata.isNewSession()) {
             // A share session cannot be started with a ShareAcknowledge request
+            nextPartitions.clear();
+            nextAcknowledgements.clear();
             return null;
         }
 

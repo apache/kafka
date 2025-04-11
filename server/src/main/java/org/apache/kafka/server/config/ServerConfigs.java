@@ -17,11 +17,9 @@
 package org.apache.kafka.server.config;
 
 import org.apache.kafka.clients.CommonClientConfigs;
-import org.apache.kafka.common.compress.GzipCompression;
-import org.apache.kafka.common.compress.Lz4Compression;
-import org.apache.kafka.common.compress.ZstdCompression;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.storage.internals.log.LogConfig;
@@ -30,7 +28,6 @@ import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
 import static org.apache.kafka.common.config.ConfigDef.Importance.LOW;
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
 import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
-import static org.apache.kafka.common.config.ConfigDef.Range.between;
 import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
@@ -38,20 +35,9 @@ import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 
 public class ServerConfigs {
     /** ********* General Configuration ***********/
-    public static final String RESERVED_BROKER_MAX_ID_CONFIG = "reserved.broker.max.id";
-    public static final int RESERVED_BROKER_MAX_ID_DEFAULT = 1000;
-    public static final String RESERVED_BROKER_MAX_ID_DOC = "Max number that can be used for a broker.id";
-
-    public static final String BROKER_ID_GENERATION_ENABLE_CONFIG = "broker.id.generation.enable";
-    public static final boolean BROKER_ID_GENERATION_ENABLE_DEFAULT = true;
-    public static final String BROKER_ID_GENERATION_ENABLE_DOC = "Enable automatic broker id generation on the server. When enabled the value configured for " + RESERVED_BROKER_MAX_ID_CONFIG + " should be reviewed.";
-
-
     public static final String BROKER_ID_CONFIG = "broker.id";
     public static final int BROKER_ID_DEFAULT = -1;
-    public static final String BROKER_ID_DOC = "The broker id for this server. If unset, a unique broker id will be generated." +
-            "To avoid conflicts between ZooKeeper generated broker id's and user configured broker id's, generated broker ids " +
-            "start from " + RESERVED_BROKER_MAX_ID_CONFIG + " + 1.";
+    public static final String BROKER_ID_DOC = "The broker id for this server.";
 
     public static final String MESSAGE_MAX_BYTES_CONFIG = "message.max.bytes";
     public static final String MESSAGE_MAX_BYTES_DOC = TopicConfig.MAX_MESSAGE_BYTES_DOC +
@@ -66,7 +52,8 @@ public class ServerConfigs {
     public static final String BACKGROUND_THREADS_DOC = "The number of threads to use for various background processing tasks";
 
     public static final String NUM_REPLICA_ALTER_LOG_DIRS_THREADS_CONFIG = "num.replica.alter.log.dirs.threads";
-    public static final String NUM_REPLICA_ALTER_LOG_DIRS_THREADS_DOC = "The number of threads that can move replicas between log directories, which may include disk I/O";
+    public static final String NUM_REPLICA_ALTER_LOG_DIRS_THREADS_DOC = "The number of threads that can move replicas between log directories, which may include disk I/O. " +
+            "The default value is equal to the number of directories specified in the <code>" + ServerLogConfigs.LOG_DIR_CONFIG + "</code> or <code>" + ServerLogConfigs.LOG_DIRS_CONFIG + "</code> configuration property.";
 
     public static final String REQUEST_TIMEOUT_MS_CONFIG = CommonClientConfigs.REQUEST_TIMEOUT_MS_CONFIG;
     public static final int REQUEST_TIMEOUT_MS_DEFAULT = 30000;
@@ -101,14 +88,6 @@ public class ServerConfigs {
     public static final String BROKER_RACK_DOC = "Rack of the broker. This will be used in rack aware replication assignment for fault tolerance. Examples: <code>RACK1</code>, <code>us-east-1d</code>";
 
     /** ********* Controlled shutdown configuration ***********/
-    public static final String CONTROLLED_SHUTDOWN_MAX_RETRIES_CONFIG = "controlled.shutdown.max.retries";
-    public static final int CONTROLLED_SHUTDOWN_MAX_RETRIES_DEFAULT = 3;
-    public static final String CONTROLLED_SHUTDOWN_MAX_RETRIES_DOC = "Controlled shutdown can fail for multiple reasons. This determines the number of retries when such failure happens";
-
-    public static final String CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_CONFIG = "controlled.shutdown.retry.backoff.ms";
-    public static final int CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_DEFAULT = 5000;
-    public static final String CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_DOC = "Before each retry, the system needs time to recover from the state that caused the previous failure (Controller fail over, replica lag etc). This config determines the amount of time to wait before retrying.";
-
     public static final String CONTROLLED_SHUTDOWN_ENABLE_CONFIG = "controlled.shutdown.enable";
     public static final boolean CONTROLLED_SHUTDOWN_ENABLE_DEFAULT = true;
     public static final String CONTROLLED_SHUTDOWN_ENABLE_DOC = "Enable controlled shutdown of the server.";
@@ -142,8 +121,6 @@ public class ServerConfigs {
             "the StandardAuthorizer (which stores ACLs in the metadata log.) By default, all listeners included in controller.listener.names " +
             "will also be early start listeners. A listener should not appear in this list if it accepts external traffic.";
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
-            .define(BROKER_ID_GENERATION_ENABLE_CONFIG, BOOLEAN, BROKER_ID_GENERATION_ENABLE_DEFAULT, MEDIUM, BROKER_ID_GENERATION_ENABLE_DOC)
-            .define(RESERVED_BROKER_MAX_ID_CONFIG, INT, RESERVED_BROKER_MAX_ID_DEFAULT, atLeast(0), MEDIUM, RESERVED_BROKER_MAX_ID_DOC)
             .define(BROKER_ID_CONFIG, INT, BROKER_ID_DEFAULT, HIGH, BROKER_ID_DOC)
             .define(MESSAGE_MAX_BYTES_CONFIG, INT, LogConfig.DEFAULT_MAX_MESSAGE_BYTES, atLeast(0), HIGH, MESSAGE_MAX_BYTES_DOC)
             .define(NUM_IO_THREADS_CONFIG, INT, NUM_IO_THREADS_DEFAULT, atLeast(1), HIGH, NUM_IO_THREADS_DOC)
@@ -158,14 +135,12 @@ public class ServerConfigs {
             /************ Rack Configuration ******************/
             .define(BROKER_RACK_CONFIG, STRING, null, MEDIUM, BROKER_RACK_DOC)
             /** ********* Controlled shutdown configuration ***********/
-            .define(CONTROLLED_SHUTDOWN_MAX_RETRIES_CONFIG, INT, CONTROLLED_SHUTDOWN_MAX_RETRIES_DEFAULT, MEDIUM, CONTROLLED_SHUTDOWN_MAX_RETRIES_DOC)
-            .define(CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_CONFIG, LONG, CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_DEFAULT, MEDIUM, CONTROLLED_SHUTDOWN_RETRY_BACKOFF_MS_DOC)
             .define(CONTROLLED_SHUTDOWN_ENABLE_CONFIG, BOOLEAN, CONTROLLED_SHUTDOWN_ENABLE_DEFAULT, MEDIUM, CONTROLLED_SHUTDOWN_ENABLE_DOC)
             .define(DELETE_TOPIC_ENABLE_CONFIG, BOOLEAN, DELETE_TOPIC_ENABLE_DEFAULT, HIGH, DELETE_TOPIC_ENABLE_DOC)
             .define(COMPRESSION_TYPE_CONFIG, STRING, LogConfig.DEFAULT_COMPRESSION_TYPE, ConfigDef.ValidString.in(BrokerCompressionType.names().toArray(new String[0])), HIGH, COMPRESSION_TYPE_DOC)
-            .define(COMPRESSION_GZIP_LEVEL_CONFIG, INT, GzipCompression.DEFAULT_LEVEL, new GzipCompression.LevelValidator(), MEDIUM, COMPRESSION_GZIP_LEVEL_DOC)
-            .define(COMPRESSION_LZ4_LEVEL_CONFIG, INT, Lz4Compression.DEFAULT_LEVEL, between(Lz4Compression.MIN_LEVEL, Lz4Compression.MAX_LEVEL), MEDIUM, COMPRESSION_LZ4_LEVEL_DOC)
-            .define(COMPRESSION_ZSTD_LEVEL_CONFIG, INT, ZstdCompression.DEFAULT_LEVEL, between(ZstdCompression.MIN_LEVEL, ZstdCompression.MAX_LEVEL), MEDIUM, COMPRESSION_ZSTD_LEVEL_DOC)
+            .define(COMPRESSION_GZIP_LEVEL_CONFIG, INT, CompressionType.GZIP.defaultLevel(), CompressionType.GZIP.levelValidator(), MEDIUM, COMPRESSION_GZIP_LEVEL_DOC)
+            .define(COMPRESSION_LZ4_LEVEL_CONFIG, INT, CompressionType.LZ4.defaultLevel(), CompressionType.LZ4.levelValidator(), MEDIUM, COMPRESSION_LZ4_LEVEL_DOC)
+            .define(COMPRESSION_ZSTD_LEVEL_CONFIG, INT, CompressionType.ZSTD.defaultLevel(), CompressionType.ZSTD.levelValidator(), MEDIUM, COMPRESSION_ZSTD_LEVEL_DOC)
             /** ********* Fetch Configuration **************/
             .define(MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_CONFIG, INT, MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_DEFAULT, atLeast(0), MEDIUM, MAX_INCREMENTAL_FETCH_SESSION_CACHE_SLOTS_DOC)
             .define(FETCH_MAX_BYTES_CONFIG, INT, FETCH_MAX_BYTES_DEFAULT, atLeast(1024), MEDIUM, FETCH_MAX_BYTES_DOC)

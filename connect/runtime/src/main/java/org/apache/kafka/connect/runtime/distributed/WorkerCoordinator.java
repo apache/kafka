@@ -17,6 +17,7 @@
 package org.apache.kafka.connect.runtime.distributed;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.internals.AbstractCoordinator;
 import org.apache.kafka.clients.consumer.internals.ConsumerNetworkClient;
 import org.apache.kafka.common.metrics.Measurable;
@@ -271,7 +272,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
     @Override
     protected void handlePollTimeoutExpiry() {
         listener.onPollTimeoutExpiry();
-        maybeLeaveGroup("worker poll timeout has expired.");
+        maybeLeaveGroup(CloseOptions.GroupMembershipOperation.DEFAULT, "worker poll timeout has expired.");
     }
 
     /**
@@ -440,8 +441,7 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         @Override
         public boolean equals(Object o) {
             if (this == o) return true;
-            if (!(o instanceof LeaderState)) return false;
-            LeaderState that = (LeaderState) o;
+            if (!(o instanceof LeaderState that)) return false;
             return Objects.equals(allMembers, that.allMembers)
                     && Objects.equals(connectorOwners, that.connectorOwners)
                     && Objects.equals(taskOwners, that.taskOwners);
@@ -644,10 +644,9 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
             if (this == o) {
                 return true;
             }
-            if (!(o instanceof WorkerLoad)) {
+            if (!(o instanceof WorkerLoad that)) {
                 return false;
             }
-            WorkerLoad that = (WorkerLoad) o;
             return worker.equals(that.worker) &&
                     connectors.equals(that.connectors) &&
                     tasks.equals(that.tasks);

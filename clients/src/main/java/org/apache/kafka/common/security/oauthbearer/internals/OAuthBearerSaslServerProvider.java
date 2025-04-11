@@ -22,12 +22,11 @@ import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerSaslSer
 import java.security.Provider;
 import java.security.Security;
 
-public class OAuthBearerSaslServerProvider extends Provider {
+public final class OAuthBearerSaslServerProvider extends Provider {
     private static final long serialVersionUID = 1L;
 
-    @SuppressWarnings("this-escape")
-    protected OAuthBearerSaslServerProvider() {
-        super("SASL/OAUTHBEARER Server Provider", 1.0, "SASL/OAUTHBEARER Server Provider for Kafka");
+    private OAuthBearerSaslServerProvider() {
+        super("SASL/OAUTHBEARER Server Provider", "1.0", "SASL/OAUTHBEARER Server Provider for Kafka");
         put("SaslServerFactory." + OAuthBearerLoginModule.OAUTHBEARER_MECHANISM,
                 OAuthBearerSaslServerFactory.class.getName());
     }

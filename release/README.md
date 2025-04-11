@@ -8,7 +8,6 @@ This directory contains the tools used to publish a release.
 * python 3.12
 * git
 * gpg 2.4
-* sftp
 
 The full instructions for producing a release are available in
 https://cwiki.apache.org/confluence/display/KAFKA/Release+Process.

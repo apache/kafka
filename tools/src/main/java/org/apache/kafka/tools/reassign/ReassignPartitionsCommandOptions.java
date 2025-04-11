@@ -35,12 +35,14 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
     final OptionSpec<String> reassignmentJsonFileOpt;
     final OptionSpec<String> topicsToMoveJsonFileOpt;
     final OptionSpec<String> brokerListOpt;
+    final OptionSpec<String> bootstrapControllerOpt;
     final OptionSpec<?> disableRackAware;
     final OptionSpec<Long> interBrokerThrottleOpt;
     final OptionSpec<Long> replicaAlterLogDirsThrottleOpt;
     final OptionSpec<Long> timeoutOpt;
     final OptionSpec<?> additionalOpt;
     final OptionSpec<?> preserveThrottlesOpt;
+    final OptionSpec<?> disallowReplicationFactorChangeOpt;
 
     public ReassignPartitionsCommandOptions(String[] args) {
         super(args);
@@ -54,8 +56,8 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
         listOpt = parser.accepts("list", "List all active partition reassignments.");
 
         // Arguments
-        bootstrapServerOpt = parser.accepts("bootstrap-server", "REQUIRED: the server(s) to use for bootstrapping.")
-            .withRequiredArg()
+        bootstrapServerOpt = parser.accepts("bootstrap-server", "the server(s) to use for bootstrapping.")
+            .withOptionalArg()
             .describedAs("Server(s) to use for bootstrapping")
             .ofType(String.class);
 
@@ -83,6 +85,13 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
             .withRequiredArg()
             .describedAs("brokerlist")
             .ofType(String.class);
+
+        bootstrapControllerOpt = parser.accepts("bootstrap-controller", "The controller to use for reassignment. " +
+                        "By default, the tool will get the quorum controller. This option supports the actions --cancel and --list.")
+            .withOptionalArg()
+            .describedAs("bootstrap controller to connect to")
+            .ofType(String.class);
+        
         disableRackAware = parser.accepts("disable-rack-aware", "Disable rack aware replica assignment");
         interBrokerThrottleOpt = parser.accepts("throttle", "The movement of partitions between brokers will be throttled to this value (bytes/sec). " +
                 "This option can be included with --execute when a reassignment is started, and it can be altered by resubmitting the current reassignment " +
@@ -107,6 +116,7 @@ public class ReassignPartitionsCommandOptions extends CommandDefaultOptions {
         additionalOpt = parser.accepts("additional", "Execute this reassignment in addition to any " +
             "other ongoing ones. This option can also be used to change the throttle of an ongoing reassignment.");
         preserveThrottlesOpt = parser.accepts("preserve-throttles", "Do not modify broker or topic throttles.");
+        disallowReplicationFactorChangeOpt = parser.accepts("disallow-replication-factor-change", "Denies the ability to change a partition's replication factor as part of this reassignment through adding validation against it.");
 
         options = parser.parse(args);
     }

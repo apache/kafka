@@ -19,12 +19,12 @@ package org.apache.kafka.streams.processor.internals;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.common.header.Headers;
 
-public class StampedRecord extends Stamped<ConsumerRecord<?, ?>> {
-    private final ConsumerRecord<byte[], byte[]> rawRecord;
+import java.util.Optional;
 
-    public StampedRecord(final ConsumerRecord<?, ?> record, final long timestamp, final ConsumerRecord<byte[], byte[]> rawRecord) {
+public class StampedRecord extends Stamped<ConsumerRecord<?, ?>> {
+
+    public StampedRecord(final ConsumerRecord<?, ?> record, final long timestamp) {
         super(record, timestamp);
-        this.rawRecord = rawRecord;
     }
 
     public String topic() {
@@ -47,22 +47,12 @@ public class StampedRecord extends Stamped<ConsumerRecord<?, ?>> {
         return value.offset();
     }
 
+    public Optional<Integer> leaderEpoch() {
+        return value.leaderEpoch();
+    }
+
     public Headers headers() {
         return value.headers();
-    }
-
-    public ConsumerRecord<byte[], byte[]> rawRecord() {
-        return rawRecord;
-    }
-
-    @Override
-    public boolean equals(final Object other) {
-        return super.equals(other);
-    }
-
-    @Override
-    public int hashCode() {
-        return super.hashCode();
     }
 
     @Override

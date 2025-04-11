@@ -66,7 +66,7 @@ public class WorkerGroupMemberTest {
         workerProps.put("offset.storage.topic", "topic-1");
         workerProps.put("config.storage.topic", "topic-1");
         workerProps.put("status.storage.topic", "topic-1");
-        workerProps.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, MockConnectMetrics.MockMetricsReporter.class.getName());
+        workerProps.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, JmxReporter.class.getName() + "," + MockConnectMetrics.MockMetricsReporter.class.getName());
         DistributedConfig config = spy(new DistributedConfig(workerProps));
         doReturn("cluster-1").when(config).kafkaClusterId();
 
@@ -78,9 +78,8 @@ public class WorkerGroupMemberTest {
         boolean foundJmxReporter = false;
         assertEquals(2, member.metrics().reporters().size());
         for (MetricsReporter reporter : member.metrics().reporters()) {
-            if (reporter instanceof MockConnectMetrics.MockMetricsReporter) {
+            if (reporter instanceof MockConnectMetrics.MockMetricsReporter mockMetricsReporter) {
                 foundMockReporter = true;
-                MockConnectMetrics.MockMetricsReporter mockMetricsReporter = (MockConnectMetrics.MockMetricsReporter) reporter;
                 assertEquals("cluster-1", mockMetricsReporter.getMetricsContext().contextLabels().get(WorkerConfig.CONNECT_KAFKA_CLUSTER_ID));
                 assertEquals("group-1", mockMetricsReporter.getMetricsContext().contextLabels().get(WorkerConfig.CONNECT_GROUP_ID));
             }
@@ -109,7 +108,7 @@ public class WorkerGroupMemberTest {
         workerProps.put("offset.storage.topic", "topic-1");
         workerProps.put("config.storage.topic", "topic-1");
         workerProps.put("status.storage.topic", "topic-1");
-        workerProps.put("auto.include.jmx.reporter", "false");
+        workerProps.put(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, "");
         DistributedConfig config = spy(new DistributedConfig(workerProps));
         doReturn("cluster-1").when(config).kafkaClusterId();
 

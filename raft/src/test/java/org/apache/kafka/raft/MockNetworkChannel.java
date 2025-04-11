@@ -18,7 +18,6 @@ package org.apache.kafka.raft;
 
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.raft.internals.VoterSetTest;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -67,7 +66,7 @@ public class MockNetworkChannel implements NetworkChannel {
         Iterator<RaftRequest.Outbound> iterator = sendQueue.iterator();
         while (iterator.hasNext()) {
             RaftRequest.Outbound request = iterator.next();
-            if (!apiKeyFilter.isPresent() || request.data().apiKey() == apiKeyFilter.get().id) {
+            if (apiKeyFilter.isEmpty() || request.data().apiKey() == apiKeyFilter.get().id) {
                 awaitingResponse.put(request.correlationId(), request);
                 requests.add(request);
                 iterator.remove();

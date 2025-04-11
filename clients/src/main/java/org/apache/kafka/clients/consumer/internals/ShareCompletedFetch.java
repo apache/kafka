@@ -55,7 +55,7 @@ import java.util.Optional;
  * to keep track of aborted transactions or the need to keep track of fetch position.
  */
 public class ShareCompletedFetch {
-
+    final int nodeId;
     final TopicIdPartition partition;
     final ShareFetchResponseData.PartitionData partitionData;
     final short requestVersion;
@@ -79,12 +79,14 @@ public class ShareCompletedFetch {
 
     ShareCompletedFetch(final LogContext logContext,
                         final BufferSupplier decompressionBufferSupplier,
+                        final int nodeId,
                         final TopicIdPartition partition,
                         final ShareFetchResponseData.PartitionData partitionData,
                         final ShareFetchMetricsAggregator metricAggregator,
                         final short requestVersion) {
         this.log = logContext.logger(org.apache.kafka.clients.consumer.internals.ShareCompletedFetch.class);
         this.decompressionBufferSupplier = decompressionBufferSupplier;
+        this.nodeId = nodeId;
         this.partition = partition;
         this.partitionData = partitionData;
         this.metricAggregator = metricAggregator;
@@ -156,7 +158,7 @@ public class ShareCompletedFetch {
                                                  final int maxRecords,
                                                  final boolean checkCrcs) {
         // Creating an empty ShareInFlightBatch
-        ShareInFlightBatch<K, V> inFlightBatch = new ShareInFlightBatch<>(partition);
+        ShareInFlightBatch<K, V> inFlightBatch = new ShareInFlightBatch<>(nodeId, partition);
 
         if (cachedBatchException != null) {
             // If the event that a CRC check fails, reject the entire record batch because it is corrupt.
@@ -180,8 +182,10 @@ public class ShareCompletedFetch {
 
         try {
             int recordsInBatch = 0;
-            while (recordsInBatch < maxRecords) {
-                lastRecord = nextFetchedRecord(checkCrcs);
+            boolean currentBatchHasMoreRecords = false;
+
+            while (recordsInBatch < maxRecords || currentBatchHasMoreRecords) {
+                currentBatchHasMoreRecords = nextFetchedRecord(checkCrcs);
                 if (lastRecord == null) {
                     // Any remaining acquired records are gaps
                     while (nextAcquired != null) {
@@ -282,7 +286,6 @@ public class ShareCompletedFetch {
     /**
      * Parse the record entry, deserializing the key / value fields if necessary
      */
-    @SuppressWarnings("UnusedParameters")
     <K, V> ConsumerRecord<K, V> parseRecord(final Deserializers<K, V> deserializers,
                                             final TopicIdPartition partition,
                                             final Optional<Integer> leaderEpoch,
@@ -295,23 +298,22 @@ public class ShareCompletedFetch {
         K key;
         V value;
         try {
-            key = keyBytes == null ? null : deserializers.keyDeserializer.deserialize(partition.topic(), headers, keyBytes);
+            key = keyBytes == null ? null : deserializers.keyDeserializer().deserialize(partition.topic(), headers, keyBytes);
         } catch (RuntimeException e) {
             log.error("Key Deserializers with error: {}", deserializers);
             throw newRecordDeserializationException(RecordDeserializationException.DeserializationExceptionOrigin.KEY, partition.topicPartition(), timestampType, record, e, headers);
         }
         try {
-            value = valueBytes == null ? null : deserializers.valueDeserializer.deserialize(partition.topic(), headers, valueBytes);
+            value = valueBytes == null ? null : deserializers.valueDeserializer().deserialize(partition.topic(), headers, valueBytes);
         } catch (RuntimeException e) {
             log.error("Value Deserializers with error: {}", deserializers);
             throw newRecordDeserializationException(RecordDeserializationException.DeserializationExceptionOrigin.VALUE, partition.topicPartition(), timestampType, record, e, headers);
         }
-        // When ConsumerRecord gains the delivery count, add it here
         return new ConsumerRecord<>(partition.topic(), partition.partition(), record.offset(),
                 record.timestamp(), timestampType,
                 keyBytes == null ? ConsumerRecord.NULL_SIZE : keyBytes.remaining(),
                 valueBytes == null ? ConsumerRecord.NULL_SIZE : valueBytes.remaining(),
-                key, value, headers, leaderEpoch);
+                key, value, headers, leaderEpoch, Optional.of(deliveryCount));
     }
 
     private static RecordDeserializationException newRecordDeserializationException(RecordDeserializationException.DeserializationExceptionOrigin origin,
@@ -325,14 +327,22 @@ public class ShareCompletedFetch {
                         + ". The record has been released.", e);
     }
 
-    private Record nextFetchedRecord(final boolean checkCrcs) {
+    /**
+     * Scans for the next record in the available batches, skipping control records
+     *
+     * @param checkCrcs Whether to check the CRC of fetched records
+     *
+     * @return true if the current batch has more records, else false
+     */
+    private boolean nextFetchedRecord(final boolean checkCrcs) {
         while (true) {
             if (records == null || !records.hasNext()) {
                 maybeCloseRecordStream();
 
                 if (!batches.hasNext()) {
                     drain();
-                    return null;
+                    lastRecord = null;
+                    break;
                 }
 
                 currentBatch = batches.next();
@@ -345,10 +355,13 @@ public class ShareCompletedFetch {
 
                 // control records are not returned to the user
                 if (!currentBatch.isControlBatch()) {
-                    return record;
+                    lastRecord = record;
+                    break;
                 }
             }
         }
+
+        return records != null && records.hasNext();
     }
 
     private Optional<Integer> maybeLeaderEpoch(final int leaderEpoch) {

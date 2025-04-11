@@ -16,10 +16,8 @@
   */
 package kafka.server.epoch
 
-import kafka.cluster.BrokerEndPoint
 import kafka.server.KafkaConfig._
 import kafka.server._
-import kafka.utils.Implicits._
 import kafka.utils.TestUtils._
 import kafka.utils.{Logging, TestUtils}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
@@ -28,13 +26,13 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetFo
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
-import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH_OFFSET
 import org.apache.kafka.common.requests.{OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.common.utils.{LogContext, Time}
+import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions._
@@ -67,9 +65,9 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def shouldAddCurrentLeaderEpochToMessagesAsTheyAreWrittenToLeader(quorum: String): Unit = {
-    brokers ++= (0 to 1).map { id => createBroker(fromProps(createBrokerConfig(id, zkConnectOrNull))) }
+    brokers ++= (0 to 1).map { id => createBroker(fromProps(createBrokerConfig(id))) }
 
     // Given two topics with replication of a single partition
     for (topic <- List(topic1, topic2)) {
@@ -100,11 +98,11 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def shouldSendLeaderEpochRequestAndGetAResponse(quorum: String): Unit = {
 
     //3 brokers, put partition on 100/101 and then pretend to be 102
-    brokers ++= (100 to 102).map { id => createBroker(fromProps(createBrokerConfig(id, zkConnectOrNull))) }
+    brokers ++= (100 to 102).map { id => createBroker(fromProps(createBrokerConfig(id))) }
 
     val assignment1 = Map(0 -> Seq(100), 1 -> Seq(101))
     createTopic(topic1, assignment1)
@@ -148,17 +146,13 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   }
 
   @ParameterizedTest
-  @ValueSource(strings = Array("zk", "kraft"))
+  @ValueSource(strings = Array("kraft"))
   def shouldIncreaseLeaderEpochBetweenLeaderRestarts(quorum: String): Unit = {
     //Setup: we are only interested in the single partition on broker 101
-    brokers += createBroker(fromProps(createBrokerConfig(100, zkConnectOrNull)))
-    if (isKRaftTest()) {
-      assertEquals(controllerServer.config.nodeId, waitUntilQuorumLeaderElected(controllerServer))
-    } else {
-      assertEquals(100, TestUtils.waitUntilControllerElected(zkClient))
-    }
+    brokers += createBroker(fromProps(createBrokerConfig(100)))
+    assertEquals(controllerServer.config.nodeId, waitUntilQuorumLeaderElected(controllerServer))
 
-    brokers += createBroker(fromProps(createBrokerConfig(101, zkConnectOrNull)))
+    brokers += createBroker(fromProps(createBrokerConfig(101)))
 
     def leo() = brokers(1).replicaManager.localLog(tp).get.logEndOffset
 
@@ -251,7 +245,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
 
   private def waitForEpochChangeTo(topic: String, partition: Int, epoch: Int): Unit = {
     TestUtils.waitUntilTrue(() => {
-      brokers(0).metadataCache.getPartitionInfo(topic, partition).exists(_.leaderEpoch == epoch)
+      brokers(0).metadataCache.getLeaderAndIsr(topic, partition).filter(_.leaderEpoch == epoch).isPresent()
     }, "Epoch didn't change")
   }
 
@@ -288,14 +282,18 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
   }
 
   private def createTopic(topic: String, partitionReplicaAssignment: collection.Map[Int, Seq[Int]]): Unit = {
-    Using(createAdminClient(brokers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))) { admin =>
-      TestUtils.createTopicWithAdmin(
-        admin = admin,
-        topic = topic,
-        replicaAssignment = partitionReplicaAssignment,
-        brokers = brokers,
-        controllers = controllerServers
-      )
+    Using.resource(createAdminClient(brokers, ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))) { admin =>
+      try {
+        TestUtils.createTopicWithAdmin(
+          admin = admin,
+          topic = topic,
+          replicaAssignment = partitionReplicaAssignment,
+          brokers = brokers,
+          controllers = controllerServers
+        )
+      } finally {
+        admin.close()
+      }
     }
   }
 
@@ -311,7 +309,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
 
     def leaderOffsetsFor(partitions: Map[TopicPartition, Int]): Map[TopicPartition, EpochEndOffset] = {
       val topics = new OffsetForLeaderTopicCollection(partitions.size)
-      partitions.forKeyValue { (topicPartition, leaderEpoch) =>
+      partitions.foreachEntry { (topicPartition, leaderEpoch) =>
         var topic = topics.find(topicPartition.topic)
         if (topic == null) {
           topic = new OffsetForLeaderTopic().setTopic(topicPartition.topic)
@@ -322,8 +320,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
           .setLeaderEpoch(leaderEpoch))
       }
 
-      val request = OffsetsForLeaderEpochRequest.Builder.forFollower(
-        ApiKeys.OFFSET_FOR_LEADER_EPOCH.latestVersion, topics, 1)
+      val request = OffsetsForLeaderEpochRequest.Builder.forFollower(topics, 1)
       val response = sender.sendRequest(request)
       response.responseBody.asInstanceOf[OffsetsForLeaderEpochResponse].data.topics.asScala.flatMap { topic =>
         topic.partitions.asScala.map { partition =>

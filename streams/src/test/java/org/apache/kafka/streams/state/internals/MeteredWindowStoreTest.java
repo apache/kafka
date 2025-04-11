@@ -34,8 +34,6 @@ import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.ProcessorContext;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorStateManager;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.KeyValueIterator;
@@ -96,7 +94,7 @@ public class MeteredWindowStoreTest {
     private static final long TIMESTAMP = 42L;
 
     private final String threadId = Thread.currentThread().getName();
-    private InternalMockProcessorContext context;
+    private InternalMockProcessorContext<?, ?> context;
     @SuppressWarnings("unchecked")
     private final WindowStore<Bytes, byte[]> innerStoreMock = mock(WindowStore.class);
     private final MockTime mockTime = new MockTime();
@@ -118,7 +116,7 @@ public class MeteredWindowStoreTest {
     @BeforeEach
     public void setUp() {
         final StreamsMetricsImpl streamsMetrics =
-            new StreamsMetricsImpl(metrics, "test", StreamsConfig.METRICS_LATEST, new MockTime());
+            new StreamsMetricsImpl(metrics, "test", "processId", new MockTime());
         context = new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
@@ -136,22 +134,6 @@ public class MeteredWindowStoreTest {
         );
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        final MeteredWindowStore<String, String> outer = new MeteredWindowStore<>(
-            innerStoreMock,
-            WINDOW_SIZE_MS, // any size
-            STORE_TYPE,
-            new MockTime(),
-            Serdes.String(),
-            new SerdeThatDoesntHandleNull()
-        );
-        when(innerStoreMock.name()).thenReturn("store");
-        doNothing().when(innerStoreMock).init((ProcessorContext) context, outer);
-        outer.init((ProcessorContext) context, outer);
-    }
-
     @Test
     public void shouldDelegateInit() {
         final MeteredWindowStore<String, String> outer = new MeteredWindowStore<>(
@@ -163,8 +145,8 @@ public class MeteredWindowStoreTest {
             new SerdeThatDoesntHandleNull()
         );
         when(innerStoreMock.name()).thenReturn("store");
-        doNothing().when(innerStoreMock).init((StateStoreContext) context, outer);
-        outer.init((StateStoreContext) context, outer);
+        doNothing().when(innerStoreMock).init(context, outer);
+        outer.init(context, outer);
     }
 
     @Test
@@ -202,7 +184,7 @@ public class MeteredWindowStoreTest {
             keySerde,
             valueSerde
         );
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
 
         store.fetch(KEY, TIMESTAMP);
         store.put(KEY, VALUE, TIMESTAMP);
@@ -210,7 +192,7 @@ public class MeteredWindowStoreTest {
 
     @Test
     public void testMetrics() {
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
         final JmxReporter reporter = new JmxReporter();
         final MetricsContext metricsContext = new KafkaMetricsContext("kafka.streams");
         reporter.contextChange(metricsContext);
@@ -229,8 +211,8 @@ public class MeteredWindowStoreTest {
 
     @Test
     public void shouldRecordRestoreLatencyOnInit() {
-        doNothing().when(innerStoreMock).init((StateStoreContext) context, store);
-        store.init((StateStoreContext) context, store);
+        doNothing().when(innerStoreMock).init(context, store);
+        store.init(context, store);
 
         // it suffices to verify one restore metric since all restore metrics are recorded by the same sensor
         // and the sensor is tested elsewhere
@@ -241,10 +223,10 @@ public class MeteredWindowStoreTest {
     @Test
     public void shouldPutToInnerStoreAndRecordPutMetrics() {
         final byte[] bytes = "a".getBytes();
-        doNothing().when(innerStoreMock).put(eq(Bytes.wrap(bytes)), any(), eq(context.timestamp()));
+        doNothing().when(innerStoreMock).put(eq(Bytes.wrap(bytes)), any(), eq(context.recordContext().timestamp()));
 
-        store.init((StateStoreContext) context, store);
-        store.put("a", "a", context.timestamp());
+        store.init(context, store);
+        store.put("a", "a", context.recordContext().timestamp());
 
         // it suffices to verify one put metric since all put metrics are recorded by the same sensor
         // and the sensor is tested elsewhere
@@ -257,7 +239,7 @@ public class MeteredWindowStoreTest {
         when(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1))
             .thenReturn(KeyValueIterators.emptyWindowStoreIterator());
 
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
         store.fetch("a", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
 
         // it suffices to verify one fetch metric since all fetch metrics are recorded by the same sensor
@@ -271,7 +253,7 @@ public class MeteredWindowStoreTest {
         when(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 1, 1 + RETENTION_PERIOD))
                 .thenReturn(KeyValueIterators.emptyWindowStoreIterator());
 
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
         store.fetch("a", ofEpochMilli(1), ofEpochMilli(1).plus(RETENTION_PERIOD, ChronoUnit.MILLIS)).close(); // recorded on close;
     }
 
@@ -286,7 +268,7 @@ public class MeteredWindowStoreTest {
         when(innerStoreMock.fetch(null, null, 1, 1))
             .thenReturn(KeyValueIterators.emptyIterator());
 
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
         store.fetch("a", "b", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
         store.fetch(null, "b", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
         store.fetch("a", null, ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
@@ -303,7 +285,7 @@ public class MeteredWindowStoreTest {
         when(innerStoreMock.backwardFetch(Bytes.wrap("a".getBytes()), Bytes.wrap("b".getBytes()), 1, 1))
             .thenReturn(KeyValueIterators.emptyIterator());
 
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
         store.backwardFetch("a", "b", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
 
         // it suffices to verify one fetch metric since all fetch metrics are recorded by the same sensor
@@ -323,7 +305,7 @@ public class MeteredWindowStoreTest {
         when(innerStoreMock.backwardFetch(null, null, 1, 1))
             .thenReturn(KeyValueIterators.emptyIterator());
 
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
         store.backwardFetch("a", "b", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
         store.backwardFetch(null, "b", ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
         store.backwardFetch("a", null, ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
@@ -339,7 +321,7 @@ public class MeteredWindowStoreTest {
     public void shouldFetchAllFromInnerStoreAndRecordFetchMetrics() {
         when(innerStoreMock.fetchAll(1, 1)).thenReturn(KeyValueIterators.emptyIterator());
 
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
         store.fetchAll(ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
 
         // it suffices to verify one fetch metric since all fetch metrics are recorded by the same sensor
@@ -352,7 +334,7 @@ public class MeteredWindowStoreTest {
     public void shouldBackwardFetchAllFromInnerStoreAndRecordFetchMetrics() {
         when(innerStoreMock.backwardFetchAll(1, 1)).thenReturn(KeyValueIterators.emptyIterator());
 
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
         store.backwardFetchAll(ofEpochMilli(1), ofEpochMilli(1)).close(); // recorded on close;
 
         // it suffices to verify one fetch metric since all fetch metrics are recorded by the same sensor
@@ -365,7 +347,7 @@ public class MeteredWindowStoreTest {
     public void shouldRecordFlushLatency() {
         doNothing().when(innerStoreMock).flush();
 
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
         store.flush();
 
         // it suffices to verify one flush metric since all flush metrics are recorded by the same sensor
@@ -378,7 +360,7 @@ public class MeteredWindowStoreTest {
     public void shouldNotThrowNullPointerExceptionIfFetchReturnsNull() {
         when(innerStoreMock.fetch(Bytes.wrap("a".getBytes()), 0)).thenReturn(null);
 
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
         assertNull(store.fetch("a", 0));
     }
 
@@ -411,7 +393,7 @@ public class MeteredWindowStoreTest {
     @Test
     public void shouldCloseUnderlyingStore() {
         doNothing().when(innerStoreMock).close();
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
 
         store.close();
     }
@@ -419,7 +401,7 @@ public class MeteredWindowStoreTest {
     @Test
     public void shouldRemoveMetricsOnClose() {
         doNothing().when(innerStoreMock).close();
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
 
         assertThat(storeMetrics(), not(empty()));
         store.close();
@@ -429,7 +411,7 @@ public class MeteredWindowStoreTest {
     @Test
     public void shouldRemoveMetricsEvenIfWrappedStoreThrowsOnClose() {
         doThrow(new RuntimeException("Oops!")).when(innerStoreMock).close();
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
 
         // There's always a "count" metric registered
         assertThat(storeMetrics(), not(empty()));
@@ -442,37 +424,41 @@ public class MeteredWindowStoreTest {
         assertThrows(NullPointerException.class, () -> store.put(null, "a", 1L));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerOnFetchIfKeyIsNull() {
         assertThrows(NullPointerException.class, () -> store.fetch(null, 0L, 1L));
     }
 
+    @SuppressWarnings("resource")
     @Test
     public void shouldThrowNullPointerOnBackwardFetchIfKeyIsNull() {
         assertThrows(NullPointerException.class, () -> store.backwardFetch(null, 0L, 1L));
     }
 
+    @SuppressWarnings("unused")
     @Test
     public void shouldTrackOpenIteratorsMetric() {
         when(innerStoreMock.all()).thenReturn(KeyValueIterators.emptyIterator());
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
 
         final KafkaMetric openIteratorsMetric = metric("num-open-iterators");
         assertThat(openIteratorsMetric, not(nullValue()));
 
         assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
 
-        try (final KeyValueIterator<Windowed<String>, String> iterator = store.all()) {
+        try (final KeyValueIterator<Windowed<String>, String> unused = store.all()) {
             assertThat((Long) openIteratorsMetric.metricValue(), equalTo(1L));
         }
 
         assertThat((Long) openIteratorsMetric.metricValue(), equalTo(0L));
     }
 
+    @SuppressWarnings("unused")
     @Test
     public void shouldTimeIteratorDuration() {
         when(innerStoreMock.all()).thenReturn(KeyValueIterators.emptyIterator());
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
 
         final KafkaMetric iteratorDurationAvgMetric = metric("iterator-duration-avg");
         final KafkaMetric iteratorDurationMaxMetric = metric("iterator-duration-max");
@@ -482,7 +468,7 @@ public class MeteredWindowStoreTest {
         assertThat((Double) iteratorDurationAvgMetric.metricValue(), equalTo(Double.NaN));
         assertThat((Double) iteratorDurationMaxMetric.metricValue(), equalTo(Double.NaN));
 
-        try (final KeyValueIterator<Windowed<String>, String> iterator = store.all()) {
+        try (final KeyValueIterator<Windowed<String>, String> unused = store.all()) {
             // nothing to do, just close immediately
             mockTime.sleep(2);
         }
@@ -490,7 +476,7 @@ public class MeteredWindowStoreTest {
         assertThat((double) iteratorDurationAvgMetric.metricValue(), equalTo(2.0 * TimeUnit.MILLISECONDS.toNanos(1)));
         assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(2.0 * TimeUnit.MILLISECONDS.toNanos(1)));
 
-        try (final KeyValueIterator<Windowed<String>, String> iterator = store.all()) {
+        try (final KeyValueIterator<Windowed<String>, String> unused = store.all()) {
             // nothing to do, just close immediately
             mockTime.sleep(3);
         }
@@ -499,10 +485,11 @@ public class MeteredWindowStoreTest {
         assertThat((double) iteratorDurationMaxMetric.metricValue(), equalTo(3.0 * TimeUnit.MILLISECONDS.toNanos(1)));
     }
 
+    @SuppressWarnings("unused")
     @Test
     public void shouldTrackOldestOpenIteratorTimestamp() {
         when(innerStoreMock.all()).thenReturn(KeyValueIterators.emptyIterator());
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
 
         final KafkaMetric oldestIteratorTimestampMetric = metric("oldest-iterator-open-since-ms");
         assertThat(oldestIteratorTimestampMetric, not(nullValue()));
@@ -512,7 +499,7 @@ public class MeteredWindowStoreTest {
         KeyValueIterator<Windowed<String>, String> second = null;
         final long secondTimestamp;
         try {
-            try (final KeyValueIterator<Windowed<String>, String> first = store.all()) {
+            try (final KeyValueIterator<Windowed<String>, String> unused = store.all()) {
                 final long oldestTimestamp = mockTime.milliseconds();
                 assertThat((Long) oldestIteratorTimestampMetric.metricValue(), equalTo(oldestTimestamp));
                 mockTime.sleep(100);

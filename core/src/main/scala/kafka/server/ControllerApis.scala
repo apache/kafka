@@ -47,7 +47,7 @@ import org.apache.kafka.common.protocol.Errors._
 import org.apache.kafka.common.protocol.{ApiKeys, ApiMessage, Errors}
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.resource.Resource.CLUSTER_NAME
-import org.apache.kafka.common.resource.ResourceType.{CLUSTER, TOPIC, USER}
+import org.apache.kafka.common.resource.ResourceType.{CLUSTER, GROUP, TOPIC, USER}
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.controller.ControllerRequestContext.requestTimeoutMsToDeadlineNs
@@ -56,8 +56,9 @@ import org.apache.kafka.image.publisher.ControllerRegistrationsPublisher
 import org.apache.kafka.metadata.{BrokerHeartbeatReply, BrokerRegistrationReply}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.auth.SecurityProtocol
+import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
-import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.server.common.{ApiMessageAndVersion, RequestLocal}
 
 import scala.jdk.CollectionConverters._
 
@@ -84,7 +85,7 @@ class ControllerApis(
   val configHelper = new ConfigHelper(metadataCache, config, metadataCache)
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
   val runtimeLoggerManager = new RuntimeLoggerManager(config.nodeId, logger.underlying)
-  private val aclApis = new AclApis(authHelper, authorizer, requestHelper, "controller", config)
+  private val aclApis = new AclApis(authHelper, authorizer, requestHelper, ProcessRole.ControllerRole, config)
 
   def isClosed: Boolean = aclApis.isClosed
 
@@ -186,7 +187,7 @@ class ControllerApis(
 
   def handleFetch(request: RequestChannel.Request): CompletableFuture[Unit] = {
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
-    handleRaftRequest(request, response => new FetchResponse(response.asInstanceOf[FetchResponseData]))
+    handleRaftRequest(request, response => FetchResponse.of(response.asInstanceOf[FetchResponseData]))
   }
 
   def handleFetchSnapshot(request: RequestChannel.Request): CompletableFuture[Unit] = {
@@ -481,6 +482,12 @@ class ControllerApis(
         } else {
           new ApiError(TOPIC_AUTHORIZATION_FAILED)
         }
+      case ConfigResource.Type.GROUP =>
+        if (authHelper.authorize(requestContext, ALTER_CONFIGS, GROUP, resource.name)) {
+          new ApiError(NONE)
+        } else {
+          new ApiError(GROUP_AUTHORIZATION_FAILED)
+        }
       case rt => new ApiError(INVALID_REQUEST, s"Unexpected resource type $rt.")
     }
   }
@@ -636,9 +643,7 @@ class ControllerApis(
       def createResponseCallback(requestThrottleMs: Int,
                                  e: Throwable): UnregisterBrokerResponse = {
         if (e != null) {
-          new UnregisterBrokerResponse(new UnregisterBrokerResponseData().
-            setThrottleTimeMs(requestThrottleMs).
-            setErrorCode(Errors.forException(e).code))
+          decommissionRequest.getErrorResponse(requestThrottleMs, e)
         } else {
           new UnregisterBrokerResponse(new UnregisterBrokerResponseData().
             setThrottleTimeMs(requestThrottleMs))
@@ -1090,11 +1095,11 @@ class ControllerApis(
 
   def handleRemoveRaftVoter(request: RequestChannel.Request): CompletableFuture[Unit] = {
     authHelper.authorizeClusterOperation(request, ALTER)
-    throw new UnsupportedVersionException("handleRemoveRaftVoter is not supported yet.")
+    handleRaftRequest(request, response => new RemoveRaftVoterResponse(response.asInstanceOf[RemoveRaftVoterResponseData]))
   }
 
   def handleUpdateRaftVoter(request: RequestChannel.Request): CompletableFuture[Unit] = {
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
-    throw new UnsupportedVersionException("handleUpdateRaftVoter is not supported yet.")
+    handleRaftRequest(request, response => new UpdateRaftVoterResponse(response.asInstanceOf[UpdateRaftVoterResponseData]))
   }
 }

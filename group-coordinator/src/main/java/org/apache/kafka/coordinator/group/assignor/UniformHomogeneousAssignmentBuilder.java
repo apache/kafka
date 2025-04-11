@@ -26,7 +26,6 @@ import org.apache.kafka.coordinator.group.modern.MemberAssignmentImpl;
 import org.apache.kafka.server.common.TopicIdPartition;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -49,17 +48,6 @@ import java.util.Set;
  *      Balance > Stickiness.
  */
 public class UniformHomogeneousAssignmentBuilder {
-    private static final Class<?> UNMODIFIABLE_MAP_CLASS = Collections.unmodifiableMap(new HashMap<>()).getClass();
-    private static final Class<?> EMPTY_MAP_CLASS = Collections.emptyMap().getClass();
-
-    /**
-     * @return True if the provided map is an UnmodifiableMap or EmptyMap. Those classes are not
-     * public hence we cannot use the `instanceof` operator.
-     */
-    private static boolean isImmutableMap(Map<?, ?> map) {
-        return UNMODIFIABLE_MAP_CLASS.isInstance(map) || EMPTY_MAP_CLASS.isInstance(map);
-    }
-
     /**
      * The assignment specification which includes member metadata.
      */
@@ -120,7 +108,7 @@ public class UniformHomogeneousAssignmentBuilder {
      */
     public GroupAssignment build() throws PartitionAssignorException {
         if (subscribedTopicIds.isEmpty()) {
-            return new GroupAssignment(Collections.emptyMap());
+            return new GroupAssignment(Map.of());
         }
 
         // Compute the list of unassigned partitions.
@@ -171,7 +159,7 @@ public class UniformHomogeneousAssignmentBuilder {
 
             // The assignor expects to receive the assignment as an immutable map. It leverages
             // this knowledge in order to avoid having to copy all assignments.
-            if (!isImmutableMap(oldAssignment)) {
+            if (!AssignorHelpers.isImmutableMap(oldAssignment)) {
                 throw new IllegalStateException("The assignor expect an immutable map.");
             }
 
@@ -196,7 +184,7 @@ public class UniformHomogeneousAssignmentBuilder {
                                 if (newAssignment == null) {
                                     // If the new assignment is null, we create a deep copy of the
                                     // original assignment so that we can alter it.
-                                    newAssignment = deepCopy(oldAssignment);
+                                    newAssignment = AssignorHelpers.deepCopyAssignment(oldAssignment);
                                 }
                                 // Remove the partition from the new assignment.
                                 Set<Integer> parts = newAssignment.get(topicId);
@@ -213,7 +201,7 @@ public class UniformHomogeneousAssignmentBuilder {
                     if (newAssignment == null) {
                         // If the new assignment is null, we create a deep copy of the
                         // original assignment so that we can alter it.
-                        newAssignment = deepCopy(oldAssignment);
+                        newAssignment = AssignorHelpers.deepCopyAssignment(oldAssignment);
                     }
                     // Remove the entire topic.
                     newAssignment.remove(topicId);
@@ -243,10 +231,10 @@ public class UniformHomogeneousAssignmentBuilder {
             int remainingQuota = unfilledMember.remainingQuota;
 
             Map<Uuid, Set<Integer>> newAssignment = targetAssignment.get(memberId).partitions();
-            if (isImmutableMap(newAssignment)) {
+            if (AssignorHelpers.isImmutableMap(newAssignment)) {
                 // If the new assignment is immutable, we must create a deep copy of it
                 // before altering it.
-                newAssignment = deepCopy(newAssignment);
+                newAssignment = AssignorHelpers.deepCopyAssignment(newAssignment);
                 targetAssignment.put(memberId, new MemberAssignmentImpl(newAssignment));
             }
 
@@ -262,14 +250,6 @@ public class UniformHomogeneousAssignmentBuilder {
         if (unassignedPartitionIndex < unassignedPartitions.size()) {
             throw new PartitionAssignorException("Partitions were left unassigned");
         }
-    }
-
-    private static Map<Uuid, Set<Integer>> deepCopy(Map<Uuid, Set<Integer>> map) {
-        Map<Uuid, Set<Integer>> copy = new HashMap<>(map.size());
-        for (Map.Entry<Uuid, Set<Integer>> entry : map.entrySet()) {
-            copy.put(entry.getKey(), new HashSet<>(entry.getValue()));
-        }
-        return copy;
     }
 
     private static class MemberWithRemainingQuota {

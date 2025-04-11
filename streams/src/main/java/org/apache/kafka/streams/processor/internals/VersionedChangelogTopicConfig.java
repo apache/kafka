@@ -59,7 +59,7 @@ public class VersionedChangelogTopicConfig extends InternalTopicConfig {
      * @return Properties to be used when creating the topic
      */
     @Override
-    public Map<String, String> getProperties(final Map<String, String> defaultProperties, final long windowStoreAdditionalRetentionMs) {
+    public Map<String, String> properties(final Map<String, String> defaultProperties, final long windowStoreAdditionalRetentionMs) {
         // internal topic config override rule: library overrides < global config overrides < per-topic config overrides
         final Map<String, String> topicConfig = new HashMap<>(VERSIONED_STORE_CHANGELOG_TOPIC_DEFAULT_OVERRIDES);
 

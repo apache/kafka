@@ -63,11 +63,11 @@ public class LeftOrRightValue<V1, V2> {
         return new LeftOrRightValue<>(null, rightValue);
     }
 
-    public V1 getLeftValue() {
+    public V1 leftValue() {
         return leftValue;
     }
 
-    public V2 getRightValue() {
+    public V2 rightValue() {
         return rightValue;
     }
 

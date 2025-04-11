@@ -25,13 +25,11 @@ import org.apache.kafka.coordinator.group.modern.MemberSubscriptionAndAssignment
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -56,7 +54,7 @@ public class GroupSpecImplTest {
         members.put(TEST_MEMBER,  new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            mkSet(topicId),
+            Set.of(topicId),
             Assignment.EMPTY
         ));
 
@@ -99,16 +97,16 @@ public class GroupSpecImplTest {
         Map<Uuid, Set<Integer>> topicPartitions = new HashMap<>();
         topicPartitions.put(
             topicId,
-            mkSet(0, 1)
+            Set.of(0, 1)
         );
         members.put(TEST_MEMBER, new MemberSubscriptionAndAssignmentImpl(
             Optional.empty(),
             Optional.empty(),
-            mkSet(topicId),
+            Set.of(topicId),
             new Assignment(topicPartitions)
         ));
 
         assertEquals(topicPartitions, groupSpec.memberAssignment(TEST_MEMBER).partitions());
-        assertEquals(Collections.emptyMap(), groupSpec.memberAssignment("unknown-member").partitions());
+        assertEquals(Map.of(), groupSpec.memberAssignment("unknown-member").partitions());
     }
 }

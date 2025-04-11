@@ -19,13 +19,14 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
-import org.apache.kafka.raft.internals.ReplicaKey;
 
 import org.slf4j.Logger;
 
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.Set;
+
+import static org.apache.kafka.raft.QuorumState.unattachedOrProspectiveCanGrantVote;
 
 /**
  * A replica is "unattached" when it doesn't know the leader or the leader's endpoint.
@@ -39,9 +40,11 @@ import java.util.Set;
  * either through random Fetch requests to the bootstrap servers or through BeginQuorumEpoch
  * request from the leader.
  */
+
 public class UnattachedState implements EpochState {
     private final int epoch;
     private final OptionalInt leaderId;
+    private final Optional<ReplicaKey> votedKey;
     private final Set<Integer> voters;
     private final long electionTimeoutMs;
     private final Timer electionTimer;
@@ -52,6 +55,7 @@ public class UnattachedState implements EpochState {
         Time time,
         int epoch,
         OptionalInt leaderId,
+        Optional<ReplicaKey> votedKey,
         Set<Integer> voters,
         Optional<LogOffsetMetadata> highWatermark,
         long electionTimeoutMs,
@@ -59,6 +63,7 @@ public class UnattachedState implements EpochState {
     ) {
         this.epoch = epoch;
         this.leaderId = leaderId;
+        this.votedKey = votedKey;
         this.voters = voters;
         this.highWatermark = highWatermark;
         this.electionTimeoutMs = electionTimeoutMs;
@@ -69,7 +74,9 @@ public class UnattachedState implements EpochState {
     @Override
     public ElectionState election() {
         if (leaderId.isPresent()) {
-            return ElectionState.withElectedLeader(epoch, leaderId.getAsInt(), voters);
+            return ElectionState.withElectedLeader(epoch, leaderId.getAsInt(), votedKey, voters);
+        } else if (votedKey.isPresent()) {
+            return ElectionState.withVotedCandidate(epoch, votedKey.get(), voters);
         } else {
             return ElectionState.withUnknownLeader(epoch, voters);
         }
@@ -88,6 +95,10 @@ public class UnattachedState implements EpochState {
     @Override
     public String name() {
         return "Unattached";
+    }
+
+    public Optional<ReplicaKey> votedKey() {
+        return votedKey;
     }
 
     public long electionTimeoutMs() {
@@ -110,33 +121,30 @@ public class UnattachedState implements EpochState {
     }
 
     @Override
-    public boolean canGrantVote(ReplicaKey candidateKey, boolean isLogUpToDate) {
-        if (leaderId.isPresent()) {
-            // If the leader id known it should behave similar to the follower state
-            log.debug(
-                "Rejecting vote request from candidate ({}) since we already have a leader {} in epoch {}",
-                candidateKey,
-                leaderId,
-                epoch
-            );
-            return false;
-        } else if (!isLogUpToDate) {
-            log.debug(
-                "Rejecting vote request from candidate ({}) since candidate epoch/offset is not up to date with us",
-                candidateKey
-            );
-        }
-
-        return isLogUpToDate;
+    public boolean canGrantVote(ReplicaKey replicaKey, boolean isLogUpToDate, boolean isPreVote) {
+        return unattachedOrProspectiveCanGrantVote(
+            leaderId,
+            votedKey,
+            epoch,
+            replicaKey,
+            isLogUpToDate,
+            isPreVote,
+            log
+        );
     }
 
     @Override
     public String toString() {
-        return "Unattached(" +
-            "epoch=" + epoch +
-            ", voters=" + voters +
-            ", electionTimeoutMs=" + electionTimeoutMs +
-            ')';
+        return String.format(
+            "UnattachedState(epoch=%d, leaderId=%s, votedKey=%s, voters=%s, " +
+            "electionTimeoutMs=%d, highWatermark=%s)",
+            epoch,
+            leaderId,
+            votedKey,
+            voters,
+            electionTimeoutMs,
+            highWatermark
+        );
     }
 
     @Override

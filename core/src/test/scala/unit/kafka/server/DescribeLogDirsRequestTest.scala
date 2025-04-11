@@ -25,7 +25,8 @@ import org.apache.kafka.common.message.DescribeLogDirsRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests._
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Test
+import org.junit.jupiter.params.ParameterizedTest
+import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 
@@ -38,16 +39,17 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
   val tp0 = new TopicPartition(topic, 0)
   val tp1 = new TopicPartition(topic, 1)
 
-  @Test
-  def testDescribeLogDirsRequest(): Unit = {
-    val onlineDir = new File(servers.head.config.logDirs.head).getAbsolutePath
-    val offlineDir = new File(servers.head.config.logDirs.tail.head).getAbsolutePath
-    servers.head.replicaManager.handleLogDirFailure(offlineDir)
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testDescribeLogDirsRequest(quorum: String): Unit = {
+    val onlineDir = new File(brokers.head.config.logDirs.head).getAbsolutePath
+    val offlineDir = new File(brokers.head.config.logDirs.tail.head).getAbsolutePath
+    brokers.head.replicaManager.handleLogDirFailure(offlineDir)
     createTopic(topic, partitionNum, 1)
-    TestUtils.generateAndProduceMessages(servers, topic, 10)
+    TestUtils.generateAndProduceMessages(brokers, topic, 10)
 
     val request = new DescribeLogDirsRequest.Builder(new DescribeLogDirsRequestData().setTopics(null)).build()
-    val response = connectAndReceive[DescribeLogDirsResponse](request, destination = controllerSocketServer)
+    val response = connectAndReceive[DescribeLogDirsResponse](request, destination = anySocketServer)
 
     assertEquals(logDirCount, response.data.results.size)
     val offlineResult = response.data.results.asScala.find(logDirResult => logDirResult.logDir == offlineDir).get
@@ -67,14 +69,14 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
     }.toMap
     val replicaInfo0 = onlinePartitionsMap(tp0)
     val replicaInfo1 = onlinePartitionsMap(tp1)
-    val log0 = servers.head.logManager.getLog(tp0).get
-    val log1 = servers.head.logManager.getLog(tp1).get
+    val log0 = brokers.head.logManager.getLog(tp0).get
+    val log1 = brokers.head.logManager.getLog(tp1).get
     assertEquals(log0.size, replicaInfo0.partitionSize)
     assertEquals(log1.size, replicaInfo1.partitionSize)
-    val logEndOffset = servers.head.logManager.getLog(tp0).get.logEndOffset
+    val logEndOffset = brokers.head.logManager.getLog(tp0).get.logEndOffset
     assertTrue(logEndOffset > 0, s"LogEndOffset '$logEndOffset' should be > 0")
-    assertEquals(servers.head.replicaManager.getLogEndOffsetLag(tp0, log0.logEndOffset, isFuture = false), replicaInfo0.offsetLag)
-    assertEquals(servers.head.replicaManager.getLogEndOffsetLag(tp1, log1.logEndOffset, isFuture = false), replicaInfo1.offsetLag)
+    assertEquals(brokers.head.replicaManager.getLogEndOffsetLag(tp0, log0.logEndOffset, isFuture = false), replicaInfo0.offsetLag)
+    assertEquals(brokers.head.replicaManager.getLogEndOffsetLag(tp1, log1.logEndOffset, isFuture = false), replicaInfo1.offsetLag)
   }
 
 }

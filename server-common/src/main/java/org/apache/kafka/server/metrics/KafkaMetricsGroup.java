@@ -24,7 +24,6 @@ import com.yammer.metrics.core.Meter;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.Timer;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -33,10 +32,21 @@ import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 public class KafkaMetricsGroup {
-    private final Class<?> klass;
+    private final String pkg;
+    private final String simpleName;
 
     public KafkaMetricsGroup(Class<?> klass) {
-        this.klass = klass;
+        this(klass.getPackage() == null ? "" : klass.getPackage().getName(), klass.getSimpleName().replaceAll("\\$$", ""));
+    }
+
+    /**
+     * This constructor allows caller to build metrics name with custom package and class name. This is useful to keep metrics
+     * compatibility in migrating scala code, since the difference of either package or class name will impact the mbean name and
+     * that will break the backward compatibility.
+     */
+    public KafkaMetricsGroup(String packageName, String simpleName) {
+        this.pkg = packageName;
+        this.simpleName = simpleName;
     }
 
     /**
@@ -47,12 +57,10 @@ public class KafkaMetricsGroup {
      * @return Sanitized metric name object.
      */
     public MetricName metricName(String name, Map<String, String> tags) {
-        String pkg = klass.getPackage() == null ? "" : klass.getPackage().getName();
-        String simpleName = klass.getSimpleName().replaceAll("\\$$", "");
-        return explicitMetricName(pkg, simpleName, name, tags);
+        return explicitMetricName(this.pkg, this.simpleName, name, tags);
     }
 
-    public static MetricName explicitMetricName(String group, String typeName,
+    private static MetricName explicitMetricName(String group, String typeName,
                                                 String name, Map<String, String> tags) {
         StringBuilder nameBuilder = new StringBuilder(100);
         nameBuilder.append(group);
@@ -76,7 +84,7 @@ public class KafkaMetricsGroup {
     }
 
     public <T> Gauge<T> newGauge(String name, Supplier<T> metric) {
-        return newGauge(name, metric, Collections.emptyMap());
+        return newGauge(name, metric, Map.of());
     }
 
     public <T> Gauge<T> newGauge(MetricName name, Supplier<T> metric) {
@@ -95,7 +103,7 @@ public class KafkaMetricsGroup {
 
     public final Meter newMeter(String name, String eventType,
                                 TimeUnit timeUnit) {
-        return newMeter(name, eventType, timeUnit, Collections.emptyMap());
+        return newMeter(name, eventType, timeUnit, Map.of());
     }
 
     public final Meter newMeter(MetricName metricName, String eventType, TimeUnit timeUnit) {
@@ -107,7 +115,7 @@ public class KafkaMetricsGroup {
     }
 
     public final Histogram newHistogram(String name) {
-        return newHistogram(name, true, Collections.emptyMap());
+        return newHistogram(name, true, Map.of());
     }
 
     public final Timer newTimer(String name, TimeUnit durationUnit, TimeUnit rateUnit, Map<String, String> tags) {
@@ -115,7 +123,7 @@ public class KafkaMetricsGroup {
     }
 
     public final Timer newTimer(String name, TimeUnit durationUnit, TimeUnit rateUnit) {
-        return newTimer(name, durationUnit, rateUnit, Collections.emptyMap());
+        return newTimer(name, durationUnit, rateUnit, Map.of());
     }
 
     public final Timer newTimer(MetricName metricName, TimeUnit durationUnit, TimeUnit rateUnit) {
@@ -127,7 +135,7 @@ public class KafkaMetricsGroup {
     }
 
     public final void removeMetric(String name) {
-        removeMetric(name, Collections.emptyMap());
+        removeMetric(name, Map.of());
     }
 
     public final void removeMetric(MetricName metricName) {
@@ -137,7 +145,7 @@ public class KafkaMetricsGroup {
     private static Optional<String> toMBeanName(Map<String, String> tags) {
         List<Map.Entry<String, String>> filteredTags = tags.entrySet().stream()
                 .filter(entry -> !entry.getValue().isEmpty())
-                .collect(Collectors.toList());
+                .toList();
         if (!filteredTags.isEmpty()) {
             String tagsString = filteredTags.stream()
                     .map(entry -> entry.getKey() + "=" + Sanitizer.jmxSanitize(entry.getValue()))
@@ -151,7 +159,7 @@ public class KafkaMetricsGroup {
     private static Optional<String> toScope(Map<String, String> tags) {
         List<Map.Entry<String, String>> filteredTags = tags.entrySet().stream()
                 .filter(entry -> !entry.getValue().isEmpty())
-                .collect(Collectors.toList());
+                .toList();
         if (!filteredTags.isEmpty()) {
             // convert dot to _ since reporters like Graphite typically use dot to represent hierarchy
             String tagsString = filteredTags.stream()

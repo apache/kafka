@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.Time;
 
 import java.util.List;
 import java.util.Locale;
+import java.util.Optional;
 
 /**
  * {@code ConsumerDelegateCreator} implements a quasi-factory pattern to allow the caller to remain unaware of the
@@ -42,7 +43,7 @@ import java.util.Locale;
  * it is using the new consumer group protocol (KIP-848) or if it should fall back to the existing, legacy group
  * protocol. This is based on the presence and value of the {@link ConsumerConfig#GROUP_PROTOCOL_CONFIG group.protocol}
  * configuration. If the value is present and equal to &quot;{@code consumer}&quot;, the {@link AsyncKafkaConsumer}
- * will be returned. Otherwise, the {@link LegacyKafkaConsumer} will be returned.
+ * will be returned. Otherwise, the {@link ClassicKafkaConsumer} will be returned.
  *
  *
  * <p/>
@@ -60,9 +61,9 @@ public class ConsumerDelegateCreator {
             GroupProtocol groupProtocol = GroupProtocol.valueOf(config.getString(ConsumerConfig.GROUP_PROTOCOL_CONFIG).toUpperCase(Locale.ROOT));
 
             if (groupProtocol == GroupProtocol.CONSUMER)
-                return new AsyncKafkaConsumer<>(config, keyDeserializer, valueDeserializer);
+                return new AsyncKafkaConsumer<>(config, keyDeserializer, valueDeserializer, Optional.empty());
             else
-                return new LegacyKafkaConsumer<>(config, keyDeserializer, valueDeserializer);
+                return new ClassicKafkaConsumer<>(config, keyDeserializer, valueDeserializer);
         } catch (KafkaException e) {
             throw e;
         } catch (Throwable t) {
@@ -94,7 +95,7 @@ public class ConsumerDelegateCreator {
                     metadata
                 );
             else
-                return new LegacyKafkaConsumer<>(
+                return new ClassicKafkaConsumer<>(
                     logContext,
                     time,
                     config,

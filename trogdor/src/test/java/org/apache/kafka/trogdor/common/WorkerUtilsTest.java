@@ -26,7 +26,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.errors.TopicExistsException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
-import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -42,6 +41,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -201,7 +201,7 @@ public class WorkerUtilsTest {
 
         WorkerUtils.createTopics(log, adminClient, topics, false);
 
-        assertEquals(Utils.mkSet(existingTopic, TEST_TOPIC), adminClient.listTopics().names().get());
+        assertEquals(Set.of(existingTopic, TEST_TOPIC), adminClient.listTopics().names().get());
     }
 
     @Test
@@ -274,7 +274,7 @@ public class WorkerUtilsTest {
         Collection<TopicPartition> topicPartitions =
             WorkerUtils.getMatchingTopicPartitions(adminClient, topic2, 0, 2);
         assertEquals(
-            Utils.mkSet(
+            Set.of(
                 new TopicPartition(topic2, 0), new TopicPartition(topic2, 1),
                 new TopicPartition(topic2, 2)
             ),
@@ -294,7 +294,7 @@ public class WorkerUtilsTest {
         Collection<TopicPartition> topicPartitions =
             WorkerUtils.getMatchingTopicPartitions(adminClient, ".*-topic$", 0, 1);
         assertEquals(
-            Utils.mkSet(
+            Set.of(
                 new TopicPartition(topic1, 0), new TopicPartition(topic1, 1),
                 new TopicPartition(topic2, 0), new TopicPartition(topic2, 1)
             ),

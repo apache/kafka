@@ -23,12 +23,12 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.common.utils.Utils.mkSortedSet;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T0_0_0;
 import static org.apache.kafka.streams.processor.internals.assignment.AssignmentTestUtils.NAMED_TASK_T0_0_1;
@@ -47,7 +47,7 @@ public class KafkaStreamsStateTest {
             mkSortedSet(NAMED_TASK_T0_0_0, NAMED_TASK_T0_0_1),
             mkSortedSet(),
             new TreeMap<>(mkMap(
-                mkEntry("c1", mkSet(NAMED_TASK_T0_0_0, NAMED_TASK_T0_0_1))
+                mkEntry("c1", Set.of(NAMED_TASK_T0_0_0, NAMED_TASK_T0_0_1))
             )),
             Optional.empty(),
             Optional.of(
@@ -78,7 +78,7 @@ public class KafkaStreamsStateTest {
             mkSortedSet(NAMED_TASK_T0_0_0, NAMED_TASK_T0_0_1),
             mkSortedSet(),
             new TreeMap<>(mkMap(
-                mkEntry("c1", mkSet(NAMED_TASK_T0_0_0, NAMED_TASK_T0_0_1))
+                mkEntry("c1", Set.of(NAMED_TASK_T0_0_0, NAMED_TASK_T0_0_1))
             )),
             Optional.empty(),
             Optional.empty(),

@@ -18,7 +18,6 @@ package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
-import org.apache.kafka.clients.consumer.OffsetResetStrategy;
 import org.apache.kafka.common.IsolationLevel;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
@@ -216,13 +215,13 @@ public class CompletedFetchTest {
     private CompletedFetch newCompletedFetch(long fetchOffset,
                                              FetchResponseData.PartitionData partitionData) {
         LogContext logContext = new LogContext();
-        SubscriptionState subscriptions = new SubscriptionState(logContext, OffsetResetStrategy.NONE);
+        SubscriptionState subscriptions = new SubscriptionState(logContext, AutoOffsetResetStrategy.NONE);
         FetchMetricsRegistry metricsRegistry = new FetchMetricsRegistry();
         FetchMetricsManager metrics = new FetchMetricsManager(new Metrics(), metricsRegistry);
         FetchMetricsAggregator metricAggregator = new FetchMetricsAggregator(metrics, Collections.singleton(TP));
 
         return new CompletedFetch(
-                logContext,
+                logContext.logger(CompletedFetch.class),
                 subscriptions,
                 BufferSupplier.create(),
                 TP,
@@ -233,11 +232,11 @@ public class CompletedFetchTest {
     }
 
     private static Deserializers<UUID, UUID> newUuidDeserializers() {
-        return new Deserializers<>(new UUIDDeserializer(), new UUIDDeserializer());
+        return new Deserializers<>(new UUIDDeserializer(), new UUIDDeserializer(), null);
     }
 
     private static Deserializers<String, String> newStringDeserializers() {
-        return new Deserializers<>(new StringDeserializer(), new StringDeserializer());
+        return new Deserializers<>(new StringDeserializer(), new StringDeserializer(), null);
     }
 
     private static FetchConfig newFetchConfig(IsolationLevel isolationLevel, boolean checkCrcs) {

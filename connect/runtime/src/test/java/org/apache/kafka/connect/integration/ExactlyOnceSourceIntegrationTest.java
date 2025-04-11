@@ -29,7 +29,8 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.config.ConfigDef;
-import org.apache.kafka.common.errors.ProducerFencedException;
+import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.errors.InvalidProducerEpochException;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourceType;
@@ -42,6 +43,7 @@ import org.apache.kafka.connect.runtime.WorkerConfig;
 import org.apache.kafka.connect.runtime.distributed.DistributedConfig;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfo;
 import org.apache.kafka.connect.runtime.rest.entities.ConfigInfos;
+import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
 import org.apache.kafka.connect.runtime.rest.errors.ConnectRestException;
 import org.apache.kafka.connect.source.SourceConnector;
 import org.apache.kafka.connect.source.SourceRecord;
@@ -50,6 +52,10 @@ import org.apache.kafka.connect.storage.StringConverter;
 import org.apache.kafka.connect.util.clusters.ConnectAssertions;
 import org.apache.kafka.connect.util.clusters.EmbeddedConnectCluster;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
+import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.server.config.KRaftConfigs;
+import org.apache.kafka.server.config.ServerConfigs;
+import org.apache.kafka.test.NoRetryException;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
@@ -78,11 +84,11 @@ import static org.apache.kafka.clients.producer.ProducerConfig.BOOTSTRAP_SERVERS
 import static org.apache.kafka.clients.producer.ProducerConfig.CLIENT_ID_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.TRANSACTIONAL_ID_CONFIG;
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.CUSTOM_EXACTLY_ONCE_SUPPORT_CONFIG;
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.CUSTOM_TRANSACTION_BOUNDARIES_CONFIG;
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.MAX_MESSAGES_PER_SECOND_CONFIG;
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.MESSAGES_PER_POLL_CONFIG;
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.CUSTOM_EXACTLY_ONCE_SUPPORT_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.CUSTOM_TRANSACTION_BOUNDARIES_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.MAX_MESSAGES_PER_SECOND_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.MESSAGES_PER_POLL_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_ADMIN_OVERRIDES_PREFIX;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLIENT_CONSUMER_OVERRIDES_PREFIX;
@@ -116,6 +122,7 @@ public class ExactlyOnceSourceIntegrationTest {
 
     private static final int CONSUME_RECORDS_TIMEOUT_MS = 60_000;
     private static final int SOURCE_TASK_PRODUCE_TIMEOUT_MS = 30_000;
+    private static final int ACL_PROPAGATION_TIMEOUT_MS = 30_000;
     private static final int DEFAULT_NUM_WORKERS = 3;
 
     // Tests require that a minimum but not unreasonably large number of records are sourced.
@@ -140,7 +147,7 @@ public class ExactlyOnceSourceIntegrationTest {
         brokerProps.put("transaction.state.log.replication.factor", "1");
         brokerProps.put("transaction.state.log.min.isr", "1");
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by Kafka
         connectBuilder = new EmbeddedConnectCluster.Builder()
                 .numWorkers(DEFAULT_NUM_WORKERS)
                 .numBrokers(1)
@@ -159,7 +166,7 @@ public class ExactlyOnceSourceIntegrationTest {
     @AfterEach
     public void close() {
         try {
-            // stop all Connect, Kafka and Zk threads.
+            // stop the Connect cluster and its backing Kafka cluster.
             connect.stop();
         } finally {
             // Clear the handle for the connector. Fun fact: if you don't do this, your tests become quite flaky.
@@ -176,7 +183,7 @@ public class ExactlyOnceSourceIntegrationTest {
         startConnect();
 
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getName());
         props.put(TASKS_MAX_CONFIG, "1");
         props.put(TOPIC_CONFIG, "topic");
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -187,8 +194,8 @@ public class ExactlyOnceSourceIntegrationTest {
         props.put(EXACTLY_ONCE_SUPPORT_CONFIG, "required");
 
         // Connector will return null from SourceConnector::exactlyOnceSupport
-        props.put(CUSTOM_EXACTLY_ONCE_SUPPORT_CONFIG, MonitorableSourceConnector.EXACTLY_ONCE_NULL);
-        ConfigInfos validation = connect.validateConnectorConfig(MonitorableSourceConnector.class.getSimpleName(), props);
+        props.put(CUSTOM_EXACTLY_ONCE_SUPPORT_CONFIG, TestableSourceConnector.EXACTLY_ONCE_NULL);
+        ConfigInfos validation = connect.validateConnectorConfig(TestableSourceConnector.class.getSimpleName(), props);
         assertEquals(1, validation.errorCount(),
                 "Preflight validation should have exactly one error");
         ConfigInfo propertyValidation = findConfigInfo(EXACTLY_ONCE_SUPPORT_CONFIG, validation);
@@ -196,56 +203,56 @@ public class ExactlyOnceSourceIntegrationTest {
                 "Preflight validation for exactly-once support property should have at least one error message");
 
         // Connector will return UNSUPPORTED from SourceConnector::exactlyOnceSupport
-        props.put(CUSTOM_EXACTLY_ONCE_SUPPORT_CONFIG, MonitorableSourceConnector.EXACTLY_ONCE_UNSUPPORTED);
-        validation = connect.validateConnectorConfig(MonitorableSourceConnector.class.getSimpleName(), props);
+        props.put(CUSTOM_EXACTLY_ONCE_SUPPORT_CONFIG, TestableSourceConnector.EXACTLY_ONCE_UNSUPPORTED);
+        validation = connect.validateConnectorConfig(TestableSourceConnector.class.getSimpleName(), props);
         assertEquals(1, validation.errorCount(), "Preflight validation should have exactly one error");
         propertyValidation = findConfigInfo(EXACTLY_ONCE_SUPPORT_CONFIG, validation);
         assertFalse(propertyValidation.configValue().errors().isEmpty(), 
                 "Preflight validation for exactly-once support property should have at least one error message");
 
         // Connector will throw an exception from SourceConnector::exactlyOnceSupport
-        props.put(CUSTOM_EXACTLY_ONCE_SUPPORT_CONFIG, MonitorableSourceConnector.EXACTLY_ONCE_FAIL);
-        validation = connect.validateConnectorConfig(MonitorableSourceConnector.class.getSimpleName(), props);
+        props.put(CUSTOM_EXACTLY_ONCE_SUPPORT_CONFIG, TestableSourceConnector.EXACTLY_ONCE_FAIL);
+        validation = connect.validateConnectorConfig(TestableSourceConnector.class.getSimpleName(), props);
         assertEquals(1, validation.errorCount(), "Preflight validation should have exactly one error");
         propertyValidation = findConfigInfo(EXACTLY_ONCE_SUPPORT_CONFIG, validation);
         assertFalse(propertyValidation.configValue().errors().isEmpty(),
                 "Preflight validation for exactly-once support property should have at least one error message");
 
         // Connector will return SUPPORTED from SourceConnector::exactlyOnceSupport
-        props.put(CUSTOM_EXACTLY_ONCE_SUPPORT_CONFIG, MonitorableSourceConnector.EXACTLY_ONCE_SUPPORTED);
-        validation = connect.validateConnectorConfig(MonitorableSourceConnector.class.getSimpleName(), props);
+        props.put(CUSTOM_EXACTLY_ONCE_SUPPORT_CONFIG, TestableSourceConnector.EXACTLY_ONCE_SUPPORTED);
+        validation = connect.validateConnectorConfig(TestableSourceConnector.class.getSimpleName(), props);
         assertEquals(0, validation.errorCount(), "Preflight validation should have zero errors");
 
         // Test out the transaction boundary definition property
         props.put(TRANSACTION_BOUNDARY_CONFIG, CONNECTOR.toString());
 
         // Connector will return null from SourceConnector::canDefineTransactionBoundaries
-        props.put(CUSTOM_TRANSACTION_BOUNDARIES_CONFIG, MonitorableSourceConnector.TRANSACTION_BOUNDARIES_NULL);
-        validation = connect.validateConnectorConfig(MonitorableSourceConnector.class.getSimpleName(), props);
+        props.put(CUSTOM_TRANSACTION_BOUNDARIES_CONFIG, TestableSourceConnector.TRANSACTION_BOUNDARIES_NULL);
+        validation = connect.validateConnectorConfig(TestableSourceConnector.class.getSimpleName(), props);
         assertEquals(1, validation.errorCount(), "Preflight validation should have exactly one error");
         propertyValidation = findConfigInfo(TRANSACTION_BOUNDARY_CONFIG, validation);
         assertFalse(propertyValidation.configValue().errors().isEmpty(),
                 "Preflight validation for transaction boundary property should have at least one error message");
 
         // Connector will return UNSUPPORTED from SourceConnector::canDefineTransactionBoundaries
-        props.put(CUSTOM_TRANSACTION_BOUNDARIES_CONFIG, MonitorableSourceConnector.TRANSACTION_BOUNDARIES_UNSUPPORTED);
-        validation = connect.validateConnectorConfig(MonitorableSourceConnector.class.getSimpleName(), props);
+        props.put(CUSTOM_TRANSACTION_BOUNDARIES_CONFIG, TestableSourceConnector.TRANSACTION_BOUNDARIES_UNSUPPORTED);
+        validation = connect.validateConnectorConfig(TestableSourceConnector.class.getSimpleName(), props);
         assertEquals(1, validation.errorCount(), "Preflight validation should have exactly one error");
         propertyValidation = findConfigInfo(TRANSACTION_BOUNDARY_CONFIG, validation);
         assertFalse(propertyValidation.configValue().errors().isEmpty(),
                 "Preflight validation for transaction boundary property should have at least one error message");
 
         // Connector will throw an exception from SourceConnector::canDefineTransactionBoundaries
-        props.put(CUSTOM_TRANSACTION_BOUNDARIES_CONFIG, MonitorableSourceConnector.TRANSACTION_BOUNDARIES_FAIL);
-        validation = connect.validateConnectorConfig(MonitorableSourceConnector.class.getSimpleName(), props);
+        props.put(CUSTOM_TRANSACTION_BOUNDARIES_CONFIG, TestableSourceConnector.TRANSACTION_BOUNDARIES_FAIL);
+        validation = connect.validateConnectorConfig(TestableSourceConnector.class.getSimpleName(), props);
         assertEquals(1, validation.errorCount(), "Preflight validation should have exactly one error");
         propertyValidation = findConfigInfo(TRANSACTION_BOUNDARY_CONFIG, validation);
         assertFalse(propertyValidation.configValue().errors().isEmpty(), 
                 "Preflight validation for transaction boundary property should have at least one error message");
 
         // Connector will return SUPPORTED from SourceConnector::canDefineTransactionBoundaries
-        props.put(CUSTOM_TRANSACTION_BOUNDARIES_CONFIG, MonitorableSourceConnector.TRANSACTION_BOUNDARIES_SUPPORTED);
-        validation = connect.validateConnectorConfig(MonitorableSourceConnector.class.getSimpleName(), props);
+        props.put(CUSTOM_TRANSACTION_BOUNDARIES_CONFIG, TestableSourceConnector.TRANSACTION_BOUNDARIES_SUPPORTED);
+        validation = connect.validateConnectorConfig(TestableSourceConnector.class.getSimpleName(), props);
         assertEquals(0, validation.errorCount(), "Preflight validation should have zero errors");
     }
 
@@ -267,7 +274,7 @@ public class ExactlyOnceSourceIntegrationTest {
         int numTasks = 1;
 
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getName());
         props.put(TASKS_MAX_CONFIG, Integer.toString(numTasks));
         props.put(TOPIC_CONFIG, topic);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -326,7 +333,7 @@ public class ExactlyOnceSourceIntegrationTest {
         int numTasks = 1;
 
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getName());
         props.put(TASKS_MAX_CONFIG, Integer.toString(numTasks));
         props.put(TOPIC_CONFIG, topic);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -386,14 +393,14 @@ public class ExactlyOnceSourceIntegrationTest {
         connect.kafka().createTopic(topic, 3);
 
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getName());
         props.put(TASKS_MAX_CONFIG, "1");
         props.put(TOPIC_CONFIG, topic);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(NAME_CONFIG, CONNECTOR_NAME);
         props.put(TRANSACTION_BOUNDARY_CONFIG, CONNECTOR.toString());
-        props.put(CUSTOM_TRANSACTION_BOUNDARIES_CONFIG, MonitorableSourceConnector.TRANSACTION_BOUNDARIES_SUPPORTED);
+        props.put(CUSTOM_TRANSACTION_BOUNDARIES_CONFIG, TestableSourceConnector.TRANSACTION_BOUNDARIES_SUPPORTED);
         props.put(MESSAGES_PER_POLL_CONFIG, MESSAGES_PER_POLL);
         props.put(MAX_MESSAGES_PER_SECOND_CONFIG, MESSAGES_PER_SECOND);
 
@@ -488,7 +495,7 @@ public class ExactlyOnceSourceIntegrationTest {
         int numTasks = 1;
 
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getName());
         props.put(TASKS_MAX_CONFIG, Integer.toString(numTasks));
         props.put(TOPIC_CONFIG, topic);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -555,7 +562,7 @@ public class ExactlyOnceSourceIntegrationTest {
         connect.kafka().createTopic(topic, 3);
 
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getName());
         props.put(TOPIC_CONFIG, topic);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -624,17 +631,18 @@ public class ExactlyOnceSourceIntegrationTest {
      */
     @Test
     public void testTasksFailOnInabilityToFence() throws Exception {
-        brokerProps.put("authorizer.class.name", "kafka.security.authorizer.AclAuthorizer");
-        brokerProps.put("sasl.enabled.mechanisms", "PLAIN");
-        brokerProps.put("sasl.mechanism.inter.broker.protocol", "PLAIN");
-        brokerProps.put("security.inter.broker.protocol", "SASL_PLAINTEXT");
-        brokerProps.put("listeners", "SASL_PLAINTEXT://localhost:0");
-        brokerProps.put("listener.name.sasl_plaintext.plain.sasl.jaas.config",
-                "org.apache.kafka.common.security.plain.PlainLoginModule required "
-                        + "username=\"super\" "
-                        + "password=\"super_pwd\" "
-                        + "user_connector=\"connector_pwd\" "
-                        + "user_super=\"super_pwd\";");
+        brokerProps.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "CONTROLLER:SASL_PLAINTEXT,EXTERNAL:SASL_PLAINTEXT");
+        brokerProps.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, "org.apache.kafka.metadata.authorizer.StandardAuthorizer");
+        brokerProps.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, "PLAIN");
+        brokerProps.put(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN");
+        brokerProps.put(KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG, "PLAIN");
+        String listenerSaslJaasConfig = "org.apache.kafka.common.security.plain.PlainLoginModule required "
+                + "username=\"super\" "
+                + "password=\"super_pwd\" "
+                + "user_connector=\"connector_pwd\" "
+                + "user_super=\"super_pwd\";";
+        brokerProps.put("listener.name.external.plain.sasl.jaas.config", listenerSaslJaasConfig);
+        brokerProps.put("listener.name.controller.plain.sasl.jaas.config", listenerSaslJaasConfig);
         brokerProps.put("super.users", "User:super");
 
         Map<String, String> superUserClientConfig = new HashMap<>();
@@ -661,7 +669,7 @@ public class ExactlyOnceSourceIntegrationTest {
 
         Map<String, String> props = new HashMap<>();
         int tasksMax = 2; // Use two tasks since single-task connectors don't require zombie fencing
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getName());
         props.put(TOPIC_CONFIG, topic);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
         props.put(VALUE_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -694,12 +702,30 @@ public class ExactlyOnceSourceIntegrationTest {
             )).all().get();
         }
 
-        StartAndStopLatch connectorStart = connectorAndTaskStart(tasksMax);
-
         log.info("Bringing up connector with fresh slate; fencing should not be necessary");
         connect.configureConnector(CONNECTOR_NAME, props);
-        assertConnectorStarted(connectorStart);
-        // Verify that the connector and its tasks have been able to start successfully
+
+        // Hack: There is a small chance that our recent ACL updates for the connector have
+        // not yet been propagated across the entire Kafka cluster, and that our connector
+        // will fail on startup when it tries to list the end offsets of the worker's offsets topic
+        // So, we implement some retry logic here to add a layer of resiliency in that case
+        waitForCondition(
+                () -> {
+                    ConnectorStateInfo status = connect.connectorStatus(CONNECTOR_NAME);
+                    if ("RUNNING".equals(status.connector().state())) {
+                        return true;
+                    } else if ("FAILED".equals(status.connector().state())) {
+                        log.debug("Restarting failed connector {}", CONNECTOR_NAME);
+                        connect.restartConnector(CONNECTOR_NAME);
+                    }
+                    return false;
+                },
+                ACL_PROPAGATION_TIMEOUT_MS,
+                "Connector was not able to start in time, "
+                        + "or ACL updates were not propagated across the Kafka cluster soon enough"
+        );
+
+        // Also verify that the connector's tasks have been able to start successfully
         connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, tasksMax, "Connector and task should have started successfully");
 
         log.info("Reconfiguring connector; fencing should be necessary, and tasks should fail to start");
@@ -725,8 +751,39 @@ public class ExactlyOnceSourceIntegrationTest {
 
         log.info("Restarting connector after tweaking its ACLs; fencing should succeed this time");
         connect.restartConnectorAndTasks(CONNECTOR_NAME, false, true, false);
+
         // Verify that the connector and its tasks have been able to restart successfully
-        connect.assertions().assertConnectorAndExactlyNumTasksAreRunning(CONNECTOR_NAME, tasksMax, "Connector and task should have restarted successfully");
+        // Use the same retry logic as above, in case there is a delay in the propagation of our ACL updates
+        waitForCondition(
+                () -> {
+                    ConnectorStateInfo status = connect.connectorStatus(CONNECTOR_NAME);
+                    boolean connectorRunning = "RUNNING".equals(status.connector().state());
+                    boolean allTasksRunning = status.tasks().stream()
+                            .allMatch(t -> "RUNNING".equals(t.state()));
+                    boolean expectedNumTasks = status.tasks().size() == tasksMax;
+                    if (connectorRunning && allTasksRunning && expectedNumTasks) {
+                        return true;
+                    } else {
+                        if (!connectorRunning) {
+                            if ("FAILED".equals(status.connector().state())) {
+                                // Only task failures are expected ;if the connector has failed, something
+                                // else is wrong and we should fail the test immediately
+                                throw new NoRetryException(
+                                        new AssertionError("Connector " + CONNECTOR_NAME + " has failed unexpectedly")
+                                );
+                            }
+                        }
+                        // Restart all failed tasks
+                        status.tasks().stream()
+                                .filter(t -> "FAILED".equals(t.state()))
+                                .map(ConnectorStateInfo.TaskState::id)
+                                .forEach(t -> connect.restartTask(CONNECTOR_NAME, t));
+                        return false;
+                    }
+                },
+                ConnectAssertions.CONNECTOR_SETUP_DURATION_MS,
+                "Connector and task should have restarted successfully"
+        );
     }
 
     /**
@@ -767,7 +824,7 @@ public class ExactlyOnceSourceIntegrationTest {
             int numTasks = 1;
 
             Map<String, String> props = new HashMap<>();
-            props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getName());
+            props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getName());
             props.put(TASKS_MAX_CONFIG, Integer.toString(numTasks));
             props.put(TOPIC_CONFIG, topic);
             props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());
@@ -1066,7 +1123,7 @@ public class ExactlyOnceSourceIntegrationTest {
             @SuppressWarnings("unchecked")
             Map<String, Object> partition = assertAndCast(key.get(1), Map.class, "Key[1]");
             Object taskIdObject = partition.get("task.id");
-            assertNotNull(taskIdObject, "Serialized source partition should contain 'task.id' field from MonitorableSourceConnector");
+            assertNotNull(taskIdObject, "Serialized source partition should contain 'task.id' field from TestableSourceConnector");
             String taskId = assertAndCast(taskIdObject, String.class, "task ID");
             assertTrue(taskId.startsWith(CONNECTOR_NAME + "-"), "task ID should match pattern '<connectorName>-<taskId>");
             String taskIdRemainder = taskId.substring(CONNECTOR_NAME.length() + 1);
@@ -1081,7 +1138,7 @@ public class ExactlyOnceSourceIntegrationTest {
             Map<String, Object> value = assertAndCast(valueObject, Map.class, "Value");
 
             Object seqnoObject = value.get("saved");
-            assertNotNull(seqnoObject, "Serialized source offset should contain 'seqno' field from MonitorableSourceConnector");
+            assertNotNull(seqnoObject, "Serialized source offset should contain 'seqno' field from TestableSourceConnector");
             long seqno = assertAndCast(seqnoObject, Long.class, "Seqno offset field");
 
             result.computeIfAbsent(taskNum, t -> new ArrayList<>()).add(seqno);
@@ -1106,7 +1163,7 @@ public class ExactlyOnceSourceIntegrationTest {
     private StartAndStopLatch connectorAndTaskStart(int numTasks) {
         connectorHandle.clearTasks();
         IntStream.range(0, numTasks)
-                .mapToObj(i -> MonitorableSourceConnector.taskId(CONNECTOR_NAME, i))
+                .mapToObj(i -> TestableSourceConnector.taskId(CONNECTOR_NAME, i))
                 .forEach(connectorHandle::taskHandle);
         return connectorHandle.expectedStarts(1, true);
     }
@@ -1168,7 +1225,7 @@ public class ExactlyOnceSourceIntegrationTest {
     private void assertTransactionalProducerIsFenced(KafkaProducer<byte[], byte[]> producer, String topic) {
         producer.beginTransaction();
         assertThrows(
-                ProducerFencedException.class,
+                InvalidProducerEpochException.class,
                 () -> {
                     producer.send(new ProducerRecord<>(topic, new byte[] {69}, new byte[] {96}));
                     producer.commitTransaction();

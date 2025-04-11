@@ -105,7 +105,7 @@ public final class FileRawSnapshotTest {
             int countBatches = 0;
             int countRecords = 0;
 
-            Iterator<RecordBatch> batches = Utils.covariantCast(snapshot.records().batchIterator());
+            var batches = snapshot.records().batchIterator();
             while (batches.hasNext()) {
                 RecordBatch batch = batches.next();
                 countBatches += 1;
@@ -191,7 +191,7 @@ public final class FileRawSnapshotTest {
             int countBatches = 0;
             int countRecords = 0;
 
-            Iterator<RecordBatch> batches = Utils.covariantCast(snapshot.records().batchIterator());
+            var batches = snapshot.records().batchIterator();
             while (batches.hasNext()) {
                 RecordBatch batch = batches.next();
                 countBatches += 1;
@@ -245,7 +245,7 @@ public final class FileRawSnapshotTest {
             int countBatches = 0;
             int countRecords = 0;
 
-            Iterator<RecordBatch> batches = Utils.covariantCast(snapshot.records().batchIterator());
+            var batches = snapshot.records().batchIterator();
             while (batches.hasNext()) {
                 RecordBatch batch = batches.next();
                 countBatches += 1;

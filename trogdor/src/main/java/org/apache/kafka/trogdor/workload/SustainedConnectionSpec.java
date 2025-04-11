@@ -65,7 +65,7 @@ import java.util.Map;
  *   }
  *  }
  */
-public class SustainedConnectionSpec extends TaskSpec {
+public final class SustainedConnectionSpec extends TaskSpec {
     private final String clientNode;
     private final String bootstrapServers;
     private final Map<String, String> producerConf;
@@ -81,7 +81,6 @@ public class SustainedConnectionSpec extends TaskSpec {
     private final int numThreads;
     private final int refreshRateMs;
 
-    @SuppressWarnings("this-escape")
     @JsonCreator
     public SustainedConnectionSpec(
             @JsonProperty("startMs") long startMs,

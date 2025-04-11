@@ -116,31 +116,31 @@ public class AbstractPartitionAssignorTest {
     public void testUseRackAwareAssignment() {
         AbstractPartitionAssignor assignor = new RangeAssignor();
         String[] racks = new String[] {"a", "b", "c"};
-        Set<String> allRacks = Utils.mkSet(racks);
-        Set<String> twoRacks = Utils.mkSet("a", "b");
+        Set<String> allRacks = Set.of(racks);
+        Set<String> twoRacks = Set.of("a", "b");
         Map<TopicPartition, Set<String>> partitionsOnAllRacks = new HashMap<>();
         Map<TopicPartition, Set<String>> partitionsOnSubsetOfRacks = new HashMap<>();
         for (int i = 0; i < 10; i++) {
             TopicPartition tp = new TopicPartition("topic", i);
             partitionsOnAllRacks.put(tp, allRacks);
-            partitionsOnSubsetOfRacks.put(tp, Utils.mkSet(racks[i % racks.length]));
+            partitionsOnSubsetOfRacks.put(tp, Set.of(racks[i % racks.length]));
         }
         assertFalse(assignor.useRackAwareAssignment(Collections.emptySet(), Collections.emptySet(), partitionsOnAllRacks));
         assertFalse(assignor.useRackAwareAssignment(Collections.emptySet(), allRacks, partitionsOnAllRacks));
         assertFalse(assignor.useRackAwareAssignment(allRacks, Collections.emptySet(), Collections.emptyMap()));
-        assertFalse(assignor.useRackAwareAssignment(Utils.mkSet("d"), allRacks, partitionsOnAllRacks));
+        assertFalse(assignor.useRackAwareAssignment(Set.of("d"), allRacks, partitionsOnAllRacks));
         assertFalse(assignor.useRackAwareAssignment(allRacks, allRacks, partitionsOnAllRacks));
         assertFalse(assignor.useRackAwareAssignment(twoRacks, allRacks, partitionsOnAllRacks));
-        assertFalse(assignor.useRackAwareAssignment(Utils.mkSet("a", "d"), allRacks, partitionsOnAllRacks));
+        assertFalse(assignor.useRackAwareAssignment(Set.of("a", "d"), allRacks, partitionsOnAllRacks));
         assertTrue(assignor.useRackAwareAssignment(allRacks, allRacks, partitionsOnSubsetOfRacks));
         assertTrue(assignor.useRackAwareAssignment(twoRacks, allRacks, partitionsOnSubsetOfRacks));
-        assertTrue(assignor.useRackAwareAssignment(Utils.mkSet("a", "d"), allRacks, partitionsOnSubsetOfRacks));
+        assertTrue(assignor.useRackAwareAssignment(Set.of("a", "d"), allRacks, partitionsOnSubsetOfRacks));
 
         assignor.preferRackAwareLogic = true;
         assertFalse(assignor.useRackAwareAssignment(Collections.emptySet(), Collections.emptySet(), partitionsOnAllRacks));
         assertFalse(assignor.useRackAwareAssignment(Collections.emptySet(), allRacks, partitionsOnAllRacks));
         assertFalse(assignor.useRackAwareAssignment(allRacks, Collections.emptySet(), Collections.emptyMap()));
-        assertFalse(assignor.useRackAwareAssignment(Utils.mkSet("d"), allRacks, partitionsOnAllRacks));
+        assertFalse(assignor.useRackAwareAssignment(Set.of("d"), allRacks, partitionsOnAllRacks));
         assertTrue(assignor.useRackAwareAssignment(allRacks, allRacks, partitionsOnAllRacks));
         assertTrue(assignor.useRackAwareAssignment(twoRacks, allRacks, partitionsOnAllRacks));
         assertTrue(assignor.useRackAwareAssignment(allRacks, allRacks, partitionsOnSubsetOfRacks));

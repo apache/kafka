@@ -1,0 +1,67 @@
+# Licensed to the Apache Software Foundation (ASF) under one
+# or more contributor license agreements.  See the NOTICE file
+# distributed with this work for additional information
+# regarding copyright ownership.  The ASF licenses this file
+# to you under the Apache License, Version 2.0 (the
+# "License"); you may not use this file except in compliance
+# with the License.  You may obtain a copy of the License at
+#
+#   http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing,
+# software distributed under the License is distributed on an
+# "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+# KIND, either express or implied.  See the License for the
+# specific language governing permissions and limitations
+# under the License.
+#
+---
+name: "Update Commit Status Check"
+description: "Update the status of a commit check using the GH CLI"
+inputs:
+  # Composite actions do not support typed parameters. Everything is treated as a string
+  # See: https://github.com/actions/runner/issues/2238
+  gh-token:
+    description: "The GitHub token for use with the CLI"
+    required: true
+  repository:
+    description: "The GitHub repository"
+    required: true
+    default: "apache/kafka"
+  commit_sha:
+    description: "The SHA of the commit we are updating"
+    required: true
+  url:
+    description: "The URL of the status check"
+    required: false
+    default: ""
+  description:
+    description: "The text to display next to the check"
+    default: ""
+    required: false
+  context:
+    description: "The name of the status check"
+    required: true
+  state:
+    description: "The state of the check. Can be one of: error, failure, pending, success"
+    required: true
+
+runs:
+  using: "composite"
+  steps:
+    - name: Update Check
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.gh-token }}
+        REPO: ${{ inputs.repository }}
+        COMMIT_SHA: ${{ inputs.commit_sha }}
+        STATE: ${{ inputs.state }}
+        URL: ${{ inputs.url }}
+        DESCRIPTION: ${{ inputs.description }}
+        CONTEXT: ${{ inputs.context }}
+      run: |
+        gh api --method POST -H "Accept: application/vnd.github+json" -H "X-GitHub-Api-Version: 2022-11-28" \
+        /repos/$REPO/statuses/$COMMIT_SHA \
+        -f "state=$STATE" -f "target_url=$URL" \
+        -f "description=$DESCRIPTION" \
+        -f "context=$CONTEXT"

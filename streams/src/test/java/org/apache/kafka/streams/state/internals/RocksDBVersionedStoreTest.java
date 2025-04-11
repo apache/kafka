@@ -28,7 +28,6 @@ import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.ResultOrder;
 import org.apache.kafka.streams.state.VersionedRecord;
 import org.apache.kafka.streams.state.VersionedRecordIterator;
@@ -69,7 +68,7 @@ public class RocksDBVersionedStoreTest {
     private static final String DROPPED_RECORDS_METRIC = "dropped-records-total";
     private static final String TASK_LEVEL_GROUP = "stream-task-metrics";
 
-    private InternalMockProcessorContext context;
+    private InternalMockProcessorContext<String, String> context;
     private Map<String, String> expectedMetricsTags;
 
     private RocksDBVersionedStore store;
@@ -90,7 +89,7 @@ public class RocksDBVersionedStoreTest {
         );
 
         store = new RocksDBVersionedStore(STORE_NAME, METRICS_SCOPE, HISTORY_RETENTION, SEGMENT_INTERVAL);
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
     }
 
     @AfterEach
@@ -801,7 +800,7 @@ public class RocksDBVersionedStoreTest {
         // recreate store with zero history retention
         store.close();
         store = new RocksDBVersionedStore(STORE_NAME, METRICS_SCOPE, 0L, SEGMENT_INTERVAL);
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
 
         // put and get
         putToStore("k", "v", BASE_TIMESTAMP, PUT_RETURN_CODE_VALID_TO_UNDEFINED);

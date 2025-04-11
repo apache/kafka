@@ -16,14 +16,22 @@
  */
 package org.apache.kafka.streams.kstream.internals;
 
+import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.kstream.Aggregator;
 import org.apache.kafka.streams.kstream.Initializer;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
+import org.apache.kafka.streams.processor.internals.StoreFactory.FactoryWrappingStoreBuilder;
+import org.apache.kafka.streams.state.KeyValueStore;
+import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
 import org.apache.kafka.streams.state.internals.KeyValueStoreWrapper;
+
+import java.util.Collections;
+import java.util.Set;
 
 import static org.apache.kafka.streams.state.ValueAndTimestamp.getValueOrNull;
 import static org.apache.kafka.streams.state.VersionedKeyValueStore.PUT_RETURN_CODE_NOT_PUT;
@@ -33,17 +41,19 @@ public class KTableAggregate<KIn, VIn, VAgg> implements
     KTableProcessorSupplier<KIn, VIn, KIn, VAgg> {
 
     private final String storeName;
+    private final StoreFactory storeFactory;
     private final Initializer<VAgg> initializer;
     private final Aggregator<? super KIn, ? super VIn, VAgg> add;
     private final Aggregator<? super KIn, ? super VIn, VAgg> remove;
 
     private boolean sendOldValues = false;
 
-    KTableAggregate(final String storeName,
+    KTableAggregate(final MaterializedInternal<KIn, VAgg, KeyValueStore<Bytes, byte[]>> materialized,
                     final Initializer<VAgg> initializer,
                     final Aggregator<? super KIn, ? super VIn, VAgg> add,
                     final Aggregator<? super KIn, ? super VIn, VAgg> remove) {
-        this.storeName = storeName;
+        this.storeFactory = new KeyValueStoreMaterializer<>(materialized);
+        this.storeName = materialized.storeName();
         this.initializer = initializer;
         this.add = add;
         this.remove = remove;
@@ -54,6 +64,11 @@ public class KTableAggregate<KIn, VIn, VAgg> implements
         // Aggregates are always materialized:
         sendOldValues = true;
         return true;
+    }
+
+    @Override
+    public Set<StoreBuilder<?>> stores() {
+        return Collections.singleton(new FactoryWrappingStoreBuilder<>(storeFactory));
     }
 
     @Override
@@ -70,7 +85,7 @@ public class KTableAggregate<KIn, VIn, VAgg> implements
         public void init(final ProcessorContext<KIn, Change<VAgg>> context) {
             store = new KeyValueStoreWrapper<>(context, storeName);
             tupleForwarder = new TimestampedTupleForwarder<>(
-                store.getStore(),
+                store.store(),
                 context,
                 new TimestampedCacheFlushListener<>(context),
                 sendOldValues);

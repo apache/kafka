@@ -18,15 +18,16 @@
 package org.apache.kafka.controller.metrics;
 
 import com.yammer.metrics.core.Gauge;
+import com.yammer.metrics.core.Meter;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import java.util.function.Function;
 
@@ -39,20 +40,21 @@ public class ControllerMetadataMetricsTest {
         try {
             try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
                 ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.controller:",
-                    new HashSet<>(Arrays.asList(
+                    new HashSet<>(List.of(
                         "kafka.controller:type=KafkaController,name=ActiveBrokerCount",
                         "kafka.controller:type=KafkaController,name=FencedBrokerCount",
-                        "kafka.controller:type=KafkaController,name=MigratingZkBrokerCount",
                         "kafka.controller:type=KafkaController,name=GlobalPartitionCount",
                         "kafka.controller:type=KafkaController,name=GlobalTopicCount",
                         "kafka.controller:type=KafkaController,name=MetadataErrorCount",
                         "kafka.controller:type=KafkaController,name=OfflinePartitionsCount",
                         "kafka.controller:type=KafkaController,name=PreferredReplicaImbalanceCount",
-                        "kafka.controller:type=KafkaController,name=ZkMigrationState"
+                        "kafka.controller:type=KafkaController,name=IgnoredStaticVoters",
+                        "kafka.controller:type=ControllerStats,name=UncleanLeaderElectionsPerSec",
+                        "kafka.controller:type=ControllerStats,name=ElectionFromEligibleLeaderReplicasPerSec"
                     )));
             }
             ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "KafkaController",
-                    Collections.emptySet());
+                    Set.of());
         } finally {
             registry.shutdown();
         }
@@ -173,5 +175,55 @@ public class ControllerMetadataMetricsTest {
             (m, v) -> m.setPreferredReplicaImbalanceCount(v),
             (m, v) -> m.addToPreferredReplicaImbalanceCount(v)
         );
+    }
+
+    @SuppressWarnings("LocalVariableName")
+    @Test
+    public void testUpdateUncleanLeaderElection() {
+        MetricsRegistry registry = new MetricsRegistry();
+        try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
+            Meter UncleanLeaderElectionsPerSec = (Meter) registry
+                    .allMetrics()
+                    .get(metricName("ControllerStats", "UncleanLeaderElectionsPerSec"));
+            assertEquals(0, UncleanLeaderElectionsPerSec.count());
+            metrics.updateUncleanLeaderElection(2);
+            assertEquals(2, UncleanLeaderElectionsPerSec.count());
+        } finally {
+            registry.shutdown();
+        }
+    }
+
+    @SuppressWarnings("LocalVariableName")
+    @Test
+    public void testUpdateElectionFromEligibleLeaderReplicasCount() {
+        MetricsRegistry registry = new MetricsRegistry();
+        try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
+            Meter ElectionFromEligibleLeaderReplicasPerSec = (Meter) registry
+                .allMetrics()
+                .get(metricName("ControllerStats", "ElectionFromEligibleLeaderReplicasPerSec"));
+            assertEquals(0, ElectionFromEligibleLeaderReplicasPerSec.count());
+            metrics.updateElectionFromEligibleLeaderReplicasCount(2);
+            assertEquals(2, ElectionFromEligibleLeaderReplicasPerSec.count());
+        } finally {
+            registry.shutdown();
+        }
+    }
+
+    @Test
+    public void testIgnoredStaticVoters() {
+        MetricsRegistry registry = new MetricsRegistry();
+        try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
+            @SuppressWarnings("unchecked")
+            Gauge<Integer> ignoredStaticVoters = (Gauge<Integer>) registry
+                .allMetrics()
+                .get(metricName("KafkaController", "IgnoredStaticVoters"));
+            assertEquals(0, ignoredStaticVoters.value());
+            metrics.setIgnoredStaticVoters(true);
+            assertEquals(1, ignoredStaticVoters.value());
+            metrics.setIgnoredStaticVoters(false);
+            assertEquals(0, ignoredStaticVoters.value());
+        } finally {
+            registry.shutdown();
+        }
     }
 }

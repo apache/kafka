@@ -18,8 +18,7 @@
 package org.apache.kafka.image;
 
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
-import org.apache.kafka.common.metadata.ZkMigrationStateRecord;
-import org.apache.kafka.metadata.migration.ZkMigrationState;
+import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
 
 import java.util.HashMap;
@@ -38,18 +37,12 @@ public final class FeaturesDelta {
 
     private MetadataVersion metadataVersionChange = null;
 
-    private ZkMigrationState zkMigrationStateChange = null;
-
     public FeaturesDelta(FeaturesImage image) {
         this.image = image;
     }
 
     public Map<String, Optional<Short>> changes() {
         return changes;
-    }
-
-    public Optional<ZkMigrationState> getZkMigrationStateChange() {
-        return Optional.ofNullable(zkMigrationStateChange);
     }
 
     public Optional<MetadataVersion> metadataVersionChange() {
@@ -66,7 +59,17 @@ public final class FeaturesDelta {
 
     public void replay(FeatureLevelRecord record) {
         if (record.name().equals(MetadataVersion.FEATURE_NAME)) {
-            metadataVersionChange = MetadataVersion.fromFeatureLevel(record.featureLevel());
+            try {
+                metadataVersionChange = MetadataVersion.fromFeatureLevel(record.featureLevel());
+            } catch (IllegalArgumentException e) {
+                throw new IllegalArgumentException("Unsupported metadata version - if you are currently upgrading your cluster, "
+                        + "please ensure the metadata version is set to " + MetadataVersion.MINIMUM_VERSION + " (or higher) before "
+                        + "updating the software version. The metadata version can be updated via the `kafka-features` command-line tool.", e);
+            }
+        } else if (record.name().equals(KRaftVersion.FEATURE_NAME)) {
+            // KAFKA-18979 - Skip any feature level record for kraft.version. This has two benefits:
+            // 1. It removes from snapshots any FeatureLevelRecord for kraft.version that was incorrectly written to the log
+            // 2. Allows ApiVersions to report the correct finalized kraft.version
         } else {
             if (record.featureLevel() == 0) {
                 changes.put(record.name(), Optional.empty());
@@ -74,10 +77,6 @@ public final class FeaturesDelta {
                 changes.put(record.name(), Optional.of(record.featureLevel()));
             }
         }
-    }
-
-    public void replay(ZkMigrationStateRecord record) {
-        this.zkMigrationStateChange = ZkMigrationState.of(record.zkMigrationState());
     }
 
     public FeaturesImage apply() {
@@ -102,20 +101,14 @@ public final class FeaturesDelta {
             }
         }
 
-        final MetadataVersion metadataVersion;
+        final Optional<MetadataVersion> metadataVersion;
         if (metadataVersionChange == null) {
             metadataVersion = image.metadataVersion();
         } else {
-            metadataVersion = metadataVersionChange;
+            metadataVersion = Optional.of(metadataVersionChange);
         }
 
-        final ZkMigrationState zkMigrationState;
-        if (zkMigrationStateChange == null) {
-            zkMigrationState = image.zkMigrationState();
-        } else {
-            zkMigrationState = zkMigrationStateChange;
-        }
-        return new FeaturesImage(newFinalizedVersions, metadataVersion, zkMigrationState);
+        return new FeaturesImage(newFinalizedVersions, metadataVersion);
     }
 
     @Override
@@ -123,7 +116,6 @@ public final class FeaturesDelta {
         return "FeaturesDelta(" +
             "changes=" + changes +
             ", metadataVersionChange=" + metadataVersionChange +
-            ", zkMigrationStateChange=" + zkMigrationStateChange +
             ')';
     }
 }

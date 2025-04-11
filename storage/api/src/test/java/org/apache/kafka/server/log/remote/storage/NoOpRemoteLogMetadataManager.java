@@ -80,6 +80,11 @@ public class NoOpRemoteLogMetadataManager implements RemoteLogMetadataManager {
     }
 
     @Override
+    public Optional<RemoteLogSegmentMetadata> nextSegmentWithTxnIndex(TopicIdPartition topicIdPartition, int epoch, long offset) {
+        return Optional.empty();
+    }
+
+    @Override
     public void close() throws IOException {
     }
 

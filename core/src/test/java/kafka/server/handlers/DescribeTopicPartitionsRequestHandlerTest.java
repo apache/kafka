@@ -31,8 +31,6 @@ import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.DescribeTopicPartitionsRequestData;
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData;
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponseTopic;
-import org.apache.kafka.common.message.UpdateMetadataRequestData;
-import org.apache.kafka.common.message.UpdateMetadataRequestData.UpdateMetadataBroker;
 import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord;
 import org.apache.kafka.common.metadata.RegisterBrokerRecord.BrokerEndpoint;
@@ -59,12 +57,13 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.metadata.LeaderRecoveryState;
+import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.network.metrics.RequestChannelMetrics;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.KRaftVersion;
-import org.apache.kafka.server.common.MetadataVersion;
 import org.apache.kafka.server.config.KRaftConfigs;
 
 import org.junit.jupiter.api.Test;
@@ -72,13 +71,11 @@ import org.junit.jupiter.api.Test;
 import java.net.InetAddress;
 import java.net.UnknownHostException;
 import java.nio.ByteBuffer;
-import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
-import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -90,7 +87,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 class DescribeTopicPartitionsRequestHandlerTest {
-    private final RequestChannel.Metrics requestChannelMetrics = mock(RequestChannel.Metrics.class);
+    private final RequestChannelMetrics requestChannelMetrics = mock(RequestChannelMetrics.class);
     private final KafkaPrincipalSerde kafkaPrincipalSerde = new KafkaPrincipalSerde() {
         @Override
         public byte[] serialize(KafkaPrincipal principal) throws SerializationException {
@@ -104,16 +101,13 @@ class DescribeTopicPartitionsRequestHandlerTest {
     };
 
     ListenerName plaintextListener = ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT);
-    UpdateMetadataBroker broker = new UpdateMetadataBroker()
-        .setId(0)
-        .setRack("rack")
-        .setEndpoints(Arrays.asList(
-            new UpdateMetadataRequestData.UpdateMetadataEndpoint()
-                .setHost("broker0")
-                .setPort(9092)
-                .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id)
-                .setListener(plaintextListener.value())
-        ));
+    String rack = "rack";
+    int brokerId = 0;
+    BrokerEndpoint brokerEndpoint = new BrokerEndpoint()
+        .setName(plaintextListener.value())
+        .setHost("broker0")
+        .setPort(9092)
+        .setSecurityProtocol(SecurityProtocol.PLAINTEXT.id);
 
     @Test
     void testDescribeTopicPartitionsRequest() {
@@ -136,7 +130,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
                         return AuthorizationResult.ALLOWED;
                     else
                         return AuthorizationResult.DENIED;
-                }).collect(Collectors.toList());
+                }).toList();
             });
 
         // 2. Set up MetadataCache
@@ -148,52 +142,47 @@ class DescribeTopicPartitionsRequestHandlerTest {
         topicIds.put(unauthorizedTopic, unauthorizedTopicId);
 
         BrokerEndpointCollection collection = new BrokerEndpointCollection();
-        collection.add(new BrokerEndpoint()
-            .setName(broker.endpoints().get(0).listener())
-            .setHost(broker.endpoints().get(0).host())
-            .setPort(broker.endpoints().get(0).port())
-            .setSecurityProtocol(broker.endpoints().get(0).securityProtocol())
-        );
-        List<ApiMessage> records = Arrays.asList(
+        collection.add(brokerEndpoint);
+        List<ApiMessage> records = List.of(
             new RegisterBrokerRecord()
-                .setBrokerId(broker.id())
+                .setBrokerId(brokerId)
                 .setBrokerEpoch(0)
                 .setIncarnationId(Uuid.randomUuid())
                 .setEndPoints(collection)
-                .setRack(broker.rack())
+                .setRack(rack)
                 .setFenced(false),
             new TopicRecord().setName(authorizedTopic).setTopicId(topicIds.get(authorizedTopic)),
             new TopicRecord().setName(unauthorizedTopic).setTopicId(topicIds.get(unauthorizedTopic)),
             new PartitionRecord()
                 .setTopicId(authorizedTopicId)
                 .setPartitionId(1)
-                .setReplicas(Arrays.asList(0, 1, 2))
+                .setReplicas(List.of(0, 1, 2))
                 .setLeader(0)
-                .setIsr(Arrays.asList(0))
-                .setEligibleLeaderReplicas(Arrays.asList(1))
-                .setLastKnownElr(Arrays.asList(2))
+                .setIsr(List.of(0))
+                .setEligibleLeaderReplicas(List.of(1))
+                .setLastKnownElr(List.of(2))
                 .setLeaderEpoch(0)
                 .setPartitionEpoch(1)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
             new PartitionRecord()
                 .setTopicId(authorizedTopicId)
                 .setPartitionId(0)
-                .setReplicas(Arrays.asList(0, 1, 2))
+                .setReplicas(List.of(0, 1, 2))
                 .setLeader(0)
-                .setIsr(Arrays.asList(0))
-                .setEligibleLeaderReplicas(Arrays.asList(1))
-                .setLastKnownElr(Arrays.asList(2))
+                .setIsr(List.of(0))
+                .setEligibleLeaderReplicas(List.of(1))
+                .setLastKnownElr(List.of(2))
                 .setLeaderEpoch(0)
                 .setPartitionEpoch(1)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
             new PartitionRecord()
                 .setTopicId(unauthorizedTopicId)
                 .setPartitionId(0)
-                .setReplicas(Arrays.asList(0, 1, 3))
+                .setReplicas(List.of(0, 1, 3))
                 .setLeader(0)
-                .setIsr(Arrays.asList(0))
-                .setEligibleLeaderReplicas(Arrays.asList(1))
-                .setLastKnownElr(Arrays.asList(3))
+                .setIsr(List.of(0))
+                .setEligibleLeaderReplicas(List.of(1))
+                .setLastKnownElr(List.of(3))
                 .setLeaderEpoch(0)
                 .setPartitionEpoch(2)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
@@ -206,7 +195,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         // 3.1 Basic test
         DescribeTopicPartitionsRequest describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(
             new DescribeTopicPartitionsRequestData()
-                .setTopics(Arrays.asList(
+                .setTopics(List.of(
                     new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
                     new DescribeTopicPartitionsRequestData.TopicRequest().setName(unauthorizedTopic)
                 ))
@@ -234,7 +223,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
 
         // 3.2 With cursor
         describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
-            .setTopics(Arrays.asList(
+            .setTopics(List.of(
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(unauthorizedTopic)
                 ))
@@ -338,7 +327,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
                         return AuthorizationResult.ALLOWED;
                     else
                         return AuthorizationResult.DENIED;
-                }).collect(Collectors.toList());
+                }).toList();
             });
 
         // 2. Set up MetadataCache
@@ -350,52 +339,47 @@ class DescribeTopicPartitionsRequestHandlerTest {
         topicIds.put(authorizedTopic2, authorizedTopicId2);
 
         BrokerEndpointCollection collection = new BrokerEndpointCollection();
-        collection.add(new BrokerEndpoint()
-                .setName(broker.endpoints().get(0).listener())
-                .setHost(broker.endpoints().get(0).host())
-                .setPort(broker.endpoints().get(0).port())
-                .setSecurityProtocol(broker.endpoints().get(0).securityProtocol())
-        );
-        List<ApiMessage> records = Arrays.asList(
+        collection.add(brokerEndpoint);
+        List<ApiMessage> records = List.of(
             new RegisterBrokerRecord()
-                .setBrokerId(broker.id())
+                .setBrokerId(brokerId)
                 .setBrokerEpoch(0)
                 .setIncarnationId(Uuid.randomUuid())
                 .setEndPoints(collection)
-                .setRack(broker.rack())
+                .setRack(rack)
                 .setFenced(false),
             new TopicRecord().setName(authorizedTopic).setTopicId(topicIds.get(authorizedTopic)),
             new TopicRecord().setName(authorizedTopic2).setTopicId(topicIds.get(authorizedTopic2)),
             new PartitionRecord()
                 .setTopicId(authorizedTopicId)
                 .setPartitionId(0)
-                .setReplicas(Arrays.asList(0, 1, 2))
+                .setReplicas(List.of(0, 1, 2))
                 .setLeader(0)
-                .setIsr(Arrays.asList(0))
-                .setEligibleLeaderReplicas(Arrays.asList(1))
-                .setLastKnownElr(Arrays.asList(2))
+                .setIsr(List.of(0))
+                .setEligibleLeaderReplicas(List.of(1))
+                .setLastKnownElr(List.of(2))
                 .setLeaderEpoch(0)
                 .setPartitionEpoch(1)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
             new PartitionRecord()
                 .setTopicId(authorizedTopicId)
                 .setPartitionId(1)
-                .setReplicas(Arrays.asList(0, 1, 2))
+                .setReplicas(List.of(0, 1, 2))
                 .setLeader(0)
-                .setIsr(Arrays.asList(0))
-                .setEligibleLeaderReplicas(Arrays.asList(1))
-                .setLastKnownElr(Arrays.asList(2))
+                .setIsr(List.of(0))
+                .setEligibleLeaderReplicas(List.of(1))
+                .setLastKnownElr(List.of(2))
                 .setLeaderEpoch(0)
                 .setPartitionEpoch(1)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value()),
             new PartitionRecord()
                 .setTopicId(authorizedTopicId2)
                 .setPartitionId(0)
-                .setReplicas(Arrays.asList(0, 1, 3))
+                .setReplicas(List.of(0, 1, 3))
                 .setLeader(0)
-                .setIsr(Arrays.asList(0))
-                .setEligibleLeaderReplicas(Arrays.asList(1))
-                .setLastKnownElr(Arrays.asList(3))
+                .setIsr(List.of(0))
+                .setEligibleLeaderReplicas(List.of(1))
+                .setLastKnownElr(List.of(3))
                 .setLeaderEpoch(0)
                 .setPartitionEpoch(2)
                 .setLeaderRecoveryState(LeaderRecoveryState.RECOVERED.value())
@@ -407,7 +391,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
 
         // 3.1 With cursor point to the first one
         DescribeTopicPartitionsRequest describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
-            .setTopics(Arrays.asList(
+            .setTopics(List.of(
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic2)
                 ))
@@ -438,7 +422,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
 
         // 3.2 With cursor point to the second one. The first topic should be ignored.
         describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
-            .setTopics(Arrays.asList(
+            .setTopics(List.of(
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic2)
                 ))
@@ -462,7 +446,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
 
         // 3.3 With cursor point to a non existing topic. Exception should be thrown if not querying all the topics.
         describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
-            .setTopics(Arrays.asList(
+            .setTopics(List.of(
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic2)
                 ))
@@ -477,7 +461,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
 
         // 3.4 With cursor point to a negative partition id. Exception should be thrown if not querying all the topics.
         describeTopicPartitionsRequest = new DescribeTopicPartitionsRequest(new DescribeTopicPartitionsRequestData()
-            .setTopics(Arrays.asList(
+            .setTopics(List.of(
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic),
                 new DescribeTopicPartitionsRequestData.TopicRequest().setName(authorizedTopic2)
             ))
@@ -494,7 +478,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
     void updateKraftMetadataCache(KRaftMetadataCache kRaftMetadataCache, List<ApiMessage> records) {
         MetadataImage image = kRaftMetadataCache.currentImage();
         MetadataImage partialImage = new MetadataImage(
-            new MetadataProvenance(100L, 10, 1000L),
+            new MetadataProvenance(100L, 10, 1000L, true),
             image.features(),
             ClusterImage.EMPTY,
             image.topics(),
@@ -506,8 +490,8 @@ class DescribeTopicPartitionsRequestHandlerTest {
             image.delegationTokens()
         );
         MetadataDelta delta = new MetadataDelta.Builder().setImage(partialImage).build();
-        records.stream().forEach(record -> delta.replay(record));
-        kRaftMetadataCache.setImage(delta.apply(new MetadataProvenance(100L, 10, 1000L)));
+        records.forEach(delta::replay);
+        kRaftMetadataCache.setImage(delta.apply(new MetadataProvenance(100L, 10, 1000L, true)));
     }
 
     private RequestChannel.Request buildRequest(AbstractRequest request,
@@ -533,7 +517,6 @@ class DescribeTopicPartitionsRequestHandlerTest {
         int brokerId = 1;
         Properties properties = TestUtils.createBrokerConfig(
             brokerId,
-            "",
             true,
             true,
             TestUtils.RandomPort(),
@@ -558,7 +541,7 @@ class DescribeTopicPartitionsRequestHandlerTest {
         int voterId = brokerId + 1;
         properties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, voterId + "@localhost:9093");
         properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL");
-        TestUtils.setIbpAndMessageFormatVersions(properties, MetadataVersion.latestProduction());
+        properties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,SSL:SSL");
         return new KafkaConfig(properties);
     }
 }

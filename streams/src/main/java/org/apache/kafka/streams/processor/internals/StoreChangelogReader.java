@@ -236,7 +236,7 @@ public class StoreChangelogReader implements ChangelogReader {
         this.stateRestoreListener = stateRestoreListener;
         this.standbyUpdateListener = standbyUpdateListener;
 
-        this.stateUpdaterEnabled = InternalConfig.getStateUpdaterEnabled(config.originals());
+        this.stateUpdaterEnabled = InternalConfig.stateUpdaterEnabled(config.originals());
 
         this.groupId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         this.pollTime = Duration.ofMillis(config.getLong(StreamsConfig.POLL_MS_CONFIG));
@@ -741,10 +741,14 @@ public class StoreChangelogReader implements ChangelogReader {
         try {
             // those which do not have a committed offset would default to 0
             final ListConsumerGroupOffsetsOptions options = new ListConsumerGroupOffsetsOptions()
-                    .requireStable(true);
+                .requireStable(true);
             final ListConsumerGroupOffsetsSpec spec = new ListConsumerGroupOffsetsSpec()
-                    .topicPartitions(new ArrayList<>(partitions));
-            final Map<TopicPartition, Long> committedOffsets = adminClient.listConsumerGroupOffsets(Collections.singletonMap(groupId, spec))
+                .topicPartitions(new ArrayList<>(partitions));
+            final Map<TopicPartition, Long> committedOffsets =
+                adminClient.listConsumerGroupOffsets(
+                        Collections.singletonMap(groupId, spec),
+                        options
+                    )
                     .partitionsToOffsetAndMetadata(groupId).get().entrySet()
                     .stream()
                     .collect(Collectors.toMap(Map.Entry::getKey, e -> e.getValue() == null ? 0L : e.getValue().offset()));

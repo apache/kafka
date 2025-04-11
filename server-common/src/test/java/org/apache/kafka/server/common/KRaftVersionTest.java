@@ -17,11 +17,14 @@
 
 package org.apache.kafka.server.common;
 
+import org.apache.kafka.common.record.ControlRecordUtils;
+
 import org.junit.jupiter.api.Test;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 
-class KRaftVersionTest {
+public final class KRaftVersionTest {
     @Test
     public void testFeatureLevel() {
         for (int i = 0; i < KRaftVersion.values().length; i++) {
@@ -49,13 +52,61 @@ class KRaftVersionTest {
             MetadataVersion metadataVersion = KRaftVersion.values()[i].bootstrapMetadataVersion();
             switch (i) {
                 case 0:
-                    assertEquals(MetadataVersion.MINIMUM_KRAFT_VERSION, metadataVersion);
+                    assertEquals(MetadataVersion.MINIMUM_VERSION, metadataVersion);
                     break;
                 case 1:
                     assertEquals(MetadataVersion.IBP_3_9_IV0, metadataVersion);
                     break;
                 default:
                     throw new RuntimeException("Unsupported value " + i);
+            }
+        }
+    }
+
+    @Test
+    public void testKraftVersionRecordVersion() {
+        for (KRaftVersion kraftVersion : KRaftVersion.values()) {
+            switch (kraftVersion) {
+                case KRAFT_VERSION_0:
+                    assertThrows(
+                        IllegalStateException.class,
+                        () -> kraftVersion.kraftVersionRecordVersion()
+                    );
+                    break;
+
+                case KRAFT_VERSION_1:
+                    assertEquals(
+                        ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION,
+                        kraftVersion.kraftVersionRecordVersion()
+                    );
+                    break;
+
+                default:
+                    throw new RuntimeException("Unsupported value " + kraftVersion);
+            }
+        }
+    }
+
+    @Test
+    public void tesVotersRecordVersion() {
+        for (KRaftVersion kraftVersion : KRaftVersion.values()) {
+            switch (kraftVersion) {
+                case KRAFT_VERSION_0:
+                    assertThrows(
+                        IllegalStateException.class,
+                        () -> kraftVersion.votersRecordVersion()
+                    );
+                    break;
+
+                case KRAFT_VERSION_1:
+                    assertEquals(
+                        ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION,
+                        kraftVersion.votersRecordVersion()
+                    );
+                    break;
+
+                default:
+                    throw new RuntimeException("Unsupported value " + kraftVersion);
             }
         }
     }

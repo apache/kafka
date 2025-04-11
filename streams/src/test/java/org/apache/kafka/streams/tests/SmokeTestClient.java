@@ -129,10 +129,13 @@ public class SmokeTestClient extends SmokeTestUtil {
 
     private Properties getStreamsConfig(final Properties props) {
         final Properties fullProps = new Properties(props);
-        fullProps.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
+        if (!props.containsKey(StreamsConfig.APPLICATION_ID_CONFIG)) {
+            fullProps.put(StreamsConfig.APPLICATION_ID_CONFIG, "SmokeTest");
+        }
         fullProps.put(StreamsConfig.CLIENT_ID_CONFIG, "SmokeTest-" + name);
         fullProps.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
         fullProps.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
+        fullProps.put(StreamsConfig.WINDOW_STORE_CHANGE_LOG_ADDITIONAL_RETENTION_MS_CONFIG, Duration.ofDays(3).toMillis());
         fullProps.putAll(props);
         return fullProps;
     }

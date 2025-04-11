@@ -534,4 +534,84 @@ class KTableTest extends TestDriver {
 
     testDriver.close()
   }
+
+  @Test
+  def testJoinWithBiFunctionKeyExtractor(): Unit = {
+    val builder = new StreamsBuilder()
+    val sourceTopic1 = "source1"
+    val sourceTopic2 = "source2"
+    val sinkTopic = "sink"
+
+    val table1 = builder.stream[String, String](sourceTopic1).toTable
+    val table2 = builder.stream[String, String](sourceTopic2).toTable
+
+    table1
+      .join[String, String, String](
+        table2,
+        (key: String, value: String) => s"$key-$value",
+        joiner = (v1: String, v2: String) => s"$v1+$v2",
+        materialized = Materialized.`with`[String, String, ByteArrayKeyValueStore]
+      )
+      .toStream
+      .to(sinkTopic)
+
+    val testDriver = createTestDriver(builder)
+    val testInput1 = testDriver.createInput[String, String](sourceTopic1)
+    val testInput2 = testDriver.createInput[String, String](sourceTopic2)
+    val testOutput = testDriver.createOutput[String, String](sinkTopic)
+
+    testInput1.pipeInput("k1", "v1")
+    testInput2.pipeInput("k1-v1", "v2")
+
+    val record = testOutput.readKeyValue
+    assertEquals("k1", record.key)
+    assertEquals("v1+v2", record.value)
+
+    testDriver.close()
+  }
+
+  @Test
+  def testLeftJoinWithBiFunctionKeyExtractor(): Unit = {
+    val builder = new StreamsBuilder()
+    val sourceTopic1 = "source1"
+    val sourceTopic2 = "source2"
+    val sinkTopic = "sink"
+
+    val table1 = builder.stream[String, String](sourceTopic1).toTable
+    val table2 = builder.stream[String, String](sourceTopic2).toTable
+
+    table1
+      .leftJoin[String, String, String](
+        table2,
+        (key: String, value: String) => s"$key-$value",
+        joiner = (v1: String, v2: String) => s"${v1}+${Option(v2).getOrElse("null")}",
+        materialized = Materialized.`with`[String, String, ByteArrayKeyValueStore]
+      )
+      .toStream
+      .to(sinkTopic)
+
+    val testDriver = createTestDriver(builder)
+    val testInput1 = testDriver.createInput[String, String](sourceTopic1)
+    val testInput2 = testDriver.createInput[String, String](sourceTopic2)
+    val testOutput = testDriver.createOutput[String, String](sinkTopic)
+
+    // First insert into the foreign key table (table2)
+    testInput2.pipeInput("k1-v1", "v2")
+
+    // Then insert into the primary table (table1)
+    testInput1.pipeInput("k1", "v1")
+
+    val record1 = testOutput.readKeyValue
+    assertEquals("k1", record1.key)
+    assertEquals("v1+v2", record1.value)
+
+    // Test with non-matching foreign key (should still output due to left join)
+    testInput1.pipeInput("k2", "v3")
+
+    val record2 = testOutput.readKeyValue
+    assertEquals("k2", record2.key)
+    assertEquals("v3+null", record2.value)
+
+    testDriver.close()
+  }
 }

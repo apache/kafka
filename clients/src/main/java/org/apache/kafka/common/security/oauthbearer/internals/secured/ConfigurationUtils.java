@@ -25,8 +25,14 @@ import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.file.Path;
+import java.util.Arrays;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
+
+import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
+import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT;
 
 /**
  * <code>ConfigurationUtils</code> is a utility class to perform basic configuration-related
@@ -72,17 +78,17 @@ public class ConfigurationUtils {
         try {
             file = new File(url.toURI().getRawPath()).getAbsoluteFile();
         } catch (URISyntaxException e) {
-            throw new ConfigException(name, url.toString(), String.format("The OAuth configuration option %s contains a URL (%s) that is malformed: %s", name, url, e.getMessage()));
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that is malformed: %s", name, url, e.getMessage()));
         }
 
         if (!file.exists())
-            throw new ConfigException(name, file, String.format("The OAuth configuration option %s contains a file (%s) that doesn't exist", name, file));
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a file (%s) that doesn't exist", name, file));
 
         if (!file.canRead())
-            throw new ConfigException(name, file, String.format("The OAuth configuration option %s contains a file (%s) that doesn't have read permission", name, file));
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a file (%s) that doesn't have read permission", name, file));
 
         if (file.isDirectory())
-            throw new ConfigException(name, file, String.format("The OAuth configuration option %s references a directory (%s), not a file", name, file));
+            throw new ConfigException(String.format("The OAuth configuration option %s references a directory (%s), not a file", name, file));
 
         return file.toPath();
     }
@@ -104,7 +110,7 @@ public class ConfigurationUtils {
 
         if (value == null) {
             if (isRequired)
-                throw new ConfigException(name, null, String.format("The OAuth configuration option %s must be non-null", name));
+                throw new ConfigException(String.format("The OAuth configuration option %s must be non-null", name));
             else
                 return null;
         }
@@ -137,13 +143,13 @@ public class ConfigurationUtils {
 
         if (value == null) {
             if (isRequired)
-                throw new ConfigException(name, null, String.format("The OAuth configuration option %s must be non-null", name));
+                throw new ConfigException(String.format("The OAuth configuration option %s must be non-null", name));
             else
                 return null;
         }
 
         if (min != null && value < min)
-            throw new ConfigException(name, value, String.format("The OAuth configuration option %s value must be at least %s", name, min));
+            throw new ConfigException(String.format("The OAuth configuration option %s value must be at least %s", name, min));
 
         return value;
     }
@@ -151,11 +157,12 @@ public class ConfigurationUtils {
     /**
      * Validates that the configured URL that:
      *
-     * <li>
-     *     <ul>is well-formed</ul>
-     *     <ul>contains a scheme</ul>
-     *     <ul>uses either HTTP, HTTPS, or file protocols</ul>
-     * </li>
+     * <ul>
+     *     <li>is well-formed</li>
+     *     <li>contains a scheme</li>
+     *     <li>uses either HTTP, HTTPS, or file protocols</li>
+     *     <li>is in the allow-list</li>
+     * </ul>
      *
      * No effort is made to connect to the URL in the validation step.
      */
@@ -167,18 +174,20 @@ public class ConfigurationUtils {
         try {
             url = new URL(value);
         } catch (MalformedURLException e) {
-            throw new ConfigException(name, value, String.format("The OAuth configuration option %s contains a URL (%s) that is malformed: %s", name, value, e.getMessage()));
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that is malformed: %s", name, value, e.getMessage()));
         }
 
         String protocol = url.getProtocol();
 
         if (protocol == null || protocol.trim().isEmpty())
-            throw new ConfigException(name, value, String.format("The OAuth configuration option %s contains a URL (%s) that is missing the protocol", name, value));
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that is missing the protocol", name, value));
 
         protocol = protocol.toLowerCase(Locale.ROOT);
 
         if (!(protocol.equals("http") || protocol.equals("https") || protocol.equals("file")))
-            throw new ConfigException(name, value, String.format("The OAuth configuration option %s contains a URL (%s) that contains an invalid protocol (%s); only \"http\", \"https\", and \"file\" protocol are supported", name, value, protocol));
+            throw new ConfigException(String.format("The OAuth configuration option %s contains a URL (%s) that contains an invalid protocol (%s); only \"http\", \"https\", and \"file\" protocol are supported", name, value, protocol));
+
+        throwIfURLIsNotAllowed(value);
 
         return url;
     }
@@ -209,6 +218,15 @@ public class ConfigurationUtils {
         return value;
     }
 
+    public Boolean validateBoolean(String name, boolean isRequired) {
+        Boolean value = get(name);
+
+        if (value == null && isRequired)
+            throw new ConfigException(String.format("The OAuth configuration option %s must be non-null", name));
+
+        return value;
+    }
+
     @SuppressWarnings("unchecked")
     public <T> T get(String name) {
         T value = (T) configs.get(prefix + name);
@@ -219,4 +237,16 @@ public class ConfigurationUtils {
         return (T) configs.get(name);
     }
 
+    // visible for testing
+    // make sure the url is in the "org.apache.kafka.sasl.oauthbearer.allowed.urls" system property
+    void throwIfURLIsNotAllowed(String value) {
+        Set<String> allowedUrls = Arrays.stream(
+                        System.getProperty(ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG, ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT).split(","))
+                .map(String::trim)
+                .collect(Collectors.toSet());
+        if (!allowedUrls.contains(value)) {
+            throw new ConfigException(value + " is not allowed. Update system property '"
+                    + ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG + "' to allow " + value);
+        }
+    }
 }

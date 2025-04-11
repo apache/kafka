@@ -18,12 +18,12 @@ package kafka.coordinator.transaction
 
 import java.nio.ByteBuffer
 import java.util.Collections
+import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.transaction.TransactionCoordinatorConcurrencyTest._
-import kafka.log.UnifiedLog
-import kafka.server.{KafkaConfig, MetadataCache, RequestLocal}
+import kafka.server.KafkaConfig
 import kafka.utils.{Pool, TestUtils}
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.compress.Compression
@@ -35,7 +35,11 @@ import org.apache.kafka.common.record.{FileRecords, MemoryRecords, RecordBatch, 
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{LogContext, MockTime, ProducerIdAndEpoch}
 import org.apache.kafka.common.{Node, TopicPartition}
-import org.apache.kafka.storage.internals.log.{FetchDataInfo, FetchIsolation, LogConfig, LogOffsetMetadata}
+import org.apache.kafka.coordinator.transaction.ProducerIdManager
+import org.apache.kafka.metadata.MetadataCache
+import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion, RequestLocal, TransactionVersion}
+import org.apache.kafka.server.storage.log.FetchIsolation
+import org.apache.kafka.storage.internals.log.{FetchDataInfo, LogConfig, LogOffsetMetadata, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.{ArgumentCaptor, ArgumentMatchers}
@@ -44,7 +48,6 @@ import org.mockito.Mockito.{mock, when}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, mutable}
-import scala.util.Success
 
 class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurrencyTest[Transaction] {
   private val nTransactions = nThreads * 10
@@ -72,30 +75,36 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   override def setUp(): Unit = {
     super.setUp()
 
-    when(zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME))
-      .thenReturn(Some(numPartitions))
-
-    txnStateManager = new TransactionStateManager(0, scheduler, replicaManager, txnConfig, time,
-      new Metrics())
-    txnStateManager.startup(() => zkClient.getTopicPartitionCount(TRANSACTION_STATE_TOPIC_NAME).get,
-      enableTransactionalIdExpiration = true)
-    for (i <- 0 until numPartitions)
-      txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new Pool[String, TransactionMetadata]())
-
-    val pidGenerator: ProducerIdManager = mock(classOf[ProducerIdManager])
-    when(pidGenerator.generateProducerId())
-      .thenAnswer(_ => if (bumpProducerId) {
-        Success(producerId + 1)
-      } else {
-        Success(producerId)
-      })
     val brokerNode = new Node(0, "host", 10)
     val metadataCache: MetadataCache = mock(classOf[MetadataCache])
     when(metadataCache.getPartitionLeaderEndpoint(
       anyString,
       anyInt,
       any[ListenerName])
-    ).thenReturn(Some(brokerNode))
+    ).thenReturn(Optional.of(brokerNode))
+    when(metadataCache.features()).thenReturn {
+      new FinalizedFeatures(
+        MetadataVersion.latestTesting(),
+        Collections.singletonMap(TransactionVersion.FEATURE_NAME, TransactionVersion.TV_2.featureLevel()),
+        0)
+    }
+
+    when(metadataCache.metadataVersion())
+      .thenReturn(MetadataVersion.latestProduction())
+    
+    txnStateManager = new TransactionStateManager(0, scheduler, replicaManager, metadataCache, txnConfig, time,
+      new Metrics())
+    txnStateManager.startup(() => numPartitions, enableTransactionalIdExpiration = true)
+    for (i <- 0 until numPartitions)
+      txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+
+    val pidGenerator: ProducerIdManager = mock(classOf[ProducerIdManager])
+    when(pidGenerator.generateProducerId())
+      .thenAnswer(_ => if (bumpProducerId) {
+        producerId + 1
+      } else {
+        producerId
+      })
     val networkClient: NetworkClient = mock(classOf[NetworkClient])
     txnMarkerChannelManager = new TransactionMarkerChannelManager(
       KafkaConfig.fromProps(serverProps),
@@ -451,10 +460,10 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
     addPartitionsOp.awaitAndVerify(txn)
 
     val txnMetadata = transactionMetadata(txn).getOrElse(throw new IllegalStateException(s"Transaction not found $txn"))
-    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit()))
+    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), TransactionVersion.TV_2))
 
     txnMetadata.state = PrepareCommit
-    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit()))
+    txnRecords += new SimpleRecord(txn.txnMessageKeyBytes, TransactionLog.valueToBytes(txnMetadata.prepareNoTransit(), TransactionVersion.TV_2))
 
     prepareTxnLog(partitionId)
   }
@@ -472,9 +481,9 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
     when(logMock.logStartOffset).thenReturn(startOffset)
     when(logMock.read(ArgumentMatchers.eq(startOffset),
-      maxLength = anyInt,
-      isolation = ArgumentMatchers.eq(FetchIsolation.LOG_END),
-      minOneMessage = ArgumentMatchers.eq(true)))
+      anyInt,
+      ArgumentMatchers.eq(FetchIsolation.LOG_END),
+      ArgumentMatchers.eq(true)))
       .thenReturn(new FetchDataInfo(new LogOffsetMetadata(startOffset), fileRecordsMock))
 
     when(fileRecordsMock.sizeInBytes()).thenReturn(records.sizeInBytes)
@@ -493,13 +502,15 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
   private def prepareExhaustedEpochTxnMetadata(txn: Transaction): TransactionMetadata = {
     new TransactionMetadata(transactionalId = txn.transactionalId,
       producerId = producerId,
-      lastProducerId = RecordBatch.NO_PRODUCER_ID,
+      prevProducerId = RecordBatch.NO_PRODUCER_ID,
+      nextProducerId = RecordBatch.NO_PRODUCER_ID,
       producerEpoch = (Short.MaxValue - 1).toShort,
       lastProducerEpoch = RecordBatch.NO_PRODUCER_EPOCH,
       txnTimeoutMs = 60000,
       state = Empty,
       topicPartitions = collection.mutable.Set.empty[TopicPartition],
-      txnLastUpdateTimestamp = time.milliseconds())
+      txnLastUpdateTimestamp = time.milliseconds(),
+      clientTransactionVersion = TransactionVersion.TV_0)
   }
 
   abstract class TxnOperation[R] extends Operation {
@@ -512,10 +523,18 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
 
   class InitProducerIdOperation(val producerIdAndEpoch: Option[ProducerIdAndEpoch] = None) extends TxnOperation[InitProducerIdResult] {
     override def run(txn: Transaction): Unit = {
-      transactionCoordinator.handleInitProducerId(txn.transactionalId, 60000, producerIdAndEpoch, resultCallback,
-        RequestLocal.withThreadConfinedCaching)
+      transactionCoordinator.handleInitProducerId(
+        txn.transactionalId,
+        60000,
+        enableTwoPCFlag = false,
+        keepPreparedTxn = false,
+        producerIdAndEpoch,
+        resultCallback,
+        RequestLocal.withThreadConfinedCaching
+      )
       replicaManager.tryCompleteActions()
     }
+
     override def awaitAndVerify(txn: Transaction): Unit = {
       val initPidResult = result.getOrElse(throw new IllegalStateException("InitProducerId has not completed"))
       assertEquals(Errors.NONE, initPidResult.error)
@@ -531,6 +550,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
             txnMetadata.producerEpoch,
             partitions,
             resultCallback,
+            TransactionVersion.TV_2,
             RequestLocal.withThreadConfinedCaching)
         replicaManager.tryCompleteActions()
       }
@@ -549,7 +569,8 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
           txnMetadata.producerId,
           txnMetadata.producerEpoch,
           transactionResult(txn),
-          resultCallback,
+          TransactionVersion.TV_2,
+          (r, _, _) => resultCallback(r),
           RequestLocal.withThreadConfinedCaching)
       }
     }

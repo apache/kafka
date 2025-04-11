@@ -18,7 +18,6 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.errors.ResourceNotFoundException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.message.DescribeUserScramCredentialsResponseData;
@@ -33,10 +32,7 @@ import java.util.stream.Collectors;
 
 /**
  * The result of the {@link Admin#describeUserScramCredentials()} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class DescribeUserScramCredentialsResult {
     private final KafkaFuture<DescribeUserScramCredentialsResponseData> dataFuture;
 
@@ -125,7 +121,7 @@ public class DescribeUserScramCredentialsResult {
                 // for users 1, 2, and 3 but this is looking for user 4), so explicitly take care of that case
                 Optional<DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult> optionalUserResult =
                         data.results().stream().filter(result -> result.user().equals(userName)).findFirst();
-                if (!optionalUserResult.isPresent()) {
+                if (optionalUserResult.isEmpty()) {
                     retval.completeExceptionally(new ResourceNotFoundException("No such user: " + userName));
                 } else {
                     DescribeUserScramCredentialsResponseData.DescribeUserScramCredentialsResult userResult = optionalUserResult.get();

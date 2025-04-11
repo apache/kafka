@@ -75,7 +75,7 @@ public class SinkConnectorsIntegrationTest {
         brokerProps.put("auto.create.topics.enable", "false");
         brokerProps.put("delete.topic.enable", "true");
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         connect = new EmbeddedConnectCluster.Builder()
                 .name("connect-cluster")
                 .numWorkers(NUM_WORKERS)
@@ -90,7 +90,7 @@ public class SinkConnectorsIntegrationTest {
         // delete connector handle
         RuntimeHandles.get().deleteConnector(CONNECTOR_NAME);
 
-        // stop all Connect, Kafka and Zk threads.
+        // stop the Connect cluster and its backing Kafka cluster.
         connect.stop();
     }
 
@@ -309,7 +309,7 @@ public class SinkConnectorsIntegrationTest {
 
     private Map<String, String> baseSinkConnectorProps(String topics) {
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSinkConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSinkConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPICS_CONFIG, topics);
         props.put(KEY_CONVERTER_CLASS_CONFIG, StringConverter.class.getName());

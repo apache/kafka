@@ -39,14 +39,14 @@ import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.coordinator.common.runtime.CoordinatorResult;
 import org.apache.kafka.coordinator.group.classic.ClassicGroup;
 import org.apache.kafka.coordinator.group.classic.ClassicGroupState;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
-import org.apache.kafka.coordinator.group.runtime.CoordinatorResult;
-import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
@@ -55,14 +55,11 @@ import org.apache.kafka.timeline.TimelineHashSet;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.OptionalLong;
-import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.Consumer;
@@ -166,11 +163,6 @@ public class OffsetMetadataManager {
      * The system time.
      */
     private final Time time;
-
-    /**
-     * The metadata image.
-     */
-    private MetadataImage metadataImage;
 
     /**
      * The group metadata manager.
@@ -283,7 +275,6 @@ public class OffsetMetadataManager {
         this.snapshotRegistry = snapshotRegistry;
         this.log = logContext.logger(OffsetMetadataManager.class);
         this.time = time;
-        this.metadataImage = metadataImage;
         this.groupMetadataManager = groupMetadataManager;
         this.config = config;
         this.metrics = metrics;
@@ -311,6 +302,7 @@ public class OffsetMetadataManager {
                 // either the admin client or a consumer which does not use the group management
                 // facility. In this case, a so-called simple group is created and the request
                 // is accepted.
+                log.info("[GroupId {}] Creating a simple consumer group via manual offset commit.", request.groupId());
                 group = groupMetadataManager.getOrMaybeCreateClassicGroup(request.groupId(), true);
             } else {
                 if (context.header.apiVersion() >= 9) {
@@ -492,12 +484,11 @@ public class OffsetMetadataManager {
                         expireTimestampMs
                     );
 
-                    records.add(CoordinatorRecordHelpers.newOffsetCommitRecord(
+                    records.add(GroupCoordinatorRecordHelpers.newOffsetCommitRecord(
                         request.groupId(),
                         topic.name(),
                         partition.partitionIndex(),
-                        offsetAndMetadata,
-                        metadataImage.features().metadataVersion()
+                        offsetAndMetadata
                     ));
                 }
             });
@@ -552,12 +543,11 @@ public class OffsetMetadataManager {
                         currentTimeMs
                     );
 
-                    records.add(CoordinatorRecordHelpers.newOffsetCommitRecord(
+                    records.add(GroupCoordinatorRecordHelpers.newOffsetCommitRecord(
                         request.groupId(),
                         topic.name(),
                         partition.partitionIndex(),
-                        offsetAndMetadata,
-                        metadataImage.features().metadataVersion()
+                        offsetAndMetadata
                     ));
                 }
             });
@@ -608,7 +598,7 @@ public class OffsetMetadataManager {
                     // if a pending transactional offset exists.
                     if (hasCommittedOffset(request.groupId(), topic.name(), partition.partitionIndex()) ||
                         hasPendingTransactionalOffsets(request.groupId(), topic.name(), partition.partitionIndex())) {
-                        records.add(CoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(
+                        records.add(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(
                             request.groupId(),
                             topic.name(),
                             partition.partitionIndex()
@@ -651,7 +641,7 @@ public class OffsetMetadataManager {
         if (offsetsByTopic != null) {
             offsetsByTopic.forEach((topic, offsetsByPartition) ->
                 offsetsByPartition.keySet().forEach(partition -> {
-                    records.add(CoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
+                    records.add(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
                     numDeletedOffsets.getAndIncrement();
                 })
             );
@@ -671,7 +661,7 @@ public class OffsetMetadataManager {
                         pendingGroupOffsets.forEach((topic, offsetsByPartition) -> {
                             offsetsByPartition.keySet().forEach(partition -> {
                                 if (!hasCommittedOffset(groupId, topic, partition)) {
-                                    records.add(CoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
+                                    records.add(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
                                     numDeletedOffsets.getAndIncrement();
                                 }
                             });
@@ -806,7 +796,7 @@ public class OffsetMetadataManager {
         } catch (GroupIdNotFoundException ex) {
             return new OffsetFetchResponseData.OffsetFetchResponseGroup()
                 .setGroupId(request.groupId())
-                .setTopics(Collections.emptyList());
+                .setTopics(List.of());
         }
 
         final List<OffsetFetchResponseData.OffsetFetchResponseTopics> topicResponses = new ArrayList<>();
@@ -866,11 +856,10 @@ public class OffsetMetadataManager {
 
         // We expect the group to exist.
         Group group = groupMetadataManager.group(groupId);
-        Set<String> expiredPartitions = new HashSet<>();
         long currentTimestampMs = time.milliseconds();
         Optional<OffsetExpirationCondition> offsetExpirationCondition = group.offsetExpirationCondition();
 
-        if (!offsetExpirationCondition.isPresent()) {
+        if (offsetExpirationCondition.isEmpty()) {
             return false;
         }
 
@@ -883,7 +872,7 @@ public class OffsetMetadataManager {
                     // We don't expire the offset yet if there is a pending transactional offset for the partition.
                     if (condition.isOffsetExpired(offsetAndMetadata, currentTimestampMs, config.offsetsRetentionMs()) &&
                         !hasPendingTransactionalOffsets(groupId, topic, partition)) {
-                        expiredPartitions.add(appendOffsetCommitTombstone(groupId, topic, partition, records).toString());
+                        appendOffsetCommitTombstone(groupId, topic, partition, records);
                         log.debug("[GroupId {}] Expired offset for partition={}-{}", groupId, topic, partition);
                     } else {
                         allOffsetsExpired.set(false);
@@ -893,7 +882,7 @@ public class OffsetMetadataManager {
                 allOffsetsExpired.set(false);
             }
         });
-        metrics.record(OFFSET_EXPIRED_SENSOR_NAME, expiredPartitions.size());
+        metrics.record(OFFSET_EXPIRED_SENSOR_NAME, records.size());
 
         // We don't want to remove the group if there are ongoing transactions.
         return allOffsetsExpired.get() && !openTransactionsByGroup.containsKey(groupId);
@@ -945,19 +934,15 @@ public class OffsetMetadataManager {
      * @param topic     The topic name.
      * @param partition The partition.
      * @param records   The list of records to append the tombstone.
-     *
-     * @return The topic partition of the corresponding tombstone.
      */
-    private TopicPartition appendOffsetCommitTombstone(
+    private void appendOffsetCommitTombstone(
         String groupId,
         String topic,
         int partition, 
         List<CoordinatorRecord> records
     ) {
-        records.add(CoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
-        TopicPartition tp = new TopicPartition(topic, partition);
-        log.trace("[GroupId {}] Removing expired offset and metadata for {}", groupId, tp);
-        return tp;
+        records.add(GroupCoordinatorRecordHelpers.newOffsetCommitTombstoneRecord(groupId, topic, partition));
+        log.trace("[GroupId {}] Removing expired offset and metadata for {}-{}", groupId, topic, partition);
     }
 
     /**
@@ -1107,16 +1092,6 @@ public class OffsetMetadataManager {
         } else {
             log.debug("Aborted transactional offset commits for producer id {}.", producerId);
         }
-    }
-
-    /**
-     * A new metadata image is available.
-     *
-     * @param newImage  The new metadata image.
-     * @param delta     The delta image.
-     */
-    public void onNewMetadataImage(MetadataImage newImage, MetadataDelta delta) {
-        metadataImage = newImage;
     }
 
     /**

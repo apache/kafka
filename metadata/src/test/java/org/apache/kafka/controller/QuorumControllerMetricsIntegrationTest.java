@@ -57,7 +57,7 @@ public class QuorumControllerMetricsIntegrationTest {
         final AtomicBoolean closed = new AtomicBoolean(false);
 
         MockControllerMetrics() {
-            super(Optional.empty(), Time.SYSTEM, true);
+            super(Optional.empty(), Time.SYSTEM);
         }
 
         @Override
@@ -109,7 +109,7 @@ public class QuorumControllerMetricsIntegrationTest {
                 }
             });
             if (forceFailoverUsingLogLayer) {
-                controlEnv.activeController().setNewNextWriteOffset(123L);
+                logEnv.activeLogManager().get().throwOnNextAppend();
 
                 TestUtils.retryOnExceptionWithTimeout(30_000, () ->
                     createTopics(controlEnv.activeController(), "test_", 1, 1)
@@ -198,7 +198,7 @@ public class QuorumControllerMetricsIntegrationTest {
                                                      build()
         ) {
             QuorumController active = controlEnv.activeController();
-            Map<Integer, Long> brokerEpochs = registerBrokersAndUnfence(active, 3);
+            registerBrokersAndUnfence(active, 3);
 
             // Test that a new operation increments operationsStarted. We retry this if needed
             // to handle the case where another operation is performed in between loading

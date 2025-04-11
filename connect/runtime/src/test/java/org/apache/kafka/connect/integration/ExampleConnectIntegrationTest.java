@@ -63,8 +63,8 @@ public class ExampleConnectIntegrationTest {
     private static final int NUM_TASKS = 3;
     private static final int NUM_WORKERS = 3;
     private static final String CONNECTOR_NAME = "simple-conn";
-    private static final String SINK_CONNECTOR_CLASS_NAME = MonitorableSinkConnector.class.getSimpleName();
-    private static final String SOURCE_CONNECTOR_CLASS_NAME = MonitorableSourceConnector.class.getSimpleName();
+    private static final String SINK_CONNECTOR_CLASS_NAME = TestableSinkConnector.class.getSimpleName();
+    private static final String SOURCE_CONNECTOR_CLASS_NAME = TestableSourceConnector.class.getSimpleName();
 
     private EmbeddedConnectCluster connect;
     private ConnectorHandle connectorHandle;
@@ -79,7 +79,7 @@ public class ExampleConnectIntegrationTest {
         Properties exampleBrokerProps = new Properties();
         exampleBrokerProps.put("auto.create.topics.enable", "false");
 
-        // build a Connect cluster backed by Kafka and Zk
+        // build a Connect cluster backed by a Kafka KRaft cluster
         connect = new EmbeddedConnectCluster.Builder()
                 .name("connect-cluster")
                 .numWorkers(NUM_WORKERS)
@@ -100,7 +100,7 @@ public class ExampleConnectIntegrationTest {
         // delete connector handle
         RuntimeHandles.get().deleteConnector(CONNECTOR_NAME);
 
-        // stop all Connect, Kafka and Zk threads.
+        // stop the Connect cluster and its backing Kafka cluster.
         connect.stop();
     }
 

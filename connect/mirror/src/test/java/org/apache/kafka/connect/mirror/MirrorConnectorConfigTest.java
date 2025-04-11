@@ -187,15 +187,14 @@ public class MirrorConnectorConfigTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testMetricsReporters() {
-        Map<String, String> connectorProps = makeProps("metric.reporters", MockMetricsReporter.class.getName());
+        Map<String, String> connectorProps = makeProps();
         MirrorConnectorConfig config = new TestMirrorConnectorConfig(connectorProps);
-        assertEquals(2, config.metricsReporters().size());
-
-        connectorProps.put(CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false");
-        config = new TestMirrorConnectorConfig(connectorProps);
         assertEquals(1, config.metricsReporters().size());
+
+        connectorProps.put("metric.reporters", JmxReporter.class.getName() + "," + MockMetricsReporter.class.getName());
+        config = new TestMirrorConnectorConfig(connectorProps);
+        assertEquals(2, config.metricsReporters().size());
     }
 
     @Test

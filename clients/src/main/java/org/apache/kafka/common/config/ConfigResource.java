@@ -33,7 +33,12 @@ public final class ConfigResource {
      * Type of resource.
      */
     public enum Type {
-        CLIENT_METRICS((byte) 16), BROKER_LOGGER((byte) 8), BROKER((byte) 4), TOPIC((byte) 2), UNKNOWN((byte) 0);
+        GROUP((byte) 32),
+        CLIENT_METRICS((byte) 16),
+        BROKER_LOGGER((byte) 8),
+        BROKER((byte) 4),
+        TOPIC((byte) 2),
+        UNKNOWN((byte) 0);
 
         private static final Map<Byte, Type> TYPES = Collections.unmodifiableMap(
             Arrays.stream(values()).collect(Collectors.toMap(Type::id, Function.identity()))
