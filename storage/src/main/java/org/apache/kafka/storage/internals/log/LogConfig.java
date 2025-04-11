@@ -26,7 +26,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.LegacyRecord;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.ConfigUtils;
@@ -191,7 +190,7 @@ public class LogConfig extends AbstractConfig {
             .define(ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_DOC)
             .define(ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_CONFIG, LONG, ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_DEFAULT, atLeast(1), LOW, ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_DOC)
             .defineInternal(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, LONG, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT, atLeast(0), LOW, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DOC)
-            .defineInternal(TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), LOW, ServerLogConfigs.LOG_SEGMENT_BYTES_DOC);
+            .defineInternal(TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, LOW, ServerLogConfigs.LOG_SEGMENT_BYTES_DOC);
 
     private static final LogConfigDef CONFIG = new LogConfigDef();
     static {
@@ -259,7 +258,7 @@ public class LogConfig extends AbstractConfig {
                         TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC)
                 .define(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_COPY_DISABLE_DOC)
                 .define(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_DOC)
-                .defineInternal(TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), LOW, ServerLogConfigs.LOG_SEGMENT_BYTES_DOC);
+                .defineInternal(TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, LOW, ServerLogConfigs.LOG_SEGMENT_BYTES_DOC);
     }
 
     public final Set<String> overriddenConfigs;
