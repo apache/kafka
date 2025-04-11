@@ -21,7 +21,6 @@ import org.apache.kafka.clients.admin.AdminClient;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.OffsetSpec;
-import org.apache.kafka.clients.admin.TopicDescription;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.Assignment;
 import org.apache.kafka.clients.consumer.ConsumerPartitionAssignor.GroupSubscription;
@@ -2818,23 +2817,6 @@ public class StreamsPartitionAssignorTest {
         }
         return changelogEndOffsets;
     }
-
-    private static Map<String, TopicDescription> getTopicDescriptionMap(final List<String> changelogTopics,
-                                                                        final List<List<TopicPartitionInfo>> topicPartitionInfos) {
-        if (changelogTopics.size() != topicPartitionInfos.size()) {
-            throw new IllegalStateException("Passed in " + changelogTopics.size() + " changelog topic names, but " +
-                topicPartitionInfos.size() + " different topicPartitionInfo for the topics");
-        }
-        final Map<String, TopicDescription> changeLogTopicDescriptions = new HashMap<>();
-        for (int i = 0; i < changelogTopics.size(); i++) {
-            final String topic = changelogTopics.get(i);
-            final List<TopicPartitionInfo> topicPartitionInfo = topicPartitionInfos.get(i);
-            changeLogTopicDescriptions.put(topic, new TopicDescription(topic, false, topicPartitionInfo));
-        }
-
-        return changeLogTopicDescriptions;
-    }
-
 
     private static SubscriptionInfo getInfoForOlderVersion(final int version,
                                                            final ProcessId processId,

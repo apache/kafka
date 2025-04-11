@@ -2227,7 +2227,7 @@ public class StreamThreadTest {
         final List<Long> punctuatedStreamTime = new ArrayList<>();
         final List<Long> punctuatedWallClockTime = new ArrayList<>();
         final ProcessorSupplier<Object, Object, Void, Void> punctuateProcessor =
-            () -> new ContextualProcessor<Object, Object, Void, Void>() {
+            () -> new ContextualProcessor<>() {
                 @Override
                 public void init(final ProcessorContext<Void, Void> context) {
                     context.schedule(Duration.ofMillis(100L), PunctuationType.STREAM_TIME, punctuatedStreamTime::add);
@@ -2495,7 +2495,7 @@ public class StreamThreadTest {
 
         if (stateUpdaterEnabled) {
             TestUtils.waitForCondition(
-                () -> mockRestoreConsumer.assignment().size() == 0,
+                () -> mockRestoreConsumer.assignment().isEmpty(),
                 "Never get the assignment");
         } else {
             TestUtils.waitForCondition(
@@ -3433,7 +3433,7 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldReturnErrorIfProducerInstanceIdNotInitialized(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
+    public void shouldReturnErrorIfProducerInstanceIdNotInitialized(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
         thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
         thread.setState(State.STARTING);
 
@@ -3549,7 +3549,7 @@ public class StreamThreadTest {
 
     @ParameterizedTest
     @MethodSource("data")        
-    public void shouldTimeOutOnProducerInstanceId(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) throws Exception {
+    public void shouldTimeOutOnProducerInstanceId(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
         final MockProducer<byte[], byte[]> producer = new MockProducer<>();
         producer.setClientInstanceId(Uuid.randomUuid());
         producer.injectTimeoutException(-1);

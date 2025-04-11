@@ -345,7 +345,7 @@ public class KafkaStreamsTest {
         }).when(thread).start();
     }
 
-    private CountDownLatch terminableThreadBlockingLatch = new CountDownLatch(1);
+    private final CountDownLatch terminableThreadBlockingLatch = new CountDownLatch(1);
 
     private void prepareTerminableThread(final StreamThread thread) throws InterruptedException {
         doAnswer(invocation -> {
@@ -1369,7 +1369,7 @@ public class KafkaStreamsTest {
     }
 
     @Test
-    public void shouldGetClientSupplierFromConfigForConstructorWithTime() throws Exception {
+    public void shouldGetClientSupplierFromConfigForConstructorWithTime() {
         prepareStreams();
         final AtomicReference<StreamThread.State> state1 = prepareStreamThread(streamThreadOne, 1);
         final AtomicReference<StreamThread.State> state2 = prepareStreamThread(streamThreadTwo, 2);
@@ -1796,7 +1796,7 @@ public class KafkaStreamsTest {
         final AtomicBoolean didAssertGlobalThread = new AtomicBoolean(false);
 
         when(streamThreadOne.clientInstanceIds(any()))
-            .thenReturn(Collections.singletonMap("any-client-1", new KafkaFutureImpl<Uuid>() {
+            .thenReturn(Collections.singletonMap("any-client-1", new KafkaFutureImpl<>() {
                 @Override
                 public Uuid get(final long timeout, final TimeUnit timeUnit) {
                     didAssertThreadOne.set(true);
@@ -1806,7 +1806,7 @@ public class KafkaStreamsTest {
                 }
             }));
         when(streamThreadTwo.clientInstanceIds(any()))
-            .thenReturn(Collections.singletonMap("any-client-2", new KafkaFutureImpl<Uuid>() {
+            .thenReturn(Collections.singletonMap("any-client-2", new KafkaFutureImpl<>() {
                 @Override
                 public Uuid get(final long timeout, final TimeUnit timeUnit) {
                     didAssertThreadTwo.set(true);
@@ -1823,7 +1823,7 @@ public class KafkaStreamsTest {
             streams.start();
 
             when(globalStreamThreadMockedConstruction.constructed().get(0).globalConsumerInstanceId(any()))
-                .thenReturn(new KafkaFutureImpl<Uuid>() {
+                .thenReturn(new KafkaFutureImpl<>() {
                     @Override
                     public Uuid get(final long timeout, final TimeUnit timeUnit) {
                         didAssertGlobalThread.set(true);

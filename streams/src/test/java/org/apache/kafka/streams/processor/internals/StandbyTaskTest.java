@@ -178,7 +178,7 @@ public class StandbyTaskTest {
     }
 
     @Test
-    public void shouldThrowLockExceptionIfFailedToLockStateDirectory() throws IOException {
+    public void shouldThrowLockExceptionIfFailedToLockStateDirectory() {
         stateDirectory = mock(StateDirectory.class);
         when(stateDirectory.lock(taskId)).thenReturn(false);
         when(stateManager.taskType()).thenReturn(TaskType.STANDBY);

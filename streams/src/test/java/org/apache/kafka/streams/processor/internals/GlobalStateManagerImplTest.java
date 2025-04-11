@@ -29,7 +29,6 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
-import org.apache.kafka.streams.errors.DeserializationExceptionHandler;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.errors.StreamsException;
@@ -110,7 +109,6 @@ public class GlobalStateManagerImplTest {
     private ProcessorTopology topology;
     private InternalMockProcessorContext processorContext;
     private Optional<InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?>> optionalMockReprocessFactory;
-    private DeserializationExceptionHandler deserializationExceptionHandler;
 
     static ProcessorTopology withGlobalStores(final List<StateStore> stateStores,
                                               final Map<String, String> storeToChangelogTopic,
@@ -434,7 +432,7 @@ public class GlobalStateManagerImplTest {
     }
 
     @Test
-    public void shouldCloseStateStores() throws IOException {
+    public void shouldCloseStateStores() {
         stateManager.initialize();
         // register the stores
         initializeConsumer(1, 0, t1);

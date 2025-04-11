@@ -750,7 +750,7 @@ public class StreamTaskTest {
         metrics = new Metrics(new MetricConfig().recordLevel(Sensor.RecordingLevel.INFO), time);
 
         // Create a processor that only forwards even keys to test the metrics at the source and terminal nodes
-        final MockSourceNode<Integer, Integer> evenKeyForwardingSourceNode = new MockSourceNode<Integer, Integer>(intDeserializer, intDeserializer) {
+        final MockSourceNode<Integer, Integer> evenKeyForwardingSourceNode = new MockSourceNode<>(intDeserializer, intDeserializer) {
             InternalProcessorContext<Integer, Integer> context;
 
             @Override
@@ -2029,7 +2029,7 @@ public class StreamTaskTest {
     public void shouldThrowStreamsExceptionWhenFetchCommittedFailed() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
-        final Consumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        final Consumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
                 throw new KafkaException("KABOOM!");
@@ -3093,7 +3093,7 @@ public class StreamTaskTest {
             singletonList(stateStore),
             emptyMap());
 
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
                 throw new TimeoutException("KABOOM!");
