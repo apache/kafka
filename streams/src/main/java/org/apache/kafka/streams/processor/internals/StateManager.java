@@ -39,7 +39,7 @@ public interface StateManager {
                        final StateRestoreCallback stateRestoreCallback,
                        final CommitCallback checkpoint);
 
-    StateStore getStore(final String name);
+    StateStore store(final String name);
 
     void flush();
 
@@ -56,5 +56,5 @@ public interface StateManager {
     String changelogFor(final String storeName);
 
     // TODO: we can remove this when consolidating global state manager into processor state manager
-    StateStore getGlobalStore(final String name);
+    StateStore globalStore(final String name);
 }

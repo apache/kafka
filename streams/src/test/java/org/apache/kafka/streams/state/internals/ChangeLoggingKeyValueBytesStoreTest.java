@@ -28,9 +28,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ChangelogRecordDeserializationHelper;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
@@ -76,7 +74,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     private final MockRecordCollector collector = new MockRecordCollector();
     private final InMemoryKeyValueStore inner = new InMemoryKeyValueStore("kv");
     private final ChangeLoggingKeyValueBytesStore store = new ChangeLoggingKeyValueBytesStore(inner);
-    private InternalMockProcessorContext context;
+    private InternalMockProcessorContext<?, ?> context;
     private final StreamsConfig streamsConfig = streamsConfigMock();
     private final Bytes hi = Bytes.wrap("hi".getBytes());
     private final Bytes hello = Bytes.wrap("hello".getBytes());
@@ -91,7 +89,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
     public void before() {
         context = mockContext();
         context.setTime(0);
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
     }
 
     private InternalMockProcessorContext mockContext() {
@@ -99,7 +97,7 @@ public class ChangeLoggingKeyValueBytesStoreTest {
             TestUtils.tempDirectory(),
             Serdes.String(),
             Serdes.Long(),
-            new StreamsMetricsImpl(new Metrics(), "mock", StreamsConfig.METRICS_LATEST, new MockTime()),
+            new StreamsMetricsImpl(new Metrics(), "mock", "processId", new MockTime()),
             streamsConfig,
             () -> collector,
             new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics())),
@@ -112,23 +110,13 @@ public class ChangeLoggingKeyValueBytesStoreTest {
         store.close();
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        final InternalMockProcessorContext context = mockContext();
-        final KeyValueStore<Bytes, byte[]> innerMock = mock(InMemoryKeyValueStore.class);
-        final StateStore outer = new ChangeLoggingKeyValueBytesStore(innerMock);
-        outer.init((ProcessorContext) context, outer);
-        verify(innerMock).init((ProcessorContext) context, outer);
-    }
-
     @Test
     public void shouldDelegateInit() {
         final InternalMockProcessorContext context = mockContext();
         final KeyValueStore<Bytes, byte[]> innerMock = mock(InMemoryKeyValueStore.class);
         final StateStore outer = new ChangeLoggingKeyValueBytesStore(innerMock);
-        outer.init((StateStoreContext) context, outer);
-        verify(innerMock).init((StateStoreContext) context, outer);
+        outer.init(context, outer);
+        verify(innerMock).init(context, outer);
     }
 
     @Test

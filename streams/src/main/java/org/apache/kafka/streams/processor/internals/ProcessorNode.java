@@ -38,6 +38,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Set;
 
 import static org.apache.kafka.streams.StreamsConfig.PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG;
@@ -98,7 +99,7 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         return children;
     }
 
-    ProcessorNode<KOut, VOut, ?, ?> getChild(final String childName) {
+    ProcessorNode<KOut, VOut, ?, ?> child(final String childName) {
         return childByName.get(childName);
     }
 
@@ -202,29 +203,49 @@ public class ProcessorNode<KIn, VIn, KOut, VOut> {
         } catch (final FailedProcessingException | TaskCorruptedException | TaskMigratedException e) {
             // Rethrow exceptions that should not be handled here
             throw e;
-        } catch (final RuntimeException e) {
+        } catch (final Exception processingException) {
+            // while Java distinguishes checked vs unchecked exceptions, other languages
+            // like Scala or Kotlin do not, and thus we need to catch `Exception`
+            // (instead of `RuntimeException`) to work well with those languages
             final ErrorHandlerContext errorHandlerContext = new DefaultErrorHandlerContext(
                 null, // only required to pass for DeserializationExceptionHandler
-                internalProcessorContext.topic(),
-                internalProcessorContext.partition(),
-                internalProcessorContext.offset(),
-                internalProcessorContext.headers(),
+                internalProcessorContext.recordContext().topic(),
+                internalProcessorContext.recordContext().partition(),
+                internalProcessorContext.recordContext().offset(),
+                internalProcessorContext.recordContext().headers(),
                 internalProcessorContext.currentNode().name(),
-                internalProcessorContext.taskId());
+                internalProcessorContext.taskId(),
+                internalProcessorContext.recordContext().timestamp()
+            );
 
             final ProcessingExceptionHandler.ProcessingHandlerResponse response;
-
             try {
-                response = processingExceptionHandler.handle(errorHandlerContext, record, e);
+                response = Objects.requireNonNull(
+                    processingExceptionHandler.handle(errorHandlerContext, record, processingException),
+                    "Invalid ProductionExceptionHandler response."
+                );
             } catch (final Exception fatalUserException) {
-                throw new FailedProcessingException(fatalUserException);
+                // while Java distinguishes checked vs unchecked exceptions, other languages
+                // like Scala or Kotlin do not, and thus we need to catch `Exception`
+                // (instead of `RuntimeException`) to work well with those languages
+                log.error(
+                    "Processing error callback failed after processing error for record: {}",
+                    errorHandlerContext,
+                    processingException
+                );
+                throw new FailedProcessingException(
+                    "Fatal user code error in processing error callback",
+                    internalProcessorContext.currentNode().name(),
+                    fatalUserException
+                );
             }
+
             if (response == ProcessingExceptionHandler.ProcessingHandlerResponse.FAIL) {
                 log.error("Processing exception handler is set to fail upon" +
                      " a processing error. If you would rather have the streaming pipeline" +
                      " continue after a processing error, please set the " +
                      PROCESSING_EXCEPTION_HANDLER_CLASS_CONFIG + " appropriately.");
-                throw new FailedProcessingException(e);
+                throw new FailedProcessingException(internalProcessorContext.currentNode().name(), processingException);
             } else {
                 droppedRecordsSensor.record();
             }

@@ -33,6 +33,7 @@ import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.EnumMap;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -104,6 +105,10 @@ public class MetadataResponse extends AbstractResponse {
         return errors;
     }
 
+    public Errors topLevelError() {
+        return Errors.forCode(data.errorCode());
+    }
+
     /**
      * Get a map of the topicIds which had metadata errors
      * @return the map
@@ -122,7 +127,7 @@ public class MetadataResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errorCounts = new HashMap<>();
+        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
         data.topics().forEach(metadata -> {
             metadata.partitions().forEach(p -> updateErrorCounts(errorCounts, Errors.forCode(p.errorCode())));
             updateErrorCounts(errorCounts, Errors.forCode(metadata.errorCode()));
@@ -177,12 +182,17 @@ public class MetadataResponse extends AbstractResponse {
     }
 
     private static Node[] convertToNodeArray(List<Integer> replicaIds, Map<Integer, Node> nodesById) {
-        return replicaIds.stream().map(replicaId -> {
+        // Since this is on hot path for partition info, use indexed iteration to avoid allocation overhead of Streams.
+        int size = replicaIds.size();
+        Node[] nodes = new Node[size];
+        for (int i = 0; i < size; i++) {
+            Integer replicaId = replicaIds.get(i);
             Node node = nodesById.get(replicaId);
             if (node == null)
-                return new Node(replicaId, "", -1);
-            return node;
-        }).toArray(Node[]::new);
+                node = new Node(replicaId, "", -1);
+            nodes[i] = node;
+        }
+        return nodes;
     }
 
     /**

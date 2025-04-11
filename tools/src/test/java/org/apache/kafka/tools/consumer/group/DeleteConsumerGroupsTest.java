@@ -16,25 +16,22 @@
  */
 package org.apache.kafka.tools.consumer.group;
 
-import kafka.test.ClusterConfig;
-import kafka.test.ClusterInstance;
-import kafka.test.annotation.ClusterTemplate;
-import kafka.test.junit.ClusterTestExtensions;
-
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.RangeAssignor;
-import org.apache.kafka.common.ConsumerGroupState;
+import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.serialization.StringDeserializer;
+import org.apache.kafka.common.test.ClusterInstance;
+import org.apache.kafka.common.test.api.ClusterConfig;
+import org.apache.kafka.common.test.api.ClusterTemplate;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.Arrays;
 import java.util.HashMap;
@@ -57,8 +54,8 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CO
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.common.ConsumerGroupState.EMPTY;
-import static org.apache.kafka.common.ConsumerGroupState.STABLE;
+import static org.apache.kafka.common.GroupState.EMPTY;
+import static org.apache.kafka.common.GroupState.STABLE;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
@@ -67,8 +64,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-
-@ExtendWith(value = ClusterTestExtensions.class)
 public class DeleteConsumerGroupsTest {
 
     private static List<ClusterConfig> generator() {
@@ -101,7 +96,7 @@ public class DeleteConsumerGroupsTest {
             assertEquals(1, result.size());
             assertNotNull(result.get(missingGroupId));
             assertInstanceOf(GroupIdNotFoundException.class,
-                    result.get(missingGroupId).getCause(),
+                    result.get(missingGroupId),
                     "The expected error (" + Errors.GROUP_ID_NOT_FOUND + ") was not detected while deleting consumer group");
         }
     }
@@ -117,7 +112,7 @@ public class DeleteConsumerGroupsTest {
                     ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(cgcArgs)
             ) {
                 TestUtils.waitForCondition(
-                        () -> service.collectGroupMembers(groupId, false).getValue().get().size() == 1,
+                        () -> service.collectGroupMembers(groupId).getValue().get().size() == 1,
                         "The group did not initialize as expected."
                 );
 
@@ -133,7 +128,7 @@ public class DeleteConsumerGroupsTest {
                 assertEquals(1, result.size());
                 assertNotNull(result.get(groupId));
                 assertInstanceOf(GroupNotEmptyException.class,
-                        result.get(groupId).getCause(),
+                        result.get(groupId),
                         "The expected error (" + Errors.NON_EMPTY_GROUP + ") was not detected while deleting consumer group. Result was:(" + result + ")");
             }
         }
@@ -319,8 +314,8 @@ public class DeleteConsumerGroupsTest {
         );
     }
 
-    private boolean checkGroupState(ConsumerGroupCommand.ConsumerGroupService service, String groupId, ConsumerGroupState state) throws Exception {
-        return Objects.equals(service.collectGroupState(groupId).state, state);
+    private boolean checkGroupState(ConsumerGroupCommand.ConsumerGroupService service, String groupId, GroupState state) throws Exception {
+        return Objects.equals(service.collectGroupState(groupId).groupState, state);
     }
 
     private ConsumerGroupCommand.ConsumerGroupService getConsumerGroupService(String[] args) {
@@ -338,8 +333,9 @@ public class DeleteConsumerGroupsTest {
         configs.put(KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         configs.put(VALUE_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class.getName());
         configs.put(GROUP_PROTOCOL_CONFIG, groupProtocol);
-        configs.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
-
+        if (GroupProtocol.CLASSIC.name.equalsIgnoreCase(groupProtocol)) {
+            configs.put(PARTITION_ASSIGNMENT_STRATEGY_CONFIG, RangeAssignor.class.getName());
+        }
         configs.putAll(customConfigs);
         return configs;
     }

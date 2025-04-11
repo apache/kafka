@@ -172,54 +172,6 @@ public class MirrorMakerConfigTest {
     }
 
     @Test
-    public void testConfigBackwardsCompatibility() {
-        MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
-            "clusters", "a, b",
-            "groups.blacklist", "group-7",
-            "topics.blacklist", "topic3",
-            "config.properties.blacklist", "property-3",
-            "topic.filter.class", DefaultTopicFilter.class.getName()));
-        SourceAndTarget sourceAndTarget = new SourceAndTarget("source", "target");
-        Map<String, String> connectorProps = mirrorConfig.connectorBaseConfig(sourceAndTarget,
-                                                                              MirrorSourceConnector.class);
-        MirrorSourceConfig sourceConfig = new MirrorSourceConfig(connectorProps);
-        DefaultTopicFilter.TopicFilterConfig filterConfig =
-            new DefaultTopicFilter.TopicFilterConfig(connectorProps);
-
-        assertEquals(Collections.singletonList("topic3"), filterConfig.getList("topics.exclude"),
-            "Topics exclude should be backwards compatible.");
-
-        assertEquals(Collections.singletonList("property-3"), sourceConfig.getList("config.properties.exclude"),
-            "Config properties exclude should be backwards compatible.");
-
-        MirrorCheckpointConfig checkpointConfig = new MirrorCheckpointConfig(connectorProps);
-        assertEquals(Collections.singletonList("group-7"), checkpointConfig.getList("groups.exclude"),
-            "Groups exclude should be backwards compatible.");
-
-    }
-
-    @Test
-    public void testConfigBackwardsCompatibilitySourceTarget() {
-        MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
-            "clusters", "a, b",
-            "source->target.topics.blacklist", "topic3",
-            "source->target.groups.blacklist", "group-7",
-            "topic.filter.class", DefaultTopicFilter.class.getName()));
-        SourceAndTarget sourceAndTarget = new SourceAndTarget("source", "target");
-        Map<String, String> connectorProps = mirrorConfig.connectorBaseConfig(sourceAndTarget,
-                                                                              MirrorSourceConnector.class);
-        MirrorCheckpointConfig connectorConfig = new MirrorCheckpointConfig(connectorProps);
-        DefaultTopicFilter.TopicFilterConfig filterConfig =
-            new DefaultTopicFilter.TopicFilterConfig(connectorProps);
-
-        assertEquals(Collections.singletonList("topic3"), filterConfig.getList("topics.exclude"),
-            "Topics exclude should be backwards compatible.");
-
-        assertEquals(Collections.singletonList("group-7"), connectorConfig.getList("groups.exclude"),
-            "Groups exclude should be backwards compatible.");
-    }
-
-    @Test
     public void testIncludesTopicFilterProperties() {
         MirrorMakerConfig mirrorConfig = new MirrorMakerConfig(makeProps(
             "clusters", "a, b",

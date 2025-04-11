@@ -23,7 +23,6 @@ import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.processor.internals.ProcessorRecordContext;
 import org.apache.kafka.test.InternalMockProcessorContext;
@@ -45,7 +44,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class RocksDBTimeOrderedKeyValueBytesStoreTest {
 
-    private InternalMockProcessorContext context;
+    private InternalMockProcessorContext<?, ?> context;
     private RocksDBTimeOrderedKeyValueBytesStore bytesStore;
     private File stateDir;
     final String storeName = "bytes-store";
@@ -65,7 +64,7 @@ class RocksDBTimeOrderedKeyValueBytesStoreTest {
             new MockRecordCollector(),
             new ThreadCache(new LogContext("testCache "), 0, new MockStreamsMetrics(new Metrics()))
         );
-        bytesStore.init((StateStoreContext) context, bytesStore);
+        bytesStore.init(context, bytesStore);
     }
 
     @AfterEach
@@ -94,6 +93,7 @@ class RocksDBTimeOrderedKeyValueBytesStoreTest {
         assertEquals(0, writeBatchMap.size());
     }
 
+    @SuppressWarnings("resource")
     private byte[] serializeValue(final Long value) {
         final Serde<Long> valueSerde = new Serdes.LongSerde();
         final byte[] valueBytes = valueSerde.serializer().serialize(topic, value);
@@ -101,6 +101,7 @@ class RocksDBTimeOrderedKeyValueBytesStoreTest {
         return buffered.serialize(0).array();
     }
 
+    @SuppressWarnings("resource")
     private Bytes serializeKey(final String key, final int seqnum, final long timestamp) {
         final Serde<String> keySerde = new Serdes.StringSerde();
         return Bytes.wrap(

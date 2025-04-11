@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.InternalProcessorContext;
@@ -34,26 +33,17 @@ public class ChangeLoggingKeyValueBytesStore
         extends WrappedStateStore<KeyValueStore<Bytes, byte[]>, byte[], byte[]>
         implements KeyValueStore<Bytes, byte[]> {
 
-    InternalProcessorContext context;
+    InternalProcessorContext<?, ?> internalContext;
 
     ChangeLoggingKeyValueBytesStore(final KeyValueStore<Bytes, byte[]> inner) {
         super(inner);
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context,
+    public void init(final StateStoreContext stateStoreContext,
                      final StateStore root) {
-        this.context = asInternalProcessorContext(context);
-        super.init(context, root);
-        maybeSetEvictionListener();
-    }
-
-    @Override
-    public void init(final StateStoreContext context,
-                     final StateStore root) {
-        this.context = asInternalProcessorContext(context);
-        super.init(context, root);
+        internalContext = asInternalProcessorContext(stateStoreContext);
+        super.init(stateStoreContext, root);
         maybeSetEvictionListener();
     }
 
@@ -62,7 +52,7 @@ public class ChangeLoggingKeyValueBytesStore
         if (wrapped() instanceof MemoryLRUCache) {
             ((MemoryLRUCache) wrapped()).setWhenEldestRemoved((key, value) -> {
                 // pass null to indicate removal
-                log(key, null, context.timestamp());
+                log(key, null, internalContext.recordContext().timestamp());
             });
         }
     }
@@ -76,7 +66,7 @@ public class ChangeLoggingKeyValueBytesStore
     public void put(final Bytes key,
                     final byte[] value) {
         wrapped().put(key, value);
-        log(key, value, context.timestamp());
+        log(key, value, internalContext.recordContext().timestamp());
     }
 
     @Override
@@ -85,7 +75,7 @@ public class ChangeLoggingKeyValueBytesStore
         final byte[] previous = wrapped().putIfAbsent(key, value);
         if (previous == null) {
             // then it was absent
-            log(key, value, context.timestamp());
+            log(key, value, internalContext.recordContext().timestamp());
         }
         return previous;
     }
@@ -94,7 +84,7 @@ public class ChangeLoggingKeyValueBytesStore
     public void putAll(final List<KeyValue<Bytes, byte[]>> entries) {
         wrapped().putAll(entries);
         for (final KeyValue<Bytes, byte[]> entry : entries) {
-            log(entry.key, entry.value, context.timestamp());
+            log(entry.key, entry.value, internalContext.recordContext().timestamp());
         }
     }
 
@@ -107,7 +97,7 @@ public class ChangeLoggingKeyValueBytesStore
     @Override
     public byte[] delete(final Bytes key) {
         final byte[] oldValue = wrapped().delete(key);
-        log(key, null, context.timestamp());
+        log(key, null, internalContext.recordContext().timestamp());
         return oldValue;
     }
 
@@ -139,6 +129,6 @@ public class ChangeLoggingKeyValueBytesStore
     }
 
     void log(final Bytes key, final byte[] value, final long timestamp) {
-        context.logChange(name(), key, value, timestamp, wrapped().getPosition());
+        internalContext.logChange(name(), key, value, timestamp, wrapped().getPosition());
     }
 }

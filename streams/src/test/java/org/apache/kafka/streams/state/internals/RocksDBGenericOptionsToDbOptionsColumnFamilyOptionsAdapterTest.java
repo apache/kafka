@@ -28,7 +28,6 @@ import org.rocksdb.AbstractCompactionFilter;
 import org.rocksdb.AbstractCompactionFilter.Context;
 import org.rocksdb.AbstractCompactionFilterFactory;
 import org.rocksdb.AbstractWalFilter;
-import org.rocksdb.AccessHint;
 import org.rocksdb.BuiltinComparator;
 import org.rocksdb.ColumnFamilyOptions;
 import org.rocksdb.CompactionPriority;
@@ -108,6 +107,12 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
             add("notifyAll");
             add("toString");
             add("getOptionStringFromProps");
+            add("maxBackgroundCompactions");
+            add("setMaxBackgroundCompactions");
+            add("maxBackgroundFlushes");
+            add("setMaxBackgroundFlushes");
+            add("tablePropertiesCollectorFactory");
+            add("setTablePropertiesCollectorFactory");
             addAll(walRelatedMethods);
         }
     };
@@ -171,9 +176,6 @@ public class RocksDBGenericOptionsToDbOptionsColumnFamilyOptionsAdapterTest {
                     break;
                 case "java.util.Collection":
                     parameters[i] = new ArrayList<>();
-                    break;
-                case "org.rocksdb.AccessHint":
-                    parameters[i] = AccessHint.NONE;
                     break;
                 case "org.rocksdb.Cache":
                     parameters[i] = new LRUCache(1L);

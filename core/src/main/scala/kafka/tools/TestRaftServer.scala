@@ -22,9 +22,9 @@ import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDeque, TimeUnit}
 import joptsimple.{OptionException, OptionSpec}
 import kafka.network.{DataPlaneAcceptor, SocketServer}
-import kafka.raft.{KafkaRaftManager, RaftManager}
+import kafka.raft.{DefaultExternalKRaftMetrics, KafkaRaftManager, RaftManager}
 import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, SimpleApiVersionManager}
-import kafka.utils.{CoreUtils, Exit, Logging}
+import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
@@ -33,10 +33,10 @@ import org.apache.kafka.common.metrics.stats.{Meter, Percentile, Percentiles}
 import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
-import org.apache.kafka.common.utils.{Time, Utils}
+import org.apache.kafka.common.utils.{Exit, Time, Utils}
 import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.errors.NotLeaderException
-import org.apache.kafka.raft.{Batch, BatchReader, Endpoints, LeaderAndEpoch, RaftClient, QuorumConfig}
+import org.apache.kafka.raft.{Batch, BatchReader, Endpoints, LeaderAndEpoch, QuorumConfig, RaftClient}
 import org.apache.kafka.security.CredentialProvider
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.common.serialization.RecordSerde
@@ -81,8 +81,7 @@ class TestRaftServer(
     val apiVersionManager = new SimpleApiVersionManager(
       ListenerType.CONTROLLER,
       true,
-      false,
-      () => FinalizedFeatures.fromKRaftVersion(MetadataVersion.MINIMUM_KRAFT_VERSION))
+      () => FinalizedFeatures.fromKRaftVersion(MetadataVersion.MINIMUM_VERSION))
     socketServer = new SocketServer(config, metrics, time, credentialProvider, apiVersionManager)
 
     val endpoints = Endpoints.fromInetSocketAddresses(
@@ -103,9 +102,10 @@ class TestRaftServer(
       topicId,
       time,
       metrics,
+      new DefaultExternalKRaftMetrics(None, None),
       Some(threadNamePrefix),
-      CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumVoters)),
-      QuorumConfig.parseBootstrapServers(config.quorumBootstrapServers),
+      CompletableFuture.completedFuture(QuorumConfig.parseVoterConnections(config.quorumConfig.voters)),
+      QuorumConfig.parseBootstrapServers(config.quorumConfig.bootstrapServers),
       endpoints,
       new ProcessTerminatingFaultHandler.Builder().build()
     )
@@ -148,8 +148,7 @@ class TestRaftServer(
       CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), this)
     if (socketServer != null)
       CoreUtils.swallow(socketServer.shutdown(), this)
-    if (metrics != null)
-      CoreUtils.swallow(metrics.close(), this)
+    Utils.closeQuietly(metrics, "metrics")
     shutdownLatch.countDown()
   }
 
@@ -211,7 +210,8 @@ class TestRaftServer(
     ): Unit = {
       recordCount.incrementAndGet()
       try {
-        val offset = raftManager.client.scheduleAppend(leaderEpoch, List(payload).asJava)
+        val offset = raftManager.client.prepareAppend(leaderEpoch, List(payload).asJava)
+        raftManager.client.schedulePreparedAppend()
         pendingAppends.offer(PendingAppend(offset, currentTimeMs))
       } catch {
         case e: NotLeaderException =>
@@ -479,7 +479,7 @@ object TestRaftServer extends Logging {
       val recordSize = opts.options.valueOf(opts.recordSizeOpt)
       val server = new TestRaftServer(config, Uuid.fromString(directoryIdAsString), throughput, recordSize)
 
-      Exit.addShutdownHook("raft-shutdown-hook", server.shutdown())
+      Exit.addShutdownHook("raft-shutdown-hook", () => server.shutdown())
 
       server.startup()
       server.awaitShutdown()

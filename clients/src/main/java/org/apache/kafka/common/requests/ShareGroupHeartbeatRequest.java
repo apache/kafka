@@ -19,10 +19,8 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.message.ShareGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
-
-import java.nio.ByteBuffer;
+import org.apache.kafka.common.protocol.Readable;
 
 public class ShareGroupHeartbeatRequest extends AbstractRequest {
     /**
@@ -79,8 +77,8 @@ public class ShareGroupHeartbeatRequest extends AbstractRequest {
         return data;
     }
 
-    public static ShareGroupHeartbeatRequest parse(ByteBuffer buffer, short version) {
+    public static ShareGroupHeartbeatRequest parse(Readable readable, short version) {
         return new ShareGroupHeartbeatRequest(new ShareGroupHeartbeatRequestData(
-                new ByteBufferAccessor(buffer), version), version);
+                readable, version), version);
     }
 }

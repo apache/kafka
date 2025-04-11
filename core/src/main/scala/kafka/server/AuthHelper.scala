@@ -20,7 +20,6 @@ package kafka.server
 import java.lang.{Byte => JByte}
 import java.util.Collections
 import kafka.network.RequestChannel
-import kafka.utils.CoreUtils
 import org.apache.kafka.clients.admin.EndpointType
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.acl.AclOperation.DESCRIBE
@@ -56,7 +55,7 @@ class AuthHelper(authorizer: Option[Authorizer]) {
 
   def authorizeClusterOperation(request: RequestChannel.Request, operation: AclOperation): Unit = {
     if (!authorize(request.context, operation, CLUSTER, CLUSTER_NAME))
-      throw new ClusterAuthorizationException(s"Request $request is not authorized.")
+      throw new ClusterAuthorizationException(s"Request $request needs $operation permission.")
   }
 
   def authorizedOperations(request: RequestChannel.Request, resource: Resource): Int = {
@@ -105,7 +104,7 @@ class AuthHelper(authorizer: Option[Authorizer]) {
                             logIfDenied: Boolean = true)(resourceName: T => String): Set[String] = {
     authorizer match {
       case Some(authZ) =>
-        val resourceNameToCount = CoreUtils.groupMapReduce(resources)(resourceName)(_ => 1)(_ + _)
+        val resourceNameToCount = resources.groupMapReduce(resourceName)(_ => 1)(_ + _)
         val actions = resourceNameToCount.iterator.map { case (resourceName, count) =>
           val resource = new ResourcePattern(resourceType, resourceName, PatternType.LITERAL)
           new Action(operation, resource, count, logIfAllowed, logIfDenied)

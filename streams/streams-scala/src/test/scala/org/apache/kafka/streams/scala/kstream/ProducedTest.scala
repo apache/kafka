@@ -23,6 +23,9 @@ import org.apache.kafka.streams.scala.serialization.Serdes._
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Test
 
+import java.util
+import java.util.Optional
+
 class ProducedTest {
 
   @Test
@@ -37,7 +40,16 @@ class ProducedTest {
   @Test
   def testCreateProducedWithSerdesAndStreamPartitioner(): Unit = {
     val partitioner = new StreamPartitioner[String, Long] {
-      override def partition(topic: String, key: String, value: Long, numPartitions: Int): Integer = 0
+      override def partitions(
+        topic: String,
+        key: String,
+        value: Long,
+        numPartitions: Int
+      ): Optional[util.Set[Integer]] = {
+        val partitions = new util.HashSet[Integer]()
+        partitions.add(Int.box(0))
+        Optional.of(partitions)
+      }
     }
     val produced: Produced[String, Long] = Produced.`with`(partitioner)
 

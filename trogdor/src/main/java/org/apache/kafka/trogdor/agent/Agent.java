@@ -41,9 +41,6 @@ import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.Namespace;
 
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
-
 import java.io.PrintStream;
 import java.util.Set;
 
@@ -55,8 +52,6 @@ import static net.sourceforge.argparse4j.impl.Arguments.store;
  * The agent process runs tasks.
  */
 public final class Agent {
-    private static final Logger log = LoggerFactory.getLogger(Agent.class);
-
     /**
      * The default Agent port.
      */
@@ -160,7 +155,7 @@ public final class Agent {
     /**
      * Start a task on the agent, and block until it completes.
      *
-     * @param spec          The task specifiction.
+     * @param spec          The task specification.
      * @param out           The output stream to print to.
      *
      * @return              True if the task run successfully; false otherwise.
@@ -248,16 +243,16 @@ public final class Agent {
         JsonRestServer restServer =
             new JsonRestServer(Node.Util.getTrogdorAgentPort(platform.curNode()));
         AgentRestResource resource = new AgentRestResource();
-        log.info("Starting agent process.");
+        System.out.println("Starting agent process.");
         final Agent agent = new Agent(platform, Scheduler.SYSTEM, restServer, resource);
         restServer.start(resource);
         Exit.addShutdownHook("agent-shutdown-hook", () -> {
-            log.warn("Running agent shutdown hook.");
+            System.out.println("Running agent shutdown hook.");
             try {
                 agent.beginShutdown();
                 agent.waitForShutdown();
             } catch (Exception e) {
-                log.error("Got exception while running agent shutdown hook.", e);
+                System.out.println("Got exception while running agent shutdown hook. " + e);
             }
         });
         if (taskSpec != null) {

@@ -16,12 +16,22 @@
  */
 package org.apache.kafka.network;
 
+import org.apache.kafka.common.Endpoint;
+import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
-import org.apache.kafka.server.config.ReplicationConfigs;
+import org.apache.kafka.server.util.Csv;
 
+import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.HIGH;
@@ -54,49 +64,27 @@ public class SocketServerConfigs {
 
     public static final String LISTENERS_CONFIG = "listeners";
     public static final String LISTENERS_DEFAULT = "PLAINTEXT://:9092";
-    public static final String LISTENERS_DOC = "Listener List - Comma-separated list of URIs we will listen on and the listener names." +
-            String.format(" If the listener name is not a security protocol, <code>%s</code> must also be set.%n", LISTENER_SECURITY_PROTOCOL_MAP_CONFIG) +
-            " Listener names and port numbers must be unique unless %n" +
-            " one listener is an IPv4 address and the other listener is %n" +
-            " an IPv6 address (for the same port).%n" +
-            " Specify hostname as 0.0.0.0 to bind to all interfaces.%n" +
-            " Leave hostname empty to bind to default interface.%n" +
-            " Examples of legal listener lists:%n" +
-            " <code>PLAINTEXT://myhost:9092,SSL://:9091</code>%n" +
-            " <code>CLIENT://0.0.0.0:9092,REPLICATION://localhost:9093</code>%n" +
-            " <code>PLAINTEXT://127.0.0.1:9092,SSL://[::1]:9092</code>%n";
+    public static final String LISTENERS_DOC = String.format("Listener List - Comma-separated list of URIs we will listen on and the listener names." +
+                    " If the listener name is not a security protocol, <code>%s</code> must also be set.%n" +
+                    " Listener names and port numbers must be unique unless one listener is an IPv4 address and the other listener is an IPv6 address (for the same port).%n" +
+                    " Specify hostname as 0.0.0.0 to bind to all interfaces.%n" +
+                    " Leave hostname empty to bind to default interface.%n" +
+                    " Examples of legal listener lists:%n" +
+                    " <code>PLAINTEXT://myhost:9092,SSL://:9091</code>%n" +
+                    " <code>CLIENT://0.0.0.0:9092,REPLICATION://localhost:9093</code>%n" +
+                    " <code>PLAINTEXT://127.0.0.1:9092,SSL://[::1]:9092</code>%n", LISTENER_SECURITY_PROTOCOL_MAP_CONFIG);
 
     public static final String ADVERTISED_LISTENERS_CONFIG = "advertised.listeners";
-    public static final String ADVERTISED_LISTENERS_DOC = String.format(
-            "Listeners to publish to ZooKeeper for clients to use, if different than the <code>%s</code> config property." +
+    public static final String ADVERTISED_LISTENERS_DOC = String.format("Specifies the listener addresses that the Kafka brokers will advertise to clients and other brokers." +
+                    " The config is useful where the actual listener configuration <code>%s</code> does not represent the addresses that clients should" +
+                    " use to connect, such as in cloud environments." +
+                    " The addresses are published to and managed by the controller, the brokers pull these data from the controller as needed." +
                     " In IaaS environments, this may need to be different from the interface to which the broker binds." +
                     " If this is not set, the value for <code>%1$1s</code> will be used." +
                     " Unlike <code>%1$1s</code>, it is not valid to advertise the 0.0.0.0 meta-address.%n" +
                     " Also unlike <code>%1$1s</code>, there can be duplicated ports in this property," +
                     " so that one listener can be configured to advertise another listener's address." +
                     " This can be useful in some cases where external load balancers are used.", LISTENERS_CONFIG);
-
-
-    public static final String CONTROL_PLANE_LISTENER_NAME_CONFIG = "control.plane.listener.name";
-    public static final String CONTROL_PLANE_LISTENER_NAME_DOC = String.format(
-            "Name of listener used for communication between controller and brokers. " +
-                    "A broker will use the <code>%s</code> to locate the endpoint in %s list, to listen for connections from the controller. " +
-                    "For example, if a broker's config is:%n" +
-                    "<code>listeners = INTERNAL://192.1.1.8:9092, EXTERNAL://10.1.1.5:9093, CONTROLLER://192.1.1.8:9094" +
-                    "listener.security.protocol.map = INTERNAL:PLAINTEXT, EXTERNAL:SSL, CONTROLLER:SSL" +
-                    "control.plane.listener.name = CONTROLLER</code>%n" +
-                    "On startup, the broker will start listening on \"192.1.1.8:9094\" with security protocol \"SSL\".%n" +
-                    "On the controller side, when it discovers a broker's published endpoints through ZooKeeper, it will use the <code>%1$1s</code> " +
-                    "to find the endpoint, which it will use to establish connection to the broker.%n" +
-                    "For example, if the broker's published endpoints on ZooKeeper are:%n" +
-                    " <code>\"endpoints\" : [\"INTERNAL://broker1.example.com:9092\",\"EXTERNAL://broker1.example.com:9093\",\"CONTROLLER://broker1.example.com:9094\"]</code>%n" +
-                    " and the controller's config is:%n" +
-                    "<code>listener.security.protocol.map = INTERNAL:PLAINTEXT, EXTERNAL:SSL, CONTROLLER:SSL" +
-                    "control.plane.listener.name = CONTROLLER</code>%n" +
-                    "then the controller will use \"broker1.example.com:9094\" with security protocol \"SSL\" to connect to the broker.%n" +
-                    "If not explicitly configured, the default value will be null and there will be no dedicated endpoints for controller connections.%n" +
-                    "If explicitly configured, the value cannot be the same as the value of <code>%s</code>.",
-            CONTROL_PLANE_LISTENER_NAME_CONFIG, LISTENERS_CONFIG, ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG);
 
     public static final String SOCKET_SEND_BUFFER_BYTES_CONFIG = "socket.send.buffer.bytes";
     public static final int SOCKET_SEND_BUFFER_BYTES_DEFAULT = 100 * 1024;
@@ -170,7 +158,6 @@ public class SocketServerConfigs {
             .define(LISTENERS_CONFIG, STRING, LISTENERS_DEFAULT, HIGH, LISTENERS_DOC)
             .define(ADVERTISED_LISTENERS_CONFIG, STRING, null, HIGH, ADVERTISED_LISTENERS_DOC)
             .define(LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, STRING, LISTENER_SECURITY_PROTOCOL_MAP_DEFAULT, LOW, LISTENER_SECURITY_PROTOCOL_MAP_DOC)
-            .define(CONTROL_PLANE_LISTENER_NAME_CONFIG, STRING, null, HIGH, CONTROL_PLANE_LISTENER_NAME_DOC)
             .define(SOCKET_SEND_BUFFER_BYTES_CONFIG, INT, SOCKET_SEND_BUFFER_BYTES_DEFAULT, HIGH, SOCKET_SEND_BUFFER_BYTES_DOC)
             .define(SOCKET_RECEIVE_BUFFER_BYTES_CONFIG, INT, SOCKET_RECEIVE_BUFFER_BYTES_DEFAULT, HIGH, SOCKET_RECEIVE_BUFFER_BYTES_DOC)
             .define(SOCKET_REQUEST_MAX_BYTES_CONFIG, INT, SOCKET_REQUEST_MAX_BYTES_DEFAULT, atLeast(1), HIGH, SOCKET_REQUEST_MAX_BYTES_DOC)
@@ -184,4 +171,58 @@ public class SocketServerConfigs {
             .define(QUEUED_MAX_REQUESTS_CONFIG, INT, QUEUED_MAX_REQUESTS_DEFAULT, atLeast(1), HIGH, QUEUED_MAX_REQUESTS_DOC)
             .define(QUEUED_MAX_BYTES_CONFIG, LONG, QUEUED_MAX_REQUEST_BYTES_DEFAULT, MEDIUM, QUEUED_MAX_REQUEST_BYTES_DOC)
             .define(NUM_NETWORK_THREADS_CONFIG, INT, NUM_NETWORK_THREADS_DEFAULT, atLeast(1), HIGH, NUM_NETWORK_THREADS_DOC);
+
+    private static final Pattern URI_PARSE_REGEXP = Pattern.compile(
+        "^(.*)://\\[?([0-9a-zA-Z\\-%._:]*)\\]?:(-?[0-9]+)");
+
+    public static final Map<ListenerName, SecurityProtocol> DEFAULT_NAME_TO_SECURITY_PROTO;
+
+    static {
+        HashMap<ListenerName, SecurityProtocol> nameToSecurityProtocol = new HashMap<>();
+        for (SecurityProtocol securityProtocol : SecurityProtocol.values()) {
+            nameToSecurityProtocol.put(ListenerName.forSecurityProtocol(securityProtocol), securityProtocol);
+        }
+        DEFAULT_NAME_TO_SECURITY_PROTO = Collections.unmodifiableMap(nameToSecurityProtocol);
+    }
+
+    public static List<Endpoint> listenerListToEndPoints(
+        String input,
+        Map<ListenerName, SecurityProtocol> nameToSecurityProto
+    ) {
+        return listenerListToEndPoints(input, n -> {
+            SecurityProtocol result = nameToSecurityProto.get(n);
+            if (result == null) {
+                throw new IllegalArgumentException("No security protocol defined for listener " + n.value());
+            }
+            return result;
+        });
+    }
+
+    public static List<Endpoint> listenerListToEndPoints(
+        String input,
+        Function<ListenerName, SecurityProtocol> nameToSecurityProto
+    ) {
+        List<Endpoint> results = new ArrayList<>();
+        for (String entry : Csv.parseCsvList(input.trim())) {
+            Matcher matcher = URI_PARSE_REGEXP.matcher(entry);
+            if (!matcher.matches()) {
+                throw new KafkaException("Unable to parse " + entry + " to a broker endpoint");
+            }
+            ListenerName listenerName = ListenerName.normalised(matcher.group(1));
+            String host = matcher.group(2);
+            if (host.isEmpty()) {
+                // By Kafka convention, an empty host string indicates binding to the wildcard
+                // address, and is stored as null.
+                host = null;
+            }
+            String portString = matcher.group(3);
+            int port = Integer.parseInt(portString);
+            SecurityProtocol securityProtocol = nameToSecurityProto.apply(listenerName);
+            results.add(new Endpoint(listenerName.value(),
+                securityProtocol,
+                host,
+                port));
+        }
+        return results;
+    }
 }

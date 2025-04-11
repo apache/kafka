@@ -38,14 +38,14 @@ tmp_native_dir=${ducker_dir}/native
 # This does not include swap.
 docker_build_memory_limit="3200m"
 
-# The maximum mmemory consumption to allow in containers.
+# The maximum memory consumption to allow in containers.
 docker_run_memory_limit="2000m"
 
 # The default number of cluster nodes to bring up if a number is not specified.
 default_num_nodes=14
 
 # The default OpenJDK base image.
-default_jdk="openjdk:8"
+default_jdk="openjdk:17-buster"
 
 # The default ducker-ak image name.
 default_image_name="ducker-ak"
@@ -489,6 +489,18 @@ EOF
     exec 3>&-
 }
 
+correct_latest_link() {
+    local result_dir="${kafka_dir}/results"
+    local latest_link="${result_dir}/latest"
+
+    # Correct the link if it's a symbolic link and broken.
+    if [[ -L "${latest_link}" ]] && [[ ! -e "${latest_link}" ]]; then
+        local latest_test_dirname=$(basename "$(readlink "${latest_link}")")
+        unlink "${latest_link}"
+        ln -s "${result_dir}/${latest_test_dirname}" "${latest_link}"
+    fi
+}
+
 ducker_test() {
     require_commands docker
     docker inspect ducker01 &>/dev/null || \
@@ -529,7 +541,10 @@ ducker_test() {
 
     cmd="cd /opt/kafka-dev && ${ducktape_cmd} --cluster-file /opt/kafka-dev/tests/docker/build/cluster.json $test_names $ducktape_args"
     echo "docker exec ducker01 bash -c \"${cmd}\""
-    exec docker exec --user=ducker ducker01 bash -c "${cmd}"
+    docker exec --user=ducker ducker01 bash -c "${cmd}"
+    docker_status=$?
+    correct_latest_link
+    exit "${docker_status}"
 }
 
 ducker_ssh() {

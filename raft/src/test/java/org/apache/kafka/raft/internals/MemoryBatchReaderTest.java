@@ -22,7 +22,7 @@ import org.apache.kafka.raft.BatchReader;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;
 
-import java.util.Arrays;
+import java.util.List;
 import java.util.OptionalLong;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -34,19 +34,19 @@ class MemoryBatchReaderTest {
     @Test
     public void testIteration() {
         Batch<String> batch1 = Batch.data(
-            0L, 1, 0L, 3, Arrays.asList("a", "b", "c")
+            0L, 1, 0L, 3, List.of("a", "b", "c")
         );
         Batch<String> batch2 = Batch.data(
-            3L, 2, 1L, 2, Arrays.asList("d", "e")
+            3L, 2, 1L, 2, List.of("d", "e")
         );
         Batch<String> batch3 = Batch.data(
-            5L, 2, 3L, 4, Arrays.asList("f", "g", "h", "i")
+            5L, 2, 3L, 4, List.of("f", "g", "h", "i")
         );
 
         @SuppressWarnings("unchecked")
         CloseListener<BatchReader<String>> listener = Mockito.mock(CloseListener.class);
         MemoryBatchReader<String> reader = MemoryBatchReader.of(
-            Arrays.asList(batch1, batch2, batch3),
+            List.of(batch1, batch2, batch3),
             listener
         );
 

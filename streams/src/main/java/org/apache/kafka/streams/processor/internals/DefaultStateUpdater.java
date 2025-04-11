@@ -55,7 +55,6 @@ import java.util.Set;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -97,11 +96,11 @@ public class DefaultStateUpdater implements StateUpdater {
             this.updaterMetrics = new StateUpdaterMetrics(metrics, name);
         }
 
-        public Collection<Task> getUpdatingTasks() {
+        public Collection<Task> updatingTasks() {
             return updatingTasks.values();
         }
 
-        public Collection<StandbyTask> getUpdatingStandbyTasks() {
+        public Collection<StandbyTask> updatingStandbyTasks() {
             return updatingTasks.values().stream()
                 .filter(t -> !t.isActive())
                 .map(t -> (StandbyTask) t)
@@ -112,29 +111,29 @@ public class DefaultStateUpdater implements StateUpdater {
             return !updatingTasks.isEmpty() && updatingTasks.values().stream().noneMatch(Task::isActive);
         }
 
-        public Collection<Task> getPausedTasks() {
+        public Collection<Task> pausedTasks() {
             return pausedTasks.values();
         }
 
-        public long getNumUpdatingStandbyTasks() {
+        public long numUpdatingStandbyTasks() {
             return updatingTasks.values().stream()
                 .filter(t -> !t.isActive())
                 .count();
         }
 
-        public long getNumRestoringActiveTasks() {
+        public long numRestoringActiveTasks() {
             return updatingTasks.values().stream()
                 .filter(Task::isActive)
                 .count();
         }
 
-        public long getNumPausedStandbyTasks() {
+        public long numPausedStandbyTasks() {
             return pausedTasks.values().stream()
                 .filter(t -> !t.isActive())
                 .count();
         }
 
-        public long getNumPausedActiveTasks() {
+        public long numPausedActiveTasks() {
             return pausedTasks.values().stream()
                 .filter(Task::isActive)
                 .count();
@@ -153,7 +152,6 @@ public class DefaultStateUpdater implements StateUpdater {
                 clearInputQueue();
                 clearUpdatingAndPausedTasks();
                 updaterMetrics.clear();
-                shutdownGate.countDown();
                 log.info("State updater thread stopped");
             }
         }
@@ -202,7 +200,7 @@ public class DefaultStateUpdater implements StateUpdater {
         private void performActionsOnTasks() {
             tasksAndActionsLock.lock();
             try {
-                for (final TaskAndAction taskAndAction : getTasksAndActions()) {
+                for (final TaskAndAction taskAndAction : tasksAndActions()) {
                     final Action action = taskAndAction.action();
                     switch (action) {
                         case ADD:
@@ -322,7 +320,7 @@ public class DefaultStateUpdater implements StateUpdater {
 
 
         private void handleRuntimeException(final RuntimeException runtimeException) {
-            log.error("An unexpected error occurred within the state updater thread: " + runtimeException);
+            log.error("An unexpected error occurred within the state updater thread: {}", String.valueOf(runtimeException));
             addToExceptionsAndFailedTasksThenClearUpdatingAndPausedTasks(runtimeException);
             isRunning.set(false);
         }
@@ -460,7 +458,7 @@ public class DefaultStateUpdater implements StateUpdater {
             changelogReader.clear();
         }
 
-        private List<TaskAndAction> getTasksAndActions() {
+        private List<TaskAndAction> tasksAndActions() {
             final List<TaskAndAction> tasksAndActionsToProcess = new ArrayList<>(tasksAndActions);
             tasksAndActions.clear();
             return tasksAndActionsToProcess;
@@ -675,7 +673,6 @@ public class DefaultStateUpdater implements StateUpdater {
                 measureCheckpointLatency(() -> task.maybeCheckpoint(true));
                 changelogReader.unregister(changelogPartitions);
                 addToRestoredTasks(task);
-                updatingTasks.remove(task.id());
                 log.info("Stateful active task " + task.id() + " completed restoration");
                 transitToUpdateStandbysIfOnlyStandbysLeft();
             }
@@ -691,6 +688,7 @@ public class DefaultStateUpdater implements StateUpdater {
             restoredActiveTasksLock.lock();
             try {
                 restoredActiveTasks.add(task);
+                updatingTasks.remove(task.id());
                 log.debug("Active task " + task.id() + " was added to the restored tasks");
                 restoredActiveTasksCondition.signalAll();
             } finally {
@@ -766,7 +764,6 @@ public class DefaultStateUpdater implements StateUpdater {
     private long lastCommitMs;
 
     private StateUpdaterThread stateUpdaterThread = null;
-    private CountDownLatch shutdownGate;
 
     public DefaultStateUpdater(final String name,
                                final Metrics metrics,
@@ -796,7 +793,6 @@ public class DefaultStateUpdater implements StateUpdater {
             }
             stateUpdaterThread = new StateUpdaterThread(name, metrics, changelogReader);
             stateUpdaterThread.start();
-            shutdownGate = new CountDownLatch(1);
 
             // initialize the last commit as of now to prevent first commit happens immediately
             this.lastCommitMs = time.milliseconds();
@@ -821,7 +817,8 @@ public class DefaultStateUpdater implements StateUpdater {
             }
 
             try {
-                if (!shutdownGate.await(timeout.toMillis(), TimeUnit.MILLISECONDS)) {
+                stateUpdaterThread.join(timeout.toMillis());
+                if (stateUpdaterThread.isAlive()) {
                     throw new StreamsException("State updater thread did not shutdown within the timeout");
                 }
                 stateUpdaterThread = null;
@@ -888,7 +885,10 @@ public class DefaultStateUpdater implements StateUpdater {
                 restoredActiveTasksLock.lock();
                 try {
                     while (restoredActiveTasks.isEmpty() && now <= deadline) {
-                        final boolean elapsed = restoredActiveTasksCondition.await(deadline - now, TimeUnit.MILLISECONDS);
+                        // We can ignore whether the deadline expired during await, as the while loop condition will
+                        // check again for deadline expiration.
+                        @SuppressWarnings("UnusedLocalVariable")
+                        final boolean ignored = restoredActiveTasksCondition.await(deadline - now, TimeUnit.MILLISECONDS);
                         now = time.milliseconds();
                     }
                     result.addAll(restoredActiveTasks);
@@ -927,69 +927,69 @@ public class DefaultStateUpdater implements StateUpdater {
         }
     }
 
-    public Set<StandbyTask> getUpdatingStandbyTasks() {
+    public Set<StandbyTask> updatingStandbyTasks() {
         return stateUpdaterThread != null
-            ? Collections.unmodifiableSet(new HashSet<>(stateUpdaterThread.getUpdatingStandbyTasks()))
+            ? Set.copyOf(stateUpdaterThread.updatingStandbyTasks())
             : Collections.emptySet();
     }
 
     @Override
-    public Set<Task> getUpdatingTasks() {
+    public Set<Task> updatingTasks() {
         return stateUpdaterThread != null
-            ? Collections.unmodifiableSet(new HashSet<>(stateUpdaterThread.getUpdatingTasks()))
+            ? Set.copyOf(stateUpdaterThread.updatingTasks())
             : Collections.emptySet();
     }
 
-    public Set<StreamTask> getRestoredActiveTasks() {
+    public Set<StreamTask> restoredActiveTasks() {
         restoredActiveTasksLock.lock();
         try {
-            return Collections.unmodifiableSet(new HashSet<>(restoredActiveTasks));
+            return Set.copyOf(restoredActiveTasks);
         } finally {
             restoredActiveTasksLock.unlock();
         }
     }
 
-    public List<ExceptionAndTask> getExceptionsAndFailedTasks() {
+    public List<ExceptionAndTask> exceptionsAndFailedTasks() {
         exceptionsAndFailedTasksLock.lock();
         try {
-            return Collections.unmodifiableList(new ArrayList<>(exceptionsAndFailedTasks));
+            return List.copyOf(exceptionsAndFailedTasks);
         } finally {
             exceptionsAndFailedTasksLock.unlock();
         }
     }
 
-    public Set<Task> getRemovedTasks() {
-        return Collections.unmodifiableSet(new HashSet<>(removedTasks));
+    public Set<Task> removedTasks() {
+        return Set.copyOf(removedTasks);
     }
 
-    public Set<Task> getPausedTasks() {
+    public Set<Task> pausedTasks() {
         return stateUpdaterThread != null
-            ? Collections.unmodifiableSet(new HashSet<>(stateUpdaterThread.getPausedTasks()))
+            ? Set.copyOf(stateUpdaterThread.pausedTasks())
             : Collections.emptySet();
     }
 
     @Override
-    public Set<Task> getTasks() {
-        return executeWithQueuesLocked(() -> getStreamOfTasks().map(ReadOnlyTask::new).collect(Collectors.toSet()));
+    public Set<Task> tasks() {
+        return executeWithQueuesLocked(() -> streamOfTasks().map(ReadOnlyTask::new).collect(Collectors.toSet()));
     }
 
     @Override
     public boolean restoresActiveTasks() {
         return !executeWithQueuesLocked(
-            () -> getStreamOfTasks().filter(Task::isActive).collect(Collectors.toSet())
+            () -> streamOfTasks().filter(Task::isActive).collect(Collectors.toSet())
         ).isEmpty();
     }
 
-    public Set<StreamTask> getActiveTasks() {
+    public Set<StreamTask> activeTasks() {
         return executeWithQueuesLocked(
-            () -> getStreamOfTasks().filter(Task::isActive).map(t -> (StreamTask) t).collect(Collectors.toSet())
+            () -> streamOfTasks().filter(Task::isActive).map(t -> (StreamTask) t).collect(Collectors.toSet())
         );
     }
 
     @Override
-    public Set<StandbyTask> getStandbyTasks() {
+    public Set<StandbyTask> standbyTasks() {
         return executeWithQueuesLocked(
-            () -> getStreamOfTasks().filter(t -> !t.isActive()).map(t -> (StandbyTask) t).collect(Collectors.toSet())
+            () -> streamOfTasks().filter(t -> !t.isActive()).map(t -> (StandbyTask) t).collect(Collectors.toSet())
         );
     }
 
@@ -1023,22 +1023,22 @@ public class DefaultStateUpdater implements StateUpdater {
         }
     }
 
-    private Stream<Task> getStreamOfTasks() {
+    private Stream<Task> streamOfTasks() {
         return
             Stream.concat(
-                getStreamOfNonPausedTasks(),
-                getPausedTasks().stream()
+                streamOfNonPausedTasks(),
+                pausedTasks().stream()
             );
     }
 
-    private Stream<Task> getStreamOfNonPausedTasks() {
+    private Stream<Task> streamOfNonPausedTasks() {
         return
             Stream.concat(
                 tasksAndActions.stream()
                     .filter(taskAndAction -> taskAndAction.action() == Action.ADD)
                     .map(TaskAndAction::task),
                 Stream.concat(
-                    getUpdatingTasks().stream(),
+                    updatingTasks().stream(),
                     Stream.concat(
                         restoredActiveTasks.stream(),
                         Stream.concat(
@@ -1074,7 +1074,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 "The number of active tasks currently undergoing restoration",
                 threadLevelTags);
             metrics.addMetric(metricName, (config, now) -> stateUpdaterThread != null ?
-                stateUpdaterThread.getNumRestoringActiveTasks() : 0);
+                stateUpdaterThread.numRestoringActiveTasks() : 0);
             allMetricNames.push(metricName);
 
             metricName = metrics.metricName("standby-updating-tasks",
@@ -1082,7 +1082,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 "The number of standby tasks currently undergoing state update",
                 threadLevelTags);
             metrics.addMetric(metricName, (config, now) -> stateUpdaterThread != null ?
-                stateUpdaterThread.getNumUpdatingStandbyTasks() : 0);
+                stateUpdaterThread.numUpdatingStandbyTasks() : 0);
             allMetricNames.push(metricName);
 
             metricName = metrics.metricName("active-paused-tasks",
@@ -1090,7 +1090,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 "The number of active tasks paused restoring",
                 threadLevelTags);
             metrics.addMetric(metricName, (config, now) -> stateUpdaterThread != null ?
-                stateUpdaterThread.getNumPausedActiveTasks() : 0);
+                stateUpdaterThread.numPausedActiveTasks() : 0);
             allMetricNames.push(metricName);
 
             metricName = metrics.metricName("standby-paused-tasks",
@@ -1098,7 +1098,7 @@ public class DefaultStateUpdater implements StateUpdater {
                 "The number of standby tasks paused state update",
                 threadLevelTags);
             metrics.addMetric(metricName, (config, now) -> stateUpdaterThread != null ?
-                stateUpdaterThread.getNumPausedStandbyTasks() : 0);
+                stateUpdaterThread.numPausedStandbyTasks() : 0);
             allMetricNames.push(metricName);
 
             this.idleRatioSensor = metrics.sensor("idle-ratio", RecordingLevel.INFO);

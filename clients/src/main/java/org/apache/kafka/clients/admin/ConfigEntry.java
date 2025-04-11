@@ -17,18 +17,13 @@
 
 package org.apache.kafka.clients.admin;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
-
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
 
 /**
  * A class representing a configuration entry containing name, value and additional metadata.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class ConfigEntry {
 
     private final String name;
@@ -223,6 +218,7 @@ public class ConfigEntry {
         DYNAMIC_BROKER_CONFIG,          // dynamic broker config that is configured for a specific broker
         DYNAMIC_DEFAULT_BROKER_CONFIG,  // dynamic broker config that is configured as default for all brokers in the cluster
         DYNAMIC_CLIENT_METRICS_CONFIG,  // dynamic client metrics subscription config that is configured for all clients
+        DYNAMIC_GROUP_CONFIG,           // dynamic group config that is configured for a specific group
         STATIC_BROKER_CONFIG,           // static broker config provided as broker properties at start up (e.g. server.properties file)
         DEFAULT_CONFIG,                 // built-in default configuration for configs that have a default value
         UNKNOWN                         // source unknown e.g. in the ConfigEntry used for alter requests where source is not set

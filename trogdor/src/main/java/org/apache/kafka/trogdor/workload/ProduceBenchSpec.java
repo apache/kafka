@@ -59,7 +59,7 @@ import java.util.Optional;
  *   }
  * }
  */
-public class ProduceBenchSpec extends TaskSpec {
+public final class ProduceBenchSpec extends TaskSpec {
     private final String producerNode;
     private final String bootstrapServers;
     private final int targetMessagesPerSec;
@@ -75,7 +75,6 @@ public class ProduceBenchSpec extends TaskSpec {
     private final boolean useConfiguredPartitioner;
     private final boolean skipFlush;
 
-    @SuppressWarnings("this-escape")
     @JsonCreator
     public ProduceBenchSpec(@JsonProperty("startMs") long startMs,
                          @JsonProperty("durationMs") long durationMs,

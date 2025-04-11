@@ -22,11 +22,9 @@ import org.apache.kafka.image.TopicsImage;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -41,19 +39,24 @@ public class TopicIdsTest {
 
     @Test
     public void testTopicsImageCannotBeNull() {
-        assertThrows(NullPointerException.class, () -> new TopicIds(Collections.emptySet(), null));
+        assertThrows(NullPointerException.class, () -> new TopicIds(Set.of(), (TopicsImage) null));
+    }
+
+    @Test
+    public void testTopicResolverCannotBeNull() {
+        assertThrows(NullPointerException.class, () -> new TopicIds(Set.of(), (TopicIds.TopicResolver) null));
     }
 
     @Test
     public void testSize() {
-        Set<String> topicNames = mkSet("foo", "bar", "baz");
+        Set<String> topicNames = Set.of("foo", "bar", "baz");
         Set<Uuid> topicIds = new TopicIds(topicNames, TopicsImage.EMPTY);
         assertEquals(topicNames.size(), topicIds.size());
     }
 
     @Test
     public void testIsEmpty() {
-        Set<String> topicNames = Collections.emptySet();
+        Set<String> topicNames = Set.of();
         Set<Uuid> topicIds = new TopicIds(topicNames, TopicsImage.EMPTY);
         assertEquals(topicNames.size(), topicIds.size());
     }
@@ -71,7 +74,7 @@ public class TopicIdsTest {
             .build()
             .topics();
 
-        Set<Uuid> topicIds = new TopicIds(mkSet("foo", "bar", "baz"), topicsImage);
+        Set<Uuid> topicIds = new TopicIds(Set.of("foo", "bar", "baz"), topicsImage);
 
         assertTrue(topicIds.contains(fooUuid));
         assertTrue(topicIds.contains(barUuid));
@@ -93,13 +96,13 @@ public class TopicIdsTest {
             .build()
             .topics();
 
-        Set<Uuid> topicIds = new TopicIds(mkSet("foo", "bar", "baz", "qux"), topicsImage);
+        Set<Uuid> topicIds = new TopicIds(Set.of("foo", "bar", "baz", "qux"), topicsImage);
 
         assertTrue(topicIds.contains(fooUuid));
         assertTrue(topicIds.contains(barUuid));
         assertTrue(topicIds.contains(bazUuid));
         assertTrue(topicIds.contains(quxUuid));
-        assertTrue(topicIds.containsAll(mkSet(fooUuid, barUuid, bazUuid, quxUuid)));
+        assertTrue(topicIds.containsAll(Set.of(fooUuid, barUuid, bazUuid, quxUuid)));
     }
 
     @Test
@@ -116,13 +119,13 @@ public class TopicIdsTest {
             .build()
             .topics();
 
-        Set<Uuid> topicIds = new TopicIds(mkSet("foo", "bar", "baz", "qux"), topicsImage);
+        Set<Uuid> topicIds = new TopicIds(Set.of("foo", "bar", "baz", "qux"), topicsImage);
 
         assertTrue(topicIds.contains(fooUuid));
         assertTrue(topicIds.contains(barUuid));
         assertTrue(topicIds.contains(bazUuid));
-        assertTrue(topicIds.containsAll(mkSet(fooUuid, barUuid, bazUuid)));
-        assertFalse(topicIds.containsAll(mkSet(fooUuid, barUuid, bazUuid, quxUuid)));
+        assertTrue(topicIds.containsAll(Set.of(fooUuid, barUuid, bazUuid)));
+        assertFalse(topicIds.containsAll(Set.of(fooUuid, barUuid, bazUuid, quxUuid)));
     }
 
     @Test
@@ -139,8 +142,8 @@ public class TopicIdsTest {
             .build()
             .topics();
 
-        Set<Uuid> topicIds = new TopicIds(mkSet("foo", "bar", "baz", "qux"), topicsImage);
-        Set<Uuid> expectedIds = mkSet(fooUuid, barUuid, bazUuid, quxUuid);
+        Set<Uuid> topicIds = new TopicIds(Set.of("foo", "bar", "baz", "qux"), topicsImage);
+        Set<Uuid> expectedIds = Set.of(fooUuid, barUuid, bazUuid, quxUuid);
         Set<Uuid> actualIds = new HashSet<>(topicIds);
 
         assertEquals(expectedIds, actualIds);
@@ -162,8 +165,8 @@ public class TopicIdsTest {
             .build()
             .topics();
 
-        Set<Uuid> topicIds = new TopicIds(mkSet("foo", "bar", "baz", "quux"), topicsImage);
-        Set<Uuid> expectedIds = mkSet(fooUuid, barUuid, bazUuid);
+        Set<Uuid> topicIds = new TopicIds(Set.of("foo", "bar", "baz", "quux"), topicsImage);
+        Set<Uuid> expectedIds = Set.of(fooUuid, barUuid, bazUuid);
         Set<Uuid> actualIds = new HashSet<>(topicIds);
 
         assertEquals(expectedIds, actualIds);
@@ -172,14 +175,14 @@ public class TopicIdsTest {
     @Test
     public void testEquals() {
         Uuid topicId = Uuid.randomUuid();
-        TopicIds topicIds1 = new TopicIds(Collections.singleton("topic"),
+        TopicIds topicIds1 = new TopicIds(Set.of("topic"),
             new MetadataImageBuilder()
                 .addTopic(topicId, "topicId", 3)
                 .build()
                 .topics()
         );
 
-        TopicIds topicIds2 = new TopicIds(Collections.singleton("topic"),
+        TopicIds topicIds2 = new TopicIds(Set.of("topic"),
             new MetadataImageBuilder()
                 .addTopic(topicId, "topicId", 3)
                 .build()

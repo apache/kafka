@@ -27,7 +27,6 @@ import org.apache.kafka.metadata.KafkaConfigSchema;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -44,13 +43,13 @@ public final class RecordRedactorTest {
                 define("quux", ConfigDef.Type.PASSWORD, ConfigDef.Importance.HIGH, "quuux2 doc"));
     }
 
-    private static final KafkaConfigSchema SCHEMA = new KafkaConfigSchema(CONFIGS, Collections.emptyMap());
+    private static final KafkaConfigSchema SCHEMA = new KafkaConfigSchema(CONFIGS, Map.of());
 
     private static final RecordRedactor REDACTOR = new RecordRedactor(SCHEMA);
 
     @Test
     public void testTopicRecordToString() {
-        assertEquals("TopicRecord(name='foo', topicId=UOovKkohSU6AGdYW33ZUNg, tieredEpoch=0, tieredState=false)",
+        assertEquals("TopicRecord(name='foo', topicId=UOovKkohSU6AGdYW33ZUNg)",
                 REDACTOR.toLoggableString(new TopicRecord().
                     setTopicId(Uuid.fromString("UOovKkohSU6AGdYW33ZUNg")).
                     setName("foo")));

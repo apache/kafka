@@ -17,13 +17,9 @@
 
 package kafka.server
 
-import java.util.concurrent.LinkedBlockingDeque
-import java.util.concurrent.atomic.AtomicReference
 import kafka.raft.RaftManager
-import kafka.server.metadata.ZkMetadataCache
 import kafka.utils.Logging
 import org.apache.kafka.clients._
-import org.apache.kafka.common.{Node, Reconfigurable}
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network._
 import org.apache.kafka.common.protocol.Errors
@@ -31,57 +27,27 @@ import org.apache.kafka.common.requests.AbstractRequest
 import org.apache.kafka.common.security.JaasContext
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.{LogContext, Time}
-import org.apache.kafka.server.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
-import org.apache.kafka.server.common.ApiMessageAndVersion
+import org.apache.kafka.common.{Node, Reconfigurable}
+import org.apache.kafka.server.common.{ApiMessageAndVersion, ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 import org.apache.kafka.server.util.{InterBrokerSendThread, RequestAndCompletionHandler}
 
 import java.util
 import java.util.Optional
+import java.util.concurrent.LinkedBlockingDeque
+import java.util.concurrent.atomic.AtomicReference
 import scala.collection.Seq
-import scala.compat.java8.OptionConverters._
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters.{RichOption, RichOptionalInt}
 
 case class ControllerInformation(
   node: Option[Node],
   listenerName: ListenerName,
   securityProtocol: SecurityProtocol,
-  saslMechanism: String,
-  isZkController: Boolean
+  saslMechanism: String
 )
 
 trait ControllerNodeProvider {
   def getControllerInfo(): ControllerInformation
-}
-
-class MetadataCacheControllerNodeProvider(
-  val metadataCache: ZkMetadataCache,
-  val config: KafkaConfig,
-  val quorumControllerNodeProvider: () => Option[ControllerInformation]
-) extends ControllerNodeProvider {
-
-  private val zkControllerListenerName = config.controlPlaneListenerName.getOrElse(config.interBrokerListenerName)
-  private val zkControllerSecurityProtocol = config.controlPlaneSecurityProtocol.getOrElse(config.interBrokerSecurityProtocol)
-  private val zkControllerSaslMechanism = config.saslMechanismInterBrokerProtocol
-
-  val emptyZkControllerInfo =  ControllerInformation(
-    None,
-    zkControllerListenerName,
-    zkControllerSecurityProtocol,
-    zkControllerSaslMechanism,
-    isZkController = true)
-
-  override def getControllerInfo(): ControllerInformation = {
-    metadataCache.getControllerId.map {
-      case ZkCachedControllerId(id) => ControllerInformation(
-        metadataCache.getAliveBrokerNode(id, zkControllerListenerName),
-        zkControllerListenerName,
-        zkControllerSecurityProtocol,
-        zkControllerSaslMechanism,
-        isZkController = true)
-      case KRaftCachedControllerId(_) =>
-        quorumControllerNodeProvider.apply().getOrElse(emptyZkControllerInfo)
-    }.getOrElse(emptyZkControllerInfo)
-  }
 }
 
 object RaftControllerNodeProvider {
@@ -115,8 +81,8 @@ class RaftControllerNodeProvider(
   private def idToNode(id: Int): Option[Node] = raftManager.voterNode(id, listenerName)
 
   override def getControllerInfo(): ControllerInformation =
-    ControllerInformation(raftManager.leaderAndEpoch.leaderId.asScala.flatMap(idToNode),
-      listenerName, securityProtocol, saslMechanism, isZkController = false)
+    ControllerInformation(raftManager.leaderAndEpoch.leaderId.toScala.flatMap(idToNode),
+      listenerName, securityProtocol, saslMechanism)
 }
 
 /**
@@ -158,7 +124,6 @@ class NodeToControllerChannelManagerImpl(
         controllerInfo.listenerName,
         controllerInfo.saslMechanism,
         time,
-        config.saslInterBrokerHandshakeRequestEnable,
         logContext
       )
       channelBuilder match {
@@ -200,8 +165,6 @@ class NodeToControllerChannelManagerImpl(
     val controllerInformation = controllerNodeProvider.getControllerInfo()
     new NodeToControllerRequestThread(
       buildNetworkClient(controllerInformation),
-      controllerInformation.isZkController,
-      buildNetworkClient,
       manualMetadataUpdater,
       controllerNodeProvider,
       config,
@@ -231,8 +194,10 @@ class NodeToControllerChannelManagerImpl(
   def controllerApiVersions(): Optional[NodeApiVersions] = {
     requestThread.activeControllerAddress().flatMap { activeController =>
       Option(apiVersions.get(activeController.idString))
-    }.asJava
+    }.toJava
   }
+
+  def getTimeoutMs: Long = retryTimeoutMs
 }
 
 case class NodeToControllerQueueItem(
@@ -243,8 +208,6 @@ case class NodeToControllerQueueItem(
 
 class NodeToControllerRequestThread(
   initialNetworkClient: KafkaClient,
-  var isNetworkClientForZkController: Boolean,
-  networkClientFactory: ControllerInformation => KafkaClient,
   metadataUpdater: ManualMetadataUpdater,
   controllerNodeProvider: ControllerNodeProvider,
   config: KafkaConfig,
@@ -260,22 +223,6 @@ class NodeToControllerRequestThread(
 ) with Logging {
 
   this.logIdent = logPrefix
-
-  private def maybeResetNetworkClient(controllerInformation: ControllerInformation): Unit = {
-    if (isNetworkClientForZkController != controllerInformation.isZkController) {
-      debug("Controller changed to " + (if (isNetworkClientForZkController) "kraft" else "zk") + " mode. " +
-        s"Resetting network client with new controller information : ${controllerInformation}")
-      // Close existing network client.
-      val oldClient = networkClient
-      oldClient.initiateClose()
-      oldClient.close()
-
-      isNetworkClientForZkController = controllerInformation.isZkController
-      updateControllerAddress(controllerInformation.node.orNull)
-      controllerInformation.node.foreach(n => metadataUpdater.setNodes(Seq(n).asJava))
-      networkClient = networkClientFactory(controllerInformation)
-    }
-  }
 
   private val requestQueue = new LinkedBlockingDeque[NodeToControllerQueueItem]()
   private val activeController = new AtomicReference[Node](null)
@@ -370,19 +317,13 @@ class NodeToControllerRequestThread(
 
   override def doWork(): Unit = {
     val controllerInformation = controllerNodeProvider.getControllerInfo()
-    maybeResetNetworkClient(controllerInformation)
     if (activeControllerAddress().isDefined) {
       super.pollOnce(Long.MaxValue)
     } else {
       debug("Controller isn't cached, looking for local metadata changes")
       controllerInformation.node match {
         case Some(controllerNode) =>
-          val controllerType = if (controllerInformation.isZkController) {
-            "ZK"
-          } else {
-            "KRaft"
-          }
-          info(s"Recorded new $controllerType controller, from now on will use node $controllerNode")
+          info(s"Recorded new KRaft controller, from now on will use node $controllerNode")
           updateControllerAddress(controllerNode)
           metadataUpdater.setNodes(Seq(controllerNode).asJava)
         case None =>

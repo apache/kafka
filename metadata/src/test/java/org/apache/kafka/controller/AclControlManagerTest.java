@@ -55,8 +55,6 @@ import org.junit.jupiter.api.Timeout;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -115,6 +113,34 @@ public class AclControlManagerTest {
     }
 
     /**
+     * Verify that validateNewAcl catches invalid ACLs with principals that do not contain a colon.
+     */
+    @Test
+    public void testValidateAclWithBadPrincipal() {
+        assertEquals("Could not parse principal from `invalid` (no colon is present " +
+                "separating the principal type from the principal name)",
+            assertThrows(InvalidRequestException.class, () ->
+                AclControlManager.validateNewAcl(new AclBinding(
+                    new ResourcePattern(TOPIC, "*", LITERAL),
+                    new AccessControlEntry("invalid", "*", ALTER, ALLOW)))).
+                getMessage());
+    }
+
+    /**
+     * Verify that validateNewAcl catches invalid ACLs with principals that do not contain a colon.
+     */
+    @Test
+    public void testValidateAclWithEmptyPrincipal() {
+        assertEquals("Could not parse principal from `` (no colon is present " +
+                "separating the principal type from the principal name)",
+            assertThrows(InvalidRequestException.class, () ->
+                AclControlManager.validateNewAcl(new AclBinding(
+                    new ResourcePattern(TOPIC, "*", LITERAL),
+                    new AccessControlEntry("", "*", ALTER, ALLOW)))).
+                        getMessage());
+    }
+
+    /**
      * Verify that validateFilter catches invalid filters.
      */
     @Test
@@ -137,7 +163,7 @@ public class AclControlManagerTest {
     }
 
     static class MockClusterMetadataAuthorizer implements ClusterMetadataAuthorizer {
-        Map<Uuid, StandardAcl> acls = Collections.emptyMap();
+        Map<Uuid, StandardAcl> acls = Map.of();
 
         @Override
         public void setAclMutator(AclMutator aclMutator) {
@@ -203,7 +229,7 @@ public class AclControlManagerTest {
     @Test
     public void testLoadSnapshot() {
         SnapshotRegistry snapshotRegistry = new SnapshotRegistry(new LogContext());
-        snapshotRegistry.getOrCreateSnapshot(0);
+        snapshotRegistry.idempotentCreateSnapshot(0);
         AclControlManager manager = new AclControlManager.Builder().
             setSnapshotRegistry(snapshotRegistry).
             build();
@@ -284,7 +310,7 @@ public class AclControlManagerTest {
         assertFalse(manager.idToAcl().isEmpty());
 
         ControllerResult<List<AclDeleteResult>> deleteResult =
-            manager.deleteAcls(Arrays.asList(
+            manager.deleteAcls(List.of(
                 new AclBindingFilter(
                     new ResourcePatternFilter(ResourceType.ANY, null, LITERAL),
                         AccessControlEntryFilter.ANY),
@@ -298,7 +324,7 @@ public class AclControlManagerTest {
             assertEquals(Optional.empty(), result.exception());
             deleted.add(result.aclBinding());
         }
-        assertEquals(new HashSet<>(Arrays.asList(
+        assertEquals(new HashSet<>(List.of(
             TEST_ACLS.get(0).toBinding(),
                 TEST_ACLS.get(2).toBinding())), deleted);
         assertEquals(InvalidRequestException.class,
@@ -319,21 +345,21 @@ public class AclControlManagerTest {
         AclBinding aclBinding = new AclBinding(new ResourcePattern(TOPIC, "topic-1", LITERAL),
                 new AccessControlEntry("User:user", "10.0.0.1", AclOperation.ALL, ALLOW));
 
-        ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(Collections.singletonList(aclBinding));
+        ControllerResult<List<AclCreateResult>> createResult = manager.createAcls(List.of(aclBinding));
         Uuid id = ((AccessControlEntryRecord) createResult.records().get(0).message()).id();
         assertEquals(1, createResult.records().size());
 
-        ControllerResult<List<AclDeleteResult>> deleteAclResultsAnyFilter = manager.deleteAcls(Collections.singletonList(AclBindingFilter.ANY));
+        ControllerResult<List<AclDeleteResult>> deleteAclResultsAnyFilter = manager.deleteAcls(List.of(AclBindingFilter.ANY));
         assertEquals(1, deleteAclResultsAnyFilter.records().size());
         assertEquals(id, ((RemoveAccessControlEntryRecord) deleteAclResultsAnyFilter.records().get(0).message()).id());
         assertEquals(1, deleteAclResultsAnyFilter.response().size());
 
-        ControllerResult<List<AclDeleteResult>> deleteAclResultsSpecificFilter = manager.deleteAcls(Collections.singletonList(aclBinding.toFilter()));
+        ControllerResult<List<AclDeleteResult>> deleteAclResultsSpecificFilter = manager.deleteAcls(List.of(aclBinding.toFilter()));
         assertEquals(1, deleteAclResultsSpecificFilter.records().size());
         assertEquals(id, ((RemoveAccessControlEntryRecord) deleteAclResultsSpecificFilter.records().get(0).message()).id());
         assertEquals(1, deleteAclResultsSpecificFilter.response().size());
 
-        ControllerResult<List<AclDeleteResult>> deleteAclResultsBothFilters = manager.deleteAcls(Arrays.asList(AclBindingFilter.ANY, aclBinding.toFilter()));
+        ControllerResult<List<AclDeleteResult>> deleteAclResultsBothFilters = manager.deleteAcls(List.of(AclBindingFilter.ANY, aclBinding.toFilter()));
         assertEquals(1, deleteAclResultsBothFilters.records().size());
         assertEquals(id, ((RemoveAccessControlEntryRecord) deleteAclResultsBothFilters.records().get(0).message()).id());
         assertEquals(2, deleteAclResultsBothFilters.response().size());

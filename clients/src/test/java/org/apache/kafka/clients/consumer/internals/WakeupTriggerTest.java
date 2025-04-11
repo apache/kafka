@@ -111,6 +111,19 @@ public class WakeupTriggerTest {
     }
 
     @Test
+    public void testWakeupFromShareFetchAction() {
+        try (final ShareFetchBuffer fetchBuffer = mock(ShareFetchBuffer.class)) {
+            wakeupTrigger.setShareFetchAction(fetchBuffer);
+
+            wakeupTrigger.wakeup();
+
+            verify(fetchBuffer).wakeup();
+            final WakeupTrigger.Wakeupable wakeupable = wakeupTrigger.getPendingTask();
+            assertInstanceOf(WakeupTrigger.WakeupFuture.class, wakeupable);
+        }
+    }
+
+    @Test
     public void testManualTriggerWhenWakeupCalled() {
         wakeupTrigger.wakeup();
         assertThrows(WakeupException.class, () -> wakeupTrigger.maybeTriggerWakeup());

@@ -26,7 +26,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-import java.util.stream.Collectors;
 
 public class RemoteLogSegmentMetadataSnapshotTransform implements RemoteLogMetadataTransform<RemoteLogSegmentMetadataSnapshot> {
 
@@ -40,7 +39,8 @@ public class RemoteLogSegmentMetadataSnapshotTransform implements RemoteLogMetad
                 .setMaxTimestampMs(segmentMetadata.maxTimestampMs())
                 .setSegmentSizeInBytes(segmentMetadata.segmentSizeInBytes())
                 .setSegmentLeaderEpochs(createSegmentLeaderEpochsEntry(segmentMetadata.segmentLeaderEpochs()))
-                .setRemoteLogSegmentState(segmentMetadata.state().id());
+                .setRemoteLogSegmentState(segmentMetadata.state().id())
+                .setTxnIndexEmpty(segmentMetadata.isTxnIdxEmpty());
         segmentMetadata.customMetadata().ifPresent(md -> record.setCustomMetadata(md.value()));
 
         return new ApiMessageAndVersion(record, record.highestSupportedVersion());
@@ -51,7 +51,7 @@ public class RemoteLogSegmentMetadataSnapshotTransform implements RemoteLogMetad
                            .map(entry -> new RemoteLogSegmentMetadataSnapshotRecord.SegmentLeaderEpochEntry()
                            .setLeaderEpoch(entry.getKey())
                            .setOffset(entry.getValue()))
-                           .collect(Collectors.toList());
+                           .toList();
     }
 
     @Override
@@ -72,7 +72,8 @@ public class RemoteLogSegmentMetadataSnapshotTransform implements RemoteLogMetad
                                                     record.segmentSizeInBytes(),
                                                     customMetadata,
                                                     RemoteLogSegmentState.forId(record.remoteLogSegmentState()),
-                                                    segmentLeaderEpochs);
+                                                    segmentLeaderEpochs,
+                                                    record.txnIndexEmpty());
     }
 
 }

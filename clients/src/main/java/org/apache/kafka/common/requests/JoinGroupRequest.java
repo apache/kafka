@@ -22,10 +22,9 @@ import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.Collections;
 
 public class JoinGroupRequest extends AbstractRequest {
@@ -208,7 +207,7 @@ public class JoinGroupRequest extends AbstractRequest {
         return new JoinGroupResponse(data, version());
     }
 
-    public static JoinGroupRequest parse(ByteBuffer buffer, short version) {
-        return new JoinGroupRequest(new JoinGroupRequestData(new ByteBufferAccessor(buffer), version), version);
+    public static JoinGroupRequest parse(Readable readable, short version) {
+        return new JoinGroupRequest(new JoinGroupRequestData(readable, version), version);
     }
 }

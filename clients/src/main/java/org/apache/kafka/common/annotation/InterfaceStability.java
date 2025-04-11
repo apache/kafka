@@ -24,7 +24,6 @@ import java.lang.annotation.RetentionPolicy;
  * Annotation to inform users of how much to rely on a particular package, class or method not changing over time.
  * Currently the stability can be {@link Stable}, {@link Evolving} or {@link Unstable}.
  */
-@InterfaceStability.Evolving
 public class InterfaceStability {
     /**
      * Compatibility is maintained in major, minor and patch releases with one exception: compatibility may be broken

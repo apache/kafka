@@ -18,13 +18,14 @@ package kafka.server
 
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
+import org.junit.jupiter.api.TestInfo
 
 import java.util.Properties
 import scala.collection.Seq
 
 class ListOffsetsRequestWithRemoteStoreTest extends ListOffsetsRequestTest {
 
-  override def kraftControllerConfigs(): Seq[Properties] = {
+  override def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {
     val props = new Properties
     brokerPropertyOverrides(props)
     Seq(props)

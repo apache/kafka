@@ -20,7 +20,6 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigDef.Importance;
 import org.apache.kafka.common.config.ConfigDef.Type;
-import org.apache.kafka.common.utils.ConfigUtils;
 
 import java.util.Map;
 import java.util.regex.Pattern;
@@ -33,9 +32,8 @@ public class DefaultTopicFilter implements TopicFilter {
     public static final String TOPICS_INCLUDE_DEFAULT = ".*";
 
     public static final String TOPICS_EXCLUDE_CONFIG = "topics.exclude";
-    public static final String TOPICS_EXCLUDE_CONFIG_ALIAS = "topics.blacklist";
     private static final String TOPICS_EXCLUDE_DOC = "List of topics and/or regexes that should not be replicated.";
-    public static final String TOPICS_EXCLUDE_DEFAULT = ".*[\\-\\.]internal, .*\\.replica, __.*";
+    public static final String TOPICS_EXCLUDE_DEFAULT = "mm2.*\\.internal, .*\\.replica, __.*";
 
     private Pattern includePattern;
     private Pattern excludePattern;
@@ -72,16 +70,10 @@ public class DefaultTopicFilter implements TopicFilter {
                     Type.LIST,
                     TOPICS_EXCLUDE_DEFAULT,
                     Importance.HIGH,
-                    TOPICS_EXCLUDE_DOC)
-            .define(TOPICS_EXCLUDE_CONFIG_ALIAS,
-                    Type.LIST,
-                    null,
-                    Importance.HIGH,
-                    "Deprecated. Use " + TOPICS_EXCLUDE_CONFIG + " instead.");
+                    TOPICS_EXCLUDE_DOC);
 
         TopicFilterConfig(Map<String, ?> props) {
-            super(DEF, ConfigUtils.translateDeprecatedConfigs(props, new String[][]{
-                {TOPICS_EXCLUDE_CONFIG, TOPICS_EXCLUDE_CONFIG_ALIAS}}), false);
+            super(DEF, props, false);
         }
 
         Pattern includePattern() {

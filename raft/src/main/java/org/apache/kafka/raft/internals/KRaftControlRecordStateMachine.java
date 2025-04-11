@@ -22,9 +22,11 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.ControlRecord;
+import org.apache.kafka.raft.ExternalKRaftMetrics;
 import org.apache.kafka.raft.Isolation;
 import org.apache.kafka.raft.LogFetchInfo;
 import org.apache.kafka.raft.ReplicatedLog;
+import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RawSnapshotReader;
@@ -69,6 +71,9 @@ public final class KRaftControlRecordStateMachine {
     // 2. The read operations lastVoterSet, voterSetAtOffset and kraftVersionAtOffset read
     // the nextOffset first before reading voterSetHistory or kraftVersionHistory
     private volatile long nextOffset = STARTING_NEXT_OFFSET;
+    private final KafkaRaftMetrics kafkaRaftMetrics;
+    private final ExternalKRaftMetrics externalKRaftMetrics;
+    private final VoterSet staticVoterSet;
 
     /**
      * Constructs an internal log listener
@@ -81,19 +86,26 @@ public final class KRaftControlRecordStateMachine {
      * @param logContext the log context
      */
     public KRaftControlRecordStateMachine(
-        Optional<VoterSet> staticVoterSet,
+        VoterSet staticVoterSet,
         ReplicatedLog log,
         RecordSerde<?> serde,
         BufferSupplier bufferSupplier,
         int maxBatchSizeBytes,
-        LogContext logContext
+        LogContext logContext,
+        KafkaRaftMetrics kafkaRaftMetrics,
+        ExternalKRaftMetrics externalKRaftMetrics
     ) {
         this.log = log;
-        this.voterSetHistory = new VoterSetHistory(staticVoterSet);
+        this.voterSetHistory = new VoterSetHistory(staticVoterSet, logContext);
         this.serde = serde;
         this.bufferSupplier = bufferSupplier;
         this.maxBatchSizeBytes = maxBatchSizeBytes;
         this.logger = logContext.logger(this.getClass());
+        this.kafkaRaftMetrics = kafkaRaftMetrics;
+        this.externalKRaftMetrics = externalKRaftMetrics;
+        this.staticVoterSet = staticVoterSet;
+
+        kafkaRaftMetrics.updateNumVoters(staticVoterSet.size());
     }
 
     /**
@@ -115,6 +127,11 @@ public final class KRaftControlRecordStateMachine {
         }
         synchronized (kraftVersionHistory) {
             kraftVersionHistory.truncateNewEntries(endOffset);
+        }
+
+        kafkaRaftMetrics.updateNumVoters(voterSetHistory.lastValue().size());
+        if (!staticVoterSet.isEmpty() && voterSetHistory.lastEntry().isEmpty()) {
+            externalKRaftMetrics.setIgnoredStaticVoters(false);
         }
     }
 
@@ -279,19 +296,29 @@ public final class KRaftControlRecordStateMachine {
             long currentOffset = overrideOffset.orElse(batch.baseOffset() + offsetDelta);
             switch (record.type()) {
                 case KRAFT_VOTERS:
+                    VoterSet voters = VoterSet.fromVotersRecord((VotersRecord) record.message());
+                    kafkaRaftMetrics.updateNumVoters(voters.size());
+                    if (!staticVoterSet.isEmpty()) {
+                        externalKRaftMetrics.setIgnoredStaticVoters(true);
+                    }
+                    logger.info("Latest set of voters is {} at offset {}", voters, currentOffset);
                     synchronized (voterSetHistory) {
-                        voterSetHistory.addAt(currentOffset, VoterSet.fromVotersRecord((VotersRecord) record.message()));
+                        voterSetHistory.addAt(currentOffset, voters);
                     }
                     break;
 
                 case KRAFT_VERSION:
+                    KRaftVersion kraftVersion = KRaftVersion.fromFeatureLevel(
+                        ((KRaftVersionRecord) record.message()).kRaftVersion()
+                    );
+                    logger.info(
+                        "Latest {} is {} at offset {}",
+                        KRaftVersion.FEATURE_NAME,
+                        kraftVersion,
+                        currentOffset
+                    );
                     synchronized (kraftVersionHistory) {
-                        kraftVersionHistory.addAt(
-                            currentOffset,
-                            KRaftVersion.fromFeatureLevel(
-                                ((KRaftVersionRecord) record.message()).kRaftVersion()
-                            )
-                        );
+                        kraftVersionHistory.addAt(currentOffset, kraftVersion);
                     }
                     break;
 

@@ -25,6 +25,7 @@ import org.mockito.Mockito;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.nio.channels.ScatteringByteChannel;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -70,4 +71,55 @@ public class NetworkReceiveTest {
         assertTrue(receive.complete());
     }
 
+    @Test
+    public void testRequiredMemoryAmountKnownWhenNotSet() {
+        NetworkReceive receive = new NetworkReceive("0");
+        assertFalse(receive.requiredMemoryAmountKnown(), "Memory amount should not be known before read.");
+    }
+
+    @Test
+    public void testRequiredMemoryAmountKnownWhenSet() throws IOException {
+        NetworkReceive receive = new NetworkReceive(128, "0");
+
+        ScatteringByteChannel channel = Mockito.mock(ScatteringByteChannel.class);
+
+        ArgumentCaptor<ByteBuffer> bufferCaptor = ArgumentCaptor.forClass(ByteBuffer.class);
+        Mockito.when(channel.read(bufferCaptor.capture())).thenAnswer(invocation -> {
+            bufferCaptor.getValue().putInt(64);
+            return 4;
+        });
+
+        receive.readFrom(channel);
+        assertTrue(receive.requiredMemoryAmountKnown(), "Memory amount should be known after read.");
+    }
+
+    @Test
+    public void testSizeWithPredefineBuffer() {
+        int payloadSize = 8;
+        int expectedTotalSize = 4 + payloadSize; // 4 bytes for size buffer + payload size
+
+        ByteBuffer payloadBuffer = ByteBuffer.allocate(payloadSize);
+        IntStream.range(0, payloadSize).forEach(i -> payloadBuffer.put((byte) i));
+
+        NetworkReceive networkReceive = new NetworkReceive("0", payloadBuffer);
+        assertEquals(expectedTotalSize, networkReceive.size(), "The total size should be the sum of the size buffer and payload.");
+    }
+
+    @Test
+    public void testSizeAfterRead() throws IOException {
+        int payloadSize = 32;
+        int expectedTotalSize = 4 + payloadSize; // 4 bytes for size buffer + payload size
+        NetworkReceive receive = new NetworkReceive(128, "0");
+
+        ScatteringByteChannel channel = Mockito.mock(ScatteringByteChannel.class);
+
+        ArgumentCaptor<ByteBuffer> bufferCaptor = ArgumentCaptor.forClass(ByteBuffer.class);
+        Mockito.when(channel.read(bufferCaptor.capture())).thenAnswer(invocation -> {
+            bufferCaptor.getValue().putInt(payloadSize);
+            return 4;
+        });
+
+        receive.readFrom(channel);
+        assertEquals(expectedTotalSize, receive.size(), "The total size should be the sum of the size buffer and receive size.");
+    }
 }

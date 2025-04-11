@@ -21,7 +21,6 @@ import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.errors.ProcessorStateException;
 import org.apache.kafka.streams.kstream.internals.WrappingNullableUtils;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.ProcessorContextUtils;
@@ -102,7 +101,7 @@ public class MeteredVersionedKeyValueStore<K, V>
         private final Serde<V> plainValueSerde;
         private StateSerdes<K, V> plainValueSerdes;
 
-        private final Map<Class, QueryHandler> queryHandlers =
+        private final Map<Class<?>, QueryHandler> queryHandlers =
             mkMap(
                 mkEntry(
                     RangeQuery.class,
@@ -202,6 +201,7 @@ public class MeteredVersionedKeyValueStore<K, V>
             return result;
         }
 
+        @SuppressWarnings("unused")
         private <R> QueryResult<R> runRangeQuery(final Query<R> query,
                                                  final PositionBound positionBound,
                                                  final QueryConfig config) {
@@ -210,6 +210,7 @@ public class MeteredVersionedKeyValueStore<K, V>
             throw new UnsupportedOperationException("Versioned stores do not support RangeQuery queries at this time.");
         }
 
+        @SuppressWarnings("unused")
         private <R> QueryResult<R> runKeyQuery(final Query<R> query,
                                                final PositionBound positionBound,
                                                final QueryConfig config) {
@@ -263,11 +264,11 @@ public class MeteredVersionedKeyValueStore<K, V>
             final QueryResult<VersionedRecordIterator<byte[]>> rawResult = wrapped().query(rawKeyQuery, positionBound, config);
             if (rawResult.isSuccess()) {
                 final MeteredMultiVersionedKeyQueryIterator<V> typedResult =
-                        new MeteredMultiVersionedKeyQueryIterator<V>(
+                        new MeteredMultiVersionedKeyQueryIterator<>(
                             rawResult.getResult(),
                             iteratorDurationSensor,
                             time,
-                            StoreQueryUtils.getDeserializeValue(plainValueSerdes),
+                            StoreQueryUtils.deserializeValue(plainValueSerdes),
                             numOpenIterators,
                             openIterators
                         );
@@ -292,18 +293,6 @@ public class MeteredVersionedKeyValueStore<K, V>
             } else {
                 return super.prepareValueSerdeForStore(valueSerde, getter);
             }
-        }
-
-        @Deprecated
-        @Override
-        protected void initStoreSerde(final ProcessorContext context) {
-            super.initStoreSerde(context);
-
-            // additionally init raw value serde
-            final String storeName = super.name();
-            final String changelogTopic = ProcessorContextUtils.changelogFor(context, storeName, Boolean.FALSE);
-            plainValueSerdes = StoreSerdeInitializer.prepareStoreSerde(
-                context, storeName, changelogTopic, keySerde, plainValueSerde, WrappingNullableUtils::prepareValueSerde);
         }
 
         @Override
@@ -352,15 +341,9 @@ public class MeteredVersionedKeyValueStore<K, V>
         return internal.name();
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context, final StateStore root) {
-        internal.init(context, root);
-    }
-
-    @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        internal.init(context, root);
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+        internal.init(stateStoreContext, root);
     }
 
     @Override

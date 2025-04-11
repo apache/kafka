@@ -41,20 +41,31 @@ public class MemberDescriptionTest {
                                                           INSTANCE_ID,
                                                           CLIENT_ID,
                                                           HOST,
-                                                          ASSIGNMENT);
+                                                          ASSIGNMENT,
+                                                          Optional.empty(),
+                                                          Optional.empty(),
+                                                          Optional.empty());
     }
 
     @Test
     public void testEqualsWithoutGroupInstanceId() {
         MemberDescription dynamicMemberDescription = new MemberDescription(MEMBER_ID,
+                                                                           Optional.empty(),
                                                                            CLIENT_ID,
                                                                            HOST,
-                                                                           ASSIGNMENT);
+                                                                           ASSIGNMENT,
+                                                                           Optional.empty(),
+                                                                           Optional.empty(),
+                                                                           Optional.empty());
 
         MemberDescription identityDescription = new MemberDescription(MEMBER_ID,
+                                                                      Optional.empty(),
                                                                       CLIENT_ID,
                                                                       HOST,
-                                                                      ASSIGNMENT);
+                                                                      ASSIGNMENT,
+                                                                      Optional.empty(),
+                                                                      Optional.empty(),
+                                                                      Optional.empty());
 
         assertNotEquals(STATIC_MEMBER_DESCRIPTION, dynamicMemberDescription);
         assertNotEquals(STATIC_MEMBER_DESCRIPTION.hashCode(), dynamicMemberDescription.hashCode());
@@ -74,7 +85,10 @@ public class MemberDescriptionTest {
                                                                       INSTANCE_ID,
                                                                       CLIENT_ID,
                                                                       HOST,
-                                                                      ASSIGNMENT);
+                                                                      ASSIGNMENT,
+                                                                      Optional.empty(),
+                                                                      Optional.empty(),
+                                                                      Optional.empty());
 
         assertEquals(STATIC_MEMBER_DESCRIPTION, identityDescription);
         assertEquals(STATIC_MEMBER_DESCRIPTION.hashCode(), identityDescription.hashCode());
@@ -86,7 +100,10 @@ public class MemberDescriptionTest {
                                                                        INSTANCE_ID,
                                                                        CLIENT_ID,
                                                                        HOST,
-                                                                       ASSIGNMENT);
+                                                                       ASSIGNMENT,
+                                                                       Optional.empty(),
+                                                                       Optional.empty(),
+                                                                       Optional.empty());
 
         assertNotEquals(STATIC_MEMBER_DESCRIPTION, newMemberDescription);
         assertNotEquals(STATIC_MEMBER_DESCRIPTION.hashCode(), newMemberDescription.hashCode());
@@ -95,9 +112,45 @@ public class MemberDescriptionTest {
                                                                          Optional.of("new_instance"),
                                                                          CLIENT_ID,
                                                                          HOST,
-                                                                         ASSIGNMENT);
+                                                                         ASSIGNMENT,
+                                                                         Optional.empty(),
+                                                                         Optional.empty(),
+                                                                         Optional.empty());
 
         assertNotEquals(STATIC_MEMBER_DESCRIPTION, newInstanceDescription);
         assertNotEquals(STATIC_MEMBER_DESCRIPTION.hashCode(), newInstanceDescription.hashCode());
+
+        MemberDescription newTargetAssignmentDescription = new MemberDescription(MEMBER_ID,
+                                                                                 INSTANCE_ID,
+                                                                                 CLIENT_ID,
+                                                                                 HOST,
+                                                                                 ASSIGNMENT,
+                                                                                 Optional.of(ASSIGNMENT),
+                                                                                 Optional.empty(),
+                                                                                 Optional.empty());
+        assertNotEquals(STATIC_MEMBER_DESCRIPTION, newTargetAssignmentDescription);
+        assertNotEquals(STATIC_MEMBER_DESCRIPTION.hashCode(), newTargetAssignmentDescription.hashCode());
+
+        MemberDescription newMemberEpochDescription = new MemberDescription(MEMBER_ID,
+                                                                            INSTANCE_ID,
+                                                                            CLIENT_ID,
+                                                                            HOST,
+                                                                            ASSIGNMENT,
+                                                                            Optional.empty(),
+                                                                            Optional.of(1),
+                                                                            Optional.empty());
+        assertNotEquals(STATIC_MEMBER_DESCRIPTION, newMemberEpochDescription);
+        assertNotEquals(STATIC_MEMBER_DESCRIPTION.hashCode(), newMemberEpochDescription.hashCode());
+
+        MemberDescription newIsClassicDescription = new MemberDescription(MEMBER_ID,
+                                                                          INSTANCE_ID,
+                                                                          CLIENT_ID,
+                                                                          HOST,
+                                                                          ASSIGNMENT,
+                                                                          Optional.empty(),
+                                                                          Optional.empty(),
+                                                                          Optional.of(false));
+        assertNotEquals(STATIC_MEMBER_DESCRIPTION, newIsClassicDescription);
+        assertNotEquals(STATIC_MEMBER_DESCRIPTION.hashCode(), newIsClassicDescription.hashCode());
     }
 }

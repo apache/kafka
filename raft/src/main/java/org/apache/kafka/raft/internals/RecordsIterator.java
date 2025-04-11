@@ -86,7 +86,7 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
     public boolean hasNext() {
         ensureOpen();
 
-        if (!nextBatch.isPresent()) {
+        if (nextBatch.isEmpty()) {
             nextBatch = nextBatch();
         }
 
@@ -334,7 +334,7 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
             throw new IllegalArgumentException("Got key in the record when no key was expected");
         }
 
-        if (!value.isPresent()) {
+        if (value.isEmpty()) {
             throw new IllegalArgumentException("Missing value in the record when a value was expected");
         } else if (value.get().remaining() == 0) {
             throw new IllegalArgumentException("Got an unexpected empty value in the record");
@@ -346,13 +346,13 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
     }
 
     private static ControlRecord decodeControlRecord(Optional<ByteBuffer> key, Optional<ByteBuffer> value) {
-        if (!key.isPresent()) {
+        if (key.isEmpty()) {
             throw new IllegalArgumentException("Missing key in the record when a key was expected");
         } else if (key.get().remaining() == 0) {
             throw new IllegalArgumentException("Got an unexpected empty key in the record");
         }
 
-        if (!value.isPresent()) {
+        if (value.isEmpty()) {
             throw new IllegalArgumentException("Missing value in the record when a value was expected");
         } else if (value.get().remaining() == 0) {
             throw new IllegalArgumentException("Got an unexpected empty value in the record");
@@ -360,26 +360,14 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
 
         ControlRecordType type = ControlRecordType.parse(key.get());
 
-        final ApiMessage message;
-        switch (type) {
-            case LEADER_CHANGE:
-                message = ControlRecordUtils.deserializeLeaderChangeMessage(value.get());
-                break;
-            case SNAPSHOT_HEADER:
-                message = ControlRecordUtils.deserializeSnapshotHeaderRecord(value.get());
-                break;
-            case SNAPSHOT_FOOTER:
-                message = ControlRecordUtils.deserializeSnapshotFooterRecord(value.get());
-                break;
-            case KRAFT_VERSION:
-                message = ControlRecordUtils.deserializeKRaftVersionRecord(value.get());
-                break;
-            case KRAFT_VOTERS:
-                message = ControlRecordUtils.deserializeVotersRecord(value.get());
-                break;
-            default:
-                throw new IllegalArgumentException(String.format("Unknown control record type %s", type));
-        }
+        final ApiMessage message = switch (type) {
+            case LEADER_CHANGE -> ControlRecordUtils.deserializeLeaderChangeMessage(value.get());
+            case SNAPSHOT_HEADER -> ControlRecordUtils.deserializeSnapshotHeaderRecord(value.get());
+            case SNAPSHOT_FOOTER -> ControlRecordUtils.deserializeSnapshotFooterRecord(value.get());
+            case KRAFT_VERSION -> ControlRecordUtils.deserializeKRaftVersionRecord(value.get());
+            case KRAFT_VOTERS -> ControlRecordUtils.deserializeVotersRecord(value.get());
+            default -> throw new IllegalArgumentException(String.format("Unknown control record type %s", type));
+        };
 
         return new ControlRecord(type, message);
     }

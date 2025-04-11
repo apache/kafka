@@ -112,7 +112,7 @@ public class ChildFirstClassLoader extends URLClassLoader {
         Enumeration<URL> urls1 = findResources(name);
         Enumeration<URL> urls2 = getParent() != null ? getParent().getResources(name) : null;
 
-        return new Enumeration<URL>() {
+        return new Enumeration<>() {
             @Override
             public boolean hasMoreElements() {
                 return (urls1 != null && urls1.hasMoreElements()) || (urls2 != null && urls2.hasMoreElements());

@@ -23,14 +23,13 @@ package org.apache.kafka.server.util;
  * 1. This has an associated scheduler instance for managing background tasks in a deterministic way.
  * 2. This doesn't support the `auto-tick` functionality as it interacts badly with the current implementation of `MockScheduler`.
  */
-public class MockTime extends org.apache.kafka.common.utils.MockTime {
+public final class MockTime extends org.apache.kafka.common.utils.MockTime {
     public final MockScheduler scheduler;
 
     public MockTime() {
         this(System.currentTimeMillis(), System.nanoTime());
     }
 
-    @SuppressWarnings("this-escape")
     public MockTime(long currentTimeMs, long currentHiResTimeNs) {
         super(0L, currentTimeMs, currentHiResTimeNs);
         scheduler = new MockScheduler(this);

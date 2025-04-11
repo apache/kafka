@@ -24,13 +24,13 @@ import org.apache.kafka.common.message.EndQuorumEpochRequestData;
 import org.apache.kafka.common.message.EndQuorumEpochResponseData;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.FetchSnapshotResponseData;
+import org.apache.kafka.common.message.UpdateRaftVoterRequestData;
 import org.apache.kafka.common.message.VoteResponseData;
 import org.apache.kafka.common.message.VotersRecord;
 import org.apache.kafka.common.network.ListenerName;
 
 import java.net.InetSocketAddress;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.Map;
@@ -131,7 +131,22 @@ public final class Endpoints {
         return listeners;
     }
 
-    private static final Endpoints EMPTY = new Endpoints(Collections.emptyMap());
+    public UpdateRaftVoterRequestData.ListenerCollection toUpdateVoterRequest() {
+        UpdateRaftVoterRequestData.ListenerCollection listeners =
+            new UpdateRaftVoterRequestData.ListenerCollection(endpoints.size());
+        for (Map.Entry<ListenerName, InetSocketAddress> entry : endpoints.entrySet()) {
+            listeners.add(
+                new UpdateRaftVoterRequestData.Listener()
+                    .setName(entry.getKey().value())
+                    .setHost(entry.getValue().getHostString())
+                    .setPort(entry.getValue().getPort())
+            );
+        }
+
+        return listeners;
+    }
+
+    private static final Endpoints EMPTY = new Endpoints(Map.of());
     public static Endpoints empty() {
         return EMPTY;
     }
@@ -172,7 +187,7 @@ public final class Endpoints {
         return Optional.ofNullable(endpoints.find(leaderId))
             .map(endpoint ->
                 new Endpoints(
-                    Collections.singletonMap(
+                    Map.of(
                         listenerName,
                         InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
                     )
@@ -201,7 +216,7 @@ public final class Endpoints {
         return Optional.ofNullable(endpoints.find(leaderId))
             .map(endpoint ->
                 new Endpoints(
-                    Collections.singletonMap(
+                    Map.of(
                         listenerName,
                         InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
                     )
@@ -218,7 +233,7 @@ public final class Endpoints {
         return Optional.ofNullable(endpoints.find(leaderId))
             .map(endpoint ->
                 new Endpoints(
-                    Collections.singletonMap(
+                    Map.of(
                         listenerName,
                         InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
                     )
@@ -235,7 +250,7 @@ public final class Endpoints {
         return Optional.ofNullable(endpoints.find(leaderId))
             .map(endpoint ->
                 new Endpoints(
-                    Collections.singletonMap(
+                    Map.of(
                         listenerName,
                         InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
                     )
@@ -252,7 +267,7 @@ public final class Endpoints {
         return Optional.ofNullable(endpoints.find(leaderId))
             .map(endpoint ->
                 new Endpoints(
-                    Collections.singletonMap(
+                    Map.of(
                         listenerName,
                         InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
                     )
@@ -264,6 +279,18 @@ public final class Endpoints {
     public static Endpoints fromAddVoterRequest(AddRaftVoterRequestData.ListenerCollection endpoints) {
         Map<ListenerName, InetSocketAddress> listeners = new HashMap<>(endpoints.size());
         for (AddRaftVoterRequestData.Listener endpoint : endpoints) {
+            listeners.put(
+                ListenerName.normalised(endpoint.name()),
+                InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())
+            );
+        }
+
+        return new Endpoints(listeners);
+    }
+
+    public static Endpoints fromUpdateVoterRequest(UpdateRaftVoterRequestData.ListenerCollection endpoints) {
+        Map<ListenerName, InetSocketAddress> listeners = new HashMap<>(endpoints.size());
+        for (UpdateRaftVoterRequestData.Listener endpoint : endpoints) {
             listeners.put(
                 ListenerName.normalised(endpoint.name()),
                 InetSocketAddress.createUnresolved(endpoint.host(), endpoint.port())

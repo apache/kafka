@@ -17,7 +17,6 @@
 
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
-import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
 import org.apache.kafka.common.utils.MockTime;
 
@@ -298,7 +297,7 @@ public class RefreshingHttpsJwksTest extends OAuthBearerTest {
         public <T> ScheduledFuture<T> schedule(final Callable<T> callable, long delayMs, Long period) {
 
             KafkaFutureImpl<Long> waiter = new KafkaFutureImpl<>();
-            waiter.thenApply((KafkaFuture.BaseFunction<Long, Void>) now -> {
+            waiter.thenApply(now -> {
                 try {
                     callable.call();
                 } catch (Throwable e) {

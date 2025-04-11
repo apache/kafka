@@ -17,7 +17,6 @@
 package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.streams.errors.InvalidStateStoreException;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.Position;
@@ -37,7 +36,7 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
         if (stateStore instanceof TimestampedBytesStore) {
             return true;
         } else if (stateStore instanceof WrappedStateStore) {
-            return isTimestamped(((WrappedStateStore) stateStore).wrapped());
+            return isTimestamped(((WrappedStateStore<?, ?, ?>) stateStore).wrapped());
         } else {
             return false;
         }
@@ -47,7 +46,7 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
         if (stateStore instanceof VersionedBytesStore) {
             return true;
         } else if (stateStore instanceof WrappedStateStore) {
-            return isVersioned(((WrappedStateStore) stateStore).wrapped());
+            return isVersioned(((WrappedStateStore<?, ?, ?>) stateStore).wrapped());
         } else {
             return false;
         }
@@ -59,16 +58,9 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
         this.wrapped = wrapped;
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context,
-                     final StateStore root) {
-        wrapped.init(context, root);
-    }
-
-    @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        wrapped.init(context, root);
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+        wrapped.init(stateStoreContext, root);
     }
 
     @SuppressWarnings("unchecked")
@@ -84,14 +76,14 @@ public abstract class WrappedStateStore<S extends StateStore, K, V> implements S
     @Override
     public void flushCache() {
         if (wrapped instanceof CachedStateStore) {
-            ((CachedStateStore) wrapped).flushCache();
+            ((CachedStateStore<?, ?>) wrapped).flushCache();
         }
     }
 
     @Override
     public void clearCache() {
         if (wrapped instanceof CachedStateStore) {
-            ((CachedStateStore) wrapped).clearCache();
+            ((CachedStateStore<?, ?>) wrapped).clearCache();
         }
     }
 

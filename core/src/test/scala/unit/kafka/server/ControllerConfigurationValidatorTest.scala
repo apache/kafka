@@ -19,9 +19,10 @@ package kafka.server
 
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.ConfigResource
-import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, CLIENT_METRICS, TOPIC}
+import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER, CLIENT_METRICS, GROUP, TOPIC}
 import org.apache.kafka.common.config.TopicConfig.{REMOTE_LOG_STORAGE_ENABLE_CONFIG, SEGMENT_BYTES_CONFIG, SEGMENT_JITTER_MS_CONFIG, SEGMENT_MS_CONFIG}
 import org.apache.kafka.common.errors.{InvalidConfigurationException, InvalidRequestException, InvalidTopicException}
+import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.server.metrics.ClientMetricsConfigs
 import org.junit.jupiter.api.Assertions.{assertEquals, assertThrows}
 import org.junit.jupiter.api.Test
@@ -93,7 +94,9 @@ class ControllerConfigurationValidatorTest {
     val config = new util.TreeMap[String, String]()
     config.put(REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false")
     if (wasRemoteStorageEnabled) {
-      assertEquals("Disabling remote storage feature on the topic level is not supported.",
+      assertEquals("It is invalid to disable remote storage without deleting remote data. " +
+        "If you want to keep the remote data and turn to read only, please set `remote.storage.enable=true,remote.log.copy.disable=true`. " +
+        "If you want to disable remote storage and delete all remote data, please set `remote.storage.enable=false,remote.log.delete.on.disable=true`.",
         assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
           new ConfigResource(TOPIC, "foo"), config, util.Collections.singletonMap(REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"))).getMessage)
     } else {
@@ -125,9 +128,9 @@ class ControllerConfigurationValidatorTest {
   @Test
   def testValidClientMetricsConfig(): Unit = {
     val config = new util.TreeMap[String, String]()
-    config.put(ClientMetricsConfigs.PUSH_INTERVAL_MS, "2000")
-    config.put(ClientMetricsConfigs.SUBSCRIPTION_METRICS, "org.apache.kafka.client.producer.partition.queue.,org.apache.kafka.client.producer.partition.latency")
-    config.put(ClientMetricsConfigs.CLIENT_MATCH_PATTERN, "client_instance_id=b69cc35a-7a54-4790-aa69-cc2bd4ee4538,client_id=1" +
+    config.put(ClientMetricsConfigs.INTERVAL_MS_CONFIG, "2000")
+    config.put(ClientMetricsConfigs.METRICS_CONFIG, "org.apache.kafka.client.producer.partition.queue.,org.apache.kafka.client.producer.partition.latency")
+    config.put(ClientMetricsConfigs.MATCH_CONFIG, "client_instance_id=b69cc35a-7a54-4790-aa69-cc2bd4ee4538,client_id=1" +
       ",client_software_name=apache-kafka-java,client_software_version=2.8.0-SNAPSHOT,client_source_address=127.0.0.1," +
       "client_source_port=1234")
     validator.validate(new ConfigResource(CLIENT_METRICS, "subscription-1"), config, emptyMap())
@@ -144,12 +147,12 @@ class ControllerConfigurationValidatorTest {
   @Test
   def testInvalidIntervalClientMetricsConfig(): Unit = {
     val config = new util.TreeMap[String, String]()
-    config.put(ClientMetricsConfigs.PUSH_INTERVAL_MS, "10")
+    config.put(ClientMetricsConfigs.INTERVAL_MS_CONFIG, "10")
     assertEquals("Invalid value 10 for interval.ms, interval must be between 100 and 3600000 (1 hour)",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
         new ConfigResource(CLIENT_METRICS, "subscription-1"), config, emptyMap())). getMessage)
 
-    config.put(ClientMetricsConfigs.PUSH_INTERVAL_MS, "3600001")
+    config.put(ClientMetricsConfigs.INTERVAL_MS_CONFIG, "3600001")
     assertEquals("Invalid value 3600001 for interval.ms, interval must be between 100 and 3600000 (1 hour)",
       assertThrows(classOf[InvalidRequestException], () => validator.validate(
         new ConfigResource(CLIENT_METRICS, "subscription-1"), config, emptyMap())). getMessage)
@@ -167,9 +170,45 @@ class ControllerConfigurationValidatorTest {
   @Test
   def testInvalidMatchClientMetricsConfig(): Unit = {
     val config = new util.TreeMap[String, String]()
-    config.put(ClientMetricsConfigs.CLIENT_MATCH_PATTERN, "10")
+    config.put(ClientMetricsConfigs.MATCH_CONFIG, "10")
     assertEquals("Illegal client matching pattern: 10",
       assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
         new ConfigResource(CLIENT_METRICS, "subscription-1"), config, emptyMap())). getMessage)
+  }
+
+  @Test
+  def testValidGroupConfig(): Unit = {
+    val config = new util.TreeMap[String, String]()
+    config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
+    config.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, "5000")
+    validator.validate(new ConfigResource(GROUP, "group"), config, emptyMap())
+  }
+
+  @Test
+  def testInvalidGroupNameGroupConfig(): Unit = {
+    val config = new util.TreeMap[String, String]()
+    assertEquals("Default group resources are not allowed.",
+      assertThrows(classOf[InvalidRequestException], () => validator.validate(
+        new ConfigResource(GROUP, ""), config, emptyMap())).getMessage)
+  }
+
+  @Test
+  def testNullGroupConfigValue(): Unit = {
+    val config = new util.TreeMap[String, String]()
+    config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
+    config.put(GroupConfig.CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, null)
+    assertEquals("Null value not supported for group configs: consumer.heartbeat.interval.ms",
+      assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
+        new ConfigResource(GROUP, "group"), config, emptyMap())).getMessage)
+  }
+
+  @Test
+  def testInvalidGroupConfig(): Unit = {
+    val config = new util.TreeMap[String, String]()
+    config.put(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "50000")
+    config.put("foobar", "abc")
+    assertEquals("Unknown group config name: foobar",
+      assertThrows(classOf[InvalidConfigurationException], () => validator.validate(
+        new ConfigResource(GROUP, "group"), config, emptyMap())).getMessage)
   }
 }

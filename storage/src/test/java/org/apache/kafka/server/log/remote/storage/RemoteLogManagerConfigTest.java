@@ -21,7 +21,6 @@ import org.apache.kafka.common.config.ConfigException;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -29,13 +28,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class RemoteLogManagerConfigTest {
-
     @Test
     public void testValidConfigs() {
         String rsmPrefix = "__custom.rsm.";
         String rlmmPrefix = "__custom.rlmm.";
-        Map<String, Object> rsmProps = Collections.singletonMap("rsm.prop", "val");
-        Map<String, Object> rlmmProps = Collections.singletonMap("rlmm.prop", "val");
+        Map<String, Object> rsmProps = Map.of("rsm.prop", "val");
+        Map<String, Object> rlmmProps = Map.of("rlmm.prop", "val");
 
         Map<String, Object> props = getRLMProps(rsmPrefix, rlmmPrefix);
         rsmProps.forEach((k, v) -> props.put(rsmPrefix + k, v));
@@ -57,15 +55,24 @@ public class RemoteLogManagerConfigTest {
     }
 
     @Test
+    public void testThreadPoolDefaults() {
+        // Even with empty properties, RemoteLogManagerConfig has default values
+        Map<String, Object> emptyProps = new HashMap<>();
+        RemoteLogManagerConfig remoteLogManagerConfigEmptyConfig = new RLMTestConfig(emptyProps).remoteLogManagerConfig();
+        assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_THREAD_POOL_SIZE, remoteLogManagerConfigEmptyConfig.remoteLogManagerThreadPoolSize());
+        assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE, remoteLogManagerConfigEmptyConfig.remoteLogManagerCopierThreadPoolSize());
+        assertEquals(RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE, remoteLogManagerConfigEmptyConfig.remoteLogManagerExpirationThreadPoolSize());
+    }
+
+    @Test
     public void testValidateEmptyStringConfig() {
         // Test with a empty string props should throw ConfigException
-        Map<String, Object> emptyStringProps = Collections.singletonMap(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "");
+        Map<String, Object> emptyStringProps = Map.of(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP, "");
         assertThrows(ConfigException.class, () ->
                 new RLMTestConfig(emptyStringProps).remoteLogManagerConfig());
     }
 
     private Map<String, Object> getRLMProps(String rsmPrefix, String rlmmPrefix) {
-
         Map<String, Object> props = new HashMap<>();
         props.put(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, true);
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP,
@@ -95,7 +102,7 @@ public class RemoteLogManagerConfigTest {
         props.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_RETRY_JITTER_PROP,
                 0.3);
         props.put(RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP,
-                10);
+                2);
         props.put(RemoteLogManagerConfig.REMOTE_LOG_READER_MAX_PENDING_TASKS_PROP,
                 100);
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_CUSTOM_METADATA_MAX_BYTES_PROP,
@@ -108,7 +115,6 @@ public class RemoteLogManagerConfigTest {
     }
 
     private static class RLMTestConfig extends AbstractConfig {
-
         private final RemoteLogManagerConfig rlmConfig;
 
         public RLMTestConfig(Map<?, ?> originals) {

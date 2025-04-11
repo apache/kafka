@@ -19,16 +19,14 @@ package org.apache.kafka.coordinator.group.modern.share;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.coordinator.group.Utils;
-import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMemberMetadataValue;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.ModernGroupMember;
-import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember.Builder;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -57,8 +55,8 @@ public class ShareGroupMember extends ModernGroupMember {
         private String rackId = null;
         private String clientId = "";
         private String clientHost = "";
-        private Set<String> subscribedTopicNames = Collections.emptySet();
-        private Map<Uuid, Set<Integer>> assignedPartitions = Collections.emptyMap();
+        private Set<String> subscribedTopicNames = Set.of();
+        private Map<Uuid, Set<Integer>> assignedPartitions = Map.of();
 
         public Builder(String memberId) {
             this.memberId = Objects.requireNonNull(memberId);
@@ -149,11 +147,11 @@ public class ShareGroupMember extends ModernGroupMember {
             return this;
         }
 
-        public Builder updateWith(ConsumerGroupCurrentMemberAssignmentValue record) {
+        public Builder updateWith(ShareGroupCurrentMemberAssignmentValue record) {
             setMemberEpoch(record.memberEpoch());
             setPreviousMemberEpoch(record.previousMemberEpoch());
             setState(MemberState.fromValue(record.state()));
-            setAssignedPartitions(Utils.assignmentFromTopicPartitions(record.assignedPartitions()));
+            setAssignedPartitions(Utils.assignmentFromShareGroupTopicPartitions(record.assignedPartitions()));
             return this;
         }
 

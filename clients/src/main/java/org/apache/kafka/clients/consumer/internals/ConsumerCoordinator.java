@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.clients.GroupRebalanceConfig;
+import org.apache.kafka.clients.consumer.CloseOptions;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
@@ -86,6 +87,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicReference;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ASSIGN_FROM_SUBSCRIBED_ASSIGNORS;
@@ -176,13 +178,51 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                                boolean throwOnFetchStableOffsetsUnsupported,
                                String rackId,
                                Optional<ClientTelemetryReporter> clientTelemetryReporter) {
+        this(rebalanceConfig,
+            logContext,
+            client,
+            assignors,
+            metadata,
+            subscriptions,
+            metrics,
+            metricGrpPrefix,
+            time,
+            autoCommitEnabled,
+            autoCommitIntervalMs,
+            interceptors,
+            throwOnFetchStableOffsetsUnsupported,
+            rackId,
+            clientTelemetryReporter,
+            Optional.empty());
+    }
+
+    /**
+     * Initialize the coordination manager.
+     */
+    public ConsumerCoordinator(GroupRebalanceConfig rebalanceConfig,
+                               LogContext logContext,
+                               ConsumerNetworkClient client,
+                               List<ConsumerPartitionAssignor> assignors,
+                               ConsumerMetadata metadata,
+                               SubscriptionState subscriptions,
+                               Metrics metrics,
+                               String metricGrpPrefix,
+                               Time time,
+                               boolean autoCommitEnabled,
+                               int autoCommitIntervalMs,
+                               ConsumerInterceptors<?, ?> interceptors,
+                               boolean throwOnFetchStableOffsetsUnsupported,
+                               String rackId,
+                               Optional<ClientTelemetryReporter> clientTelemetryReporter,
+                               Optional<Supplier<BaseHeartbeatThread>> heartbeatThreadSupplier) {
         super(rebalanceConfig,
               logContext,
               client,
               metrics,
               metricGrpPrefix,
               time,
-              clientTelemetryReporter);
+              clientTelemetryReporter,
+              heartbeatThreadSupplier);
         this.rebalanceConfig = rebalanceConfig;
         this.log = logContext.logger(ConsumerCoordinator.class);
         this.metadata = metadata;
@@ -973,7 +1013,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
     /**
      * @throws KafkaException if the rebalance callback throws exception
      */
-    public void close(final Timer timer) {
+    public void close(final Timer timer, CloseOptions.GroupMembershipOperation membershipOperation) {
         // we do not need to re-enable wakeups since we are closing already
         client.disableWakeups();
         try {
@@ -984,7 +1024,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
                 invokeCompletedOffsetCommitCallbacks();
             }
         } finally {
-            super.close(timer);
+            super.close(timer, membershipOperation);
         }
     }
 
@@ -1031,7 +1071,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             // the same order that they were added. Note also that AbstractCoordinator prevents
             // multiple concurrent coordinator lookup requests.
             pendingAsyncCommits.incrementAndGet();
-            lookupCoordinator().addListener(new RequestFutureListener<Void>() {
+            lookupCoordinator().addListener(new RequestFutureListener<>() {
                 @Override
                 public void onSuccess(Void value) {
                     pendingAsyncCommits.decrementAndGet();
@@ -1059,7 +1099,7 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
         RequestFuture<Void> future = sendOffsetCommitRequest(offsets);
         inFlightAsyncCommits.incrementAndGet();
         final OffsetCommitCallback cb = callback == null ? defaultOffsetCommitCallback : callback;
-        future.addListener(new RequestFutureListener<Void>() {
+        future.addListener(new RequestFutureListener<>() {
             @Override
             public void onSuccess(Void value) {
                 inFlightAsyncCommits.decrementAndGet();
@@ -1457,15 +1497,16 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             if (responseError != Errors.NONE) {
                 log.debug("Offset fetch failed: {}", responseError.message());
 
-                if (responseError == Errors.COORDINATOR_LOAD_IN_PROGRESS) {
-                    // just retry
-                    future.raise(responseError);
-                } else if (responseError == Errors.NOT_COORDINATOR) {
+                if (responseError == Errors.COORDINATOR_NOT_AVAILABLE ||
+                    responseError == Errors.NOT_COORDINATOR) {
                     // re-discover the coordinator and retry
                     markCoordinatorUnknown(responseError);
                     future.raise(responseError);
                 } else if (responseError == Errors.GROUP_AUTHORIZATION_FAILED) {
                     future.raise(GroupAuthorizationException.forGroupId(rebalanceConfig.groupId));
+                } else if (responseError.exception() instanceof RetriableException) {
+                    // retry
+                    future.raise(responseError);
                 } else {
                     future.raise(new KafkaException("Unexpected error in fetch offset response: " + responseError.message()));
                 }

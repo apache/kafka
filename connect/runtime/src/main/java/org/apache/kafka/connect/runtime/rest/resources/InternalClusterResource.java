@@ -30,18 +30,17 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.util.List;
 import java.util.Map;
 
-import javax.ws.rs.POST;
-import javax.ws.rs.PUT;
-import javax.ws.rs.Path;
-import javax.ws.rs.PathParam;
-import javax.ws.rs.Produces;
-import javax.ws.rs.QueryParam;
-import javax.ws.rs.core.Context;
-import javax.ws.rs.core.HttpHeaders;
-import javax.ws.rs.core.MediaType;
-import javax.ws.rs.core.UriInfo;
-
 import io.swagger.v3.oas.annotations.Operation;
+import jakarta.ws.rs.POST;
+import jakarta.ws.rs.PUT;
+import jakarta.ws.rs.Path;
+import jakarta.ws.rs.PathParam;
+import jakarta.ws.rs.Produces;
+import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.core.Context;
+import jakarta.ws.rs.core.HttpHeaders;
+import jakarta.ws.rs.core.MediaType;
+import jakarta.ws.rs.core.UriInfo;
 
 /**
  * Contains endpoints necessary for intra-cluster communication--that is, requests that
@@ -66,7 +65,7 @@ public abstract class InternalClusterResource {
 
     /**
      * @return a {@link Herder} instance that can be used to satisfy the current request; may not be null
-     * @throws javax.ws.rs.NotFoundException if no such herder can be provided
+     * @throws jakarta.ws.rs.NotFoundException if no such herder can be provided
      */
     protected abstract Herder herderForRequest();
 

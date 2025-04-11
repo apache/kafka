@@ -19,6 +19,7 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.streams.kstream.ValueJoinerWithKey;
 import org.apache.kafka.streams.kstream.internals.KStreamImplJoin.TimeTrackerSupplier;
 import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.internals.StoreFactory;
 import org.apache.kafka.streams.state.internals.LeftOrRightValue;
 import org.apache.kafka.streams.state.internals.TimestampedKeyAndJoinSide;
 
@@ -26,14 +27,14 @@ import java.util.Optional;
 
 class KStreamKStreamJoinRightSide<K, VLeft, VRight, VOut> extends KStreamKStreamJoin<K, VLeft, VRight, VOut, VRight, VLeft> {
 
-    KStreamKStreamJoinRightSide(final String otherWindowName,
-                                final JoinWindowsInternal windows,
+    KStreamKStreamJoinRightSide(final JoinWindowsInternal windows,
                                 final ValueJoinerWithKey<? super K, ? super VRight, ? super VLeft, ? extends VOut> joiner,
                                 final boolean outer,
-                                final Optional<String> outerJoinWindowName,
-                                final TimeTrackerSupplier sharedTimeTrackerSupplier) {
-        super(otherWindowName, windows, joiner, outer, outerJoinWindowName, windows.afterMs, windows.beforeMs,
-                sharedTimeTrackerSupplier);
+                                final TimeTrackerSupplier sharedTimeTrackerSupplier,
+                                final StoreFactory otherWindowStoreFactory,
+                                final Optional<StoreFactory> outerJoinWindowStoreFactory) {
+        super(windows, joiner, outer, windows.afterMs, windows.beforeMs, sharedTimeTrackerSupplier,
+              otherWindowStoreFactory, outerJoinWindowStoreFactory);
     }
 
     @Override
@@ -58,13 +59,13 @@ class KStreamKStreamJoinRightSide<K, VLeft, VRight, VOut> extends KStreamKStream
         }
 
         @Override
-        public VRight getThisValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue) {
-            return leftOrRightValue.getRightValue();
+        public VRight thisValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue) {
+            return leftOrRightValue.rightValue();
         }
 
         @Override
-        public VLeft getOtherValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue) {
-            return leftOrRightValue.getLeftValue();
+        public VLeft otherValue(final LeftOrRightValue<? extends VLeft, ? extends VRight> leftOrRightValue) {
+            return leftOrRightValue.leftValue();
         }
     }
 }

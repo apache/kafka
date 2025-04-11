@@ -74,17 +74,13 @@ public class SnapshotEmitterTest {
         }
 
         @Override
-        public long scheduleAppend(int epoch, List<ApiMessageAndVersion> records) {
+        public long prepareAppend(int epoch, List<ApiMessageAndVersion> records) {
             return 0;
         }
 
         @Override
-        public long scheduleAtomicAppend(
-            int epoch,
-            OptionalLong requiredEndOffset,
-            List<ApiMessageAndVersion> records
-        ) {
-            return 0;
+        public void schedulePreparedAppend() {
+            // nothing to do
         }
 
         @Override
@@ -152,7 +148,7 @@ public class SnapshotEmitterTest {
         assertEquals(0L, emitter.metrics().latestSnapshotGeneratedBytes());
         emitter.maybeEmit(MetadataImageTest.IMAGE1);
         assertEquals(0L, emitter.metrics().latestSnapshotGeneratedAgeMs());
-        assertEquals(1600L, emitter.metrics().latestSnapshotGeneratedBytes());
+        assertEquals(1500L, emitter.metrics().latestSnapshotGeneratedBytes());
         FakeSnapshotWriter writer = mockRaftClient.writers.get(
                 MetadataImageTest.IMAGE1.provenance().snapshotId());
         assertNotNull(writer);

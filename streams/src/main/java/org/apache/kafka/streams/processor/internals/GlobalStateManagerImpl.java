@@ -35,8 +35,8 @@ import org.apache.kafka.streams.processor.CommitCallback;
 import org.apache.kafka.streams.processor.StateRestoreCallback;
 import org.apache.kafka.streams.processor.StateRestoreListener;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.api.Processor;
+import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.Task.TaskType;
 import org.apache.kafka.streams.state.internals.OffsetCheckpoint;
@@ -83,7 +83,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
     private final Set<String> globalStoreNames = new HashSet<>();
     private final Set<String> globalNonPersistentStoresTopics = new HashSet<>();
     private final FixedOrderMap<String, Optional<StateStore>> globalStores = new FixedOrderMap<>();
-    private InternalProcessorContext globalProcessorContext;
+    private InternalProcessorContext<?, ?> globalProcessorContext;
     private DeserializationExceptionHandler deserializationExceptionHandler;
 
     public GlobalStateManagerImpl(final LogContext logContext,
@@ -122,11 +122,11 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
             config.getLong(StreamsConfig.POLL_MS_CONFIG) + requestTimeoutMs
         );
         taskTimeoutMs = config.getLong(StreamsConfig.TASK_TIMEOUT_MS_CONFIG);
-        deserializationExceptionHandler = config.defaultDeserializationExceptionHandler();
+        deserializationExceptionHandler = config.deserializationExceptionHandler();
     }
 
     @Override
-    public void setGlobalProcessorContext(final InternalProcessorContext globalProcessorContext) {
+    public void setGlobalProcessorContext(final InternalProcessorContext<?, ?> globalProcessorContext) {
         this.globalProcessorContext = globalProcessorContext;
     }
 
@@ -142,7 +142,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         for (final StateStore stateStore : topology.globalStateStores()) {
             final String sourceTopic = storeToChangelogTopic.get(stateStore.name());
             changelogTopics.add(sourceTopic);
-            stateStore.init((StateStoreContext) globalProcessorContext, stateStore);
+            stateStore.init(globalProcessorContext, stateStore);
         }
 
         // make sure each topic-partition from checkpointFileCache is associated with a global state store
@@ -161,13 +161,13 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         return Collections.unmodifiableSet(globalStoreNames);
     }
 
-    public StateStore getGlobalStore(final String name) {
+    public StateStore globalStore(final String name) {
         return globalStores.getOrDefault(name, Optional.empty()).orElse(null);
     }
 
     @Override
-    public StateStore getStore(final String name) {
-        return getGlobalStore(name);
+    public StateStore store(final String name) {
+        return globalStore(name);
     }
 
     public File baseDir() {
@@ -259,13 +259,13 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
         this.deserializationExceptionHandler = deserializationExceptionHandler;
     }
 
-    @SuppressWarnings("unchecked")
+    @SuppressWarnings({"rawtypes", "unchecked", "resource"})
     private void reprocessState(final List<TopicPartition> topicPartitions,
                                 final Map<TopicPartition, Long> highWatermarks,
-                                final InternalTopologyBuilder.ReprocessFactory reprocessFactory,
+                                final InternalTopologyBuilder.ReprocessFactory<?, ?, ?, ?> reprocessFactory,
                                 final String storeName) {
-        final Processor source = reprocessFactory.processorSupplier().get();
-        source.init(globalProcessorContext);
+        final Processor<?, ?, ?, ?> source = reprocessFactory.processorSupplier().get();
+        source.init((ProcessorContext) globalProcessorContext);
 
         for (final TopicPartition topicPartition : topicPartitions) {
             long currentDeadline = NO_DEADLINE;
@@ -300,6 +300,7 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                     currentDeadline = NO_DEADLINE;
                 }
 
+                long batchRestoreCount = 0;
                 for (final ConsumerRecord<byte[], byte[]> record : records.records(topicPartition)) {
                     final ProcessorRecordContext recordContext =
                         new ProcessorRecordContext(
@@ -312,14 +313,18 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
 
                     try {
                         if (record.key() != null) {
-                            source.process(new Record<>(
+                            source.process(new Record(
                                 reprocessFactory.keyDeserializer().deserialize(record.topic(), record.key()),
                                 reprocessFactory.valueDeserializer().deserialize(record.topic(), record.value()),
                                 record.timestamp(),
                                 record.headers()));
                             restoreCount++;
+                            batchRestoreCount++;
                         }
                     } catch (final Exception deserializationException) {
+                        // while Java distinguishes checked vs unchecked exceptions, other languages
+                        // like Scala or Kotlin do not, and thus we need to catch `Exception`
+                        // (instead of `RuntimeException`) to work well with those languages
                         handleDeserializationFailure(
                             deserializationExceptionHandler,
                             globalProcessorContext,
@@ -330,14 +335,15 @@ public class GlobalStateManagerImpl implements GlobalStateManager {
                                 Thread.currentThread().getName(),
                                 globalProcessorContext.taskId().toString(),
                                 globalProcessorContext.metrics()
-                            )
+                            ),
+                            null
                         );
                     }
                 }
 
                 offset = getGlobalConsumerOffset(topicPartition);
 
-                stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, restoreCount);
+                stateRestoreListener.onBatchRestored(topicPartition, storeName, offset, batchRestoreCount);
             }
             stateRestoreListener.onRestoreEnd(topicPartition, storeName, restoreCount);
             checkpointFileCache.put(topicPartition, offset);

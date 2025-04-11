@@ -135,8 +135,8 @@ public class LogicalKeyValueSegmentsTest {
 
     @Test
     public void shouldCleanupSegmentsThatHaveExpired() {
-        final LogicalKeyValueSegment segment1 = segments.getOrCreateSegmentIfLive(0, context, 0);
-        final LogicalKeyValueSegment segment2 = segments.getOrCreateSegmentIfLive(2, context, SEGMENT_INTERVAL * 2L);
+        segments.getOrCreateSegmentIfLive(0, context, 0);
+        segments.getOrCreateSegmentIfLive(2, context, SEGMENT_INTERVAL * 2L);
         final LogicalKeyValueSegment segment3 = segments.getOrCreateSegmentIfLive(3, context, SEGMENT_INTERVAL * 3L);
         final LogicalKeyValueSegment segment4 = segments.getOrCreateSegmentIfLive(7, context, SEGMENT_INTERVAL * 7L);
 
@@ -151,7 +151,7 @@ public class LogicalKeyValueSegmentsTest {
     @Test
     public void shouldNotCleanUpReservedSegments() {
         final LogicalKeyValueSegment reservedSegment = segments.createReservedSegment(-1, "reserved");
-        final LogicalKeyValueSegment segment1 = segments.getOrCreateSegmentIfLive(1, context, SEGMENT_INTERVAL);
+        segments.getOrCreateSegmentIfLive(1, context, SEGMENT_INTERVAL);
         final LogicalKeyValueSegment segment2 = segments.getOrCreateSegmentIfLive(2, context, SEGMENT_INTERVAL * 2L);
 
         segments.cleanupExpiredSegments(SEGMENT_INTERVAL * 6L);
@@ -167,10 +167,10 @@ public class LogicalKeyValueSegmentsTest {
         final LogicalKeyValueSegment segment1 = segments.getOrCreateSegmentIfLive(0, context, 0L);
         final LogicalKeyValueSegment segment2 = segments.getOrCreateSegmentIfLive(1, context, SEGMENT_INTERVAL);
 
-        assertEquals(segment1, segments.getSegmentForTimestamp(0L));
-        assertEquals(segment1, segments.getSegmentForTimestamp(SEGMENT_INTERVAL - 1));
-        assertEquals(segment2, segments.getSegmentForTimestamp(SEGMENT_INTERVAL));
-        assertEquals(segment2, segments.getSegmentForTimestamp(2 * SEGMENT_INTERVAL - 1));
+        assertEquals(segment1, segments.segmentForTimestamp(0L));
+        assertEquals(segment1, segments.segmentForTimestamp(SEGMENT_INTERVAL - 1));
+        assertEquals(segment2, segments.segmentForTimestamp(SEGMENT_INTERVAL));
+        assertEquals(segment2, segments.segmentForTimestamp(2 * SEGMENT_INTERVAL - 1));
     }
 
     @Test
@@ -226,7 +226,7 @@ public class LogicalKeyValueSegmentsTest {
 
         segments.close();
 
-        assertThat(segments.getSegmentForTimestamp(0), is(nullValue()));
+        assertThat(segments.segmentForTimestamp(0), is(nullValue()));
         assertThat(segments.getReservedSegment(-1), is(nullValue()));
         // verify iterators closed as well
         assertThrows(InvalidStateStoreException.class, all1::hasNext);

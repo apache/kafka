@@ -39,13 +39,14 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 import java.util.Properties;
+import java.util.Set;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
 import static org.apache.kafka.common.utils.Utils.mkProperties;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.hamcrest.MatcherAssert.assertThat;
 import static org.hamcrest.Matchers.is;
 
@@ -214,7 +215,7 @@ public class KTableKTableForeignKeyJoinScenarioTest {
         }
         // verifying primarily that no extra pseudo-topics were used, but it's nice to also verify the rest of the
         // topics our serdes serialize data for
-        assertThat(serdeScope.registeredTopics(), is(mkSet(
+        assertThat(serdeScope.registeredTopics(), is(Set.of(
             // expected pseudo-topics
             applicationId + "-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic-fk--key",
             applicationId + "-KTABLE-FK-JOIN-SUBSCRIPTION-REGISTRATION-0000000006-topic-pk--key",
@@ -231,6 +232,137 @@ public class KTableKTableForeignKeyJoinScenarioTest {
             "output-topic--key",
             "output-topic--value"
         )));
+    }
+
+    @Test
+    public void shouldWorkWithCompositeKeyAndProducerIdInValue() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        // Left table keyed by <producer_id, product_id>
+        final KTable<String, String> leftTable = builder.table(
+            "left_table",
+            Consumed.with(Serdes.String(), Serdes.String())
+        );
+
+        // Right table keyed by producer_id
+        final KTable<String, String> rightTable = builder.table(
+            "right_table",
+            Consumed.with(Serdes.String(), Serdes.String())
+        );
+
+        // Have to include producer_id in value since foreignKeyExtractor only gets value
+        final KTable<String, String> joined = leftTable.join(
+            rightTable,
+            value -> value.split("\\|")[0], // extract producer_id from value
+            (leftValue, rightValue) -> "(" + leftValue + "," + rightValue + ")",
+            Materialized.as("store")
+        );
+
+        joined.toStream().to("output");
+
+        try (final TopologyTestDriver driver = createTopologyTestDriver(builder)) {
+            final TestInputTopic<String, String> leftInput = driver.createInputTopic(
+                "left_table",
+                new StringSerializer(),
+                new StringSerializer()
+            );
+            final TestInputTopic<String, String> rightInput = driver.createInputTopic(
+                "right_table",
+                new StringSerializer(),
+                new StringSerializer()
+            );
+            final TestOutputTopic<String, String> output = driver.createOutputTopic(
+                "output",
+                new StringDeserializer(),
+                new StringDeserializer()
+            );
+
+            // Key format: "producerId:productId"
+            // Left value format: "producerId|productData"
+            leftInput.pipeInput("producer1:product1", "producer1|product1-data");
+            leftInput.pipeInput("producer1:product2", "producer1|product2-data");
+            leftInput.pipeInput("producer2:product1", "producer2|product1-data");
+
+            rightInput.pipeInput("producer1", "producer1-data");
+            rightInput.pipeInput("producer2", "producer2-data");
+
+            final Map<String, String> expectedOutput = new HashMap<>();
+            expectedOutput.put("producer1:product1", "(producer1|product1-data,producer1-data)");
+            expectedOutput.put("producer1:product2", "(producer1|product2-data,producer1-data)");
+            expectedOutput.put("producer2:product1", "(producer2|product1-data,producer2-data)");
+
+            assertThat(output.readKeyValuesToMap(), is(expectedOutput));
+        }
+    }
+
+    @Test
+    public void shouldWorkWithCompositeKeyAndBiFunctionExtractor() {
+        final StreamsBuilder builder = new StreamsBuilder();
+
+        // Left table keyed by <producer_id, product_id>
+        final KTable<String, String> leftTable = builder.table(
+            "left_table",
+            Consumed.with(Serdes.String(), Serdes.String())
+        );
+
+        // Right table keyed by producer_id
+        final KTable<String, String> rightTable = builder.table(
+            "right_table",
+            Consumed.with(Serdes.String(), Serdes.String())
+        );
+
+        // Can extract producer_id from composite key using BiFunction
+        final KTable<String, String> joined = leftTable.join(
+            rightTable,
+            (key, value) -> key.split(":")[0], // extract producer_id from key
+            (leftValue, rightValue) -> "(" + leftValue + "," + rightValue + ")",
+            Materialized.as("store")
+        );
+
+        joined.toStream().to("output");
+
+        try (final TopologyTestDriver driver = createTopologyTestDriver(builder)) {
+            final TestInputTopic<String, String> leftInput = driver.createInputTopic(
+                "left_table",
+                new StringSerializer(),
+                new StringSerializer()
+            );
+            final TestInputTopic<String, String> rightInput = driver.createInputTopic(
+                "right_table",
+                new StringSerializer(),
+                new StringSerializer()
+            );
+            final TestOutputTopic<String, String> output = driver.createOutputTopic(
+                "output",
+                new StringDeserializer(),
+                new StringDeserializer()
+            );
+
+            // Now we don't need producer_id in the value
+            leftInput.pipeInput("producer1:product1", "product1-data");
+            leftInput.pipeInput("producer1:product2", "product2-data");
+            leftInput.pipeInput("producer2:product1", "product1-data");
+
+            rightInput.pipeInput("producer1", "producer1-data");
+            rightInput.pipeInput("producer2", "producer2-data");
+
+            final Map<String, String> expectedOutput = new HashMap<>();
+            expectedOutput.put("producer1:product1", "(product1-data,producer1-data)");
+            expectedOutput.put("producer1:product2", "(product2-data,producer1-data)");
+            expectedOutput.put("producer2:product1", "(product1-data,producer2-data)");
+
+            assertThat(output.readKeyValuesToMap(), is(expectedOutput));
+        }
+    }
+
+    private TopologyTestDriver createTopologyTestDriver(final StreamsBuilder builder) {
+        final Properties config = new Properties();
+        config.setProperty(StreamsConfig.APPLICATION_ID_CONFIG, "test-app");
+        config.setProperty(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, "dummy:1234");
+        config.setProperty(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory().getAbsolutePath());
+        config.setProperty(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        config.setProperty(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.String().getClass().getName());
+        return new TopologyTestDriver(builder.build(), config);
     }
 
     private void validateTopologyCanProcessData(final StreamsBuilder builder) {

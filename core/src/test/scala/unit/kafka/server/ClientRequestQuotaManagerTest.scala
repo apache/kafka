@@ -16,23 +16,29 @@
  */
 package kafka.server
 
-import kafka.server.QuotaType.Request
 import org.apache.kafka.common.metrics.Quota
 import org.apache.kafka.server.config.ClientQuotaManagerConfig
+import org.apache.kafka.server.quota.QuotaType
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
+
+import java.util.Optional
 
 class ClientRequestQuotaManagerTest extends BaseClientQuotaManagerTest {
   private val config = new ClientQuotaManagerConfig()
 
   @Test
   def testRequestPercentageQuotaViolation(): Unit = {
-    val clientRequestQuotaManager = new ClientRequestQuotaManager(config, metrics, time, "", None)
-    clientRequestQuotaManager.updateQuota(Some("ANONYMOUS"), Some("test-client"), Some("test-client"), Some(Quota.upperBound(1)))
-    val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", Request.toString, ""))
-    def millisToPercent(millis: Double) = millis * 1000 * 1000 * ClientRequestQuotaManager.NanosToPercentagePerSecond
+    val clientRequestQuotaManager = new ClientRequestQuotaManager(config, metrics, time, "", Optional.empty())
+    clientRequestQuotaManager.updateQuota(
+      Some(ClientQuotaManager.UserEntity("ANONYMOUS")),
+      Some(ClientQuotaManager.ClientIdEntity("test-client")),
+      Some(Quota.upperBound(1))
+    )
+    val queueSizeMetric = metrics.metrics().get(metrics.metricName("queue-size", QuotaType.REQUEST.toString, ""))
+    def millisToPercent(millis: Double) = millis * 1000 * 1000 * ClientRequestQuotaManager.NANOS_TO_PERCENTAGE_PER_SECOND
     try {
-      // We have 10 second windows. Make sure that there is no quota violation
+      // We have 10 seconds windows. Make sure that there is no quota violation
       // if we are under the quota
       for (_ <- 0 until 10) {
         assertEquals(0, maybeRecord(clientRequestQuotaManager, "ANONYMOUS", "test-client", millisToPercent(4)))

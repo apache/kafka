@@ -17,9 +17,8 @@
 
 package kafka.server
 
-import kafka.testkit.KafkaClusterTestKit
-import kafka.testkit.TestKitNodes
 import kafka.utils.TestUtils
+import org.apache.kafka.common.test.{KafkaClusterTestKit, TestKitNodes}
 import org.apache.kafka.common.utils.BufferSupplier
 import org.apache.kafka.metadata.MetadataRecordSerde
 import org.apache.kafka.server.config.KRaftConfigs
@@ -41,7 +40,7 @@ class RaftClusterSnapshotTest {
     val numberOfBrokers = 3
     val numberOfControllers = 3
 
-    Using(
+    Using.resource(
       new KafkaClusterTestKit
         .Builder(
           new TestKitNodes.Builder()
@@ -74,7 +73,7 @@ class RaftClusterSnapshotTest {
 
       // For every controller and broker perform some sanity checks against the latest snapshot
       for ((_, raftManager) <- cluster.raftManagers().asScala) {
-        Using(
+        Using.resource(
           RecordsSnapshotReader.of(
             raftManager.replicatedLog.latestSnapshot.get(),
             new MetadataRecordSerde(),

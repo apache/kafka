@@ -29,7 +29,6 @@ import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.SecurityUtils;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
@@ -37,8 +36,6 @@ import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.util.Collections;
-import java.util.EnumSet;
 import java.util.Iterator;
 import java.util.NavigableSet;
 import java.util.Set;
@@ -123,7 +120,7 @@ public class StandardAuthorizerData {
         return new StandardAuthorizerData(createLogger(-1),
             null,
             false,
-            Collections.emptySet(),
+            Set.of(),
             DENIED,
             new AclCache());
     }
@@ -438,14 +435,14 @@ public class StandardAuthorizerData {
     /**
      * The set of operations which imply DESCRIBE permission, when used in an ALLOW acl.
      */
-    private static final Set<AclOperation> IMPLIES_DESCRIBE = Collections.unmodifiableSet(
-        EnumSet.of(DESCRIBE, READ, WRITE, DELETE, ALTER));
+    private static final Set<AclOperation> IMPLIES_DESCRIBE =
+        Set.of(DESCRIBE, READ, WRITE, DELETE, ALTER);
 
     /**
      * The set of operations which imply DESCRIBE_CONFIGS permission, when used in an ALLOW acl.
      */
-    private static final Set<AclOperation> IMPLIES_DESCRIBE_CONFIGS = Collections.unmodifiableSet(
-        EnumSet.of(DESCRIBE_CONFIGS, ALTER_CONFIGS));
+    private static final Set<AclOperation> IMPLIES_DESCRIBE_CONFIGS =
+        Set.of(DESCRIBE_CONFIGS, ALTER_CONFIGS);
 
     static AuthorizationResult findResult(Action action,
                                           AuthorizableRequestContext requestContext,
@@ -470,7 +467,7 @@ public class StandardAuthorizerData {
         KafkaPrincipal basePrincipal = sessionPrincipal.getClass().equals(KafkaPrincipal.class)
             ? sessionPrincipal
             : new KafkaPrincipal(sessionPrincipal.getPrincipalType(), sessionPrincipal.getName());
-        return Utils.mkSet(basePrincipal, WILDCARD_KAFKA_PRINCIPAL);
+        return Set.of(basePrincipal, WILDCARD_KAFKA_PRINCIPAL);
     }
 
     /**

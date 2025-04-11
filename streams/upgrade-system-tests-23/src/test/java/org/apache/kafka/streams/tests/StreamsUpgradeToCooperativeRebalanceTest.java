@@ -68,7 +68,7 @@ public class StreamsUpgradeToCooperativeRebalanceTest {
                 @Override
                 public void apply(final String key, final String value) {
                     if (recordCounter++ % reportInterval == 0) {
-                        System.out.println(String.format("Processed %d records so far", recordCounter));
+                        System.out.printf("Processed %d records so far%n", recordCounter);
                         System.out.flush();
                     }
                 }

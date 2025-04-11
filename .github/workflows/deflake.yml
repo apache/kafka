@@ -1,0 +1,116 @@
+# Licensed to the Apache Software Foundation (ASF) under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The ASF licenses this file to You under the Apache License, Version 2.0
+# (the "License"); you may not use this file except in compliance with
+# the License.  You may obtain a copy of the License at
+#
+#    http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+name: 'Deflake a test'
+on:
+  workflow_dispatch:
+    inputs:
+      test-module:
+        description: 'Gradle sub-module which contains the test being de-flaked. Should be like :core'
+        required: true
+        type: string
+      test-pattern:
+        description: 'Test class to de-flake (must be a ClusterTest). Should be like *SomeTest*'
+        required: true
+        type: string
+      test-repeat:
+        description: 'Number of times to invoke the test'
+        required: true
+        type: number
+        default: 1
+      java-version:
+        description: 'Java version to use.'
+        required: true
+        type: string
+        default: '17'
+
+jobs:
+  deflake:
+    runs-on: ubuntu-latest
+    name: Deflake JUnit tests
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Setup Python
+        uses: ./.github/actions/setup-python
+
+      - name: Setup Gradle
+        uses: ./.github/actions/setup-gradle
+        with:
+          java-version: ${{ inputs.java-version }}
+          gradle-cache-read-only: true
+          develocity-access-key: ${{ secrets.DEVELOCITY_ACCESS_KEY }}
+
+      - name: Test
+        timeout-minutes: 60
+        id: junit-test
+        env:
+          TEST_REPEAT: ${{ inputs.test-repeat }}
+          TEST_MODULE: ${{ inputs.test-module }}
+          TEST_PATTERN: ${{ inputs.test-pattern }}
+        run: |
+          set +e
+          ./.github/scripts/thread-dump.sh &
+          timeout 60m ./gradlew --info --build-cache --scan --continue \
+          -PtestLoggingEvents=started,passed,skipped,failed \
+          -PmaxParallelForks=2 \
+          -Pkafka.cluster.test.repeat=$TEST_REPEAT \
+          -PmaxTestRetries=$TEST_REPEAT -PmaxTestRetryFailures=0 \
+          ${TEST_MODULE}:test --tests $TEST_PATTERN
+          exitcode="$?"
+          echo "exitcode=$exitcode" >> $GITHUB_OUTPUT
+
+      - name: Archive JUnit HTML reports
+        uses: actions/upload-artifact@v4
+        id: archive-junit-html
+        with:
+          name: junit-html-reports
+          path: |
+            **/build/reports/tests/*
+          compression-level: 9
+          if-no-files-found: ignore
+
+      - name: Archive JUnit XML
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-xml
+          path: |
+            build/junit-xml/**/*.xml
+          compression-level: 9
+          if-no-files-found: ignore
+
+      - name: Archive Thread Dumps
+        id: archive-thread-dump
+        if: steps.junit-test.outputs.gradle-exitcode == '124'
+        uses: actions/upload-artifact@v4
+        with:
+          name: junit-thread-dumps-${{ env.job-variation }}
+          path: |
+            thread-dumps/*
+          compression-level: 9
+          if-no-files-found: ignore
+
+      - name: Parse JUnit tests
+        env:
+          GITHUB_WORKSPACE: ${{ github.workspace }}
+          JUNIT_REPORT_URL: ${{ steps.archive-junit-html.outputs.artifact-url }}
+          THREAD_DUMP_URL: ${{ steps.archive-thread-dump.outputs.artifact-url }}
+          GRADLE_TEST_EXIT_CODE: ${{ steps.junit-test.outputs.gradle-exitcode }}
+        run: |
+          python .github/scripts/junit.py \
+           --path build/junit-xml >> $GITHUB_STEP_SUMMARY

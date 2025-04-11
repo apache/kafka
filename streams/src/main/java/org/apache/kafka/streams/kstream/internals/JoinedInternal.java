@@ -19,22 +19,30 @@ package org.apache.kafka.streams.kstream.internals;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.kstream.Joined;
 
-public class JoinedInternal<K, V, VO> extends Joined<K, V, VO>  {
+import java.time.Duration;
 
-    JoinedInternal(final Joined<K, V, VO> joined) {
+public class JoinedInternal<K, VLeft, VRight> extends Joined<K, VLeft, VRight>  {
+
+    JoinedInternal(final Joined<K, VLeft, VRight> joined) {
         super(joined);
     }
 
+    @SuppressWarnings("deprecation")
+    public Duration gracePeriod() {
+        return gracePeriod;
+    }
+
+    @SuppressWarnings("deprecation")
     public Serde<K> keySerde() {
         return keySerde;
     }
 
-    public Serde<V> valueSerde() {
-        return valueSerde;
+    public Serde<VLeft> leftValueSerde() {
+        return leftValueSerde;
     }
 
-    public Serde<VO> otherValueSerde() {
-        return otherValueSerde;
+    public Serde<VRight> rightValueSerde() {
+        return rightValueSerde;
     }
 
     public String name() {

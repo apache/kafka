@@ -32,7 +32,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.concurrent.CountDownLatch;
@@ -81,11 +80,20 @@ public class SnapshotGeneratorTest {
 
     static LogDeltaManifest.Builder logDeltaManifestBuilder() {
         return LogDeltaManifest.newBuilder()
-            .provenance(MetadataProvenance.EMPTY)
+            .provenance(new MetadataProvenance(-1L, -1, -1L, true))
             .leaderAndEpoch(LeaderAndEpoch.UNKNOWN)
             .numBatches(1)
             .elapsedNs(100)
             .numBytes(100);
+    }
+
+    static LogDeltaManifest.Builder notBatchAlignedLogDeltaManifestBuilder() {
+        return LogDeltaManifest.newBuilder()
+                .provenance(MetadataProvenance.EMPTY)
+                .leaderAndEpoch(LeaderAndEpoch.UNKNOWN)
+                .numBatches(1)
+                .elapsedNs(100)
+                .numBytes(100);
     }
 
     private static final MetadataDelta TEST_DELTA;
@@ -109,16 +117,59 @@ public class SnapshotGeneratorTest {
                 setMaxTimeSinceLastSnapshotNs(TimeUnit.DAYS.toNanos(10)).
                 build()) {
             // Publish a log delta batch. This one will not trigger a snapshot yet.
-            generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, logDeltaManifestBuilder().build());
+            generator.publishLogDelta(TEST_IMAGE, logDeltaManifestBuilder().build());
             // Publish a log delta batch. This will trigger a snapshot.
-            generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, logDeltaManifestBuilder().build());
+            generator.publishLogDelta(TEST_IMAGE, logDeltaManifestBuilder().build());
             // Publish a log delta batch. This one will be ignored because there are other images
             // queued for writing.
-            generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, logDeltaManifestBuilder().numBytes(2000).build());
-            assertEquals(Collections.emptyList(), emitter.images());
+            generator.publishLogDelta(TEST_IMAGE, logDeltaManifestBuilder().numBytes(2000).build());
+            assertEquals(List.of(), emitter.images());
             emitter.setReady();
         }
-        assertEquals(Collections.singletonList(TEST_IMAGE), emitter.images());
+        assertEquals(List.of(TEST_IMAGE), emitter.images());
+        faultHandler.maybeRethrowFirstException();
+    }
+
+    @Test
+    public void testNoSnapshotCreatedWhenLastOffsetIsNotBatchAligned() throws Exception {
+        MockFaultHandler faultHandler = new MockFaultHandler("SnapshotGenerator");
+        MockEmitter emitter = new MockEmitter();
+        try (SnapshotGenerator generator = new SnapshotGenerator.Builder(emitter).
+                setFaultHandler(faultHandler).
+                setMaxBytesSinceLastSnapshot(200).
+                setMaxTimeSinceLastSnapshotNs(TimeUnit.DAYS.toNanos(10)).
+                build()) {
+            // None of these log delta batches should trigger a snapshot since their offset is not batch aligned.
+            generator.publishLogDelta(TEST_IMAGE, notBatchAlignedLogDeltaManifestBuilder().build());
+            generator.publishLogDelta(TEST_IMAGE, notBatchAlignedLogDeltaManifestBuilder().build());
+            generator.publishLogDelta(TEST_IMAGE, notBatchAlignedLogDeltaManifestBuilder().build());
+            assertEquals(List.of(), emitter.images());
+            emitter.setReady();
+        }
+        assertEquals(List.of(), emitter.images());
+        faultHandler.maybeRethrowFirstException();
+    }
+
+    @Test
+    public void testSnapshotsCreatedAgainWhenLastOffsetIsAligned() throws Exception {
+        MockFaultHandler faultHandler = new MockFaultHandler("SnapshotGenerator");
+        MockEmitter emitter = new MockEmitter();
+        MetadataImage batchAlignedImage = TEST_DELTA.apply(
+                new MetadataProvenance(-1L, -1, -1L, true));
+        try (SnapshotGenerator generator = new SnapshotGenerator.Builder(emitter).
+                setFaultHandler(faultHandler).
+                setMaxBytesSinceLastSnapshot(100).
+                setMaxTimeSinceLastSnapshotNs(TimeUnit.DAYS.toNanos(10)).
+                build()) {
+            // These should not be published despite meeting the max bytes threshold since they are not batch aligned.
+            generator.publishLogDelta(TEST_IMAGE, notBatchAlignedLogDeltaManifestBuilder().build());
+            generator.publishLogDelta(TEST_IMAGE, notBatchAlignedLogDeltaManifestBuilder().build());
+            // This snapshot should get published since it is batch aligned.
+            generator.publishLogDelta(batchAlignedImage, logDeltaManifestBuilder().build());
+            assertEquals(List.of(), emitter.images());
+            emitter.setReady();
+        }
+        assertEquals(List.of(batchAlignedImage), emitter.images());
         faultHandler.maybeRethrowFirstException();
     }
 
@@ -135,9 +186,9 @@ public class SnapshotGeneratorTest {
                 build()) {
             disabledReason.compareAndSet(null, "we are testing disable()");
             // No snapshots are generated because snapshots are disabled.
-            generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, logDeltaManifestBuilder().build());
+            generator.publishLogDelta(TEST_IMAGE, logDeltaManifestBuilder().build());
         }
-        assertEquals(Collections.emptyList(), emitter.images());
+        assertEquals(List.of(), emitter.images());
         faultHandler.maybeRethrowFirstException();
     }
 
@@ -153,17 +204,17 @@ public class SnapshotGeneratorTest {
                 setMaxTimeSinceLastSnapshotNs(TimeUnit.MINUTES.toNanos(30)).
                 build()) {
             // This image isn't published yet.
-            generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, logDeltaManifestBuilder().numBytes(50).build());
-            assertEquals(Collections.emptyList(), emitter.images());
+            generator.publishLogDelta(TEST_IMAGE, logDeltaManifestBuilder().numBytes(50).build());
+            assertEquals(List.of(), emitter.images());
             mockTime.sleep(TimeUnit.MINUTES.toNanos(40));
             // Next image is published because of the time delay.
-            generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, logDeltaManifestBuilder().numBytes(50).build());
+            generator.publishLogDelta(TEST_IMAGE, logDeltaManifestBuilder().numBytes(50).build());
             TestUtils.waitForCondition(() -> emitter.images().size() == 1, "images.size == 1");
             // bytesSinceLastSnapshot was reset to 0 by the previous snapshot,
             // so this does not trigger a new snapshot.
-            generator.publishLogDelta(TEST_DELTA, TEST_IMAGE, logDeltaManifestBuilder().numBytes(150).build());
+            generator.publishLogDelta(TEST_IMAGE, logDeltaManifestBuilder().numBytes(150).build());
         }
-        assertEquals(Collections.singletonList(TEST_IMAGE), emitter.images());
+        assertEquals(List.of(TEST_IMAGE), emitter.images());
         faultHandler.maybeRethrowFirstException();
     }
 
@@ -176,11 +227,11 @@ public class SnapshotGeneratorTest {
                 setMaxBytesSinceLastSnapshot(200).
                 build()) {
             for (int i = 0; i < 2; i++) {
-                generator.publishLogDelta(TEST_DELTA, TEST_IMAGE,
+                generator.publishLogDelta(TEST_IMAGE,
                     logDeltaManifestBuilder().elapsedNs(10000).numBytes(50000).build());
             }
         }
-        assertEquals(Collections.emptyList(), emitter.images());
+        assertEquals(List.of(), emitter.images());
         assertNotNull(faultHandler.firstException());
         assertEquals(FaultHandlerException.class, faultHandler.firstException().getClass());
         assertEquals("SnapshotGenerator: KRaft snapshot file generation error: oops",

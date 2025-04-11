@@ -50,6 +50,7 @@ import java.util.Scanner;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 /**
  * MetricsReporter that aggregates metrics data and reports it via HTTP requests to a configurable
@@ -72,7 +73,7 @@ public class PushHttpMetricsReporter implements MetricsReporter {
     }
 
     private final Object lock = new Object();
-    private final Time time;
+    private final Supplier<Long> currentTimeMillis;
     private final ScheduledExecutorService executor;
     // The set of metrics are updated in init/metricChange/metricRemoval
     private final Map<MetricName, KafkaMetric> metrics = new LinkedHashMap<>();
@@ -96,12 +97,17 @@ public class PushHttpMetricsReporter implements MetricsReporter {
                             "producer/consumer/streams/connect instance");
 
     public PushHttpMetricsReporter() {
-        time = Time.SYSTEM;
+        // In test_performance_services.py, we have system tests for Kafka versions 0.8.2 and 0.9.
+        // These tests always use the tools jar from the trunk branch, regardless of the Kafka version being tested,
+        // while the client jar aligns with the Kafka version specified in the test suite. To ensure these system test
+        // passed, we need to make this class compatible with older client jars. This discrepancy force us not to use
+        // `Time.SYSTEM` here as there is no such field in the older Kafka version.
+        currentTimeMillis = System::currentTimeMillis;
         executor = Executors.newSingleThreadScheduledExecutor();
     }
 
     PushHttpMetricsReporter(Time mockTime, ScheduledExecutorService mockExecutor) {
-        time = mockTime;
+        currentTimeMillis = mockTime::milliseconds;
         executor = mockExecutor;
     }
 
@@ -169,7 +175,7 @@ public class PushHttpMetricsReporter implements MetricsReporter {
     private class HttpReporter implements Runnable {
         @Override
         public void run() {
-            long now = time.milliseconds();
+            long now = currentTimeMillis.get();
             final List<MetricValue> samples;
             synchronized (lock) {
                 samples = new ArrayList<>(metrics.size());

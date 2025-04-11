@@ -49,7 +49,7 @@ public final class WordCountDemo {
     public static final String INPUT_TOPIC = "streams-plaintext-input";
     public static final String OUTPUT_TOPIC = "streams-wordcount-output";
 
-    static Properties getStreamsConfig(final String[] args) throws IOException {
+    static Properties streamsConfig(final String[] args) throws IOException {
         final Properties props = new Properties();
         if (args != null && args.length > 0) {
             try (final FileInputStream fis = new FileInputStream(args[0])) {
@@ -85,7 +85,7 @@ public final class WordCountDemo {
     }
 
     public static void main(final String[] args) throws IOException {
-        final Properties props = getStreamsConfig(args);
+        final Properties props = streamsConfig(args);
 
         final StreamsBuilder builder = new StreamsBuilder();
         createWordCountStream(builder);

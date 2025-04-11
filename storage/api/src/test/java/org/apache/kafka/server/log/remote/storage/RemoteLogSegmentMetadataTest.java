@@ -43,14 +43,13 @@ class RemoteLogSegmentMetadataTest {
         long endOffset = 100L;
         int segmentSize = 123;
         long maxTimestamp = -1L;
-        int tieredEpoch = 0;
 
         Map<Integer, Long> segmentLeaderEpochs = new HashMap<>();
         segmentLeaderEpochs.put(0, 0L);
         RemoteLogSegmentId segmentId = new RemoteLogSegmentId(TP0, Uuid.randomUuid());
         RemoteLogSegmentMetadata segmentMetadata = new RemoteLogSegmentMetadata(segmentId, startOffset, endOffset,
                 maxTimestamp, brokerId, eventTimestamp, segmentSize,
-                segmentLeaderEpochs, tieredEpoch);
+                segmentLeaderEpochs);
 
         CustomMetadata customMetadata = new CustomMetadata(new byte[]{0, 1, 2, 3});
         RemoteLogSegmentMetadataUpdate segmentMetadataUpdate = new RemoteLogSegmentMetadataUpdate(
@@ -62,8 +61,8 @@ class RemoteLogSegmentMetadataTest {
                 segmentId, startOffset, endOffset,
                 maxTimestamp, brokerIdFinished, timestampFinished, segmentSize, Optional.of(customMetadata),
                 RemoteLogSegmentState.COPY_SEGMENT_FINISHED,
-                segmentLeaderEpochs,
-                tieredEpoch);
+                segmentLeaderEpochs
+        );
         assertEquals(expectedUpdatedMetadata, updatedMetadata);
 
         // Check that the original metadata have not changed.
@@ -75,6 +74,5 @@ class RemoteLogSegmentMetadataTest {
         assertEquals(eventTimestamp, segmentMetadata.eventTimestampMs());
         assertEquals(segmentSize, segmentMetadata.segmentSizeInBytes());
         assertEquals(segmentLeaderEpochs, segmentMetadata.segmentLeaderEpochs());
-        assertEquals(tieredEpoch, segmentMetadata.tieredEpoch());
     }
 }

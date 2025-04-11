@@ -17,5 +17,9 @@
 
 # Convenient way to invoke a gradle command with all Scala versions supported
 # by default
-./gradlew "$@" -PscalaVersion=2.12 && ./gradlew "$@" -PscalaVersion=2.13
+# This script was originally designed to support multiple Scala versions (2.12 and 2.13),
+# but as Scala 2.12 is no longer supported, this script is no longer necessary.
+# We are keeping it for backwards compatibility. It will be removed in a future release.
+echo "Warning: This script is deprecated and will be removed in a future release."
+./gradlew "$@" -PscalaVersion=2.13
 

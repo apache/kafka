@@ -37,14 +37,10 @@ public class FileLock {
     private final FileChannel channel;
     private java.nio.channels.FileLock flock;
 
-    public FileLock(File file) {
+    public FileLock(File file) throws IOException {
         this.file = file;
-        try {
-            this.channel = FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.READ,
-                    StandardOpenOption.WRITE);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        this.channel = FileChannel.open(file.toPath(), StandardOpenOption.CREATE, StandardOpenOption.READ,
+                StandardOpenOption.WRITE);
     }
 
     public File file() {
@@ -54,19 +50,15 @@ public class FileLock {
     /**
      * Lock the file or throw an exception if the lock is already held
      */
-    public synchronized void lock() {
+    public synchronized void lock() throws IOException {
         LOGGER.trace("Acquiring lock on {}", file.getAbsolutePath());
-        try {
-            flock = channel.lock();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+        flock = channel.lock();
     }
 
     /**
      * Try to lock the file and return true if the locking succeeds
      */
-    public synchronized boolean tryLock() {
+    public synchronized boolean tryLock() throws IOException {
         LOGGER.trace("Acquiring lock on {}", file.getAbsolutePath());
         try {
             // weirdly this method will return null if the lock is held by another
@@ -76,37 +68,27 @@ public class FileLock {
             return flock != null;
         } catch (OverlappingFileLockException e) {
             return false;
-        } catch (IOException e) {
-            throw new RuntimeException(e);
         }
     }
 
     /**
      * Unlock the lock if it is held
      */
-    public synchronized void unlock() {
+    public synchronized void unlock() throws IOException {
         LOGGER.trace("Releasing lock on {}", file.getAbsolutePath());
         if (flock != null) {
-            try {
-                flock.release();
-            } catch (IOException e) {
-                throw new RuntimeException(e);
-            }
+            flock.release();
         }
     }
 
     /**
      * Destroy this lock, closing the associated FileChannel
      */
-    public synchronized void destroy() {
+    public synchronized void destroy() throws IOException {
         unlock();
-        try {
-            if (file.exists() && file.delete()) {
-                LOGGER.trace("Deleted {}", file.getAbsolutePath());
-            }
-            channel.close();
-        } catch (IOException e) {
-            throw new RuntimeException(e);
+        if (file.exists() && file.delete()) {
+            LOGGER.trace("Deleted {}", file.getAbsolutePath());
         }
+        channel.close();
     }
 }

@@ -86,12 +86,12 @@ public class GlobalStateManagerStub implements GlobalStateManager {
     }
 
     @Override
-    public StateStore getStore(final String name) {
+    public StateStore store(final String name) {
         return null;
     }
 
     @Override
-    public StateStore getGlobalStore(final String name) {
+    public StateStore globalStore(final String name) {
         return null;
     }
 

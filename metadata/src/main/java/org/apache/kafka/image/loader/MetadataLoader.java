@@ -123,7 +123,6 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             return new MetadataLoader(
                 time,
                 logContext,
-                nodeId,
                 threadNamePrefix,
                 faultHandler,
                 metrics,
@@ -194,7 +193,6 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     private MetadataLoader(
         Time time,
         LogContext logContext,
-        int nodeId,
         String threadNamePrefix,
         FaultHandler faultHandler,
         MetadataLoaderMetrics metrics,
@@ -231,7 +229,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             return false;
         }
         OptionalLong highWaterMark = highWaterMarkAccessor.get();
-        if (!highWaterMark.isPresent()) {
+        if (highWaterMark.isEmpty()) {
             log.info("{}: the loader is still catching up because we still don't know the high " +
                     "water mark yet.", where);
             return true;
@@ -293,8 +291,8 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
                 setImage(MetadataImage.EMPTY).
                 build();
         ImageReWriter writer = new ImageReWriter(delta);
-        image.write(writer, new ImageWriterOptions.Builder().
-                setMetadataVersion(image.features().metadataVersion()).
+        image.write(writer, new ImageWriterOptions.Builder(image.features().metadataVersionOrThrow()).
+                setEligibleLeaderReplicasEnabled(image.features().isElrEnabled()).
                 build());
         // ImageReWriter#close invokes finishSnapshot, so we don't need to invoke it here.
         SnapshotManifest manifest = new SnapshotManifest(
@@ -347,7 +345,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
             }
         }
         metrics.updateLastAppliedImageProvenance(image.provenance());
-        metrics.setCurrentMetadataVersion(image.features().metadataVersion());
+        metrics.setCurrentMetadataVersion(image.features().metadataVersionOrThrow());
         if (!uninitializedPublishers.isEmpty()) {
             scheduleInitializeNewPublishers(0);
         }
@@ -356,21 +354,19 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
     @Override
     public void handleCommit(BatchReader<ApiMessageAndVersion> reader) {
         eventQueue.append(() -> {
-            try {
+            try (reader) {
                 while (reader.hasNext()) {
                     Batch<ApiMessageAndVersion> batch = reader.next();
                     long elapsedNs = batchLoader.loadBatch(batch, currentLeaderAndEpoch);
                     metrics.updateBatchSize(batch.records().size());
                     metrics.updateBatchProcessingTimeNs(elapsedNs);
                 }
-                batchLoader.maybeFlushBatches(currentLeaderAndEpoch);
+                batchLoader.maybeFlushBatches(currentLeaderAndEpoch, true);
             } catch (Throwable e) {
                 // This is a general catch-all block where we don't expect to end up;
                 // failure-prone operations should have individual try/catch blocks around them.
                 faultHandler.handleFault("Unhandled fault in MetadataLoader#handleCommit. " +
-                    "Last image offset was " + image.offset(), e);
-            } finally {
-                reader.close();
+                        "Last image offset was " + image.offset(), e);
             }
         });
     }
@@ -434,7 +430,7 @@ public class MetadataLoader implements RaftClient.Listener<ApiMessageAndVersion>
         }
         delta.finishSnapshot();
         MetadataProvenance provenance = new MetadataProvenance(reader.lastContainedLogOffset(),
-                reader.lastContainedLogEpoch(), reader.lastContainedLogTimestamp());
+                reader.lastContainedLogEpoch(), reader.lastContainedLogTimestamp(), true);
         return new SnapshotManifest(provenance,
                 time.nanoseconds() - startNs);
     }

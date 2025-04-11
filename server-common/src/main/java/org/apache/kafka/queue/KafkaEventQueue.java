@@ -337,7 +337,7 @@ public final class KafkaEventQueue implements EventQueue {
                         }
                         break;
                     case DEFERRED:
-                        if (!deadlineNs.isPresent()) {
+                        if (deadlineNs.isEmpty()) {
                             return new RuntimeException(
                                 "You must specify a deadline for deferred events.");
                         }

@@ -41,7 +41,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class CommonClientConfigsTest {
-    @SuppressWarnings("deprecation")
+
     private static class TestConfig extends AbstractConfig {
         private static final ConfigDef CONFIG;
         static {
@@ -71,15 +71,10 @@ public class CommonClientConfigsTest {
                     SaslConfigs.SASL_MECHANISM_DOC)
                 .define(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG,
                     ConfigDef.Type.LIST,
-                    Collections.emptyList(),
+                    JmxReporter.class.getName(),
                     new ConfigDef.NonNullValidator(),
                     ConfigDef.Importance.LOW,
-                    CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC)
-                .define(CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG,
-                    ConfigDef.Type.BOOLEAN,
-                    true,
-                    ConfigDef.Importance.LOW,
-                    CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_DOC);
+                    CommonClientConfigs.METRIC_REPORTER_CLASSES_DOC);
         }
 
         @Override
@@ -133,14 +128,13 @@ public class CommonClientConfigsTest {
     }
 
     @Test
-    @SuppressWarnings("deprecation")
     public void testMetricsReporters() {
         TestConfig config = new TestConfig(Collections.emptyMap());
         List<MetricsReporter> reporters = CommonClientConfigs.metricsReporters("clientId", config);
         assertEquals(1, reporters.size());
         assertInstanceOf(JmxReporter.class, reporters.get(0));
 
-        config = new TestConfig(Collections.singletonMap(CommonClientConfigs.AUTO_INCLUDE_JMX_REPORTER_CONFIG, "false"));
+        config = new TestConfig(Collections.singletonMap(CommonClientConfigs.METRIC_REPORTER_CLASSES_CONFIG, ""));
         reporters = CommonClientConfigs.metricsReporters("clientId", config);
         assertTrue(reporters.isEmpty());
 

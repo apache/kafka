@@ -19,6 +19,7 @@ package kafka.server
 import kafka.network.RequestChannel
 import org.apache.kafka.common.MetricName
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
+import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.metrics.QuotaViolationException
 import org.apache.kafka.common.metrics.Sensor
@@ -27,7 +28,7 @@ import org.apache.kafka.common.metrics.stats.TokenBucket
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.Session
-import org.apache.kafka.server.quota.ClientQuotaCallback
+import org.apache.kafka.server.quota.{ClientQuotaCallback, QuotaType}
 import org.apache.kafka.server.config.ClientQuotaManagerConfig
 
 import scala.jdk.CollectionConverters._
@@ -60,10 +61,10 @@ object UnboundedControllerMutationQuota extends ControllerMutationQuota {
  */
 abstract class AbstractControllerMutationQuota(private val time: Time) extends ControllerMutationQuota {
   protected var lastThrottleTimeMs = 0L
-  protected var lastRecordedTimeMs = 0L
+  private var lastRecordedTimeMs = 0L
 
   protected def updateThrottleTime(e: QuotaViolationException, timeMs: Long): Unit = {
-    lastThrottleTimeMs = ControllerMutationQuotaManager.throttleTimeMs(e, timeMs)
+    lastThrottleTimeMs = ControllerMutationQuotaManager.throttleTimeMs(e)
     lastRecordedTimeMs = timeMs
   }
 
@@ -141,7 +142,7 @@ object ControllerMutationQuotaManager {
    * Basically, if a value < 0 is observed, the time required to bring it to zero is
    * -value / refill rate (quota bound) * 1000.
    */
-  def throttleTimeMs(e: QuotaViolationException, timeMs: Long): Long = {
+  def throttleTimeMs(e: QuotaViolationException): Long = {
     e.metric().measurable() match {
       case _: TokenBucket =>
         Math.round(-e.value() / e.bound() * 1000)
@@ -165,17 +166,17 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
                                      private val metrics: Metrics,
                                      private val time: Time,
                                      private val threadNamePrefix: String,
-                                     private val quotaCallback: Option[ClientQuotaCallback])
-    extends ClientQuotaManager(config, metrics, QuotaType.ControllerMutation, time, threadNamePrefix, quotaCallback) {
+                                     private val quotaCallback: Option[Plugin[ClientQuotaCallback]])
+    extends ClientQuotaManager(config, metrics, QuotaType.CONTROLLER_MUTATION, time, threadNamePrefix, quotaCallback) {
 
   override protected def clientQuotaMetricName(quotaMetricTags: Map[String, String]): MetricName = {
-    metrics.metricName("tokens", QuotaType.ControllerMutation.toString,
+    metrics.metricName("tokens", QuotaType.CONTROLLER_MUTATION.toString,
       "Tracking remaining tokens in the token bucket per user/client-id",
       quotaMetricTags.asJava)
   }
 
   private def clientRateMetricName(quotaMetricTags: Map[String, String]): MetricName = {
-    metrics.metricName("mutation-rate", QuotaType.ControllerMutation.toString,
+    metrics.metricName("mutation-rate", QuotaType.CONTROLLER_MUTATION.toString,
       "Tracking mutation-rate per user/client-id",
       quotaMetricTags.asJava)
   }
@@ -194,7 +195,7 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
 
   /**
    * Records that a user/clientId accumulated or would like to accumulate the provided amount at the
-   * the specified time, returns throttle time in milliseconds. The quota is strict meaning that it
+   * specified time, returns throttle time in milliseconds. The quota is strict meaning that it
    * does not accept any mutations once the quota is exhausted until it gets back to the defined rate.
    *
    * @param session The session from which the user is extracted
@@ -215,7 +216,7 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
       0
     } catch {
       case e: QuotaViolationException =>
-        val throttleTimeMs = ControllerMutationQuotaManager.throttleTimeMs(e, timeMs).toInt
+        val throttleTimeMs = ControllerMutationQuotaManager.throttleTimeMs(e).toInt
         debug(s"Quota violated for sensor (${quotaSensor.name}). Delay time: ($throttleTimeMs)")
         throttleTimeMs
     }
@@ -264,7 +265,7 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
   /**
    * Returns a ControllerMutationQuota based on `strictSinceVersion`. It returns a strict
    * quota if the version is equal to or above of the `strictSinceVersion`, a permissive
-   * quota if the version is below, and a unbounded quota if the quota is disabled.
+   * quota if the version is below, and an unbounded quota if the quota is disabled.
    *
    * When the quota is strictly enforced. Any operation above the quota is not allowed
    * and rejected with a THROTTLING_QUOTA_EXCEEDED error.

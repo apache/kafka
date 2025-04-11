@@ -17,12 +17,16 @@
 package org.apache.kafka.streams.processor;
 
 import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serde;
 import org.apache.kafka.streams.StreamsBuilder;
 import org.apache.kafka.streams.StreamsMetrics;
 import org.apache.kafka.streams.Topology;
 import org.apache.kafka.streams.errors.StreamsException;
+import org.apache.kafka.streams.kstream.Consumed;
 import org.apache.kafka.streams.kstream.ValueTransformerWithKeySupplier;
+import org.apache.kafka.streams.processor.api.ProcessorSupplier;
+import org.apache.kafka.streams.state.StoreBuilder;
 
 import java.io.File;
 import java.time.Duration;
@@ -31,7 +35,17 @@ import java.util.Map;
 /**
  * Processor context interface.
  */
+/* This interface was technically deprecated via KIP-478 (AK 2.7), but we did not mark it as deprecated yet,
+ *  as it's used on many other places
+ *
+ * We need to clean this all up (https://issues.apache.org/jira/browse/KAFKA-17131) and mark the interface
+ * deprecated afterward.
+ */
 @SuppressWarnings("deprecation") // Not deprecating the old context, since it is used by Transformers. See KAFKA-10603.
+/*
+ * When we deprecate `ProcessorContext` can also deprecate `To` class,
+ * as it is only used in the `ProcessorContext#forward` method.
+ */
 public interface ProcessorContext {
 
     /**
@@ -100,9 +114,10 @@ public interface ProcessorContext {
     <S extends StateStore> S getStateStore(final String name);
 
     /**
-     * Schedule a periodic operation for processors. A processor may call this method during
-     * {@link Processor#init(ProcessorContext) initialization} or
-     * {@link Processor#process(Object, Object) processing} to
+     * Schedule a periodic operation for processors. A processor may call this method during a
+     * {@link org.apache.kafka.streams.kstream.KTable#transformValues(ValueTransformerWithKeySupplier, String...)}'s
+     * {@link org.apache.kafka.streams.kstream.ValueTransformerWithKey#init(ProcessorContext) initialization} or
+     * {@link org.apache.kafka.streams.kstream.ValueTransformerWithKey#transform(Object, Object) processing} to
      * schedule a periodic callback &mdash; called a punctuation &mdash; to {@link Punctuator#punctuate(long)}.
      * The type parameter controls what notion of time is used for punctuation:
      * <ul>
@@ -235,8 +250,8 @@ public interface ProcessorContext {
      * <p> If it is triggered while processing a record streamed from the source processor,
      * timestamp is defined as the timestamp of the current input record; the timestamp is extracted from
      * {@link org.apache.kafka.clients.consumer.ConsumerRecord ConsumerRecord} by {@link TimestampExtractor}.
-     * Note, that an upstream {@link Processor} might have set a new timestamp by calling
-     * {@link ProcessorContext#forward(Object, Object, To) forward(..., To.all().withTimestamp(...))}.
+     * Note, that an upstream {@link org.apache.kafka.streams.processor.api.Processor} might have set a new timestamp by calling
+     * {@link org.apache.kafka.streams.processor.api.ProcessorContext#forward(org.apache.kafka.streams.processor.api.Record)}.
      * In particular, some Kafka Streams DSL operators set result record timestamps explicitly,
      * to guarantee deterministic results.
      *
@@ -292,8 +307,9 @@ public interface ProcessorContext {
      * (including the currently processed record), i.e., it can be considered a high-watermark.
      * Stream-time is tracked on a per-task basis and is preserved across restarts and during task migration.
      *
-     * <p> Note: this method is not supported for global processors (cf. {@link Topology#addGlobalStore} (...)
-     * and {@link StreamsBuilder#addGlobalStore} (...),
+     * <p> Note: this method is not supported for global processors (cf.
+     * {@link Topology#addGlobalStore(StoreBuilder, String, Deserializer, Deserializer, String, String, ProcessorSupplier)  Topology.addGlobalStore(...)}
+     * and {@link StreamsBuilder#addGlobalStore(StoreBuilder, String, Consumed, ProcessorSupplier) StreamsBuilder.addGlobalStore(...)}),
      * because there is no concept of stream-time for this case.
      * Calling this method in a global processor will result in an {@link UnsupportedOperationException}.
      *

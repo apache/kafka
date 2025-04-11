@@ -66,7 +66,7 @@ public class PartitionsSpec extends Message {
         if (configs == null) {
             this.configs = Collections.emptyMap();
         } else {
-            this.configs = Collections.unmodifiableMap(new HashMap<>(configs));
+            this.configs = Map.copyOf(configs);
         }
     }
 

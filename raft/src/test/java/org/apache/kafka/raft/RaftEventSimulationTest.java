@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.memory.MemoryPool;
 import org.apache.kafka.common.message.ApiMessageType;
 import org.apache.kafka.common.metrics.Metrics;
@@ -31,10 +32,10 @@ import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.raft.MockLog.LogBatch;
 import org.apache.kafka.raft.MockLog.LogEntry;
 import org.apache.kafka.raft.internals.BatchMemoryPool;
+import org.apache.kafka.server.common.Feature;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 import org.apache.kafka.snapshot.RecordsSnapshotReader;
 import org.apache.kafka.snapshot.SnapshotReader;
@@ -45,11 +46,12 @@ import net.jqwik.api.Property;
 import net.jqwik.api.Tag;
 import net.jqwik.api.constraints.IntRange;
 
+import org.mockito.Mockito;
+
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -258,21 +260,21 @@ public class RaftEventSimulationTest {
         // to make progress even if an election is needed in the larger set.
         router.filter(
             0,
-            new DropOutboundRequestsTo(cluster.endpointsFromIds(Utils.mkSet(2, 3, 4)))
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(2, 3, 4)))
         );
         router.filter(
             1,
-            new DropOutboundRequestsTo(cluster.endpointsFromIds(Utils.mkSet(2, 3, 4)))
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(2, 3, 4)))
         );
-        router.filter(2, new DropOutboundRequestsTo(cluster.endpointsFromIds(Utils.mkSet(0, 1))));
-        router.filter(3, new DropOutboundRequestsTo(cluster.endpointsFromIds(Utils.mkSet(0, 1))));
-        router.filter(4, new DropOutboundRequestsTo(cluster.endpointsFromIds(Utils.mkSet(0, 1))));
+        router.filter(2, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
+        router.filter(3, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
+        router.filter(4, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
 
         long partitionLogEndOffset = cluster.maxLogEndOffset();
         scheduler.runUntil(() -> cluster.anyReachedHighWatermark(2 * partitionLogEndOffset));
 
-        long minorityHighWatermark = cluster.maxHighWatermarkReached(Utils.mkSet(0, 1));
-        long majorityHighWatermark = cluster.maxHighWatermarkReached(Utils.mkSet(2, 3, 4));
+        long minorityHighWatermark = cluster.maxHighWatermarkReached(Set.of(0, 1));
+        long majorityHighWatermark = cluster.maxHighWatermarkReached(Set.of(2, 3, 4));
 
         assertTrue(
             majorityHighWatermark > minorityHighWatermark,
@@ -292,6 +294,111 @@ public class RaftEventSimulationTest {
 
         long restoredLogEndOffset = cluster.maxLogEndOffset();
         scheduler.runUntil(() -> cluster.allReachedHighWatermark(2 * restoredLogEndOffset));
+    }
+
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
+    void leadershipAssignedOnlyOnceWithNetworkPartitionIfThereExistsMajority(
+        @ForAll int seed,
+        @ForAll @IntRange(min = 0, max = 3) int numObservers
+    ) {
+        int numVoters = 5;
+        Random random = new Random(seed);
+        Cluster cluster = new Cluster(numVoters, numObservers, random);
+        MessageRouter router = new MessageRouter(cluster);
+        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+        scheduler.addInvariant(new StableLeadership(cluster));
+
+        // Create network partition which would result in ping-pong of leadership between nodes 2 and 3 without PreVote
+        // Scenario explained in detail in KIP-996
+        // 0   1
+        // |   |
+        // 2 - 3
+        //  \ /
+        //   4
+        router.filter(
+            0,
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(1, 3, 4)))
+        );
+        router.filter(
+            1,
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 2, 4)))
+        );
+        router.filter(2, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(1))));
+        router.filter(3, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0))));
+        router.filter(4, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(0, 1))));
+
+        // Start cluster
+        cluster.startAll();
+        schedulePolling(scheduler, cluster, 3, 5);
+        scheduler.schedule(router::deliverAll, 0, 2, 1);
+        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 1);
+        scheduler.runUntil(cluster::hasConsistentLeader);
+
+        // Check that leadership remains stable after majority processes some data
+        int leaderId = cluster.latestLeader().getAsInt();
+        // Determine the voters in the majority based on the leader
+        Set<Integer> majority = new HashSet<>(Set.of(0, 1, 2, 3, 4));
+        switch (leaderId) {
+            case 2 -> majority.remove(1);
+            case 3 -> majority.remove(0);
+            case 4 -> {
+                majority.remove(0);
+                majority.remove(1);
+            }
+            default -> throw new IllegalStateException("Unexpected leader: " + leaderId);
+        }
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(20, majority));
+    }
+
+    @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
+    void leadershipWillNotChangeDuringNetworkPartitionIfMajorityStillReachable(
+        @ForAll int seed,
+        @ForAll @IntRange(min = 0, max = 3) int numObservers
+    ) {
+        int numVoters = 5;
+        Random random = new Random(seed);
+        Cluster cluster = new Cluster(numVoters, numObservers, random);
+        MessageRouter router = new MessageRouter(cluster);
+        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
+        scheduler.addInvariant(new StableLeadership(cluster));
+
+        // Seed the cluster with some data
+        cluster.startAll();
+        schedulePolling(scheduler, cluster, 3, 5);
+        scheduler.schedule(router::deliverAll, 0, 2, 1);
+        scheduler.schedule(new SequentialAppendAction(cluster), 0, 2, 1);
+        scheduler.runUntil(cluster::hasConsistentLeader);
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(5));
+
+        int leaderId = cluster.latestLeader().orElseThrow(() ->
+            new AssertionError("Failed to find current leader during setup")
+        );
+
+        // Create network partition which would result in ping-pong of leadership between nodes C and D without PreVote
+        // Scenario explained in detail in KIP-996
+        // A   B
+        // |   |
+        // C - D  (have leader start in position C)
+        //  \ /
+        //   E
+        int nodeA = (leaderId + 1) % numVoters;
+        int nodeB = (leaderId + 2) % numVoters;
+        int nodeD = (leaderId + 3) % numVoters;
+        int nodeE = (leaderId + 4) % numVoters;
+        router.filter(
+            nodeA,
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeB, nodeD, nodeE)))
+        );
+        router.filter(
+            nodeB,
+            new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeA, leaderId, nodeE)))
+        );
+        router.filter(leaderId, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeB))));
+        router.filter(nodeD, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeA))));
+        router.filter(nodeE, new DropOutboundRequestsTo(cluster.endpointsFromIds(Set.of(nodeA, nodeB))));
+
+        // Check that leadership remains stable
+        scheduler.runUntil(() -> cluster.allReachedHighWatermark(20, Set.of(nodeA, leaderId, nodeD, nodeE)));
     }
 
     @Property(tries = 100, afterFailure = AfterFailureMode.SAMPLE_ONLY)
@@ -650,14 +757,18 @@ public class RaftEventSimulationTest {
                 return false;
 
             RaftNode first = iter.next();
-            ElectionState election = first.store.readElectionState().get();
-            if (!election.hasLeader())
+            OptionalInt firstLeaderId = first.store.readElectionState().get().optionalLeaderId();
+            int firstEpoch = first.store.readElectionState().get().epoch();
+            if (firstLeaderId.isEmpty())
                 return false;
 
             while (iter.hasNext()) {
                 RaftNode next = iter.next();
-                if (!election.equals(next.store.readElectionState().get()))
+                OptionalInt nextLeaderId = next.store.readElectionState().get().optionalLeaderId();
+                int nextEpoch = next.store.readElectionState().get().epoch();
+                if (!firstLeaderId.equals(nextLeaderId) || firstEpoch != nextEpoch) {
                     return false;
+                }
             }
 
             return true;
@@ -745,7 +856,7 @@ public class RaftEventSimulationTest {
 
         private static Endpoints endpointsFromId(int nodeId, ListenerName listenerName) {
             return Endpoints.fromInetSocketAddresses(
-                Collections.singletonMap(
+                Map.of(
                     listenerName,
                     InetSocketAddress.createUnresolved(hostFromId(nodeId), PORT)
                 )
@@ -762,14 +873,14 @@ public class RaftEventSimulationTest {
                 .stream()
                 .collect(Collectors.toMap(Node::id, Cluster::nodeAddress));
 
-            QuorumConfig quorumConfig = new QuorumConfig(
-                REQUEST_TIMEOUT_MS,
-                RETRY_BACKOFF_MS,
-                ELECTION_TIMEOUT_MS,
-                ELECTION_JITTER_MS,
-                FETCH_TIMEOUT_MS,
-                LINGER_MS
-            );
+            Map<String, Integer> configMap = new HashMap<>();
+            configMap.put(QuorumConfig.QUORUM_REQUEST_TIMEOUT_MS_CONFIG, REQUEST_TIMEOUT_MS);
+            configMap.put(QuorumConfig.QUORUM_RETRY_BACKOFF_MS_CONFIG, RETRY_BACKOFF_MS);
+            configMap.put(QuorumConfig.QUORUM_ELECTION_TIMEOUT_MS_CONFIG, ELECTION_TIMEOUT_MS);
+            configMap.put(QuorumConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, ELECTION_JITTER_MS);
+            configMap.put(QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG, FETCH_TIMEOUT_MS);
+            configMap.put(QuorumConfig.QUORUM_LINGER_MS_CONFIG, LINGER_MS);
+            QuorumConfig quorumConfig = new QuorumConfig(new AbstractConfig(QuorumConfig.CONFIG_DEF, configMap));
             Metrics metrics = new Metrics(time);
 
             persistentState.log.reopen();
@@ -788,9 +899,11 @@ public class RaftEventSimulationTest {
                 time,
                 new MockExpirationService(time),
                 FETCH_MAX_WAIT_MS,
+                true,
                 clusterId,
-                Collections.emptyList(),
+                List.of(),
                 endpointsFromId(nodeId, channel.listenerName()),
+                Feature.KRAFT_VERSION.supportedVersionRange(),
                 logContext,
                 random,
                 quorumConfig
@@ -850,7 +963,8 @@ public class RaftEventSimulationTest {
             client.initialize(
                 voterAddresses,
                 store,
-                metrics
+                metrics,
+                Mockito.mock(ExternalKRaftMetrics.class)
             );
         }
 
@@ -955,8 +1069,7 @@ public class RaftEventSimulationTest {
          */
         @Override
         public boolean acceptOutbound(RaftMessage message) {
-            if (message instanceof RaftRequest.Outbound) {
-                RaftRequest.Outbound request = (RaftRequest.Outbound) message;
+            if (message instanceof RaftRequest.Outbound request) {
                 InetSocketAddress destination = InetSocketAddress.createUnresolved(
                     request.destination().host(),
                     request.destination().port()
@@ -987,7 +1100,7 @@ public class RaftEventSimulationTest {
                 Integer oldEpoch = nodeEpochs.get(nodeId);
 
                 Optional<ElectionState> electionState = state.store.readElectionState();
-                if (!electionState.isPresent()) {
+                if (electionState.isEmpty()) {
                     continue;
                 }
 
@@ -1047,6 +1160,45 @@ public class RaftEventSimulationTest {
                         } else {
                             epoch = election.epoch();
                             leaderId = OptionalInt.of(election.leaderId());
+                        }
+                    }
+                });
+            }
+        }
+    }
+
+    /**
+     * This invariant currently checks that the leader does not change after the first successful election
+     * and should only be applied to tests where we expect leadership not to change (e.g. non-impactful
+     * routing filter changes, no network jitter)
+     */
+    private static class StableLeadership implements Invariant {
+        final Cluster cluster;
+        OptionalInt epochWithFirstLeader = OptionalInt.empty();
+        OptionalInt firstLeaderId = OptionalInt.empty();
+
+        private StableLeadership(Cluster cluster) {
+            this.cluster = cluster;
+        }
+
+        @Override
+        public void verify() {
+            // KAFKA-18439: Currently this just checks the leader is never changed after the first successful election.
+            // KAFKA-18439 will generalize the invariant so it holds for all tests even if routing filters are changed.
+            // i.e. if the current leader is reachable by majority, we do not expect leadership to change
+            for (Map.Entry<Integer, PersistentState> nodeEntry : cluster.nodes.entrySet()) {
+                PersistentState state = nodeEntry.getValue();
+                Optional<ElectionState> electionState = state.store.readElectionState();
+
+                electionState.ifPresent(election -> {
+                    if (election.hasLeader()) {
+                        // verify there were no leaders prior to this one
+                        if (epochWithFirstLeader.isEmpty()) {
+                            epochWithFirstLeader = OptionalInt.of(election.epoch());
+                            firstLeaderId = OptionalInt.of(election.leaderId());
+                        } else {
+                            assertEquals(epochWithFirstLeader.getAsInt(), election.epoch());
+                            assertEquals(firstLeaderId.getAsInt(), election.leaderId());
                         }
                     }
                 });
@@ -1168,7 +1320,7 @@ public class RaftEventSimulationTest {
             final MockLog log = node.log;
 
             OptionalLong highWatermark = manager.highWatermark();
-            if (!highWatermark.isPresent()) {
+            if (highWatermark.isEmpty()) {
                 // We cannot do validation if the current high watermark is unknown
                 return;
             }

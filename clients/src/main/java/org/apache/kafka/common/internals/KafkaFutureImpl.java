@@ -90,16 +90,6 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         }
     }
 
-    /**
-     * @see KafkaFutureImpl#thenApply(BaseFunction)
-     * @deprecated Since Kafka 3.0.
-     */
-    @Deprecated
-    @Override
-    public <R> KafkaFuture<R> thenApply(Function<T, R> function) {
-        return thenApply((BaseFunction<T, R>) function);
-    }
-
     @Override
     public KafkaFuture<T> whenComplete(final BiConsumer<? super T, ? super Throwable> biConsumer) {
         CompletableFuture<T> tCompletableFuture = completableFuture.whenComplete((java.util.function.BiConsumer<? super T, ? super Throwable>) (a, b) -> {
@@ -163,7 +153,10 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
     public T get() throws InterruptedException, ExecutionException {
         try {
             return completableFuture.get();
-        } catch (ExecutionException e) {
+            // In Java 23, When a CompletableFuture is cancelled, get() will throw a CancellationException wrapping a
+            // CancellationException, thus we need to unwrap it to maintain the KafkaFuture behaviour. 
+            // see https://bugs.openjdk.org/browse/JDK-8331987
+        } catch (ExecutionException | CancellationException e) {
             maybeThrowCancellationException(e.getCause());
             throw e;
         }
@@ -178,7 +171,10 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
             TimeoutException {
         try {
             return completableFuture.get(timeout, unit);
-        } catch (ExecutionException e) {
+            // In Java 23, When a CompletableFuture is cancelled, get() will throw a CancellationException wrapping a
+            // CancellationException, thus we need to unwrap it to maintain the KafkaFuture behaviour. 
+            // see https://bugs.openjdk.org/browse/JDK-8331987
+        } catch (ExecutionException | CancellationException e) {
             maybeThrowCancellationException(e.getCause());
             throw e;
         }
@@ -192,6 +188,15 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
     public T getNow(T valueIfAbsent) throws ExecutionException {
         try {
             return completableFuture.getNow(valueIfAbsent);
+        } catch (CancellationException e) {
+            // In Java 23, When a CompletableFuture is cancelled, getNow() will throw a CancellationException wrapping a 
+            // CancellationException. whereas in Java < 23, it throws a CompletionException directly.
+            // see https://bugs.openjdk.org/browse/JDK-8331987
+            if (e.getCause() instanceof CancellationException) {
+                throw (CancellationException) e.getCause();
+            } else {
+                throw e;
+            }
         } catch (CompletionException e) {
             maybeThrowCancellationException(e.getCause());
             // Note, unlike CompletableFuture#get() which throws ExecutionException, CompletableFuture#getNow()
@@ -247,6 +252,15 @@ public class KafkaFutureImpl<T> extends KafkaFuture<T> {
         Throwable exception = null;
         try {
             value = completableFuture.getNow(null);
+        } catch (CancellationException e) {
+            // In Java 23, When a CompletableFuture is cancelled, getNow() will throw a CancellationException wrapping a 
+            // CancellationException. whereas in Java < 23, it throws a CompletionException directly.
+            // see https://bugs.openjdk.org/browse/JDK-8331987
+            if (e.getCause() instanceof CancellationException) {
+                exception = e.getCause();
+            } else { 
+                exception = e;
+            }
         } catch (CompletionException e) {
             exception = e.getCause();
         } catch (Exception e) {

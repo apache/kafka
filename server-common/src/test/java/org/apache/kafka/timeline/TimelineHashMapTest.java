@@ -23,13 +23,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import static org.hamcrest.MatcherAssert.assertThat;
-import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
@@ -65,8 +62,8 @@ public class TimelineHashMapTest {
         TimelineHashMap<Integer, String> map = new TimelineHashMap<>(registry, 1);
         map.put(123, "abc");
         map.put(456, "def");
-        assertThat(iteratorToList(map.keySet().iterator()), containsInAnyOrder(123, 456));
-        assertThat(iteratorToList(map.values().iterator()), containsInAnyOrder("abc", "def"));
+        assertTrue(iteratorToList(map.keySet().iterator()).containsAll(List.of(123, 456)));
+        assertTrue(iteratorToList(map.values().iterator()).containsAll(List.of("abc", "def")));
         assertTrue(map.containsValue("abc"));
         assertTrue(map.containsKey(456));
         assertFalse(map.isEmpty());
@@ -77,7 +74,7 @@ public class TimelineHashMapTest {
         snapshotValues.add(iter.next().getValue());
         snapshotValues.add(iter.next().getValue());
         assertFalse(iter.hasNext());
-        assertThat(snapshotValues, containsInAnyOrder("abc", "def"));
+        assertTrue(snapshotValues.containsAll(List.of("abc", "def")));
         assertFalse(map.isEmpty(2));
         assertTrue(map.isEmpty());
     }
@@ -97,7 +94,7 @@ public class TimelineHashMapTest {
         assertNull(map.putIfAbsent(1, "xyz"));
         assertEquals("xyz", map.putIfAbsent(1, "123"));
         assertEquals("xyz", map.putIfAbsent(1, "ghi"));
-        map.putAll(Collections.singletonMap(2, "b"));
+        map.putAll(Map.of(2, "b"));
         assertTrue(map.containsKey(2));
         assertEquals("xyz", map.remove(1));
         assertEquals("b", map.remove(2));

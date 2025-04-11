@@ -14,18 +14,15 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-
 package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.common.utils.LogContext;
-import org.apache.kafka.streams.processor.TaskId;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 
-import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_ALPHA;
 import static org.apache.kafka.streams.internals.StreamsConfigUtils.ProcessingMode.EXACTLY_ONCE_V2;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
@@ -54,31 +51,7 @@ public class TaskExecutorTest {
         final TaskExecutionMetadata metadata = mock(TaskExecutionMetadata.class);
         final StreamsProducer producer = mock(StreamsProducer.class);
         when(metadata.processingMode()).thenReturn(EXACTLY_ONCE_V2);
-        when(taskManager.threadProducer()).thenReturn(producer);
-        when(producer.transactionInFlight()).thenReturn(true);
-
-        final TaskExecutor taskExecutor = new TaskExecutor(tasks, taskManager, metadata, new LogContext());
-        taskExecutor.commitOffsetsOrTransaction(Collections.emptyMap());
-
-        verify(producer).commitTransaction(Collections.emptyMap(), groupMetadata);
-    }
-
-    @Test
-    public void testCommitWithOpenTransactionButNoOffsetsEOSV1() {
-        final TaskId taskId = new TaskId(0, 0);
-        final Task task = mock(Task.class);
-        when(task.id()).thenReturn(taskId);
-
-        final Tasks tasks = mock(Tasks.class);
-        final ConsumerGroupMetadata groupMetadata = mock(ConsumerGroupMetadata.class);
-        final TaskManager taskManager = mock(TaskManager.class);
-        when(taskManager.activeRunningTaskIterable()).thenReturn(Collections.singletonList(task));
-        when(taskManager.consumerGroupMetadata()).thenReturn(groupMetadata);
-
-        final StreamsProducer producer = mock(StreamsProducer.class);
-        final TaskExecutionMetadata metadata = mock(TaskExecutionMetadata.class);
-        when(metadata.processingMode()).thenReturn(EXACTLY_ONCE_ALPHA);
-        when(taskManager.streamsProducerForTask(taskId)).thenReturn(producer);
+        when(taskManager.streamsProducer()).thenReturn(producer);
         when(producer.transactionInFlight()).thenReturn(true);
 
         final TaskExecutor taskExecutor = new TaskExecutor(tasks, taskManager, metadata, new LogContext());

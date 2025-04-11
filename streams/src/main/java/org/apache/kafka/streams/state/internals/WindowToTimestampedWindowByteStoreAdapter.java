@@ -18,7 +18,6 @@ package org.apache.kafka.streams.state.internals;
 
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.streams.kstream.Windowed;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
 import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.query.Position;
@@ -156,16 +155,9 @@ class WindowToTimestampedWindowByteStoreAdapter implements WindowStore<Bytes, by
         return store.name();
     }
 
-    @Deprecated
     @Override
-    public void init(final ProcessorContext context,
-                     final StateStore root) {
-        store.init(context, root);
-    }
-
-    @Override
-    public void init(final StateStoreContext context, final StateStore root) {
-        store.init(context, root);
+    public void init(final StateStoreContext stateStoreContext, final StateStore root) {
+        store.init(stateStoreContext, root);
     }
 
     @Override

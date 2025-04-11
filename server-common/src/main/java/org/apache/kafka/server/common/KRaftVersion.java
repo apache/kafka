@@ -16,17 +16,18 @@
  */
 package org.apache.kafka.server.common;
 
-import java.util.Collections;
 import java.util.Map;
 
 public enum KRaftVersion implements FeatureVersion {
     // Version 0 is the initial version of KRaft.
-    KRAFT_VERSION_0(0, MetadataVersion.MINIMUM_KRAFT_VERSION),
+    KRAFT_VERSION_0(0, MetadataVersion.MINIMUM_VERSION),
 
     // Version 1 enables KIP-853.
     KRAFT_VERSION_1(1, MetadataVersion.IBP_3_9_IV0);
 
     public static final String FEATURE_NAME = "kraft.version";
+
+    public static final KRaftVersion LATEST_PRODUCTION = KRAFT_VERSION_1;
 
     private final short featureLevel;
     private final MetadataVersion bootstrapMetadataVersion;
@@ -71,7 +72,12 @@ public enum KRaftVersion implements FeatureVersion {
 
     @Override
     public Map<String, Short> dependencies() {
-        return Collections.emptyMap();
+        if (this.featureLevel == 0) {
+            return Map.of();
+        } else {
+            return Map.of(
+                MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_9_IV0.featureLevel());
+        }
     }
 
     public short quorumStateVersion() {
@@ -81,6 +87,22 @@ public enum KRaftVersion implements FeatureVersion {
             case KRAFT_VERSION_1:
                 return (short) 1;
         }
-        throw new RuntimeException("Unknown KRaft feature level: " + this);
+        throw new IllegalStateException("Unsupported KRaft feature level: " + this);
+    }
+
+    public short kraftVersionRecordVersion() {
+        switch (this) {
+            case KRAFT_VERSION_1:
+                return (short) 0;
+        }
+        throw new IllegalStateException("Unsupported KRaft feature level: " + this);
+    }
+
+    public short votersRecordVersion() {
+        switch (this) {
+            case KRAFT_VERSION_1:
+                return (short) 0;
+        }
+        throw new IllegalStateException("Unsupported KRaft feature level: " + this);
     }
 }

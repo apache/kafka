@@ -39,6 +39,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.jar.Attributes;
 import java.util.jar.JarEntry;
@@ -85,7 +86,8 @@ public class TestPlugins {
         SAMPLING_CONVERTER("sampling-converter"),
         SAMPLING_HEADER_CONVERTER("sampling-header-converter"),
         SERVICE_LOADER("service-loader"),
-        SUBCLASS_OF_CLASSPATH("subclass-of-classpath");
+        SUBCLASS_OF_CLASSPATH("subclass-of-classpath"),
+        CLASSPATH_CONVERTER("classpath-converter");
 
         private final String resourceDir;
         private final Predicate<String> removeRuntimeClasses;
@@ -251,7 +253,11 @@ public class TestPlugins {
         /**
          * A ServiceLoader discovered plugin which subclasses another plugin which is present on the classpath
          */
-        SUBCLASS_OF_CLASSPATH_OVERRIDE_POLICY(TestPackage.SUBCLASS_OF_CLASSPATH, "test.plugins.SubclassOfClasspathOverridePolicy");
+        SUBCLASS_OF_CLASSPATH_OVERRIDE_POLICY(TestPackage.SUBCLASS_OF_CLASSPATH, "test.plugins.SubclassOfClasspathOverridePolicy"),
+        /**
+         * A plugin which is part of the classpath by default. This packages it as a separate jar which is used to test plugin isolation from the classpath plugin.
+         */
+        CLASSPATH_CONVERTER(TestPackage.CLASSPATH_CONVERTER, "org.apache.kafka.connect.converters.ByteArrayConverter", false);
 
         private final TestPackage testPackage;
         private final String className;
@@ -367,6 +373,12 @@ public class TestPlugins {
                 .map(TestPlugin::className)
                 .distinct()
                 .collect(Collectors.toList());
+    }
+
+    public static Function<ClassLoader, LoaderSwap> noOpLoaderSwap() {
+        return classLoader -> {
+            return new LoaderSwap(Thread.currentThread().getContextClassLoader());
+        };
     }
 
     private static TestPlugin[] defaultPlugins() {

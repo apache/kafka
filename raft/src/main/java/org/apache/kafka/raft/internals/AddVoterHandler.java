@@ -29,6 +29,8 @@ import org.apache.kafka.raft.Endpoints;
 import org.apache.kafka.raft.LeaderState;
 import org.apache.kafka.raft.LogOffsetMetadata;
 import org.apache.kafka.raft.RaftUtil;
+import org.apache.kafka.raft.ReplicaKey;
+import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import org.slf4j.Logger;
@@ -87,19 +89,19 @@ public final class AddVoterHandler {
         Endpoints voterEndpoints,
         long currentTimeMs
     ) {
-        // Check if there are any pending add or remove voter requests
+        // Check if there are any pending voter change requests
         if (leaderState.isOperationPending(currentTimeMs)) {
             return CompletableFuture.completedFuture(
                 RaftUtil.addVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
-                    "Request timed out waiting for leader to handle previous add or remove voter request"
+                    "Request timed out waiting for leader to handle previous voter change request"
                 )
             );
         }
 
         // Check that the leader has established a HWM and committed the current epoch
         Optional<Long> highWatermark = leaderState.highWatermark().map(LogOffsetMetadata::offset);
-        if (!highWatermark.isPresent()) {
+        if (highWatermark.isEmpty()) {
             return CompletableFuture.completedFuture(
                 RaftUtil.addVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
@@ -125,7 +127,7 @@ public final class AddVoterHandler {
 
         // Check that there are no uncommitted VotersRecord
         Optional<LogHistory.Entry<VoterSet>> votersEntry = partitionState.lastVoterSetEntry();
-        if (!votersEntry.isPresent() || votersEntry.get().offset() >= highWatermark.get()) {
+        if (votersEntry.isEmpty() || votersEntry.get().offset() >= highWatermark.get()) {
             return CompletableFuture.completedFuture(
                 RaftUtil.addVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
@@ -170,7 +172,7 @@ public final class AddVoterHandler {
             this::buildApiVersionsRequest,
             currentTimeMs
         );
-        if (!timeout.isPresent()) {
+        if (timeout.isEmpty()) {
             return CompletableFuture.completedFuture(
                 RaftUtil.addVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
@@ -201,7 +203,7 @@ public final class AddVoterHandler {
         long currentTimeMs
     ) {
         Optional<AddVoterHandlerState> handlerState = leaderState.addVoterHandlerState();
-        if (!handlerState.isPresent()) {
+        if (handlerState.isEmpty()) {
             // There are no pending add operation just ignore the api response
             return true;
         }
@@ -240,7 +242,7 @@ public final class AddVoterHandler {
             return false;
         }
 
-        // Check that the new voter supports the kraft.verion for reconfiguration
+        // Check that the new voter supports the kraft.version for reconfiguration
         KRaftVersion kraftVersion = partitionState.lastKraftVersion();
         if (!validVersionRange(kraftVersion, supportedKraftVersions)) {
             logger.info(

@@ -19,7 +19,6 @@ package org.apache.kafka.streams.state.internals.metrics;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.processor.TaskId;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.state.internals.metrics.RocksDBMetrics.RocksDBMetricContext;
@@ -175,11 +174,27 @@ public class RocksDBMetricsRecorderTest {
     }
 
     @Test
+    public void shouldThrowIfMetricRecorderIsInitialisedWithNullMetrics() {
+        assertThrows(
+            NullPointerException.class,
+            () -> recorder.init(null, TASK_ID1)
+        );
+    }
+
+    @Test
+    public void shouldThrowIfMetricRecorderIsInitialisedWithNullTaskId() {
+        assertThrows(
+            NullPointerException.class,
+            () -> recorder.init(streamsMetrics, null)
+        );
+    }
+
+    @Test
     public void shouldThrowIfMetricRecorderIsReInitialisedWithDifferentStreamsMetrics() {
         assertThrows(
             IllegalStateException.class,
             () -> recorder.init(
-                new StreamsMetricsImpl(new Metrics(), "test-client", StreamsConfig.METRICS_LATEST, new MockTime()),
+                new StreamsMetricsImpl(new Metrics(), "test-client", "processId", new MockTime()),
                 TASK_ID1
             )
         );
@@ -459,10 +474,8 @@ public class RocksDBMetricsRecorderTest {
         final double expectedCompactionTimeMaxSensor = 24.0;
 
         when(statisticsToAdd1.getAndResetTickerCount(TickerType.NO_FILE_OPENS)).thenReturn(5L);
-        when(statisticsToAdd1.getAndResetTickerCount(TickerType.NO_FILE_CLOSES)).thenReturn(3L);
         when(statisticsToAdd2.getAndResetTickerCount(TickerType.NO_FILE_OPENS)).thenReturn(7L);
-        when(statisticsToAdd2.getAndResetTickerCount(TickerType.NO_FILE_CLOSES)).thenReturn(4L);
-        final double expectedNumberOfOpenFilesSensor = (5 + 7) - (3 + 4);
+        final double expectedNumberOfOpenFilesSensor = -1;
 
         when(statisticsToAdd1.getAndResetTickerCount(TickerType.NO_FILE_ERRORS)).thenReturn(34L);
         when(statisticsToAdd2.getAndResetTickerCount(TickerType.NO_FILE_ERRORS)).thenReturn(11L);
@@ -470,8 +483,8 @@ public class RocksDBMetricsRecorderTest {
 
         recorder.record(now);
 
-        verify(statisticsToAdd1, times(17)).getAndResetTickerCount(isA(TickerType.class));
-        verify(statisticsToAdd2, times(17)).getAndResetTickerCount(isA(TickerType.class));
+        verify(statisticsToAdd1, times(15)).getAndResetTickerCount(isA(TickerType.class));
+        verify(statisticsToAdd2, times(15)).getAndResetTickerCount(isA(TickerType.class));
         verify(statisticsToAdd1, times(2)).getHistogramData(isA(HistogramType.class));
         verify(statisticsToAdd2, times(2)).getHistogramData(isA(HistogramType.class));
         verify(bytesWrittenToDatabaseSensor).record(expectedBytesWrittenToDatabaseSensor, now);

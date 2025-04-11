@@ -21,10 +21,10 @@ import java.util.Objects;
 public final class FetchableSpec {
 
     private final Integer sourceBrokerId;
-    private final Integer fetchCount;
+    private final RemoteFetchCount fetchCount;
 
     public FetchableSpec(Integer sourceBrokerId,
-                         Integer fetchCount) {
+                         RemoteFetchCount fetchCount) {
         this.sourceBrokerId = sourceBrokerId;
         this.fetchCount = fetchCount;
     }
@@ -33,7 +33,7 @@ public final class FetchableSpec {
         return sourceBrokerId;
     }
 
-    public Integer getFetchCount() {
+    public RemoteFetchCount getFetchCount() {
         return fetchCount;
     }
 

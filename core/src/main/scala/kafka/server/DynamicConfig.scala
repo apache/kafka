@@ -19,10 +19,10 @@ package kafka.server
 
 import kafka.server.DynamicBrokerConfig.AllDynamicConfigs
 
-import java.net.{InetAddress, UnknownHostException}
 import java.util.Properties
 import org.apache.kafka.common.config.ConfigDef
-import org.apache.kafka.server.config.{QuotaConfigs, ZooKeeperInternals}
+import org.apache.kafka.coordinator.group.GroupConfig
+import org.apache.kafka.server.config.QuotaConfig 
 
 import java.util
 import scala.jdk.CollectionConverters._
@@ -34,7 +34,7 @@ import scala.jdk.CollectionConverters._
 object DynamicConfig {
     object Broker {
       private val brokerConfigs = {
-        val configs = QuotaConfigs.brokerQuotaConfigs()
+        val configs = QuotaConfig.brokerQuotaConfigs()
 
         // Filter and define all dynamic configurations
         KafkaConfig.configKeys
@@ -55,7 +55,7 @@ object DynamicConfig {
   }
 
   object Client {
-    private val clientConfigs = QuotaConfigs.userAndClientQuotaConfigs()
+    private val clientConfigs = QuotaConfig.userAndClientQuotaConfigs()
 
     def configKeys: util.Map[String, ConfigDef.ConfigKey] = clientConfigs.configKeys
 
@@ -65,7 +65,7 @@ object DynamicConfig {
   }
 
   object User {
-    private val userConfigs = QuotaConfigs.scramMechanismsPlusUserAndClientQuotaConfigs()
+    private val userConfigs = QuotaConfig.scramMechanismsPlusUserAndClientQuotaConfigs()
 
     def configKeys: util.Map[String, ConfigDef.ConfigKey] = userConfigs.configKeys
 
@@ -75,24 +75,13 @@ object DynamicConfig {
   }
 
   object Ip {
-    private val ipConfigs = QuotaConfigs.ipConfigs()
+    private val ipConfigs = QuotaConfig.ipConfigs
 
     def configKeys: util.Map[String, ConfigDef.ConfigKey] = ipConfigs.configKeys
 
     def names: util.Set[String] = ipConfigs.names
 
     def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(ipConfigs, props, customPropsAllowed = false)
-
-    def isValidIpEntity(ip: String): Boolean = {
-      if (ip != ZooKeeperInternals.DEFAULT_STRING) {
-        try {
-          InetAddress.getByName(ip)
-        } catch {
-          case _: UnknownHostException => return false
-        }
-      }
-      true
-    }
   }
 
   object ClientMetrics {
@@ -101,9 +90,15 @@ object DynamicConfig {
     def names: util.Set[String] = clientConfigs.names
   }
 
+  object Group {
+    private val groupConfigs = GroupConfig.configDef()
+
+    def names: util.Set[String] = groupConfigs.names
+  }
+
   private def validate(configDef: ConfigDef, props: Properties, customPropsAllowed: Boolean) = {
     // Validate Names
-    val names = configDef.names()
+    val names = configDef.names
     val propKeys = props.keySet.asScala.map(_.asInstanceOf[String])
     if (!customPropsAllowed) {
       val unknownKeys = propKeys.filterNot(names.contains(_))

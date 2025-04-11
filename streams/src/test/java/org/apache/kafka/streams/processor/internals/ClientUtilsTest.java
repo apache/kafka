@@ -46,7 +46,6 @@ import java.util.concurrent.ExecutionException;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.emptySet;
-import static org.apache.kafka.common.utils.Utils.mkSet;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.consumerRecordSizeInBytes;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchCommittedOffsets;
 import static org.apache.kafka.streams.processor.internals.ClientUtils.fetchEndOffsets;
@@ -107,7 +106,7 @@ public class ClientUtilsTest {
         HEADERS_BYTES +
         RECORD_METADATA_BYTES;
 
-    private static final Set<TopicPartition> PARTITIONS = mkSet(
+    private static final Set<TopicPartition> PARTITIONS = Set.of(
         new TopicPartition(TOPIC, 1),
         new TopicPartition(TOPIC, 2)
     );

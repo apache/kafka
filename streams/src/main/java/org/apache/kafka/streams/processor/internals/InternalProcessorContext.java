@@ -130,6 +130,6 @@ public interface InternalProcessorContext<KOut, VOut>
 
     void setProcessorMetadata(final ProcessorMetadata metadata);
 
-    ProcessorMetadata getProcessorMetadata();
+    ProcessorMetadata processorMetadata();
 
 }

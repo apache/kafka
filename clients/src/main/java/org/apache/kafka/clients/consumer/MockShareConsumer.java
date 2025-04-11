@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
+import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -23,6 +24,7 @@ import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.utils.LogContext;
 
 import java.time.Duration;
@@ -54,7 +56,7 @@ public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
     private Uuid clientInstanceId;
 
     public MockShareConsumer() {
-        this.subscriptions = new SubscriptionState(new LogContext(), OffsetResetStrategy.NONE);
+        this.subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
         this.records = new HashMap<>();
         this.closed = false;
         this.wakeup = new AtomicBoolean(false);
@@ -91,7 +93,7 @@ public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
         }
 
         records.clear();
-        return new ConsumerRecords<>(results);
+        return new ConsumerRecords<>(results, Map.of());
     }
 
     @Override
@@ -137,6 +139,14 @@ public class MockShareConsumer<K, V> implements ShareConsumer<K, V> {
     public synchronized Map<MetricName, ? extends Metric> metrics() {
         ensureNotClosed();
         return Collections.emptyMap();
+    }
+
+    @Override
+    public void registerMetricForSubscription(KafkaMetric metric) {
+    }
+
+    @Override
+    public void unregisterMetricFromSubscription(KafkaMetric metric) {
     }
 
     @Override

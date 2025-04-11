@@ -24,6 +24,8 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.raft.LeaderState;
 import org.apache.kafka.raft.LogOffsetMetadata;
 import org.apache.kafka.raft.RaftUtil;
+import org.apache.kafka.raft.ReplicaKey;
+import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.server.common.KRaftVersion;
 
 import org.slf4j.Logger;
@@ -42,7 +44,7 @@ import java.util.concurrent.CompletableFuture;
  * 2. Check that the cluster supports kraft.version 1, otherwise return the UNSUPPORTED_VERSION error.
  * 3. Check that there are no uncommitted voter changes, otherwise return the REQUEST_TIMED_OUT error.
  * 4. Append the updated VotersRecord to the log. The KRaft internal listener will read this
- *    uncommitted record from the log and add the new voter to the set of voters.
+ *    uncommitted record from the log and remove the voter from the set of voters.
  * 5. Wait for the VotersRecord to commit using the majority of the new set of voters. Return a
  *    REQUEST_TIMED_OUT error if it doesn't commit in time.
  * 6. Send the RemoveVoter successful response to the client.
@@ -77,19 +79,19 @@ public final class RemoveVoterHandler {
         ReplicaKey voterKey,
         long currentTimeMs
     ) {
-        // Check if there are any pending add or remove voter requests
+        // Check if there are any pending voter change requests
         if (leaderState.isOperationPending(currentTimeMs)) {
             return CompletableFuture.completedFuture(
                 RaftUtil.removeVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
-                    "Request timed out waiting for leader to handle previous add or remove voter request"
+                    "Request timed out waiting for leader to handle previous voter change request"
                 )
             );
         }
 
         // Check that the leader has established a HWM and committed the current epoch
         Optional<Long> highWatermark = leaderState.highWatermark().map(LogOffsetMetadata::offset);
-        if (!highWatermark.isPresent()) {
+        if (highWatermark.isEmpty()) {
             return CompletableFuture.completedFuture(
                 RaftUtil.removeVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
@@ -115,7 +117,7 @@ public final class RemoveVoterHandler {
 
         // Check that there are no uncommitted VotersRecord
         Optional<LogHistory.Entry<VoterSet>> votersEntry = partitionState.lastVoterSetEntry();
-        if (!votersEntry.isPresent() || votersEntry.get().offset() >= highWatermark.get()) {
+        if (votersEntry.isEmpty() || votersEntry.get().offset() >= highWatermark.get()) {
             return CompletableFuture.completedFuture(
                 RaftUtil.removeVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
@@ -130,7 +132,7 @@ public final class RemoveVoterHandler {
 
         // Remove the voter from the set of voters
         Optional<VoterSet> newVoters = votersEntry.get().value().removeVoter(voterKey);
-        if (!newVoters.isPresent()) {
+        if (newVoters.isEmpty()) {
             return CompletableFuture.completedFuture(
                 RaftUtil.removeVoterResponse(
                     Errors.VOTER_NOT_FOUND,

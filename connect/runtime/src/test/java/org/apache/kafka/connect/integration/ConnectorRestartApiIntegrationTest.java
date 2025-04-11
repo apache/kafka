@@ -40,9 +40,9 @@ import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
-import javax.ws.rs.core.Response;
+import jakarta.ws.rs.core.Response;
 
-import static org.apache.kafka.connect.integration.MonitorableSourceConnector.TOPIC_CONFIG;
+import static org.apache.kafka.connect.integration.TestableSourceConnector.TOPIC_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.CONNECTOR_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.KEY_CONVERTER_CLASS_CONFIG;
 import static org.apache.kafka.connect.runtime.ConnectorConfig.TASKS_MAX_CONFIG;
@@ -86,7 +86,7 @@ public class ConnectorRestartApiIntegrationTest {
         connectorHandle = RuntimeHandles.get().connectorHandle(connectorName);
     }
 
-    private void startOrReuseConnectWithNumWorkers(int numWorkers) throws Exception {
+    private void startOrReuseConnectWithNumWorkers(int numWorkers) {
         connect = CONNECT_CLUSTERS.computeIfAbsent(numWorkers, n -> {
             // setup Connect worker properties
             Map<String, String> workerProps = new HashMap<>();
@@ -123,7 +123,7 @@ public class ConnectorRestartApiIntegrationTest {
     }
 
     @Test
-    public void testRestartUnknownConnectorNoParams() throws Exception {
+    public void testRestartUnknownConnectorNoParams() {
         String connectorName = "Unknown";
 
         // build a Connect cluster backed by a Kafka KRaft cluster
@@ -137,14 +137,14 @@ public class ConnectorRestartApiIntegrationTest {
     }
 
     @Test
-    public void testRestartUnknownConnector() throws Exception {
+    public void testRestartUnknownConnector() {
         restartUnknownConnector(false, false);
         restartUnknownConnector(false, true);
         restartUnknownConnector(true, false);
         restartUnknownConnector(true, true);
     }
 
-    private void restartUnknownConnector(boolean onlyFailed, boolean includeTasks) throws Exception {
+    private void restartUnknownConnector(boolean onlyFailed, boolean includeTasks) {
         String connectorName = "Unknown";
 
         // build a Connect cluster backed by a Kafka KRaft cluster
@@ -415,7 +415,7 @@ public class ConnectorRestartApiIntegrationTest {
     private Map<String, String> defaultSourceConnectorProps(String topic) {
         // setup up props for the source connector
         Map<String, String> props = new HashMap<>();
-        props.put(CONNECTOR_CLASS_CONFIG, MonitorableSourceConnector.class.getSimpleName());
+        props.put(CONNECTOR_CLASS_CONFIG, TestableSourceConnector.class.getSimpleName());
         props.put(TASKS_MAX_CONFIG, String.valueOf(NUM_TASKS));
         props.put(TOPIC_CONFIG, topic);
         props.put("throughput", "10");

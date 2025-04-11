@@ -21,9 +21,7 @@ import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.Bytes;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.streams.KeyValue;
-import org.apache.kafka.streams.processor.ProcessorContext;
 import org.apache.kafka.streams.processor.StateStore;
-import org.apache.kafka.streams.processor.StateStoreContext;
 import org.apache.kafka.streams.processor.internals.MockStreamsMetrics;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.ValueAndTimestamp;
@@ -48,7 +46,6 @@ import static org.hamcrest.MatcherAssert.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 
-@SuppressWarnings("rawtypes")
 @ExtendWith(MockitoExtension.class)
 @MockitoSettings(strictness = Strictness.STRICT_STUBS)
 public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
@@ -67,12 +64,12 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
 
     @BeforeEach
     public void before() {
-        final InternalMockProcessorContext context = mockContext();
+        final InternalMockProcessorContext<String, Long> context = mockContext();
         context.setTime(0);
-        store.init((StateStoreContext) context, store);
+        store.init(context, store);
     }
 
-    private InternalMockProcessorContext mockContext() {
+    private InternalMockProcessorContext<String, Long> mockContext() {
         return new InternalMockProcessorContext<>(
             TestUtils.tempDirectory(),
             Serdes.String(),
@@ -87,24 +84,14 @@ public class ChangeLoggingTimestampedKeyValueBytesStoreTest {
         store.close();
     }
 
-    @SuppressWarnings("deprecation")
-    @Test
-    public void shouldDelegateDeprecatedInit() {
-        final InternalMockProcessorContext context = mockContext();
-        final KeyValueStore<Bytes, byte[]> inner = mock(InMemoryKeyValueStore.class);
-        final StateStore outer = new ChangeLoggingTimestampedKeyValueBytesStore(inner);
-        outer.init((ProcessorContext) context, outer);
-        verify(inner).init((ProcessorContext) context, outer);
-    }
-
     @Test
     public void shouldDelegateInit() {
-        final InternalMockProcessorContext context = mockContext();
+        final InternalMockProcessorContext<String, Long> context = mockContext();
         final KeyValueStore<Bytes, byte[]> inner = mock(InMemoryKeyValueStore.class);
         final StateStore outer = new ChangeLoggingTimestampedKeyValueBytesStore(inner);
 
-        outer.init((StateStoreContext) context, outer);
-        verify(inner).init((StateStoreContext) context, outer);
+        outer.init(context, outer);
+        verify(inner).init(context, outer);
     }
 
     @Test

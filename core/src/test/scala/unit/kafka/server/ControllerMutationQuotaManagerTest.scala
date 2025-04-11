@@ -17,7 +17,6 @@
 package kafka.server
 
 import java.util.concurrent.TimeUnit
-import kafka.server.QuotaType.ControllerMutation
 import org.apache.kafka.common.errors.ThrottlingQuotaExceededException
 import org.apache.kafka.common.metrics.MetricConfig
 import org.apache.kafka.common.metrics.Metrics
@@ -26,6 +25,7 @@ import org.apache.kafka.common.metrics.QuotaViolationException
 import org.apache.kafka.common.metrics.stats.TokenBucket
 import org.apache.kafka.common.utils.MockTime
 import org.apache.kafka.server.config.ClientQuotaManagerConfig
+import org.apache.kafka.server.quota.QuotaType
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Assertions.assertEquals
 import org.junit.jupiter.api.Assertions.assertFalse
@@ -137,18 +137,21 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
     sensor.add(metricName, new TokenBucket)
     val metric = metrics.metric(metricName)
 
-    assertEquals(0, throttleTimeMs(new QuotaViolationException(metric, 0, 10), time.milliseconds()))
-    assertEquals(500, throttleTimeMs(new QuotaViolationException(metric, -5, 10), time.milliseconds()))
-    assertEquals(1000, throttleTimeMs(new QuotaViolationException(metric, -10, 10), time.milliseconds()))
+    assertEquals(0, throttleTimeMs(new QuotaViolationException(metric, 0, 10)))
+    assertEquals(500, throttleTimeMs(new QuotaViolationException(metric, -5, 10)))
+    assertEquals(1000, throttleTimeMs(new QuotaViolationException(metric, -10, 10)))
   }
 
   @Test
   def testControllerMutationQuotaViolation(): Unit = {
     withQuotaManager { quotaManager =>
-      quotaManager.updateQuota(Some(User), Some(ClientId), Some(ClientId),
-        Some(Quota.upperBound(10)))
+      quotaManager.updateQuota(
+        Some(User).map(s => ClientQuotaManager.UserEntity(s)),
+        Some(ClientQuotaManager.ClientIdEntity(ClientId)),
+        Some(Quota.upperBound(10))
+      )
       val queueSizeMetric = metrics.metrics().get(
-        metrics.metricName("queue-size", ControllerMutation.toString, ""))
+        metrics.metricName("queue-size", QuotaType.CONTROLLER_MUTATION.toString, ""))
 
       // Verify that there is no quota violation if we remain under the quota.
       for (_ <- 0 until 10) {
@@ -204,8 +207,11 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testNewStrictQuotaForReturnsStrictQuotaWhenQuotaIsEnabled(): Unit = {
     withQuotaManager { quotaManager =>
-      quotaManager.updateQuota(Some(User), Some(ClientId), Some(ClientId),
-        Some(Quota.upperBound(10)))
+      quotaManager.updateQuota(
+        Some(User).map(s => ClientQuotaManager.UserEntity(s)),
+        Some(ClientQuotaManager.ClientIdEntity(ClientId)),
+        Some(Quota.upperBound(10))
+      )
       val quota = quotaManager.newStrictQuotaFor(buildSession(User), ClientId)
       assertTrue(quota.isInstanceOf[StrictControllerMutationQuota])
 
@@ -223,8 +229,11 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
   @Test
   def testNewPermissiveQuotaForReturnsStrictQuotaWhenQuotaIsEnabled(): Unit = {
     withQuotaManager { quotaManager =>
-      quotaManager.updateQuota(Some(User), Some(ClientId), Some(ClientId),
-        Some(Quota.upperBound(10)))
+      quotaManager.updateQuota(
+        Some(User).map(s => ClientQuotaManager.UserEntity(s)),
+        Some(ClientQuotaManager.ClientIdEntity(ClientId)),
+        Some(Quota.upperBound(10))
+      )
       val quota = quotaManager.newPermissiveQuotaFor(buildSession(User), ClientId)
       assertTrue(quota.isInstanceOf[PermissiveControllerMutationQuota])
     }

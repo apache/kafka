@@ -17,8 +17,6 @@
 package org.apache.kafka.common.config;
 
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
-import org.apache.kafka.common.utils.Java;
-import org.apache.kafka.common.utils.Utils;
 
 import java.util.Set;
 
@@ -31,16 +29,14 @@ public class SslConfigs {
      */
 
     public static final String SSL_PROTOCOL_CONFIG = "ssl.protocol";
-    public static final String SSL_PROTOCOL_DOC = "The SSL protocol used to generate the SSLContext. "
-        + "The default is 'TLSv1.3' when running with Java 11 or newer, 'TLSv1.2' otherwise. "
-        + "This value should be fine for most use cases. "
-        + "Allowed values in recent JVMs are 'TLSv1.2' and 'TLSv1.3'. 'TLS', 'TLSv1.1', 'SSL', 'SSLv2' and 'SSLv3' "
-        + "may be supported in older JVMs, but their usage is discouraged due to known security vulnerabilities. "
-        + "With the default value for this config and 'ssl.enabled.protocols', clients will downgrade to 'TLSv1.2' if "
-        + "the server does not support 'TLSv1.3'. If this config is set to 'TLSv1.2', clients will not use 'TLSv1.3' even "
-        + "if it is one of the values in ssl.enabled.protocols and the server only supports 'TLSv1.3'.";
+    public static final String SSL_PROTOCOL_DOC = "The SSL protocol used to generate the SSLContext. The default is 'TLSv1.3', "
+        + "which should be fine for most use cases. A typical alternative to the default is 'TLSv1.2'. Allowed values for "
+        + "this config are dependent on the JVM. "
+        + "Clients using the defaults for this config and 'ssl.enabled.protocols' will downgrade to 'TLSv1.2' if "
+        + "the server does not support 'TLSv1.3'. If this config is set to 'TLSv1.2', however, clients will not use 'TLSv1.3' even "
+        + "if it is one of the values in `ssl.enabled.protocols` and the server only supports 'TLSv1.3'.";
 
-    public static final String DEFAULT_SSL_PROTOCOL;
+    public static final String DEFAULT_SSL_PROTOCOL = "TLSv1.3";
 
     public static final String SSL_PROVIDER_CONFIG = "ssl.provider";
     public static final String SSL_PROVIDER_DOC = "The name of the security provider used for SSL connections. Default value is the default security provider of the JVM.";
@@ -51,21 +47,10 @@ public class SslConfigs {
 
     public static final String SSL_ENABLED_PROTOCOLS_CONFIG = "ssl.enabled.protocols";
     public static final String SSL_ENABLED_PROTOCOLS_DOC = "The list of protocols enabled for SSL connections. "
-        + "The default is 'TLSv1.2,TLSv1.3' when running with Java 11 or newer, 'TLSv1.2' otherwise. With the "
-        + "default value for Java 11, clients and servers will prefer TLSv1.3 if both support it and fallback "
-        + "to TLSv1.2 otherwise (assuming both support at least TLSv1.2). This default should be fine for most "
-        + "cases. Also see the config documentation for `ssl.protocol`.";
-    public static final String DEFAULT_SSL_ENABLED_PROTOCOLS;
-
-    static {
-        if (Java.IS_JAVA11_COMPATIBLE) {
-            DEFAULT_SSL_PROTOCOL = "TLSv1.3";
-            DEFAULT_SSL_ENABLED_PROTOCOLS = "TLSv1.2,TLSv1.3";
-        } else {
-            DEFAULT_SSL_PROTOCOL = "TLSv1.2";
-            DEFAULT_SSL_ENABLED_PROTOCOLS = "TLSv1.2";
-        }
-    }
+        + "The default is 'TLSv1.2,TLSv1.3'. This means that clients and servers will prefer TLSv1.3 if both support it "
+        + "and fallback to TLSv1.2 otherwise (assuming both support at least TLSv1.2). This default should be fine for most use "
+        + "cases. Also see the config documentation for `ssl.protocol` to understand how it can impact the TLS version negotiation behavior.";
+    public static final String DEFAULT_SSL_ENABLED_PROTOCOLS = "TLSv1.2,TLSv1.3";
 
     public static final String SSL_KEYSTORE_TYPE_CONFIG = "ssl.keystore.type";
     public static final String SSL_KEYSTORE_TYPE_DOC = "The file format of the key store file. "
@@ -157,7 +142,7 @@ public class SslConfigs {
                 .define(SslConfigs.SSL_ENGINE_FACTORY_CLASS_CONFIG, ConfigDef.Type.CLASS, null, ConfigDef.Importance.LOW, SslConfigs.SSL_ENGINE_FACTORY_CLASS_DOC);
     }
 
-    public static final Set<String> RECONFIGURABLE_CONFIGS = Utils.mkSet(
+    public static final Set<String> RECONFIGURABLE_CONFIGS = Set.of(
             SslConfigs.SSL_KEYSTORE_TYPE_CONFIG,
             SslConfigs.SSL_KEYSTORE_LOCATION_CONFIG,
             SslConfigs.SSL_KEYSTORE_PASSWORD_CONFIG,
@@ -169,7 +154,7 @@ public class SslConfigs {
             SslConfigs.SSL_KEYSTORE_KEY_CONFIG,
             SslConfigs.SSL_TRUSTSTORE_CERTIFICATES_CONFIG);
 
-    public static final Set<String> NON_RECONFIGURABLE_CONFIGS = Utils.mkSet(
+    public static final Set<String> NON_RECONFIGURABLE_CONFIGS = Set.of(
             BrokerSecurityConfigs.SSL_CLIENT_AUTH_CONFIG,
             SslConfigs.SSL_PROTOCOL_CONFIG,
             SslConfigs.SSL_PROVIDER_CONFIG,

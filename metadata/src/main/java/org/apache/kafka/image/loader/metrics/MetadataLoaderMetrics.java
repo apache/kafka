@@ -25,7 +25,7 @@ import com.yammer.metrics.core.Gauge;
 import com.yammer.metrics.core.MetricName;
 import com.yammer.metrics.core.MetricsRegistry;
 
-import java.util.Arrays;
+import java.util.List;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
@@ -45,7 +45,7 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
 
     private final Optional<MetricsRegistry> registry;
     private final AtomicReference<MetadataVersion> currentMetadataVersion =
-            new AtomicReference<>(MetadataVersion.MINIMUM_KRAFT_VERSION);
+            new AtomicReference<>(MetadataVersion.MINIMUM_VERSION);
     private final AtomicInteger currentControllerId = new AtomicInteger(-1);
     private final AtomicLong handleLoadSnapshotCount = new AtomicLong(0);
     private final Consumer<Long> batchProcessingTimeNsUpdater;
@@ -144,7 +144,7 @@ public final class MetadataLoaderMetrics implements AutoCloseable {
 
     @Override
     public void close() {
-        registry.ifPresent(r -> Arrays.asList(
+        registry.ifPresent(r -> List.of(
             CURRENT_METADATA_VERSION,
             CURRENT_CONTROLLER_ID,
             HANDLE_LOAD_SNAPSHOT_COUNT
