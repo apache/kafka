@@ -23,6 +23,7 @@ import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.server.share.persister.PersisterStateBatch;
 
+import java.util.ArrayList;
 import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
@@ -244,5 +245,16 @@ public class ShareGroupOffset {
             ", writeTimestamp=" + writeTimestamp +
             ", stateBatches=" + stateBatches +
             '}';
+    }
+
+    public Builder builderSupplier() {
+        return new Builder()
+            .setSnapshotEpoch(snapshotEpoch)
+            .setStateEpoch(stateEpoch)
+            .setLeaderEpoch(leaderEpoch)
+            .setStartOffset(startOffset)
+            .setStateBatches(new ArrayList<>(stateBatches))
+            .setCreateTimestamp(createTimestamp)
+            .setWriteTimestamp(writeTimestamp);
     }
 }

@@ -66,6 +66,7 @@ import org.apache.kafka.timeline.TimelineHashMap;
 
 import org.slf4j.Logger;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
@@ -572,6 +573,34 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         );
 
         return new CoordinatorResult<>(List.of(record), responseData);
+    }
+
+    /**
+     * Iterates over the soft state to determine the share partitions whose last snapshot is
+     * older than the allowed time interval. The candidate share partitions are force snapshotted.
+     *
+     * @return A result containing snapshot records, if any, and a void response.
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> snapshotColdPartitions() {
+        List<CoordinatorRecord> records = new ArrayList<>();
+        shareStateMap.forEach(((sharePartitionKey, shareGroupOffset) -> {
+                long timeSinceLastSnapshot = time.milliseconds() - shareGroupOffset.writeTimestamp();
+                if (timeSinceLastSnapshot >= config.shareCoordinatorColdPartitionSnapshotIntervalMs()) {
+                    // We need to force create a snapshot here
+                    log.info("Last snapshot for {} is older than allowed interval.", sharePartitionKey);
+                    records.add(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
+                        sharePartitionKey.groupId(),
+                        sharePartitionKey.topicId(),
+                        sharePartitionKey.partition(),
+                        shareGroupOffset.builderSupplier()
+                            .setSnapshotEpoch(shareGroupOffset.snapshotEpoch() + 1) // We need to increment by one as this is a new snapshot.
+                            .setWriteTimestamp(time.milliseconds())
+                            .build()
+                    ));
+                }
+            })
+        );
+        return new CoordinatorResult<>(records, null);
     }
 
     /**
