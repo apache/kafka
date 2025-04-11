@@ -45,7 +45,8 @@ public class SimpleApiVersionManager implements ApiVersionManager {
      * @param listenerType the listener type
      * @param enabledApis the enabled apis, which are computed by the listener type
      * @param brokerFeatures the broker features
-     * @param enableUnstableLastVersion whether to enable unstable last version, see KafkaConfig.unstableApiVersionsEnabled
+     * @param enableUnstableLastVersion whether to enable unstable last version, see
+     *   {@link org.apache.kafka.server.config.ServerConfigs#UNSTABLE_API_VERSIONS_ENABLE_CONFIG}
      * @param featuresProvider a provider to the finalized features supported
      */
     public SimpleApiVersionManager(ApiMessageType.ListenerType listenerType,

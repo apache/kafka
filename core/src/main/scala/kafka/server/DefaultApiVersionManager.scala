@@ -25,26 +25,6 @@ import org.apache.kafka.server.common.FinalizedFeatures
 
 import java.util
 
-object DefaultApiVersionManager {
-  def apply(
-    listenerType: ListenerType,
-    config: KafkaConfig,
-    forwardingManager: ForwardingManager,
-    supportedFeatures: BrokerFeatures,
-    metadataCache: MetadataCache,
-    clientMetricsManager: Option[ClientMetricsManager]
-  ): ApiVersionManager = {
-    new DefaultApiVersionManager(
-      listenerType,
-      forwardingManager,
-      supportedFeatures,
-      metadataCache,
-      config.unstableApiVersionsEnabled,
-      clientMetricsManager
-    )
-  }
-}
-
 /**
  * The default ApiVersionManager that supports forwarding and has metadata cache, used in brokers.
  * The enabled APis are determined by the broker listener type and the controller APIs.

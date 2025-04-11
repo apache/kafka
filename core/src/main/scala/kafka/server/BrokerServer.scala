@@ -252,12 +252,12 @@ class BrokerServer(
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager, metrics)
       clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config.clientTelemetryMaxBytes, time, metrics)
 
-      val apiVersionManager = DefaultApiVersionManager(
+      val apiVersionManager = new DefaultApiVersionManager(
         ListenerType.BROKER,
-        config,
         forwardingManager,
         brokerFeatures,
         metadataCache,
+        config.unstableApiVersionsEnabled,
         Some(clientMetricsManager)
       )
 
