@@ -33,7 +33,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class ShareSessionCacheTest {
 
@@ -44,7 +43,7 @@ public class ShareSessionCacheTest {
 
     @Test
     public void testShareSessionCache() throws InterruptedException {
-        ShareSessionCache cache = new ShareSessionCache(3, 100);
+        ShareSessionCache cache = new ShareSessionCache(3);
         assertEquals(0, cache.size());
         ShareSessionKey key1 = cache.maybeCreateSession("grp", Uuid.randomUuid(), 0, mockedSharePartitionMap(10), "conn-1");
         ShareSessionKey key2 = cache.maybeCreateSession("grp", Uuid.randomUuid(), 10, mockedSharePartitionMap(20), "conn-2");
@@ -57,30 +56,11 @@ public class ShareSessionCacheTest {
             "Share session count should be 3.");
         TestUtils.waitForCondition(() -> yammerMetricValue(ShareSessionCache.SHARE_PARTITIONS_COUNT).intValue() == 60,
             "Share partition count should be 60.");
-        assertEquals(0, cache.evictionsMeter().count());
-
-        // Touch the sessions to update the last used time, so that the key-2 can be evicted.
-        cache.touch(cache.get(key1), 200);
-        ShareSessionKey key4 = cache.maybeCreateSession("grp", Uuid.randomUuid(), 210, mockedSharePartitionMap(11), "conn-6");
-        assertShareCacheContains(cache, List.of(key1, key3, key4));
-
-        TestUtils.waitForCondition(() -> yammerMetricValue(ShareSessionCache.SHARE_SESSIONS_COUNT).intValue() == 3,
-            "Share session count should be 3.");
-        TestUtils.waitForCondition(() -> yammerMetricValue(ShareSessionCache.SHARE_PARTITIONS_COUNT).intValue() == 51,
-            "Share partition count should be 51.");
-        assertEquals(1, cache.evictionsMeter().count());
-        assertTrue(cache.evictionsMeter().meanRate() > 0);
-
-        cache.touch(cache.get(key1), 400);
-        cache.touch(cache.get(key3), 390);
-        cache.touch(cache.get(key4), 400);
-        // No key should be evicted as all the sessions are touched to latest time.
-        assertNull(cache.maybeCreateSession("grp", Uuid.randomUuid(), 410, mockedSharePartitionMap(50), "conn-7"));
     }
 
     @Test
     public void testResizeCachedSessions() throws InterruptedException {
-        ShareSessionCache cache = new ShareSessionCache(2, 100);
+        ShareSessionCache cache = new ShareSessionCache(2);
         assertEquals(0, cache.size());
         assertEquals(0, cache.totalPartitions());
         ShareSessionKey key1 = cache.maybeCreateSession("grp", Uuid.randomUuid(), 0, mockedSharePartitionMap(2), "conn-1");
@@ -95,7 +75,6 @@ public class ShareSessionCacheTest {
             "Share session count should be 1.");
         TestUtils.waitForCondition(() -> yammerMetricValue(ShareSessionCache.SHARE_PARTITIONS_COUNT).intValue() == 2,
             "Share partition count should be 2.");
-        assertEquals(0, cache.evictionsMeter().count());
 
         ShareSessionKey key2 = cache.maybeCreateSession("grp", Uuid.randomUuid(), 0, mockedSharePartitionMap(4), "conn-2");
         assertNotNull(key2);
@@ -110,7 +89,6 @@ public class ShareSessionCacheTest {
             "Share session count should be 2.");
         TestUtils.waitForCondition(() -> yammerMetricValue(ShareSessionCache.SHARE_PARTITIONS_COUNT).intValue() == 6,
             "Share partition count should be 6.");
-        assertEquals(0, cache.evictionsMeter().count());
 
         ShareSessionKey key3 = cache.maybeCreateSession("grp", Uuid.randomUuid(), 200, mockedSharePartitionMap(5), "conn-3");
         assertNull(key3);
@@ -126,7 +104,6 @@ public class ShareSessionCacheTest {
             "Share session count should be 1.");
         TestUtils.waitForCondition(() -> yammerMetricValue(ShareSessionCache.SHARE_PARTITIONS_COUNT).intValue() == 4,
             "Share partition count should be 4.");
-        assertEquals(0, cache.evictionsMeter().count());
 
         Iterator<CachedSharePartition> iterator = session2.partitionMap().iterator();
         iterator.next();
@@ -145,12 +122,11 @@ public class ShareSessionCacheTest {
             "Share session count should be 1.");
         TestUtils.waitForCondition(() -> yammerMetricValue(ShareSessionCache.SHARE_PARTITIONS_COUNT).intValue() == 3,
             "Share partition count should be 3.");
-        assertEquals(0, cache.evictionsMeter().count());
     }
 
     @Test
     public void testRemoveConnection() throws InterruptedException {
-        ShareSessionCache cache = new ShareSessionCache(3, 100);
+        ShareSessionCache cache = new ShareSessionCache(3);
         assertEquals(0, cache.size());
         ShareSessionKey key1 = cache.maybeCreateSession("grp", Uuid.randomUuid(), 0, mockedSharePartitionMap(10), "conn-1");
         ShareSessionKey key2 = cache.maybeCreateSession("grp", Uuid.randomUuid(), 10, mockedSharePartitionMap(20), "conn-2");
