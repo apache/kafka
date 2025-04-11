@@ -45,9 +45,12 @@ public class Plugin<T> implements Supplier<T>, AutoCloseable {
     }
 
     public static <T> Plugin<T> wrapInstance(T instance, Metrics metrics, String key, Map<String, String> extraTags) {
-        Map<String, String> tags = tags(key, instance);
-        tags.putAll(extraTags);
-        return wrapInstance(instance, metrics, () -> tags);
+        Supplier<Map<String, String>> tagsSupplier = () -> {
+            Map<String, String> tags = tags(key, instance);
+            tags.putAll(extraTags);
+            return tags;
+        };
+        return wrapInstance(instance, metrics, tagsSupplier);
     }
 
     private static <T> Map<String, String> tags(String key, T instance) {
