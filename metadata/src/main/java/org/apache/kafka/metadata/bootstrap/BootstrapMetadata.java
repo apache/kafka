@@ -149,6 +149,32 @@ public class BootstrapMetadata {
                 metadataVersion, source);
     }
 
+    public BootstrapMetadata copyWithFeatureRecord(String featureName, short level) {
+        List<ApiMessageAndVersion> newRecords = new ArrayList<>();
+        int i = 0;
+        while (i < records.size()) {
+            if (records.get(i).message() instanceof FeatureLevelRecord) {
+                FeatureLevelRecord record = (FeatureLevelRecord) records.get(i).message();
+                if (record.name().equals(featureName)) {
+                    FeatureLevelRecord newRecord = record.duplicate();
+                    newRecord.setFeatureLevel(level);
+                    newRecords.add(new ApiMessageAndVersion(newRecord, (short) 0));
+                    break;
+                } else {
+                    newRecords.add(records.get(i));
+                }
+            }
+            i++;
+        }
+        if (i == records.size()) {
+            FeatureLevelRecord newRecord = new FeatureLevelRecord().
+                    setName(featureName).
+                    setFeatureLevel(level);
+            newRecords.add(new ApiMessageAndVersion(newRecord, (short) 0));
+        }
+        return BootstrapMetadata.fromRecords(newRecords, source);
+    }
+
     @Override
     public int hashCode() {
         return Objects.hash(records, metadataVersion, source);

@@ -68,6 +68,11 @@ public class TestKitNodes {
             return this;
         }
 
+        public Builder setFeature(String featureName, short level) {
+            this.bootstrapMetadata = bootstrapMetadata.copyWithFeatureRecord(featureName, level);
+            return this;
+        }
+
         public Builder setNumControllerNodes(int numControllerNodes) {
             this.numControllerNodes = numControllerNodes;
             return this;
