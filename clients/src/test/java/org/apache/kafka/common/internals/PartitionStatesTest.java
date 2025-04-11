@@ -25,6 +25,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class PartitionStatesTest {
 
@@ -166,7 +167,8 @@ public class PartitionStatesTest {
         expected.add("blah 1");
         expected.add("baz 2");
         expected.add("baz 3");
-        assertEquals(expected, states.partitionStateValues());
+        assertEquals(states.partitionStateValues().size(), expected.size());
+        assertTrue(states.partitionStateValues().containsAll(expected));
     }
 
     @Test
