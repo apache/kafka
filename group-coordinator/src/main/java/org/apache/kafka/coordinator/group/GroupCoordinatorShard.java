@@ -295,33 +295,41 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     public static class DeleteShareGroupOffsetsResultHolder {
-        private final Errors topLevelError;
+        private final short topLevelErrorCode;
+        private final String topLevelErrorMessage;
         private final List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList;
         private final DeleteShareGroupStateParameters deleteStateRequestParameters;
 
-        DeleteShareGroupOffsetsResultHolder(Errors topLevelError) {
-            this(topLevelError, null,  null);
+        DeleteShareGroupOffsetsResultHolder(short topLevelErrorCode, String topLevelErrorMessage) {
+            this(topLevelErrorCode, topLevelErrorMessage, null,  null);
         }
 
         DeleteShareGroupOffsetsResultHolder(
-            Errors topLevelError,
+            short topLevelErrorCode,
+            String topLevelErrorMessage,
             List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList
         ) {
-            this(topLevelError, errorTopicResponseList, null);
+            this(topLevelErrorCode, topLevelErrorMessage, errorTopicResponseList, null);
         }
 
         DeleteShareGroupOffsetsResultHolder(
-            Errors topLevelErrorCode,
+            short topLevelErrorCode,
+            String topLevelErrorMessage,
             List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList,
             DeleteShareGroupStateParameters deleteStateRequestParameters
         ) {
-            this.topLevelError = topLevelErrorCode;
+            this.topLevelErrorCode = topLevelErrorCode;
+            this.topLevelErrorMessage = topLevelErrorMessage;
             this.errorTopicResponseList = errorTopicResponseList;
             this.deleteStateRequestParameters = deleteStateRequestParameters;
         }
 
-        public Errors topLevelError() {
-            return this.topLevelError;
+        public short topLevelErrorCode() {
+            return this.topLevelErrorCode;
+        }
+
+        public String topLevelErrorMessage() {
+            return this.topLevelErrorMessage;
         }
 
         public List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList() {
@@ -337,15 +345,15 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             if (this == o) return true;
             if (o == null || getClass() != o.getClass()) return false;
             DeleteShareGroupOffsetsResultHolder other = (DeleteShareGroupOffsetsResultHolder) o;
-            return topLevelError.code() == other.topLevelError.code() &&
-                Objects.equals(topLevelError.message(), other.topLevelError.message()) &&
+            return topLevelErrorCode == other.topLevelErrorCode &&
+                Objects.equals(topLevelErrorMessage, other.topLevelErrorMessage) &&
                 Objects.equals(errorTopicResponseList, other.errorTopicResponseList) &&
                 Objects.equals(deleteStateRequestParameters, other.deleteStateRequestParameters);
         }
 
         @Override
         public int hashCode() {
-            return Objects.hash(topLevelError, errorTopicResponseList, deleteStateRequestParameters);
+            return Objects.hash(topLevelErrorCode, topLevelErrorMessage, errorTopicResponseList, deleteStateRequestParameters);
         }
     }
 
@@ -699,7 +707,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 );
 
             if (deleteShareGroupStateRequestTopicsData.isEmpty()) {
-                return new DeleteShareGroupOffsetsResultHolder(Errors.NONE, errorTopicResponseList);
+                return new DeleteShareGroupOffsetsResultHolder(Errors.NONE.code(), null, errorTopicResponseList);
             }
 
             DeleteShareGroupStateRequestData deleteShareGroupStateRequestData = new DeleteShareGroupStateRequestData()
@@ -707,17 +715,18 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 .setTopics(deleteShareGroupStateRequestTopicsData);
 
             return new DeleteShareGroupOffsetsResultHolder(
-                Errors.NONE,
+                Errors.NONE.code(),
+                null,
                 errorTopicResponseList,
                 DeleteShareGroupStateParameters.from(deleteShareGroupStateRequestData)
             );
 
         } catch (GroupIdNotFoundException exception) {
             log.error("groupId {} not found", groupId, exception);
-            return new DeleteShareGroupOffsetsResultHolder(Errors.forException(exception));
+            return new DeleteShareGroupOffsetsResultHolder(Errors.GROUP_ID_NOT_FOUND.code(), exception.getMessage());
         } catch (GroupNotEmptyException exception) {
             log.error("Provided group {} is not empty", groupId);
-            return new DeleteShareGroupOffsetsResultHolder(Errors.forException(exception));
+            return new DeleteShareGroupOffsetsResultHolder(Errors.NON_EMPTY_GROUP.code(), exception.getMessage());
         }
     }
 

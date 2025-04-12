@@ -3320,7 +3320,8 @@ public class GroupCoordinatorServiceTest {
 
         GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder deleteShareGroupOffsetsResultHolder =
             new GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder(
-                Errors.NONE,
+                Errors.NONE.code(),
+                null,
                 List.of(),
                 DeleteShareGroupStateParameters.from(
                     new DeleteShareGroupStateRequestData()
@@ -3400,7 +3401,8 @@ public class GroupCoordinatorServiceTest {
 
         GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder deleteShareGroupOffsetsResultHolder =
             new GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder(
-                Errors.NONE,
+                Errors.NONE.code(),
+                null,
                 List.of(),
                 DeleteShareGroupStateParameters.from(deleteShareGroupStateRequestData)
             );
@@ -3630,7 +3632,8 @@ public class GroupCoordinatorServiceTest {
 
         GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder deleteShareGroupOffsetsResultHolder =
             new GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder(
-                Errors.GROUP_ID_NOT_FOUND,
+                Errors.GROUP_ID_NOT_FOUND.code(),
+                Errors.GROUP_ID_NOT_FOUND.message(),
                 null,
                 null
             );
@@ -3674,7 +3677,8 @@ public class GroupCoordinatorServiceTest {
 
         GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder deleteShareGroupOffsetsResultHolder =
             new GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder(
-                Errors.NON_EMPTY_GROUP,
+                Errors.NON_EMPTY_GROUP.code(),
+                Errors.NON_EMPTY_GROUP.message(),
                 null,
                 null
             );
@@ -3716,7 +3720,8 @@ public class GroupCoordinatorServiceTest {
 
         GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder deleteShareGroupOffsetsResultHolder =
             new GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder(
-                Errors.NONE,
+                Errors.NONE.code(),
+                null,
                 null,
                 null
             );
@@ -3772,7 +3777,8 @@ public class GroupCoordinatorServiceTest {
 
         GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder deleteShareGroupOffsetsResultHolder =
             new GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder(
-                Errors.NONE,
+                Errors.NONE.code(),
+                null,
                 List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
                     .setTopicName(badTopicName)
                     .setTopicId(badTopicId)
@@ -3825,7 +3831,8 @@ public class GroupCoordinatorServiceTest {
 
         GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder deleteShareGroupOffsetsResultHolder =
             new GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder(
-                Errors.NONE,
+                Errors.NONE.code(),
+                null,
                 List.of(),
                 DeleteShareGroupStateParameters.from(
                     new DeleteShareGroupStateRequestData()
@@ -3885,7 +3892,8 @@ public class GroupCoordinatorServiceTest {
 
         GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder deleteShareGroupOffsetsResultHolder =
             new GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder(
-                Errors.NONE,
+                Errors.NONE.code(),
+                null,
                 List.of(),
                 DeleteShareGroupStateParameters.from(
                     new DeleteShareGroupStateRequestData()
@@ -3945,7 +3953,8 @@ public class GroupCoordinatorServiceTest {
 
         GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder deleteShareGroupOffsetsResultHolder =
             new GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder(
-                Errors.NONE,
+                Errors.NONE.code(),
+                null,
                 List.of(),
                 DeleteShareGroupStateParameters.from(
                     new DeleteShareGroupStateRequestData()
@@ -4051,7 +4060,8 @@ public class GroupCoordinatorServiceTest {
 
         GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder deleteShareGroupOffsetsResultHolder =
             new GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder(
-                Errors.NONE,
+                Errors.NONE.code(),
+                null,
                 List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
                     .setTopicName(badTopicName)
                     .setTopicId(badTopicId)

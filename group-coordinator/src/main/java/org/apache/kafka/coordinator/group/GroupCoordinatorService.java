@@ -1593,10 +1593,12 @@ public class GroupCoordinatorService implements GroupCoordinator {
                     );
                 }
 
-                if (resultHolder.topLevelError().code() != Errors.NONE.code()) {
-                    log.error("Failed to retrieve deleteState request parameters from group coordinator for the group {}", groupId);
+                if (resultHolder.topLevelErrorCode() != Errors.NONE.code()) {
                     return CompletableFuture.completedFuture(
-                        DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(resultHolder.topLevelError())
+                        DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(
+                            resultHolder.topLevelErrorCode(),
+                            resultHolder.topLevelErrorMessage()
+                        )
                     );
                 }
 

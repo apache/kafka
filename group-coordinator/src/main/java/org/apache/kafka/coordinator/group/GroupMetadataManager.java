@@ -8185,6 +8185,7 @@ public class GroupMetadataManager {
      * Returns a list of delete share group state request topic objects to be used with the persister.
      * @param groupId - group ID of the share group
      * @param requestData - the request data for DeleteShareGroupOffsets request
+     * @param errorTopicResponseList - the list of topics not found in the metadata image
      * @return List of objects representing the share group state delete request for topics.
      */
     public List<DeleteShareGroupStateRequestData.DeleteStateData> sharePartitionsEligibleForOffsetDeletion(
