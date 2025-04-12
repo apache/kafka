@@ -27,7 +27,6 @@ import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.record.LegacyRecord;
-import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.ConfigUtils;
 import org.apache.kafka.common.utils.Utils;
@@ -124,7 +123,6 @@ public class LogConfig extends AbstractConfig {
     // Visible for testing
     public static final String SERVER_DEFAULT_HEADER_NAME = "Server Default Property";
 
-    public static final int DEFAULT_MAX_MESSAGE_BYTES = 1024 * 1024 + Records.LOG_OVERHEAD;
     public static final int DEFAULT_SEGMENT_BYTES = 1024 * 1024 * 1024;
     public static final long DEFAULT_SEGMENT_MS = 24 * 7 * 60 * 60 * 1000L;
     public static final long DEFAULT_SEGMENT_JITTER_MS = 0;
@@ -134,7 +132,6 @@ public class LogConfig extends AbstractConfig {
     public static final long DEFAULT_MAX_COMPACTION_LAG_MS = Long.MAX_VALUE;
     public static final double DEFAULT_MIN_CLEANABLE_DIRTY_RATIO = 0.5;
     public static final boolean DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE = false;
-    public static final String DEFAULT_COMPRESSION_TYPE = BrokerCompressionType.PRODUCER.name;
     public static final boolean DEFAULT_PREALLOCATE = false;
 
     public static final boolean DEFAULT_REMOTE_STORAGE_ENABLE = false;
@@ -210,7 +207,7 @@ public class LogConfig extends AbstractConfig {
                 // can be negative. See kafka.log.LogManager.cleanupExpiredSegments
                 .define(TopicConfig.RETENTION_MS_CONFIG, LONG, DEFAULT_RETENTION_MS, atLeast(-1), MEDIUM,
                         TopicConfig.RETENTION_MS_DOC)
-                .define(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, INT, DEFAULT_MAX_MESSAGE_BYTES, atLeast(0), MEDIUM,
+                .define(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, INT, ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT, atLeast(0), MEDIUM,
                         TopicConfig.MAX_MESSAGE_BYTES_DOC)
                 .define(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, INT, ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_DEFAULT, atLeast(0), MEDIUM,
                         TopicConfig.INDEX_INTERVAL_BYTES_DOC)
@@ -230,7 +227,7 @@ public class LogConfig extends AbstractConfig {
                         MEDIUM, TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_DOC)
                 .define(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, INT, ServerLogConfigs.MIN_IN_SYNC_REPLICAS_DEFAULT, atLeast(1), MEDIUM,
                         TopicConfig.MIN_IN_SYNC_REPLICAS_DOC)
-                .define(TopicConfig.COMPRESSION_TYPE_CONFIG, STRING, DEFAULT_COMPRESSION_TYPE, in(BrokerCompressionType.names().toArray(new String[0])),
+                .define(TopicConfig.COMPRESSION_TYPE_CONFIG, STRING, ServerLogConfigs.COMPRESSION_TYPE_DEFAULT, in(BrokerCompressionType.names().toArray(new String[0])),
                         MEDIUM, TopicConfig.COMPRESSION_TYPE_DOC)
                 .define(TopicConfig.COMPRESSION_GZIP_LEVEL_CONFIG, INT, CompressionType.GZIP.defaultLevel(),
                         CompressionType.GZIP.levelValidator(), MEDIUM, TopicConfig.COMPRESSION_GZIP_LEVEL_DOC)

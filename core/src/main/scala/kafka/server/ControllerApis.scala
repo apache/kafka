@@ -188,7 +188,7 @@ class ControllerApis(
 
   def handleFetch(request: RequestChannel.Request): CompletableFuture[Unit] = {
     authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
-    handleRaftRequest(request, response => new FetchResponse(response.asInstanceOf[FetchResponseData]))
+    handleRaftRequest(request, response => FetchResponse.of(response.asInstanceOf[FetchResponseData]))
   }
 
   def handleFetchSnapshot(request: RequestChannel.Request): CompletableFuture[Unit] = {
