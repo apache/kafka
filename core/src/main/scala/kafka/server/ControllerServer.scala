@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.network.{SocketServer}
+import kafka.network.SocketServer
 import kafka.raft.KafkaRaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 
