@@ -136,10 +136,7 @@ class LogManagerTest {
     assertEquals(1, logManager.liveLogDirs.size)
     val logFile = new File(logDir, name + "-0")
     assertTrue(logFile.exists)
-    logManager.directoryId(logFile.getParent) match {
-      case Some(directoryId) => assertFalse(directoryId.equals(DirectoryId.UNASSIGNED))
-      case None =>
-    }
+    assertNotEquals(Option.apply(DirectoryId.UNASSIGNED), logManager.directoryId(logFile.getParent))
     log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), 0)
   }
 
@@ -150,10 +147,7 @@ class LogManagerTest {
     assertEquals(1, logManager.liveLogDirs.size)
     val logFile = new File(logDir, name + "-0")
     assertTrue(logFile.exists)
-    logManager.directoryId(logFile.getParent) match {
-      case Some(directoryId) => assertFalse(directoryId.equals(DirectoryId.random()))
-      case None =>
-    }
+    assertNotEquals(Option.apply(DirectoryId.random()), logManager.directoryId(logFile.getParent))
     log.appendAsLeader(TestUtils.singletonRecords("test".getBytes()), 0)
   }
 
