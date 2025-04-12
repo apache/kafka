@@ -81,7 +81,7 @@ class TestRaftRequestHandler(
   }
 
   private def handleFetch(request: RequestChannel.Request): Unit = {
-    handle(request, response => new FetchResponse(response.asInstanceOf[FetchResponseData]))
+    handle(request, response => FetchResponse.of(response.asInstanceOf[FetchResponseData]))
   }
 
   private def handleFetchSnapshot(request: RequestChannel.Request): Unit = {

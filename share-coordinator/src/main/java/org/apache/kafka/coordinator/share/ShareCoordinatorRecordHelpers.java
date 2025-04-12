@@ -24,7 +24,6 @@ import org.apache.kafka.coordinator.share.generated.ShareUpdateKey;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
-import java.util.stream.Collectors;
 
 public class ShareCoordinatorRecordHelpers {
     public static CoordinatorRecord newShareSnapshotRecord(String groupId, Uuid topicId, int partitionId, ShareGroupOffset offsetData) {
@@ -44,7 +43,9 @@ public class ShareCoordinatorRecordHelpers {
                         .setLastOffset(batch.lastOffset())
                         .setDeliveryCount(batch.deliveryCount())
                         .setDeliveryState(batch.deliveryState()))
-                    .collect(Collectors.toList())),
+                    .toList())
+                .setCreateTimestamp(offsetData.createTimestamp())
+                .setWriteTimestamp(offsetData.writeTimestamp()),
                 (short) 0
             )
         );
@@ -66,7 +67,7 @@ public class ShareCoordinatorRecordHelpers {
                         .setLastOffset(batch.lastOffset())
                         .setDeliveryCount(batch.deliveryCount())
                         .setDeliveryState(batch.deliveryState()))
-                    .collect(Collectors.toList())),
+                    .toList()),
                 (short) 0
             )
         );
