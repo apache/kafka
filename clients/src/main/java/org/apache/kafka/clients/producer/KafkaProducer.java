@@ -408,7 +408,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     Arrays.asList(this.keySerializerPlugin.get(), this.valueSerializerPlugin.get()));
             this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
             this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
-            this.maxRecordSize = config.getInt(ProducerConfig.MAX_RECORD_SIZE_CONFIG)==null?this.maxRequestSize:config.getInt(ProducerConfig.MAX_RECORD_SIZE_CONFIG);
+            this.maxRecordSize = config.getInt(ProducerConfig.MAX_RECORD_SIZE_CONFIG) == null ? this.maxRequestSize : config.getInt(ProducerConfig.MAX_RECORD_SIZE_CONFIG);
             this.compression = configureCompression(config);
 
             this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
@@ -496,7 +496,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         this.interceptors = interceptors;
         this.maxRequestSize = config.getInt(ProducerConfig.MAX_REQUEST_SIZE_CONFIG);
         this.totalMemorySize = config.getLong(ProducerConfig.BUFFER_MEMORY_CONFIG);
-        this.maxRecordSize = config.getInt(ProducerConfig.MAX_RECORD_SIZE_CONFIG)==null?this.maxRequestSize:config.getInt(ProducerConfig.MAX_RECORD_SIZE_CONFIG);
+        this.maxRecordSize = config.getInt(ProducerConfig.MAX_RECORD_SIZE_CONFIG) == null ? this.maxRequestSize : config.getInt(ProducerConfig.MAX_RECORD_SIZE_CONFIG);
         this.compression = configureCompression(config);
         this.maxBlockTimeMs = config.getLong(ProducerConfig.MAX_BLOCK_MS_CONFIG);
         this.partitionerIgnoreKeys = config.getBoolean(ProducerConfig.PARTITIONER_IGNORE_KEYS_CONFIG);
