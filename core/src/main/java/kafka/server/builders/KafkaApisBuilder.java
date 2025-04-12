@@ -37,6 +37,7 @@ import org.apache.kafka.coordinator.share.ShareCoordinator;
 import org.apache.kafka.metadata.ConfigRepository;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.ClientMetricsManager;
+import org.apache.kafka.server.DelegationTokenManager;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
@@ -64,6 +65,7 @@ public class KafkaApisBuilder {
     private BrokerTopicStats brokerTopicStats = null;
     private String clusterId = "clusterId";
     private Time time = Time.SYSTEM;
+    private DelegationTokenManager tokenManager = null;
     private ApiVersionManager apiVersionManager = null;
     private ClientMetricsManager clientMetricsManager = null;
     private Optional<ShareCoordinator> shareCoordinator = Optional.empty();
@@ -164,6 +166,11 @@ public class KafkaApisBuilder {
         return this;
     }
 
+    public KafkaApisBuilder setTokenManager(DelegationTokenManager tokenManager) {
+        this.tokenManager = tokenManager;
+        return this;
+    }
+
     public KafkaApisBuilder setApiVersionManager(ApiVersionManager apiVersionManager) {
         this.apiVersionManager = apiVersionManager;
         return this;
@@ -219,7 +226,7 @@ public class KafkaApisBuilder {
                              brokerTopicStats,
                              clusterId,
                              time,
-                             null,
+                             tokenManager,
                              apiVersionManager,
                              clientMetricsManager,
                              groupConfigManager);
