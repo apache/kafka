@@ -122,6 +122,28 @@ public abstract class SourceTask implements Task {
     }
 
     /**
+     * This method is invoked periodically when offsets are committed for this source task. Note that the offsets
+     * being committed won't necessarily correspond to the latest offsets returned by this source task via
+     * {@link #poll()}. Also see {@link #commitRecord(SourceRecord, RecordMetadata)} which allows for a more
+     * fine-grained tracking of records that have been successfully delivered.
+     * <p>
+     * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
+     * automatically. This hook is provided for systems that also need to store offsets internally
+     * in their own system.
+     * <p>
+     * Note: Exceptions thrown by this method will be logged and ignored, will not result in task failure.
+     *
+     * @param latestCommittedOffsets Latest committed source-offsets produced by this task. For each key ({SourceRecord.sourcePartition}),
+     *                               the associated value ({SourceRecord.sourceOffset}) represents the most recent committed source-offset.
+     *                               This ensures that all preceding sourceOffsets, as delivered by task.poll() for the same sourcePartition,
+     *                               have also been committed.
+     * @throws InterruptedException
+     */
+    public void commit(Map<Map<String, Object>, Map<String, Object>> latestCommittedOffsets) throws InterruptedException {
+        this.commit();
+    }
+
+    /**
      * Signal this SourceTask to stop. In SourceTasks, this method only needs to signal to the task that it should stop
      * trying to poll for new data and interrupt any outstanding poll() requests. It is not required that the task has
      * fully stopped. Note that this method necessarily may be invoked from a different thread than {@link #poll()} and
@@ -156,27 +178,5 @@ public abstract class SourceTask implements Task {
     public void commitRecord(SourceRecord record, RecordMetadata metadata)
             throws InterruptedException {
         // by default, just do nothing
-    }
-
-    /**
-     * This method is invoked periodically when offsets are committed for this source task. Note that the offsets
-     * being committed won't necessarily correspond to the latest offsets returned by this source task via
-     * {@link #poll()}. Also see {@link #commitRecord(SourceRecord, RecordMetadata)} which allows for a more
-     * fine-grained tracking of records that have been successfully delivered.
-     * <p>
-     * SourceTasks are not required to implement this functionality; Kafka Connect will record offsets
-     * automatically. This hook is provided for systems that also need to store offsets internally
-     * in their own system.
-     * <p>
-     * Note: Exceptions thrown by this method will be logged and ignored, will not result in task failure.
-     *
-     * @param latestCommittedOffsets Latest committed source-offsets produced by this task. For each key ({SourceRecord.sourcePartition}),
-     *                               the associated value ({SourceRecord.sourceOffset}) represents the most recent committed source-offset.
-     *                               This ensures that all preceding sourceOffsets, as delivered by task.poll() for the same sourcePartition,
-     *                               have also been committed.
-     * @throws InterruptedException
-     */
-    public void commit(Map<Map<String, Object>, Map<String, Object>> latestCommittedOffsets) throws InterruptedException {
-        this.commit();
     }
 }

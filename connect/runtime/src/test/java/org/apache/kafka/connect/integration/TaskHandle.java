@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.Collection;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.CountDownLatch;
@@ -48,8 +49,10 @@ public class TaskHandle {
 
     private CountDownLatch recordsRemainingLatch;
     private CountDownLatch recordsToCommitLatch;
+    private CountDownLatch commitLatch;
     private int expectedRecords = -1;
     private final int expectedCommits = -1;
+    private final Map<Map<String, Object>, Map<String, Object>> committedOffsets = new ConcurrentHashMap<>();
 
     public TaskHandle(ConnectorHandle connectorHandle, String taskId, Consumer<SinkRecord> consumer) {
         this.taskId = taskId;
@@ -93,11 +96,32 @@ public class TaskHandle {
     /**
      * Record a message commit from the task and the connector overall.
      */
-    public void commit() {
+    public void commitRecord() {
         if (recordsToCommitLatch != null) {
             recordsToCommitLatch.countDown();
         }
-        connectorHandle.commit();
+        connectorHandle.commitRecord();
+    }
+
+    /**
+     * Record offset commits for (source) task.
+     *
+     * @param latestCommittedOffsets committed offsets
+     */
+    public void commit(Map<Map<String, Object>, Map<String, Object>> latestCommittedOffsets) {
+        if (recordsToCommitLatch != null && recordsToCommitLatch.getCount() == 0) {
+            commitLatch.countDown();
+        }
+        // store all committed offsets for this task
+        committedOffsets.putAll(latestCommittedOffsets);
+        connectorHandle.commit(latestCommittedOffsets);
+    }
+
+    /**
+     * @return the final set of offsets committed for this (source) task.
+     */
+    public Map<Map<String, Object>, Map<String, Object>> committedOffsets() {
+        return committedOffsets;
     }
 
     /**
@@ -108,6 +132,9 @@ public class TaskHandle {
     public void commit(int batchSize) {
         if (recordsToCommitLatch != null) {
             IntStream.range(0, batchSize).forEach(i -> recordsToCommitLatch.countDown());
+            if (recordsToCommitLatch.getCount() == 0) {
+                commitLatch.countDown(); // this latch is no-op for sink-test
+            }
         }
         connectorHandle.commit(batchSize);
     }
@@ -130,6 +157,7 @@ public class TaskHandle {
     public void expectedCommits(int expected) {
         expectedRecords = expected;
         recordsToCommitLatch = new CountDownLatch(expected);
+        commitLatch = new CountDownLatch(1); // expect at least one commit.
     }
 
     /**
@@ -273,6 +301,12 @@ public class TaskHandle {
         }
         log.debug("Task {} saw {} records, expected {} records",
                   taskId, expectedCommits - recordsToCommitLatch.getCount(), expectedCommits);
+
+        if (!commitLatch.await(timeout, TimeUnit.MILLISECONDS)) {
+            String msg = String.format("commit() not seen by task %s in %d millis.", taskId, timeout);
+            throw new DataException(msg);
+        }
+        log.debug("Connector {} saw commit()", taskId);
     }
 
     /**
