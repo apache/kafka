@@ -62,8 +62,7 @@ public class ConfigTransformer {
     /**
      * Creates a ConfigTransformer with the default pattern, of the form <code>${provider:[path:]key}</code>.
      *
-     * @param configProviderPlugins a Map of provider names and {@link ConfigProvider} instances, where each instance
-     *                              is wrapped in a {@link org.apache.kafka.common.internals.Plugin}.
+     * @param configProviderPlugins a Map of provider names and {@link ConfigProvider} instances.
      */
     public ConfigTransformer(Map<String, Plugin<ConfigProvider>> configProviderPlugins) {
         this.configProviderPlugins = configProviderPlugins;

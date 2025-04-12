@@ -588,12 +588,12 @@ public class AbstractConfig {
      * config.providers : A comma-separated list of names for providers.
      * config.providers.{name}.class : The Java class name for a provider.
      * config.providers.{name}.param.{param-name} : A parameter to be passed to the above Java class on initialization.
-     * returns a map of config provider name and its instance wrapped in a {@link org.apache.kafka.common.internals.Plugin}.
+     * returns a map of config provider name and its instance.
      *
      * @param indirectConfigs          The map of potential variable configs
      * @param providerConfigProperties The map of config provider configs
      * @param classNameFilter          Filter for config provider class names
-     * @return map of config provider name and its instance wrapped in a {@link org.apache.kafka.common.internals.Plugin}.
+     * @return map of config provider name and its instance.
      */
     private Map<String, Plugin<ConfigProvider>> instantiateConfigProviders(
             Map<String, String> indirectConfigs,
