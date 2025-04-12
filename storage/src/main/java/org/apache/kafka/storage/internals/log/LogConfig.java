@@ -264,7 +264,7 @@ public class LogConfig extends AbstractConfig {
      * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
      * should also be in `KafkaConfig#extractLogConfigMap`.
      */
-    public final int segmentSize;
+    private final int segmentSize;
     public final long segmentMs;
     public final long segmentJitterMs;
     public final int maxIndexSize;
