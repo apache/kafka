@@ -57,6 +57,8 @@ import org.apache.kafka.clients.admin.DeleteConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DeleteConsumerGroupsResult;
 import org.apache.kafka.clients.admin.DeleteRecordsOptions;
 import org.apache.kafka.clients.admin.DeleteRecordsResult;
+import org.apache.kafka.clients.admin.DeleteShareGroupOffsetsOptions;
+import org.apache.kafka.clients.admin.DeleteShareGroupOffsetsResult;
 import org.apache.kafka.clients.admin.DeleteShareGroupsOptions;
 import org.apache.kafka.clients.admin.DeleteShareGroupsResult;
 import org.apache.kafka.clients.admin.DeleteStreamsGroupOffsetsOptions;
@@ -471,6 +473,11 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     @Override
     public ListShareGroupOffsetsResult listShareGroupOffsets(final Map<String, ListShareGroupOffsetsSpec> groupSpecs, final ListShareGroupOffsetsOptions options) {
         return adminDelegate.listShareGroupOffsets(groupSpecs, options);
+    }
+
+    @Override
+    public DeleteShareGroupOffsetsResult deleteShareGroupOffsets(final String groupId, final Set<TopicPartition> partitions, final DeleteShareGroupOffsetsOptions options) {
+        return adminDelegate.deleteShareGroupOffsets(groupId, partitions, options);
     }
 
     @Override

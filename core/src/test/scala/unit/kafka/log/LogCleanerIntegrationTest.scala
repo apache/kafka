@@ -169,7 +169,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
     val firstBlockCleanableSegmentOffset = activeSegAtT0.baseOffset
 
     // the first block should get cleaned
-    cleaner.awaitCleaned(new TopicPartition("log", 0), firstBlockCleanableSegmentOffset)
+    cleaner.awaitCleaned(new TopicPartition("log", 0), firstBlockCleanableSegmentOffset, 60000L)
 
     val read1 = readFromLog(log)
     val lastCleaned = cleaner.cleanerManager.allCleanerCheckpoints.get(new TopicPartition("log", 0))
@@ -181,7 +181,7 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
 
     time.sleep(maxCompactionLagMs + 1)
     // the second block should get cleaned. only zero keys left
-    cleaner.awaitCleaned(new TopicPartition("log", 0), activeSegAtT1.baseOffset)
+    cleaner.awaitCleaned(new TopicPartition("log", 0), activeSegAtT1.baseOffset, 60000L)
 
     val read2 = readFromLog(log)
 
@@ -222,10 +222,10 @@ class LogCleanerIntegrationTest extends AbstractLogCleanerIntegrationTest {
     cleaner.startup()
     assertEquals(0, cleaner.deadThreadCount)
     // we simulate the unexpected error with an interrupt
-    cleaner.cleaners.foreach(_.interrupt())
+    cleaner.cleaners.forEach(_.interrupt())
     // wait until interruption is propagated to all the threads
     TestUtils.waitUntilTrue(
-      () => cleaner.cleaners.foldLeft(true)((result, thread) => {
+      () => cleaner.cleaners.asScala.foldLeft(true)((result, thread) => {
         thread.isThreadFailed && result
       }), "Threads didn't terminate unexpectedly"
     )

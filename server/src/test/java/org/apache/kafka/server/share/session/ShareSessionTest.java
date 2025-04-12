@@ -21,7 +21,6 @@ import org.apache.kafka.common.Uuid;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
 import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -32,7 +31,7 @@ public class ShareSessionTest {
     public void testPartitionsToLogString() {
         Uuid uuid1 = Uuid.randomUuid();
         Uuid uuid2 = Uuid.randomUuid();
-        List<TopicIdPartition> partitions = Arrays.asList(
+        List<TopicIdPartition> partitions = List.of(
             new TopicIdPartition(uuid1, 0, "foo"),
             new TopicIdPartition(uuid2, 1, "bar"));
 

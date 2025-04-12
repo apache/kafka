@@ -25,7 +25,7 @@ import org.apache.kafka.common.protocol.SendBuilder;
 import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -71,14 +71,14 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
     }
 
     protected static Map<Errors, Integer> errorCounts(Collection<Errors> errors) {
-        Map<Errors, Integer> errorCounts = new HashMap<>();
+        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
         for (Errors error : errors)
             updateErrorCounts(errorCounts, error);
         return errorCounts;
     }
 
     protected static Map<Errors, Integer> apiErrorCounts(Map<?, ApiError> errors) {
-        Map<Errors, Integer> errorCounts = new HashMap<>();
+        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
         for (ApiError apiError : errors.values())
             updateErrorCounts(errorCounts, apiError.error());
         return errorCounts;

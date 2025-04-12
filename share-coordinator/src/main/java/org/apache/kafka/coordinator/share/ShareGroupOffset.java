@@ -27,29 +27,40 @@ import java.util.Collections;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 /**
  * Container class to represent data encapsulated in {@link ShareSnapshotValue} and {@link ShareUpdateValue}
  * This class is immutable (state batches is not modified out of context).
  */
 public class ShareGroupOffset {
+    public static final int NO_TIMESTAMP = -1;
+    public static final int UNINITIALIZED_EPOCH = -1;
+    public static final int DEFAULT_EPOCH = 0;
+
     private final int snapshotEpoch;
     private final int stateEpoch;
     private final int leaderEpoch;
     private final long startOffset;
     private final List<PersisterStateBatch> stateBatches;
+    private final long createTimestamp;
+    private final long writeTimestamp;
 
-    private ShareGroupOffset(int snapshotEpoch,
-                            int stateEpoch,
-                            int leaderEpoch,
-                            long startOffset,
-                            List<PersisterStateBatch> stateBatches) {
+    private ShareGroupOffset(
+        int snapshotEpoch,
+        int stateEpoch,
+        int leaderEpoch,
+        long startOffset,
+        List<PersisterStateBatch> stateBatches,
+        long createTimestamp,
+        long writeTimestamp
+    ) {
         this.snapshotEpoch = snapshotEpoch;
         this.stateEpoch = stateEpoch;
         this.leaderEpoch = leaderEpoch;
         this.startOffset = startOffset;
         this.stateBatches = stateBatches;
+        this.createTimestamp = createTimestamp;
+        this.writeTimestamp = writeTimestamp;
     }
 
     public int snapshotEpoch() {
@@ -68,6 +79,14 @@ public class ShareGroupOffset {
         return startOffset;
     }
 
+    public long createTimestamp() {
+        return createTimestamp;
+    }
+
+    public long writeTimestamp() {
+        return writeTimestamp;
+    }
+
     public List<PersisterStateBatch> stateBatches() {
         return Collections.unmodifiableList(stateBatches);
     }
@@ -81,20 +100,38 @@ public class ShareGroupOffset {
     }
 
     public static ShareGroupOffset fromRecord(ShareSnapshotValue record) {
-        return new ShareGroupOffset(record.snapshotEpoch(), record.stateEpoch(), record.leaderEpoch(), record.startOffset(), record.stateBatches().stream()
-            .map(ShareGroupOffset::toPersisterOffsetsStateBatch).collect(Collectors.toList()));
+        return new ShareGroupOffset(
+            record.snapshotEpoch(),
+            record.stateEpoch(),
+            record.leaderEpoch(),
+            record.startOffset(),
+            record.stateBatches().stream()
+                .map(ShareGroupOffset::toPersisterOffsetsStateBatch)
+                .toList(),
+            record.createTimestamp(),
+            record.writeTimestamp()
+        );
     }
 
     public static ShareGroupOffset fromRecord(ShareUpdateValue record) {
-        return new ShareGroupOffset(record.snapshotEpoch(), -1, record.leaderEpoch(), record.startOffset(), record.stateBatches().stream()
-            .map(ShareGroupOffset::toPersisterOffsetsStateBatch).collect(Collectors.toList()));
+        return new ShareGroupOffset(
+            record.snapshotEpoch(),
+            UNINITIALIZED_EPOCH,
+            record.leaderEpoch(),
+            record.startOffset(),
+            record.stateBatches().stream()
+                .map(ShareGroupOffset::toPersisterOffsetsStateBatch)
+                .toList(),
+            NO_TIMESTAMP,
+            NO_TIMESTAMP
+        );
     }
 
-    public static ShareGroupOffset fromRequest(WriteShareGroupStateRequestData.PartitionData data) {
-        return fromRequest(data, 0);
+    public static ShareGroupOffset fromRequest(WriteShareGroupStateRequestData.PartitionData data, long timestamp) {
+        return fromRequest(data, DEFAULT_EPOCH, timestamp);
     }
 
-    public static ShareGroupOffset fromRequest(WriteShareGroupStateRequestData.PartitionData data, int snapshotEpoch) {
+    public static ShareGroupOffset fromRequest(WriteShareGroupStateRequestData.PartitionData data, int snapshotEpoch, long timestamp) {
         return new ShareGroupOffset(
             snapshotEpoch,
             data.stateEpoch(),
@@ -102,21 +139,25 @@ public class ShareGroupOffset {
             data.startOffset(),
             data.stateBatches().stream()
                 .map(PersisterStateBatch::from)
-                .toList()
+                .toList(),
+            timestamp,
+            timestamp
         );
     }
 
-    public static ShareGroupOffset fromRequest(InitializeShareGroupStateRequestData.PartitionData data) {
-        return fromRequest(data, 0);
+    public static ShareGroupOffset fromRequest(InitializeShareGroupStateRequestData.PartitionData data, long timestamp) {
+        return fromRequest(data, DEFAULT_EPOCH, timestamp);
     }
 
-    public static ShareGroupOffset fromRequest(InitializeShareGroupStateRequestData.PartitionData data, int snapshotEpoch) {
+    public static ShareGroupOffset fromRequest(InitializeShareGroupStateRequestData.PartitionData data, int snapshotEpoch, long timestamp) {
         return new ShareGroupOffset(
             snapshotEpoch,
             data.stateEpoch(),
-            -1,
+            UNINITIALIZED_EPOCH,
             data.startOffset(),
-            List.of()
+            List.of(),
+            timestamp,
+            timestamp
         );
     }
 
@@ -130,6 +171,8 @@ public class ShareGroupOffset {
         private int leaderEpoch;
         private long startOffset;
         private List<PersisterStateBatch> stateBatches;
+        private long createTimestamp = NO_TIMESTAMP;
+        private long writeTimestamp = NO_TIMESTAMP;
 
         public Builder setSnapshotEpoch(int snapshotEpoch) {
             this.snapshotEpoch = snapshotEpoch;
@@ -156,8 +199,18 @@ public class ShareGroupOffset {
             return this;
         }
 
+        public Builder setCreateTimestamp(long createTimestamp) {
+            this.createTimestamp = createTimestamp;
+            return this;
+        }
+
+        public Builder setWriteTimestamp(long writeTimestamp) {
+            this.writeTimestamp = writeTimestamp;
+            return this;
+        }
+
         public ShareGroupOffset build() {
-            return new ShareGroupOffset(snapshotEpoch, stateEpoch, leaderEpoch, startOffset, stateBatches);
+            return new ShareGroupOffset(snapshotEpoch, stateEpoch, leaderEpoch, startOffset, stateBatches, createTimestamp, writeTimestamp);
         }
     }
 
@@ -170,12 +223,14 @@ public class ShareGroupOffset {
             stateEpoch == that.stateEpoch &&
             leaderEpoch == that.leaderEpoch &&
             startOffset == that.startOffset &&
-            Objects.equals(stateBatches, that.stateBatches);
+            Objects.equals(stateBatches, that.stateBatches) &&
+            createTimestamp == that.createTimestamp &&
+            writeTimestamp == that.writeTimestamp;
     }
 
     @Override
     public int hashCode() {
-        return Objects.hash(snapshotEpoch, stateEpoch, leaderEpoch, startOffset, stateBatches);
+        return Objects.hash(snapshotEpoch, stateEpoch, leaderEpoch, startOffset, stateBatches, createTimestamp, writeTimestamp);
     }
 
     @Override
@@ -185,6 +240,8 @@ public class ShareGroupOffset {
             ", stateEpoch=" + stateEpoch +
             ", leaderEpoch=" + leaderEpoch +
             ", startOffset=" + startOffset +
+            ", createTimestamp=" + createTimestamp +
+            ", writeTimestamp=" + writeTimestamp +
             ", stateBatches=" + stateBatches +
             '}';
     }
