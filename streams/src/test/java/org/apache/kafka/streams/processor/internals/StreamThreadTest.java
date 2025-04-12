@@ -1449,7 +1449,6 @@ public class StreamThreadTest {
             HANDLER,
             null,
             Optional.empty(),
-            Optional.empty(),
             null
         ).updateThreadMetadata(adminClientId(CLIENT_ID));
 
@@ -2671,7 +2670,6 @@ public class StreamThreadTest {
             HANDLER,
             null,
             Optional.empty(),
-            Optional.empty(),
             null
         ) {
             @Override
@@ -2732,7 +2730,6 @@ public class StreamThreadTest {
             null,
             HANDLER,
             null,
-            Optional.empty(),
             Optional.empty(),
             null
         ) {
@@ -2804,7 +2801,6 @@ public class StreamThreadTest {
             HANDLER,
             null,
             Optional.empty(),
-            Optional.empty(),
             null
         ) {
             @Override
@@ -2871,7 +2867,6 @@ public class StreamThreadTest {
             HANDLER,
             null,
             Optional.empty(),
-            Optional.empty(),
             null
         ) {
             @Override
@@ -2934,7 +2929,6 @@ public class StreamThreadTest {
             null,
             HANDLER,
             null,
-            Optional.empty(),
             Optional.empty(),
             null
         ) {
@@ -3170,7 +3164,6 @@ public class StreamThreadTest {
             HANDLER,
             null,
             Optional.empty(),
-            Optional.empty(),
             null
         );
         final MetricName testMetricName = new MetricName("test_metric", "", "", new HashMap<>());
@@ -3229,7 +3222,6 @@ public class StreamThreadTest {
             null,
             (e, b) -> { },
             null,
-            Optional.empty(),
             Optional.empty(),
             null
         ) {
@@ -3613,7 +3605,6 @@ public class StreamThreadTest {
             null,
             null,
             Optional.empty(),
-            Optional.empty(),
             null
         );
     }
@@ -3737,7 +3728,6 @@ public class StreamThreadTest {
             null,
             HANDLER,
             null,
-            Optional.empty(),
             Optional.empty(),
             null
         );

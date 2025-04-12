@@ -20,13 +20,13 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchRequestData;
-import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -161,9 +161,7 @@ public class ShareFetchRequest extends AbstractRequest {
     @Override
     public AbstractResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
-        return new ShareFetchResponse(new ShareFetchResponseData()
-                .setThrottleTimeMs(throttleTimeMs)
-                .setErrorCode(error.code()));
+        return ShareFetchResponse.of(error, throttleTimeMs, new LinkedHashMap<>(), List.of(), 0);
     }
 
     public static ShareFetchRequest parse(Readable readable, short version) {

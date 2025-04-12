@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.MetadataSnapshot;
 import org.apache.kafka.clients.producer.Callback;
@@ -82,7 +81,6 @@ public class RecordAccumulator {
     private final boolean enableAdaptivePartitioning;
     private final BufferPool free;
     private final Time time;
-    private final ApiVersions apiVersions;
     private final ConcurrentMap<String /*topic*/, TopicInfo> topicInfoMap = new CopyOnWriteMap<>();
     private final ConcurrentMap<Integer /*nodeId*/, NodeLatencyStats> nodeStats = new CopyOnWriteMap<>();
     private final IncompleteBatches incomplete;
@@ -109,7 +107,6 @@ public class RecordAccumulator {
      * @param metrics The metrics
      * @param metricGrpName The metric group name
      * @param time The time instance to use
-     * @param apiVersions Request API versions for current connected brokers
      * @param transactionManager The shared transaction state object which tracks producer IDs, epochs, and sequence
      *                           numbers per partition.
      * @param bufferPool The buffer pool
@@ -125,7 +122,6 @@ public class RecordAccumulator {
                              Metrics metrics,
                              String metricGrpName,
                              Time time,
-                             ApiVersions apiVersions,
                              TransactionManager transactionManager,
                              BufferPool bufferPool) {
         this.logContext = logContext;
@@ -147,7 +143,6 @@ public class RecordAccumulator {
         this.incomplete = new IncompleteBatches();
         this.muted = new HashSet<>();
         this.time = time;
-        this.apiVersions = apiVersions;
         nodesDrainIndex = new HashMap<>();
         this.transactionManager = transactionManager;
         registerMetrics(metrics, metricGrpName);
@@ -169,7 +164,6 @@ public class RecordAccumulator {
      * @param metrics The metrics
      * @param metricGrpName The metric group name
      * @param time The time instance to use
-     * @param apiVersions Request API versions for current connected brokers
      * @param transactionManager The shared transaction state object which tracks producer IDs, epochs, and sequence
      *                           numbers per partition.
      * @param bufferPool The buffer pool
@@ -184,7 +178,6 @@ public class RecordAccumulator {
                              Metrics metrics,
                              String metricGrpName,
                              Time time,
-                             ApiVersions apiVersions,
                              TransactionManager transactionManager,
                              BufferPool bufferPool) {
         this(logContext,
@@ -198,7 +191,6 @@ public class RecordAccumulator {
             metrics,
             metricGrpName,
             time,
-            apiVersions,
             transactionManager,
             bufferPool);
     }
