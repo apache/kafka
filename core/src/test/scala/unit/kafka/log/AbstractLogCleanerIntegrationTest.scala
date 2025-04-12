@@ -16,9 +16,6 @@
  */
 package kafka.log
 
-import java.io.File
-import java.nio.file.Files
-import java.util.{Optional, Properties}
 import kafka.utils.TestUtils
 import kafka.utils.Implicits._
 import org.apache.kafka.common.TopicPartition
@@ -28,10 +25,14 @@ import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordVersion
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.util.MockTime
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, UnifiedLog}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogCleaner, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.{AfterEach, Tag}
 
+import java.io.File
+import java.nio.file.Files
+import java.util
+import java.util.{Optional, Properties}
 import scala.collection.Seq
 import scala.collection.mutable.ListBuffer
 import scala.util.Random
@@ -93,7 +94,7 @@ abstract class AbstractLogCleanerIntegrationTest {
                   cleanerIoBufferSize: Option[Int] = None,
                   propertyOverrides: Properties = new Properties()): LogCleaner = {
 
-    val logMap = new java.util.concurrent.ConcurrentHashMap[TopicPartition, UnifiedLog]()
+    val logMap = new util.concurrent.ConcurrentHashMap[TopicPartition, UnifiedLog]()
     for (partition <- partitions) {
       val dir = new File(logDir, s"${partition.topic}-${partition.partition}")
       Files.createDirectories(dir.toPath)
@@ -133,10 +134,10 @@ abstract class AbstractLogCleanerIntegrationTest {
       backoffMs,
       true)
     new LogCleaner(cleanerConfig,
-      logDirs = Array(logDir),
-      logs = logMap,
-      logDirFailureChannel = new LogDirFailureChannel(1),
-      time = time)
+      util.List.of(logDir),
+      logMap,
+      new LogDirFailureChannel(1),
+      time)
   }
 
   private var ctr = 0

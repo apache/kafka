@@ -67,7 +67,7 @@ object LogTestUtils {
                       localRetentionBytes: Long = LogConfig.DEFAULT_LOCAL_RETENTION_BYTES,
                       segmentJitterMs: Long = LogConfig.DEFAULT_SEGMENT_JITTER_MS,
                       cleanupPolicy: String = ServerLogConfigs.LOG_CLEANUP_POLICY_DEFAULT,
-                      maxMessageBytes: Int = LogConfig.DEFAULT_MAX_MESSAGE_BYTES,
+                      maxMessageBytes: Int = ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT,
                       indexIntervalBytes: Int = ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_DEFAULT,
                       segmentIndexBytes: Int = ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT,
                       fileDeleteDelayMs: Long = ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
