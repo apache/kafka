@@ -30,10 +30,9 @@ import org.apache.kafka.common.security.auth.{KafkaPrincipal, SecurityProtocol}
 import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.kafka.common.security.token.delegation.DelegationToken
 import org.apache.kafka.security.authorizer.AclEntry.{WILDCARD_HOST, WILDCARD_PRINCIPAL_STRING}
-import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, ServerConfigs}
+import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.server.authorizer.{Authorizer => JAuthorizer}
-import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
@@ -584,7 +583,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
       assertEquals(100000, segmentBytesConfig.value.toLong)
       assertEquals(ConfigEntry.ConfigSource.DYNAMIC_TOPIC_CONFIG, segmentBytesConfig.source)
       val compressionConfig = topicConfigs.find(_.name == TopicConfig.COMPRESSION_TYPE_CONFIG).get
-      assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, compressionConfig.value)
+      assertEquals(ServerLogConfigs.COMPRESSION_TYPE_DEFAULT, compressionConfig.value)
       assertEquals(ConfigEntry.ConfigSource.DEFAULT_CONFIG, compressionConfig.source)
 
       assertFutureThrows(classOf[TopicAuthorizationException], result.numPartitions(topic2))

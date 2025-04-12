@@ -61,10 +61,10 @@ object UnboundedControllerMutationQuota extends ControllerMutationQuota {
  */
 abstract class AbstractControllerMutationQuota(private val time: Time) extends ControllerMutationQuota {
   protected var lastThrottleTimeMs = 0L
-  protected var lastRecordedTimeMs = 0L
+  private var lastRecordedTimeMs = 0L
 
   protected def updateThrottleTime(e: QuotaViolationException, timeMs: Long): Unit = {
-    lastThrottleTimeMs = ControllerMutationQuotaManager.throttleTimeMs(e, timeMs)
+    lastThrottleTimeMs = ControllerMutationQuotaManager.throttleTimeMs(e)
     lastRecordedTimeMs = timeMs
   }
 
@@ -142,7 +142,7 @@ object ControllerMutationQuotaManager {
    * Basically, if a value < 0 is observed, the time required to bring it to zero is
    * -value / refill rate (quota bound) * 1000.
    */
-  def throttleTimeMs(e: QuotaViolationException, timeMs: Long): Long = {
+  def throttleTimeMs(e: QuotaViolationException): Long = {
     e.metric().measurable() match {
       case _: TokenBucket =>
         Math.round(-e.value() / e.bound() * 1000)
@@ -216,7 +216,7 @@ class ControllerMutationQuotaManager(private val config: ClientQuotaManagerConfi
       0
     } catch {
       case e: QuotaViolationException =>
-        val throttleTimeMs = ControllerMutationQuotaManager.throttleTimeMs(e, timeMs).toInt
+        val throttleTimeMs = ControllerMutationQuotaManager.throttleTimeMs(e).toInt
         debug(s"Quota violated for sensor (${quotaSensor.name}). Delay time: ($throttleTimeMs)")
         throttleTimeMs
     }
