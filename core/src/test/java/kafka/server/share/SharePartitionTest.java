@@ -35,12 +35,18 @@ import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.record.DefaultRecord;
+import org.apache.kafka.common.record.EndTransactionMarker;
 import org.apache.kafka.common.record.FileRecords;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.MemoryRecordsBuilder;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.common.utils.MockTime;
@@ -58,6 +64,7 @@ import org.apache.kafka.server.share.persister.PersisterStateBatch;
 import org.apache.kafka.server.share.persister.ReadShareGroupStateResult;
 import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.server.share.persister.WriteShareGroupStateResult;
+import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.timer.SystemTimer;
@@ -74,6 +81,7 @@ import org.mockito.Mockito;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -114,6 +122,7 @@ public class SharePartitionTest {
     private static final int DEFAULT_FETCH_OFFSET = 0;
     private static final int MAX_FETCH_RECORDS = Integer.MAX_VALUE;
     private static final byte ACKNOWLEDGE_TYPE_GAP_ID = 0;
+    private static final FetchIsolation FETCH_ISOLATION_HWM = FetchIsolation.HIGH_WATERMARK;
     private static Timer mockTimer;
     private SharePartitionMetrics sharePartitionMetrics;
 
@@ -1152,7 +1161,8 @@ public class SharePartitionTest {
             BATCH_SIZE,
             10,
             DEFAULT_FETCH_OFFSET,
-            fetchPartitionData(records)),
+            fetchPartitionData(records),
+            FETCH_ISOLATION_HWM),
             5);
 
         assertArrayEquals(expectedAcquiredRecord(0, 4, 1).toArray(), acquiredRecordsList.toArray());
@@ -1173,7 +1183,8 @@ public class SharePartitionTest {
             BATCH_SIZE,
             10,
             DEFAULT_FETCH_OFFSET,
-            fetchPartitionData(records)),
+            fetchPartitionData(records),
+            FETCH_ISOLATION_HWM),
             20);
 
         assertArrayEquals(expectedAcquiredRecord(5, 24, 1).toArray(), acquiredRecordsList.toArray());
@@ -1210,7 +1221,8 @@ public class SharePartitionTest {
             BATCH_SIZE,
             10,
             DEFAULT_FETCH_OFFSET,
-            fetchPartitionData(records, 10)),
+            fetchPartitionData(records, 10),
+            FETCH_ISOLATION_HWM),
             20);
 
         // Validate 2 batches are fetched one with 5 records and other till end of batch, third batch
@@ -1287,7 +1299,8 @@ public class SharePartitionTest {
                 BATCH_SIZE,
                 MAX_FETCH_RECORDS,
                 DEFAULT_FETCH_OFFSET,
-                fetchPartitionData(MemoryRecords.EMPTY)),
+                fetchPartitionData(MemoryRecords.EMPTY),
+                FETCH_ISOLATION_HWM),
             0
         );
 
@@ -1306,7 +1319,8 @@ public class SharePartitionTest {
             2 /* Batch size */,
             10,
             DEFAULT_FETCH_OFFSET,
-            fetchPartitionData(records)),
+            fetchPartitionData(records),
+            FETCH_ISOLATION_HWM),
             5);
 
         assertArrayEquals(expectedAcquiredRecord(0, 4, 1).toArray(), acquiredRecordsList.toArray());
@@ -1337,7 +1351,8 @@ public class SharePartitionTest {
             5 /* Batch size */,
             100,
             DEFAULT_FETCH_OFFSET,
-            fetchPartitionData(records)),
+            fetchPartitionData(records),
+            FETCH_ISOLATION_HWM),
             26 /* Gap of 3 records will also be added to first batch */);
 
         // Fetch expected records from 4 batches, but change the first expected record to include gap offsets.
@@ -1385,7 +1400,8 @@ public class SharePartitionTest {
                 2 /* Batch size */,
                 10,
                 DEFAULT_FETCH_OFFSET,
-                fetchPartitionData(records)),
+                fetchPartitionData(records),
+                FETCH_ISOLATION_HWM),
             20);
 
         List<AcquiredRecords> expectedAcquiredRecords = expectedAcquiredRecords(records, 1);
@@ -1420,7 +1436,8 @@ public class SharePartitionTest {
                 5 /* Batch size */,
                 100,
                 DEFAULT_FETCH_OFFSET,
-                fetchPartitionData(records)),
+                fetchPartitionData(records),
+                FETCH_ISOLATION_HWM),
             7 /* Acquisition of records starts post endOffset */);
 
         // Fetch expected single batch, but change the first offset as per endOffset.
@@ -1451,7 +1468,8 @@ public class SharePartitionTest {
                 5 /* Batch size */,
                 100,
                 DEFAULT_FETCH_OFFSET,
-                fetchPartitionData(records)),
+                fetchPartitionData(records),
+                FETCH_ISOLATION_HWM),
             13 /* Acquisition of records starts post endOffset */);
 
         // Fetch expected records from 2 batches, but change the first batch's first offset as per endOffset.
@@ -1492,7 +1510,8 @@ public class SharePartitionTest {
                 5 /* Batch size */,
                 100,
                 DEFAULT_FETCH_OFFSET,
-                fetchPartitionData(records)),
+                fetchPartitionData(records),
+                FETCH_ISOLATION_HWM),
             5 /* Acquisition of records starts post endOffset */);
 
         // First batch should be skipped and fetch should result a single batch (second batch), but
@@ -2524,7 +2543,8 @@ public class SharePartitionTest {
                 BATCH_SIZE,
                 6, // maxFetchRecords is less than the number of records fetched
                 DEFAULT_FETCH_OFFSET,
-                fetchPartitionData(records)),
+                fetchPartitionData(records),
+                FETCH_ISOLATION_HWM),
             6);
 
         // Since max fetch records (6) is less than the number of records fetched (8), only 6 records will be acquired
@@ -2573,7 +2593,8 @@ public class SharePartitionTest {
                 BATCH_SIZE,
                 8, // maxFetchRecords is less than the number of records fetched
                 DEFAULT_FETCH_OFFSET,
-                fetchPartitionData(records)),
+                fetchPartitionData(records),
+                FETCH_ISOLATION_HWM),
             10);
 
         assertArrayEquals(expectedAcquiredRecord(11, 20, 1).toArray(), acquiredRecordsList.toArray());
@@ -2621,7 +2642,8 @@ public class SharePartitionTest {
                 BATCH_SIZE,
                 8, // maxFetchRecords is less than the number of records fetched
                 DEFAULT_FETCH_OFFSET,
-                fetchPartitionData(records)),
+                fetchPartitionData(records),
+                FETCH_ISOLATION_HWM),
             10);
 
         assertArrayEquals(expectedAcquiredRecord(11, 20, 3).toArray(), acquiredRecordsList.toArray());
@@ -3742,8 +3764,8 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 5, fetchPartitionData(records1));
-        sharePartition.acquire(MEMBER_ID, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(records2));
+        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 5, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
+        sharePartition.acquire(MEMBER_ID, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(records2), FETCH_ISOLATION_HWM);
 
         // Acknowledging over subset of second batch with subset of gap offsets.
         sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(10, 18, List.of(
@@ -3812,8 +3834,8 @@ public class SharePartitionTest {
         recordsBuilder.appendWithOffset(20, 0L, TestUtils.randomString(10).getBytes(), TestUtils.randomString(10).getBytes());
         MemoryRecords records2 = recordsBuilder.build();
 
-        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 5, fetchPartitionData(records1));
-        sharePartition.acquire(MEMBER_ID, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(records2));
+        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 5, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
+        sharePartition.acquire(MEMBER_ID, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(records2), FETCH_ISOLATION_HWM);
 
         // Acknowledging over subset of second batch with subset of gap offsets.
         sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(10, 18, List.of(
@@ -4745,7 +4767,7 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 5), 5);
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 10), 5);
 
-        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 15, fetchPartitionData(memoryRecords(5, 15)));
+        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 15, fetchPartitionData(memoryRecords(5, 15)), FETCH_ISOLATION_HWM);
 
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 20), 5);
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 25), 5);
@@ -4883,7 +4905,7 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 5), 5);
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 10), 5);
 
-        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 15, fetchPartitionData(memoryRecords(5, 15)));
+        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 15, fetchPartitionData(memoryRecords(5, 15)), FETCH_ISOLATION_HWM);
 
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 20), 5);
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 25), 5);
@@ -5961,7 +5983,7 @@ public class SharePartitionTest {
 
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 5), 5);
 
-        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(memoryRecords(5, 10)));
+        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(memoryRecords(5, 10)), FETCH_ISOLATION_HWM);
 
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 15), 5);
 
@@ -5992,7 +6014,7 @@ public class SharePartitionTest {
 
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 5), 5);
         fetchAcquiredRecords(sharePartition, memoryRecords(5, 10), 5);
-        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 15, fetchPartitionData(memoryRecords(5, 15)));
+        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 15, fetchPartitionData(memoryRecords(5, 15)), FETCH_ISOLATION_HWM);
 
         CompletableFuture<Void> ackResult = sharePartition.acknowledge(MEMBER_ID, List.of(
                 new ShareAcknowledgementBatch(5, 9, List.of((byte) 2)),
@@ -6109,12 +6131,12 @@ public class SharePartitionTest {
         String memberId1 = "memberId-1";
         String memberId2 = "memberId-2";
 
-        sharePartition.acquire(memberId1, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1));
+        sharePartition.acquire(memberId1, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
 
         assertFalse(sharePartition.findNextFetchOffset());
         assertEquals(10, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(memberId2, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(memoryRecords(10, 10)));
+        sharePartition.acquire(memberId2, BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(memoryRecords(10, 10)), FETCH_ISOLATION_HWM);
 
         assertFalse(sharePartition.findNextFetchOffset());
         assertEquals(20, sharePartition.nextFetchOffset());
@@ -6125,7 +6147,7 @@ public class SharePartitionTest {
         assertTrue(sharePartition.findNextFetchOffset());
         assertEquals(5, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(memberId1, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1));
+        sharePartition.acquire(memberId1, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
 
         assertTrue(sharePartition.findNextFetchOffset());
         assertEquals(20, sharePartition.nextFetchOffset());
@@ -6142,17 +6164,17 @@ public class SharePartitionTest {
         String memberId1 = MEMBER_ID;
         String memberId2 = "member-2";
 
-        sharePartition.acquire(memberId1, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1));
+        sharePartition.acquire(memberId1, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
         assertEquals(3, sharePartition.nextFetchOffset());
 
         sharePartition.acknowledge(memberId1, List.of(
                 new ShareAcknowledgementBatch(0, 2, List.of((byte) 2))));
         assertEquals(0, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(memberId2, BATCH_SIZE, MAX_FETCH_RECORDS, 3, fetchPartitionData(memoryRecords(2, 3)));
+        sharePartition.acquire(memberId2, BATCH_SIZE, MAX_FETCH_RECORDS, 3, fetchPartitionData(memoryRecords(2, 3)), FETCH_ISOLATION_HWM);
         assertEquals(0, sharePartition.nextFetchOffset());
 
-        sharePartition.acquire(memberId1, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1));
+        sharePartition.acquire(memberId1, BATCH_SIZE, MAX_FETCH_RECORDS, DEFAULT_FETCH_OFFSET, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
         assertEquals(5, sharePartition.nextFetchOffset());
 
         sharePartition.acknowledge(memberId2, List.of(
@@ -6193,11 +6215,11 @@ public class SharePartitionTest {
                 new ShareAcknowledgementBatch(17, 20, List.of((byte) 2))));
 
         // Reacquire with another member.
-        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 5, fetchPartitionData(records1));
+        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 5, fetchPartitionData(records1), FETCH_ISOLATION_HWM);
         assertEquals(10, sharePartition.nextFetchOffset());
 
         // Reacquire with another member.
-        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(memoryRecords(7, 10)));
+        sharePartition.acquire("member-2", BATCH_SIZE, MAX_FETCH_RECORDS, 10, fetchPartitionData(memoryRecords(7, 10)), FETCH_ISOLATION_HWM);
         assertEquals(17, sharePartition.nextFetchOffset());
 
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(5L).batchState());
@@ -6669,13 +6691,439 @@ public class SharePartitionTest {
         return errorMessage.toString();
     }
 
+    @Test
+    public void testFilterRecordBatchesFromAcquiredRecords() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        List<AcquiredRecords> acquiredRecords1 = List.of(
+            new AcquiredRecords().setFirstOffset(1).setLastOffset(5).setDeliveryCount((short) 1),
+            new AcquiredRecords().setFirstOffset(10).setLastOffset(15).setDeliveryCount((short) 2),
+            new AcquiredRecords().setFirstOffset(20).setLastOffset(25).setDeliveryCount((short) 1)
+        );
+        List<RecordBatch> recordBatches1 = List.of(
+            memoryRecordsBuilder(3, 2).build().batches().iterator().next(),
+            memoryRecordsBuilder(3, 12).build().batches().iterator().next()
+        );
+        assertEquals(
+            List.of(
+                new AcquiredRecords().setFirstOffset(1).setLastOffset(1).setDeliveryCount((short) 1),
+                new AcquiredRecords().setFirstOffset(5).setLastOffset(5).setDeliveryCount((short) 1),
+                new AcquiredRecords().setFirstOffset(10).setLastOffset(11).setDeliveryCount((short) 2),
+                new AcquiredRecords().setFirstOffset(15).setLastOffset(15).setDeliveryCount((short) 2),
+                new AcquiredRecords().setFirstOffset(20).setLastOffset(25).setDeliveryCount((short) 1)),
+            sharePartition.filterRecordBatchesFromAcquiredRecords(acquiredRecords1, recordBatches1));
+
+        List<AcquiredRecords> acquiredRecords2 = List.of(
+            new AcquiredRecords().setFirstOffset(1).setLastOffset(4).setDeliveryCount((short) 3),
+            new AcquiredRecords().setFirstOffset(5).setLastOffset(8).setDeliveryCount((short) 3),
+            new AcquiredRecords().setFirstOffset(9).setLastOffset(30).setDeliveryCount((short) 2),
+            new AcquiredRecords().setFirstOffset(31).setLastOffset(40).setDeliveryCount((short) 3)
+        );
+        List<RecordBatch> recordBatches2 = List.of(
+            memoryRecordsBuilder(21, 5).build().batches().iterator().next(),
+            memoryRecordsBuilder(5, 31).build().batches().iterator().next()
+        );
+        assertEquals(
+            List.of(
+                new AcquiredRecords().setFirstOffset(1).setLastOffset(4).setDeliveryCount((short) 3),
+                new AcquiredRecords().setFirstOffset(26).setLastOffset(30).setDeliveryCount((short) 2),
+                new AcquiredRecords().setFirstOffset(36).setLastOffset(40).setDeliveryCount((short) 3)
+
+            ), sharePartition.filterRecordBatchesFromAcquiredRecords(acquiredRecords2, recordBatches2)
+        );
+
+        // Record batches is empty.
+        assertEquals(acquiredRecords2, sharePartition.filterRecordBatchesFromAcquiredRecords(acquiredRecords2, List.of()));
+
+        List<AcquiredRecords> acquiredRecords3 = List.of(
+            new AcquiredRecords().setFirstOffset(0).setLastOffset(19).setDeliveryCount((short) 1)
+        );
+        List<RecordBatch> recordBatches3 = List.of(
+            memoryRecordsBuilder(1, 8).build().batches().iterator().next(),
+            memoryRecordsBuilder(1, 18).build().batches().iterator().next()
+        );
+
+        assertEquals(
+            List.of(
+                new AcquiredRecords().setFirstOffset(0).setLastOffset(7).setDeliveryCount((short) 1),
+                new AcquiredRecords().setFirstOffset(9).setLastOffset(17).setDeliveryCount((short) 1),
+                new AcquiredRecords().setFirstOffset(19).setLastOffset(19).setDeliveryCount((short) 1)
+
+            ), sharePartition.filterRecordBatchesFromAcquiredRecords(acquiredRecords3, recordBatches3)
+        );
+    }
+
+    @Test
+    public void testAcquireWithReadCommittedIsolationLevel() {
+        SharePartition sharePartition = Mockito.spy(SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .build());
+
+        ByteBuffer buffer = ByteBuffer.allocate(4096);
+        memoryRecordsBuilder(buffer, 5, 10).close();
+        memoryRecordsBuilder(buffer, 5, 15).close();
+        memoryRecordsBuilder(buffer, 15, 20).close();
+        memoryRecordsBuilder(buffer, 8, 50).close();
+        memoryRecordsBuilder(buffer, 10, 58).close();
+        memoryRecordsBuilder(buffer, 5, 70).close();
+
+        buffer.flip();
+        MemoryRecords records = MemoryRecords.readableRecords(buffer);
+        FetchPartitionData fetchPartitionData = fetchPartitionData(records, newAbortedTransactions());
+
+        // We are mocking the result of function fetchAbortedTransactionRecordBatches. The records present at these offsets need to be archived.
+        // We won't be utilizing the aborted transactions passed in fetchPartitionData.
+        when(sharePartition.fetchAbortedTransactionRecordBatches(fetchPartitionData.records.batches(), fetchPartitionData.abortedTransactions.get())).thenReturn(
+            List.of(
+                memoryRecordsBuilder(5, 10).build().batches().iterator().next(),
+                memoryRecordsBuilder(10, 58).build().batches().iterator().next(),
+                memoryRecordsBuilder(5, 70).build().batches().iterator().next()
+            )
+        );
+
+        List<AcquiredRecords> acquiredRecordsList = fetchAcquiredRecords(
+            sharePartition.acquire(
+                MEMBER_ID,
+                10 /* Batch size */,
+                100,
+                DEFAULT_FETCH_OFFSET,
+                fetchPartitionData,
+                FetchIsolation.TXN_COMMITTED),
+            45 /* Gap of 15 records will be added to second batch, gap of 2 records will also be added to fourth batch */);
+
+        assertEquals(List.of(
+            new AcquiredRecords().setFirstOffset(15).setLastOffset(19).setDeliveryCount((short) 1),
+            new AcquiredRecords().setFirstOffset(20).setLastOffset(49).setDeliveryCount((short) 1),
+            new AcquiredRecords().setFirstOffset(50).setLastOffset(57).setDeliveryCount((short) 1),
+            new AcquiredRecords().setFirstOffset(68).setLastOffset(69).setDeliveryCount((short) 1)
+        ), acquiredRecordsList);
+        assertEquals(75, sharePartition.nextFetchOffset());
+
+        // Checking cached state.
+        assertEquals(4, sharePartition.cachedState().size());
+        assertTrue(sharePartition.cachedState().containsKey(10L));
+        assertTrue(sharePartition.cachedState().containsKey(20L));
+        assertTrue(sharePartition.cachedState().containsKey(50L));
+        assertTrue(sharePartition.cachedState().containsKey(70L));
+        assertNotNull(sharePartition.cachedState().get(10L).offsetState());
+        assertNotNull(sharePartition.cachedState().get(50L).offsetState());
+
+        assertEquals(19L, sharePartition.cachedState().get(10L).lastOffset());
+        assertEquals(49L, sharePartition.cachedState().get(20L).lastOffset());
+        assertEquals(69L, sharePartition.cachedState().get(50L).lastOffset());
+        assertEquals(74L, sharePartition.cachedState().get(70L).lastOffset());
+
+        assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(20L).batchState());
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(70L).batchState());
+
+        assertEquals(MEMBER_ID, sharePartition.cachedState().get(20L).batchMemberId());
+        assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(70L).batchMemberId());
+
+        assertNotNull(sharePartition.cachedState().get(20L).batchAcquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(70L).batchAcquisitionLockTimeoutTask());
+
+        Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
+        expectedOffsetStateMap.put(10L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(11L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(12L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(13L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(14L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(15L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
+        expectedOffsetStateMap.put(16L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
+        expectedOffsetStateMap.put(17L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
+        expectedOffsetStateMap.put(18L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
+        expectedOffsetStateMap.put(19L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
+        assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
+
+        assertNull(sharePartition.cachedState().get(10L).offsetState().get(10L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(10L).offsetState().get(11L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(10L).offsetState().get(12L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(10L).offsetState().get(13L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(10L).offsetState().get(14L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(10L).offsetState().get(15L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(10L).offsetState().get(16L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(10L).offsetState().get(17L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(10L).offsetState().get(18L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(10L).offsetState().get(19L).acquisitionLockTimeoutTask());
+
+        expectedOffsetStateMap = new HashMap<>();
+        expectedOffsetStateMap.put(50L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
+        expectedOffsetStateMap.put(51L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
+        expectedOffsetStateMap.put(52L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
+        expectedOffsetStateMap.put(53L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
+        expectedOffsetStateMap.put(54L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
+        expectedOffsetStateMap.put(55L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
+        expectedOffsetStateMap.put(56L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
+        expectedOffsetStateMap.put(57L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
+        expectedOffsetStateMap.put(58L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(59L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(60L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(61L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(62L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(63L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(64L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(65L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(66L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(67L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(68L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
+        expectedOffsetStateMap.put(69L, new InFlightState(RecordState.ACQUIRED, (short) 1, MEMBER_ID));
+        assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(50L).offsetState());
+
+        assertNotNull(sharePartition.cachedState().get(50L).offsetState().get(50L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(50L).offsetState().get(51L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(50L).offsetState().get(52L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(50L).offsetState().get(53L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(50L).offsetState().get(54L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(50L).offsetState().get(55L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(50L).offsetState().get(56L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(50L).offsetState().get(57L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(50L).offsetState().get(58L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(50L).offsetState().get(59L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(50L).offsetState().get(60L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(50L).offsetState().get(61L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(50L).offsetState().get(62L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(50L).offsetState().get(63L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(50L).offsetState().get(64L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(50L).offsetState().get(65L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(50L).offsetState().get(66L).acquisitionLockTimeoutTask());
+        assertNull(sharePartition.cachedState().get(50L).offsetState().get(67L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(50L).offsetState().get(68L).acquisitionLockTimeoutTask());
+        assertNotNull(sharePartition.cachedState().get(50L).offsetState().get(69L).acquisitionLockTimeoutTask());
+    }
+
+    @Test
+    public void testContainsAbortMarker() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        // Record batch is not a control batch.
+        RecordBatch recordBatch = mock(RecordBatch.class);
+        when(recordBatch.isControlBatch()).thenReturn(false);
+        assertFalse(sharePartition.containsAbortMarker(recordBatch));
+
+        // Record batch is a control batch but doesn't contain any records.
+        recordBatch = mock(RecordBatch.class);
+        Iterator batchIterator = mock(Iterator.class);
+        when(batchIterator.hasNext()).thenReturn(false);
+        when(recordBatch.iterator()).thenReturn(batchIterator);
+        when(recordBatch.isControlBatch()).thenReturn(true);
+        assertFalse(sharePartition.containsAbortMarker(recordBatch));
+
+        // Record batch is a control batch which contains a record of type ControlRecordType.ABORT.
+        recordBatch = mock(RecordBatch.class);
+        batchIterator = mock(Iterator.class);
+        when(batchIterator.hasNext()).thenReturn(true);
+        DefaultRecord record = mock(DefaultRecord.class);
+        ByteBuffer buffer = ByteBuffer.allocate(4096);
+        // Buffer has to be created in a way that ControlRecordType.parse(buffer) returns ControlRecordType.ABORT.
+        buffer.putShort((short) 5);
+        buffer.putShort(ControlRecordType.ABORT.type());
+        buffer.putInt(23432); // some field added in version 5
+        buffer.flip();
+        when(record.key()).thenReturn(buffer);
+        when(batchIterator.next()).thenReturn(record);
+        when(recordBatch.iterator()).thenReturn(batchIterator);
+        when(recordBatch.isControlBatch()).thenReturn(true);
+        assertTrue(sharePartition.containsAbortMarker(recordBatch));
+
+        // Record batch is a control batch which contains a record of type ControlRecordType.COMMIT.
+        recordBatch = mock(RecordBatch.class);
+        batchIterator = mock(Iterator.class);
+        when(batchIterator.hasNext()).thenReturn(true);
+        record = mock(DefaultRecord.class);
+        buffer = ByteBuffer.allocate(4096);
+        // Buffer has to be created in a way that ControlRecordType.parse(buffer) returns ControlRecordType.COMMIT.
+        buffer.putShort((short) 5);
+        buffer.putShort(ControlRecordType.COMMIT.type());
+        buffer.putInt(23432); // some field added in version 5
+        buffer.flip();
+        when(record.key()).thenReturn(buffer);
+        when(batchIterator.next()).thenReturn(record);
+        when(recordBatch.iterator()).thenReturn(batchIterator);
+        when(recordBatch.isControlBatch()).thenReturn(true);
+        assertFalse(sharePartition.containsAbortMarker(recordBatch));
+    }
+
+    @Test
+    public void testFetchAbortedTransactionRecordBatchesForOnlyAbortedTransactions() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        // Case 1 - Creating 10 transactional records in a single batch followed by a ABORT marker record for producerId 1.
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        newTransactionalRecords(buffer, ControlRecordType.ABORT, 10, 1, 0);
+        buffer.flip();
+        Records records = MemoryRecords.readableRecords(buffer);
+
+        List<FetchResponseData.AbortedTransaction> abortedTransactions = List.of(
+            new FetchResponseData.AbortedTransaction().setFirstOffset(0).setProducerId(1)
+        );
+        // records from 0 to 9 should be archived because they are a part of aborted transactions.
+        List<RecordBatch> actual = sharePartition.fetchAbortedTransactionRecordBatches(records.batches(), abortedTransactions);
+        assertEquals(1, actual.size());
+        assertEquals(0, actual.get(0).baseOffset());
+        assertEquals(9, actual.get(0).lastOffset());
+        assertEquals(1, actual.get(0).producerId());
+
+        // Case 2: 3 individual batches each followed by a ABORT marker record for producerId 1.
+        buffer = ByteBuffer.allocate(1024);
+        newTransactionalRecords(buffer, ControlRecordType.ABORT, 1, 1, 0);
+        newTransactionalRecords(buffer, ControlRecordType.ABORT, 1, 1, 2);
+        newTransactionalRecords(buffer, ControlRecordType.ABORT, 1, 1, 4);
+        buffer.flip();
+        records = MemoryRecords.readableRecords(buffer);
+        abortedTransactions = List.of(
+            new FetchResponseData.AbortedTransaction().setFirstOffset(0).setProducerId(1),
+            new FetchResponseData.AbortedTransaction().setFirstOffset(2).setProducerId(1),
+            new FetchResponseData.AbortedTransaction().setFirstOffset(4).setProducerId(1)
+        );
+
+        actual = sharePartition.fetchAbortedTransactionRecordBatches(records.batches(), abortedTransactions);
+        assertEquals(3, actual.size());
+        assertEquals(0, actual.get(0).baseOffset());
+        assertEquals(0, actual.get(0).lastOffset());
+        assertEquals(1, actual.get(0).producerId());
+        assertEquals(2, actual.get(1).baseOffset());
+        assertEquals(2, actual.get(1).lastOffset());
+        assertEquals(1, actual.get(1).producerId());
+        assertEquals(4, actual.get(2).baseOffset());
+        assertEquals(4, actual.get(2).lastOffset());
+        assertEquals(1, actual.get(2).producerId());
+
+        // Case 3: The producer id of records is different, so they should not be archived,
+        buffer = ByteBuffer.allocate(1024);
+        // We are creating 10 transactional records followed by a ABORT marker record for producerId 2.
+        newTransactionalRecords(buffer, ControlRecordType.ABORT, 10, 2, 0);
+        buffer.flip();
+        records = MemoryRecords.readableRecords(buffer);
+        abortedTransactions = List.of(
+            new FetchResponseData.AbortedTransaction().setFirstOffset(0).setProducerId(1)
+        );
+
+        actual = sharePartition.fetchAbortedTransactionRecordBatches(records.batches(), abortedTransactions);
+        assertEquals(0, actual.size());
+    }
+
+    @Test
+    public void testFetchAbortedTransactionRecordBatchesForAbortedAndCommittedTransactions() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        ByteBuffer buffer = ByteBuffer.allocate(1024);
+        newTransactionalRecords(buffer, ControlRecordType.ABORT, 2, 1, 0);
+        newTransactionalRecords(buffer, ControlRecordType.COMMIT, 2, 2, 3);
+        newTransactionalRecords(buffer, ControlRecordType.ABORT, 2, 2, 6);
+        newTransactionalRecords(buffer, ControlRecordType.ABORT, 2, 1, 9);
+        newTransactionalRecords(buffer, ControlRecordType.COMMIT, 2, 1, 12);
+        newTransactionalRecords(buffer, ControlRecordType.ABORT, 2, 1, 15);
+        buffer.flip();
+        Records records = MemoryRecords.readableRecords(buffer);
+
+        // Case 1 - Aborted transactions does not contain the record batch from offsets 6-7 with producer id 2.
+        List<FetchResponseData.AbortedTransaction> abortedTransactions = List.of(
+            new FetchResponseData.AbortedTransaction().setFirstOffset(0).setProducerId(1),
+            new FetchResponseData.AbortedTransaction().setFirstOffset(6).setProducerId(1),
+            new FetchResponseData.AbortedTransaction().setFirstOffset(9).setProducerId(1),
+            new FetchResponseData.AbortedTransaction().setFirstOffset(15).setProducerId(1)
+        );
+
+        List<RecordBatch> actual = sharePartition.fetchAbortedTransactionRecordBatches(records.batches(), abortedTransactions);
+        assertEquals(3, actual.size());
+        assertEquals(0, actual.get(0).baseOffset());
+        assertEquals(1, actual.get(0).lastOffset());
+        assertEquals(1, actual.get(0).producerId());
+        assertEquals(9, actual.get(1).baseOffset());
+        assertEquals(10, actual.get(1).lastOffset());
+        assertEquals(1, actual.get(1).producerId());
+        assertEquals(15, actual.get(2).baseOffset());
+        assertEquals(16, actual.get(2).lastOffset());
+        assertEquals(1, actual.get(2).producerId());
+
+        // Case 2 - Aborted transactions contains the record batch from offsets 6-7 with producer id 2.
+        abortedTransactions = List.of(
+            new FetchResponseData.AbortedTransaction().setFirstOffset(0).setProducerId(1),
+            new FetchResponseData.AbortedTransaction().setFirstOffset(6).setProducerId(2),
+            new FetchResponseData.AbortedTransaction().setFirstOffset(9).setProducerId(1),
+            new FetchResponseData.AbortedTransaction().setFirstOffset(15).setProducerId(1)
+        );
+
+        actual = sharePartition.fetchAbortedTransactionRecordBatches(records.batches(), abortedTransactions);
+        assertEquals(4, actual.size());
+        assertEquals(0, actual.get(0).baseOffset());
+        assertEquals(1, actual.get(0).lastOffset());
+        assertEquals(1, actual.get(0).producerId());
+        assertEquals(6, actual.get(1).baseOffset());
+        assertEquals(7, actual.get(1).lastOffset());
+        assertEquals(2, actual.get(1).producerId());
+        assertEquals(9, actual.get(2).baseOffset());
+        assertEquals(10, actual.get(2).lastOffset());
+        assertEquals(1, actual.get(2).producerId());
+        assertEquals(15, actual.get(3).baseOffset());
+        assertEquals(16, actual.get(3).lastOffset());
+        assertEquals(1, actual.get(3).producerId());
+    }
+
+    /**
+     * This function produces transactional data of a given no. of records followed by a transactional marker (COMMIT/ABORT).
+     */
+    private void newTransactionalRecords(ByteBuffer buffer, ControlRecordType controlRecordType, int numRecords, long producerId, long baseOffset) {
+        try (MemoryRecordsBuilder builder = MemoryRecords.builder(buffer,
+            RecordBatch.CURRENT_MAGIC_VALUE,
+            Compression.NONE,
+            TimestampType.CREATE_TIME,
+            baseOffset,
+            MOCK_TIME.milliseconds(),
+            producerId,
+            (short) 0,
+            0,
+            true,
+            RecordBatch.NO_PARTITION_LEADER_EPOCH)) {
+            for (int i = 0; i < numRecords; i++)
+                builder.append(new SimpleRecord(MOCK_TIME.milliseconds(), "key".getBytes(), "value".getBytes()));
+
+            builder.build();
+        }
+        writeTransactionMarker(buffer, controlRecordType, (int) baseOffset + numRecords, producerId);
+    }
+
+    private void writeTransactionMarker(ByteBuffer buffer, ControlRecordType controlRecordType, int offset, long producerId) {
+        MemoryRecords.writeEndTransactionalMarker(buffer,
+            offset,
+            MOCK_TIME.milliseconds(),
+            0,
+            producerId,
+            (short) 0,
+            new EndTransactionMarker(controlRecordType, 0));
+    }
+
+    private List<FetchResponseData.AbortedTransaction> newAbortedTransactions() {
+        FetchResponseData.AbortedTransaction abortedTransaction = new FetchResponseData.AbortedTransaction();
+        abortedTransaction.setFirstOffset(0);
+        abortedTransaction.setProducerId(1000L);
+        return List.of(abortedTransaction);
+    }
+
     private FetchPartitionData fetchPartitionData(Records records) {
         return fetchPartitionData(records, 0);
+    }
+
+    private FetchPartitionData fetchPartitionData(Records records, List<FetchResponseData.AbortedTransaction> abortedTransactions) {
+        return fetchPartitionData(records, 0, abortedTransactions);
     }
 
     private FetchPartitionData fetchPartitionData(Records records, long logStartOffset) {
         return new FetchPartitionData(Errors.NONE, 5, logStartOffset, records,
             Optional.empty(), OptionalLong.empty(), Optional.empty(), OptionalInt.empty(), false);
+    }
+
+    private FetchPartitionData fetchPartitionData(Records records, long logStartOffset, List<FetchResponseData.AbortedTransaction> abortedTransactions) {
+        return new FetchPartitionData(Errors.NONE, 5, logStartOffset, records,
+            Optional.empty(), OptionalLong.empty(), Optional.of(abortedTransactions), OptionalInt.empty(), false);
     }
 
     private List<AcquiredRecords> fetchAcquiredRecords(SharePartition sharePartition, Records records, long logStartOffset, int expectedOffsetCount) {
@@ -6688,7 +7136,8 @@ public class SharePartitionTest {
             BATCH_SIZE,
             MAX_FETCH_RECORDS,
             fetchOffset,
-            fetchPartitionData(records, logStartOffset));
+            fetchPartitionData(records, logStartOffset),
+            FETCH_ISOLATION_HWM);
         return fetchAcquiredRecords(shareAcquiredRecords, expectedOffsetCount);
     }
 
@@ -6698,7 +7147,8 @@ public class SharePartitionTest {
             BATCH_SIZE,
             MAX_FETCH_RECORDS,
             records.batches().iterator().next().baseOffset(),
-            fetchPartitionData(records));
+            fetchPartitionData(records),
+            FETCH_ISOLATION_HWM);
         return fetchAcquiredRecords(shareAcquiredRecords, expectedOffsetCount);
     }
 

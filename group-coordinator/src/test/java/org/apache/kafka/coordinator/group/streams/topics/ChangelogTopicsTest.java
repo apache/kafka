@@ -149,14 +149,14 @@ public class ChangelogTopicsTest {
     }
 
     @Test
-    public void shouldNotContainSourceBasedChangelogs() {
+    public void shouldContainSourceBasedChangelogs() {
         final List<Subtopology> subtopologies = List.of(SUBTOPOLOGY_SOURCE_CHANGELOG);
 
         final ChangelogTopics changelogTopics =
             new ChangelogTopics(LOG_CONTEXT, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
         Map<String, Integer> setup = changelogTopics.setup();
 
-        assertEquals(Map.of(), setup);
+        assertEquals(Map.of(SOURCE_TOPIC_NAME, 3), setup);
     }
 
     @Test
@@ -167,6 +167,6 @@ public class ChangelogTopicsTest {
             new ChangelogTopics(LOG_CONTEXT, subtopologies, ChangelogTopicsTest::topicPartitionProvider);
         Map<String, Integer> setup = changelogTopics.setup();
 
-        assertEquals(Map.of(CHANGELOG_TOPIC_CONFIG.name(), 3), setup);
+        assertEquals(Map.of(CHANGELOG_TOPIC_CONFIG.name(), 3, SOURCE_TOPIC_NAME, 3), setup);
     }
 }
