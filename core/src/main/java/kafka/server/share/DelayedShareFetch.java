@@ -188,14 +188,14 @@ public class DelayedShareFetch extends DelayedOperation {
             } else if (remoteFetchOpt.isPresent()) {
                 completeRemoteStorageShareFetchRequest();
             } else {
-                completeShareFetchRequest();
+                completeLocalLogShareFetchRequest();
             }
         } finally {
             lock.unlock();
         }
     }
 
-    private void completeShareFetchRequest() {
+    private void completeLocalLogShareFetchRequest() {
         LinkedHashMap<TopicIdPartition, Long> topicPartitionData;
         // tryComplete did not invoke forceComplete, so we need to check if we have any partitions to fetch.
         if (partitionsAcquired.isEmpty()) {
@@ -631,7 +631,7 @@ public class DelayedShareFetch extends DelayedOperation {
         LinkedHashMap<TopicIdPartition, RemoteStorageFetchInfo> remoteStorageFetchInfoMap,
         LinkedHashMap<TopicIdPartition, LogReadResult> replicaManagerReadResponse
     ) {
-        Map<TopicIdPartition, LogOffsetMetadata> fetchOffsetMetadataMap = new LinkedHashMap<>();
+        LinkedHashMap<TopicIdPartition, LogOffsetMetadata> fetchOffsetMetadataMap = new LinkedHashMap<>();
         remoteStorageFetchInfoMap.forEach((topicIdPartition, logReadResult) -> fetchOffsetMetadataMap.put(
             topicIdPartition,
             replicaManagerReadResponse.get(topicIdPartition).info().fetchOffsetMetadata
@@ -640,8 +640,9 @@ public class DelayedShareFetch extends DelayedOperation {
         Future<Void> remoteFetchTask;
         CompletableFuture<RemoteLogReadResult> remoteFetchResult = new CompletableFuture<>();
         // TODO: This is a limitation in remote storage fetch that there will be fetch only for a single topic partition.
-        TopicIdPartition topicIdPartition = remoteStorageFetchInfoMap.keySet().stream().toList().get(0);
-        RemoteStorageFetchInfo remoteStorageFetchInfo = remoteStorageFetchInfoMap.values().stream().toList().get(0);
+        Map.Entry<TopicIdPartition, RemoteStorageFetchInfo> firstRemoteStorageFetchInfo = remoteStorageFetchInfoMap.entrySet().iterator().next();
+        TopicIdPartition topicIdPartition = firstRemoteStorageFetchInfo.getKey();
+        RemoteStorageFetchInfo remoteStorageFetchInfo = firstRemoteStorageFetchInfo.getValue();
         try {
             remoteFetchTask = replicaManager.remoteLogManager().get().asyncRead(
                 remoteStorageFetchInfo,
@@ -851,7 +852,7 @@ public class DelayedShareFetch extends DelayedOperation {
         Future<Void> remoteFetchTask,
         CompletableFuture<RemoteLogReadResult> remoteFetchResult,
         RemoteStorageFetchInfo remoteFetchInfo,
-        Map<TopicIdPartition, LogOffsetMetadata> fetchOffsetMetadataMap
+        LinkedHashMap<TopicIdPartition, LogOffsetMetadata> fetchOffsetMetadataMap
     ) {
         @Override
         public String toString() {
