@@ -2984,7 +2984,7 @@ public class GroupMetadataManager {
                 groupId,
                 attachTopicName(finalInitializingMap),
                 attachTopicName(currentMap.initializedTopics()),
-                Map.of()
+                attachTopicName(currentMap.deletingTopics())
             )
         );
     }
@@ -4979,7 +4979,7 @@ public class GroupMetadataManager {
                 group.groupId(),
                 attachTopicName(finalInitializingMap),
                 attachTopicName(finalInitializedMap),
-                Map.of()
+                attachTopicName(currentMap.deletingTopics())
             )),
             null
         );
@@ -5025,7 +5025,7 @@ public class GroupMetadataManager {
                     groupId,
                     attachTopicName(finalInitializingTopics),
                     attachTopicName(info.initializedTopics()),
-                    Map.of()
+                    attachTopicName(info.deletingTopics())
                 )
             ),
             null
@@ -5055,6 +5055,13 @@ public class GroupMetadataManager {
             requests.add(buildInitializeShareGroupStateRequest(shareGroup.groupId(), shareGroup.groupEpoch(), initializing));
         }
         return requests;
+    }
+
+    private Map<Uuid, String> attachTopicName(Set<Uuid> topicIds) {
+        TopicsImage topicsImage = metadataImage.topics();
+        return topicIds.stream()
+            .map(topicId -> Map.entry(topicId, topicsImage.getTopic(topicId).name()))
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
     }
 
     private Map<Uuid, Map.Entry<String, Set<Integer>>> attachTopicName(Map<Uuid, Set<Integer>> initMap) {
@@ -8142,39 +8149,49 @@ public class GroupMetadataManager {
     /**
      * Returns an optional of delete share group request object to be used with the persister.
      * Empty if no subscribed topics or if the share group is empty.
-     * @param shareGroup - A share group
+     * @param shareGroupId      Share group id
+     * @param records           List of coordinator records to append to
      * @return Optional of object representing the share group state delete request.
      */
-    public Optional<DeleteShareGroupStateParameters> shareGroupBuildPartitionDeleteRequest(ShareGroup shareGroup) {
-        TopicsImage topicsImage = metadataImage.topics();
-        Set<String> subscribedTopics = shareGroup.subscribedTopicNames().keySet();
-        List<TopicData<PartitionIdData>> topicDataList = new ArrayList<>(subscribedTopics.size());
-
-        for (String topic : subscribedTopics) {
-            TopicImage topicImage = topicsImage.getTopic(topic);
-            topicDataList.add(
-                new TopicData<>(
-                    topicImage.id(),
-                    topicImage.partitions().keySet().stream()
-                        .map(PartitionFactory::newPartitionIdData)
-                        .toList()
-                )
-            );
-        }
-
-        if (topicDataList.isEmpty()) {
+    public Optional<DeleteShareGroupStateParameters> shareGroupBuildPartitionDeleteRequest(String shareGroupId, List<CoordinatorRecord> records) {
+        if (!shareGroupPartitionMetadata.containsKey(shareGroupId)) {
             return Optional.empty();
         }
 
-        return Optional.of(
-            new DeleteShareGroupStateParameters.Builder()
-                .setGroupTopicPartitionData(
-                    new GroupTopicPartitionData.Builder<PartitionIdData>()
-                        .setGroupId(shareGroup.groupId())
-                        .setTopicsData(topicDataList)
-                        .build()
-                )
-                .build()
+        Map<Uuid, Set<Integer>> deleteCandidates = mergeShareGroupInitMaps(
+            shareGroupPartitionMetadata.get(shareGroupId).initializedTopics(),
+            shareGroupPartitionMetadata.get(shareGroupId).initializingTopics()
+        );
+
+        if (deleteCandidates.isEmpty()) {
+            return Optional.empty();
+        }
+
+        List<TopicData<PartitionIdData>> topicDataList = new ArrayList<>(deleteCandidates.size());
+
+        for (Map.Entry<Uuid, Set<Integer>> entry : deleteCandidates.entrySet()) {
+            topicDataList.add(new TopicData<>(
+                entry.getKey(),
+                entry.getValue().stream()
+                    .map(PartitionFactory::newPartitionIdData)
+                    .toList()
+            ));
+        }
+
+        // Remove all initializing and initialized topic info from record and add deleting.
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+            shareGroupId,
+            Map.of(),
+            Map.of(),
+            attachTopicName(deleteCandidates.keySet())
+        ));
+
+        return Optional.of(new DeleteShareGroupStateParameters.Builder()
+            .setGroupTopicPartitionData(new GroupTopicPartitionData.Builder<PartitionIdData>()
+                .setGroupId(shareGroupId)
+                .setTopicsData(topicDataList)
+                .build())
+            .build()
         );
     }
 

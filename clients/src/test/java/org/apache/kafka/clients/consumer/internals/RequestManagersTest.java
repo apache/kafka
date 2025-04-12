@@ -63,7 +63,6 @@ public class RequestManagersTest {
             new Metrics(),
             mock(OffsetCommitCallbackInvoker.class),
             listener,
-            Optional.empty(),
             Optional.empty()
         ).get();
         requestManagers.consumerMembershipManager.ifPresent(

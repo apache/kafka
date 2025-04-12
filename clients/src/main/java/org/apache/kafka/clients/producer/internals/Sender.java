@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients.producer.internals;
 
-import org.apache.kafka.clients.ApiVersions;
 import org.apache.kafka.clients.ClientRequest;
 import org.apache.kafka.clients.ClientResponse;
 import org.apache.kafka.clients.KafkaClient;
@@ -118,9 +117,6 @@ public class Sender implements Runnable {
     /* The max time to wait before retrying a request which has failed */
     private final long retryBackoffMs;
 
-    /* current request API versions supported by the known brokers */
-    private final ApiVersions apiVersions;
-
     /* all the state related to transactions, in particular the producer id, producer epoch, and sequence numbers */
     private final TransactionManager transactionManager;
 
@@ -139,8 +135,7 @@ public class Sender implements Runnable {
                   Time time,
                   int requestTimeoutMs,
                   long retryBackoffMs,
-                  TransactionManager transactionManager,
-                  ApiVersions apiVersions) {
+                  TransactionManager transactionManager) {
         this.log = logContext.logger(Sender.class);
         this.client = client;
         this.accumulator = accumulator;
@@ -154,7 +149,6 @@ public class Sender implements Runnable {
         this.sensors = new SenderMetrics(metricsRegistry, metadata, client, time);
         this.requestTimeoutMs = requestTimeoutMs;
         this.retryBackoffMs = retryBackoffMs;
-        this.apiVersions = apiVersions;
         this.transactionManager = transactionManager;
         this.inFlightBatches = new HashMap<>();
     }
