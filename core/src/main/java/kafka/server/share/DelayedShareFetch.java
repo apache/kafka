@@ -162,14 +162,8 @@ public class DelayedShareFetch extends DelayedOperation {
 
     @Override
     public void onExpiration() {
-        // cancel the remote storage read task, if it has not been executed yet and avoid interrupting the task if it is
-        // already running as it may force closing opened/cached resources as transaction index.
         if (remoteFetchOpt.isPresent()) {
-            boolean cancelled = remoteFetchOpt.get().remoteFetchTask().cancel(false);
-            if (!cancelled) {
-                log.debug("Remote fetch task for RemoteStorageFetchInfo: {} could not be cancelled and its isDone value is {}",
-                    remoteFetchOpt.get().remoteFetchInfo(), remoteFetchOpt.get().remoteFetchTask().isDone());
-            }
+            cancelRemoteFetchTask();
         }
         expiredRequestMeter.mark();
     }
@@ -582,6 +576,11 @@ public class DelayedShareFetch extends DelayedOperation {
     }
 
     // Visible for testing.
+    RemoteFetch remoteFetch() {
+        return remoteFetchOpt.orElse(null);
+    }
+
+    // Visible for testing.
     Meter expiredRequestMeter() {
         return expiredRequestMeter;
     }
@@ -674,7 +673,7 @@ public class DelayedShareFetch extends DelayedOperation {
     private boolean maybeCompletePendingRemoteFetch() {
         boolean canComplete = false;
 
-        for (Map.Entry<TopicIdPartition, LogOffsetMetadata> entry : remoteFetchOpt.get().fetchOffsetMetadataMap.entrySet()) {
+        for (Map.Entry<TopicIdPartition, LogOffsetMetadata> entry : remoteFetchOpt.get().fetchOffsetMetadataMap().entrySet()) {
             TopicIdPartition topicIdPartition = entry.getKey();
             LogOffsetMetadata fetchOffsetMetadata = entry.getValue();
             try {
@@ -695,7 +694,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 break;
         }
 
-        if (canComplete || remoteFetchOpt.get().remoteFetchResult.isDone()) { // Case d
+        if (canComplete || remoteFetchOpt.get().remoteFetchResult().isDone()) { // Case d
             boolean completedByMe = forceComplete();
             // If invocation of forceComplete is not successful, then that means the request is already completed
             // hence release the acquired locks.
@@ -734,7 +733,7 @@ public class DelayedShareFetch extends DelayedOperation {
 
     /**
      * This function completes a share fetch request for which we have identified remoteFetch during tryComplete()
-     * It should only be called when we know that there is remote fetch in-flight/completed.
+     * Note - This function should only be called when we know that there is remote fetch in-flight/completed.
      */
     private void completeRemoteStorageShareFetchRequest() {
         LinkedHashMap<TopicIdPartition, Long> nonRemoteFetchTopicPartitionData = new LinkedHashMap<>();
@@ -776,6 +775,8 @@ public class DelayedShareFetch extends DelayedOperation {
                     );
                     readableBytes += info.records.sizeInBytes();
                 }
+            } else {
+                cancelRemoteFetchTask();
             }
 
             // If remote fetch bytes  < shareFetch.fetchParams().maxBytes, then we will try for a local read.
@@ -829,6 +830,19 @@ public class DelayedShareFetch extends DelayedOperation {
             Set<TopicIdPartition> topicIdPartitions = new LinkedHashSet<>(partitionsAcquired.keySet());
             topicIdPartitions.addAll(nonRemoteFetchTopicPartitionData.keySet());
             releasePartitionLocksAndAddToActionQueue(topicIdPartitions);
+        }
+    }
+
+    /**
+     * Cancel the remote storage read task, if it has not been executed yet and avoid interrupting the task if it is
+     * already running as it may force closing opened/cached resources as transaction index.
+     * Note - This function should only be called when we know that there is a remote fetch in-flight/completed.
+     */
+    private void cancelRemoteFetchTask() {
+        boolean cancelled = remoteFetchOpt.get().remoteFetchTask().cancel(false);
+        if (!cancelled) {
+            log.debug("Remote fetch task for RemoteStorageFetchInfo: {} could not be cancelled and its isDone value is {}",
+                remoteFetchOpt.get().remoteFetchInfo(), remoteFetchOpt.get().remoteFetchTask().isDone());
         }
     }
 
