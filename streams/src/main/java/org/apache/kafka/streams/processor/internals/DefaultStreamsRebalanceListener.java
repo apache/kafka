@@ -16,8 +16,8 @@
  */
 package org.apache.kafka.streams.processor.internals;
 
-import org.apache.kafka.clients.consumer.internals.StreamsGroupRebalanceCallbacks;
 import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
+import org.apache.kafka.clients.consumer.internals.StreamsRebalanceListener;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.streams.processor.TaskId;
@@ -31,7 +31,7 @@ import java.util.Set;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
-public class DefaultStreamsGroupRebalanceCallbacks implements StreamsGroupRebalanceCallbacks {
+public class DefaultStreamsRebalanceListener implements StreamsRebalanceListener {
 
     private final Logger log;
     private final Time time;
@@ -39,11 +39,11 @@ public class DefaultStreamsGroupRebalanceCallbacks implements StreamsGroupRebala
     private final TaskManager taskManager;
     private final StreamThread streamThread;
 
-    public DefaultStreamsGroupRebalanceCallbacks(final Logger log,
-                                                 final Time time,
-                                                 final StreamsRebalanceData streamsRebalanceData,
-                                                 final StreamThread streamThread,
-                                                 final TaskManager taskManager) {
+    public DefaultStreamsRebalanceListener(final Logger log,
+                                           final Time time,
+                                           final StreamsRebalanceData streamsRebalanceData,
+                                           final StreamThread streamThread,
+                                           final TaskManager taskManager) {
         this.log = log;
         this.time = time;
         this.streamsRebalanceData = streamsRebalanceData;
