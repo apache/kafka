@@ -116,6 +116,7 @@ def update_local_yaml_content(yaml_file_path: str, collaborators: List[str]) -> 
     with open(yaml_file_path, "r", encoding="utf-8") as file:
         yaml: YAML = YAML()
         yaml.indent(mapping=2, sequence=4, offset=2)
+        yaml.representer.add_representer(type(None), represent_none)
         yaml_content: dict = yaml.load(file)
 
     yaml_content["github"]["collaborators"] = collaborators
@@ -125,6 +126,8 @@ def update_local_yaml_content(yaml_file_path: str, collaborators: List[str]) -> 
 
     logging.info(f"Local file {yaml_file_path} updated successfully")
 
+def represent_none(self, data):
+    return self.represent_scalar('tag:yaml.org,2002:null', '~')
 
 def main() -> None:
     github_client: Github = get_github_client()
