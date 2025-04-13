@@ -96,7 +96,6 @@ public class SimpleApiVersionManager implements ApiVersionManager {
                 .setSupportedFeatures(brokerFeatures)
                 .setFinalizedFeatures(currentFeatures.finalizedFeatures())
                 .setFinalizedFeaturesEpoch(currentFeatures.finalizedFeaturesEpoch())
-                .setZkMigrationEnabled(false)
                 .setAlterFeatureLevel0(alterFeatureLevel0)
                 .build();
     }

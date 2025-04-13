@@ -27,10 +27,10 @@ import java.util
 
 /**
  * The default ApiVersionManager that supports forwarding and has metadata cache, used in brokers.
- * The enabled APis are determined by the broker listener type and the controller APIs.
+ * The enabled APIs are determined by the broker listener type and the controller APIs.
  *
  * @param listenerType the listener type
- * @param forwardingManager the forwarding manager,
+ * @param forwardingManager the forwarding manager
  * @param brokerFeatures the broker features
  * @param metadataCache the metadata cache, used to get the finalized features and the metadata version
  * @param enableUnstableLastVersion whether to enable unstable last version, see [[KafkaConfig.unstableApiVersionsEnabled]]
@@ -75,7 +75,6 @@ class DefaultApiVersionManager(
       setSupportedFeatures(brokerFeatures.supportedFeatures).
       setFinalizedFeatures(finalizedFeatures.finalizedFeatures()).
       setFinalizedFeaturesEpoch(finalizedFeatures.finalizedFeaturesEpoch()).
-      setZkMigrationEnabled(false).
       setAlterFeatureLevel0(alterFeatureLevel0).
       build()
   }
