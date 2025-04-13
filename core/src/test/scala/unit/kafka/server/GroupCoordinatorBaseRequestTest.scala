@@ -19,7 +19,7 @@ package kafka.server
 import kafka.network.SocketServer
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord, RecordMetadata}
-import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.{TopicCollection, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupResult, DeletableGroupResultCollection}
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
@@ -75,7 +75,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected def createTopic(
     topic: String,
     numPartitions: Int
-  ): Unit = {
+  ): Uuid = {
     val admin = cluster.admin()
     try {
       TestUtils.createTopicWithAdmin(
@@ -85,6 +85,12 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         topic = topic,
         numPartitions = numPartitions
       )
+      admin
+        .describeTopics(TopicCollection.ofTopicNames(List(topic).asJava))
+        .allTopicNames()
+        .get()
+        .get(topic)
+        .topicId()
     } finally {
       admin.close()
     }
@@ -169,8 +175,13 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     partition: Int,
     offset: Long,
     expectedError: Errors,
-    version: Short = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
+    version: Short = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled),
+    topicId: Uuid = Uuid.ZERO_UUID
   ): Unit = {
+    if (version >= 10 && topicId == Uuid.ZERO_UUID) {
+      throw new IllegalArgumentException(s"Cannot call OffsetCommit API version $version without a topic id")
+    }
+
     val request = new OffsetCommitRequest.Builder(
       new OffsetCommitRequestData()
         .setGroupId(groupId)
@@ -178,6 +189,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         .setGenerationIdOrMemberEpoch(memberEpoch)
         .setTopics(List(
           new OffsetCommitRequestData.OffsetCommitRequestTopic()
+            .setTopicId(topicId)
             .setName(topic)
             .setPartitions(List(
               new OffsetCommitRequestData.OffsetCommitRequestPartition()
@@ -191,7 +203,8 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     val expectedResponse = new OffsetCommitResponseData()
       .setTopics(List(
         new OffsetCommitResponseData.OffsetCommitResponseTopic()
-          .setName(topic)
+          .setTopicId(if (version >= 10) topicId else Uuid.ZERO_UUID)
+          .setName(if (version < 10) topic else "")
           .setPartitions(List(
             new OffsetCommitResponseData.OffsetCommitResponsePartition()
               .setPartitionIndex(partition)

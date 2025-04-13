@@ -461,7 +461,9 @@ public class OffsetMetadataManager {
         final OptionalLong expireTimestampMs = expireTimestampMs(request.retentionTimeMs(), currentTimeMs);
 
         request.topics().forEach(topic -> {
-            final OffsetCommitResponseTopic topicResponse = new OffsetCommitResponseTopic().setName(topic.name());
+            final OffsetCommitResponseTopic topicResponse = new OffsetCommitResponseTopic()
+                .setTopicId(topic.topicId())
+                .setName(topic.name());
             response.topics().add(topicResponse);
 
             topic.partitions().forEach(partition -> {
@@ -470,8 +472,8 @@ public class OffsetMetadataManager {
                         .setPartitionIndex(partition.partitionIndex())
                         .setErrorCode(Errors.OFFSET_METADATA_TOO_LARGE.code()));
                 } else {
-                    log.debug("[GroupId {}] Committing offsets {} for partition {}-{} from member {} with leader epoch {}.",
-                        request.groupId(), partition.committedOffset(), topic.name(), partition.partitionIndex(),
+                    log.debug("[GroupId {}] Committing offsets {} for partition {}-{}-{} from member {} with leader epoch {}.",
+                        request.groupId(), partition.committedOffset(), topic.topicId(), topic.name(), partition.partitionIndex(),
                         request.memberId(), partition.committedLeaderEpoch());
 
                     topicResponse.partitions().add(new OffsetCommitResponsePartition()

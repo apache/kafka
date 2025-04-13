@@ -45,20 +45,35 @@ public class OffsetCommitRequest extends AbstractRequest {
 
         private final OffsetCommitRequestData data;
 
-        public Builder(OffsetCommitRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.OFFSET_COMMIT, enableUnstableLastVersion);
+        public Builder(
+            OffsetCommitRequestData data,
+            boolean allowTopicIds,
+            boolean enableUnstableLastVersion
+        ) {
+            super(
+                ApiKeys.OFFSET_COMMIT,
+                ApiKeys.OFFSET_COMMIT.oldestVersion(),
+                allowTopicIds ? ApiKeys.OFFSET_COMMIT.latestVersion(enableUnstableLastVersion) : 9
+            );
             this.data = data;
         }
 
+        public Builder(
+            OffsetCommitRequestData data,
+            boolean allowTopicIds
+        ) {
+            this(data, allowTopicIds, false);
+        }
+
         public Builder(OffsetCommitRequestData data) {
-            this(data, false);
+            this(data, true);
         }
 
         @Override
         public OffsetCommitRequest build(short version) {
             if (data.groupInstanceId() != null && version < 7) {
-                throw new UnsupportedVersionException("The broker offset commit protocol version " +
-                        version + " does not support usage of config group.instance.id.");
+                throw new UnsupportedVersionException("The broker offset commit api version " +
+                    version + " does not support usage of config group.instance.id.");
             }
             return new OffsetCommitRequest(data, version);
         }
@@ -97,6 +112,7 @@ public class OffsetCommitRequest extends AbstractRequest {
         OffsetCommitResponseData response = new OffsetCommitResponseData();
         request.topics().forEach(topic -> {
             OffsetCommitResponseTopic responseTopic = new OffsetCommitResponseTopic()
+                .setTopicId(topic.topicId())
                 .setName(topic.name());
             response.topics().add(responseTopic);
 
