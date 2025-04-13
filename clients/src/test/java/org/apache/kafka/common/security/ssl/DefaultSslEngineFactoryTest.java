@@ -23,6 +23,8 @@ import org.apache.kafka.test.TestUtils;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import javax.net.ssl.KeyManager;
+import java.lang.reflect.Method;
 import java.security.KeyStore;
 import java.util.Arrays;
 import java.util.Collections;
@@ -33,6 +35,7 @@ import java.util.Map;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.mockito.Mockito.mock;
 
 @SuppressWarnings("this-escape")
 public class DefaultSslEngineFactoryTest {
@@ -324,6 +327,8 @@ public class DefaultSslEngineFactoryTest {
         return TestUtils.tempFile(pem).getAbsolutePath();
     }
 
+
+
     private Password pemAsConfigValue(String... pemValues) {
         StringBuilder builder = new StringBuilder();
         for (String pem : pemValues) {
@@ -332,4 +337,27 @@ public class DefaultSslEngineFactoryTest {
         }
         return new Password(builder.toString().trim());
     }
+
+    @Test
+    void testApplyAliasToKM() throws Exception {
+        DefaultSslEngineFactory instance = new DefaultSslEngineFactory();
+        // Mock KeyManager array
+        KeyManager mockKeyManager = mock(KeyManager.class);
+        KeyManager[] kms = new KeyManager[]{mockKeyManager};
+
+        // Define the alias
+        String alias = "testAlias";
+
+        // Use reflection to access the private method
+        Method method = DefaultSslEngineFactory.class.getDeclaredMethod("applyAliasToKM", KeyManager[].class, String.class);
+        method.setAccessible(true);
+
+        // Invoke the method
+        KeyManager[] result = (KeyManager[]) method.invoke(instance, (Object) kms, alias);
+
+        // Validate results (Modify based on actual method behavior)
+        assertNotNull(result);
+        assertEquals(1, result.length);
+    }
+
 }
