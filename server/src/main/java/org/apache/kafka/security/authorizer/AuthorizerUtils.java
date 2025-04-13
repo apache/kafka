@@ -28,7 +28,7 @@ public class AuthorizerUtils {
     public static Plugin<Authorizer> createAuthorizer(String className, Map<String, Object> configs, Metrics metrics, String key, String role) throws ClassNotFoundException {
         Authorizer authorizer = Utils.newInstance(className, Authorizer.class);
         authorizer.configure(configs);
-        return Plugin.wrapInstance(authorizer, metrics, key, Map.of("role", role));
+        return Plugin.wrapInstance(authorizer, metrics, key, "role", role);
     }
 
     public static boolean isClusterResource(String name) {
