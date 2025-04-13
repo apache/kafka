@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.transaction;
 
-import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 
 import java.util.concurrent.TimeUnit;
@@ -27,7 +26,13 @@ import static org.apache.kafka.common.config.ConfigDef.Range.atLeast;
 import static org.apache.kafka.common.config.ConfigDef.Type.BOOLEAN;
 import static org.apache.kafka.common.config.ConfigDef.Type.INT;
 
-public final class TransactionStateManagerConfig {
+public record TransactionStateManagerConfig(
+    int transactionalIdExpirationMs,
+    int transactionMaxTimeoutMs,
+    int transactionAbortTimedOutTransactionCleanupIntervalMs,
+    int transactionRemoveExpiredTransactionalIdCleanupIntervalMs,
+    boolean transaction2PCEnabled
+) {
     // Transaction management configs and default values
     public static final String TRANSACTIONS_MAX_TIMEOUT_MS_CONFIG = "transaction.max.timeout.ms";
     public static final int TRANSACTIONS_MAX_TIMEOUT_MS_DEFAULT = (int) TimeUnit.MINUTES.toMillis(15);
@@ -54,44 +59,11 @@ public final class TransactionStateManagerConfig {
 
     public static final String METRICS_GROUP = "transaction-coordinator-metrics";
     public static final String LOAD_TIME_SENSOR = "TransactionsPartitionLoadTime";
-    public static final ConfigDef CONFIG_DEF =  new ConfigDef()
+    public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(TRANSACTIONAL_ID_EXPIRATION_MS_CONFIG, INT, TRANSACTIONAL_ID_EXPIRATION_MS_DEFAULT, atLeast(1), HIGH, TRANSACTIONAL_ID_EXPIRATION_MS_DOC)
             .define(TRANSACTIONS_MAX_TIMEOUT_MS_CONFIG, INT, TRANSACTIONS_MAX_TIMEOUT_MS_DEFAULT, atLeast(1), HIGH, TRANSACTIONS_MAX_TIMEOUT_MS_DOC)
             .define(TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG, INT, TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_DEFAULT, atLeast(1), LOW, TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTIONS_INTERVAL_MS_DOC)
             .define(TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_CONFIG, INT, TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_DEFAULT, atLeast(1), LOW, TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONS_INTERVAL_MS_DOC)
             .define(TRANSACTIONS_2PC_ENABLED_CONFIG, BOOLEAN, TRANSACTIONS_2PC_ENABLED_DEFAULT, LOW, TRANSACTIONS_2PC_ENABLED_DOC);
 
-    private final int transactionalIdExpirationMs;
-    private final int transactionMaxTimeoutMs;
-    private final int transactionAbortTimedOutTransactionCleanupIntervalMs;
-    private final int transactionRemoveExpiredTransactionalIdCleanupIntervalMs;
-    private final boolean transaction2PCEnabled;
-
-    public TransactionStateManagerConfig(AbstractConfig config) {
-        transactionalIdExpirationMs = config.getInt(TransactionStateManagerConfig.TRANSACTIONAL_ID_EXPIRATION_MS_CONFIG);
-        transactionMaxTimeoutMs = config.getInt(TransactionStateManagerConfig.TRANSACTIONS_MAX_TIMEOUT_MS_CONFIG);
-        transactionAbortTimedOutTransactionCleanupIntervalMs = config.getInt(TransactionStateManagerConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG);
-        transactionRemoveExpiredTransactionalIdCleanupIntervalMs = config.getInt(TransactionStateManagerConfig.TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_CONFIG);
-        transaction2PCEnabled = config.getBoolean(TransactionStateManagerConfig.TRANSACTIONS_2PC_ENABLED_CONFIG);
-    }
-
-    public int transactionalIdExpirationMs() {
-        return transactionalIdExpirationMs;
-    }
-
-    public int transactionMaxTimeoutMs() {
-        return transactionMaxTimeoutMs;
-    }
-
-    public int transactionAbortTimedOutTransactionCleanupIntervalMs() {
-        return transactionAbortTimedOutTransactionCleanupIntervalMs;
-    }
-
-    public int transactionRemoveExpiredTransactionalIdCleanupIntervalMs() {
-        return transactionRemoveExpiredTransactionalIdCleanupIntervalMs;
-    }
-
-    public boolean transaction2PCEnabled() {
-        return transaction2PCEnabled;
-    }
 }
