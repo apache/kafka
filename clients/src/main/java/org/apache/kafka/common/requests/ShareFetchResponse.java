@@ -55,7 +55,7 @@ public class ShareFetchResponse extends AbstractResponse {
 
     private final ShareFetchResponseData data;
 
-    public ShareFetchResponse(ShareFetchResponseData data) {
+    private ShareFetchResponse(ShareFetchResponseData data) {
         super(ApiKeys.SHARE_FETCH);
         this.data = data;
     }
@@ -103,6 +103,13 @@ public class ShareFetchResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
+    /**
+     * Creates a {@link org.apache.kafka.common.requests.ShareFetchResponse} from the given byte buffer.
+     * Unlike {@link org.apache.kafka.common.requests.ShareFetchResponse#of(Errors, int, LinkedHashMap, List, int)},
+     * this method doesn't convert null records to {@link org.apache.kafka.common.record.MemoryRecords#EMPTY}.
+     *
+     * <p><strong>This method should only be used in client-side.</strong></p>
+     */
     public static ShareFetchResponse parse(ByteBuffer buffer, short version) {
         return new ShareFetchResponse(
                 new ShareFetchResponseData(new ByteBufferAccessor(buffer), version)
@@ -145,6 +152,13 @@ public class ShareFetchResponse extends AbstractResponse {
         return partition.records() == null ? 0 : partition.records().sizeInBytes();
     }
 
+    /**
+     * Creates a {@link org.apache.kafka.common.requests.ShareFetchResponse} from the given data.
+     * This method converts null records to {@link org.apache.kafka.common.record.MemoryRecords#EMPTY}
+     * to ensure consistent record representation in the response.
+     *
+     * <p><strong>This method should only be used in server-side.</strong></p>
+     */
     public static ShareFetchResponse of(Errors error,
                                         int throttleTimeMs,
                                         LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> responseData,
@@ -152,7 +166,7 @@ public class ShareFetchResponse extends AbstractResponse {
         return new ShareFetchResponse(toMessage(error, throttleTimeMs, responseData.entrySet().iterator(), nodeEndpoints, acquisitionLockTimeout));
     }
 
-    public static ShareFetchResponseData toMessage(Errors error, int throttleTimeMs,
+    private static ShareFetchResponseData toMessage(Errors error, int throttleTimeMs,
                                                    Iterator<Map.Entry<TopicIdPartition, ShareFetchResponseData.PartitionData>> partIterator,
                                                    List<Node> nodeEndpoints, int acquisitionLockTimeout) {
         Map<Uuid, ShareFetchResponseData.ShareFetchableTopicResponse> topicResponseList = new LinkedHashMap<>();
@@ -161,6 +175,11 @@ public class ShareFetchResponse extends AbstractResponse {
             ShareFetchResponseData.PartitionData partitionData = entry.getValue();
             // Since PartitionData alone doesn't know the partition ID, we set it here
             partitionData.setPartitionIndex(entry.getKey().topicPartition().partition());
+            // To protect the clients from failing due to null records,
+            // we always convert null records to MemoryRecords.EMPTY
+            // We will propose a KIP to change the schema definitions in the future
+            if (partitionData.records() == null)
+                partitionData.setRecords(MemoryRecords.EMPTY);
             // Checking if the topic is already present in the map
             if (topicResponseList.containsKey(entry.getKey().topicId())) {
                 topicResponseList.get(entry.getKey().topicId()).partitions().add(partitionData);
@@ -193,6 +212,7 @@ public class ShareFetchResponse extends AbstractResponse {
     public static ShareFetchResponseData.PartitionData partitionResponse(int partition, Errors error) {
         return new ShareFetchResponseData.PartitionData()
                 .setPartitionIndex(partition)
-                .setErrorCode(error.code());
+                .setErrorCode(error.code())
+                .setRecords(MemoryRecords.EMPTY);
     }
 }

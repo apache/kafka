@@ -36,6 +36,7 @@ public class ShareCoordinatorRecordHelpersTest {
     public void testNewShareSnapshotRecord() {
         String groupId = "test-group";
         Uuid topicId = Uuid.randomUuid();
+        long timestamp = System.currentTimeMillis();
         int partitionId = 1;
         PersisterStateBatch batch = new PersisterStateBatch(1L, 10L, (byte) 0, (short) 1);
         CoordinatorRecord record = ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
@@ -47,6 +48,8 @@ public class ShareCoordinatorRecordHelpersTest {
                 .setStateEpoch(1)
                 .setLeaderEpoch(5)
                 .setStartOffset(0)
+                .setCreateTimestamp(timestamp)
+                .setWriteTimestamp(timestamp)
                 .setStateBatches(List.of(batch))
                 .build()
         );
@@ -62,6 +65,8 @@ public class ShareCoordinatorRecordHelpersTest {
                     .setStateEpoch(1)
                     .setLeaderEpoch(5)
                     .setStartOffset(0)
+                    .setCreateTimestamp(timestamp)
+                    .setWriteTimestamp(timestamp)
                     .setStateBatches(List.of(
                         new ShareSnapshotValue.StateBatch()
                             .setFirstOffset(1L)
