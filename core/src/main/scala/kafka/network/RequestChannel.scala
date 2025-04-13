@@ -430,6 +430,8 @@ class RequestChannel(val queueSize: Int,
       }
       trace(message)
     }
+    
+    response.request.releaseBuffer()
 
     response match {
       // We should only send one of the following per request

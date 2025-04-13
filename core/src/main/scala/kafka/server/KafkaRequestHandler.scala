@@ -163,7 +163,9 @@ class KafkaRequestHandler(
             case e: Throwable => error("Exception when handling request", e)
           } finally {
             threadCurrentRequest.remove()
-            request.releaseBuffer()
+            if (!request.header.apiKey().forwardable) {
+              request.releaseBuffer()
+            }
           }
 
         case RequestChannel.WakeupRequest => 
