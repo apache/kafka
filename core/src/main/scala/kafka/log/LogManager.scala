@@ -42,11 +42,12 @@ import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsem
 import java.util.{Collections, Optional, OptionalLong, Properties}
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.{FileLock, Scheduler}
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, LogDirFailureChannel, LogOffsetsListener, ProducerStateManagerConfig, RemoteIndexCache, UnifiedLog}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, LogCleaner, LogConfig, LogDirFailureChannel, LogOffsetsListener, ProducerStateManagerConfig, RemoteIndexCache, UnifiedLog}
 import org.apache.kafka.storage.internals.checkpoint.{CleanShutdownFileHandler, OffsetCheckpointFile}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
 import java.util
+import java.util.stream.Collectors
 
 /**
  * The entry point to the kafka log management subsystem. The log manager is responsible for log creation, retrieval, and cleaning.
@@ -629,7 +630,7 @@ class LogManager(logDirs: Seq[File],
                          initialTaskDelayMs)
     }
     if (cleanerConfig.enableCleaner) {
-      _cleaner = new LogCleaner(cleanerConfig, liveLogDirs, currentLogs, logDirFailureChannel, time = time)
+      _cleaner = new LogCleaner(cleanerConfig, liveLogDirs.asJava, currentLogs, logDirFailureChannel, time)
       _cleaner.startup()
     }
   }
@@ -894,7 +895,7 @@ class LogManager(logDirs: Seq[File],
    */
   private def resumeCleaning(topicPartition: TopicPartition): Unit = {
     if (cleaner != null) {
-      cleaner.resumeCleaning(Seq(topicPartition))
+      cleaner.resumeCleaning(util.Set.of(topicPartition))
       info(s"Cleaning for partition $topicPartition is resumed")
     }
   }
@@ -1286,7 +1287,7 @@ class LogManager(logDirs: Seq[File],
         if (cleaner != null && !isFuture) {
           cleaner.abortCleaning(topicPartition)
           if (checkpoint) {
-            cleaner.updateCheckpoints(removedLog.parentDirFile, partitionToRemove = Option(topicPartition))
+            cleaner.updateCheckpoints(removedLog.parentDirFile, Optional.of(topicPartition))
           }
         }
         if (isStray) {
@@ -1344,7 +1345,7 @@ class LogManager(logDirs: Seq[File],
 
     val logsByDirCached = logsByDir
     logDirs.foreach { logDir =>
-      if (cleaner != null) cleaner.updateCheckpoints(logDir)
+      if (cleaner != null) cleaner.updateCheckpoints(logDir, Optional.empty())
       val logsToCheckpoint = logsInDir(logsByDirCached, logDir)
       checkpointRecoveryOffsetsInDir(logDir, logsToCheckpoint)
       checkpointLogStartOffsetsInDir(logDir, logsToCheckpoint)
@@ -1382,19 +1383,22 @@ class LogManager(logDirs: Seq[File],
     val startMs = time.milliseconds
 
     // clean current logs.
-    val deletableLogs = {
+    val deletableLogs: util.Map[TopicPartition, UnifiedLog] = {
       if (cleaner != null) {
         // prevent cleaner from working on same partitions when changing cleanup policy
         cleaner.pauseCleaningForNonCompactedPartitions()
       } else {
-        currentLogs.asScala.filter {
-          case (_, log) => !log.config.compact
-        }
+        currentLogs.entrySet().stream()
+          .filter(e => !e.getValue.config.compact)
+          .collect(Collectors.toMap(
+            (e: util.Map.Entry[TopicPartition, UnifiedLog]) => e.getKey,
+            (e: util.Map.Entry[TopicPartition, UnifiedLog]) => e.getValue
+          ))
       }
     }
 
     try {
-      deletableLogs.foreach {
+      deletableLogs.forEach {
         case (topicPartition, log) =>
           debug(s"Garbage collecting '${log.name}'")
           total += log.deleteOldSegments()
@@ -1408,7 +1412,7 @@ class LogManager(logDirs: Seq[File],
       }
     } finally {
       if (cleaner != null) {
-        cleaner.resumeCleaning(deletableLogs.map(_._1))
+        cleaner.resumeCleaning(deletableLogs.keySet())
       }
     }
 
@@ -1548,7 +1552,7 @@ object LogManager {
     LogConfig.validateBrokerLogConfigValues(defaultProps, config.remoteLogManagerConfig.isRemoteStorageSystemEnabled)
     val defaultLogConfig = new LogConfig(defaultProps)
 
-    val cleanerConfig = LogCleaner.cleanerConfig(config)
+    val cleanerConfig = new CleanerConfig(config)
     val transactionLogConfig = new TransactionLogConfig(config)
 
     new LogManager(logDirs = config.logDirs.map(new File(_).getAbsoluteFile),
