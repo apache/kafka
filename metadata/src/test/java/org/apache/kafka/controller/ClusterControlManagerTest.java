@@ -966,9 +966,10 @@ public class ClusterControlManagerTest {
         clusterControl.replay(new RegisterBrokerRecord().
             setBrokerEpoch(123).
             setBrokerId(1).
+            setFenced(false).
             setLogDirs(List.of(Uuid.fromString("TyNK6XSSQJaJc2q9uflNHg"))), 10005);
         clusterControl.activate();
-        assertEquals(OptionalLong.of(1000L), clusterControl.heartbeatManager().tracker().
+        assertEquals(OptionalLong.empty(), clusterControl.heartbeatManager().tracker().
             contactTime(new BrokerIdAndEpoch(0, 100)));
         assertEquals(OptionalLong.of(1000L), clusterControl.heartbeatManager().tracker().
             contactTime(new BrokerIdAndEpoch(1, 123)));
