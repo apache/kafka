@@ -129,16 +129,12 @@ public class PartitionStates<S> {
      */
     public void set(Map<TopicPartition, S> partitionToState) {
         map.clear();
-        update(partitionToState);
+        map.putAll(partitionToState);
         updateSize();
     }
 
     private void updateSize() {
         size = map.size();
-    }
-
-    private void update(Map<TopicPartition, S> partitionToState) {
-        map.putAll(partitionToState);
     }
 
     public static class PartitionState<S> {
