@@ -35,8 +35,6 @@ import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
-import org.apache.kafka.common.utils.MockTime;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -71,8 +69,6 @@ public class ListOffsetsIntegrationTest {
     private static final short REPLICAS = 1;
     private static final int PARTITION = 1;
     private Admin adminClient;
-    // FIXME: new infra does not support mocktime, this change is need?
-    private Time mockTime = new MockTime(1);
     private ClusterInstance clusterInstance;
 
     ListOffsetsIntegrationTest(ClusterInstance clusterInstance) {
@@ -204,12 +200,13 @@ public class ListOffsetsIntegrationTest {
 
             Future<RecordMetadata> future1 = producer.send(record1);
             future1.get();
-            // advance the server time after each record sent to make sure the time changed when appendTime is used
-            mockTime.sleep(100);
+            // sleep some time in order to advance the server time
+            // after each record sent to make sure the time changed when appendTime is used
+            Thread.sleep(100);
 
             Future<RecordMetadata> future2 = producer.send(record2);
             future2.get();
-            mockTime.sleep(100);
+            Thread.sleep(100);
 
             Future<RecordMetadata> future3 = producer.send(record3);
             future3.get();
