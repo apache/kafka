@@ -2119,7 +2119,8 @@ public class ShareConsumerTest {
         alterShareAutoOffsetReset("group1", "earliest");
         alterShareIsolationLevel("group1", "read_uncommitted");
         try (Producer<byte[], byte[]> transactionalProducer = createProducer("T1");
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1", Map.of(
+                 ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
             shareConsumer.subscribe(Set.of(tp.topic()));
             transactionalProducer.initTransactions();
             try {
@@ -2205,7 +2206,8 @@ public class ShareConsumerTest {
         alterShareAutoOffsetReset("group1", "earliest");
         alterShareIsolationLevel("group1", "read_committed");
         try (Producer<byte[], byte[]> transactionalProducer = createProducer("T1");
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1", Map.of(
+                 ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
             shareConsumer.subscribe(Set.of(tp.topic()));
             transactionalProducer.initTransactions();
 
@@ -2256,7 +2258,11 @@ public class ShareConsumerTest {
 
                 // Wait for the aborted marker offset for Message 4 (7L) to be fetched and acknowledged by the consumer.
                 TestUtils.waitForCondition(() -> {
-                    shareConsumer.poll(Duration.ofMillis(500));
+                    ConsumerRecords<byte[], byte[]> pollRecords = shareConsumer.poll(Duration.ofMillis(500));
+                    if (pollRecords.count() > 0) {
+                        // We will release Message 3 again if it was received in this poll().
+                        pollRecords.forEach(consumerRecord -> shareConsumer.acknowledge(consumerRecord, AcknowledgeType.RELEASE));
+                    }
                     return partitionOffsetsMap2.containsKey(tp) && partitionOffsetsMap2.get(tp).contains(7L);
                 }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume abort transaction marker offset for Message 4");
 
@@ -2273,7 +2279,7 @@ public class ShareConsumerTest {
                 produceCommittedTransaction(transactionalProducer, "Message 8");
 
                 // Since isolation level is READ_UNCOMMITTED, we can consume Message 3 (committed transaction that was released), Message 5, Message 6, Message 7 and Message 8.
-                List<String> finalMessages = new ArrayList<>();
+                Set<String> finalMessages = new HashSet<>();
                 TestUtils.waitForCondition(() -> {
                     ConsumerRecords<byte[], byte[]> pollRecords = shareConsumer.poll(Duration.ofMillis(5000));
                     if (pollRecords.count() > 0) {
@@ -2285,11 +2291,8 @@ public class ShareConsumerTest {
                     return finalMessages.size() == 5;
                 }, DEFAULT_MAX_WAIT_MS, 100L, () -> "Failed to consume all records post altering share isolation level");
 
-                assertEquals("Message 3", finalMessages.get(0));
-                assertEquals("Message 5", finalMessages.get(1));
-                assertEquals("Message 6", finalMessages.get(2));
-                assertEquals("Message 7", finalMessages.get(3));
-                assertEquals("Message 8", finalMessages.get(4));
+                Set<String> expected = Set.of("Message 3", "Message 5", "Message 6", "Message 7", "Message 8");
+                assertEquals(expected, finalMessages);
             } catch (InterruptedException e) {
                 throw new RuntimeException(e);
             } finally {
@@ -2304,7 +2307,8 @@ public class ShareConsumerTest {
         alterShareAutoOffsetReset("group1", "earliest");
         alterShareIsolationLevel("group1", "read_committed");
         try (Producer<byte[], byte[]> transactionalProducer = createProducer("T1");
-             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1")) {
+             ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1", Map.of(
+                 ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
             shareConsumer.subscribe(Set.of(tp.topic()));
             transactionalProducer.initTransactions();
 

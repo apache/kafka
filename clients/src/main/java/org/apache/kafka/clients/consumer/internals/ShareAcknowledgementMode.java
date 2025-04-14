@@ -109,7 +109,7 @@ public class ShareAcknowledgementMode {
                 fromString(acknowledgementMode);
             } catch (Exception e) {
                 throw new ConfigException(name, value, "Invalid value `" + acknowledgementMode + "` for configuration " +
-                        name + ". The value must either be 'implicit' or 'latest'.");
+                        name + ". The value must either be 'implicit' or 'explicit'.");
             }
         }
 
