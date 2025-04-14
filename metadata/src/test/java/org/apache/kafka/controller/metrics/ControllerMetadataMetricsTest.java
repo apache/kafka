@@ -154,7 +154,7 @@ public class ControllerMetadataMetricsTest {
             int brokerId = 1;
             metrics.addBrokerRegistrationStateMetric(brokerId);
             metrics.setBrokerRegistrationState(1, 0);
-            Gauge<Integer> registrationState = (Gauge<Integer>) registry.allMetrics().get(metricName("KafkaController", "BrokerRegistrationState", "brokerId=1"));
+            Gauge<Integer> registrationState = (Gauge<Integer>) registry.allMetrics().get(metricName("KafkaController", "BrokerRegistrationState", "broker=1"));
             assertEquals(0, registrationState.value());
             metrics.setBrokerRegistrationState(1, 2);
             assertEquals(2, registrationState.value());

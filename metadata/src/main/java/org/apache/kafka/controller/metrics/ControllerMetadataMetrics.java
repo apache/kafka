@@ -50,7 +50,7 @@ public final class ControllerMetadataMetrics implements AutoCloseable {
         "KafkaController", "ControlledShutdownBrokerCount"
     );
     private static final String BROKER_REGISTRATION_STATE_METRIC_NAME = "BrokerRegistrationState";
-    private static final String BROKER_ID_TAG = "brokerId";
+    private static final String BROKER_ID_TAG = "broker";
     private static final MetricName GLOBAL_TOPIC_COUNT = getMetricName(
         "KafkaController", "GlobalTopicCount");
     private static final MetricName GLOBAL_PARTITION_COUNT = getMetricName(
