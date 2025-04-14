@@ -179,12 +179,8 @@ class KafkaApisTest extends Logging {
     overrideProperties.foreach( p => properties.put(p._1, p._2))
     val config = new KafkaConfig(properties)
 
-    val listenerType = ListenerType.BROKER
-    val enabledApis = ApiKeys.apisForListener(listenerType)
-
     val apiVersionManager = new SimpleApiVersionManager(
-      listenerType,
-      enabledApis,
+      ListenerType.BROKER,
       BrokerFeatures.defaultSupportedFeatures(true),
       true,
       () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0))

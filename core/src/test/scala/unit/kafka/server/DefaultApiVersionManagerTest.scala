@@ -56,7 +56,6 @@ class DefaultApiVersionManagerTest {
       metadataCache = metadataCache,
       enableUnstableLastVersion = true
     )
-    assertEquals(ApiKeys.apisForListener(apiScope), versionManager.enabledApis)
     assertTrue(ApiKeys.apisForListener(apiScope).asScala.forall { apiKey =>
       apiKey.allVersions.asScala.forall { version =>
         versionManager.isApiEnabled(apiKey, version)
@@ -125,7 +124,7 @@ class DefaultApiVersionManagerTest {
       enableUnstableLastVersion = true
     )
     assertFalse(versionManager.isApiEnabled(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion))
-    assertFalse(versionManager.enabledApis.contains(ApiKeys.ENVELOPE))
+    assertFalse(ApiKeys.apisForListener(ListenerType.BROKER).contains(ApiKeys.ENVELOPE))
 
     val apiVersionsResponse = versionManager.apiVersionResponse(throttleTimeMs = 0, false)
     val envelopeVersion = apiVersionsResponse.data.apiKeys.find(ApiKeys.ENVELOPE.id)

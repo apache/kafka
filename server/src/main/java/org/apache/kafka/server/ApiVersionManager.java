@@ -22,8 +22,6 @@ import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.network.metrics.RequestChannelMetrics;
 import org.apache.kafka.server.common.FinalizedFeatures;
 
-import java.util.Set;
-
 /**
  * ApiVersionManagers are used to define the APIs supported by servers
  */
@@ -40,12 +38,6 @@ public interface ApiVersionManager {
      * @return Broker or Controller depending on the server's role
      */
     ApiMessageType.ListenerType listenerType();
-
-    /**
-     * The enabled APIs
-     * @return A Set of ApiKeys
-     */
-    Set<ApiKeys> enabledApis();
 
     /**
      * The ApiVersionsResponse to send back to client when they send an ApiVersionsRequest
@@ -76,6 +68,6 @@ public interface ApiVersionManager {
      * @return the RequestChannelMetrics
      */
     default RequestChannelMetrics newRequestMetrics() {
-        return new RequestChannelMetrics(enabledApis());
+        return new RequestChannelMetrics(ApiKeys.apisForListener(listenerType()));
     }
 }

@@ -17,13 +17,10 @@
 package kafka.server
 
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
-import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.ApiVersionsResponse
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.{ApiVersionManager, BrokerFeatures, ClientMetricsManager}
 import org.apache.kafka.server.common.FinalizedFeatures
-
-import java.util
 
 /**
  * The default ApiVersionManager that supports forwarding and has metadata cache, used in brokers.
@@ -44,8 +41,6 @@ class DefaultApiVersionManager(
   val enableUnstableLastVersion: Boolean,
   val clientMetricsManager: Option[ClientMetricsManager] = None
 ) extends ApiVersionManager {
-
-  val enabledApis: util.Set[ApiKeys] = ApiKeys.apisForListener(listenerType)
 
   override def apiVersionResponse(
     throttleTimeMs: Int,

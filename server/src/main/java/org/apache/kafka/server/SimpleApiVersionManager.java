@@ -24,7 +24,6 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.server.common.FinalizedFeatures;
 
-import java.util.Set;
 import java.util.function.Supplier;
 
 /**
@@ -34,7 +33,6 @@ import java.util.function.Supplier;
 public class SimpleApiVersionManager implements ApiVersionManager {
 
     private final ApiMessageType.ListenerType listenerType;
-    private final Set<ApiKeys> enabledApis;
     private final Features<SupportedVersionRange> brokerFeatures;
     private final boolean enableUnstableLastVersion;
     private final Supplier<FinalizedFeatures> featuresProvider;
@@ -43,30 +41,26 @@ public class SimpleApiVersionManager implements ApiVersionManager {
     /**
      * SimpleApiVersionManager constructor
      * @param listenerType the listener type
-     * @param enabledApis the enabled apis, which are computed by the listener type
      * @param brokerFeatures the broker features
      * @param enableUnstableLastVersion whether to enable unstable last version, see
      *   {@link org.apache.kafka.server.config.ServerConfigs#UNSTABLE_API_VERSIONS_ENABLE_CONFIG}
      * @param featuresProvider a provider to the finalized features supported
      */
     public SimpleApiVersionManager(ApiMessageType.ListenerType listenerType,
-                                   Set<ApiKeys> enabledApis,
                                    Features<SupportedVersionRange> brokerFeatures,
                                    boolean enableUnstableLastVersion,
                                    Supplier<FinalizedFeatures> featuresProvider) {
         this.listenerType = listenerType;
-        this.enabledApis = enabledApis;
         this.brokerFeatures = brokerFeatures;
         this.enableUnstableLastVersion = enableUnstableLastVersion;
         this.featuresProvider = featuresProvider;
-        this.apiVersions = ApiVersionsResponse.collectApis(listenerType, enabledApis, enableUnstableLastVersion);
+        this.apiVersions = ApiVersionsResponse.collectApis(listenerType, ApiKeys.apisForListener(listenerType()), enableUnstableLastVersion);
     }
 
     public SimpleApiVersionManager(ApiMessageType.ListenerType listenerType,
                                    boolean enableUnstableLastVersion,
                                    Supplier<FinalizedFeatures> featuresProvider) {
         this(listenerType,
-             ApiKeys.apisForListener(listenerType),
              BrokerFeatures.defaultSupportedFeatures(enableUnstableLastVersion),
              enableUnstableLastVersion,
              featuresProvider);
@@ -80,11 +74,6 @@ public class SimpleApiVersionManager implements ApiVersionManager {
     @Override
     public ApiMessageType.ListenerType listenerType() {
         return listenerType;
-    }
-
-    @Override
-    public Set<ApiKeys> enabledApis() {
-        return enabledApis;
     }
 
     @Override
