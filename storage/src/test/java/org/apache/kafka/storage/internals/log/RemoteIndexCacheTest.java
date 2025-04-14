@@ -42,7 +42,6 @@ import java.io.FileInputStream;
 import java.io.FileNotFoundException;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.io.UncheckedIOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -720,24 +719,7 @@ public class RemoteIndexCacheTest {
         return new EvictionResult(metadataDeleted, entriesIsMarkedForCleanup);
     }
 
-    private void verifyEntryIsEvicted(RemoteLogSegmentMetadata metadataToVerify, RemoteIndexCache.Entry entryToVerify) throws InterruptedException {
-        // wait until `entryToVerify` is marked for deletion
-        TestUtils.waitForCondition(entryToVerify::isMarkedForCleanup,
-            "Failed to mark evicted cache entry for cleanup after resizing cache.");
-        TestUtils.waitForCondition(entryToVerify::isCleanStarted,
-            "Failed to cleanup evicted cache entry after resizing cache.");
-        // verify no index files for `entryToVerify` on remote cache dir
-        TestUtils.waitForCondition(() -> getIndexFileFromRemoteCacheDir(cache, remoteOffsetIndexFileName(metadataToVerify)).isEmpty(),
-            "Offset index file for evicted entry should not be present on disk at " + cache.cacheDir());
-        TestUtils.waitForCondition(() -> getIndexFileFromRemoteCacheDir(cache, remoteTimeIndexFileName(metadataToVerify)).isEmpty(),
-            "Time index file for evicted entry should not be present on disk at " + cache.cacheDir());
-        TestUtils.waitForCondition(() -> getIndexFileFromRemoteCacheDir(cache, remoteTransactionIndexFileName(metadataToVerify)).isEmpty(),
-            "Txn index file for evicted entry should not be present on disk at " + cache.cacheDir());
-        TestUtils.waitForCondition(() -> getIndexFileFromRemoteCacheDir(cache, LogFileUtils.DELETED_FILE_SUFFIX).isEmpty(),
-            "Index file marked for deletion for evicted entry should not be present on disk at " + cache.cacheDir());
-    }
-
-    void verifyEntryIsKept(List<RemoteLogSegmentMetadata> metadataToVerify) {
+    private void verifyEntryIsKept(List<RemoteLogSegmentMetadata> metadataToVerify) {
         for (RemoteLogSegmentMetadata metadata : metadataToVerify) {
             assertTrue(getIndexFileFromRemoteCacheDir(cache, remoteOffsetIndexFileName(metadata)).isPresent());
             assertTrue(getIndexFileFromRemoteCacheDir(cache, remoteTimeIndexFileName(metadata)).isPresent());
@@ -896,21 +878,7 @@ public class RemoteIndexCacheTest {
             Files.deleteIfExists(path);
         }
         // rsm should return no corrupted file in the 2nd execution
-        when(rsm.fetchIndex(any(RemoteLogSegmentMetadata.class), any(IndexType.class))).thenAnswer(ans -> {
-            RemoteLogSegmentMetadata metadata = ans.getArgument(0);
-            IndexType indexType = ans.getArgument(1);
-            OffsetIndex offsetIdx = createOffsetIndexForSegmentMetadata(metadata, tpDir);
-            TimeIndex timeIdx = createTimeIndexForSegmentMetadata(metadata, tpDir);
-            TransactionIndex txnIdx = createTxIndexForSegmentMetadata(metadata, tpDir);
-            maybeAppendIndexEntries(offsetIdx, timeIdx);
-            return switch (indexType) {
-                case OFFSET -> new FileInputStream(offsetIdx.file());
-                case TIMESTAMP -> new FileInputStream(timeIdx.file());
-                case TRANSACTION -> new FileInputStream(txnIdx.file());
-                case LEADER_EPOCH -> null; // leader-epoch-cache is not accessed.
-                case PRODUCER_SNAPSHOT -> null; // producer-snapshot is not accessed.
-            };
-        });
+        mockRsmFetchIndex(rsm);
         cache.getIndexEntry(rlsMetadata);
         // rsm should not be called to fetch offset Index
         verifyFetchIndexInvocation(0, List.of(IndexType.OFFSET));
@@ -953,7 +921,7 @@ public class RemoteIndexCacheTest {
         assertTrue(getIndexFileFromRemoteCacheDir(cache, LogFileUtils.TIME_INDEX_FILE_SUFFIX).isPresent(), "Time index file should be present on disk at " + remoteIndexCacheDir.toPath());
     }
 
-    void renameRemoteCacheIndexFileFromDisk(String suffix, File remoteIndexCacheDir, String tempSuffix) throws IOException {
+    private void renameRemoteCacheIndexFileFromDisk(String suffix, File remoteIndexCacheDir, String tempSuffix) throws IOException {
         List<Path> paths = Files.walk(remoteIndexCacheDir.toPath())
                 .filter(Files::isRegularFile)
                 .filter(path -> path.getFileName().toString().endsWith(suffix)).toList();
@@ -1063,9 +1031,7 @@ public class RemoteIndexCacheTest {
         }
     }
 
-    private void verifyFetchIndexInvocationWithRange(int lower,
-                                                    int upper) throws RemoteStorageException {
-
+    private void verifyFetchIndexInvocationWithRange(int lower, int upper) throws RemoteStorageException {
         List<IndexType> types = List.of(IndexType.OFFSET, IndexType.TIMESTAMP, IndexType.TRANSACTION);
         for (IndexType indexType : types) {
             verify(rsm, atLeast(lower)).fetchIndex(any(RemoteLogSegmentMetadata.class), eq(indexType));
@@ -1079,7 +1045,7 @@ public class RemoteIndexCacheTest {
         return new TransactionIndex(metadata.startOffset(), txnIdxFile);
     }
 
-    private TransactionIndex createCorruptTxnIndexForSegmentMetadata(File dir, RemoteLogSegmentMetadata metadata) throws IOException {
+    private void createCorruptTxnIndexForSegmentMetadata(File dir, RemoteLogSegmentMetadata metadata) throws IOException {
         File txnIdxFile = remoteTransactionIndexFile(dir, metadata);
         txnIdxFile.createNewFile();
         TransactionIndex txnIndex = new TransactionIndex(metadata.startOffset(), txnIdxFile);
@@ -1094,7 +1060,7 @@ public class RemoteIndexCacheTest {
         txnIndex.close();
 
         // open the index with a different starting offset to fake invalid data
-        return new TransactionIndex(100L, txnIdxFile);
+        new TransactionIndex(100L, txnIdxFile);
     }
 
     private TimeIndex createTimeIndexForSegmentMetadata(RemoteLogSegmentMetadata metadata, File dir) throws IOException {
@@ -1193,7 +1159,7 @@ public class RemoteIndexCacheTest {
                     .filter(Files::isRegularFile)
                     .filter(path -> path.getFileName().toString().endsWith(suffix))
             .findAny();
-        } catch (UncheckedIOException | IOException exc) {
+        } catch (IOException exc) {
             return Optional.empty();
         }
     }
