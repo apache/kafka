@@ -286,8 +286,6 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
 
-      println(offsetCommitRequest.data)
-
       val authorizedTopics = authHelper.filterByAuthorized(
         request.context,
         READ,
