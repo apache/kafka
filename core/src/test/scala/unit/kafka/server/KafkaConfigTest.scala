@@ -896,9 +896,7 @@ class KafkaConfigTest {
         case ServerConfigs.COMPRESSION_GZIP_LEVEL_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case ServerConfigs.COMPRESSION_LZ4_LEVEL_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case ServerConfigs.COMPRESSION_ZSTD_LEVEL_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", CompressionType.ZSTD.maxLevel() + 1)
-
-        case TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG => // ignore int
-
+        
         //SSL Configs
         case BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG =>
         case BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG =>

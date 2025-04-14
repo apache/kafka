@@ -60,7 +60,7 @@ class LogConcurrencyTest {
   @Test
   def testUncommittedDataNotConsumedFrequentSegmentRolls(): Unit = {
     val logProps = new Properties()
-    logProps.put(TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 237: Integer)
+    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 237: Integer)
     val logConfig = new LogConfig(logProps)
     testUncommittedDataNotConsumed(createLog(logConfig))
   }

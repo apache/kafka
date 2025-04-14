@@ -121,6 +121,8 @@ public class LogConfig extends AbstractConfig {
 
     // Visible for testing
     public static final String SERVER_DEFAULT_HEADER_NAME = "Server Default Property";
+    // visible for testing 
+    public static final String INTERNAL_SEGMENT_BYTES_CONFIG = "internal.segment.bytes";
 
     public static final int DEFAULT_SEGMENT_BYTES = 1024 * 1024 * 1024;
     public static final long DEFAULT_SEGMENT_MS = 24 * 7 * 60 * 60 * 1000L;
@@ -144,7 +146,7 @@ public class LogConfig extends AbstractConfig {
             TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG,
             TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG,
             TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG,
-            TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG,
+            LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG,
             QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
             QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
     );
@@ -187,7 +189,7 @@ public class LogConfig extends AbstractConfig {
             .define(ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_DOC)
             .define(ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_CONFIG, LONG, ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_DEFAULT, atLeast(1), LOW, ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_DOC)
             .defineInternal(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, LONG, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT, atLeast(0), LOW, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DOC)
-            .defineInternal(TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, LOW, ServerLogConfigs.LOG_SEGMENT_BYTES_DOC);
+            .defineInternal(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, LOW, ServerLogConfigs.LOG_SEGMENT_BYTES_DOC);
 
     private static final LogConfigDef CONFIG = new LogConfigDef();
     static {
@@ -255,7 +257,7 @@ public class LogConfig extends AbstractConfig {
                         TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC)
                 .define(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_COPY_DISABLE_DOC)
                 .define(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_DOC)
-                .defineInternal(TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, LOW, ServerLogConfigs.LOG_SEGMENT_BYTES_DOC);
+                .defineInternal(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, LOW, ServerLogConfigs.LOG_SEGMENT_BYTES_DOC);
     }
 
     public final Set<String> overriddenConfigs;
@@ -309,7 +311,7 @@ public class LogConfig extends AbstractConfig {
         this.overriddenConfigs = Collections.unmodifiableSet(overriddenConfigs);
 
         this.segmentSize = getInt(TopicConfig.SEGMENT_BYTES_CONFIG);
-        this.internalSegmentSize = getInt(TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG);
+        this.internalSegmentSize = getInt(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG);
         this.segmentMs = getLong(TopicConfig.SEGMENT_MS_CONFIG);
         this.segmentJitterMs = getLong(TopicConfig.SEGMENT_JITTER_MS_CONFIG);
         this.maxIndexSize = getInt(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG);

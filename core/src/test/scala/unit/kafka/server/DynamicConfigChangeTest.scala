@@ -100,7 +100,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val tp = new TopicPartition("test", 0)
     val oldSegmentSize = 1000
     val logProps = new Properties()
-    logProps.put(TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG, oldSegmentSize.toString)
+    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, oldSegmentSize.toString)
     createTopic(tp.topic, 1, 1, logProps)
     TestUtils.retry(10000) {
       val logOpt = this.brokers.head.logManager.getLog(tp)
@@ -112,7 +112,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     val admin = createAdminClient()
     try {
       val resource = new ConfigResource(ConfigResource.Type.TOPIC, tp.topic())
-      val op = new AlterConfigOp(new ConfigEntry(TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG, newSegmentSize.toString),
+      val op = new AlterConfigOp(new ConfigEntry(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, newSegmentSize.toString),
         OpType.SET)
       admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all.get
     } finally {

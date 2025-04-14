@@ -620,7 +620,7 @@ object KafkaMetadataLog extends Logging {
   ): KafkaMetadataLog = {
     val props: Properties = settingLogProperties(config)
     props.remove(TopicConfig.SEGMENT_BYTES_CONFIG);
-    props.put(TopicConfig.INTERNAL_SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
+    props.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
     LogConfig.validate(props)
     val defaultLogConfig = new LogConfig(props)
 
