@@ -305,7 +305,7 @@ public class GlobalStateManagerImplTest {
 
         stateManager.initialize();
         stateManager.registerStore(
-            new WrappedStateStore<NoOpReadOnlyStore<Object, Object>, Object, Object>(store1) {
+            new WrappedStateStore<>(store1) {
             },
             stateRestoreCallback,
                 null);
@@ -333,7 +333,7 @@ public class GlobalStateManagerImplTest {
 
         stateManager.initialize();
         stateManager.registerStore(
-            new WrappedStateStore<NoOpReadOnlyStore<Object, Object>, Object, Object>(store2) {
+            new WrappedStateStore<>(store2) {
             },
             stateRestoreCallback,
             null);
@@ -422,7 +422,7 @@ public class GlobalStateManagerImplTest {
         stateManager.initialize();
         // register the stores
         initializeConsumer(1, 0, t1);
-        stateManager.registerStore(new NoOpReadOnlyStore<Object, Object>(store1.name()) {
+        stateManager.registerStore(new NoOpReadOnlyStore<>(store1.name()) {
             @Override
             public void flush() {
                 throw new RuntimeException("KABOOM!");
@@ -449,7 +449,7 @@ public class GlobalStateManagerImplTest {
     public void shouldThrowProcessorStateStoreExceptionIfStoreCloseFailed() {
         stateManager.initialize();
         initializeConsumer(1, 0, t1);
-        stateManager.registerStore(new NoOpReadOnlyStore<Object, Object>(store1.name()) {
+        stateManager.registerStore(new NoOpReadOnlyStore<>(store1.name()) {
             @Override
             public void close() {
                 throw new RuntimeException("KABOOM!");
@@ -474,7 +474,7 @@ public class GlobalStateManagerImplTest {
     public void shouldNotCloseStoresIfCloseAlreadyCalled() {
         stateManager.initialize();
         initializeConsumer(1, 0, t1);
-        stateManager.registerStore(new NoOpReadOnlyStore<Object, Object>("t1-store") {
+        stateManager.registerStore(new NoOpReadOnlyStore<>("t1-store") {
             @Override
             public void close() {
                 if (!isOpen()) {
@@ -492,7 +492,7 @@ public class GlobalStateManagerImplTest {
     public void shouldAttemptToCloseAllStoresEvenWhenSomeException() {
         stateManager.initialize();
         initializeConsumer(1, 0, t1);
-        final NoOpReadOnlyStore<Object, Object> store = new NoOpReadOnlyStore<Object, Object>("t1-store") {
+        final NoOpReadOnlyStore<Object, Object> store = new NoOpReadOnlyStore<>("t1-store") {
             @Override
             public void close() {
                 super.close();
@@ -596,7 +596,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldNotRetryWhenEndOffsetsThrowsTimeoutExceptionAndTaskTimeoutIsZero() {
         final AtomicInteger numberOfCalls = new AtomicInteger(0);
-        consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public synchronized Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions) {
                 numberOfCalls.incrementAndGet();
@@ -638,7 +638,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldRetryAtLeastOnceWhenEndOffsetsThrowsTimeoutException() {
         final AtomicInteger numberOfCalls = new AtomicInteger(0);
-        consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public synchronized Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions) {
                 time.sleep(100L);
@@ -679,7 +679,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldRetryWhenEndOffsetsThrowsTimeoutExceptionUntilTaskTimeoutExpired() {
         final AtomicInteger numberOfCalls = new AtomicInteger(0);
-        consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public synchronized Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions) {
                 time.sleep(100L);
@@ -720,7 +720,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldNotFailOnSlowProgressWhenEndOffsetsThrowsTimeoutException() {
         final AtomicInteger numberOfCalls = new AtomicInteger(0);
-        consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public synchronized Map<TopicPartition, Long> endOffsets(final Collection<TopicPartition> partitions) {
                 time.sleep(1L);
@@ -762,7 +762,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldNotRetryWhenPartitionsForThrowsTimeoutExceptionAndTaskTimeoutIsZero() {
         final AtomicInteger numberOfCalls = new AtomicInteger(0);
-        consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public List<PartitionInfo> partitionsFor(final String topic) {
                 numberOfCalls.incrementAndGet();
@@ -804,7 +804,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldRetryAtLeastOnceWhenPartitionsForThrowsTimeoutException() {
         final AtomicInteger numberOfCalls = new AtomicInteger(0);
-        consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public List<PartitionInfo> partitionsFor(final String topic) {
                 time.sleep(100L);
@@ -845,7 +845,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldRetryWhenPartitionsForThrowsTimeoutExceptionUntilTaskTimeoutExpires() {
         final AtomicInteger numberOfCalls = new AtomicInteger(0);
-        consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public List<PartitionInfo> partitionsFor(final String topic) {
                 time.sleep(100L);
@@ -886,7 +886,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldNotFailOnSlowProgressWhenPartitionForThrowsTimeoutException() {
         final AtomicInteger numberOfCalls = new AtomicInteger(0);
-        consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public List<PartitionInfo> partitionsFor(final String topic) {
                 time.sleep(1L);
@@ -928,7 +928,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldNotRetryWhenPositionThrowsTimeoutExceptionAndTaskTimeoutIsZero() {
         final AtomicInteger numberOfCalls = new AtomicInteger(0);
-        consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public synchronized long position(final TopicPartition partition) {
                 numberOfCalls.incrementAndGet();
@@ -970,7 +970,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldRetryAtLeastOnceWhenPositionThrowsTimeoutException() {
         final AtomicInteger numberOfCalls = new AtomicInteger(0);
-        consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public synchronized long position(final TopicPartition partition) {
                 time.sleep(100L);
@@ -1011,7 +1011,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldRetryWhenPositionThrowsTimeoutExceptionUntilTaskTimeoutExpired() {
         final AtomicInteger numberOfCalls = new AtomicInteger(0);
-        consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public synchronized long position(final TopicPartition partition) {
                 time.sleep(100L);
@@ -1052,7 +1052,7 @@ public class GlobalStateManagerImplTest {
     @Test
     public void shouldNotFailOnSlowProgressWhenPositionThrowsTimeoutException() {
         final AtomicInteger numberOfCalls = new AtomicInteger(0);
-        consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public synchronized long position(final TopicPartition partition) {
                 time.sleep(1L);
@@ -1088,7 +1088,7 @@ public class GlobalStateManagerImplTest {
 
     @Test
     public void shouldUsePollMsPlusRequestTimeoutInPollDuringRestoreAndTimeoutWhenNoProgressDuringRestore() {
-        consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public synchronized ConsumerRecords<byte[], byte[]> poll(final Duration timeout) {
                 time.sleep(timeout.toMillis());

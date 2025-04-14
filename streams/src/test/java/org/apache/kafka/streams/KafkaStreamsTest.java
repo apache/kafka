@@ -561,7 +561,7 @@ public class KafkaStreamsTest {
 
         try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
             assertEquals(NUM_THREADS, streams.threads.size());
-            assertEquals(streams.state(), KafkaStreams.State.CREATED);
+            assertEquals(KafkaStreams.State.CREATED, streams.state());
 
             streams.start();
             waitForCondition(
@@ -620,7 +620,7 @@ public class KafkaStreamsTest {
             );
 
             streams.close();
-            assertEquals(streams.state(), KafkaStreams.State.ERROR, "KafkaStreams should remain in ERROR state after close.");
+            assertEquals(KafkaStreams.State.ERROR, streams.state(), "KafkaStreams should remain in ERROR state after close.");
             assertThat(appender.getMessages(), hasItem(containsString("State transition from RUNNING to PENDING_ERROR")));
             assertThat(appender.getMessages(), hasItem(containsString("State transition from PENDING_ERROR to ERROR")));
             assertThat(appender.getMessages(), hasItem(containsString("Streams client is already in the terminal ERROR state")));
@@ -644,7 +644,7 @@ public class KafkaStreamsTest {
             streams.start();
             final int oldCloseCount = MockMetricsReporter.CLOSE_COUNT.get();
             streams.close();
-            assertEquals(streams.state(), KafkaStreams.State.NOT_RUNNING);
+            assertEquals(KafkaStreams.State.NOT_RUNNING, streams.state());
             assertEquals(oldCloseCount + initDiff, MockMetricsReporter.CLOSE_COUNT.get());
         }
     }
@@ -875,7 +875,7 @@ public class KafkaStreamsTest {
         prepareThreadState(streamThreadTwo, state2);
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
-            assertThrows(IllegalStateException.class, () -> streams.setUncaughtExceptionHandler((StreamsUncaughtExceptionHandler) null));
+            assertThrows(IllegalStateException.class, () -> streams.setUncaughtExceptionHandler(null));
         }
     }
 
@@ -886,7 +886,7 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadTwo, 2);
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
-            assertThrows(IllegalStateException.class, () -> streams.setUncaughtExceptionHandler((StreamsUncaughtExceptionHandler) null));
+            assertThrows(IllegalStateException.class, () -> streams.setUncaughtExceptionHandler(null));
         }
 
     }
@@ -896,7 +896,7 @@ public class KafkaStreamsTest {
         prepareStreamThread(streamThreadOne, 1);
         prepareStreamThread(streamThreadTwo, 2);
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
-            assertThrows(NullPointerException.class, () -> streams.setUncaughtExceptionHandler((StreamsUncaughtExceptionHandler) null));
+            assertThrows(NullPointerException.class, () -> streams.setUncaughtExceptionHandler(null));
         }
     }
 
@@ -1548,7 +1548,7 @@ public class KafkaStreamsTest {
         try (final KafkaStreams streams = new KafkaStreams(builder.build(), props, supplier, time)) {
 
             assertThat(streams.threads.size(), equalTo(0));
-            assertEquals(streams.state(), KafkaStreams.State.CREATED);
+            assertEquals(KafkaStreams.State.CREATED, streams.state());
 
             streams.start();
             waitForCondition(
