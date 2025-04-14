@@ -21,7 +21,7 @@ import java.net.InetSocketAddress
 import java.util.concurrent.atomic.{AtomicInteger, AtomicLong}
 import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDeque, TimeUnit}
 import joptsimple.{OptionException, OptionSpec}
-import kafka.network.{DataPlaneAcceptor, SocketServer}
+import kafka.network.SocketServer
 import kafka.raft.{DefaultExternalKRaftMetrics, KafkaRaftManager, RaftManager}
 import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, SimpleApiVersionManager}
 import kafka.utils.{CoreUtils, Logging}
@@ -130,8 +130,7 @@ class TestRaftServer(
       requestHandler,
       time,
       config.numIoThreads,
-      s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
-      DataPlaneAcceptor.ThreadPrefix
+      "RequestHandlerAvgIdlePercent"
     )
 
     workloadGenerator.start()

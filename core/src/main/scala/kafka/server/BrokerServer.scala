@@ -21,7 +21,7 @@ import kafka.coordinator.group.{CoordinatorLoaderImpl, CoordinatorPartitionWrite
 import kafka.coordinator.transaction.TransactionCoordinator
 import kafka.log.LogManager
 import kafka.log.remote.RemoteLogManager
-import kafka.network.{DataPlaneAcceptor, SocketServer}
+import kafka.network.SocketServer
 import kafka.raft.KafkaRaftManager
 import kafka.server.metadata._
 import kafka.server.share.{ShareCoordinatorMetadataCacheHelperImpl, SharePartitionManager}
@@ -470,8 +470,7 @@ class BrokerServer(
 
       dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
-        config.numIoThreads, s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
-        DataPlaneAcceptor.ThreadPrefix)
+        config.numIoThreads, "RequestHandlerAvgIdlePercent")
 
       // Start RemoteLogManager before initializing broker metadata publishers.
       remoteLogManagerOpt.foreach { rlm =>
