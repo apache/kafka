@@ -26,6 +26,9 @@ import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsResponseData;
+import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
@@ -131,6 +134,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -287,6 +291,69 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 coordinatorMetrics,
                 metricsShard
             );
+        }
+    }
+
+    public static class DeleteShareGroupOffsetsResultHolder {
+        private final short topLevelErrorCode;
+        private final String topLevelErrorMessage;
+        private final List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList;
+        private final DeleteShareGroupStateParameters deleteStateRequestParameters;
+
+        DeleteShareGroupOffsetsResultHolder(short topLevelErrorCode, String topLevelErrorMessage) {
+            this(topLevelErrorCode, topLevelErrorMessage, null,  null);
+        }
+
+        DeleteShareGroupOffsetsResultHolder(
+            short topLevelErrorCode,
+            String topLevelErrorMessage,
+            List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList
+        ) {
+            this(topLevelErrorCode, topLevelErrorMessage, errorTopicResponseList, null);
+        }
+
+        DeleteShareGroupOffsetsResultHolder(
+            short topLevelErrorCode,
+            String topLevelErrorMessage,
+            List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList,
+            DeleteShareGroupStateParameters deleteStateRequestParameters
+        ) {
+            this.topLevelErrorCode = topLevelErrorCode;
+            this.topLevelErrorMessage = topLevelErrorMessage;
+            this.errorTopicResponseList = errorTopicResponseList;
+            this.deleteStateRequestParameters = deleteStateRequestParameters;
+        }
+
+        public short topLevelErrorCode() {
+            return this.topLevelErrorCode;
+        }
+
+        public String topLevelErrorMessage() {
+            return this.topLevelErrorMessage;
+        }
+
+        public List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList() {
+            return this.errorTopicResponseList;
+        }
+
+        public DeleteShareGroupStateParameters deleteStateRequestParameters() {
+            return this.deleteStateRequestParameters;
+        }
+
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            DeleteShareGroupOffsetsResultHolder other = (DeleteShareGroupOffsetsResultHolder) o;
+            return topLevelErrorCode == other.topLevelErrorCode &&
+                Objects.equals(topLevelErrorMessage, other.topLevelErrorMessage) &&
+                Objects.equals(errorTopicResponseList, other.errorTopicResponseList) &&
+                Objects.equals(deleteStateRequestParameters, other.deleteStateRequestParameters);
+        }
+
+        @Override
+        public int hashCode() {
+            return Objects.hash(topLevelErrorCode, topLevelErrorMessage, errorTopicResponseList, deleteStateRequestParameters);
         }
     }
 
@@ -611,6 +678,57 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             }
         }
         return new CoordinatorResult<>(records, responseMap);
+    }
+
+    /**
+     * Does the following checks to make sure that a DeleteShareGroupOffsets request is valid and can be processed further
+     * 1. Checks whether the provided group is empty
+     * 2. Checks the requested topics are presented in the metadataImage
+     * 3. Checks the requested share partitions are initialized for the group
+     *
+     * @param groupId - The group ID
+     * @param requestData - The request data for DeleteShareGroupOffsetsRequest
+     * @return {@link DeleteShareGroupOffsetsResultHolder} an object containing top level error code, list of topic responses
+     *                                               and persister deleteState request parameters
+     */
+    public DeleteShareGroupOffsetsResultHolder shareGroupDeleteOffsetsRequest(
+        String groupId,
+        DeleteShareGroupOffsetsRequestData requestData
+    ) {
+        try {
+            ShareGroup group = groupMetadataManager.shareGroup(groupId);
+            group.validateDeleteGroup();
+
+            List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList = new ArrayList<>();
+            List<DeleteShareGroupStateRequestData.DeleteStateData> deleteShareGroupStateRequestTopicsData =
+                groupMetadataManager.sharePartitionsEligibleForOffsetDeletion(
+                    groupId,
+                    requestData,
+                    errorTopicResponseList
+                );
+
+            if (deleteShareGroupStateRequestTopicsData.isEmpty()) {
+                return new DeleteShareGroupOffsetsResultHolder(Errors.NONE.code(), null, errorTopicResponseList);
+            }
+
+            DeleteShareGroupStateRequestData deleteShareGroupStateRequestData = new DeleteShareGroupStateRequestData()
+                .setGroupId(requestData.groupId())
+                .setTopics(deleteShareGroupStateRequestTopicsData);
+
+            return new DeleteShareGroupOffsetsResultHolder(
+                Errors.NONE.code(),
+                null,
+                errorTopicResponseList,
+                DeleteShareGroupStateParameters.from(deleteShareGroupStateRequestData)
+            );
+
+        } catch (GroupIdNotFoundException exception) {
+            log.error("groupId {} not found", groupId, exception);
+            return new DeleteShareGroupOffsetsResultHolder(Errors.GROUP_ID_NOT_FOUND.code(), exception.getMessage());
+        } catch (GroupNotEmptyException exception) {
+            log.error("Provided group {} is not empty", groupId);
+            return new DeleteShareGroupOffsetsResultHolder(Errors.NON_EMPTY_GROUP.code(), exception.getMessage());
+        }
     }
 
     /**

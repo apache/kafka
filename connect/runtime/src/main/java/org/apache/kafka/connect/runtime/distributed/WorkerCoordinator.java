@@ -184,16 +184,11 @@ public class WorkerCoordinator extends AbstractCoordinator implements Closeable 
         configSnapshot = configStorage.snapshot();
         final ExtendedAssignment localAssignmentSnapshot = assignmentSnapshot;
         ExtendedWorkerState workerState = new ExtendedWorkerState(restUrl, configSnapshot.offset(), localAssignmentSnapshot);
-        switch (protocolCompatibility) {
-            case EAGER:
-                return ConnectProtocol.metadataRequest(workerState);
-            case COMPATIBLE:
-                return IncrementalCooperativeConnectProtocol.metadataRequest(workerState, false);
-            case SESSIONED:
-                return IncrementalCooperativeConnectProtocol.metadataRequest(workerState, true);
-            default:
-                throw new IllegalStateException("Unknown Connect protocol compatibility mode " + protocolCompatibility);
-        }
+        return switch (protocolCompatibility) {
+            case EAGER -> ConnectProtocol.metadataRequest(workerState);
+            case COMPATIBLE -> IncrementalCooperativeConnectProtocol.metadataRequest(workerState, false);
+            case SESSIONED -> IncrementalCooperativeConnectProtocol.metadataRequest(workerState, true);
+        };
     }
 
     @Override
