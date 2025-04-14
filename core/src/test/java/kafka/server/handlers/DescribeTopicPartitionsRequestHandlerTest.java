@@ -64,7 +64,7 @@ import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.KRaftVersion;
-import org.apache.kafka.server.config.KRaftConfigs;
+import org.apache.kafka.server.config.KRaftConfig;
 
 import org.junit.jupiter.api.Test;
 
@@ -536,11 +536,11 @@ class DescribeTopicPartitionsRequestHandlerTest {
             1,
             (short) 1,
             false);
-        properties.put(KRaftConfigs.NODE_ID_CONFIG, Integer.toString(brokerId));
-        properties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker");
+        properties.put(KRaftConfig.NODE_ID_CONFIG, Integer.toString(brokerId));
+        properties.put(KRaftConfig.PROCESS_ROLES_CONFIG, "broker");
         int voterId = brokerId + 1;
         properties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, voterId + "@localhost:9093");
-        properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL");
+        properties.put(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL");
         properties.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "PLAINTEXT:PLAINTEXT,SSL:SSL");
         return new KafkaConfig(properties);
     }

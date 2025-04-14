@@ -29,7 +29,7 @@ import org.apache.kafka.common.internals.FatalExitError
 import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs}
+import org.apache.kafka.server.config.{KRaftConfig, ReplicationConfigs}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.api.Assertions._
 
@@ -47,15 +47,15 @@ class KafkaConfigTest {
     assertBadConfigContainingMessage(properties,
       "Missing required configuration \"process.roles\" which has no default value.")
 
-    properties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
+    properties.put(KRaftConfig.PROCESS_ROLES_CONFIG, "broker")
     assertBadConfigContainingMessage(properties,
       "Missing required configuration \"node.id\" which has no default value.")
 
-    properties.put(KRaftConfigs.NODE_ID_CONFIG, -1)
+    properties.put(KRaftConfig.NODE_ID_CONFIG, -1)
     assertBadConfigContainingMessage(properties,
       "Invalid value -1 for configuration node.id: Value must be at least 0")
 
-    properties.put(KRaftConfigs.NODE_ID_CONFIG, 0)
+    properties.put(KRaftConfig.NODE_ID_CONFIG, 0)
     assertBadConfigContainingMessage(properties,
       "If using process.roles, either controller.quorum.bootstrap.servers must contain the set of bootstrap controllers or controller.quorum.voters must contain a parseable set of controllers.")
 
@@ -63,7 +63,7 @@ class KafkaConfigTest {
     assertBadConfigContainingMessage(properties,
       "requirement failed: controller.listener.names must contain at least one value when running KRaft with just the broker role")
 
-    properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    properties.put(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     KafkaConfig.fromProps(properties)
   }
 
@@ -73,15 +73,15 @@ class KafkaConfigTest {
     assertBadConfigContainingMessage(properties,
       "Missing required configuration \"process.roles\" which has no default value.")
 
-    properties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
+    properties.put(KRaftConfig.PROCESS_ROLES_CONFIG, "controller")
     assertBadConfigContainingMessage(properties,
       "Missing required configuration \"node.id\" which has no default value.")
 
-    properties.put(KRaftConfigs.NODE_ID_CONFIG, -1)
+    properties.put(KRaftConfig.NODE_ID_CONFIG, -1)
     assertBadConfigContainingMessage(properties,
       "Invalid value -1 for configuration node.id: Value must be at least 0")
 
-    properties.put(KRaftConfigs.NODE_ID_CONFIG, 0)
+    properties.put(KRaftConfig.NODE_ID_CONFIG, 0)
     assertBadConfigContainingMessage(properties,
       "If using process.roles, either controller.quorum.bootstrap.servers must contain the set of bootstrap controllers or controller.quorum.voters must contain a parseable set of controllers.")
 
@@ -97,7 +97,7 @@ class KafkaConfigTest {
     assertBadConfigContainingMessage(properties,
       "requirement failed: The listeners config must only contain KRaft controller listeners from controller.listener.names when process.roles=controller")
 
-    properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    properties.put(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     KafkaConfig.fromProps(properties)
   }
 
@@ -146,15 +146,15 @@ class KafkaConfigTest {
   def testBrokerRoleNodeIdValidation(): Unit = {
     // Ensure that validation is happening at startup to check that brokers do not use their node.id as a voter in controller.quorum.voters
     val propertiesFile = new Properties
-    propertiesFile.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
-    propertiesFile.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
+    propertiesFile.setProperty(KRaftConfig.PROCESS_ROLES_CONFIG, "broker")
+    propertiesFile.setProperty(KRaftConfig.NODE_ID_CONFIG, "1")
     propertiesFile.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9092")
     setListenerProps(propertiesFile)
     assertBadConfigContainingMessage(propertiesFile,
       "If process.roles contains just the 'broker' role, the node id 1 must not be included in the set of voters")
 
     // Ensure that with a valid config no exception is thrown
-    propertiesFile.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
+    propertiesFile.setProperty(KRaftConfig.NODE_ID_CONFIG, "2")
     KafkaConfig.fromProps(propertiesFile)
   }
 
@@ -162,15 +162,15 @@ class KafkaConfigTest {
   def testControllerRoleNodeIdValidation(): Unit = {
     // Ensure that validation is happening at startup to check that controllers use their node.id as a voter in controller.quorum.voters
     val propertiesFile = new Properties
-    propertiesFile.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
-    propertiesFile.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
+    propertiesFile.setProperty(KRaftConfig.PROCESS_ROLES_CONFIG, "controller")
+    propertiesFile.setProperty(KRaftConfig.NODE_ID_CONFIG, "1")
     propertiesFile.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9092")
     setListenerProps(propertiesFile)
     assertBadConfigContainingMessage(propertiesFile,
       "If process.roles contains the 'controller' role, the node id 1 must be included in the set of voters")
 
     // Ensure that with a valid config no exception is thrown
-    propertiesFile.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
+    propertiesFile.setProperty(KRaftConfig.NODE_ID_CONFIG, "2")
     KafkaConfig.fromProps(propertiesFile)
   }
 
@@ -178,23 +178,23 @@ class KafkaConfigTest {
   def testCombinedRoleNodeIdValidation(): Unit = {
     // Ensure that validation is happening at startup to check that combined processes use their node.id as a voter in controller.quorum.voters
     val propertiesFile = new Properties
-    propertiesFile.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller,broker")
-    propertiesFile.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
+    propertiesFile.setProperty(KRaftConfig.PROCESS_ROLES_CONFIG, "controller,broker")
+    propertiesFile.setProperty(KRaftConfig.NODE_ID_CONFIG, "1")
     propertiesFile.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9092")
     setListenerProps(propertiesFile)
     assertBadConfigContainingMessage(propertiesFile,
       "If process.roles contains the 'controller' role, the node id 1 must be included in the set of voters")
 
     // Ensure that with a valid config no exception is thrown
-    propertiesFile.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
+    propertiesFile.setProperty(KRaftConfig.NODE_ID_CONFIG, "2")
     KafkaConfig.fromProps(propertiesFile)
   }
 
   @Test
   def testIsKRaftCombinedMode(): Unit = {
     val propertiesFile = new Properties
-    propertiesFile.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller,broker")
-    propertiesFile.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
+    propertiesFile.setProperty(KRaftConfig.PROCESS_ROLES_CONFIG, "controller,broker")
+    propertiesFile.setProperty(KRaftConfig.NODE_ID_CONFIG, "1")
     propertiesFile.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9092")
     setListenerProps(propertiesFile)
     val config = KafkaConfig.fromProps(propertiesFile)
@@ -205,8 +205,8 @@ class KafkaConfigTest {
   def testMustContainQuorumVotersIfUsingProcessRoles(): Unit = {
     // Ensure that validation is happening at startup to check that if process.roles is set controller.quorum.voters is not empty
     val propertiesFile = new Properties
-    propertiesFile.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller,broker")
-    propertiesFile.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
+    propertiesFile.setProperty(KRaftConfig.PROCESS_ROLES_CONFIG, "controller,broker")
+    propertiesFile.setProperty(KRaftConfig.NODE_ID_CONFIG, "1")
     propertiesFile.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "")
     setListenerProps(propertiesFile)
     assertBadConfigContainingMessage(
@@ -218,12 +218,12 @@ class KafkaConfigTest {
   }
 
   private def setListenerProps(props: Properties): Unit = {
-    val hasBrokerRole = props.getProperty(KRaftConfigs.PROCESS_ROLES_CONFIG).contains("broker")
-    val hasControllerRole = props.getProperty(KRaftConfigs.PROCESS_ROLES_CONFIG).contains("controller")
+    val hasBrokerRole = props.getProperty(KRaftConfig.PROCESS_ROLES_CONFIG).contains("broker")
+    val hasControllerRole = props.getProperty(KRaftConfig.PROCESS_ROLES_CONFIG).contains("controller")
     val controllerListener = "SASL_PLAINTEXT://localhost:9092"
     val brokerListener = "PLAINTEXT://localhost:9093"
 
-    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SASL_PLAINTEXT")
+    props.setProperty(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG, "SASL_PLAINTEXT")
     if (hasBrokerRole && hasControllerRole) {
       props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, s"$brokerListener,$controllerListener")
     } else if (hasControllerRole) {

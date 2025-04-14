@@ -39,12 +39,12 @@ import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{AddPartitionsToTxnConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.MetadataVersion
-import org.apache.kafka.server.config.{AbstractKafkaConfig, DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{AbstractKafkaConfig, DelegationTokenManagerConfigs, KRaftConfig, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.server.util.Csv
@@ -136,11 +136,11 @@ object KafkaConfig {
   def populateSynonyms(input: util.Map[_, _]): util.Map[Any, Any] = {
     val output = new util.HashMap[Any, Any](input)
     val brokerId = output.get(ServerConfigs.BROKER_ID_CONFIG)
-    val nodeId = output.get(KRaftConfigs.NODE_ID_CONFIG)
+    val nodeId = output.get(KRaftConfig.NODE_ID_CONFIG)
     if (brokerId == null && nodeId != null) {
       output.put(ServerConfigs.BROKER_ID_CONFIG, nodeId)
     } else if (brokerId != null && nodeId == null) {
-      output.put(KRaftConfigs.NODE_ID_CONFIG, brokerId)
+      output.put(KRaftConfig.NODE_ID_CONFIG, brokerId)
     }
     output
   }
@@ -214,15 +214,15 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
   /** ********* General Configuration ***********/
   var brokerId: Int = getInt(ServerConfigs.BROKER_ID_CONFIG)
-  val nodeId: Int = getInt(KRaftConfigs.NODE_ID_CONFIG)
-  val initialRegistrationTimeoutMs: Int = getInt(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG)
-  val brokerHeartbeatIntervalMs: Int = getInt(KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG)
-  val brokerSessionTimeoutMs: Int = getInt(KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG)
-  val controllerPerformanceSamplePeriodMs: Long = getLong(KRaftConfigs.CONTROLLER_PERFORMANCE_SAMPLE_PERIOD_MS)
-  val controllerPerformanceAlwaysLogThresholdMs: Long = getLong(KRaftConfigs.CONTROLLER_PERFORMANCE_ALWAYS_LOG_THRESHOLD_MS)
+  val nodeId: Int = getInt(KRaftConfig.NODE_ID_CONFIG)
+  val initialRegistrationTimeoutMs: Int = getInt(KRaftConfig.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG)
+  val brokerHeartbeatIntervalMs: Int = getInt(KRaftConfig.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG)
+  val brokerSessionTimeoutMs: Int = getInt(KRaftConfig.BROKER_SESSION_TIMEOUT_MS_CONFIG)
+  val controllerPerformanceSamplePeriodMs: Long = getLong(KRaftConfig.CONTROLLER_PERFORMANCE_SAMPLE_PERIOD_MS)
+  val controllerPerformanceAlwaysLogThresholdMs: Long = getLong(KRaftConfig.CONTROLLER_PERFORMANCE_ALWAYS_LOG_THRESHOLD_MS)
 
   private def parseProcessRoles(): Set[ProcessRole] = {
-    val roles = getList(KRaftConfigs.PROCESS_ROLES_CONFIG).asScala.map {
+    val roles = getList(KRaftConfig.PROCESS_ROLES_CONFIG).asScala.map {
       case "broker" => ProcessRole.BrokerRole
       case "controller" => ProcessRole.ControllerRole
       case role => throw new ConfigException(s"Unknown process role '$role'" +
@@ -232,7 +232,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     val distinctRoles: Set[ProcessRole] = roles.toSet
 
     if (distinctRoles.size != roles.size) {
-      throw new ConfigException(s"Duplicate role names found in `${KRaftConfigs.PROCESS_ROLES_CONFIG}`: $roles")
+      throw new ConfigException(s"Duplicate role names found in `${KRaftConfig.PROCESS_ROLES_CONFIG}`: $roles")
     }
 
     distinctRoles
@@ -243,19 +243,19 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   }
 
   def metadataLogDir: String = {
-    Option(getString(KRaftConfigs.METADATA_LOG_DIR_CONFIG)) match {
+    Option(getString(MetadataLogConfig.METADATA_LOG_DIR_CONFIG)) match {
       case Some(dir) => dir
       case None => logDirs.head
     }
   }
 
-  def metadataLogSegmentBytes = getInt(KRaftConfigs.METADATA_LOG_SEGMENT_BYTES_CONFIG)
-  def metadataLogSegmentMillis = getLong(KRaftConfigs.METADATA_LOG_SEGMENT_MILLIS_CONFIG)
-  def metadataRetentionBytes = getLong(KRaftConfigs.METADATA_MAX_RETENTION_BYTES_CONFIG)
-  def metadataRetentionMillis = getLong(KRaftConfigs.METADATA_MAX_RETENTION_MILLIS_CONFIG)
-  def metadataNodeIDConfig = getInt(KRaftConfigs.NODE_ID_CONFIG)
-  def metadataLogSegmentMinBytes = getInt(KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG)
-  val serverMaxStartupTimeMs = getLong(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG)
+  def metadataLogSegmentBytes = getInt(MetadataLogConfig.METADATA_LOG_SEGMENT_BYTES_CONFIG)
+  def metadataLogSegmentMillis = getLong(MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG)
+  def metadataRetentionBytes = getLong(MetadataLogConfig.METADATA_MAX_RETENTION_BYTES_CONFIG)
+  def metadataRetentionMillis = getLong(MetadataLogConfig.METADATA_MAX_RETENTION_MILLIS_CONFIG)
+  def metadataNodeIDConfig = getInt(KRaftConfig.NODE_ID_CONFIG)
+  def metadataLogSegmentMinBytes = getInt(MetadataLogConfig.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG)
+  val serverMaxStartupTimeMs = getLong(KRaftConfig.SERVER_MAX_STARTUP_TIME_MS_CONFIG)
 
   def messageMaxBytes = getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG)
   val requestTimeoutMs = getInt(ServerConfigs.REQUEST_TIMEOUT_MS_CONFIG)
@@ -268,10 +268,10 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   }
 
   /************* Metadata Configuration ***********/
-  val metadataSnapshotMaxNewRecordBytes = getLong(KRaftConfigs.METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES_CONFIG)
-  val metadataSnapshotMaxIntervalMs = getLong(KRaftConfigs.METADATA_SNAPSHOT_MAX_INTERVAL_MS_CONFIG)
+  val metadataSnapshotMaxNewRecordBytes = getLong(MetadataLogConfig.METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES_CONFIG)
+  val metadataSnapshotMaxIntervalMs = getLong(MetadataLogConfig.METADATA_SNAPSHOT_MAX_INTERVAL_MS_CONFIG)
   val metadataMaxIdleIntervalNs: Option[Long] = {
-    val value = TimeUnit.NANOSECONDS.convert(getInt(KRaftConfigs.METADATA_MAX_IDLE_INTERVAL_MS_CONFIG).toLong, TimeUnit.MILLISECONDS)
+    val value = TimeUnit.NANOSECONDS.convert(getInt(MetadataLogConfig.METADATA_MAX_IDLE_INTERVAL_MS_CONFIG).toLong, TimeUnit.MILLISECONDS)
     if (value > 0) Some(value) else None
   }
 
@@ -296,7 +296,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
           if (!listenersSet.contains(listenerName) && !controllerListenersSet.contains(listenerName))
             throw new ConfigException(s"${ServerConfigs.EARLY_START_LISTENERS_CONFIG} contains " +
               s"listener ${listenerName.value()}, but this is not contained in " +
-              s"${SocketServerConfigs.LISTENERS_CONFIG} or ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG}")
+              s"${SocketServerConfigs.LISTENERS_CONFIG} or ${KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG}")
           listenerName
         }.toSet
     }
@@ -489,7 +489,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     CoreUtils.listenerListToEndPoints(getString(SocketServerConfigs.LISTENERS_CONFIG), effectiveListenerSecurityProtocolMap)
 
   def controllerListenerNames: Seq[String] = {
-    val value = Option(getString(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG)).getOrElse("")
+    val value = Option(getString(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG)).getOrElse("")
     if (value.isEmpty) {
       Seq.empty
     } else {
@@ -500,7 +500,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   def controllerListeners: Seq[EndPoint] =
     listeners.filter(l => controllerListenerNames.contains(l.listenerName.value()))
 
-  def saslMechanismControllerProtocol: String = getString(KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG)
+  def saslMechanismControllerProtocol: String = getString(KRaftConfig.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG)
 
   def dataPlaneListeners: Seq[EndPoint] = {
     listeners.filterNot { listener =>
@@ -605,7 +605,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
   private def validateValues(): Unit = {
     if (nodeId != brokerId) {
-      throw new ConfigException(s"You must set `${KRaftConfigs.NODE_ID_CONFIG}` to the same value as `${ServerConfigs.BROKER_ID_CONFIG}`.")
+      throw new ConfigException(s"You must set `${KRaftConfig.NODE_ID_CONFIG}` to the same value as `${ServerConfigs.BROKER_ID_CONFIG}`.")
     }
     require(logRollTimeMillis >= 1, "log.roll.ms must be greater than or equal to 1")
     require(logRollTimeJitterMillis >= 0, "log.roll.jitter.ms must be greater than or equal to 0")
@@ -624,7 +624,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     def validateQuorumVotersAndQuorumBootstrapServerForKRaft(): Unit = {
       if (voterIds.isEmpty && quorumConfig.bootstrapServers.isEmpty) {
         throw new ConfigException(
-          s"""If using ${KRaftConfigs.PROCESS_ROLES_CONFIG}, either ${QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG} must
+          s"""If using ${KRaftConfig.PROCESS_ROLES_CONFIG}, either ${QuorumConfig.QUORUM_BOOTSTRAP_SERVERS_CONFIG} must
           |contain the set of bootstrap controllers or ${QuorumConfig.QUORUM_VOTERS_CONFIG} must contain a parseable
           |set of controllers.""".stripMargin.replace("\n", " ")
         )
@@ -633,21 +633,21 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
 
     def validateControllerQuorumVotersMustContainNodeIdForKRaftController(): Unit = {
       require(voterIds.isEmpty || voterIds.contains(nodeId),
-        s"If ${KRaftConfigs.PROCESS_ROLES_CONFIG} contains the 'controller' role, the node id $nodeId must be included in the set of voters ${QuorumConfig.QUORUM_VOTERS_CONFIG}=${voterIds.asScala.toSet}")
+        s"If ${KRaftConfig.PROCESS_ROLES_CONFIG} contains the 'controller' role, the node id $nodeId must be included in the set of voters ${QuorumConfig.QUORUM_VOTERS_CONFIG}=${voterIds.asScala.toSet}")
     }
     def validateAdvertisedControllerListenersNonEmptyForKRaftController(): Unit = {
       require(effectiveAdvertisedControllerListeners.nonEmpty,
-        s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must contain at least one value appearing in the '${SocketServerConfigs.LISTENERS_CONFIG}' configuration when running the KRaft controller role")
+        s"${KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG} must contain at least one value appearing in the '${SocketServerConfigs.LISTENERS_CONFIG}' configuration when running the KRaft controller role")
     }
     def validateControllerListenerNamesMustAppearInListenersForKRaftController(): Unit = {
       val listenerNameValues = listeners.map(_.listenerName.value).toSet
       require(controllerListenerNames.forall(cln => listenerNameValues.contains(cln)),
-        s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must only contain values appearing in the '${SocketServerConfigs.LISTENERS_CONFIG}' configuration when running the KRaft controller role")
+        s"${KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG} must only contain values appearing in the '${SocketServerConfigs.LISTENERS_CONFIG}' configuration when running the KRaft controller role")
     }
     def validateAdvertisedBrokerListenersNonEmptyForBroker(): Unit = {
       require(advertisedBrokerListenerNames.nonEmpty,
         "There must be at least one broker advertised listener." + (
-          if (processRoles.contains(ProcessRole.BrokerRole)) s" Perhaps all listeners appear in ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG}?" else ""))
+          if (processRoles.contains(ProcessRole.BrokerRole)) s" Perhaps all listeners appear in ${KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG}?" else ""))
     }
     def warnIfConfigDefinedInWrongRole(expectedRole: ProcessRole, configName: String): Unit = {
       if (originals.containsKey(configName)) {
@@ -659,24 +659,24 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       validateQuorumVotersAndQuorumBootstrapServerForKRaft()
       // nodeId must not appear in controller.quorum.voters
       require(!voterIds.contains(nodeId),
-        s"If ${KRaftConfigs.PROCESS_ROLES_CONFIG} contains just the 'broker' role, the node id $nodeId must not be included in the set of voters ${QuorumConfig.QUORUM_VOTERS_CONFIG}=${voterIds.asScala.toSet}")
+        s"If ${KRaftConfig.PROCESS_ROLES_CONFIG} contains just the 'broker' role, the node id $nodeId must not be included in the set of voters ${QuorumConfig.QUORUM_VOTERS_CONFIG}=${voterIds.asScala.toSet}")
       // controller.listener.names must be non-empty...
       require(controllerListenerNames.nonEmpty,
-        s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must contain at least one value when running KRaft with just the broker role")
+        s"${KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG} must contain at least one value when running KRaft with just the broker role")
       // controller.listener.names are forbidden in listeners...
       require(controllerListeners.isEmpty,
-        s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must not contain a value appearing in the '${SocketServerConfigs.LISTENERS_CONFIG}' configuration when running KRaft with just the broker role")
+        s"${KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG} must not contain a value appearing in the '${SocketServerConfigs.LISTENERS_CONFIG}' configuration when running KRaft with just the broker role")
       // controller.listener.names must all appear in listener.security.protocol.map
       controllerListenerNames.foreach { name =>
         val listenerName = ListenerName.normalised(name)
         if (!effectiveListenerSecurityProtocolMap.contains(listenerName)) {
           throw new ConfigException(s"Controller listener with name ${listenerName.value} defined in " +
-            s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} not found in ${SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG}  (an explicit security mapping for each controller listener is required if ${SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG} is non-empty, or if there are security protocols other than PLAINTEXT in use)")
+            s"${KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG} not found in ${SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG}  (an explicit security mapping for each controller listener is required if ${SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG} is non-empty, or if there are security protocols other than PLAINTEXT in use)")
         }
       }
       // warn that only the first controller listener is used if there is more than one
       if (controllerListenerNames.size > 1) {
-        warn(s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} has multiple entries; only the first will be used since ${KRaftConfigs.PROCESS_ROLES_CONFIG}=broker: ${controllerListenerNames.asJava}")
+        warn(s"${KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG} has multiple entries; only the first will be used since ${KRaftConfig.PROCESS_ROLES_CONFIG}=broker: ${controllerListenerNames.asJava}")
       }
       // warn if create.topic.policy.class.name or alter.config.policy.class.name is defined in the broker role
       warnIfConfigDefinedInWrongRole(ProcessRole.ControllerRole, ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG)
@@ -687,13 +687,13 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       // listeners should only contain listeners also enumerated in the controller listener
       require(
         effectiveAdvertisedControllerListeners.size == listeners.size,
-        s"The ${SocketServerConfigs.LISTENERS_CONFIG} config must only contain KRaft controller listeners from ${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} when ${KRaftConfigs.PROCESS_ROLES_CONFIG}=controller"
+        s"The ${SocketServerConfigs.LISTENERS_CONFIG} config must only contain KRaft controller listeners from ${KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG} when ${KRaftConfig.PROCESS_ROLES_CONFIG}=controller"
       )
       // controller.listener.names must not contain inter.broker.listener.name when inter.broker.listener.name is explicitly set
       if (Option(getString(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG)).isDefined) {
         require(
           !controllerListenerNames.contains(interBrokerListenerName.value()),
-          s"${KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG} must not contain an explicitly set ${ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG} configuration value when ${KRaftConfigs.PROCESS_ROLES_CONFIG}=controller'"
+          s"${KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG} must not contain an explicitly set ${ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG} configuration value when ${KRaftConfig.PROCESS_ROLES_CONFIG}=controller'"
         )
       }
       validateControllerQuorumVotersMustContainNodeIdForKRaftController()

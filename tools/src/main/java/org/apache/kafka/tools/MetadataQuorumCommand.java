@@ -29,7 +29,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.network.SocketServerConfigs;
-import org.apache.kafka.server.config.KRaftConfigs;
+import org.apache.kafka.raft.MetadataLogConfig;
+import org.apache.kafka.server.config.KRaftConfig;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.util.CommandLineUtils;
 
@@ -342,25 +343,25 @@ public class MetadataQuorumCommand {
     }
 
     static int getControllerId(Properties props) throws TerseException {
-        if (!props.containsKey(KRaftConfigs.NODE_ID_CONFIG)) {
-            throw new TerseException(KRaftConfigs.NODE_ID_CONFIG + " not found in configuration " +
+        if (!props.containsKey(KRaftConfig.NODE_ID_CONFIG)) {
+            throw new TerseException(KRaftConfig.NODE_ID_CONFIG + " not found in configuration " +
                 "file. Is this a valid controller configuration file?");
         }
-        int nodeId = Integer.parseInt(props.getProperty(KRaftConfigs.NODE_ID_CONFIG));
+        int nodeId = Integer.parseInt(props.getProperty(KRaftConfig.NODE_ID_CONFIG));
         if (nodeId < 0) {
-            throw new TerseException(KRaftConfigs.NODE_ID_CONFIG + " was negative in configuration " +
+            throw new TerseException(KRaftConfig.NODE_ID_CONFIG + " was negative in configuration " +
                 "file. Is this a valid controller configuration file?");
         }
-        if (!props.getOrDefault(KRaftConfigs.PROCESS_ROLES_CONFIG, "").toString().contains("controller")) {
-            throw new TerseException(KRaftConfigs.PROCESS_ROLES_CONFIG + " did not contain 'controller' in " +
+        if (!props.getOrDefault(KRaftConfig.PROCESS_ROLES_CONFIG, "").toString().contains("controller")) {
+            throw new TerseException(KRaftConfig.PROCESS_ROLES_CONFIG + " did not contain 'controller' in " +
                 "configuration file. Is this a valid controller configuration file?");
         }
         return nodeId;
     }
 
     static String getMetadataDirectory(Properties props) throws TerseException {
-        if (props.containsKey(KRaftConfigs.METADATA_LOG_DIR_CONFIG)) {
-            return props.getProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG);
+        if (props.containsKey(MetadataLogConfig.METADATA_LOG_DIR_CONFIG)) {
+            return props.getProperty(MetadataLogConfig.METADATA_LOG_DIR_CONFIG);
         }
         if (props.containsKey(ServerLogConfigs.LOG_DIRS_CONFIG)) {
             String[] logDirs = props.getProperty(ServerLogConfigs.LOG_DIRS_CONFIG).trim().split(",");
@@ -368,7 +369,7 @@ public class MetadataQuorumCommand {
                 return logDirs[0];
             }
         }
-        throw new TerseException("Neither " + KRaftConfigs.METADATA_LOG_DIR_CONFIG + " nor " +
+        throw new TerseException("Neither " + MetadataLogConfig.METADATA_LOG_DIR_CONFIG + " nor " +
             ServerLogConfigs.LOG_DIRS_CONFIG + " were found. Is this a valid controller " +
             "configuration file?");
     }
@@ -398,13 +399,13 @@ public class MetadataQuorumCommand {
         SocketServerConfigs.listenerListToEndPoints(
             props.getOrDefault(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "").toString(),
             __ -> SecurityProtocol.PLAINTEXT).forEach(e -> listeners.put(e.listenerName().get(), e));
-        if (!props.containsKey(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG)) {
-            throw new TerseException(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG +
+        if (!props.containsKey(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG)) {
+            throw new TerseException(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG +
                 " was not found. Is this a valid controller configuration file?");
         }
         LinkedHashSet<RaftVoterEndpoint> results = new LinkedHashSet<>();
         for (String listenerName : props.getProperty(
-                KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG).split(",")) {
+                KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG).split(",")) {
             listenerName = ListenerName.normalised(listenerName).value();
             Endpoint endpoint = listeners.get(listenerName);
             if (endpoint == null) {

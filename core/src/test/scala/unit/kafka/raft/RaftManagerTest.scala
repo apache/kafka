@@ -31,10 +31,9 @@ import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.Endpoints
-import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.raft.{Endpoints, MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.server.ProcessRole
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{KRaftConfig, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.FaultHandler
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
@@ -58,11 +57,11 @@ class RaftManagerTest {
       props.setProperty(ServerLogConfigs.LOG_DIR_CONFIG, value.toString)
     }
     metadataDir.foreach { value =>
-      props.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, value.toString)
+      props.setProperty(MetadataLogConfig.METADATA_LOG_DIR_CONFIG, value.toString)
     }
-    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, processRoles.mkString(","))
-    props.setProperty(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
-    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
+    props.setProperty(KRaftConfig.PROCESS_ROLES_CONFIG, processRoles.mkString(","))
+    props.setProperty(KRaftConfig.NODE_ID_CONFIG, nodeId.toString)
+    props.setProperty(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
     if (processRoles.contains(ProcessRole.BrokerRole)) {
       props.setProperty(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, "PLAINTEXT")
       if (processRoles.contains(ProcessRole.ControllerRole)) { // co-located

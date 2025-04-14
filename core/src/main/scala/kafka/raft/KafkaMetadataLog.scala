@@ -29,7 +29,7 @@ import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, MetadataLogConfig, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, SegmentPosition, ValidOffsetAndEpoch}
-import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.snapshot.FileRawSnapshotReader
@@ -478,15 +478,15 @@ final class KafkaMetadataLog private (
   }
 
   private def cleanSnapshotsRetentionMs(): Boolean = {
-    if (config.retentionMillis < 0)
+    if (config.maxRetentionMillis < 0)
       return false
 
     // Keep deleting snapshots as long as the
     def shouldClean(snapshotId: OffsetAndEpoch): Option[SnapshotDeletionReason] = {
       readSnapshotTimestamp(snapshotId).flatMap { timestamp =>
         val now = time.milliseconds()
-        if (now - timestamp > config.retentionMillis) {
-          Some(RetentionMsBreach(now, timestamp, config.retentionMillis))
+        if (now - timestamp > config.maxRetentionMillis) {
+          Some(RetentionMsBreach(now, timestamp, config.maxRetentionMillis))
         } else {
           None
         }
@@ -497,7 +497,7 @@ final class KafkaMetadataLog private (
   }
 
   private def cleanSnapshotsRetentionSize(): Boolean = {
-    if (config.retentionMaxBytes < 0)
+    if (config.maxRetentionBytes < 0)
       return false
 
     val snapshotSizes = loadSnapshotSizes().toMap
@@ -508,10 +508,10 @@ final class KafkaMetadataLog private (
     def shouldClean(snapshotId: OffsetAndEpoch): Option[SnapshotDeletionReason] = {
       snapshotSizes.get(snapshotId).flatMap { snapshotSize =>
         val logSize = log.size
-        if (logSize + snapshotTotalSize > config.retentionMaxBytes) {
+        if (logSize + snapshotTotalSize > config.maxRetentionBytes) {
           val oldSnapshotTotalSize = snapshotTotalSize
           snapshotTotalSize -= snapshotSize
-          Some(RetentionSizeBreach(logSize, oldSnapshotTotalSize, config.retentionMaxBytes))
+          Some(RetentionSizeBreach(logSize, oldSnapshotTotalSize, config.maxRetentionBytes))
         } else {
           None
         }
@@ -597,7 +597,7 @@ object KafkaMetadataLog extends Logging {
 
     if (config.logSegmentBytes < config.logSegmentMinBytes) {
       throw new InvalidConfigurationException(
-        s"Cannot set ${KRaftConfigs.METADATA_LOG_SEGMENT_BYTES_CONFIG} below ${config.logSegmentMinBytes}: ${config.logSegmentBytes}"
+        s"Cannot set ${MetadataLogConfig.METADATA_LOG_SEGMENT_BYTES_CONFIG} below ${config.logSegmentMinBytes}: ${config.logSegmentBytes}"
       )
     } else if (defaultLogConfig.retentionMs >= 0) {
       throw new InvalidConfigurationException(
@@ -636,7 +636,7 @@ object KafkaMetadataLog extends Logging {
 
     // Print a warning if users have overridden the internal config
     if (config.logSegmentMinBytes != KafkaRaftClient.MAX_BATCH_SIZE_BYTES) {
-      metadataLog.error(s"Overriding ${KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG} is only supported for testing. Setting " +
+      metadataLog.error(s"Overriding ${MetadataLogConfig.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG} is only supported for testing. Setting " +
         s"this value too low may lead to an inability to write batches of metadata records.")
     }
 

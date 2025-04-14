@@ -35,7 +35,7 @@ import org.apache.kafka.connect.mirror.clients.admin.FakeForwardingAdminWithLoca
 import org.apache.kafka.connect.mirror.clients.admin.FakeLocalMetadataStore;
 import org.apache.kafka.connect.util.clusters.EmbeddedKafkaCluster;
 import org.apache.kafka.network.SocketServerConfigs;
-import org.apache.kafka.server.config.KRaftConfigs;
+import org.apache.kafka.server.config.KRaftConfig;
 import org.apache.kafka.server.config.ServerConfigs;
 
 import org.junit.jupiter.api.AfterEach;
@@ -78,7 +78,7 @@ public class MirrorConnectorsWithCustomForwardingAdminIntegrationTest extends Mi
         brokerProps.put(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, "org.apache.kafka.metadata.authorizer.StandardAuthorizer");
         brokerProps.put(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, "PLAIN");
         brokerProps.put(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN");
-        brokerProps.put(KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG, "PLAIN");
+        brokerProps.put(KRaftConfig.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG, "PLAIN");
         String listenerSaslJaasConfig = "org.apache.kafka.common.security.plain.PlainLoginModule required "
                 + "username=\"super\" "
                 + "password=\"super_pwd\" "

@@ -27,6 +27,7 @@ import org.apache.kafka.coordinator.transaction.AddPartitionsToTxnConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.coordinator.transaction.TransactionStateManagerConfig;
 import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
 import org.apache.kafka.server.metrics.MetricConfigs;
@@ -46,7 +47,8 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
     public static final ConfigDef CONFIG_DEF = Utils.mergeConfigs(List.of(
         RemoteLogManagerConfig.configDef(),
         ServerConfigs.CONFIG_DEF,
-        KRaftConfigs.CONFIG_DEF,
+        KRaftConfig.CONFIG_DEF,
+        MetadataLogConfig.CONFIG_DEF,
         SocketServerConfigs.CONFIG_DEF,
         ReplicationConfigs.CONFIG_DEF,
         GroupCoordinatorConfig.CONFIG_DEF,

@@ -34,7 +34,6 @@ import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse
 import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.RequestLocal
-import org.apache.kafka.server.config.KRaftConfigs
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -58,6 +57,7 @@ import org.mockito.Mockito.{doAnswer, doThrow, spy}
 import net.jqwik.api.AfterFailureMode
 import net.jqwik.api.ForAll
 import net.jqwik.api.Property
+import org.apache.kafka.server.config.KRaftConfig
 
 import java.io._
 import java.nio.ByteBuffer
@@ -2401,9 +2401,9 @@ class UnifiedLogTest {
 
   private def createKafkaConfigWithRLM: KafkaConfig = {
     val props = new Properties()
-    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
-    props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "0")
-    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    props.setProperty(KRaftConfig.PROCESS_ROLES_CONFIG, "controller")
+    props.setProperty(KRaftConfig.NODE_ID_CONFIG, "0")
+    props.setProperty(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     props.setProperty("controller.quorum.bootstrap.servers", "localhost:9093")
     props.setProperty("listeners", "CONTROLLER://:9093")
     props.setProperty("advertised.listeners", "CONTROLLER://127.0.0.1:9093")

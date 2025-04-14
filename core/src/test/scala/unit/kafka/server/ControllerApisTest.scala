@@ -57,7 +57,7 @@ import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, FinalizedFeatures, KRaftVersion, MetadataVersion, ProducerIdsBlock, RequestLocal}
-import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs}
+import org.apache.kafka.server.config.{KRaftConfig, ServerConfigs}
 import org.apache.kafka.server.util.FutureUtils
 import org.apache.kafka.storage.internals.log.CleanerConfig
 import org.junit.jupiter.api.Assertions._
@@ -154,9 +154,9 @@ class ControllerApisTest {
                                    controller: Controller,
                                    props: Properties = new Properties(),
                                    throttle: Boolean = false): ControllerApis = {
-    props.put(KRaftConfigs.NODE_ID_CONFIG, nodeId: java.lang.Integer)
-    props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
-    props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    props.put(KRaftConfig.NODE_ID_CONFIG, nodeId: java.lang.Integer)
+    props.put(KRaftConfig.PROCESS_ROLES_CONFIG, "controller")
+    props.put(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     props.put(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://:9092")
     props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:9092")
     new ControllerApis(

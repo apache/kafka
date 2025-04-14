@@ -32,8 +32,8 @@ import org.apache.kafka.metadata.bootstrap.BootstrapDirectory
 import org.apache.kafka.metadata.properties.{MetaPropertiesEnsemble, PropertiesUtils}
 import org.apache.kafka.metadata.storage.FormatterException
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
+import org.apache.kafka.server.config.{KRaftConfig, ServerConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows, assertTrue}
 import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
@@ -48,10 +48,10 @@ class StorageToolTest {
   private def newSelfManagedProperties() = {
     val properties = new Properties()
     properties.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, "/tmp/foo,/tmp/bar")
-    properties.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
-    properties.setProperty(KRaftConfigs.NODE_ID_CONFIG, "2")
+    properties.setProperty(KRaftConfig.PROCESS_ROLES_CONFIG, "controller")
+    properties.setProperty(KRaftConfig.NODE_ID_CONFIG, "2")
     properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"2@localhost:9092")
-    properties.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    properties.put(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     properties.put(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://:9092")
     properties
   }
@@ -67,7 +67,7 @@ class StorageToolTest {
   @Test
   def testConfigToLogDirectoriesWithMetaLogDir(): Unit = {
     val properties = newSelfManagedProperties()
-    properties.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, "/tmp/baz")
+    properties.setProperty(MetadataLogConfig.METADATA_LOG_DIR_CONFIG, "/tmp/baz")
     val config = new KafkaConfig(properties)
     assertEquals(Seq("/tmp/bar", "/tmp/baz", "/tmp/foo"),
       StorageTool.configToLogDirectories(config))

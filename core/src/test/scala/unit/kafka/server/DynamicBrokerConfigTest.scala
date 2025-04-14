@@ -31,11 +31,11 @@ import org.apache.kafka.common.config.{ConfigException, SslConfigs}
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.DynamicThreadPool
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{KRaftConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.util.KafkaScheduler
@@ -254,7 +254,7 @@ class DynamicBrokerConfigTest {
 
     val securityPropsWithoutListenerPrefix = Map(SslConfigs.SSL_KEYSTORE_TYPE_CONFIG -> "PKCS12")
     verifyConfigUpdateWithInvalidConfig(config, origProps, validProps, securityPropsWithoutListenerPrefix)
-    val nonDynamicProps = Map(KRaftConfigs.NODE_ID_CONFIG -> "123")
+    val nonDynamicProps = Map(KRaftConfig.NODE_ID_CONFIG -> "123")
     verifyConfigUpdateWithInvalidConfig(config, origProps, validProps, nonDynamicProps)
 
     // Test update of configs with invalid type
@@ -496,8 +496,8 @@ class DynamicBrokerConfigTest {
       enableControlledShutdown = true,
       enableDeleteTopic = true,
       port)
-    retval.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker,controller")
-    retval.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    retval.put(KRaftConfig.PROCESS_ROLES_CONFIG, "broker,controller")
+    retval.put(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     retval.put(SocketServerConfigs.LISTENERS_CONFIG, s"${retval.get(SocketServerConfigs.LISTENERS_CONFIG)},CONTROLLER://localhost:0")
     retval.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"${nodeId}@localhost:0")
     retval
@@ -539,10 +539,10 @@ class DynamicBrokerConfigTest {
       enableDeleteTopic = true,
       port
     )
-    retval.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
+    retval.put(KRaftConfig.PROCESS_ROLES_CONFIG, "controller")
     retval.remove(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG)
 
-    retval.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    retval.put(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     retval.put(SocketServerConfigs.LISTENERS_CONFIG, "CONTROLLER://localhost:0")
     retval.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"${nodeId}@localhost:0")
     retval
@@ -670,11 +670,11 @@ class DynamicBrokerConfigTest {
   @Test
   def testNonInternalValuesDoesNotExposeInternalConfigs(): Unit = {
     val props = TestUtils.createBrokerConfig(0, port = 8181)
-    props.put(KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, "1024")
+    props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, "1024")
     val config = new KafkaConfig(props)
-    assertFalse(config.nonInternalValues.containsKey(KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG))
+    assertFalse(config.nonInternalValues.containsKey(MetadataLogConfig.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG))
     config.updateCurrentConfig(new KafkaConfig(props))
-    assertFalse(config.nonInternalValues.containsKey(KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG))
+    assertFalse(config.nonInternalValues.containsKey(MetadataLogConfig.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG))
   }
 
   @Test

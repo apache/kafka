@@ -40,10 +40,11 @@ import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.metadata.storage.Formatter;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.raft.DynamicVoters;
+import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.raft.QuorumConfig;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
-import org.apache.kafka.server.config.KRaftConfigs;
+import org.apache.kafka.server.config.KRaftConfig;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.storage.internals.log.CleanerConfig;
@@ -133,18 +134,18 @@ public class KafkaClusterTestKit implements AutoCloseable {
             TestKitNode controllerNode = nodes.controllerNodes().get(node.id());
 
             Map<String, Object> props = new HashMap<>(configProps);
-            props.put(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG,
+            props.put(KRaftConfig.SERVER_MAX_STARTUP_TIME_MS_CONFIG,
                     Long.toString(TimeUnit.MINUTES.toMillis(10)));
-            props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, roles(node.id()));
-            props.put(KRaftConfigs.NODE_ID_CONFIG,
+            props.put(KRaftConfig.PROCESS_ROLES_CONFIG, roles(node.id()));
+            props.put(KRaftConfig.NODE_ID_CONFIG,
                     Integer.toString(node.id()));
             // In combined mode, always prefer the metadata log directory of the controller node.
             if (controllerNode != null) {
-                props.put(KRaftConfigs.METADATA_LOG_DIR_CONFIG,
+                props.put(MetadataLogConfig.METADATA_LOG_DIR_CONFIG,
                         controllerNode.metadataDirectory());
                 setSecurityProtocolProps(props, controllerSecurityProtocol);
             } else {
-                props.put(KRaftConfigs.METADATA_LOG_DIR_CONFIG,
+                props.put(MetadataLogConfig.METADATA_LOG_DIR_CONFIG,
                         node.metadataDirectory());
             }
             if (brokerNode != null) {
@@ -164,7 +165,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
                     brokerListenerName, brokerSecurityProtocol, controllerListenerName, controllerSecurityProtocol));
             props.putIfAbsent(SocketServerConfigs.LISTENERS_CONFIG, listeners(node.id()));
             props.putIfAbsent(INTER_BROKER_LISTENER_NAME_CONFIG, brokerListenerName);
-            props.putIfAbsent(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, controllerListenerName);
+            props.putIfAbsent(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG, controllerListenerName);
 
             StringBuilder quorumVoterStringBuilder = new StringBuilder();
             String prefix = "";
@@ -199,7 +200,7 @@ public class KafkaClusterTestKit implements AutoCloseable {
             if (securityProtocol.equals(SecurityProtocol.SASL_PLAINTEXT.name)) {
                 props.putIfAbsent(BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG, "PLAIN");
                 props.putIfAbsent(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, "PLAIN");
-                props.putIfAbsent(KRaftConfigs.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG, "PLAIN");
+                props.putIfAbsent(KRaftConfig.SASL_MECHANISM_CONTROLLER_PROTOCOL_CONFIG, "PLAIN");
                 props.putIfAbsent(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG, StandardAuthorizer.class.getName());
                 props.putIfAbsent(StandardAuthorizer.ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "false");
                 props.putIfAbsent(StandardAuthorizer.SUPER_USERS_CONFIG, "User:" + JaasUtils.KAFKA_PLAIN_ADMIN);

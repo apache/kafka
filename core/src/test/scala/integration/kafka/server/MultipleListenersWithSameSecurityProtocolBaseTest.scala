@@ -32,7 +32,7 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.config.{SaslConfigs, SslConfigs}
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs}
+import org.apache.kafka.server.config.{KRaftConfig, ReplicationConfigs}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.junit.jupiter.api.Assertions.assertEquals
@@ -87,7 +87,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
       props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, props.get(SocketServerConfigs.LISTENERS_CONFIG))
       props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, s"$Internal:PLAINTEXT, $SecureInternal:SASL_SSL," +
         s"$External:PLAINTEXT, $SecureExternal:SASL_SSL, CONTROLLER:PLAINTEXT")
-      props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+      props.put(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
       props.put(ReplicationConfigs.INTER_BROKER_LISTENER_NAME_CONFIG, Internal)
       props.put(BrokerSecurityConfigs.SASL_MECHANISM_INTER_BROKER_PROTOCOL_CONFIG, kafkaClientSaslMechanism)
       props.put(s"${new ListenerName(SecureInternal).configPrefix}${BrokerSecurityConfigs.SASL_ENABLED_MECHANISMS_CONFIG}",
