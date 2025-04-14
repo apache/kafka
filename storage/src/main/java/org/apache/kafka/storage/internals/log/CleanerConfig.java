@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.storage.internals.log;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerTopicConfigSynonyms;
 
 import static org.apache.kafka.common.config.ConfigDef.Importance.MEDIUM;
@@ -127,6 +129,22 @@ public class CleanerConfig {
         this.maxIoBytesPerSecond = maxIoBytesPerSecond;
         this.backoffMs = backoffMs;
         this.enableCleaner = enableCleaner;
+    }
+
+    /**
+     * Create an instance of this class.
+     *
+     * @param config the {@link AbstractConfig} instance for initialize all variables
+     */
+    public CleanerConfig(AbstractConfig config) {
+        this.numThreads = config.getInt(LOG_CLEANER_THREADS_PROP);
+        this.dedupeBufferSize = config.getLong(LOG_CLEANER_DEDUPE_BUFFER_SIZE_PROP);
+        this.dedupeBufferLoadFactor = config.getDouble(LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_PROP);
+        this.ioBufferSize = config.getInt(LOG_CLEANER_IO_BUFFER_SIZE_PROP);
+        this.maxMessageSize = config.getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG);
+        this.maxIoBytesPerSecond = config.getDouble(LOG_CLEANER_IO_MAX_BYTES_PER_SECOND_PROP);
+        this.backoffMs = config.getLong(LOG_CLEANER_BACKOFF_MS_PROP);
+        this.enableCleaner = config.getBoolean(LOG_CLEANER_ENABLE_PROP);
     }
 
     public String hashAlgorithm() {

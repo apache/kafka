@@ -24,6 +24,14 @@
 <h5><a id="upgrade_4_1_0" href="#upgrade_4_1_0">Upgrading Servers to 4.1.0 from any version 3.3.x through 4.0.x</a></h5>
     <h6><a id="upgrade_410_notable" href="#upgrade_410_notable">Notable changes in 4.1.0</a></h6>
         <ul>
+            <li><b>Common</b>
+                <ul>
+                    <li>
+                        The logger class name for LogCleaner has been updated from <code>kafka.log.LogCleaner</code> to <code>org.apache.kafka.storage.internals.log.LogCleaner</code> in the log4j2.yaml configuration file.
+                        Added loggers for <code>org.apache.kafka.storage.internals.log.LogCleaner$CleanerThread</code> and <code>org.apache.kafka.storage.internals.log.Cleaner</code> classes to CleanerAppender.
+                    </li>
+                </ul>
+            </li>
             <li><b>Producer</b>
                 <ul>
                     <li>The <code>flush</code> method now detects potential deadlocks and prohibits its use inside a callback. This change prevents unintended blocking behavior, which was a known risk in earlier versions.
