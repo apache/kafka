@@ -47,13 +47,7 @@ object TransactionCoordinator {
             time: Time): TransactionCoordinator = {
 
     val transactionLogConfig = new TransactionLogConfig(config)
-    val transactionStateManagerConfig = new TransactionStateManagerConfig(
-      config.getInt(TransactionStateManagerConfig.TRANSACTIONAL_ID_EXPIRATION_MS_CONFIG),
-      config.getInt(TransactionStateManagerConfig.TRANSACTIONS_MAX_TIMEOUT_MS_CONFIG),
-      config.getInt(TransactionStateManagerConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG),
-      config.getInt(TransactionStateManagerConfig.TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_CONFIG),
-      config.getBoolean(TransactionStateManagerConfig.TRANSACTIONS_2PC_ENABLED_CONFIG)
-    )
+    val transactionStateManagerConfig = new TransactionStateManagerConfig(config)
     val txnConfig = TransactionConfig(transactionStateManagerConfig.transactionalIdExpirationMs,
       transactionStateManagerConfig.transactionMaxTimeoutMs,
       transactionLogConfig.transactionTopicPartitions,

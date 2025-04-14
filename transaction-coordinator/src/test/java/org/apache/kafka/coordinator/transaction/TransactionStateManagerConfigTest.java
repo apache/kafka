@@ -52,13 +52,7 @@ class TransactionStateManagerConfigTest {
         doReturn(4).when(config).getInt(TransactionStateManagerConfig.TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_CONFIG);
         doReturn(true).when(config).getBoolean(TransactionStateManagerConfig.TRANSACTIONS_2PC_ENABLED_CONFIG);
 
-        TransactionStateManagerConfig transactionStateManagerConfig = new TransactionStateManagerConfig(
-            config.getInt(TransactionStateManagerConfig.TRANSACTIONAL_ID_EXPIRATION_MS_CONFIG),
-            config.getInt(TransactionStateManagerConfig.TRANSACTIONS_MAX_TIMEOUT_MS_CONFIG),
-            config.getInt(TransactionStateManagerConfig.TRANSACTIONS_ABORT_TIMED_OUT_TRANSACTION_CLEANUP_INTERVAL_MS_CONFIG),
-            config.getInt(TransactionStateManagerConfig.TRANSACTIONS_REMOVE_EXPIRED_TRANSACTIONAL_ID_CLEANUP_INTERVAL_MS_CONFIG),
-            config.getBoolean(TransactionStateManagerConfig.TRANSACTIONS_2PC_ENABLED_CONFIG)
-        );
+        TransactionStateManagerConfig transactionStateManagerConfig = new TransactionStateManagerConfig(config);
 
         assertEquals(1, transactionStateManagerConfig.transactionMaxTimeoutMs());
         assertEquals(2, transactionStateManagerConfig.transactionalIdExpirationMs());
