@@ -172,17 +172,17 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     memberId: String,
     memberEpoch: Int,
     topic: String,
+    topicId: Uuid,
     partition: Int,
     offset: Long,
     expectedError: Errors,
-    version: Short = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled),
-    topicId: Uuid = Uuid.ZERO_UUID
+    version: Short = ApiKeys.OFFSET_COMMIT.latestVersion(isUnstableApiEnabled)
   ): Unit = {
     if (version >= 10 && topicId == Uuid.ZERO_UUID) {
       throw new IllegalArgumentException(s"Cannot call OffsetCommit API version $version without a topic id")
     }
 
-    val request = new OffsetCommitRequest.Builder(
+    val request = OffsetCommitRequest.Builder.forTopicIdsAndNames(
       new OffsetCommitRequestData()
         .setGroupId(groupId)
         .setMemberId(memberId)

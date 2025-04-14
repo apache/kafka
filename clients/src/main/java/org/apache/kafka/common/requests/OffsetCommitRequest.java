@@ -45,28 +45,17 @@ public class OffsetCommitRequest extends AbstractRequest {
 
         private final OffsetCommitRequestData data;
 
-        public Builder(
-            OffsetCommitRequestData data,
-            boolean allowTopicIds,
-            boolean enableUnstableLastVersion
-        ) {
-            super(
-                ApiKeys.OFFSET_COMMIT,
-                ApiKeys.OFFSET_COMMIT.oldestVersion(),
-                allowTopicIds ? ApiKeys.OFFSET_COMMIT.latestVersion(enableUnstableLastVersion) : 9
-            );
+        private Builder(OffsetCommitRequestData data, short oldestAllowedVersion, short latestAllowedVersion) {
+            super(ApiKeys.OFFSET_COMMIT, oldestAllowedVersion, latestAllowedVersion);
             this.data = data;
         }
 
-        public Builder(
-            OffsetCommitRequestData data,
-            boolean allowTopicIds
-        ) {
-            this(data, allowTopicIds, false);
+        public static Builder forTopicIdsAndNames(OffsetCommitRequestData data, boolean enableUnstableLastVersion) {
+            return new Builder(data, ApiKeys.OFFSET_COMMIT.oldestVersion(), ApiKeys.OFFSET_COMMIT.latestVersion(enableUnstableLastVersion));
         }
 
-        public Builder(OffsetCommitRequestData data) {
-            this(data, true);
+        public static Builder forTopicNames(OffsetCommitRequestData data) {
+            return new Builder(data, ApiKeys.OFFSET_COMMIT.oldestVersion(), (short) 9);
         }
 
         @Override

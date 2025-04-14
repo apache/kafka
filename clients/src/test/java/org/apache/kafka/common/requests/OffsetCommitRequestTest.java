@@ -95,7 +95,7 @@ public class OffsetCommitRequestTest {
         expectedOffsets.put(new TopicPartition(topicOne, partitionOne), offset);
         expectedOffsets.put(new TopicPartition(topicTwo, partitionTwo), offset);
 
-        OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(data);
+        OffsetCommitRequest.Builder builder = OffsetCommitRequest.Builder.forTopicNames(data);
 
         for (short version : ApiKeys.OFFSET_COMMIT.allVersions()) {
             OffsetCommitRequest request = builder.build(version);
@@ -110,7 +110,7 @@ public class OffsetCommitRequestTest {
 
     @Test
     public void testVersionSupportForGroupInstanceId() {
-        OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(
+        OffsetCommitRequest.Builder builder = OffsetCommitRequest.Builder.forTopicNames(
             new OffsetCommitRequestData()
                 .setGroupId(groupId)
                 .setMemberId(memberId)

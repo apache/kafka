@@ -270,7 +270,7 @@ class RequestQuotaTest extends BaseRequestTest {
             .setTargetTimes(List(topic).asJava)
 
         case ApiKeys.OFFSET_COMMIT =>
-          new OffsetCommitRequest.Builder(
+          OffsetCommitRequest.Builder.forTopicNames(
             new OffsetCommitRequestData()
               .setGroupId("test-group")
               .setGenerationIdOrMemberEpoch(1)
