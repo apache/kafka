@@ -54,7 +54,7 @@ public class SimpleApiVersionManager implements ApiVersionManager {
         this.brokerFeatures = brokerFeatures;
         this.enableUnstableLastVersion = enableUnstableLastVersion;
         this.featuresProvider = featuresProvider;
-        this.apiVersions = ApiVersionsResponse.collectApis(listenerType, ApiKeys.apisForListener(listenerType()), enableUnstableLastVersion);
+        this.apiVersions = ApiVersionsResponse.collectApis(listenerType, ApiKeys.apisForListener(listenerType), enableUnstableLastVersion);
     }
 
     public SimpleApiVersionManager(ApiMessageType.ListenerType listenerType,
