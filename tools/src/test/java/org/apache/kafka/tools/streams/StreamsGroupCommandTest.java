@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeStreamsGroupsResult;
 import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
+import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.clients.admin.ListGroupsResult;
 import org.apache.kafka.clients.admin.ListOffsetsResult;
@@ -28,6 +29,7 @@ import org.apache.kafka.clients.admin.StreamsGroupDescription;
 import org.apache.kafka.clients.admin.StreamsGroupMemberAssignment;
 import org.apache.kafka.clients.admin.StreamsGroupMemberDescription;
 import org.apache.kafka.clients.admin.StreamsGroupSubtopologyDescription;
+import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaFuture;
@@ -179,6 +181,13 @@ public class StreamsGroupCommandTest {
 
         when(adminClient.listOffsets(ArgumentMatchers.anyMap())).thenReturn(startOffset, endOffset);
 
+        ListConsumerGroupOffsetsResult result = mock(ListConsumerGroupOffsetsResult.class);
+        Map<TopicPartition, OffsetAndMetadata> committedOffsetsMap = new HashMap<>();
+        committedOffsetsMap.put(new TopicPartition("topic1", 0), new OffsetAndMetadata(12, Optional.of(0), ""));
+
+        when(adminClient.listConsumerGroupOffsets(ArgumentMatchers.anyMap())).thenReturn(result);
+        when(result.partitionsToOffsetAndMetadata(ArgumentMatchers.anyString())).thenReturn(KafkaFuture.completedFuture(committedOffsetsMap));
+
         StreamsGroupMemberDescription description = new StreamsGroupMemberDescription("foo", 0, Optional.empty(),
             Optional.empty(), "bar", "baz", 0, "qux",
             Optional.empty(), Map.of(), List.of(), List.of(),
@@ -195,19 +204,19 @@ public class StreamsGroupCommandTest {
             new Node(0, "host", 0),
             null);
         StreamsGroupCommand.StreamsGroupService service = new StreamsGroupCommand.StreamsGroupService(null, adminClient);
-        Map<TopicPartition, Long> lags = service.getOffsets(List.of(description), x);
+        Map<TopicPartition, StreamsGroupCommand.OffsetsInfo> lags = service.getOffsets(x);
         assertEquals(1, lags.size());
-        assertEquals(20, lags.get(new TopicPartition("topic1", 0)));
+        assertEquals(new StreamsGroupCommand.OffsetsInfo(Optional.of(12L), Optional.of(0), 30L, 18L), lags.get(new TopicPartition("topic1", 0)));
         service.close();
     }
 
     @Test
     public void testPrintEmptyGroupState() {
-        assertFalse(StreamsGroupCommand.StreamsGroupService.maybePrintEmptyGroupState("group", GroupState.EMPTY, 0));
-        assertFalse(StreamsGroupCommand.StreamsGroupService.maybePrintEmptyGroupState("group", GroupState.DEAD, 0));
-        assertFalse(StreamsGroupCommand.StreamsGroupService.maybePrintEmptyGroupState("group", GroupState.STABLE, 0));
-        assertTrue(StreamsGroupCommand.StreamsGroupService.maybePrintEmptyGroupState("group", GroupState.STABLE, 1));
-        assertTrue(StreamsGroupCommand.StreamsGroupService.maybePrintEmptyGroupState("group", GroupState.UNKNOWN, 1));
+        assertFalse(StreamsGroupCommand.StreamsGroupService.isGroupStateValid(GroupState.EMPTY, 0));
+        assertFalse(StreamsGroupCommand.StreamsGroupService.isGroupStateValid(GroupState.DEAD, 0));
+        assertFalse(StreamsGroupCommand.StreamsGroupService.isGroupStateValid(GroupState.STABLE, 0));
+        assertTrue(StreamsGroupCommand.StreamsGroupService.isGroupStateValid(GroupState.STABLE, 1));
+        assertTrue(StreamsGroupCommand.StreamsGroupService.isGroupStateValid(GroupState.UNKNOWN, 1));
     }
 
     @Test
