@@ -17,13 +17,14 @@
 
 package org.apache.kafka.server.share.session;
 
-import com.yammer.metrics.core.Meter;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.network.ConnectionDisconnectListener;
 import org.apache.kafka.server.share.CachedSharePartition;
+
+import com.yammer.metrics.core.Meter;
 
 import java.util.HashMap;
 import java.util.Map;
