@@ -23,9 +23,7 @@ import org.apache.kafka.coordinator.share.generated.ShareSnapshotValue;
 import org.apache.kafka.coordinator.share.generated.ShareUpdateValue;
 import org.apache.kafka.server.share.persister.PersisterStateBatch;
 
-import java.util.ArrayList;
 import java.util.Collections;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Objects;
 
@@ -162,10 +160,6 @@ public class ShareGroupOffset {
         );
     }
 
-    public LinkedHashSet<PersisterStateBatch> stateBatchAsSet() {
-        return new LinkedHashSet<>(stateBatches);
-    }
-
     public static class Builder {
         private int snapshotEpoch;
         private int stateEpoch;
@@ -196,7 +190,7 @@ public class ShareGroupOffset {
         }
 
         public Builder setStateBatches(List<PersisterStateBatch> stateBatches) {
-            this.stateBatches = stateBatches;
+            this.stateBatches = stateBatches == null ? Collections.emptyList() : stateBatches.stream().toList();
             return this;
         }
 
@@ -249,12 +243,12 @@ public class ShareGroupOffset {
 
     public Builder builderSupplier() {
         return new Builder()
-            .setSnapshotEpoch(snapshotEpoch)
-            .setStateEpoch(stateEpoch)
-            .setLeaderEpoch(leaderEpoch)
-            .setStartOffset(startOffset)
-            .setStateBatches(new ArrayList<>(stateBatches))
-            .setCreateTimestamp(createTimestamp)
-            .setWriteTimestamp(writeTimestamp);
+            .setSnapshotEpoch(snapshotEpoch())
+            .setStateEpoch(stateEpoch())
+            .setLeaderEpoch(leaderEpoch())
+            .setStartOffset(startOffset())
+            .setStateBatches(stateBatches())
+            .setCreateTimestamp(createTimestamp())
+            .setWriteTimestamp(writeTimestamp());
     }
 }
