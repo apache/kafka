@@ -179,7 +179,11 @@ public class StandbyTask extends AbstractTask implements Task {
      *                          or flushing state store get IO errors; such error should cause the thread to die
      */
     @Override
-    public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
+    public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
+        if (!clean) {
+            log.warn("Skipped preparing {} standby task with id {} for commit since the task is getting closed dirty.", state(), id);
+            return null;
+        }
         switch (state()) {
             case CREATED:
                 log.debug("Skipped preparing created task for commit");
@@ -198,11 +202,6 @@ public class StandbyTask extends AbstractTask implements Task {
         }
 
         return Collections.emptyMap();
-    }
-
-    @Override
-    public void flush() {
-        throw new UnsupportedOperationException("Flushing behavior is not required for standby tasks.");
     }
 
     @Override

@@ -180,12 +180,7 @@ public class ReadOnlyTask implements Task {
     }
 
     @Override
-    public Map<TopicPartition, OffsetAndMetadata> prepareCommit() {
-        throw new UnsupportedOperationException("This task is read-only");
-    }
-
-    @Override
-    public void flush() {
+    public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
         throw new UnsupportedOperationException("This task is read-only");
     }
 
