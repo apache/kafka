@@ -184,7 +184,7 @@ public class DeadLetterQueueReporter implements ErrorReporter<ConsumerRecord<byt
     private byte[] stacktrace(Throwable error) {
         ByteArrayOutputStream bos = new ByteArrayOutputStream();
         try {
-            PrintStream stream = new PrintStream(bos, true, StandardCharsets.UTF_8.name());
+            PrintStream stream = new PrintStream(bos, true, StandardCharsets.UTF_8);
             error.printStackTrace(stream);
             bos.close();
             return bos.toByteArray();
