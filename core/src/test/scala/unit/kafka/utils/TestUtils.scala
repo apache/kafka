@@ -52,7 +52,7 @@ import org.apache.kafka.network.metrics.RequestChannelMetrics
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.authorizer.{AuthorizableRequestContext, Authorizer => JAuthorizer}
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, TopicIdPartition}
-import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
@@ -249,12 +249,12 @@ object TestUtils extends Logging {
     val props = new Properties
     props.put(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, "true")
     props.put(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true")
-    props.setProperty(KRaftConfig.SERVER_MAX_STARTUP_TIME_MS_CONFIG, TimeUnit.MINUTES.toMillis(10).toString)
-    props.put(KRaftConfig.NODE_ID_CONFIG, nodeId.toString)
+    props.setProperty(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG, TimeUnit.MINUTES.toMillis(10).toString)
+    props.put(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
     props.put(ServerConfigs.BROKER_ID_CONFIG, nodeId.toString)
     props.put(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, listeners)
     props.put(SocketServerConfigs.LISTENERS_CONFIG, listeners)
-    props.put(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
+    props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER")
     props.put(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, protocolAndPorts.
       map(p => "%s:%s".format(p._1, p._1)).mkString(",") + ",CONTROLLER:PLAINTEXT")
 
@@ -268,7 +268,7 @@ object TestUtils extends Logging {
     } else {
       props.put(ServerLogConfigs.LOG_DIR_CONFIG, tempDir().getAbsolutePath)
     }
-    props.put(KRaftConfig.PROCESS_ROLES_CONFIG, "broker")
+    props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     // Note: this is just a placeholder value for controller.quorum.voters. JUnit
     // tests use random port assignment, so the controller ports are not known ahead of
     // time. Therefore, we ignore controller.quorum.voters and use

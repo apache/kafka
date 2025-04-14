@@ -30,7 +30,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.raft.{KafkaRaftClient, LogAppendInfo, LogOffsetMetadata, MetadataLogConfig, OffsetAndEpoch, QuorumConfig, ReplicatedLog, SegmentPosition, ValidOffsetAndEpoch}
 import org.apache.kafka.raft.internals.BatchBuilder
 import org.apache.kafka.server.common.serialization.RecordSerde
-import org.apache.kafka.server.config.{KRaftConfig, ServerLogConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.snapshot.{FileRawSnapshotWriter, RawSnapshotReader, RawSnapshotWriter, SnapshotPath, Snapshots}
 import org.apache.kafka.storage.internals.log.{LogConfig, LogStartOffsetIncrementReason, UnifiedLog}
@@ -72,10 +72,10 @@ final class KafkaMetadataLogTest {
   @Test
   def testConfig(): Unit = {
     val props = new Properties()
-    props.put(KRaftConfig.PROCESS_ROLES_CONFIG, util.Arrays.asList("broker"))
+    props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, util.Arrays.asList("broker"))
     props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9093")
-    props.put(KRaftConfig.NODE_ID_CONFIG, Int.box(2))
-    props.put(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
+    props.put(KRaftConfigs.NODE_ID_CONFIG, Int.box(2))
+    props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
     props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_BYTES_CONFIG, Int.box(10240))
     props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG, Int.box(10 * 1024))
     assertThrows(classOf[InvalidConfigurationException], () => {
@@ -709,8 +709,8 @@ final class KafkaMetadataLogTest {
       DefaultMetadataLogConfig.logSegmentBytes,
       DefaultMetadataLogConfig.logSegmentMinBytes,
       DefaultMetadataLogConfig.logSegmentMillis,
-      DefaultMetadataLogConfig.maxRetentionBytes,
-      DefaultMetadataLogConfig.maxRetentionMillis,
+      DefaultMetadataLogConfig.retentionMaxBytes,
+      DefaultMetadataLogConfig.retentionMillis,
       maxBatchSizeInBytes,
       DefaultMetadataLogConfig.maxFetchSizeInBytes,
       DefaultMetadataLogConfig.deleteDelayMillis,
@@ -1037,7 +1037,7 @@ final class KafkaMetadataLogTest {
     assertOptional(log.latestSnapshotId(), (snapshotId: OffsetAndEpoch) => {
       assertEquals(2000, snapshotId.offset, "Unexpected offset for latest snapshot")
       assertOptional(log.readSnapshot(snapshotId), (reader: RawSnapshotReader) => {
-        assertTrue(reader.sizeInBytes() + log.log.size > config.maxRetentionBytes)
+        assertTrue(reader.sizeInBytes() + log.log.size > config.retentionMaxBytes)
       })
     })
   }

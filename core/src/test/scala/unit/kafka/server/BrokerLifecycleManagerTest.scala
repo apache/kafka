@@ -26,7 +26,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, BrokerHeartbeatRequest, BrokerHeartbeatResponse, BrokerRegistrationRequest, BrokerRegistrationResponse}
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.raft.QuorumConfig
-import org.apache.kafka.server.config.{KRaftConfig, ServerLogConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Test, Timeout}
 
@@ -47,12 +47,12 @@ class BrokerLifecycleManagerTest {
   def configProperties = {
     val properties = new Properties()
     properties.setProperty(ServerLogConfigs.LOG_DIRS_CONFIG, "/tmp/foo")
-    properties.setProperty(KRaftConfig.PROCESS_ROLES_CONFIG, "broker")
-    properties.setProperty(KRaftConfig.NODE_ID_CONFIG, "1")
+    properties.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
+    properties.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
     properties.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"2@localhost:9093")
-    properties.setProperty(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
-    properties.setProperty(KRaftConfig.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG, "300000")
-    properties.setProperty(KRaftConfig.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG, "100")
+    properties.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
+    properties.setProperty(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG, "300000")
+    properties.setProperty(KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG, "100")
     properties
   }
 

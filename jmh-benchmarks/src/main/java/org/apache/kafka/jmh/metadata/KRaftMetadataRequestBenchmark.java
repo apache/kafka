@@ -63,7 +63,7 @@ import org.apache.kafka.server.ClientMetricsManager;
 import org.apache.kafka.server.common.FinalizedFeatures;
 import org.apache.kafka.server.common.KRaftVersion;
 import org.apache.kafka.server.common.MetadataVersion;
-import org.apache.kafka.server.config.KRaftConfig;
+import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
 import org.mockito.Mockito;
@@ -178,10 +178,10 @@ public class KRaftMetadataRequestBenchmark {
 
     private KafkaApis createKafkaApis() {
         Properties kafkaProps =  new Properties();
-        kafkaProps.put(KRaftConfig.NODE_ID_CONFIG, brokerId + "");
-        kafkaProps.put(KRaftConfig.PROCESS_ROLES_CONFIG, "broker");
+        kafkaProps.put(KRaftConfigs.NODE_ID_CONFIG, brokerId + "");
+        kafkaProps.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker");
         kafkaProps.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "9000@foo:8092");
-        kafkaProps.put(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER");
+        kafkaProps.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "CONTROLLER");
         KafkaConfig config = new KafkaConfig(kafkaProps);
         return new KafkaApisBuilder().
                 setRequestChannel(requestChannel).

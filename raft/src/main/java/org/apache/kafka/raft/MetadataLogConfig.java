@@ -92,8 +92,8 @@ public class MetadataLogConfig {
     public final int logSegmentBytes;
     public final int logSegmentMinBytes;
     public final long logSegmentMillis;
-    public final long maxRetentionBytes;
-    public final long maxRetentionMillis;
+    public final long retentionMaxBytes;
+    public final long retentionMillis;
     public final int maxBatchSizeInBytes;
     public final int maxFetchSizeInBytes;
     public final long deleteDelayMillis;
@@ -104,8 +104,8 @@ public class MetadataLogConfig {
      * @param logSegmentBytes The maximum size of a single metadata log file
      * @param logSegmentMinBytes The minimum size of a single metadata log file
      * @param logSegmentMillis The maximum time before a new metadata log file is rolled out
-     * @param maxRetentionBytes The size of the metadata log and snapshots before deleting old snapshots and log files
-     * @param maxRetentionMillis The time to keep a metadata log file or snapshot before deleting it
+     * @param retentionMaxBytes The size of the metadata log and snapshots before deleting old snapshots and log files
+     * @param retentionMillis The time to keep a metadata log file or snapshot before deleting it
      * @param maxBatchSizeInBytes The largest record batch size allowed in the metadata log
      * @param maxFetchSizeInBytes The maximum number of bytes to read when fetching from the metadata log
      * @param deleteDelayMillis The amount of time to wait before deleting a file from the filesystem
@@ -114,8 +114,8 @@ public class MetadataLogConfig {
     public MetadataLogConfig(int logSegmentBytes,
                              int logSegmentMinBytes,
                              long logSegmentMillis,
-                             long maxRetentionBytes,
-                             long maxRetentionMillis,
+                             long retentionMaxBytes,
+                             long retentionMillis,
                              int maxBatchSizeInBytes,
                              int maxFetchSizeInBytes,
                              long deleteDelayMillis,
@@ -123,8 +123,8 @@ public class MetadataLogConfig {
         this.logSegmentBytes = logSegmentBytes;
         this.logSegmentMinBytes = logSegmentMinBytes;
         this.logSegmentMillis = logSegmentMillis;
-        this.maxRetentionBytes = maxRetentionBytes;
-        this.maxRetentionMillis = maxRetentionMillis;
+        this.retentionMaxBytes = retentionMaxBytes;
+        this.retentionMillis = retentionMillis;
         this.maxBatchSizeInBytes = maxBatchSizeInBytes;
         this.maxFetchSizeInBytes = maxFetchSizeInBytes;
         this.deleteDelayMillis = deleteDelayMillis;

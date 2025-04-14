@@ -89,7 +89,7 @@ import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.{BrokerFeatures, ClientMetricsManager}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion, RequestLocal, TransactionVersion}
-import org.apache.kafka.server.config.{KRaftConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
 import org.apache.kafka.server.share.{CachedSharePartition, ErroneousAndValidPartitionData, SharePartitionKey}
 import org.apache.kafka.server.quota.ThrottleCallback
@@ -171,8 +171,8 @@ class KafkaApisTest extends Logging {
   ): KafkaApis = {
 
     val properties = TestUtils.createBrokerConfig(brokerId)
-    properties.put(KRaftConfig.NODE_ID_CONFIG, brokerId.toString)
-    properties.put(KRaftConfig.PROCESS_ROLES_CONFIG, "broker")
+    properties.put(KRaftConfigs.NODE_ID_CONFIG, brokerId.toString)
+    properties.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     val voterId = brokerId + 1
     properties.put(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$voterId@localhost:9093")
 

@@ -26,7 +26,7 @@ import org.apache.kafka.common.message.FindCoordinatorRequestData
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{FindCoordinatorRequest, FindCoordinatorResponse}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
-import org.apache.kafka.server.config.{KRaftConfig, ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.util.ShutdownableThread
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, Disabled, TestInfo}
@@ -68,8 +68,8 @@ class ConsumerBounceTest extends AbstractConsumerTest with Logging {
     ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG -> "false",
     ReplicationConfigs.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG -> "true",
     ReplicationConfigs.UNCLEAN_LEADER_ELECTION_INTERVAL_MS_CONFIG -> "50",
-    KRaftConfig.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG -> "50",
-    KRaftConfig.BROKER_SESSION_TIMEOUT_MS_CONFIG -> "300",
+    KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG -> "50",
+    KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG -> "300",
   )
 
   override def kraftControllerConfigs(testInfo: TestInfo): Seq[Properties] = {

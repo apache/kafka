@@ -41,7 +41,7 @@ import org.apache.kafka.queue.KafkaEventQueue
 import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.server.{ClientMetricsManager, ServerSocketFactory}
 import org.apache.kafka.server.common.{EligibleLeaderReplicasVersion, MetadataVersion, TransactionVersion}
-import org.apache.kafka.server.config.{KRaftConfig, ServerConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.{FaultHandler, MockFaultHandler}
 import org.apache.kafka.server.util.timer.SystemTimer
 import org.junit.jupiter.api.Assertions._
@@ -253,13 +253,13 @@ abstract class QuorumTestHarness extends Logging {
     }
     val props = propsList.head
     props.putAll(overridingProps)
-    props.setProperty(KRaftConfig.SERVER_MAX_STARTUP_TIME_MS_CONFIG, TimeUnit.MINUTES.toMillis(10).toString)
-    props.setProperty(KRaftConfig.PROCESS_ROLES_CONFIG, "controller")
+    props.setProperty(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG, TimeUnit.MINUTES.toMillis(10).toString)
+    props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "controller")
     props.setProperty(ServerConfigs.UNSTABLE_FEATURE_VERSIONS_ENABLE_CONFIG, "true")
-    if (props.getProperty(KRaftConfig.NODE_ID_CONFIG) == null) {
-      props.setProperty(KRaftConfig.NODE_ID_CONFIG, "1000")
+    if (props.getProperty(KRaftConfigs.NODE_ID_CONFIG) == null) {
+      props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1000")
     }
-    val nodeId = Integer.parseInt(props.getProperty(KRaftConfig.NODE_ID_CONFIG))
+    val nodeId = Integer.parseInt(props.getProperty(KRaftConfigs.NODE_ID_CONFIG))
     val metadataDir = TestUtils.tempDir()
     props.setProperty(MetadataLogConfig.METADATA_LOG_DIR_CONFIG, metadataDir.getAbsolutePath)
     val proto = controllerListenerSecurityProtocol.toString
@@ -268,7 +268,7 @@ abstract class QuorumTestHarness extends Logging {
     val listenerNames = extraControllerSecurityProtocols().mkString(",")
     props.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, s"CONTROLLER:$proto,$securityProtocolMaps")
     props.setProperty(SocketServerConfigs.LISTENERS_CONFIG, s"CONTROLLER://localhost:0,$listeners")
-    props.setProperty(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG, s"CONTROLLER,$listenerNames")
+    props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, s"CONTROLLER,$listenerNames")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, s"$nodeId@localhost:0")
     props.setProperty(ServerLogConfigs.LOG_DELETE_DELAY_MS_CONFIG, "1000")
     val config = new KafkaConfig(props)

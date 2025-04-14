@@ -39,7 +39,7 @@ import org.apache.kafka.metadata.PartitionRegistration
 import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.server.common.{KRaftVersion, MetadataVersion, TopicIdPartition}
-import org.apache.kafka.server.config.{KRaftConfig, ReplicationConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 import org.apache.kafka.server.util.{MockTime, ShutdownableThread}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LogConfig, LogDirFailureChannel}
@@ -168,9 +168,9 @@ class ReplicaManagerConcurrencyTest extends Logging {
 
     val props = new Properties
     props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "100@localhost:12345")
-    props.put(KRaftConfig.PROCESS_ROLES_CONFIG, "broker")
-    props.put(KRaftConfig.NODE_ID_CONFIG, localId.toString)
-    props.put(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
+    props.put(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
+    props.put(KRaftConfigs.NODE_ID_CONFIG, localId.toString)
+    props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
     props.put(ServerLogConfigs.LOG_DIR_CONFIG, logDir.getAbsolutePath)
     props.put(ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_CONFIG, 5000.toString)
 

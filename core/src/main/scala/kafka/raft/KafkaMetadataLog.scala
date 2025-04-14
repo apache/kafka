@@ -478,15 +478,15 @@ final class KafkaMetadataLog private (
   }
 
   private def cleanSnapshotsRetentionMs(): Boolean = {
-    if (config.maxRetentionMillis < 0)
+    if (config.retentionMillis < 0)
       return false
 
     // Keep deleting snapshots as long as the
     def shouldClean(snapshotId: OffsetAndEpoch): Option[SnapshotDeletionReason] = {
       readSnapshotTimestamp(snapshotId).flatMap { timestamp =>
         val now = time.milliseconds()
-        if (now - timestamp > config.maxRetentionMillis) {
-          Some(RetentionMsBreach(now, timestamp, config.maxRetentionMillis))
+        if (now - timestamp > config.retentionMillis) {
+          Some(RetentionMsBreach(now, timestamp, config.retentionMillis))
         } else {
           None
         }
@@ -497,7 +497,7 @@ final class KafkaMetadataLog private (
   }
 
   private def cleanSnapshotsRetentionSize(): Boolean = {
-    if (config.maxRetentionBytes < 0)
+    if (config.retentionMaxBytes < 0)
       return false
 
     val snapshotSizes = loadSnapshotSizes().toMap
@@ -508,10 +508,10 @@ final class KafkaMetadataLog private (
     def shouldClean(snapshotId: OffsetAndEpoch): Option[SnapshotDeletionReason] = {
       snapshotSizes.get(snapshotId).flatMap { snapshotSize =>
         val logSize = log.size
-        if (logSize + snapshotTotalSize > config.maxRetentionBytes) {
+        if (logSize + snapshotTotalSize > config.retentionMaxBytes) {
           val oldSnapshotTotalSize = snapshotTotalSize
           snapshotTotalSize -= snapshotSize
-          Some(RetentionSizeBreach(logSize, oldSnapshotTotalSize, config.maxRetentionBytes))
+          Some(RetentionSizeBreach(logSize, oldSnapshotTotalSize, config.retentionMaxBytes))
         } else {
           None
         }

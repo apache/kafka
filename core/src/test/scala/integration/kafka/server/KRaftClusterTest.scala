@@ -43,7 +43,7 @@ import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion, MetadataVersion}
-import org.apache.kafka.server.config.{KRaftConfig, ServerConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.quota
 import org.apache.kafka.server.quota.{ClientQuotaCallback, ClientQuotaType}
@@ -1291,8 +1291,8 @@ class KRaftClusterTest {
       new TestKitNodes.Builder().
         setNumBrokerNodes(3).
         setNumControllerNodes(1).build()).
-      setConfigProp(KRaftConfig.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG, 10.toString).
-      setConfigProp(KRaftConfig.BROKER_SESSION_TIMEOUT_MS_CONFIG, 1000.toString).
+      setConfigProp(KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG, 10.toString).
+      setConfigProp(KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG, 1000.toString).
       build()
     try {
       cluster.format()

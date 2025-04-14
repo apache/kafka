@@ -33,7 +33,7 @@ import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySe
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.MetadataLogConfig
-import org.apache.kafka.server.config.{KRaftConfig, ReplicationConfigs, ServerConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import scala.collection.mutable
@@ -103,7 +103,7 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     props.foreach { config =>
       // Add a security protocol for the controller endpoints, if one is not already set.
       val securityPairs = config.getProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, "").split(",")
-      val toAdd = config.getProperty(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG, "").split(",").filter(
+      val toAdd = config.getProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "").split(",").filter(
         e => !securityPairs.exists(_.startsWith(s"$e:")))
       if (toAdd.nonEmpty) {
         config.setProperty(SocketServerConfigs.LISTENER_SECURITY_PROTOCOL_MAP_CONFIG, (securityPairs ++

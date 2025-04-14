@@ -28,7 +28,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerializer, StringDeserializer, StringSerializer}
 import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.metadata.BrokerState
-import org.apache.kafka.server.config.{KRaftConfig, ServerLogConfigs}
+import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
 import org.junit.jupiter.api.{BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
@@ -137,7 +137,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testCleanShutdownAfterFailedStartup(quorum: String): Unit = {
-    propsToChangeUponRestart.setProperty(KRaftConfig.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG, "1000")
+    propsToChangeUponRestart.setProperty(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG, "1000")
     shutdownBroker()
     shutdownKRaftController()
     verifyCleanShutdownAfterFailedStartup[CancellationException]

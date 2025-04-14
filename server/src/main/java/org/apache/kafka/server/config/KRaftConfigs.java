@@ -27,7 +27,7 @@ import static org.apache.kafka.common.config.ConfigDef.Type.LIST;
 import static org.apache.kafka.common.config.ConfigDef.Type.LONG;
 import static org.apache.kafka.common.config.ConfigDef.Type.STRING;
 
-public class KRaftConfig {
+public class KRaftConfigs {
     /** KRaft mode configs */
     public static final String PROCESS_ROLES_CONFIG = "process.roles";
     public static final String PROCESS_ROLES_DOC = "The roles that this process plays: 'broker', 'controller', or 'broker,controller' if it is both. ";

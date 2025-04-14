@@ -30,7 +30,7 @@ import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.network.SocketServerConfigs;
 import org.apache.kafka.raft.MetadataLogConfig;
-import org.apache.kafka.server.config.KRaftConfig;
+import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.util.CommandLineUtils;
 
@@ -343,17 +343,17 @@ public class MetadataQuorumCommand {
     }
 
     static int getControllerId(Properties props) throws TerseException {
-        if (!props.containsKey(KRaftConfig.NODE_ID_CONFIG)) {
-            throw new TerseException(KRaftConfig.NODE_ID_CONFIG + " not found in configuration " +
+        if (!props.containsKey(KRaftConfigs.NODE_ID_CONFIG)) {
+            throw new TerseException(KRaftConfigs.NODE_ID_CONFIG + " not found in configuration " +
                 "file. Is this a valid controller configuration file?");
         }
-        int nodeId = Integer.parseInt(props.getProperty(KRaftConfig.NODE_ID_CONFIG));
+        int nodeId = Integer.parseInt(props.getProperty(KRaftConfigs.NODE_ID_CONFIG));
         if (nodeId < 0) {
-            throw new TerseException(KRaftConfig.NODE_ID_CONFIG + " was negative in configuration " +
+            throw new TerseException(KRaftConfigs.NODE_ID_CONFIG + " was negative in configuration " +
                 "file. Is this a valid controller configuration file?");
         }
-        if (!props.getOrDefault(KRaftConfig.PROCESS_ROLES_CONFIG, "").toString().contains("controller")) {
-            throw new TerseException(KRaftConfig.PROCESS_ROLES_CONFIG + " did not contain 'controller' in " +
+        if (!props.getOrDefault(KRaftConfigs.PROCESS_ROLES_CONFIG, "").toString().contains("controller")) {
+            throw new TerseException(KRaftConfigs.PROCESS_ROLES_CONFIG + " did not contain 'controller' in " +
                 "configuration file. Is this a valid controller configuration file?");
         }
         return nodeId;
@@ -399,13 +399,13 @@ public class MetadataQuorumCommand {
         SocketServerConfigs.listenerListToEndPoints(
             props.getOrDefault(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "").toString(),
             __ -> SecurityProtocol.PLAINTEXT).forEach(e -> listeners.put(e.listenerName().get(), e));
-        if (!props.containsKey(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG)) {
-            throw new TerseException(KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG +
+        if (!props.containsKey(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG)) {
+            throw new TerseException(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG +
                 " was not found. Is this a valid controller configuration file?");
         }
         LinkedHashSet<RaftVoterEndpoint> results = new LinkedHashSet<>();
         for (String listenerName : props.getProperty(
-                KRaftConfig.CONTROLLER_LISTENER_NAMES_CONFIG).split(",")) {
+                KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG).split(",")) {
             listenerName = ListenerName.normalised(listenerName).value();
             Endpoint endpoint = listeners.get(listenerName);
             if (endpoint == null) {
