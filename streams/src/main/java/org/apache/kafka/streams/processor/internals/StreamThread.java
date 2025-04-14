@@ -2015,4 +2015,8 @@ public class StreamThread extends Thread implements ProcessingThread {
     Admin adminClient() {
         return adminClient;
     }
+
+    Optional<StreamsRebalanceData> streamsRebalanceData() {
+        return streamsRebalanceData;
+    }
 }
