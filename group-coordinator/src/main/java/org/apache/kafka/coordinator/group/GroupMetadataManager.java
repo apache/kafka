@@ -8178,12 +8178,15 @@ public class GroupMetadataManager {
             ));
         }
 
-        // Remove all initializing and initialized topic info from record and add deleting.
+        // Remove all initializing and initialized topic info from record and add deleting. There
+        // could be previous deleting topics due to offsets delete, we need to account for them as well.
+        Set<Uuid> finalDeleteSet = new HashSet<>(shareGroupPartitionMetadata.get(shareGroupId).deletingTopics());
+        finalDeleteSet.addAll(deleteCandidates.keySet());
         records.add(GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
             shareGroupId,
             Map.of(),
             Map.of(),
-            attachTopicName(deleteCandidates.keySet())
+            attachTopicName(finalDeleteSet)
         ));
 
         return Optional.of(new DeleteShareGroupStateParameters.Builder()

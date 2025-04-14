@@ -20741,7 +20741,7 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testShareGroupDeleteRequest() {
+    public void testShareGroupDeleteRequestNoDeletingTopics() {
         MockPartitionAssignor assignor = new MockPartitionAssignor("range");
         assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
@@ -20790,6 +20790,73 @@ public class GroupMetadataManagerTest {
                 Map.of(),
                 Map.of(),
                 Map.of(t1Uuid, t1Name, t2Uuid, t2Name)
+            )
+        );
+
+        List<CoordinatorRecord> records = new ArrayList<>();
+        Optional<DeleteShareGroupStateParameters> params = context.groupMetadataManager.shareGroupBuildPartitionDeleteRequest(groupId, records);
+        verifyShareGroupDeleteRequest(
+            params,
+            expectedTopicPartitionMap,
+            groupId,
+            true
+        );
+        assertRecordsEquals(expectedRecords, records);
+    }
+
+    @Test
+    public void testShareGroupDeleteRequestWithAlreadyDeletingTopics() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
+            .build();
+
+        Uuid t1Uuid = Uuid.randomUuid();
+        Uuid t2Uuid = Uuid.randomUuid();
+        Uuid t3Uuid = Uuid.randomUuid();
+        String t1Name = "t1";
+        String t2Name = "t2";
+        String t3Name = "t3";
+
+        String groupId = "share-group";
+        ShareGroup shareGroup = mock(ShareGroup.class);
+        when(shareGroup.groupId()).thenReturn(groupId);
+        when(shareGroup.isEmpty()).thenReturn(false);
+
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(t1Uuid, t1Name, 2)
+            .addTopic(t2Uuid, t2Name, 2)
+            .addTopic(t3Uuid, t3Name, 2)
+            .build();
+
+        MetadataDelta delta = new MetadataDelta(image);
+        context.groupMetadataManager.onNewMetadataImage(image, delta);
+
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0));
+
+        context.replay(
+            GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(t1Uuid, Map.entry(t1Name, Set.of(0, 1))),
+                Map.of(t2Uuid, Map.entry(t2Name, Set.of(0, 1))),
+                Map.of(t3Uuid, t3Name)
+            )
+        );
+
+        context.commit();
+
+        Map<Uuid, Set<Integer>> expectedTopicPartitionMap = Map.of(
+            t1Uuid, Set.of(0, 1),
+            t2Uuid, Set.of(0, 1)
+        );
+
+        List<CoordinatorRecord> expectedRecords = List.of(
+            newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(),
+                Map.of(),
+                Map.of(t1Uuid, t1Name, t2Uuid, t2Name, t3Uuid, t3Name)  // Existing deleting topics should be included here.
             )
         );
 
