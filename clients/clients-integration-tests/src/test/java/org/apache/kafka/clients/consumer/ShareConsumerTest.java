@@ -757,7 +757,6 @@ public class ShareConsumerTest {
             shareConsumer1.close();
 
             assertFalse(partitionExceptionMap.containsKey(tp));
-            assertNull(partitionExceptionMap.get(tp));
             assertTrue(partitionOffsetsMap.containsKey(tp) && partitionOffsetsMap.get(tp).size() == 4);
             verifyShareGroupStateTopicRecordsProduced();
         }
