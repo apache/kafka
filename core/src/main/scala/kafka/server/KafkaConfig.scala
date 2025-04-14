@@ -23,10 +23,9 @@ import java.util.Properties
 import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
 import org.apache.kafka.common.Reconfigurable
-import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource, TopicConfig}
+import org.apache.kafka.common.config.{ConfigException, TopicConfig}
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
-import org.apache.kafka.common.config.types.Password
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.record.TimestampType
 import org.apache.kafka.common.security.auth.KafkaPrincipalSerde
@@ -35,7 +34,7 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.network.EndPoint
 import org.apache.kafka.coordinator.group.Group.GroupType
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
-import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
+import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.coordinator.transaction.{AddPartitionsToTxnConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
@@ -48,11 +47,10 @@ import org.apache.kafka.server.config.{AbstractKafkaConfig, KRaftConfigs, QuotaC
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.apache.kafka.server.util.Csv
-import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig}
+import org.apache.kafka.storage.internals.log.CleanerConfig
 
 import scala.jdk.CollectionConverters._
 import scala.collection.{Map, Seq}
-import scala.jdk.OptionConverters.RichOptional
 
 object KafkaConfig {
 
@@ -84,51 +82,6 @@ object KafkaConfig {
   }
 
   def apply(props: java.util.Map[_, _], doLog: Boolean = true): KafkaConfig = new KafkaConfig(props, doLog)
-
-  private def typeOf(name: String): Option[ConfigDef.Type] = Option(configDef.configKeys.get(name)).map(_.`type`)
-
-  def configType(configName: String): Option[ConfigDef.Type] = {
-    val configType = configTypeExact(configName)
-    if (configType.isDefined) {
-      return configType
-    }
-    typeOf(configName) match {
-      case Some(t) => Some(t)
-      case None =>
-        DynamicBrokerConfig.brokerConfigSynonyms(configName, matchListenerOverride = true).flatMap(typeOf).headOption
-    }
-  }
-
-  private def configTypeExact(exactName: String): Option[ConfigDef.Type] = {
-    val configType = typeOf(exactName).orNull
-    if (configType != null) {
-      Some(configType)
-    } else {
-      val configKey = DynamicConfig.Broker.configKeys.get(exactName)
-      if (configKey != null) {
-        Some(configKey.`type`)
-      } else {
-        None
-      }
-    }
-  }
-
-  def maybeSensitive(configType: Option[ConfigDef.Type]): Boolean = {
-    // If we can't determine the config entry type, treat it as a sensitive config to be safe
-    configType.isEmpty || configType.contains(ConfigDef.Type.PASSWORD)
-  }
-
-  def loggableValue(resourceType: ConfigResource.Type, name: String, value: String): String = {
-    val maybeSensitive = resourceType match {
-      case ConfigResource.Type.BROKER => KafkaConfig.maybeSensitive(KafkaConfig.configType(name))
-      case ConfigResource.Type.TOPIC => KafkaConfig.maybeSensitive(LogConfig.configType(name).toScala)
-      case ConfigResource.Type.GROUP => KafkaConfig.maybeSensitive(GroupConfig.configType(name).toScala)
-      case ConfigResource.Type.BROKER_LOGGER => false
-      case ConfigResource.Type.CLIENT_METRICS => false
-      case _ => true
-    }
-    if (maybeSensitive) Password.HIDDEN else value
-  }
 
   /**
    * Copy a configuration map, populating some keys that we want to treat as synonyms.

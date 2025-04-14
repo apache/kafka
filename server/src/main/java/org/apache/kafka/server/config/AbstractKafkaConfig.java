@@ -18,8 +18,12 @@ package org.apache.kafka.server.config;
 
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
+import org.apache.kafka.common.config.ConfigResource;
+import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig;
@@ -35,6 +39,10 @@ import org.apache.kafka.storage.internals.log.LogConfig;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * During moving {@link kafka.server.KafkaConfig} out of core AbstractKafkaConfig will be the future KafkaConfig
@@ -63,6 +71,84 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         DelegationTokenManagerConfigs.CONFIG_DEF,
         AddPartitionsToTxnConfig.CONFIG_DEF
     ));
+
+    public static boolean maybeSensitive(Optional<ConfigDef.Type> configType) {
+        return configType.isEmpty() || configType.get().equals(ConfigDef.Type.PASSWORD);
+    }
+
+    public static String loggableValue(ConfigResource.Type resourceType, String name, String value) {
+        boolean isSensitive = switch (resourceType) {
+            case BROKER -> maybeSensitive(configType(name));
+            case TOPIC -> maybeSensitive(LogConfig.configType(name));
+            case GROUP -> maybeSensitive(GroupConfig.configType(name));
+            case BROKER_LOGGER, CLIENT_METRICS -> false;
+            default -> true;
+        };
+        return isSensitive ? Password.HIDDEN : value;
+    }
+
+    public static Optional<ConfigDef.Type> configType(String configName) {
+        Optional<ConfigDef.Type> configType = configTypeExact(configName);
+        if (configType.isPresent()) {
+            return configType;
+        }
+        return configDefTypeOf(configName).or(() ->
+            brokerConfigSynonyms(configName, true)
+                .stream()
+                .map(AbstractKafkaConfig::configDefTypeOf)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .findFirst()
+        );
+    }
+
+    public static List<String> brokerConfigSynonyms(String name, boolean matchListenerOverride) {
+        Matcher matcher = LISTENER_CONFIG_REGEX.matcher(name);
+        if (name.equals(ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG) || name.equals(ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG)) {
+            return List.of(ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG, ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG);
+        } else if (name.equals(ServerLogConfigs.LOG_ROLL_TIME_JITTER_MILLIS_CONFIG) || name.equals(ServerLogConfigs.LOG_ROLL_TIME_JITTER_HOURS_CONFIG)) {
+            return List.of(ServerLogConfigs.LOG_ROLL_TIME_JITTER_MILLIS_CONFIG, ServerLogConfigs.LOG_ROLL_TIME_JITTER_HOURS_CONFIG);
+        } else if (name.equals(ServerLogConfigs.LOG_FLUSH_INTERVAL_MS_CONFIG)) {
+            return List.of(ServerLogConfigs.LOG_FLUSH_INTERVAL_MS_CONFIG, ServerLogConfigs.LOG_FLUSH_SCHEDULER_INTERVAL_MS_CONFIG);
+        } else if (name.equals(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG) ||
+            name.equals(ServerLogConfigs.LOG_RETENTION_TIME_MINUTES_CONFIG) ||
+            name.equals(ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG)) {
+            return List.of(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, ServerLogConfigs.LOG_RETENTION_TIME_MINUTES_CONFIG, ServerLogConfigs.LOG_RETENTION_TIME_HOURS_CONFIG);
+        } else if (matcher.matches() && matchListenerOverride) {
+            String baseName = matcher.group(1);
+            Optional<String> mechanismConfig = Set.of(
+                SaslConfigs.SASL_JAAS_CONFIG,
+                SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS,
+                SaslConfigs.SASL_LOGIN_CLASS,
+                BrokerSecurityConfigs.SASL_SERVER_CALLBACK_HANDLER_CLASS_CONFIG,
+                BrokerSecurityConfigs.CONNECTIONS_MAX_REAUTH_MS_CONFIG
+            ).stream().filter(baseName::endsWith).findFirst();
+            return List.of(name, mechanismConfig.orElse(baseName));
+        } else {
+            return List.of(name);
+        }
+    }
+
+    private static final Pattern LISTENER_CONFIG_REGEX = Pattern.compile("listener\\.name\\.[^.]*\\.(.*)");
+
+    private static Optional<ConfigDef.Type> configTypeExact(String exactName) {
+        ConfigDef.Type configType = configDefTypeOf(exactName).orElse(null);
+        if (configType != null) {
+            return Optional.of(configType);
+        } else {
+            ConfigDef.ConfigKey configKey = DynamicConfig.Broker.configKeys().get(exactName);
+            if (configKey != null) {
+                return Optional.of(configKey.type);
+            } else {
+                return Optional.empty();
+            }
+        }
+    }
+
+    private static Optional<ConfigDef.Type> configDefTypeOf(String name) {
+        return Optional.ofNullable(CONFIG_DEF.configKeys().get(name))
+            .map(ConfigDef.ConfigKey::type);
+    }
 
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
         super(definition, originals, configProviderProps, doLog);
