@@ -17,6 +17,7 @@
 
 package org.apache.kafka.server.share.session;
 
+import com.yammer.metrics.core.Meter;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
@@ -26,6 +27,7 @@ import org.apache.kafka.server.share.CachedSharePartition;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 /**
  * Caches share sessions.
@@ -42,6 +44,12 @@ public class ShareSessionCache {
     static final String SHARE_SESSIONS_COUNT = "ShareSessionsCount";
     // Visible for testing.
     static final String SHARE_PARTITIONS_COUNT = "SharePartitionsCount";
+    private static final String SHARE_SESSION_EVICTIONS_PER_SEC = "ShareSessionEvictionsPerSec";
+
+    /**
+     * Metric for the rate of eviction of share sessions.
+     */
+    private final Meter evictionsMeter;
 
     private final int maxEntries;
     private long numPartitions = 0;
@@ -61,6 +69,7 @@ public class ShareSessionCache {
         metricsGroup.newGauge(SHARE_PARTITIONS_COUNT, this::totalPartitions);
         this.connectionIdToSessionMapping = new HashMap<>();
         this.connectionDisconnectListener = new ClientConnectionDisconnectListener();
+        this.evictionsMeter = metricsGroup.newMeter(SHARE_SESSION_EVICTIONS_PER_SEC, "evictions", TimeUnit.SECONDS);
     }
 
     /**
@@ -106,15 +115,12 @@ public class ShareSessionCache {
     }
 
     /**
-     * Update a session's position in the lastUsed tree.
+     * Update the number of partitions in the share session
      *
      * @param session  The session.
-     * @param now      The current time in milliseconds.
      */
-    public synchronized void touch(ShareSession session, long now) {
+    public synchronized void updateNumPartitions(ShareSession session) {
         synchronized (session) {
-            session.lastUsedMs(now);
-
             int oldSize = session.cachedSize();
             if (oldSize != -1) {
                 numPartitions = numPartitions - oldSize;
@@ -128,7 +134,6 @@ public class ShareSessionCache {
      * Maybe create a new session and add it to the cache.
      * @param groupId - The group id in the share fetch request.
      * @param memberId - The member id in the share fetch request.
-     * @param now - The current time in milliseconds.
      * @param partitionMap - The topic partitions to be added to the session.
      * @param clientConnectionId - The client connection id.
      * @return - The session key if the session was created, or null if the session was not created.
@@ -136,15 +141,14 @@ public class ShareSessionCache {
     public synchronized ShareSessionKey maybeCreateSession(
         String groupId,
         Uuid memberId,
-        long now,
         ImplicitLinkedHashCollection<CachedSharePartition> partitionMap,
         String clientConnectionId
     ) {
         if (sessions.size() < maxEntries) {
             ShareSession session = new ShareSession(new ShareSessionKey(groupId, memberId), partitionMap,
-                    now, now, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH));
+                ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH));
             sessions.put(session.key(), session);
-            touch(session, now);
+            updateNumPartitions(session);
             connectionIdToSessionMapping.put(clientConnectionId, session.key());
             return session.key();
         }
@@ -155,6 +159,11 @@ public class ShareSessionCache {
         return connectionDisconnectListener;
     }
 
+    // Visible for testing.
+    Meter evictionsMeter() {
+        return evictionsMeter;
+    }
+
     private final class ClientConnectionDisconnectListener implements ConnectionDisconnectListener {
 
         // When the client disconnects, the corresponding session should be removed from the cache.
@@ -162,7 +171,11 @@ public class ShareSessionCache {
         public void onDisconnect(String connectionId) {
             ShareSessionKey shareSessionKey = connectionIdToSessionMapping.remove(connectionId);
             if (shareSessionKey != null) {
-                remove(shareSessionKey);
+                // Remove the session from the cache.
+                ShareSession removedSession = remove(shareSessionKey);
+                if (removedSession != null) {
+                    evictionsMeter.mark();
+                }
             }
         }
     }

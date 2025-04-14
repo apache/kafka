@@ -38,9 +38,7 @@ public class ShareSession {
 
     private final ShareSessionKey key;
     private final ImplicitLinkedHashCollection<CachedSharePartition> partitionMap;
-    private final long creationMs;
 
-    private long lastUsedMs;
     // visible for testing
     public int epoch;
     // This is used by the ShareSessionCache to store the last known size of this session.
@@ -54,17 +52,12 @@ public class ShareSession {
      *
      * @param key                The share session key to identify the share session uniquely.
      * @param partitionMap       The CachedPartitionMap.
-     * @param creationMs         The time in milliseconds when this share session was created.
-     * @param lastUsedMs         The last used time in milliseconds. This should only be updated by
      *                           ShareSessionCache#touch.
      * @param epoch              The share session sequence number.
      */
-    public ShareSession(ShareSessionKey key, ImplicitLinkedHashCollection<CachedSharePartition> partitionMap,
-                        long creationMs, long lastUsedMs, int epoch) {
+    public ShareSession(ShareSessionKey key, ImplicitLinkedHashCollection<CachedSharePartition> partitionMap, int epoch) {
         this.key = key;
         this.partitionMap = partitionMap;
-        this.creationMs = creationMs;
-        this.lastUsedMs = lastUsedMs;
         this.epoch = epoch;
     }
 
@@ -78,14 +71,6 @@ public class ShareSession {
 
     public synchronized void cachedSize(int size) {
         cachedSize = size;
-    }
-
-    public synchronized long lastUsedMs() {
-        return lastUsedMs;
-    }
-
-    public synchronized void lastUsedMs(long ts) {
-        lastUsedMs = ts;
     }
 
     public synchronized ImplicitLinkedHashCollection<CachedSharePartition> partitionMap() {
@@ -103,10 +88,6 @@ public class ShareSession {
 
     public synchronized Boolean isEmpty() {
         return partitionMap.isEmpty();
-    }
-
-    public synchronized LastUsedKey lastUsedKey() {
-        return new LastUsedKey(key, lastUsedMs);
     }
 
     // Update the cached partition data based on the request.
@@ -149,8 +130,6 @@ public class ShareSession {
         return "ShareSession(" +
                 "key=" + key +
                 ", partitionMap=" + partitionMap +
-                ", creationMs=" + creationMs +
-                ", lastUsedMs=" + lastUsedMs +
                 ", epoch=" + epoch +
                 ", cachedSize=" + cachedSize +
                 ")";
