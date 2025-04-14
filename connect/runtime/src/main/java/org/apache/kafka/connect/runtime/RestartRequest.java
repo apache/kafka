@@ -17,7 +17,6 @@
 package org.apache.kafka.connect.runtime;
 
 import org.apache.kafka.connect.connector.Connector;
-import org.apache.kafka.connect.connector.Task;
 
 import java.util.Objects;
 
@@ -37,36 +36,6 @@ public record RestartRequest(String connectorName,
 
     public RestartRequest {
         Objects.requireNonNull(connectorName, "Connector name may not be null");
-    }
-
-    /**
-     * Get the name of the connector.
-     *
-     * @return the connector name; never null
-     */
-    @Override
-    public String connectorName() {
-        return connectorName;
-    }
-
-    /**
-     * Determine whether only failed instances be restarted.
-     *
-     * @return true if only failed instances should be restarted, or false if all applicable instances should be restarted
-     */
-    @Override
-    public boolean onlyFailed() {
-        return onlyFailed;
-    }
-
-    /**
-     * Determine whether {@link Task} instances should also be restarted in addition to the {@link Connector} instance.
-     *
-     * @return true if the connector and task instances should be restarted, or false if just the connector should be restarted
-     */
-    @Override
-    public boolean includeTasks() {
-        return includeTasks;
     }
 
     /**

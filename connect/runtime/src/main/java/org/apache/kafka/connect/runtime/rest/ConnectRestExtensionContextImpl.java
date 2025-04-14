@@ -24,5 +24,4 @@ import jakarta.ws.rs.core.Configurable;
 
 public record ConnectRestExtensionContextImpl(Configurable<? extends Configurable<?>> configurable,
                                               ConnectClusterState clusterState) implements ConnectRestExtensionContext {
-
 }

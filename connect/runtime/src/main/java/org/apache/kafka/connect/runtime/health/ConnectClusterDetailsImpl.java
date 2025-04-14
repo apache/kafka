@@ -20,5 +20,4 @@ package org.apache.kafka.connect.runtime.health;
 import org.apache.kafka.connect.health.ConnectClusterDetails;
 
 public record ConnectClusterDetailsImpl(String kafkaClusterId) implements ConnectClusterDetails {
-
 }

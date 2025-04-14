@@ -392,6 +392,5 @@ public interface Herder {
     }
 
     record Created<T>(boolean created, T result) {
-
     }
 }

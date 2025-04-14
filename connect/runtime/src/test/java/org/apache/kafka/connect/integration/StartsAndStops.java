@@ -18,5 +18,4 @@
 package org.apache.kafka.connect.integration;
 
 public record StartsAndStops(int starts, int stops) {
-
 }
