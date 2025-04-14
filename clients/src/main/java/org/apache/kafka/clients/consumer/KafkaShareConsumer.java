@@ -115,16 +115,14 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * as naturally happens when the locks time out. This limit is controlled by the broker configuration property
  * {@code group.share.record.lock.partition.limit}. By limiting the duration of the acquisition lock and automatically
  * releasing the locks, the broker ensures delivery progresses even in the presence of consumer failures.
- *
  * <p>
  * The consumer can choose to use implicit or explicit acknowledgement of the records it processes by configuring the
- * {@link ConsumerConfig#SHARE_ACKNOWLEDGEMENT_MODE_CONFIG} property. If the property is not set, the default mode is <code>"implicit"</code>.
+ * {@code share.acknowledgement.mode} property. If the property is not set, the default mode is <code>"implicit"</code>.
  *
  * <p>If the config is set to "explicit", the consumer is using <em>explicit acknowledgement</em>. In this case:
  * <ul>
- *     <li>The application is expected to acknowledge all the records it received in the batch before the next call to ({@link #poll(Duration)}</li>
- *     <li> If the application has some unacknowledged records before the next call to ({@link #poll(Duration)}, then the poll()
- *     throws an {@link IllegalStateException}. This is because in explicit mode, all the records in the batch should be acknowledged before the next call to poll()</li>
+ *     <li>The application must acknowledge all the records it received in the batch before the next call to ({@link #poll(Duration)}</li>
+ *     <li>The poll() throws an {@link IllegalStateException} if there are some unacknowledged records in explicit mode</li>
  *     <li>The application calls {@link #commitSync()} or {@link #commitAsync()} which commits the acknowledgements to Kafka.
  *     If any records in the batch were not acknowledged until the next poll(), an {@link IllegalStateException} is thrown.</li>
  *     <li>The application calls {@link #poll(Duration)} without committing first, which commits the acknowledgements to
@@ -133,8 +131,8 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *     <li>The application calls {@link #close()} which attempts to commit any pending acknowledgements and
  *     releases any remaining acquired records.</li>
  * </ul>
- * If the application sets the {@code share.acknowledgement.mode} property to "implicit" or does not configure the mode, then
- * the consumer is using <em>implicit acknowledgement</em>. In this case:
+ * If the application does not set the {@code share.acknowledgement.mode} property to "explicit" or does not configure the mode,
+ * then the consumer is using <em>implicit acknowledgement</em>. In this case:
  * <ul>
  *     <li>The application calls {@link #commitSync()} or {@link #commitAsync()} which implicitly acknowledges all of
  *     the delivered records as processed successfully and commits the acknowledgements to Kafka.</li>
@@ -143,7 +141,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *     thrown by a failure to commit the acknowledgements.</li>
  *     <li>The application calls {@link #close()}  which releases any acquired records without acknowledgement.</li>
  * </ul>
- *
+ * <p>
  * The consumer guarantees that the records returned in the {@code ConsumerRecords} object for a specific topic-partition
  * are in order of increasing offset. For each topic-partition, Kafka guarantees that acknowledgements for the records
  * in a batch are performed atomically. This makes error handling significantly more straightforward because there can be
@@ -157,7 +155,6 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * This example demonstrates implicit acknowledgement using {@link #poll(Duration)} to acknowledge the records which
  * were delivered in the previous poll. All the records delivered are implicitly marked as successfully consumed and
  * acknowledged synchronously with Kafka as the consumer fetches more records.
- * The <code>share.acknowledgement.mode</code> property is not configured, so it is set to "implicit" by default.
  * <pre>
  *     Properties props = new Properties();
  *     props.setProperty(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
@@ -183,7 +180,6 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *     props.setProperty(&quot;group.id&quot;, &quot;test&quot;);
  *     props.setProperty(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
  *     props.setProperty(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
- *     props.setProperty(&quot;share.acknowledgement.mode&quot;, &quot;implicit&quot;);
  *     KafkaShareConsumer&lt;String, String&gt; consumer = new KafkaShareConsumer&lt;&gt;(props);
  *     consumer.subscribe(Arrays.asList(&quot;foo&quot;));
  *     while (true) {

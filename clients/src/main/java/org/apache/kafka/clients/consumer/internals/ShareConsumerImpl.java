@@ -175,15 +175,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     private ShareFetch<K, V> currentFetch;
     private AcknowledgementCommitCallbackHandler acknowledgementCommitCallbackHandler;
     private final List<Map<TopicIdPartition, Acknowledgements>> completedAcknowledgements;
-
-    private enum AcknowledgementMode {
-        /** Acknowledgements are explicit, using {@link #acknowledge(ConsumerRecord, AcknowledgeType)} */
-        EXPLICIT,
-        /** Acknowledgements are implicit, not using {@link #acknowledge(ConsumerRecord, AcknowledgeType)} */
-        IMPLICIT
-    }
-
-    private final AcknowledgementMode acknowledgementMode;
+    private final ShareAcknowledgementMode acknowledgementMode;
 
     /**
      * A thread-safe {@link ShareFetchBuffer fetch buffer} for the results that are populated in the
@@ -467,7 +459,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.metadata = metadata;
         this.requestTimeoutMs = requestTimeoutMs;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
-        this.acknowledgementMode = acknowledgementMode.equals("explicit") ? AcknowledgementMode.EXPLICIT : AcknowledgementMode.IMPLICIT;
+        this.acknowledgementMode = ShareAcknowledgementMode.fromString(acknowledgementMode);
         this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer, metrics);
         this.currentFetch = ShareFetch.empty();
         this.applicationEventHandler = applicationEventHandler;
@@ -669,7 +661,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                 // Notify the network thread to wake up and start the next round of fetching
                 applicationEventHandler.wakeupNetworkThread();
             }
-            if (acknowledgementMode == AcknowledgementMode.EXPLICIT) {
+            if (acknowledgementMode == ShareAcknowledgementMode.EXPLICIT) {
                 // We cannot leave unacknowledged records in EXPLICIT acknowledgement mode, so we throw an exception to the application.
                 throw new IllegalStateException("There are unacknowledged records from the previous fetch : " + currentFetch.records());
             }
@@ -1036,7 +1028,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      */
     private void acknowledgeBatchIfImplicitAcknowledgement() {
         // If IMPLICIT, acknowledge all records
-        if (acknowledgementMode == AcknowledgementMode.IMPLICIT) {
+        if (acknowledgementMode == ShareAcknowledgementMode.IMPLICIT) {
             currentFetch.acknowledgeAll(AcknowledgeType.ACCEPT);
         }
     }
@@ -1052,7 +1044,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
      * Called to verify if the acknowledgement mode is EXPLICIT, else throws an exception.
      */
     private void ensureExplicitAcknowledgement() {
-        if (acknowledgementMode == AcknowledgementMode.IMPLICIT) {
+        if (acknowledgementMode == ShareAcknowledgementMode.IMPLICIT) {
             throw new IllegalStateException("Implicit acknowledgement of delivery is being used.");
         }
     }
@@ -1060,20 +1052,9 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
     /**
      * Initializes the acknowledgement mode based on the configuration.
      */
-    private static AcknowledgementMode initializeAcknowledgementMode(ConsumerConfig config, Logger log) {
-        if (config == null) {
-            return AcknowledgementMode.IMPLICIT;
-        }
-        String acknowledgementModeStr = config.getString(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG);
-        if ((acknowledgementModeStr == null) ||
-            acknowledgementModeStr.isEmpty() ||
-            acknowledgementModeStr.equalsIgnoreCase("implicit")) {
-            return AcknowledgementMode.IMPLICIT;
-        } else if (acknowledgementModeStr.equalsIgnoreCase("explicit")) {
-            return AcknowledgementMode.EXPLICIT;
-        }
-        log.warn("Invalid value for config, {}: \"{}\", setting mode to default value : IMPLICIT", ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, acknowledgementModeStr);
-        return AcknowledgementMode.IMPLICIT;
+    private static ShareAcknowledgementMode initializeAcknowledgementMode(ConsumerConfig config, Logger log) {
+        String s = config.getString(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG);
+        return ShareAcknowledgementMode.fromString(s);
     }
 
     /**
