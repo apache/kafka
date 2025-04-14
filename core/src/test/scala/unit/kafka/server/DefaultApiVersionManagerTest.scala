@@ -130,7 +130,7 @@ class DefaultApiVersionManagerTest {
       Optional.empty
     )
     assertFalse(versionManager.isApiEnabled(ApiKeys.ENVELOPE, ApiKeys.ENVELOPE.latestVersion))
-    assertFalse(ApiKeys.apisForListener(ListenerType.BROKER).contains(ApiKeys.ENVELOPE))
+    assertFalse(ApiKeys.apisForListener(versionManager.listenerType()).contains(ApiKeys.ENVELOPE))
 
     val apiVersionsResponse = versionManager.apiVersionResponse(0, false)
     val envelopeVersion = apiVersionsResponse.data.apiKeys.find(ApiKeys.ENVELOPE.id)

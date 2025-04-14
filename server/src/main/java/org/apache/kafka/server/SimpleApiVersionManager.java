@@ -41,29 +41,18 @@ public class SimpleApiVersionManager implements ApiVersionManager {
     /**
      * SimpleApiVersionManager constructor
      * @param listenerType the listener type
-     * @param brokerFeatures the broker features
      * @param enableUnstableLastVersion whether to enable unstable last version, see
      *   {@link org.apache.kafka.server.config.ServerConfigs#UNSTABLE_API_VERSIONS_ENABLE_CONFIG}
      * @param featuresProvider a provider to the finalized features supported
      */
     public SimpleApiVersionManager(ApiMessageType.ListenerType listenerType,
-                                   Features<SupportedVersionRange> brokerFeatures,
                                    boolean enableUnstableLastVersion,
                                    Supplier<FinalizedFeatures> featuresProvider) {
         this.listenerType = listenerType;
-        this.brokerFeatures = brokerFeatures;
+        this.brokerFeatures = BrokerFeatures.defaultSupportedFeatures(enableUnstableLastVersion);
         this.enableUnstableLastVersion = enableUnstableLastVersion;
         this.featuresProvider = featuresProvider;
         this.apiVersions = ApiVersionsResponse.collectApis(listenerType, ApiKeys.apisForListener(listenerType), enableUnstableLastVersion);
-    }
-
-    public SimpleApiVersionManager(ApiMessageType.ListenerType listenerType,
-                                   boolean enableUnstableLastVersion,
-                                   Supplier<FinalizedFeatures> featuresProvider) {
-        this(listenerType,
-             BrokerFeatures.defaultSupportedFeatures(enableUnstableLastVersion),
-             enableUnstableLastVersion,
-             featuresProvider);
     }
 
     @Override
