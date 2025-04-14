@@ -84,7 +84,7 @@ class LogCleanerLagIntegrationTest extends AbstractLogCleanerIntegrationTest wit
     val firstBlock1SegmentBaseOffset = activeSegAtT0.baseOffset
 
     // the first block should get cleaned
-    cleaner.awaitCleaned(new TopicPartition("log", 0), activeSegAtT0.baseOffset)
+    cleaner.awaitCleaned(new TopicPartition("log", 0), activeSegAtT0.baseOffset, 60000L)
 
     // check the data is the same
     val read1 = readFromLog(log)

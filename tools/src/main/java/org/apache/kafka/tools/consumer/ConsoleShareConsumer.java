@@ -111,7 +111,7 @@ public class ConsoleShareConsumer {
             messageCount += 1;
             try {
                 formatter.writeTo(new ConsumerRecord<>(msg.topic(), msg.partition(), msg.offset(), msg.timestamp(), msg.timestampType(),
-                        0, 0, msg.key(), msg.value(), msg.headers(), Optional.empty()), output);
+                        0, 0, msg.key(), msg.value(), msg.headers(), Optional.empty(), msg.deliveryCount()), output);
                 consumer.acknowledge(msg, acknowledgeType);
             } catch (Throwable t) {
                 if (rejectMessageOnError) {
