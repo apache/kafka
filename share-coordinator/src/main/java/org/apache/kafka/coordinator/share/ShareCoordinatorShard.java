@@ -69,6 +69,7 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord> {
     private final Logger log;
@@ -583,23 +584,37 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      */
     public CoordinatorResult<Void, CoordinatorRecord> snapshotColdPartitions() {
         List<CoordinatorRecord> records = new ArrayList<>();
-        shareStateMap.forEach(((sharePartitionKey, shareGroupOffset) -> {
-                long timeSinceLastSnapshot = time.milliseconds() - shareGroupOffset.writeTimestamp();
-                if (timeSinceLastSnapshot >= config.shareCoordinatorColdPartitionSnapshotIntervalMs()) {
-                    // We need to force create a snapshot here
-                    log.info("Last snapshot for {} is older than allowed interval.", sharePartitionKey);
-                    records.add(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
-                        sharePartitionKey.groupId(),
-                        sharePartitionKey.topicId(),
-                        sharePartitionKey.partition(),
-                        shareGroupOffset.builderSupplier()
-                            .setSnapshotEpoch(shareGroupOffset.snapshotEpoch() + 1) // We need to increment by one as this is a new snapshot.
-                            .setWriteTimestamp(time.milliseconds())
-                            .build()
-                    ));
-                }
-            })
-        );
+        AtomicInteger counter = new AtomicInteger(0);
+        shareStateMap.forEach((sharePartitionKey, shareGroupOffset) -> {
+            // If create and write timestamp not the same, it implies that the forced snapshot has happened.
+            if (shareGroupOffset.createTimestamp() - shareGroupOffset.writeTimestamp() != 0) {
+                counter.incrementAndGet();
+            }
+        });
+
+        // If all share partitions are snapshotted, it means that
+        // system is quiet and cold snapshotting will not help much.
+        if (counter.get() == shareStateMap.size()) {
+            return new CoordinatorResult<>(List.of(), null);
+        }
+
+        // Some active partitions are there
+        shareStateMap.forEach((sharePartitionKey, shareGroupOffset) -> {
+            long timeSinceLastSnapshot = time.milliseconds() - shareGroupOffset.writeTimestamp();
+            if (timeSinceLastSnapshot >= config.shareCoordinatorColdPartitionSnapshotIntervalMs()) {
+                // We need to force create a snapshot here
+                log.info("Last snapshot for {} is older than allowed interval.", sharePartitionKey);
+                records.add(ShareCoordinatorRecordHelpers.newShareSnapshotRecord(
+                    sharePartitionKey.groupId(),
+                    sharePartitionKey.topicId(),
+                    sharePartitionKey.partition(),
+                    shareGroupOffset.builderSupplier()
+                        .setSnapshotEpoch(shareGroupOffset.snapshotEpoch() + 1) // We need to increment by one as this is a new snapshot.
+                        .setWriteTimestamp(time.milliseconds())
+                        .build()
+                ));
+            }
+        });
         return new CoordinatorResult<>(records, null);
     }
 
