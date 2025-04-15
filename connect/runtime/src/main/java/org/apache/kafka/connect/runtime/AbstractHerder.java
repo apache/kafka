@@ -73,7 +73,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.PrintStream;
-import java.io.UnsupportedEncodingException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -1082,12 +1081,8 @@ public abstract class AbstractHerder implements Herder, TaskStatus.Listener, Con
 
     private String trace(Throwable t) {
         ByteArrayOutputStream output = new ByteArrayOutputStream();
-        try {
-            t.printStackTrace(new PrintStream(output, false, StandardCharsets.UTF_8.name()));
-            return output.toString(StandardCharsets.UTF_8.name());
-        } catch (UnsupportedEncodingException e) {
-            return null;
-        }
+        t.printStackTrace(new PrintStream(output, false, StandardCharsets.UTF_8));
+        return output.toString(StandardCharsets.UTF_8);
     }
 
     /*
