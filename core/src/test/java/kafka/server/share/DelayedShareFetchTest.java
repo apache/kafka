@@ -1688,9 +1688,11 @@ public class DelayedShareFetchTest {
         assertTrue(delayedShareFetch.isCompleted());
         // Pending remote fetch object gets created for delayed share fetch.
         assertNotNull(delayedShareFetch.remoteFetch());
-        // Verify the locks are released separately for tp0 (from onComplete) and tp1 (from tryComplete).
-        Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(Set.of(tp0));
+        // Verify the locks are released separately for tp1 (from tryComplete).
         Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(Set.of(tp1));
+        // From onComplete, the locks will be released for both tp0 and tp1. tp0 because it was acquired from
+        // tryComplete and has remote fetch processed. tp1 will be reacquired in onComplete when we check for local log read.
+        Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(Set.of(tp0, tp1));
         assertTrue(shareFetch.isCompleted());
         // Share fetch response only contains the first remote storage fetch topic partition - tp0.
         assertEquals(Set.of(tp0), future.join().keySet());
