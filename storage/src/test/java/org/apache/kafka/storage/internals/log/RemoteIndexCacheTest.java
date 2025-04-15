@@ -46,6 +46,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -114,7 +115,7 @@ public class RemoteIndexCacheTest {
         Files.createDirectory(tpDir.toPath());
 
         RemoteLogSegmentId remoteLogSegmentId = RemoteLogSegmentId.generateNew(idPartition);
-        rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Map.of(0, 0L));
+        rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L));
 
         cache = new RemoteIndexCache(defaultRemoteIndexCacheSizeBytes, rsm, tpDir.toString());
 
@@ -761,7 +762,7 @@ public class RemoteIndexCacheTest {
     @Test
     public void testConcurrentRemoveReadForCache() throws IOException, InterruptedException, ExecutionException {
         // Create a spy Cache Entry
-        RemoteLogSegmentMetadata rlsMetadata = new RemoteLogSegmentMetadata(RemoteLogSegmentId.generateNew(idPartition), baseOffset, lastOffset, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Map.of(0, 0L));
+        RemoteLogSegmentMetadata rlsMetadata = new RemoteLogSegmentMetadata(RemoteLogSegmentId.generateNew(idPartition), baseOffset, lastOffset, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L));
 
         TimeIndex timeIndex = spy(createTimeIndexForSegmentMetadata(rlsMetadata, new File(tpDir, DIR_NAME)));
         TransactionIndex txIndex = spy(createTxIndexForSegmentMetadata(rlsMetadata, new File(tpDir, DIR_NAME)));
@@ -999,7 +1000,7 @@ public class RemoteIndexCacheTest {
     }
 
     private RemoteIndexCache.Entry generateSpyCacheEntry(RemoteLogSegmentId remoteLogSegmentId) throws IOException {
-        RemoteLogSegmentMetadata rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Map.of(0, 0L));
+        RemoteLogSegmentMetadata rlsMetadata = new RemoteLogSegmentMetadata(remoteLogSegmentId, baseOffset, lastOffset, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L));
         TimeIndex timeIndex = spy(createTimeIndexForSegmentMetadata(rlsMetadata, tpDir));
         TransactionIndex txIndex = spy(createTxIndexForSegmentMetadata(rlsMetadata, tpDir));
         OffsetIndex offsetIndex = spy(createOffsetIndexForSegmentMetadata(rlsMetadata, tpDir));
@@ -1075,7 +1076,7 @@ public class RemoteIndexCacheTest {
     private List<RemoteLogSegmentMetadata> generateRemoteLogSegmentMetadata(int size, TopicIdPartition tpId) {
         List<RemoteLogSegmentMetadata> metadataList = new ArrayList<>();
         for (int i = 0; i < size; i++) {
-            metadataList.add(new RemoteLogSegmentMetadata(new RemoteLogSegmentId(tpId, Uuid.randomUuid()), baseOffset * i, baseOffset * i + 10, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Map.of(0, 0L)));
+            metadataList.add(new RemoteLogSegmentMetadata(new RemoteLogSegmentId(tpId, Uuid.randomUuid()), baseOffset * i, baseOffset * i + 10, time.milliseconds(), brokerId, time.milliseconds(), segmentSize, Collections.singletonMap(0, 0L)));
         }
         return metadataList;
     }

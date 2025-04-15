@@ -39,6 +39,7 @@ import org.opentest4j.AssertionFailedError;
 
 import java.time.Duration;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ExecutionException;
@@ -278,7 +279,7 @@ public class ProducerIdExpirationTest {
     }
 
     private List<ProducerState> producerStates(Admin admin) throws ExecutionException, InterruptedException {
-        return admin.describeProducers(List.of(tp0))
+        return admin.describeProducers(Collections.singletonList(tp0))
             .partitionResult(tp0)
             .get()
             .activeProducers();
