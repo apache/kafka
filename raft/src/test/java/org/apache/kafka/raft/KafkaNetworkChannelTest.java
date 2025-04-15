@@ -377,7 +377,7 @@ public class KafkaNetworkChannelTest {
         } else if (responseData instanceof EndQuorumEpochResponseData) {
             return new EndQuorumEpochResponse((EndQuorumEpochResponseData) responseData);
         } else if (responseData instanceof FetchResponseData) {
-            return new FetchResponse((FetchResponseData) responseData);
+            return FetchResponse.of((FetchResponseData) responseData);
         } else if (responseData instanceof FetchSnapshotResponseData) {
             return new FetchSnapshotResponse((FetchSnapshotResponseData) responseData);
         } else if (responseData instanceof UpdateRaftVoterResponseData) {

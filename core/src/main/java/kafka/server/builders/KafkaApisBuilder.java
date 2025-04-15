@@ -19,9 +19,7 @@ package kafka.server.builders;
 
 import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
-import kafka.server.ApiVersionManager;
 import kafka.server.AutoTopicCreationManager;
-import kafka.server.DelegationTokenManager;
 import kafka.server.FetchManager;
 import kafka.server.ForwardingManager;
 import kafka.server.KafkaApis;
@@ -37,11 +35,13 @@ import org.apache.kafka.coordinator.group.GroupCoordinator;
 import org.apache.kafka.coordinator.share.ShareCoordinator;
 import org.apache.kafka.metadata.ConfigRepository;
 import org.apache.kafka.metadata.MetadataCache;
+import org.apache.kafka.server.ApiVersionManager;
 import org.apache.kafka.server.ClientMetricsManager;
+import org.apache.kafka.server.DelegationTokenManager;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
-import java.util.Collections;
+import java.util.Map;
 import java.util.Optional;
 
 import scala.jdk.javaapi.OptionConverters;
@@ -195,7 +195,7 @@ public class KafkaApisBuilder {
         if (txnCoordinator == null) throw new RuntimeException("You must set txnCoordinator");
         if (autoTopicCreationManager == null)
             throw new RuntimeException("You must set autoTopicCreationManager");
-        if (config == null) config = new KafkaConfig(Collections.emptyMap());
+        if (config == null) config = new KafkaConfig(Map.of());
         if (configRepository == null) throw new RuntimeException("You must set configRepository");
         if (metadataCache == null) throw new RuntimeException("You must set metadataCache");
         if (metrics == null) throw new RuntimeException("You must set metrics");

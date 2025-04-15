@@ -14,36 +14,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.server.purgatory;
+package org.apache.kafka.streams;
 
-import java.util.Objects;
+import java.util.Locale;
 
-/**
- * Used by delayed-sync operations
- */
-public class GroupSyncKey implements DelayedOperationKey {
+public enum GroupProtocol {
+    /** Classic group protocol.  */
+    CLASSIC("CLASSIC"),
 
-    private final String groupId;
+    /** Streams group protocol */
+    STREAMS("STREAMS");
 
-    public GroupSyncKey(String groupId) {
-        this.groupId = groupId;
+    /**
+     * String representation of the group protocol.
+     */
+    public final String name;
+
+    GroupProtocol(final String name) {
+        this.name = name;
     }
 
-    @Override
-    public String keyLabel() {
-        return "sync-" + groupId;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        GroupSyncKey that = (GroupSyncKey) o;
-        return Objects.equals(groupId, that.groupId);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(groupId);
+    /**
+     * Case-insensitive group protocol lookup by string name.
+     */
+    public static GroupProtocol of(final String name) {
+        return GroupProtocol.valueOf(name.toUpperCase(Locale.ROOT));
     }
 }

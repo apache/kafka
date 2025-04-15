@@ -17,7 +17,7 @@
 
 package kafka.server
 
-import kafka.network.{DataPlaneAcceptor, SocketServer}
+import kafka.network.SocketServer
 import kafka.raft.KafkaRaftManager
 import kafka.server.QuotaFactory.QuotaManagers
 
@@ -40,10 +40,11 @@ import org.apache.kafka.metadata.bootstrap.BootstrapMetadata
 import org.apache.kafka.metadata.publisher.{AclPublisher, FeaturesPublisher}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.CredentialProvider
+import org.apache.kafka.server.{DelegationTokenManager, ProcessRole, SimpleApiVersionManager}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.config.ServerLogConfigs.{ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion, NodeToControllerChannelManager}
-import org.apache.kafka.server.config.ConfigType
+import org.apache.kafka.server.config.{ConfigType, DelegationTokenManagerConfigs}
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import org.apache.kafka.server.network.{EndpointReadyFutures, KafkaAuthorizerServerInfo}
 import org.apache.kafka.server.policy.{AlterConfigPolicy, CreateTopicPolicy}
@@ -205,9 +206,10 @@ class ControllerServer(
         QuorumFeatures.defaultSupportedFeatureMap(config.unstableFeatureVersionsEnabled),
         controllerNodes.asScala.map(node => Integer.valueOf(node.id())).asJava)
 
+      val delegationTokenManagerConfigs = new DelegationTokenManagerConfigs(config)
       val delegationTokenKeyString = {
-        if (config.tokenAuthEnabled) {
-          config.delegationTokenSecretKey.value
+        if (delegationTokenManagerConfigs.tokenAuthEnabled) {
+          delegationTokenManagerConfigs.delegationTokenSecretKey.value
         } else {
           null
         }
@@ -246,9 +248,9 @@ class ControllerServer(
           setNonFatalFaultHandler(sharedServer.nonFatalQuorumControllerFaultHandler).
           setDelegationTokenCache(tokenCache).
           setDelegationTokenSecretKey(delegationTokenKeyString).
-          setDelegationTokenMaxLifeMs(config.delegationTokenMaxLifeMs).
-          setDelegationTokenExpiryTimeMs(config.delegationTokenExpiryTimeMs).
-          setDelegationTokenExpiryCheckIntervalMs(config.delegationTokenExpiryCheckIntervalMs).
+          setDelegationTokenMaxLifeMs(delegationTokenManagerConfigs.delegationTokenMaxLifeMs).
+          setDelegationTokenExpiryTimeMs(delegationTokenManagerConfigs.delegationTokenExpiryTimeMs).
+          setDelegationTokenExpiryCheckIntervalMs(delegationTokenManagerConfigs.delegationTokenExpiryCheckIntervalMs).
           setUncleanLeaderElectionCheckIntervalMs(config.uncleanLeaderElectionCheckIntervalMs).
           setInterBrokerListenerName(config.interBrokerListenerName.value()).
           setControllerPerformanceSamplePeriodMs(config.controllerPerformanceSamplePeriodMs).
@@ -266,7 +268,7 @@ class ControllerServer(
       quotaManagers = QuotaFactory.instantiate(config,
         metrics,
         time,
-        s"controller-${config.nodeId}-")
+        s"controller-${config.nodeId}-", ProcessRole.ControllerRole.toString)
       clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizer,
@@ -284,8 +286,7 @@ class ControllerServer(
         controllerApis,
         time,
         config.numIoThreads,
-        s"${DataPlaneAcceptor.MetricPrefix}RequestHandlerAvgIdlePercent",
-        DataPlaneAcceptor.ThreadPrefix,
+        "RequestHandlerAvgIdlePercent",
         "controller")
 
       // Set up the metadata cache publisher.
@@ -361,7 +362,7 @@ class ControllerServer(
           config,
           sharedServer.metadataPublishingFaultHandler,
           "controller",
-          new DelegationTokenManager(config, tokenCache, time)
+          new DelegationTokenManager(delegationTokenManagerConfigs, tokenCache)
       ))
 
       // Set up the metrics publisher.
