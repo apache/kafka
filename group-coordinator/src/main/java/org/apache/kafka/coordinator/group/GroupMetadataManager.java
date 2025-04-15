@@ -8177,6 +8177,7 @@ public class GroupMetadataManager {
             .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
 
         if (!deletingTopics.isEmpty()) {
+            log.info("Existing deleting entries found in share group {} - {}", shareGroupId, deletingTopics);
             deleteCandidates = mergeShareGroupInitMaps(
                 deleteCandidates,
                 deletingTopics
