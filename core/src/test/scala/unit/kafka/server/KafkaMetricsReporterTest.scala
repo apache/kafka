@@ -22,6 +22,7 @@ import kafka.utils.{CoreUtils, TestUtils}
 import org.apache.kafka.common.metrics.{KafkaMetric, MetricsContext, MetricsReporter}
 import org.apache.kafka.server.config.ServerConfigs
 import org.apache.kafka.server.metrics.MetricConfigs
+import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -85,7 +86,7 @@ class KafkaMetricsReporterTest extends QuorumTestHarness {
     assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.JMXPREFIX.get())
 
     broker.shutdown()
-    TestUtils.assertNoNonDaemonThreads(this.getClass.getName)
+    JTestUtils.assertNoLeakedThreadsWithNameAndDaemonStatus(this.getClass.getName, true)
   }
 
   @AfterEach

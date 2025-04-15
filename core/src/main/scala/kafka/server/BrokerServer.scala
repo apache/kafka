@@ -54,7 +54,7 @@ import org.apache.kafka.server.share.persister.{DefaultStatePersister, NoOpState
 import org.apache.kafka.server.share.session.ShareSessionCache
 import org.apache.kafka.server.util.timer.{SystemTimer, SystemTimerReaper}
 import org.apache.kafka.server.util.{Deadline, FutureUtils, KafkaScheduler}
-import org.apache.kafka.server.{AssignmentsManager, BrokerFeatures, ClientMetricsManager, DelayedActionQueue, DelegationTokenManager, ProcessRole}
+import org.apache.kafka.server.{AssignmentsManager, BrokerFeatures, ClientMetricsManager, DefaultApiVersionManager, DelayedActionQueue, DelegationTokenManager, ProcessRole}
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 
@@ -252,13 +252,13 @@ class BrokerServer(
       forwardingManager = new ForwardingManagerImpl(clientToControllerChannelManager, metrics)
       clientMetricsManager = new ClientMetricsManager(clientMetricsReceiverPlugin, config.clientTelemetryMaxBytes, time, metrics)
 
-      val apiVersionManager = ApiVersionManager(
+      val apiVersionManager = new DefaultApiVersionManager(
         ListenerType.BROKER,
-        config,
-        forwardingManager,
+        () => forwardingManager.controllerApiVersions,
         brokerFeatures,
         metadataCache,
-        Some(clientMetricsManager)
+        config.unstableApiVersionsEnabled,
+        Optional.of(clientMetricsManager)
       )
 
       val connectionDisconnectListeners = Seq(clientMetricsManager.connectionDisconnectListener())
