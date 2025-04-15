@@ -27,6 +27,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader}
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
 
+import java.util.Optional
 import java.util.concurrent.TimeUnit
 import scala.jdk.OptionConverters.RichOptional
 
@@ -85,7 +86,7 @@ trait ForwardingManager {
     responseCallback: Option[AbstractResponse] => Unit
   ): Unit
 
-  def controllerApiVersions: Option[NodeApiVersions]
+  def controllerApiVersions: Optional[NodeApiVersions]
 }
 
 object ForwardingManager {
@@ -187,8 +188,8 @@ class ForwardingManagerImpl(
   override def close(): Unit =
     forwardingManagerMetrics.close()
 
-  override def controllerApiVersions: Option[NodeApiVersions] =
-    channelManager.controllerApiVersions.toScala
+  override def controllerApiVersions: Optional[NodeApiVersions] =
+    channelManager.controllerApiVersions
 
   private def parseResponse(
     buffer: ByteBuffer,

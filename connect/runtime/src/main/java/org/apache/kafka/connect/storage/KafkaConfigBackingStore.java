@@ -854,14 +854,7 @@ public final class KafkaConfigBackingStore extends KafkaTopicBasedBackingStore i
         }
     }
 
-    private static class ProducerKeyValue {
-        final String key;
-        final byte[] value;
-
-        ProducerKeyValue(String key, byte[] value) {
-            this.key = key;
-            this.value = value;
-        }
+    private record ProducerKeyValue(String key, byte[] value) {
     }
 
     private void relinquishWritePrivileges() {

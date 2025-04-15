@@ -95,7 +95,7 @@ class KafkaRequestHandler(
   time: Time,
   nodeName: String = "broker"
 ) extends Runnable with Logging {
-  this.logIdent = s"[Kafka Request Handler $id on ${nodeName.capitalize} $brokerId], "
+  this.logIdent = s"[Kafka Request Handler $id on ${nodeName.capitalize} $brokerId] "
   private val shutdownComplete = new CountDownLatch(1)
   private val requestLocal = RequestLocal.withThreadConfinedCaching
   @volatile private var stopped = false
@@ -199,7 +199,6 @@ class KafkaRequestHandlerPool(
   time: Time,
   numThreads: Int,
   requestHandlerAvgIdleMetricName: String,
-  logAndThreadNamePrefix : String,
   nodeName: String = "broker"
 ) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
@@ -208,7 +207,7 @@ class KafkaRequestHandlerPool(
   /* a meter to track the average free capacity of the request handlers */
   private val aggregateIdleMeter = metricsGroup.newMeter(requestHandlerAvgIdleMetricName, "percent", TimeUnit.NANOSECONDS)
 
-  this.logIdent = "[" + logAndThreadNamePrefix + " Kafka Request Handler on Broker " + brokerId + "], "
+  this.logIdent = s"[data-plane Kafka Request Handler on ${nodeName.capitalize} $brokerId] "
   val runnables = new mutable.ArrayBuffer[KafkaRequestHandler](numThreads)
   for (i <- 0 until numThreads) {
     createHandler(i)
@@ -216,7 +215,7 @@ class KafkaRequestHandlerPool(
 
   def createHandler(id: Int): Unit = synchronized {
     runnables += new KafkaRequestHandler(id, brokerId, aggregateIdleMeter, threadPoolSize, requestChannel, apis, time, nodeName)
-    KafkaThread.daemon(logAndThreadNamePrefix + "-kafka-request-handler-" + id, runnables(id)).start()
+    KafkaThread.daemon("data-plane-kafka-request-handler-" + id, runnables(id)).start()
   }
 
   def resizeThreadPool(newSize: Int): Unit = synchronized {

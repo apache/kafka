@@ -584,6 +584,57 @@ public class RequestResponseTest {
     }
 
     @Test
+    public void testFetchResponseShouldNotHaveNullRecords() {
+        Uuid id = Uuid.randomUuid();
+        FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
+            .setPartitionIndex(0)
+            .setHighWatermark(1000000)
+            .setLogStartOffset(100)
+            .setLastStableOffset(200)
+            .setRecords(null);
+        FetchResponseData.FetchableTopicResponse response = new FetchResponseData.FetchableTopicResponse()
+            .setTopic("topic")
+            .setPartitions(List.of(partitionData))
+            .setTopicId(id);
+        FetchResponseData data = new FetchResponseData().setResponses(List.of(response));
+
+        response.setPartitions(List.of(FetchResponse.partitionResponse(0, Errors.NONE)));
+        FetchResponse fetchResponse = FetchResponse.of(data);
+        validateNoNullRecords(fetchResponse);
+
+        TopicIdPartition topicIdPartition = new TopicIdPartition(id, new TopicPartition("test", 0));
+        LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> tpToData = new LinkedHashMap<>(Map.of(topicIdPartition, partitionData));
+        fetchResponse = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, tpToData);
+        validateNoNullRecords(fetchResponse);
+    }
+
+    private void validateNoNullRecords(FetchResponse fetchResponse) {
+        fetchResponse.data().responses().stream()
+            .flatMap(response -> response.partitions().stream())
+            .forEach(partition -> assertEquals(MemoryRecords.EMPTY, partition.records()));
+    }
+
+    @Test
+    public void testShareFetchResponseShouldNotHaveNullRecords() {
+        Uuid id = Uuid.randomUuid();
+        ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
+            .setPartitionIndex(0)
+            .setAcquiredRecords(List.of())
+            .setRecords(null);
+
+        TopicIdPartition topicIdPartition = new TopicIdPartition(id, new TopicPartition("test", 0));
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> tpToData = new LinkedHashMap<>(Map.of(topicIdPartition, partitionData));
+        ShareFetchResponse shareFetchResponse = ShareFetchResponse.of(Errors.NONE, 0, tpToData, List.of(), 0);
+        validateNoNullRecords(shareFetchResponse);
+    }
+
+    private void validateNoNullRecords(ShareFetchResponse fetchResponse) {
+        fetchResponse.data().responses().stream()
+            .flatMap(response -> response.partitions().stream())
+            .forEach(partition -> assertEquals(MemoryRecords.EMPTY, partition.records()));
+    }
+
+    @Test
     public void verifyFetchResponseFullWrites() throws Exception {
         verifyFetchResponseFullWrite(FETCH.latestVersion(), createFetchResponse(123));
         verifyFetchResponseFullWrite(FETCH.latestVersion(),
@@ -1443,7 +1494,6 @@ public class RequestResponseTest {
     }
 
     private ShareFetchResponse createShareFetchResponse() {
-        ShareFetchResponseData data = new ShareFetchResponseData();
         MemoryRecords records = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("blah".getBytes()));
         ShareFetchResponseData.PartitionData partition = new ShareFetchResponseData.PartitionData()
                 .setPartitionIndex(0)
@@ -1453,14 +1503,10 @@ public class RequestResponseTest {
                         .setFirstOffset(0)
                         .setLastOffset(0)
                         .setDeliveryCount((short) 1)));
-        ShareFetchResponseData.ShareFetchableTopicResponse response = new ShareFetchResponseData.ShareFetchableTopicResponse()
-                .setTopicId(Uuid.randomUuid())
-                .setPartitions(singletonList(partition));
-
-        data.setResponses(singletonList(response));
-        data.setThrottleTimeMs(345);
-        data.setErrorCode(Errors.NONE.code());
-        return new ShareFetchResponse(data);
+        TopicIdPartition topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("", partition.partitionIndex()));
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> topicIdPartitionToPartition = new LinkedHashMap<>();
+        topicIdPartitionToPartition.put(topicIdPartition, partition);
+        return ShareFetchResponse.of(Errors.NONE, 345, topicIdPartitionToPartition, List.of(), 0);
     }
 
     private ShareAcknowledgeRequest createShareAcknowledgeRequest(short version) {
@@ -2103,7 +2149,7 @@ public class RequestResponseTest {
             response.setTopicId(Uuid.randomUuid());
         }
         data.setResponses(singletonList(response));
-        return new FetchResponse(data);
+        return FetchResponse.of(data);
     }
 
     private HeartbeatRequest createHeartBeatRequest(short version) {

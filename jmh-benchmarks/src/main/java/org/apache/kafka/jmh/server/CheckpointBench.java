@@ -120,7 +120,7 @@ public class CheckpointBench {
         this.quotaManagers =
                 QuotaFactory.instantiate(this.brokerProperties,
                         this.metrics,
-                        this.time, "");
+                        this.time, "", "");
 
         this.alterPartitionManager = TestUtils.createAlterIsrManager();
         this.replicaManager = new ReplicaManagerBuilder().

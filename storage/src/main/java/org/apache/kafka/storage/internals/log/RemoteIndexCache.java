@@ -149,9 +149,7 @@ public class RemoteIndexCache implements Closeable {
     private Cache<Uuid, Entry> initEmptyCache(long maxSize) {
         return Caffeine.newBuilder()
                 .maximumWeight(maxSize)
-                .weigher((Uuid key, Entry entry) -> {
-                    return (int) entry.entrySizeBytes;
-                })
+                .weigher((Uuid key, Entry entry) -> (int) entry.entrySizeBytes)
                 // This listener is invoked each time an entry is being automatically removed due to eviction. The cache will invoke this listener
                 // during the atomic operation to remove the entry (refer: https://github.com/ben-manes/caffeine/wiki/Removal),
                 // hence, care must be taken to ensure that this operation is not expensive. Note that this listener is not invoked when

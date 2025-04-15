@@ -788,7 +788,7 @@ public class StandaloneHerderTest {
 
         ArgumentCaptor<NotFoundException> exceptionCaptor = ArgumentCaptor.forClass(NotFoundException.class);
         verify(patchCallback).onCompletion(exceptionCaptor.capture(), isNull());
-        assertEquals(exceptionCaptor.getValue().getMessage(), "Connector " + CONNECTOR_NAME + " not found");
+        assertEquals("Connector " + CONNECTOR_NAME + " not found", exceptionCaptor.getValue().getMessage());
     }
 
     @Test
@@ -899,10 +899,10 @@ public class StandaloneHerderTest {
         Throwable cause = e.getCause();
         assertInstanceOf(BadRequestException.class, cause);
         assertEquals(
-            cause.getMessage(),
-            "Connector configuration is invalid and contains the following 1 error(s):\n" +
-                error + "\n" +
-                "You can also find the above list of errors at the endpoint `/connector-plugins/{connectorType}/config/validate`"
+                "Connector configuration is invalid and contains the following 1 error(s):\n" +
+                    error + "\n" +
+                    "You can also find the above list of errors at the endpoint `/connector-plugins/{connectorType}/config/validate`",
+                cause.getMessage()
         );
         verify(loaderSwap).close();
     }
