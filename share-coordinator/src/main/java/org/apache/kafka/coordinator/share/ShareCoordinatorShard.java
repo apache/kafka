@@ -588,7 +588,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
 
         // If all share partitions are snapshotted, it means that
         // system is quiet and cold snapshotting will not help much.
-        if (coldSnapshottedPartitionsCount == shareStateMap.size()) {
+        if (coldSnapshottedPartitionsCount != 0 && coldSnapshottedPartitionsCount == shareStateMap.size()) {
             log.debug("All share snapshot records already cold snapshotted, skipping.");
             return new CoordinatorResult<>(List.of(), null);
         }
