@@ -159,7 +159,7 @@ ext {
     libs.log4j2Api,
     libs.log4j2Core
   ]
-  
+
 }
 
 allprojects {
@@ -510,7 +510,6 @@ subprojects {
   // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
   def testsToExclude = ['**/*Suite.class']
 
-
   // This task will copy JUnit XML files out of the sub-project's build directory and into
   // a top-level build/junit-xml directory. This is necessary to avoid reporting on tests which
   // were not run, but instead were restored via FROM-CACHE. See KAFKA-17479 for more details.
@@ -521,10 +520,6 @@ subprojects {
 
     ext {
       output = project.findProperty("kafka.test.xml.output.dir")
-    }
-    
-    doFirst {
-      jvmArgs("-javaagent:${configurations.mockitoAgent.asPath}")
     }
 
     // Never cache this task
@@ -557,6 +552,10 @@ subprojects {
     systemProperty("kafka.test.run.flaky", project.findProperty("kafka.test.run.flaky"))
     systemProperty("kafka.test.verbose", project.findProperty("kafka.test.verbose"))
 
+    doFirst {
+      jvmArgs("-javaagent:${configurations.mockitoAgent.asPath}")
+    }
+
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
       showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
@@ -577,7 +576,7 @@ subprojects {
         maxFailures = userMaxTestRetryFailures
       }
     }
-    
+
     finalizedBy("copyTestXml")
   }
 
