@@ -8167,10 +8167,10 @@ public class GroupMetadataManager {
         );
 
         // Ideally the deleting should be empty - if it is not then it implies
-        // then some previous share group delete or delete offsets command
+        // that some previous share group delete or delete offsets command
         // did not complete successfully. So, set up the delete request such that
-        // a retry for the same is possible. Since this is part of admin operation
-        // deleting entries in already deleted should not pose issues related to
+        // a retry for the same is possible. Since this is part of an admin operation
+        // retrying delete should not pose issues related to
         // performance. Also, the share coordinator is idempotent on delete partitions.
         Map<Uuid, Set<Integer>> deletingTopics = shareGroupPartitionMetadata.get(shareGroupId).deletingTopics().stream()
             .map(tid -> Map.entry(tid, metadataImage.topics().getTopic(tid).partitions().keySet()))
