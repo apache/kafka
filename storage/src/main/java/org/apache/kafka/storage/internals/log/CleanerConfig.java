@@ -69,6 +69,7 @@ public class CleanerConfig {
     public static final String LOG_CLEANER_DEDUPE_BUFFER_LOAD_FACTOR_DOC = "Log cleaner dedupe buffer load factor. The percentage full the dedupe buffer can become. A higher value " +
             "will allow more log to be cleaned at once but will lead to more hash collisions";
     public static final String LOG_CLEANER_BACKOFF_MS_DOC = "The amount of time to sleep when there are no logs to clean";
+    @Deprecated(since = "4.1")
     public static final String LOG_CLEANER_ENABLE_DOC = "This configuration has been deprecated and will be removed in Kafka 5.0. Users should not set it to false to prepare for its future removal. " +
             "Enable the log cleaner process to run on the server. Should be enabled if using any topics with a cleanup.policy=compact including the internal offsets topic. If disabled those topics will not be compacted and continually grow in size.";
     public static final String LOG_CLEANER_DELETE_RETENTION_MS_DOC = "The amount of time to retain tombstone message markers for log compacted topics. This setting also gives a bound " +
