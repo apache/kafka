@@ -152,7 +152,7 @@ public class DeadLetterQueueReporter implements ErrorReporter<ConsumerRecord<byt
 
         return this.kafkaProducer.send(producerRecord, (metadata, exception) -> {
             if (exception != null) {
-                log.error("Could not produce message to dead letter queue. topic=" + dlqTopicName, exception);
+                log.error("Could not produce message to dead letter queue. topic={}", dlqTopicName, exception);
                 errorHandlingMetrics.recordDeadLetterQueueProduceFailed();
             }
         });
