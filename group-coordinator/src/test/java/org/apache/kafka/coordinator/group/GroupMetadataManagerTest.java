@@ -20851,7 +20851,8 @@ public class GroupMetadataManagerTest {
 
         Map<Uuid, Set<Integer>> expectedTopicPartitionMap = Map.of(
             t1Uuid, Set.of(0, 1),
-            t2Uuid, Set.of(0, 1)
+            t2Uuid, Set.of(0, 1),
+            t3Uuid, Set.of(0, 1)
         );
 
         List<CoordinatorRecord> expectedRecords = List.of(
