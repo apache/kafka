@@ -263,21 +263,10 @@ public class FetchCollector<K, V> {
         Iterator<? extends RecordBatch> batches = FetchResponse.recordsOrFail(partition).batches().iterator();
 
         if (!batches.hasNext() && FetchResponse.recordsSize(partition) > 0) {
-            if (completedFetch.requestVersion < 3) {
-                // Implement the pre KIP-74 behavior of throwing a RecordTooLargeException.
-                Map<TopicPartition, Long> recordTooLargePartitions = Collections.singletonMap(tp, fetchOffset);
-                throw new RecordTooLargeException("There are some messages at [Partition=Offset]: " +
-                        recordTooLargePartitions + " whose size is larger than the fetch size " + fetchConfig.fetchSize +
-                        " and hence cannot be returned. Please considering upgrading your broker to 2.1 or " +
-                        "newer to avoid this issue. Alternately, increase the fetch size on the client (using " +
-                        ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG + ")",
-                        recordTooLargePartitions);
-            } else {
-                // This should not happen with brokers that support FetchRequest/Response V3 or higher (i.e. KIP-74)
-                throw new KafkaException("Failed to make progress reading messages at " + tp + "=" +
-                        fetchOffset + ". Received a non-empty fetch response from the server, but no " +
-                        "complete records were found.");
-            }
+            // This should not happen with brokers that support FetchRequest/Response V4 or higher (i.e. KIP-74)
+            throw new KafkaException("Failed to make progress reading messages at " + tp + "=" +
+                    fetchOffset + ". Received a non-empty fetch response from the server, but no " +
+                    "complete records were found.");
         }
 
         if (!updatePartitionState(partition, tp)) {
