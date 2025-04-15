@@ -129,6 +129,7 @@ import org.apache.kafka.image.MetadataProvenance;
 import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
+import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.PartitionIdData;
@@ -21417,6 +21418,69 @@ public class GroupMetadataManagerTest {
             0,
             false
         );
+    }
+
+    @Test
+    public void testShareGroupInitializingClearsCommonDeleting() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        Uuid t1Uuid = Uuid.randomUuid();
+        String t1Name = "t1";
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(t1Uuid, t1Name, 2)
+            .build();
+
+        String groupId = "share-group";
+
+        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
+        context.groupMetadataManager.replay(
+            new ShareGroupMetadataKey()
+                .setGroupId(groupId),
+            new ShareGroupMetadataValue()
+                .setEpoch(0)
+        );
+
+        // Replay a deleting record.
+        context.groupMetadataManager.replay(
+            new ShareGroupStatePartitionMetadataKey()
+                .setGroupId(groupId),
+            new ShareGroupStatePartitionMetadataValue()
+                .setInitializingTopics(List.of())
+                .setInitializedTopics(List.of())
+                .setDeletingTopics(List.of(
+                    new ShareGroupStatePartitionMetadataValue.TopicInfo()
+                        .setTopicId(t1Uuid)
+                        .setTopicName(t1Name)
+                ))
+        );
+
+        List<CoordinatorRecord> records = new ArrayList<>();
+        context.groupMetadataManager.addInitializingTopicsRecords(groupId, records, Map.of(t1Uuid, Set.of(0, 1)));
+
+        List<CoordinatorRecord> expectedRecords = List.of(
+            CoordinatorRecord.record(
+                new ShareGroupStatePartitionMetadataKey()
+                    .setGroupId(groupId),
+                new ApiMessageAndVersion(
+                    new ShareGroupStatePartitionMetadataValue()
+                        .setInitializingTopics(List.of(
+                            new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                                .setTopicId(t1Uuid)
+                                .setTopicName(t1Name)
+                                .setPartitions(List.of(0, 1))
+                        ))
+                        .setInitializedTopics(List.of())
+                        .setDeletingTopics(List.of()),
+                    (short) 0
+                )
+            )
+        );
+
+        assertEquals(expectedRecords, records);
     }
 
     @Test

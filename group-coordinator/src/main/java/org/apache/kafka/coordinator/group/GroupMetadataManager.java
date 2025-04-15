@@ -2968,7 +2968,8 @@ public class GroupMetadataManager {
             )).build();
     }
 
-    private void addInitializingTopicsRecords(String groupId, List<CoordinatorRecord> records, Map<Uuid, Set<Integer>> topicPartitionMap) {
+    // Visibility for tests
+    void addInitializingTopicsRecords(String groupId, List<CoordinatorRecord> records, Map<Uuid, Set<Integer>> topicPartitionMap) {
         if (topicPartitionMap == null || topicPartitionMap.isEmpty()) {
             return;
         }
@@ -2982,12 +2983,23 @@ public class GroupMetadataManager {
         // We must combine the existing information in the record with the topicPartitionMap argument.
         Map<Uuid, Set<Integer>> finalInitializingMap = mergeShareGroupInitMaps(currentMap.initializingTopics(), topicPartitionMap);
 
+        // If any initializing topics are also present in the deleting state
+        // we should remove them from deleting.
+        Set<Uuid> currentDeleting = new HashSet<>(currentMap.deletingTopics());
+        if (!currentDeleting.isEmpty()) {
+            finalInitializingMap.keySet().forEach(key -> {
+                if (currentDeleting.remove(key)) {
+                    log.warn("Initializing topic {} for share group {} found in deleting state as well, removing from deleting.", metadataImage.topics().getTopic(key).name(), groupId);
+                }
+            });
+        }
+
         records.add(
             newShareGroupStatePartitionMetadataRecord(
                 groupId,
                 attachTopicName(finalInitializingMap),
                 attachTopicName(currentMap.initializedTopics()),
-                attachTopicName(currentMap.deletingTopics())
+                attachTopicName(currentDeleting)
             )
         );
     }
