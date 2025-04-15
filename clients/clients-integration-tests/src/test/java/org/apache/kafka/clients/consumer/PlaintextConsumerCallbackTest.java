@@ -68,8 +68,8 @@ public class PlaintextConsumerCallbackTest {
         testRebalanceListenerAssignOnPartitionsAssigned(CONSUMER);
     }
 
-    private void testRebalanceListenerAssignOnPartitionsAssigned(GroupProtocol classic) throws InterruptedException {
-        try (var consumer = createConsumer(classic)) {
+    private void testRebalanceListenerAssignOnPartitionsAssigned(GroupProtocol groupProtocol) throws InterruptedException {
+        try (var consumer = createConsumer(groupProtocol)) {
             triggerOnPartitionsAssigned(tp, consumer, (executeConsumer, partitions) -> {
                 var e = assertThrows(IllegalStateException.class, () -> executeConsumer.assign(List.of(tp)));
                 assertEquals("Subscription to topics, partitions and pattern are mutually exclusive", e.getMessage());
@@ -87,8 +87,8 @@ public class PlaintextConsumerCallbackTest {
         testRebalanceListenerAssignmentOnPartitionsAssigned(CONSUMER);
     }
 
-    private void testRebalanceListenerAssignmentOnPartitionsAssigned(GroupProtocol classic) throws InterruptedException {
-        try (var consumer = createConsumer(classic)) {
+    private void testRebalanceListenerAssignmentOnPartitionsAssigned(GroupProtocol groupProtocol) throws InterruptedException {
+        try (var consumer = createConsumer(groupProtocol)) {
             triggerOnPartitionsAssigned(tp, consumer,
                 (executeConsumer, partitions) -> assertTrue(executeConsumer.assignment().contains(tp))
             );
@@ -105,8 +105,8 @@ public class PlaintextConsumerCallbackTest {
         testRebalanceListenerBeginningOffsetsOnPartitionsAssigned(CONSUMER);
     }
 
-    private void testRebalanceListenerBeginningOffsetsOnPartitionsAssigned(GroupProtocol classic) throws InterruptedException {
-        try (var consumer = createConsumer(classic)) {
+    private void testRebalanceListenerBeginningOffsetsOnPartitionsAssigned(GroupProtocol groupProtocol) throws InterruptedException {
+        try (var consumer = createConsumer(groupProtocol)) {
             triggerOnPartitionsAssigned(tp, consumer, (executeConsumer, partitions) -> {
                 var map = executeConsumer.beginningOffsets(List.of(tp));
                 assertTrue(map.containsKey(tp));
@@ -125,8 +125,8 @@ public class PlaintextConsumerCallbackTest {
         testRebalanceListenerAssignOnPartitionsRevoked(CONSUMER);
     }
 
-    private void testRebalanceListenerAssignOnPartitionsRevoked(GroupProtocol classic) throws InterruptedException {
-        triggerOnPartitionsRevoked(tp, classic, (consumer, partitions) -> {
+    private void testRebalanceListenerAssignOnPartitionsRevoked(GroupProtocol groupProtocol) throws InterruptedException {
+        triggerOnPartitionsRevoked(tp, groupProtocol, (consumer, partitions) -> {
             var e = assertThrows(IllegalStateException.class, () -> consumer.assign(List.of(tp)));
             assertEquals("Subscription to topics, partitions and pattern are mutually exclusive", e.getMessage());
         });
@@ -156,8 +156,8 @@ public class PlaintextConsumerCallbackTest {
         testRebalanceListenerBeginningOffsetsOnPartitionsRevoked(CONSUMER);
     }
 
-    private void testRebalanceListenerBeginningOffsetsOnPartitionsRevoked(GroupProtocol consumer) throws InterruptedException {
-        triggerOnPartitionsRevoked(tp, consumer, (consumer, partitions) -> {
+    private void testRebalanceListenerBeginningOffsetsOnPartitionsRevoked(GroupProtocol groupProtocol) throws InterruptedException {
+        triggerOnPartitionsRevoked(tp, groupProtocol, (consumer, partitions) -> {
             var map = consumer.beginningOffsets(List.of(tp));
             assertTrue(map.containsKey(tp));
             assertEquals(0L, map.get(tp));
@@ -174,8 +174,8 @@ public class PlaintextConsumerCallbackTest {
         testGetPositionOfNewlyAssignedPartitionOnPartitionsAssignedCallback(CONSUMER);
     }
 
-    private void testGetPositionOfNewlyAssignedPartitionOnPartitionsAssignedCallback(GroupProtocol classic) throws InterruptedException {
-        try (var consumer = createConsumer(classic)) {
+    private void testGetPositionOfNewlyAssignedPartitionOnPartitionsAssignedCallback(GroupProtocol groupProtocol) throws InterruptedException {
+        try (var consumer = createConsumer(groupProtocol)) {
             triggerOnPartitionsAssigned(tp, consumer,
                 (executeConsumer, partitions) -> assertDoesNotThrow(() -> executeConsumer.position(tp))
             );
@@ -192,8 +192,8 @@ public class PlaintextConsumerCallbackTest {
         testSeekPositionAndPauseNewlyAssignedPartitionOnPartitionsAssignedCallback(CONSUMER);
     }
 
-    private void testSeekPositionAndPauseNewlyAssignedPartitionOnPartitionsAssignedCallback(GroupProtocol classic) throws InterruptedException {
-        try (var consumer = createConsumer(classic)) {
+    private void testSeekPositionAndPauseNewlyAssignedPartitionOnPartitionsAssignedCallback(GroupProtocol groupProtocol) throws InterruptedException {
+        try (var consumer = createConsumer(groupProtocol)) {
             var startingOffset = 100L;
             var totalRecords = 120;
             var startingTimestamp = 0L;
