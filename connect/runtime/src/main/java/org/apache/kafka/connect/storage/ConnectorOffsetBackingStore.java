@@ -210,7 +210,7 @@ public class ConnectorOffsetBackingStore implements OffsetBackingStore {
         Future<Map<ByteBuffer, ByteBuffer>> workerGetFuture = getFromStore(workerStore, keys);
         Future<Map<ByteBuffer, ByteBuffer>> connectorGetFuture = getFromStore(connectorStore, keys);
 
-        return new Future<Map<ByteBuffer, ByteBuffer>>() {
+        return new Future<>() {
             @Override
             public boolean cancel(boolean mayInterruptIfRunning) {
                 // Note the use of | instead of || here; this causes cancel to be invoked on both futures,

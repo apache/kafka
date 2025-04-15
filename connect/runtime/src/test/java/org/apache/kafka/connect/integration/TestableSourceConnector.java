@@ -134,33 +134,23 @@ public class TestableSourceConnector extends SampleSourceConnector {
     @Override
     public ExactlyOnceSupport exactlyOnceSupport(Map<String, String> connectorConfig) {
         String supportLevel = connectorConfig.getOrDefault(CUSTOM_EXACTLY_ONCE_SUPPORT_CONFIG, "null").toLowerCase(Locale.ROOT);
-        switch (supportLevel) {
-            case EXACTLY_ONCE_SUPPORTED:
-                return ExactlyOnceSupport.SUPPORTED;
-            case EXACTLY_ONCE_UNSUPPORTED:
-                return ExactlyOnceSupport.UNSUPPORTED;
-            case EXACTLY_ONCE_FAIL:
-                throw new ConnectException("oops");
-            default:
-            case EXACTLY_ONCE_NULL:
-                return null;
-        }
+        return switch (supportLevel) {
+            case EXACTLY_ONCE_SUPPORTED -> ExactlyOnceSupport.SUPPORTED;
+            case EXACTLY_ONCE_UNSUPPORTED -> ExactlyOnceSupport.UNSUPPORTED;
+            case EXACTLY_ONCE_FAIL -> throw new ConnectException("oops");
+            default -> null;
+        };
     }
 
     @Override
     public ConnectorTransactionBoundaries canDefineTransactionBoundaries(Map<String, String> connectorConfig) {
         String supportLevel = connectorConfig.getOrDefault(CUSTOM_TRANSACTION_BOUNDARIES_CONFIG, TRANSACTION_BOUNDARIES_UNSUPPORTED).toLowerCase(Locale.ROOT);
-        switch (supportLevel) {
-            case TRANSACTION_BOUNDARIES_SUPPORTED:
-                return ConnectorTransactionBoundaries.SUPPORTED;
-            case TRANSACTION_BOUNDARIES_FAIL:
-                throw new ConnectException("oh no :(");
-            case TRANSACTION_BOUNDARIES_NULL:
-                return null;
-            default:
-            case TRANSACTION_BOUNDARIES_UNSUPPORTED:
-                return ConnectorTransactionBoundaries.UNSUPPORTED;
-        }
+        return switch (supportLevel) {
+            case TRANSACTION_BOUNDARIES_SUPPORTED -> ConnectorTransactionBoundaries.SUPPORTED;
+            case TRANSACTION_BOUNDARIES_FAIL -> throw new ConnectException("oh no :(");
+            case TRANSACTION_BOUNDARIES_NULL -> null;
+            default -> ConnectorTransactionBoundaries.UNSUPPORTED;
+        };
     }
 
     @Override
