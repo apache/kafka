@@ -21,7 +21,6 @@ import kafka.coordinator.transaction.TransactionCoordinator;
 import kafka.network.RequestChannel;
 import kafka.server.ApiVersionManager;
 import kafka.server.AutoTopicCreationManager;
-import kafka.server.DelegationTokenManager;
 import kafka.server.FetchManager;
 import kafka.server.ForwardingManager;
 import kafka.server.KafkaApis;
@@ -38,6 +37,7 @@ import org.apache.kafka.coordinator.share.ShareCoordinator;
 import org.apache.kafka.metadata.ConfigRepository;
 import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.ClientMetricsManager;
+import org.apache.kafka.server.DelegationTokenManager;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
