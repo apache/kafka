@@ -510,7 +510,6 @@ subprojects {
   // Gradle will run each test class, so we exclude the suites to avoid redundantly running the tests twice.
   def testsToExclude = ['**/*Suite.class']
 
-  
   // This task will copy JUnit XML files out of the sub-project's build directory and into
   // a top-level build/junit-xml directory. This is necessary to avoid reporting on tests which
   // were not run, but instead were restored via FROM-CACHE. See KAFKA-17479 for more details.
@@ -578,7 +577,7 @@ subprojects {
         maxFailures = userMaxTestRetryFailures
       }
     }
-
+    
     finalizedBy("copyTestXml")
   }
 
