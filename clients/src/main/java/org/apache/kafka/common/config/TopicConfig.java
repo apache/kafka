@@ -58,8 +58,10 @@ public class TopicConfig {
     public static final String FLUSH_MS_CONFIG = "flush.ms";
     public static final String FLUSH_MS_DOC = "This setting allows specifying a time interval at which we will " +
         "force an fsync of data written to the log. For example if this was set to 1000 " +
-        "we would fsync after 1000 ms had passed. In general we recommend you not set " +
-        "this and use replication for durability and allow the operating system's background " +
+        "we would fsync after 1000 ms had passed. Note that this setting depends on the broker-level " +
+        "configuration \"log.flush.scheduler.interval.ms\", which controls how frequently the flush check occurs. " +
+        "If \"log.flush.scheduler.interval.ms\" is not configured, the topic config \"flush.ms\" will not be triggered. " +
+        "In general we recommend you not set this and use replication for durability and allow the operating system's background " +
         "flush capabilities as it is more efficient.";
 
     public static final String RETENTION_BYTES_CONFIG = "retention.bytes";
