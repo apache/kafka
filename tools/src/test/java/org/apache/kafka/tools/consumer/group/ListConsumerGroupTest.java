@@ -29,8 +29,10 @@ import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.api.ClusterConfig;
-import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 
@@ -61,8 +63,22 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CO
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 
-
+@ClusterTestDefaults(
+    types = {Type.CO_KRAFT},
+    serverProperties = {
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000"),
+        @ClusterConfigProperty(key = CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
+        @ClusterConfigProperty(key = CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
+    }
+)
 public class ListConsumerGroupTest {
     private static final String TOPIC_PREFIX = "test.topic.";
     private static final String TOPIC_PARTITIONS_GROUP_PREFIX = "test.topic.partitions.group.";
@@ -74,15 +90,11 @@ public class ListConsumerGroupTest {
         this.clusterInstance = clusterInstance;
     }
 
-    private static List<ClusterConfig> defaultGenerator() {
-        return ConsumerGroupCommandTestUtils.generator();
-    }
-
     private List<GroupProtocol> supportedGroupProtocols() {
         return new ArrayList<>(clusterInstance.supportedGroupProtocols());
     }
 
-    @ClusterTemplate("defaultGenerator")
+    @ClusterTest
     public void testListConsumerGroupsWithoutFilters() throws Exception {
         for (int i = 0; i < supportedGroupProtocols().size(); i++) {
             GroupProtocol groupProtocol = supportedGroupProtocols().get(i);
@@ -111,13 +123,13 @@ public class ListConsumerGroupTest {
         }
     }
 
-    @ClusterTemplate("defaultGenerator")
+    @ClusterTest
     public void testListWithUnrecognizedNewConsumerOption() {
         String[] cgcArgs = new String[]{"--new-consumer", "--bootstrap-server", clusterInstance.bootstrapServers(), "--list"};
         Assertions.assertThrows(OptionException.class, () -> getConsumerGroupService(cgcArgs));
     }
 
-    @ClusterTemplate("defaultGenerator")
+    @ClusterTest
     public void testListConsumerGroupsWithStates() throws Exception {
         for (int i = 0; i < supportedGroupProtocols().size(); i++) {
             GroupProtocol groupProtocol = supportedGroupProtocols().get(i);
@@ -181,7 +193,7 @@ public class ListConsumerGroupTest {
         }
     }
 
-    @ClusterTemplate("defaultGenerator")
+    @ClusterTest
     public void testListConsumerGroupsWithTypesClassicProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CLASSIC;
         String topic = TOPIC_PREFIX + groupProtocol.name;
@@ -235,7 +247,7 @@ public class ListConsumerGroupTest {
         }
     }
 
-    @ClusterTemplate("defaultGenerator")
+    @ClusterTest
     public void testListConsumerGroupsWithTypesConsumerProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
         String topic = TOPIC_PREFIX + groupProtocol.name;
@@ -322,7 +334,7 @@ public class ListConsumerGroupTest {
         }
     }
 
-    @ClusterTemplate("defaultGenerator")
+    @ClusterTest
     public void testListGroupCommandClassicProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CLASSIC;
         String topic = TOPIC_PREFIX + groupProtocol.name;
@@ -407,7 +419,7 @@ public class ListConsumerGroupTest {
         }
     }
 
-    @ClusterTemplate("defaultGenerator")
+    @ClusterTest
     public void testListGroupCommandConsumerProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
         String topic = TOPIC_PREFIX + groupProtocol.name;

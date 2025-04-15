@@ -41,6 +41,9 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic;
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsResponseData;
+import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.HeartbeatRequestData;
 import org.apache.kafka.common.message.HeartbeatResponseData;
@@ -8193,6 +8196,52 @@ public class GroupMetadataManager {
                 .build())
             .build()
         );
+    }
+
+    /**
+     * Returns a list of delete share group state request topic objects to be used with the persister.
+     * @param groupId - group ID of the share group
+     * @param requestData - the request data for DeleteShareGroupOffsets request
+     * @param errorTopicResponseList - the list of topics not found in the metadata image
+     * @return List of objects representing the share group state delete request for topics.
+     */
+    public List<DeleteShareGroupStateRequestData.DeleteStateData> sharePartitionsEligibleForOffsetDeletion(
+        String groupId,
+        DeleteShareGroupOffsetsRequestData requestData,
+        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList
+    ) {
+        List<DeleteShareGroupStateRequestData.DeleteStateData> deleteShareGroupStateRequestTopicsData = new ArrayList<>();
+
+        Map<Uuid, Set<Integer>> initializedSharePartitions = initializedShareGroupPartitions(groupId);
+        requestData.topics().forEach(topic -> {
+            Uuid topicId = metadataImage.topics().topicNameToIdView().get(topic.topicName());
+            if (topicId != null) {
+                // A deleteState request to persister should only be sent with those topic partitions for which corresponding
+                // share partitions are initialized for the group.
+                if (initializedSharePartitions.containsKey(topicId)) {
+                    List<DeleteShareGroupStateRequestData.PartitionData> partitions = new ArrayList<>();
+                    topic.partitions().forEach(partition -> {
+                        if (initializedSharePartitions.get(topicId).contains(partition)) {
+                            partitions.add(new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition));
+                        }
+                    });
+                    deleteShareGroupStateRequestTopicsData.add(new DeleteShareGroupStateRequestData.DeleteStateData()
+                        .setTopicId(topicId)
+                        .setPartitions(partitions));
+                }
+            } else {
+                errorTopicResponseList.add(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                    .setTopicName(topic.topicName())
+                    .setPartitions(topic.partitions().stream().map(
+                        partition -> new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
+                            .setPartitionIndex(partition)
+                            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                            .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
+                    ).collect(Collectors.toCollection(ArrayList::new))));
+            }
+        });
+
+        return deleteShareGroupStateRequestTopicsData;
     }
 
     /**
