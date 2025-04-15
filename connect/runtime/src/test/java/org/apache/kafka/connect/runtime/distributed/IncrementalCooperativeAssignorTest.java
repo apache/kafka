@@ -1236,7 +1236,7 @@ public class IncrementalCooperativeAssignorTest {
         when(coordinator.configSnapshot()).thenReturn(configState());
         Map<String, ByteBuffer> serializedAssignments = assignor.performAssignment(
                 leader,
-                ConnectProtocolCompatibility.COMPATIBLE.protocol(),
+                ConnectProtocolCompatibility.COMPATIBLE,
                 memberMetadata,
                 coordinator
         );
@@ -1277,7 +1277,7 @@ public class IncrementalCooperativeAssignorTest {
         when(coordinator.configSnapshot()).thenReturn(configState());
         Map<String, ByteBuffer> serializedAssignments = assignor.performAssignment(
                 leader,
-                ConnectProtocolCompatibility.SESSIONED.protocol(),
+                ConnectProtocolCompatibility.SESSIONED,
                 memberMetadata,
                 coordinator
         );
