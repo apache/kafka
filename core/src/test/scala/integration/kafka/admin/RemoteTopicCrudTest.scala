@@ -441,7 +441,36 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
           AlterConfigOp.OpType.SET),
       ))
     assertThrowsException(classOf[InvalidConfigurationException],
-      () => admin.incrementalAlterConfigs(configs).all().get(), "Disabling remote storage feature on the topic level is not supported.")
+      () => admin.incrementalAlterConfigs(configs).all().get(), "It is invalid to disable remote storage without deleting remote data. " +
+        "If you want to keep the remote data and turn to read only, please set `remote.storage.enable=true,remote.log.copy.disable=true`. " +
+        "If you want to disable remote storage and delete all remote data, please set `remote.storage.enable=false,remote.log.delete.on.disable=true`.")
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
+  def testUpdateTopicConfigWithDisablingRemoteStorageWithDeleteOnDisable(quorum: String): Unit = {
+    val admin = createAdminClient()
+    val topicConfig = new Properties
+    topicConfig.setProperty(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true")
+    TestUtils.createTopicWithAdmin(admin, testTopicName, brokers, controllerServers, numPartitions, numReplicationFactor,
+      topicConfig = topicConfig)
+
+    val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
+    configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
+      util.Arrays.asList(
+        new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false"),
+          AlterConfigOp.OpType.SET),
+        new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, "true"),
+          AlterConfigOp.OpType.SET)
+      ))
+    admin.incrementalAlterConfigs(configs).all().get()
+
+    val newProps = new Properties()
+    configs.get(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName)).forEach { op =>
+      newProps.setProperty(op.configEntry().name(), op.configEntry().value())
+    }
+
+    verifyRemoteLogTopicConfigs(newProps)
   }
 
   @ParameterizedTest

@@ -86,7 +86,7 @@ import org.apache.kafka.metadata.{ConfigRepository, MetadataCache, MockConfigRep
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.{BrokerFeatures, ClientMetricsManager}
+import org.apache.kafka.server.{ClientMetricsManager, SimpleApiVersionManager}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
@@ -179,13 +179,8 @@ class KafkaApisTest extends Logging {
     overrideProperties.foreach( p => properties.put(p._1, p._2))
     val config = new KafkaConfig(properties)
 
-    val listenerType = ListenerType.BROKER
-    val enabledApis = ApiKeys.apisForListener(listenerType).asScala
-
     val apiVersionManager = new SimpleApiVersionManager(
-      listenerType,
-      enabledApis,
-      BrokerFeatures.defaultSupportedFeatures(true),
+      ListenerType.BROKER,
       true,
       () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0))
 
