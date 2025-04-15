@@ -69,7 +69,6 @@ import org.slf4j.Logger;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord> {
     private final Logger log;
@@ -583,22 +582,20 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @return A result containing snapshot records, if any, and a void response.
      */
     public CoordinatorResult<Void, CoordinatorRecord> snapshotColdPartitions() {
-        List<CoordinatorRecord> records = new ArrayList<>();
-        AtomicInteger counter = new AtomicInteger(0);
-        shareStateMap.forEach((sharePartitionKey, shareGroupOffset) -> {
-            // If create and write timestamp not the same, it implies that the forced snapshot has happened.
-            if (shareGroupOffset.createTimestamp() - shareGroupOffset.writeTimestamp() != 0) {
-                counter.incrementAndGet();
-            }
-        });
+        long coldSnapshottedPartitionsCount = shareStateMap.values().stream()
+            .filter(shareGroupOffset -> shareGroupOffset.createTimestamp() - shareGroupOffset.writeTimestamp() != 0)
+            .count();
 
         // If all share partitions are snapshotted, it means that
         // system is quiet and cold snapshotting will not help much.
-        if (counter.get() == shareStateMap.size()) {
+        if (coldSnapshottedPartitionsCount == shareStateMap.size()) {
+            log.debug("All share snapshot records already cold snapshotted, skipping.");
             return new CoordinatorResult<>(List.of(), null);
         }
 
-        // Some active partitions are there
+        // Some active partitions are there.
+        List<CoordinatorRecord> records = new ArrayList<>();
+
         shareStateMap.forEach((sharePartitionKey, shareGroupOffset) -> {
             long timeSinceLastSnapshot = time.milliseconds() - shareGroupOffset.writeTimestamp();
             if (timeSinceLastSnapshot >= config.shareCoordinatorColdPartitionSnapshotIntervalMs()) {
@@ -633,6 +630,7 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         WriteShareGroupStateRequestData.PartitionData partitionData,
         SharePartitionKey key
     ) {
+        long timestamp = time.milliseconds();
         if (!shareStateMap.containsKey(key)) {
             // Since this is the first time we are getting a write request for key, we should be creating a share snapshot record.
             // The incoming partition data could have overlapping state batches, we must merge them
@@ -644,8 +642,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     .setLeaderEpoch(partitionData.leaderEpoch())
                     .setStateEpoch(partitionData.stateEpoch())
                     .setStateBatches(mergeBatches(List.of(), partitionData))
-                    .setCreateTimestamp(time.milliseconds())
-                    .setWriteTimestamp(time.milliseconds())
+                    .setCreateTimestamp(timestamp)
+                    .setWriteTimestamp(timestamp)
                     .build());
         } else if (snapshotUpdateCount.getOrDefault(key, 0) >= config.shareCoordinatorSnapshotUpdateRecordsPerSnapshot()) {
             ShareGroupOffset currentState = shareStateMap.get(key); // shareStateMap will have the entry as containsKey is true
@@ -664,8 +662,8 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     .setLeaderEpoch(newLeaderEpoch)
                     .setStateEpoch(newStateEpoch)
                     .setStateBatches(mergeBatches(currentState.stateBatches(), partitionData, newStartOffset))
-                    .setCreateTimestamp(time.milliseconds())
-                    .setWriteTimestamp(time.milliseconds())
+                    .setCreateTimestamp(timestamp)
+                    .setWriteTimestamp(timestamp)
                     .build());
         } else {
             ShareGroupOffset currentState = shareStateMap.get(key); // shareStateMap will have the entry as containsKey is true.
@@ -680,8 +678,6 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                     .setStartOffset(partitionData.startOffset())
                     .setLeaderEpoch(partitionData.leaderEpoch())
                     .setStateBatches(mergeBatches(List.of(), partitionData))
-                    .setCreateTimestamp(currentState.createTimestamp())
-                    .setWriteTimestamp(currentState.writeTimestamp())
                     .build());
         }
     }
