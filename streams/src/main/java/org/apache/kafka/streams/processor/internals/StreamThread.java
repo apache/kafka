@@ -405,7 +405,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         referenceContainer.time = time;
         referenceContainer.clientTags = config.getClientTags();
 
-        log.info("Creating restore consumer client");
+        log.info("Creating restore consumer client for thread {}", threadId);
         final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(restoreConsumerClientId(restorationThreadId));
         final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(restoreConsumerConfigs);
 
@@ -434,7 +434,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             threadId,
             threadIdx,
             processId,
-            log,
+            logContext,
             stateUpdaterEnabled,
             proceessingThreadsEnabled
         );
@@ -445,7 +445,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             stateDirectory,
             changelogReader,
             threadId,
-            log,
+            logContext,
             stateUpdaterEnabled);
 
         final Tasks tasks = new Tasks(new LogContext(logPrefix));
@@ -483,7 +483,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         );
         referenceContainer.taskManager = taskManager;
 
-        log.info("Creating consumer client");
+        log.info("Creating consumer client for thread {}", threadId);
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, consumerClientId(threadId), threadIdx);
         consumerConfigs.put(StreamsConfig.InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
@@ -494,7 +494,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
         }
 
-        final MainConsumerSetup mainConsumerSetup = setupMainConsumer(topologyMetadata, config, clientSupplier, processId, log, consumerConfigs);
+        final MainConsumerSetup mainConsumerSetup = setupMainConsumer(topologyMetadata, config, clientSupplier, processId, log, threadId, consumerConfigs);
 
         taskManager.setMainConsumer(mainConsumerSetup.mainConsumer);
         referenceContainer.mainConsumer = mainConsumerSetup.mainConsumer;
@@ -535,6 +535,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                                                        final KafkaClientSupplier clientSupplier,
                                                        final UUID processId,
                                                        final Logger log,
+                                                       final String threadId,
                                                        final Map<String, Object> consumerConfigs) {
         if (config.getString(StreamsConfig.GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name)) {
             if (topologyMetadata.hasNamedTopologies()) {
