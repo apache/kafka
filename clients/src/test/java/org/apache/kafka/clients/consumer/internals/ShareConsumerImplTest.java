@@ -407,7 +407,22 @@ public class ShareConsumerImplTest {
 
         // Verify that after acknowledging all records, poll succeeds
         consumer.acknowledge(iterator.next());
-        assertDoesNotThrow(() -> consumer.poll(Duration.ofMillis(100)));
+        
+        // Setup second fetch to return new records
+        ShareFetch<String, String> secondFetch = ShareFetch.empty();
+        ShareInFlightBatch<String, String> newBatch = new ShareInFlightBatch<>(2, tip);
+        newBatch.addRecord(new ConsumerRecord<>(topic, partition, 2, "key3", "value3"));
+        newBatch.addRecord(new ConsumerRecord<>(topic, partition, 3, "key4", "value4"));
+        secondFetch.add(tip, newBatch);
+        
+        // Reset mock to return new records
+        doReturn(secondFetch)
+            .when(fetchCollector)
+            .collect(any(ShareFetchBuffer.class));
+
+        // Verify that poll succeeds and returns new records
+        ConsumerRecords<String, String> newRecords = consumer.poll(Duration.ofMillis(100));
+        assertEquals(2, newRecords.count(), "Should have received 2 new records");
     }
 
     @Test
