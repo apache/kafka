@@ -153,11 +153,11 @@ public class ControllerMetadataMetricsTest {
         try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
             int brokerId = 1;
             metrics.addBrokerRegistrationStateMetric(brokerId);
-            metrics.setBrokerRegistrationState(1, 0);
+            metrics.setBrokerRegistrationState(1, ControllerMetadataMetrics.BROKER_ACTIVE_STATE);
             Gauge<Integer> registrationState = (Gauge<Integer>) registry.allMetrics().get(metricName("KafkaController", "BrokerRegistrationState", "broker=1"));
-            assertEquals(0, registrationState.value());
-            metrics.setBrokerRegistrationState(1, 2);
-            assertEquals(2, registrationState.value());
+            assertEquals(ControllerMetadataMetrics.BROKER_ACTIVE_STATE, registrationState.value());
+            metrics.setBrokerRegistrationState(1, ControllerMetadataMetrics.BROKER_FENCED_STATE);
+            assertEquals(ControllerMetadataMetrics.BROKER_FENCED_STATE, registrationState.value());
         } finally {
             registry.shutdown();
         }

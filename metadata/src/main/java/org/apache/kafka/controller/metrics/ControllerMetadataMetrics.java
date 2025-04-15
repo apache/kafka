@@ -42,6 +42,11 @@ import java.util.concurrent.atomic.AtomicInteger;
  * {@link org.apache.kafka.controller.metrics.QuorumControllerMetrics}, not here.
  */
 public final class ControllerMetadataMetrics implements AutoCloseable {
+    public static final int BROKER_UNREGISTERED_STATE = -1;
+    public static final int BROKER_FENCED_STATE = 10;
+    public static final int BROKER_CONTROLLED_SHUTDOWN_STATE = 20;
+    public static final int BROKER_ACTIVE_STATE = 30;
+
     private static final MetricName FENCED_BROKER_COUNT = getMetricName(
         "KafkaController", "FencedBrokerCount");
     private static final MetricName ACTIVE_BROKER_COUNT = getMetricName(

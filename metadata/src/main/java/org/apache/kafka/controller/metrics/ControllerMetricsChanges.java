@@ -97,11 +97,11 @@ class ControllerMetricsChanges {
             isActive = !next.fenced();
             isInControlledShutdown = next.inControlledShutdown();
             if (isFenced) {
-                metrics.setBrokerRegistrationState(next.id(), 1);
+                metrics.setBrokerRegistrationState(next.id(), ControllerMetadataMetrics.BROKER_FENCED_STATE);
             } else if (isInControlledShutdown) {
-                metrics.setBrokerRegistrationState(next.id(), 2);
+                metrics.setBrokerRegistrationState(next.id(), ControllerMetadataMetrics.BROKER_CONTROLLED_SHUTDOWN_STATE);
             } else {
-                metrics.setBrokerRegistrationState(next.id(), 0);
+                metrics.setBrokerRegistrationState(next.id(), ControllerMetadataMetrics.BROKER_ACTIVE_STATE);
             }
         }
         fencedBrokersChange += delta(wasFenced, isFenced);
@@ -112,7 +112,7 @@ class ControllerMetricsChanges {
             metrics.addBrokerRegistrationStateMetric(next.id());
         } else if (next == null) {
             metrics.removeBrokerRegistrationStateMetric(prev.id());
-            metrics.setBrokerRegistrationState(prev.id(), -1);
+            metrics.setBrokerRegistrationState(prev.id(), ControllerMetadataMetrics.BROKER_UNREGISTERED_STATE);
         }
     }
 
