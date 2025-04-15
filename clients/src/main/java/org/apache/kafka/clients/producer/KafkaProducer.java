@@ -1602,7 +1602,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * Objects of this class can be written to and read from a database
      * to support recovery of prepared transactions.
      */
-    static public class PreparedTxnState {
+    public static class PreparedTxnState {
         private final long producerId;
         private final short epoch;
         
