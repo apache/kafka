@@ -1228,7 +1228,8 @@ public class DelayedShareFetchTest {
         // Remote fetch object gets created for delayed share fetch object.
         assertNotNull(delayedShareFetch.remoteFetch());
         // Verify the locks are released for local log read topic partitions tp0 and tp1.
-        Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(Set.of(tp0, tp1));
+        Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(Set.of(tp0));
+        Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(Set.of(tp1));
         assertTrue(delayedShareFetch.lock().tryLock());
         delayedShareFetch.lock().unlock();
     }
