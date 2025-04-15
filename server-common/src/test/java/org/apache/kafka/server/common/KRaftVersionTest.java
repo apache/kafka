@@ -122,10 +122,10 @@ public final class KRaftVersionTest {
     }
 
     @Test
-    public void testIsLessThan() {
-        assertFalse(KRaftVersion.KRAFT_VERSION_0.isLessThan(KRaftVersion.KRAFT_VERSION_0));
-        assertTrue(KRaftVersion.KRAFT_VERSION_0.isLessThan(KRaftVersion.KRAFT_VERSION_1));
-        assertFalse(KRaftVersion.KRAFT_VERSION_1.isLessThan(KRaftVersion.KRAFT_VERSION_0));
-        assertFalse(KRaftVersion.KRAFT_VERSION_1.isLessThan(KRaftVersion.KRAFT_VERSION_1));
+    public void testIsMoreThan() {
+        assertFalse(KRaftVersion.KRAFT_VERSION_0.isMoreThan(KRaftVersion.KRAFT_VERSION_0));
+        assertFalse(KRaftVersion.KRAFT_VERSION_0.isMoreThan(KRaftVersion.KRAFT_VERSION_1));
+        assertTrue(KRaftVersion.KRAFT_VERSION_1.isMoreThan(KRaftVersion.KRAFT_VERSION_0));
+        assertFalse(KRaftVersion.KRAFT_VERSION_1.isMoreThan(KRaftVersion.KRAFT_VERSION_1));
     }
 }

@@ -84,8 +84,8 @@ public enum KRaftVersion implements FeatureVersion {
         return this.compareTo(otherVersion) >= 0;
     }
 
-    public boolean isLessThan(KRaftVersion otherVersion) {
-        return this.compareTo(otherVersion) < 0;
+    public boolean isMoreThan(KRaftVersion otherVersion) {
+        return this.compareTo(otherVersion) > 0;
     }
 
     public short quorumStateVersion() {

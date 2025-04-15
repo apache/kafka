@@ -23,6 +23,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.internals.BatchAccumulator;
+import org.apache.kafka.raft.internals.KRaftVersionUpgrade;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.server.common.KRaftVersion;
 
@@ -719,20 +720,33 @@ public class LeaderStateTest {
             KRaftVersion.KRAFT_VERSION_0
         );
 
-        var updatedVoters = voters.updateVoterIgnoringDirectoryId(localVoterNode);
-        assertEquals(updatedVoters, state.volatileVoters());
+        var votersWithLeaderUpdated = state.volatileVoters().get();
+        assertEquals(
+            voters.updateVoterIgnoringDirectoryId(localVoterNode).get(),
+            votersWithLeaderUpdated.voters()
+        );
 
-        updatedVoters = updatedVoters
-            .get()
-            .updateVoterIgnoringDirectoryId(VoterSetTest.voterNode(follower1, true));
-        assertNotEquals(updatedVoters, state.volatileVoters());
+        var updatedVoters = new KRaftVersionUpgrade.Voters(
+            votersWithLeaderUpdated
+                .voters()
+                .updateVoterIgnoringDirectoryId(VoterSetTest.voterNode(follower1, true))
+                .get()
+        );
 
-        state.setVolatileVoters(updatedVoters);
-        assertEquals(updatedVoters, state.volatileVoters());
+        // Upate in-memory voter and check state
+        assertTrue(
+            state.compareAndSetVolatileVoters(votersWithLeaderUpdated, updatedVoters)
+        );
+        assertEquals(updatedVoters, state.volatileVoters().get());
+
+        // Unable to perform atomic update
+        assertFalse(
+            state.compareAndSetVolatileVoters(votersWithLeaderUpdated, updatedVoters)
+        );
     }
 
     @Test
-    public void testInvalidUpgradeKRaftVersion() {
+    public void testInvalidMaybeAppendUpgradedKRaftVersion() {
         int follower1 = 1;
         int follower2 = 2;
         long epochStartOffset = 10L;
@@ -747,50 +761,52 @@ public class LeaderStateTest {
         assertThrows(
             InvalidUpdateVersionException.class,
             () ->
-                state.upgradeKRaftVersion(
+                state.maybeAppendUpgradedKRaftVersion(
                     epoch,
                     KRaftVersion.KRAFT_VERSION_1,
                     KRaftVersion.KRAFT_VERSION_0,
-                    persistedVoters
+                    persistedVoters,
+                    time.milliseconds()
                 )
         );
 
         assertThrows(
             NotLeaderException.class,
             () ->
-                state.upgradeKRaftVersion(
+                state.maybeAppendUpgradedKRaftVersion(
                     epoch - 1,
                     KRaftVersion.KRAFT_VERSION_1,
                     KRaftVersion.KRAFT_VERSION_0,
-                    persistedVoters
+                    persistedVoters,
+                    time.milliseconds()
                 )
         );
 
         assertThrows(
             IllegalArgumentException.class,
             () ->
-                state.upgradeKRaftVersion(
+                state.maybeAppendUpgradedKRaftVersion(
                     epoch + 1,
                     KRaftVersion.KRAFT_VERSION_1,
                     KRaftVersion.KRAFT_VERSION_0,
-                    persistedVoters
+                    persistedVoters,
+                    time.milliseconds()
                 )
         );
 
-        assertThrows(
-            InvalidUpdateVersionException.class,
-            () ->
-                state.upgradeKRaftVersion(
-                    epoch,
-                    KRaftVersion.KRAFT_VERSION_1,
-                    KRaftVersion.KRAFT_VERSION_1,
-                    persistedVoters
-                )
+        assertFalse(
+            state.maybeAppendUpgradedKRaftVersion(
+                epoch,
+                KRaftVersion.KRAFT_VERSION_1,
+                KRaftVersion.KRAFT_VERSION_1,
+                persistedVoters,
+                time.milliseconds()
+            )
         );
     }
 
     @Test
-    public void testUpgradeKRaftVersion() {
+    public void testMaybeAppendUpgradedKRaftVersion() {
         int follower1 = 1;
         int follower2 = 2;
         long epochStartOffset = 10L;
@@ -804,45 +820,41 @@ public class LeaderStateTest {
             accumulator
         );
 
-        var updatedVoters = state.volatileVoters();
+        var updatedVoters = state.volatileVoters().get().voters();
         updatedVoters = updatedVoters
-            .get()
-            .updateVoterIgnoringDirectoryId(VoterSetTest.voterNode(follower1, true));
+            .updateVoterIgnoringDirectoryId(VoterSetTest.voterNode(follower1, true))
+            .get();
         updatedVoters = updatedVoters
-            .get()
-            .updateVoterIgnoringDirectoryId(VoterSetTest.voterNode(follower2, true));
-        state.setVolatileVoters(updatedVoters);
+            .updateVoterIgnoringDirectoryId(VoterSetTest.voterNode(follower2, true))
+            .get();
+        state.compareAndSetVolatileVoters(
+            state.volatileVoters().get(),
+            new KRaftVersionUpgrade.Voters(updatedVoters)
+        );
 
-        state.upgradeKRaftVersion(
-            epoch,
-            KRaftVersion.KRAFT_VERSION_1,
-            KRaftVersion.KRAFT_VERSION_0,
-            persistedVoters
+        assertTrue(
+            state.maybeAppendUpgradedKRaftVersion(
+                epoch,
+                KRaftVersion.KRAFT_VERSION_1,
+                KRaftVersion.KRAFT_VERSION_0,
+                persistedVoters,
+                time.milliseconds()
+            )
         );
 
         // Expect control records after upgrading the kraft version.
-        assertTrue(state.maybeAppendUpgradedKRaftVersion(persistedVoters, time.milliseconds()));
         Mockito.verify(accumulator).appendControlMessages(Mockito.any());
 
         // maybe upgrade kraft version should be a noop after an upgrade
-        assertFalse(state.maybeAppendUpgradedKRaftVersion(persistedVoters, time.milliseconds()));
-    }
-
-    @Test
-    public void testNoopMaybeUpgradeKRaftVersion() {
-        int follower1 = 1;
-        int follower2 = 2;
-        long epochStartOffset = 10L;
-
-        VoterSet persistedVoters = localWithRemoteVoterSet(IntStream.of(follower1, follower2), false);
-        LeaderState<?> state = newLeaderState(
-            persistedVoters,
-            epochStartOffset,
-            KRaftVersion.KRAFT_VERSION_0
+        assertFalse(
+            state.maybeAppendUpgradedKRaftVersion(
+                epoch,
+                KRaftVersion.KRAFT_VERSION_1,
+                KRaftVersion.KRAFT_VERSION_0,
+                persistedVoters,
+                time.milliseconds()
+            )
         );
-
-        assertFalse(state.maybeAppendUpgradedKRaftVersion(persistedVoters, time.milliseconds()));
-        assertFalse(state.accumulator().needsDrain(time.milliseconds()));
     }
 
     private static class MockOffsetMetadata implements OffsetMetadata {

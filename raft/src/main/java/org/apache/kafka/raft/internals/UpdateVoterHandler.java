@@ -21,6 +21,7 @@ import org.apache.kafka.common.message.UpdateRaftVoterRequestData;
 import org.apache.kafka.common.message.UpdateRaftVoterResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.raft.Endpoints;
 import org.apache.kafka.raft.LeaderAndEpoch;
 import org.apache.kafka.raft.LeaderState;
@@ -29,6 +30,8 @@ import org.apache.kafka.raft.RaftUtil;
 import org.apache.kafka.raft.ReplicaKey;
 import org.apache.kafka.raft.VoterSet;
 import org.apache.kafka.server.common.KRaftVersion;
+
+import org.slf4j.Logger;
 
 import java.util.Optional;
 import java.util.OptionalInt;
@@ -55,15 +58,18 @@ public final class UpdateVoterHandler {
     private final OptionalInt localId;
     private final KRaftControlRecordStateMachine partitionState;
     private final ListenerName defaultListenerName;
+    private final Logger log;
 
     public UpdateVoterHandler(
         OptionalInt localId,
         KRaftControlRecordStateMachine partitionState,
-        ListenerName defaultListenerName
+        ListenerName defaultListenerName,
+        LogContext logContext
     ) {
         this.localId = localId;
         this.partitionState = partitionState;
         this.defaultListenerName = defaultListenerName;
+        this.log = logContext.logger(getClass());
     }
 
     public CompletableFuture<UpdateRaftVoterResponseData> handleUpdateVoterRequest(
@@ -105,10 +111,39 @@ public final class UpdateVoterHandler {
             );
         }
 
-        // Read the in-memory volatile voters set if one exists
+        // Read the voter set from the log or leader state
         KRaftVersion kraftVersion = partitionState.lastKraftVersion();
-        Optional<VoterSet> voters = currentVoters(leaderState, highWatermark.get(), kraftVersion);
+        final Optional<KRaftVersionUpgrade.Voters> inMemoryVoters;
+        final Optional<VoterSet> voters;
+        if (kraftVersion.isReconfigSupported()) {
+            inMemoryVoters = Optional.empty();
+
+            // Check that there are no uncommitted VotersRecord
+            Optional<LogHistory.Entry<VoterSet>> votersEntry = partitionState.lastVoterSetEntry();
+            if (votersEntry.isEmpty() || votersEntry.get().offset() >= highWatermark.get()) {
+                voters = Optional.empty();
+            } else {
+                voters = votersEntry.map(LogHistory.Entry::value);
+            }
+        } else {
+            inMemoryVoters = leaderState.volatileVoters();
+            if (inMemoryVoters.isEmpty()) {
+                return CompletableFuture.completedFuture(
+                    RaftUtil.updateVoterResponse(
+                        Errors.REQUEST_TIMED_OUT,
+                        requestListenerName,
+                        new LeaderAndEpoch(
+                            localId,
+                            leaderState.epoch()
+                        ),
+                        leaderState.leaderEndpoints()
+                    )
+                );
+            }
+            voters = inMemoryVoters.map(KRaftVersionUpgrade.Voters::voters);
+        }
         if (voters.isEmpty()) {
+            log.info("Unable to read the current voter set with kraft version {}", kraftVersion);
             return CompletableFuture.completedFuture(
                 RaftUtil.updateVoterResponse(
                     Errors.REQUEST_TIMED_OUT,
@@ -178,9 +213,14 @@ public final class UpdateVoterHandler {
             );
         }
 
-        storeUpdatedVoters(leaderState, updatedVoters.get(), kraftVersion, currentTimeMs);
+        storeUpdatedVoters(
+            leaderState,
+            inMemoryVoters,
+            updatedVoters.get(),
+            currentTimeMs
+        );
 
-        // Reply immediately and don't wait for the change to commit
+        // Reply immediately and don't wait for the change to commit for kraft version
         return CompletableFuture.completedFuture(
             RaftUtil.updateVoterResponse(
                 Errors.NONE,
@@ -202,24 +242,6 @@ public final class UpdateVoterHandler {
             supportedKraftVersions.maxSupportedVersion() >= finalizedVersion.featureLevel();
     }
 
-    private Optional<VoterSet> currentVoters(
-        LeaderState<?> leaderState,
-        long highWatermark,
-        KRaftVersion kraftVersion
-    ) {
-        if (kraftVersion.isReconfigSupported()) {
-            // Check that there are no uncommitted VotersRecord
-            Optional<LogHistory.Entry<VoterSet>> votersEntry = partitionState.lastVoterSetEntry();
-            if (votersEntry.isEmpty() || votersEntry.get().offset() >= highWatermark) {
-                return Optional.empty();
-            }
-
-            return votersEntry.map(LogHistory.Entry::value);
-        } else {
-            return Optional.of(leaderState.volatileVoters().orElseGet(partitionState::lastVoterSet));
-        }
-    }
-
     private Optional<VoterSet> updateVoters(
         VoterSet voters,
         KRaftVersion kraftVersion,
@@ -232,16 +254,24 @@ public final class UpdateVoterHandler {
 
     private void storeUpdatedVoters(
         LeaderState<?> leaderState,
-        VoterSet voters,
-        KRaftVersion kraftVersion,
+        Optional<KRaftVersionUpgrade.Voters> inMemoryVoters,
+        VoterSet newVoters,
         long currentTimeMs
     ) {
-        if (kraftVersion.isReconfigSupported()) {
+        if (inMemoryVoters.isEmpty()) {
             // Since the partition support reconfig then just write the update voter set directly to the log
-            leaderState.appendVotersRecord(voters, currentTimeMs);
+            leaderState.appendVotersRecord(newVoters, currentTimeMs);
         } else {
             // Store the new voters set in the leader state since it cannot be written to the log
-            leaderState.setVolatileVoters(Optional.of(voters));
+            var successful = leaderState.compareAndSetVolatileVoters(
+                inMemoryVoters.get(),
+                new KRaftVersionUpgrade.Voters(newVoters)
+            );
+            if (!successful) {
+                // TODO: remove this
+                log.info("In-memory voter set {}", leaderState.volatileVoters());
+                log.info("Unable to update in-memory voters from {} to {}", inMemoryVoters, newVoters);
+            }
         }
     }
 }

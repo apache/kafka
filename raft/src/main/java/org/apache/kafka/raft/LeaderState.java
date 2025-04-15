@@ -32,6 +32,7 @@ import org.apache.kafka.common.utils.Timer;
 import org.apache.kafka.raft.errors.NotLeaderException;
 import org.apache.kafka.raft.internals.AddVoterHandlerState;
 import org.apache.kafka.raft.internals.BatchAccumulator;
+import org.apache.kafka.raft.internals.KRaftVersionUpgrade;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.raft.internals.RemoveVoterHandlerState;
 import org.apache.kafka.server.common.KRaftVersion;
@@ -90,14 +91,11 @@ public class LeaderState<T> implements EpochState {
 
     // This is volatile because resignation can be requested from an external thread.
     private volatile boolean resignRequested = false;
-    // Atomic because kraft version upgrade is requested by an external thread.
-    private final AtomicReference<Optional<KRaftVersion>> requestedVersionUpgrade = new AtomicReference<>(Optional.empty());
-    /* When the kraft version is 0 the latest updated voter set cannot be written to disk. Hold it in memory
-     * until the cluster is upgraded to a version that supports reconfig (greater than 1).
-     *
-     * Only the kraft driver thread writes to this field. Many threads read this field.
-     */
-    private AtomicReference<Optional<VoterSet>> updatedVolatileVoters = new AtomicReference<>(Optional.empty());
+
+    // TODO: document this
+    private final AtomicReference<KRaftVersionUpgrade> kraftVersionUpgradeState = new AtomicReference<>(
+        KRaftVersionUpgrade.empty()
+    );
 
     protected LeaderState(
         Time time,
@@ -154,9 +152,18 @@ public class LeaderState<T> implements EpochState {
         this.kafkaRaftMetrics = kafkaRaftMetrics;
 
         if (!kraftVersionAtEpochStart.isReconfigSupported()) {
-            updatedVolatileVoters.set(
-                voterSetAtEpochStart.updateVoterIgnoringDirectoryId(localVoterNode)
-            );
+            var updatedVoters = voterSetAtEpochStart
+                .updateVoterIgnoringDirectoryId(localVoterNode)
+                .orElseThrow(
+                    () -> new IllegalStateException(
+                        String.format(
+                            "Unable to update voter set %s with the latest leader information %s",
+                            voterSetAtEpochStart,
+                            localVoterNode
+                        )
+                    )
+                );
+            kraftVersionUpgradeState.set(new KRaftVersionUpgrade.Voters(updatedVoters));
         }
     }
 
@@ -424,12 +431,23 @@ public class LeaderState<T> implements EpochState {
         );
     }
 
-    public void setVolatileVoters(Optional<VoterSet> voters) {
-        updatedVolatileVoters.set(voters);
+    public boolean compareAndSetVolatileVoters(
+        KRaftVersionUpgrade.Voters oldVoters,
+        KRaftVersionUpgrade.Voters newVoters
+    ) {
+        return kraftVersionUpgradeState.compareAndSet(oldVoters, newVoters);
     }
 
-    public Optional<VoterSet> volatileVoters() {
-        return updatedVolatileVoters.get();
+    public void resetUpgradedKRaftVersion() {
+        kraftVersionUpgradeState.set(KRaftVersionUpgrade.empty());
+    }
+
+    public Optional<KRaftVersionUpgrade.Voters> volatileVoters() {
+        return kraftVersionUpgradeState.get().toVoters();
+    }
+
+    public Optional<KRaftVersionUpgrade.Version> requestedKRaftVersion() {
+        return kraftVersionUpgradeState.get().toVersion();
     }
 
     public boolean isResignRequested() {
@@ -453,11 +471,13 @@ public class LeaderState<T> implements EpochState {
         this.resignRequested = true;
     }
 
-    public void upgradeKRaftVersion(
+    // TODO: document this. It is important to state that this method is called by a thread that is not the kraft driver
+    public boolean maybeAppendUpgradedKRaftVersion(
         int epoch,
         KRaftVersion newVersion,
         KRaftVersion persistedVersion,
-        VoterSet persistedVoters
+        VoterSet persistedVoters,
+        long currentTimeMs
     ) {
         if (epoch < epoch()) {
             throw new NotLeaderException(
@@ -475,7 +495,9 @@ public class LeaderState<T> implements EpochState {
                     this.epoch
                 )
             );
-        } else if (persistedVersion.isAtLeast(newVersion)) {
+        } else if (persistedVersion.equals(newVersion)) {
+            return false;
+        } else if (persistedVersion.isMoreThan(newVersion)) {
             throw new InvalidUpdateVersionException(
                 String.format(
                     "Invalid upgrade of %s from version %s to %s",
@@ -486,20 +508,34 @@ public class LeaderState<T> implements EpochState {
             );
         }
 
-        var pendingVersion = requestedVersionUpgrade.get();
-        if (pendingVersion.stream().anyMatch(version -> version.isAtLeast(newVersion))) {
-            throw new InvalidUpdateVersionException(
+        var pendingVersion = kraftVersionUpgradeState.get().toVersion();
+        if (pendingVersion.isPresent()) {
+            if (pendingVersion.get().kraftVersion().equals(newVersion)) {
+                // The version match; upgrade is a noop
+                return false;
+            } else {
+                throw new InvalidUpdateVersionException(
+                    String.format(
+                        "Invalid concurrent upgrade of %s from version %s to %s",
+                        KRaftVersion.FEATURE_NAME,
+                        pendingVersion.get(),
+                        newVersion
+                    )
+                );
+            }
+        }
+
+        var inMemoryVoters = kraftVersionUpgradeState.get().toVoters().orElseThrow(() ->
+            new IllegalStateException(
                 String.format(
                     "Invalid upgrade of %s from version %s to %s",
                     KRaftVersion.FEATURE_NAME,
-                    pendingVersion.get(),
+                    persistedVersion,
                     newVersion
                 )
-            );
-        }
-
-        var voterSet = updatedVolatileVoters.get().orElse(persistedVoters);
-        if (!voterSet.voterIds().equals(persistedVoters.voterIds())) {
+            )
+        );
+        if (!inMemoryVoters.voters().voterIds().equals(persistedVoters.voterIds())) {
             throw new IllegalStateException(
                 String.format(
                     "Invalid upgrade of %s to %s because not all of the supported versions are known",
@@ -507,7 +543,7 @@ public class LeaderState<T> implements EpochState {
                     newVersion
                 )
             );
-        } else if (!voterSet.supportsVersion(newVersion)) {
+        } else if (!inMemoryVoters.voters().supportsVersion(newVersion)) {
             throw new InvalidUpdateVersionException(
                 String.format(
                     "Invalid upgrade of %s to %s because not all of the voters support it",
@@ -515,69 +551,63 @@ public class LeaderState<T> implements EpochState {
                     newVersion
                 )
             );
-        } else if (voterSet.voterKeys().stream().anyMatch(voterKey -> voterKey.directoryId().isEmpty())) {
+        } else if (inMemoryVoters.voters().voterKeys().stream().anyMatch(voterKey -> voterKey.directoryId().isEmpty())) {
             throw new IllegalStateException(
                 String.format(
                     "Directory id must be known for all of the voters: %s",
-                    voterSet
+                    inMemoryVoters.voters()
                 )
             );
-        } else if (!requestedVersionUpgrade.compareAndSet(pendingVersion, Optional.of(newVersion))) {
+        }
+
+        /* Note that this only supports upgrades from kraft.version 0 to kraft.version 1. When
+         * kraft.version 2 is added, this logic needs to be revisited
+         */
+        var successful = kraftVersionUpgradeState.compareAndSet(
+            inMemoryVoters,
+            new KRaftVersionUpgrade.Version(newVersion)
+        );
+        if (!successful) {
             throw new InvalidUpdateVersionException(
                 String.format(
-                    "Concurrent attempt to upgrade the version. Previous pending value %s; new pending value %s",
-                    pendingVersion,
-                    requestedVersionUpgrade.get()
+                    "Unable to upgrade version for %s to %s due to changing voters",
+                    KRaftVersion.FEATURE_NAME,
+                    newVersion
                 )
             );
         }
-    }
 
-    public Optional<KRaftVersion> requestedKRaftVersion() {
-        return requestedVersionUpgrade.get();
-    }
+        // All of the validations succeeded; create control records for the upgrade
+        accumulator.appendControlMessages((baseOffset, batchEpoch, compression, buffer) -> {
+            try (MemoryRecordsBuilder builder = createControlRecordsBuilder(
+                    baseOffset,
+                    batchEpoch,
+                    compression,
+                    buffer,
+                    currentTimeMs
+                )
+            ) {
+                log.info("Appended kraft.version {} to the batch accumulator", newVersion);
+                builder.appendKRaftVersionMessage(
+                        currentTimeMs,
+                        new KRaftVersionRecord()
+                            .setVersion(newVersion.kraftVersionRecordVersion())
+                            .setKRaftVersion(newVersion.featureLevel())
+                );
 
-    public boolean maybeAppendUpgradedKRaftVersion(VoterSet persistedVoters, long currentTimeMs) {
-        var pendingVersion = requestedVersionUpgrade.getAndSet(Optional.empty());
-        if (pendingVersion.isPresent()) {
-            var voterSet = updatedVolatileVoters.get().orElse(persistedVoters);
-            if (voterSet.supportsVersion(pendingVersion.get())) {
-                accumulator.appendControlMessages((baseOffset, epoch, compression, buffer) -> {
-                    try (MemoryRecordsBuilder builder = createControlRecordsBuilder(
-                            baseOffset,
-                            epoch,
-                            compression,
-                            buffer,
-                            currentTimeMs
-                        )
-                    ) {
-                        log.info("Appended kraft.version {} to the batch accumulator", pendingVersion.get());
-                        builder.appendKRaftVersionMessage(
-                            currentTimeMs,
-                            new KRaftVersionRecord()
-                                .setVersion(pendingVersion.get().kraftVersionRecordVersion())
-                                .setKRaftVersion(pendingVersion.get().featureLevel())
-                        );
+                if (!inMemoryVoters.voters().equals(persistedVoters)) {
+                    log.info("Appended voter set {} to the batch accumulator", inMemoryVoters.voters());
+                    builder.appendVotersMessage(
+                        currentTimeMs,
+                        inMemoryVoters.voters().toVotersRecord(newVersion.votersRecordVersion())
+                    );
+                }
 
-                        if (!voterSet.equals(persistedVoters)) {
-                            log.info("Appended voter set {} to the batch accumulator", voterSet);
-                            builder.appendVotersMessage(
-                                currentTimeMs,
-                                voterSet.toVotersRecord(
-                                    pendingVersion.get().votersRecordVersion()
-                                )
-                            );
-                        }
-
-                        return builder.build();
-                    }
-                });
-
-                return true;
+                return builder.build();
             }
-        }
+        });
 
-        return false;
+        return true;
     }
 
     @Override

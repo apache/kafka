@@ -77,6 +77,7 @@ import org.apache.kafka.raft.internals.CloseListener;
 import org.apache.kafka.raft.internals.DefaultRequestSender;
 import org.apache.kafka.raft.internals.FuturePurgatory;
 import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
+import org.apache.kafka.raft.internals.KRaftVersionUpgrade;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
 import org.apache.kafka.raft.internals.RecordsBatchReader;
@@ -592,7 +593,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         this.updateVoterHandler = new UpdateVoterHandler(
             nodeId,
             partitionState,
-            channel.listenerName()
+            channel.listenerName(),
+            logContext
         );
     }
 
@@ -2968,8 +2970,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         LeaderState<T> state,
         long currentTimeMs
     ) {
-        var upgradedKRaftVersion = state.maybeAppendUpgradedKRaftVersion(partitionState.lastVoterSet(), currentTimeMs);
-
         long timeUntilDrain = state.accumulator().timeUntilDrain(currentTimeMs);
         if (timeUntilDrain <= 0) {
             List<BatchAccumulator.CompletedBatch<T>> batches = state.accumulator().drain();
@@ -2978,7 +2978,14 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             try {
                 while (iterator.hasNext()) {
                     BatchAccumulator.CompletedBatch<T> batch = iterator.next();
+
+                    // TODO: check if the batch contains a control batch and the value of the kraft version.
+                    // TODO: Need to reset the pending kraft version stored in the leader state
                     appendBatch(state, batch, currentTimeMs);
+
+                    // TODO: fix this
+                    // The kraft version was written to the log. Remove the stored in-memory state
+                    // state.resetUpgradedKRaftVersion();
                 }
                 flushLeaderLog(state, currentTimeMs);
             } finally {
@@ -2988,10 +2995,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 }
             }
 
-            if (upgradedKRaftVersion) {
-                // The kraft version was written to the log. Remove the stored in-memory state
-                state.setVolatileVoters(Optional.empty());
-            }
         }
 
         return state.accumulator().timeUntilDrain(currentTimeMs);
@@ -3657,6 +3660,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         return quorum
             .maybeLeaderState()
             .flatMap(LeaderState::requestedKRaftVersion)
+            .map(KRaftVersionUpgrade.Version::kraftVersion)
             .orElseGet(partitionState::lastKraftVersion);
     }
 
@@ -3670,11 +3674,12 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             () -> new NotLeaderException("Upgrade kraft version failed because the replica is not the current leader")
         );
 
-        leaderState.upgradeKRaftVersion(
+        leaderState.maybeAppendUpgradedKRaftVersion(
             epoch,
             version,
             partitionState.lastKraftVersion(),
-            partitionState.lastVoterSet()
+            partitionState.lastVoterSet(),
+            time.milliseconds()
         );
     }
 
