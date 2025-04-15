@@ -38,6 +38,7 @@ import static org.apache.kafka.common.acl.AclOperation.DESCRIBE_CONFIGS;
 import static org.apache.kafka.common.acl.AclOperation.DESCRIBE_TOKENS;
 import static org.apache.kafka.common.acl.AclOperation.IDEMPOTENT_WRITE;
 import static org.apache.kafka.common.acl.AclOperation.READ;
+import static org.apache.kafka.common.acl.AclOperation.TWO_PHASE_COMMIT;
 import static org.apache.kafka.common.acl.AclOperation.WRITE;
 
 public class AclEntry {
@@ -59,7 +60,7 @@ public class AclEntry {
             case CLUSTER:
                 return new HashSet<>(Arrays.asList(CREATE, CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, ALTER, DESCRIBE));
             case TRANSACTIONAL_ID:
-                return new HashSet<>(Arrays.asList(DESCRIBE, WRITE));
+                return new HashSet<>(Arrays.asList(DESCRIBE, WRITE, TWO_PHASE_COMMIT));
             case DELEGATION_TOKEN:
                 return Set.of(DESCRIBE);
             case USER:
