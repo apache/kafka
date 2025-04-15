@@ -542,7 +542,7 @@ subprojects {
   test {
 
     doFirst {
-      jvmArgs("-XX:+EnableDynamicAgentLoading")
+      jvmArgs("-javaagent:${configurations.mockitoAgent.asPath}")
     }
 
     maxParallelForks = maxTestForks
@@ -3358,7 +3358,6 @@ project(':jmh-benchmarks') {
     mainClass = "-jar"
 
     doFirst {
-      jvmArgs("-XX:+EnableDynamicAgentLoading")
       if (System.getProperty("jmhArgs")) {
           args System.getProperty("jmhArgs").split(' ')
       }
