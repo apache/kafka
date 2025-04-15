@@ -3159,16 +3159,12 @@ public class WorkerTest {
      */
     private Object workerTaskMethod(InvocationOnMock invocation) {
         // provide implementations of three methods used during testing
-        switch (invocation.getMethod().getName()) {
-            case "id":
-                return TASK_ID;
-            case "loader":
-                return pluginLoader;
-            case "awaitStop":
-                return true;
-            default:
-                return null;
-        }
+        return switch (invocation.getMethod().getName()) {
+            case "id" -> TASK_ID;
+            case "loader" -> pluginLoader;
+            case "awaitStop" -> true;
+            default -> null;
+        };
     }
 
     private static class TestSourceTask extends SourceTask {
