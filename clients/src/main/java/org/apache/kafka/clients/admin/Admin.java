@@ -1950,11 +1950,11 @@ public interface Admin extends AutoCloseable {
      * Delete offsets for a set of partitions in a share group.
      *
      * @param groupId The group for which to delete offsets.
-     * @param partitions The topic-partitions.
+     * @param topics The set of topic names for which offsets need to be deleted.
      * @param options The options to use when deleting offsets in a share group.
      * @return The DeleteShareGroupOffsetsResult.
      */
-    DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteShareGroupOffsetsOptions options);
+    DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<String> topics, DeleteShareGroupOffsetsOptions options);
 
     /**
      * Delete offsets for a set of partitions in a share group with the default options.
@@ -1964,11 +1964,11 @@ public interface Admin extends AutoCloseable {
      * See the overload for more details.
      *
      * @param groupId The group for which to delete offsets.
-     * @param partitions The topic-partitions.
+     * @param topics The set of topic names for which offsets need to be deleted.
      * @return The DeleteShareGroupOffsetsResult.
      */
-    default DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<TopicPartition> partitions) {
-        return deleteShareGroupOffsets(groupId, partitions, new DeleteShareGroupOffsetsOptions());
+    default DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<String> topics) {
+        return deleteShareGroupOffsets(groupId, topics, new DeleteShareGroupOffsetsOptions());
     }
 
     /**

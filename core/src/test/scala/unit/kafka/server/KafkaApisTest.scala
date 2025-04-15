@@ -44,7 +44,7 @@ import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData.{Descri
 import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopic
 import org.apache.kafka.common.message.CreateTopicsResponseData.CreatableTopicResult
 import org.apache.kafka.common.message.DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic
-import org.apache.kafka.common.message.DeleteShareGroupOffsetsResponseData.{DeleteShareGroupOffsetsResponsePartition, DeleteShareGroupOffsetsResponseTopic}
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic
 import org.apache.kafka.common.message.DescribeShareGroupOffsetsRequestData.{DescribeShareGroupOffsetsRequestGroup, DescribeShareGroupOffsetsRequestTopic}
 import org.apache.kafka.common.message.DescribeShareGroupOffsetsResponseData.{DescribeShareGroupOffsetsResponseGroup, DescribeShareGroupOffsetsResponsePartition, DescribeShareGroupOffsetsResponseTopic}
 import org.apache.kafka.common.message.IncrementalAlterConfigsRequestData.{AlterConfigsResource => IAlterConfigsResource, AlterConfigsResourceCollection => IAlterConfigsResourceCollection, AlterableConfig => IAlterableConfig, AlterableConfigCollection => IAlterableConfigCollection}
@@ -11816,7 +11816,7 @@ class KafkaApisTest extends Logging {
   def testDeleteShareGroupOffsetsReturnsUnsupportedVersion(): Unit = {
     val deleteShareGroupOffsetsRequest = new DeleteShareGroupOffsetsRequestData()
       .setGroupId("group")
-      .setTopics(util.List.of(new DeleteShareGroupOffsetsRequestTopic().setTopicName("topic-1").setPartitions(util.List.of(1))))
+      .setTopics(util.List.of(new DeleteShareGroupOffsetsRequestTopic().setTopicName("topic-1")))
 
     val requestChannelRequest = buildRequest(new DeleteShareGroupOffsetsRequest.Builder(deleteShareGroupOffsetsRequest, true).build())
     metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
@@ -11824,14 +11824,14 @@ class KafkaApisTest extends Logging {
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val response = verifyNoThrottling[DeleteShareGroupOffsetsResponse](requestChannelRequest)
-    response.data.responses.forEach(topic => topic.partitions.forEach(partition => assertEquals(Errors.UNSUPPORTED_VERSION.code, partition.errorCode)))
+    response.data.responses.forEach(topic => assertEquals(Errors.UNSUPPORTED_VERSION.code, topic.errorCode))
   }
 
   @Test
   def testDeleteShareGroupOffsetsRequestsGroupAuthorizationFailed(): Unit = {
     val deleteShareGroupOffsetsRequest = new DeleteShareGroupOffsetsRequestData()
       .setGroupId("group")
-      .setTopics(util.List.of(new DeleteShareGroupOffsetsRequestTopic().setTopicName("topic-1").setPartitions(util.List.of(1))))
+      .setTopics(util.List.of(new DeleteShareGroupOffsetsRequestTopic().setTopicName("topic-1")))
 
     val requestChannelRequest = buildRequest(new DeleteShareGroupOffsetsRequest.Builder(deleteShareGroupOffsetsRequest, true).build)
 
@@ -11876,11 +11876,9 @@ class KafkaApisTest extends Logging {
 
     val deleteShareGroupOffsetsRequestTopic1 = new DeleteShareGroupOffsetsRequestTopic()
       .setTopicName(topicName1)
-      .setPartitions(util.List.of(0, 1))
 
     val deleteShareGroupOffsetsRequestTopic2 = new DeleteShareGroupOffsetsRequestTopic()
       .setTopicName(topicName2)
-      .setPartitions(util.List.of(0, 1))
 
     val deleteShareGroupOffsetsRequestData = new DeleteShareGroupOffsetsRequestData()
       .setGroupId(groupId)
@@ -11919,33 +11917,18 @@ class KafkaApisTest extends Logging {
         new DeleteShareGroupOffsetsResponseTopic()
           .setTopicName(topicName2)
           .setTopicId(topicId2)
-          .setPartitions(util.List.of(
-            new DeleteShareGroupOffsetsResponsePartition()
-              .setPartitionIndex(0)
-              .setErrorMessage(null)
-              .setErrorCode(Errors.NONE.code()),
-            new DeleteShareGroupOffsetsResponsePartition()
-              .setPartitionIndex(1)
-              .setErrorMessage(null)
-              .setErrorCode(Errors.NONE.code())
-          ))
-      ))
+          .setErrorMessage(null)
+          .setErrorCode(Errors.NONE.code())
+          )
+      )
 
     val expectedResponseTopics: util.List[DeleteShareGroupOffsetsResponseTopic] = new util.ArrayList[DeleteShareGroupOffsetsResponseTopic]()
 
     expectedResponseTopics.add(
       new DeleteShareGroupOffsetsResponseTopic()
         .setTopicName(topicName1)
-        .setPartitions(util.List.of(
-          new DeleteShareGroupOffsetsResponsePartition()
-            .setPartitionIndex(0)
-            .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
-            .setErrorMessage(Errors.TOPIC_AUTHORIZATION_FAILED.message()),
-          new DeleteShareGroupOffsetsResponsePartition()
-            .setPartitionIndex(1)
-            .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
-            .setErrorMessage(Errors.TOPIC_AUTHORIZATION_FAILED.message())
-        ))
+        .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+        .setErrorMessage(Errors.TOPIC_AUTHORIZATION_FAILED.message())
     )
 
     deleteShareGroupOffsetsResponseData.responses.forEach{ topic => {
@@ -11977,15 +11960,12 @@ class KafkaApisTest extends Logging {
 
     val deleteShareGroupOffsetsRequestTopic1 = new DeleteShareGroupOffsetsRequestTopic()
       .setTopicName(topicName1)
-      .setPartitions(util.List.of(0))
 
     val deleteShareGroupOffsetsRequestTopic2 = new DeleteShareGroupOffsetsRequestTopic()
       .setTopicName(topicName2)
-      .setPartitions(util.List.of(0, 1))
 
     val deleteShareGroupOffsetsRequestTopic3 = new DeleteShareGroupOffsetsRequestTopic()
       .setTopicName(topicName3)
-      .setPartitions(util.List.of(0, 1, 2))
 
     val deleteShareGroupOffsetsRequestData = new DeleteShareGroupOffsetsRequestData()
       .setGroupId("group")
@@ -12011,42 +11991,18 @@ class KafkaApisTest extends Logging {
         new DeleteShareGroupOffsetsResponseTopic()
           .setTopicName(topicName1)
           .setTopicId(topicId1)
-          .setPartitions(util.List.of(
-            new DeleteShareGroupOffsetsResponsePartition()
-              .setPartitionIndex(0)
-              .setErrorMessage(null)
-              .setErrorCode(Errors.NONE.code())
-          )),
+          .setErrorMessage(null)
+          .setErrorCode(Errors.NONE.code()),
         new DeleteShareGroupOffsetsResponseTopic()
           .setTopicName(topicName2)
           .setTopicId(topicId2)
-          .setPartitions(util.List.of(
-            new DeleteShareGroupOffsetsResponsePartition()
-              .setPartitionIndex(0)
-              .setErrorMessage(null)
-              .setErrorCode(Errors.NONE.code()),
-            new DeleteShareGroupOffsetsResponsePartition()
-              .setPartitionIndex(1)
-              .setErrorMessage(null)
-              .setErrorCode(Errors.NONE.code())
-          )),
+          .setErrorMessage(null)
+          .setErrorCode(Errors.NONE.code()),
         new DeleteShareGroupOffsetsResponseTopic()
           .setTopicName(topicName3)
           .setTopicId(topicId3)
-          .setPartitions(util.List.of(
-            new DeleteShareGroupOffsetsResponsePartition()
-              .setPartitionIndex(0)
-              .setErrorMessage(null)
-              .setErrorCode(Errors.NONE.code()),
-            new DeleteShareGroupOffsetsResponsePartition()
-              .setPartitionIndex(1)
-              .setErrorMessage(null)
-              .setErrorCode(Errors.NONE.code()),
-            new DeleteShareGroupOffsetsResponsePartition()
-              .setPartitionIndex(2)
-              .setErrorMessage(null)
-              .setErrorCode(Errors.NONE.code())
-          ))
+          .setErrorMessage(null)
+          .setErrorCode(Errors.NONE.code()),
       ))
 
     resultFuture.complete(deleteShareGroupOffsetsResponseData)
@@ -12066,11 +12022,9 @@ class KafkaApisTest extends Logging {
 
     val deleteShareGroupOffsetsRequestTopic1 = new DeleteShareGroupOffsetsRequestTopic()
       .setTopicName(topicName1)
-      .setPartitions(util.List.of(0))
 
     val deleteShareGroupOffsetsRequestTopic2 = new DeleteShareGroupOffsetsRequestTopic()
       .setTopicName(topicName2)
-      .setPartitions(util.List.of(0, 1))
 
     val deleteShareGroupOffsetsRequestData = new DeleteShareGroupOffsetsRequestData()
       .setGroupId("group")
@@ -12108,11 +12062,9 @@ class KafkaApisTest extends Logging {
 
     val deleteShareGroupOffsetsRequestTopic1 = new DeleteShareGroupOffsetsRequestTopic()
       .setTopicName(topicName1)
-      .setPartitions(util.List.of(0))
 
     val deleteShareGroupOffsetsRequestTopic2 = new DeleteShareGroupOffsetsRequestTopic()
       .setTopicName(topicName2)
-      .setPartitions(util.List.of(0, 1))
 
     val deleteShareGroupOffsetsRequestData = new DeleteShareGroupOffsetsRequestData()
       .setGroupId("group")
