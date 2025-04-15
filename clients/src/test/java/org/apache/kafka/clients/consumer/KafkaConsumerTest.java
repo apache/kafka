@@ -3746,7 +3746,9 @@ public void testClosingConsumerUnregistersConsumerMetrics(GroupProtocol groupPro
 
     private static final String NAME = "name";
     private static final String DESCRIPTION = "description";
-    private static final Map<String, String> TAGS = Collections.singletonMap("k", "v");
+    private static final LinkedHashMap<String, String> TAGS = new LinkedHashMap<>() {{
+        put("k", "v");
+    }};
     private static final double VALUE = 123.0;
 
     public static class MonitorableDeserializer extends MockDeserializer implements Monitorable {

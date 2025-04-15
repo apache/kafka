@@ -27,7 +27,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.io.IOException;
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.Map;
 
@@ -36,7 +35,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class PluginMetricsImplTest {
 
-    private final Map<String, String> extraTags = Collections.singletonMap("my-tag", "my-value");
+    private final LinkedHashMap<String, String> extraTags = new LinkedHashMap<>(){{
+        put("my-tag", "my-value");
+    }};
     private Map<String, String> tags;
     private Metrics metrics;
     private int initialMetrics;
@@ -65,8 +66,10 @@ public class PluginMetricsImplTest {
     @Test
     void testDuplicateTagName() {
         PluginMetricsImpl pmi = new PluginMetricsImpl(metrics, tags);
+        LinkedHashMap<String, String> tags = new LinkedHashMap<>();
+        tags.put("k1", "value");
         assertThrows(IllegalArgumentException.class,
-                () -> pmi.metricName("name", "description", Collections.singletonMap("k1", "value")));
+                () -> pmi.metricName("name", "description", tags));
     }
 
     @Test
