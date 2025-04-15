@@ -1744,7 +1744,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         @Override
         public int hashCode() {
             int result = 31;
-            result = 31 * result + (int) (producerId ^ (producerId >>> 32));
+            result = 31 * result + Long.hashCode(producerId);
             result = 31 * result + (int) epoch;
             return result;
         }

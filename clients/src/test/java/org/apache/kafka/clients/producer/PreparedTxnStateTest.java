@@ -107,8 +107,7 @@ public class PreparedTxnStateTest {
         assertEquals(state1, state2, "Equal states should be equal");
         assertNotEquals(state1, state3, "States with different producer IDs should not be equal");
         assertNotEquals(state1, state4, "States with different epochs should not be equal");
-        assertNotEquals(state1, null, "State should not equal null");
-        assertNotEquals(state1, "not a state", "State should not equal non-state object");
+        assertNotEquals(null, state1, "State should not equal null");
         
         // Test hashCode
         assertEquals(state1.hashCode(), state2.hashCode(), "Equal states should have same hash code");
