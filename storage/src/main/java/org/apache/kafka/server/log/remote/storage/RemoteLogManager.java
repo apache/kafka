@@ -183,7 +183,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     // topic ids that are received on leadership changes, this map is cleared on stop partitions
     private final ConcurrentMap<TopicPartition, Uuid> topicIdByPartitionMap = new ConcurrentHashMap<>();
     private final String clusterId;
-    private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
+    // For compatibility, metrics are defined to be under the `kafka.log.remote.RemoteLogManager` class
+    private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.log.remote", "RemoteLogManager");
 
     // The endpoint for remote log metadata manager to connect to
     private Optional<Endpoint> endpoint = Optional.empty();
