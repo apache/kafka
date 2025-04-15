@@ -541,7 +541,10 @@ subprojects {
   test {
 
     doFirst {
-      jvmArgs("-javaagent:${configurations.mockitoAgent.asPath}")
+      def mockitoAgentConfig = configurations.findByName('mockitoAgent')
+      if (mockitoAgentConfig) {
+        jvmArgs("-javaagent:${mockitoAgentConfig.asPath}")
+      }
     }
 
     maxParallelForks = maxTestForks
