@@ -57,7 +57,6 @@ import java.net.URI;
 import java.net.URLEncoder;
 import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -237,7 +236,7 @@ public class MirrorMaker {
         Map<String, String> workerProps = config.workerConfig(sourceAndTarget);
         String encodedSource = encodePath(sourceAndTarget.source());
         String encodedTarget = encodePath(sourceAndTarget.target());
-        List<String> restNamespace = Arrays.asList(encodedSource, encodedTarget);
+        List<String> restNamespace = List.of(encodedSource, encodedTarget);
         String workerId = generateWorkerId(sourceAndTarget);
         Plugins plugins = new Plugins(workerProps);
         plugins.compareAndSwapWithDelegatingLoader();

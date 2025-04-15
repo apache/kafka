@@ -38,6 +38,7 @@ import java.nio.file.Files;
 
 import static org.hamcrest.CoreMatchers.equalTo;
 import static org.hamcrest.MatcherAssert.assertThat;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class PrintedTest {
@@ -80,7 +81,7 @@ public class PrintedTest {
 
         processor.process(new Record<>("good", 2, 0L));
         processor.close();
-        assertThat(sysOut.toString(StandardCharsets.UTF_8), equalTo("[processor]: good, 2\n"));
+        assertEquals(sysOut.toString(StandardCharsets.UTF_8), "[processor]: good, 2\n");
     }
 
     @Test
@@ -91,7 +92,7 @@ public class PrintedTest {
 
         processor.process(new Record<>("hello", 3, 0L));
         processor.close();
-        assertThat(sysOut.toString(StandardCharsets.UTF_8), equalTo("[label]: hello, 3\n"));
+        assertEquals(sysOut.toString(StandardCharsets.UTF_8), "[label]: hello, 3\n");
     }
 
     @Test
@@ -101,7 +102,7 @@ public class PrintedTest {
         ).build("processor").get();
         processor.process(new Record<>("hello", 1, 0L));
         processor.close();
-        assertThat(sysOut.toString(StandardCharsets.UTF_8), equalTo("[processor]: hello -> 1\n"));
+        assertEquals(sysOut.toString(StandardCharsets.UTF_8), "[processor]: hello -> 1\n");
     }
 
     @Test
