@@ -442,7 +442,7 @@ public class MetadataQuorumCommand {
         output.append(" and endpoints: ");
         String prefix = "";
         for (RaftVoterEndpoint endpoint : endpoints) {
-            output.append(prefix).append(endpoint.name()).append("://");
+            output.append(prefix).append(endpoint.listener()).append("://");
             if (endpoint.host().contains(":")) {
                 output.append("[");
             }
