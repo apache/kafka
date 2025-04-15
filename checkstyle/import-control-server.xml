@@ -82,6 +82,7 @@
   <allow pkg="org.apache.kafka.raft" />
 
   <subpackage name="server">
+    <allow pkg="javax.crypto" />
     <allow pkg="org.apache.kafka.server" />
     <allow pkg="org.apache.kafka.image" />
     <allow pkg="org.apache.kafka.storage.internals.log" />
