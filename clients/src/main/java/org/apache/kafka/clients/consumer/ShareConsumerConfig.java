@@ -26,7 +26,7 @@ import java.util.Properties;
 /**
  * The consumer configuration behavior specific to share groups.
  */
-public class ShareConsumerConfig extends ConsumerConfig {
+class ShareConsumerConfig extends ConsumerConfig {
     /**
      * A list of configuration keys not supported for SHARE consumer.
      */
@@ -43,7 +43,7 @@ public class ShareConsumerConfig extends ConsumerConfig {
             ConsumerConfig.GROUP_REMOTE_ASSIGNOR_CONFIG
     );
 
-    public ShareConsumerConfig(Properties props) {
+    ShareConsumerConfig(Properties props) {
         super(props);
     }
 

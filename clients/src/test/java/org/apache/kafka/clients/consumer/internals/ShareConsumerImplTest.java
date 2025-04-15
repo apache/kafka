@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.AcknowledgementCommitCallback;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.ConsumerRecords;
-import org.apache.kafka.clients.consumer.ShareConsumerConfig;
 import org.apache.kafka.clients.consumer.internals.events.ApplicationEventHandler;
 import org.apache.kafka.clients.consumer.internals.events.BackgroundEvent;
 import org.apache.kafka.clients.consumer.internals.events.CompletableEventReaper;
@@ -121,7 +120,7 @@ public class ShareConsumerImplTest {
     }
 
     private ShareConsumerImpl<String, String> newConsumer(Properties props) {
-        final ConsumerConfig config = new ShareConsumerConfig(props);
+        final ConsumerConfig config = new ConsumerConfig(props);
         return newConsumer(config);
     }
 

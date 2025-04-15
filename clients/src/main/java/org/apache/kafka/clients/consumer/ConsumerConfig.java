@@ -390,8 +390,7 @@ public class ConsumerConfig extends AbstractConfig {
             " use <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records. Instead," +
             " delivery is acknowledged implicitly on the next call to poll or commit." +
             " If set to <code>explicit</code>, the acknowledgement mode of the consumer is explicit and it must use" +
-            " <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records." +
-            " Otherwise, the acknowledgement mode of the consumer is set to 'implicit' by default";
+            " <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records.";
 
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
 

@@ -444,7 +444,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
                       final int requestTimeoutMs,
                       final int defaultApiTimeoutMs,
                       final String groupId,
-                      final String acknowledgementMode) {
+                      final String acknowledgementModeConfig) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.clientId = clientId;
@@ -459,7 +459,7 @@ public class ShareConsumerImpl<K, V> implements ShareConsumerDelegate<K, V> {
         this.metadata = metadata;
         this.requestTimeoutMs = requestTimeoutMs;
         this.defaultApiTimeoutMs = defaultApiTimeoutMs;
-        this.acknowledgementMode = ShareAcknowledgementMode.fromString(acknowledgementMode);
+        this.acknowledgementMode = ShareAcknowledgementMode.fromString(acknowledgementModeConfig);
         this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer, metrics);
         this.currentFetch = ShareFetch.empty();
         this.applicationEventHandler = applicationEventHandler;

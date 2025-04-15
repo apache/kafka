@@ -118,20 +118,8 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * <p>
  * The consumer can choose to use implicit or explicit acknowledgement of the records it processes by configuring the
  * {@code share.acknowledgement.mode} property. If the property is not set, the default mode is <code>"implicit"</code>.
- *
- * <p>If the config is set to "explicit", the consumer is using <em>explicit acknowledgement</em>. In this case:
- * <ul>
- *     <li>The application must acknowledge all the records it received in the batch before the next call to ({@link #poll(Duration)}</li>
- *     <li>The poll() throws an {@link IllegalStateException} if there are some unacknowledged records in explicit mode</li>
- *     <li>The application calls {@link #commitSync()} or {@link #commitAsync()} which commits the acknowledgements to Kafka.
- *     If any records in the batch were not acknowledged until the next poll(), an {@link IllegalStateException} is thrown.</li>
- *     <li>The application calls {@link #poll(Duration)} without committing first, which commits the acknowledgements to
- *     Kafka asynchronously. In this case, no exception is thrown by a failure to commit the acknowledgement.
- *     If any records in the batch were not acknowledged, an {@link IllegalStateException} is thrown.</li>
- *     <li>The application calls {@link #close()} which attempts to commit any pending acknowledgements and
- *     releases any remaining acquired records.</li>
- * </ul>
- * If the application does not set the {@code share.acknowledgement.mode} property to "explicit" or does not configure the mode,
+ * <p>
+ * If the application sets the property to "implicit" or does not configure the mode,
  * then the consumer is using <em>implicit acknowledgement</em>. In this case:
  * <ul>
  *     <li>The application calls {@link #commitSync()} or {@link #commitAsync()} which implicitly acknowledges all of
@@ -141,7 +129,17 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *     thrown by a failure to commit the acknowledgements.</li>
  *     <li>The application calls {@link #close()}  which releases any acquired records without acknowledgement.</li>
  * </ul>
- * <p>
+ * <p>If the config is set to "explicit", the consumer is using <em>explicit acknowledgement</em>. In this case:
+ * <ul>
+ *     <li>The application must acknowledge all the records it received in the batch before the next call to {@link #poll(Duration)}</li>
+ *     <li>The application calls {@link #commitSync()} or {@link #commitAsync()} which commits the acknowledgements to Kafka.
+ *     If any records in the batch were not acknowledged until the next poll(), an {@link IllegalStateException} is thrown.</li>
+ *     <li>The application calls {@link #poll(Duration)} without committing first, which commits the acknowledgements to
+ *     Kafka asynchronously. In this case, no exception is thrown by a failure to commit the acknowledgement.
+ *     If any records in the batch were not acknowledged, an {@link IllegalStateException} is thrown.</li>
+ *     <li>The application calls {@link #close()} which attempts to commit any pending acknowledgements and
+ *     releases any remaining acquired records.</li>
+ * </ul>
  * The consumer guarantees that the records returned in the {@code ConsumerRecords} object for a specific topic-partition
  * are in order of increasing offset. For each topic-partition, Kafka guarantees that acknowledgements for the records
  * in a batch are performed atomically. This makes error handling significantly more straightforward because there can be
@@ -194,7 +192,7 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *
  * <h4>Per-record acknowledgement (explicit acknowledgement)</h4>
  * This example demonstrates using different acknowledgement types depending on the outcome of processing the records.
- * Here the share.acknowledgement.mode property is set to "explicit" so the consumer must explicitly acknowledge each record.
+ * Here the {@code share.acknowledgement.mode} property is set to "explicit" so the consumer must explicitly acknowledge each record.
  * <pre>
  *     Properties props = new Properties();
  *     props.setProperty(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);

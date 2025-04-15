@@ -68,13 +68,6 @@ public class ShareAcknowledgementMode {
     }
 
     /**
-     * Returns the acknowledgement mode enum.
-     */
-    public AcknowledgementMode getAcknowledgementMode() {
-        return acknowledgementMode;
-    }
-
-    /**
      * Returns the name of the acknowledgement mode.
      */
     public String name() {
