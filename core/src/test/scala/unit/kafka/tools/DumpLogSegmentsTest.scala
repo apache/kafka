@@ -544,16 +544,16 @@ class DumpLogSegmentsTest {
       logDir,
       time,
       time.scheduler,
+      1,
+      KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+      KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
+      ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
       new MetadataLogConfig(
         100 * 1024,
         100 * 1024,
         10 * 1000,
         100 * 1024,
-        60 * 1000,
-        KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-        KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-        ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
-        1
+        60 * 1000
       )
     )
 

@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.raft;
 
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.record.Records;
 
@@ -78,7 +79,7 @@ public class MetadataLogConfig {
             "controller should write no-op records to the metadata partition. If the value is 0, no-op records " +
             "are not appended to the metadata partition. The default value is " + METADATA_MAX_IDLE_INTERVAL_MS_DEFAULT;
 
-    public static final ConfigDef CONFIG_DEF =  new ConfigDef()
+    public static final ConfigDef CONFIG_DEF = new ConfigDef()
             .define(METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES_CONFIG, LONG, METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES, atLeast(1), HIGH, METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES_DOC)
             .define(METADATA_SNAPSHOT_MAX_INTERVAL_MS_CONFIG, LONG, METADATA_SNAPSHOT_MAX_INTERVAL_MS_DEFAULT, atLeast(0), HIGH, METADATA_SNAPSHOT_MAX_INTERVAL_MS_DOC)
             .define(METADATA_LOG_DIR_CONFIG, STRING, null, null, HIGH, METADATA_LOG_DIR_DOC)
@@ -89,46 +90,58 @@ public class MetadataLogConfig {
             .define(METADATA_MAX_RETENTION_MILLIS_CONFIG, LONG, METADATA_MAX_RETENTION_MILLIS_DEFAULT, null, HIGH, METADATA_MAX_RETENTION_MILLIS_DOC)
             .define(METADATA_MAX_IDLE_INTERVAL_MS_CONFIG, INT, METADATA_MAX_IDLE_INTERVAL_MS_DEFAULT, atLeast(0), LOW, METADATA_MAX_IDLE_INTERVAL_MS_DOC);
 
-    public final int logSegmentBytes;
-    public final int logSegmentMinBytes;
-    public final long logSegmentMillis;
-    public final long retentionMaxBytes;
-    public final long retentionMillis;
-    public final int maxBatchSizeInBytes;
-    public final int maxFetchSizeInBytes;
-    public final long deleteDelayMillis;
-    public final int nodeId;
+    private final int logSegmentBytes;
+    private final int logSegmentMinBytes;
+    private final long logSegmentMillis;
+    private final long retentionMaxBytes;
+    private final long retentionMillis;
 
     /**
      * Configuration for the metadata log
-     * @param logSegmentBytes The maximum size of a single metadata log file
+     *
+     * @param logSegmentBytes    The maximum size of a single metadata log file
      * @param logSegmentMinBytes The minimum size of a single metadata log file
-     * @param logSegmentMillis The maximum time before a new metadata log file is rolled out
-     * @param retentionMaxBytes The size of the metadata log and snapshots before deleting old snapshots and log files
-     * @param retentionMillis The time to keep a metadata log file or snapshot before deleting it
-     * @param maxBatchSizeInBytes The largest record batch size allowed in the metadata log
-     * @param maxFetchSizeInBytes The maximum number of bytes to read when fetching from the metadata log
-     * @param deleteDelayMillis The amount of time to wait before deleting a file from the filesystem
-     * @param nodeId The node id
+     * @param logSegmentMillis   The maximum time before a new metadata log file is rolled out
+     * @param retentionMaxBytes  The size of the metadata log and snapshots before deleting old snapshots and log files
+     * @param retentionMillis    The time to keep a metadata log file or snapshot before deleting it
      */
     public MetadataLogConfig(int logSegmentBytes,
                              int logSegmentMinBytes,
                              long logSegmentMillis,
                              long retentionMaxBytes,
-                             long retentionMillis,
-                             int maxBatchSizeInBytes,
-                             int maxFetchSizeInBytes,
-                             long deleteDelayMillis,
-                             int nodeId) {
+                             long retentionMillis) {
         this.logSegmentBytes = logSegmentBytes;
         this.logSegmentMinBytes = logSegmentMinBytes;
         this.logSegmentMillis = logSegmentMillis;
         this.retentionMaxBytes = retentionMaxBytes;
         this.retentionMillis = retentionMillis;
-        this.maxBatchSizeInBytes = maxBatchSizeInBytes;
-        this.maxFetchSizeInBytes = maxFetchSizeInBytes;
-        this.deleteDelayMillis = deleteDelayMillis;
-        this.nodeId = nodeId;
     }
 
+    public static MetadataLogConfig fromConfig(AbstractConfig config) {
+        return new MetadataLogConfig(config.getInt(METADATA_LOG_SEGMENT_BYTES_CONFIG),
+                config.getInt(METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG),
+                config.getLong(METADATA_LOG_SEGMENT_MILLIS_CONFIG),
+                config.getLong(METADATA_MAX_RETENTION_BYTES_CONFIG),
+                config.getLong(METADATA_MAX_RETENTION_MILLIS_CONFIG));
+    }
+
+    public int logSegmentBytes() {
+        return logSegmentBytes;
+    }
+
+    public int logSegmentMinBytes() {
+        return logSegmentMinBytes;
+    }
+
+    public long logSegmentMillis() {
+        return logSegmentMillis;
+    }
+
+    public long retentionMaxBytes() {
+        return retentionMaxBytes;
+    }
+
+    public long retentionMillis() {
+        return retentionMillis;
+    }
 }
