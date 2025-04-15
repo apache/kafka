@@ -32,8 +32,8 @@ import java.util.Objects;
  * This class is immutable (state batches is not modified out of context).
  */
 public class ShareGroupOffset {
-    public static final int NO_TIMESTAMP = -1;
-    public static final int UNINITIALIZED_EPOCH = -1;
+    public static final int NO_TIMESTAMP = 0;
+    public static final int UNINITIALIZED_EPOCH = 0;
     public static final int DEFAULT_EPOCH = 0;
 
     private final int snapshotEpoch;
