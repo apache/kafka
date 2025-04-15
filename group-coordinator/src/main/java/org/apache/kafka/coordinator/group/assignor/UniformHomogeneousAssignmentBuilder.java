@@ -35,7 +35,7 @@ import java.util.Set;
 /**
  * The homogeneous uniform assignment builder is used to generate the target assignment for a consumer group with
  * all its members subscribed to the same set of topics.
- *
+ * <p>
  * Assignments are done according to the following principles:
  *
  * <li> Balance:          Ensure partitions are distributed equally among all members.
