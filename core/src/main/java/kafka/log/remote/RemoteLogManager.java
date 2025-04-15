@@ -202,7 +202,6 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     private Optional<Endpoint> endpoint = Optional.empty();
     private boolean closed = false;
 
-    private volatile boolean remoteLogManagerConfigured = false;
     private final Timer remoteReadTimer;
     private volatile DelayedOperationPurgatory<DelayedRemoteListOffsets> delayedRemoteListOffsetsPurgatory;
 
@@ -241,9 +240,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         this.metrics = metrics;
         this.endpoint = endpoint;
 
-        remoteStorageManagerPlugin = configAndWrapRSMPlugin(createRemoteStorageManager());
-        remoteLogMetadataManagerPlugin = configAndWrapRLMMPlugin(createRemoteLogMetadataManager());
-        remoteLogManagerConfigured = true;
+        remoteStorageManagerPlugin = configAndWrapRsmPlugin(createRemoteStorageManager());
+        remoteLogMetadataManagerPlugin = configAndWrapRlmmPlugin(createRemoteLogMetadataManager());
 
         rlmCopyQuotaManager = createRLMCopyQuotaManager();
         rlmFetchQuotaManager = createRLMFetchQuotaManager();
@@ -376,7 +374,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         });
     }
 
-    private Plugin<RemoteStorageManager> configAndWrapRSMPlugin(RemoteStorageManager rsm) {
+    private Plugin<RemoteStorageManager> configAndWrapRsmPlugin(RemoteStorageManager rsm) {
         final Map<String, Object> rsmProps = new HashMap<>(rlmConfig.remoteStorageManagerProps());
         rsmProps.put(ServerConfigs.BROKER_ID_CONFIG, brokerId);
         rsm.configure(rsmProps);
@@ -396,7 +394,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         });
     }
 
-    private Plugin<RemoteLogMetadataManager> configAndWrapRLMMPlugin(RemoteLogMetadataManager rlmm) {
+    private Plugin<RemoteLogMetadataManager> configAndWrapRlmmPlugin(RemoteLogMetadataManager rlmm) {
         final Map<String, Object> rlmmProps = new HashMap<>();
         endpoint.ifPresent(e -> {
             rlmmProps.put(REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "bootstrap.servers", e.host() + ":" + e.port());
@@ -448,7 +446,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                                    Map<String, Uuid> topicIds) {
         LOGGER.debug("Received leadership changes for leaders: {} and followers: {}", partitionsBecomeLeader, partitionsBecomeFollower);
 
-        if (rlmConfig.isRemoteStorageSystemEnabled() && !this.remoteLogManagerConfigured) {
+        if (rlmConfig.isRemoteStorageSystemEnabled()) {
             throw new KafkaException("RemoteLogManager is not configured when remote storage system is enabled");
         }
 

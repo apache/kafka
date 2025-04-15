@@ -3759,8 +3759,8 @@ public class RemoteLogManagerTest {
             assertInstanceOf(MonitorableNoOpRemoteStorageManager.class, remoteLogManager.storageManager());
             assertInstanceOf(MonitorableNoOpRemoteLogMetadataManager.class, remoteLogManager.remoteLogMetadataManager());
 
-            assertEquals(true, ((MonitorableNoOpRemoteStorageManager) remoteLogManager.storageManager()).pluginMetrics);
-            assertEquals(true, ((MonitorableNoOpRemoteLogMetadataManager) remoteLogManager.remoteLogMetadataManager()).pluginMetrics);
+            assertTrue(((MonitorableNoOpRemoteStorageManager) remoteLogManager.storageManager()).pluginMetrics);
+            assertTrue(((MonitorableNoOpRemoteLogMetadataManager) remoteLogManager.remoteLogMetadataManager()).pluginMetrics);
         }
     }
 

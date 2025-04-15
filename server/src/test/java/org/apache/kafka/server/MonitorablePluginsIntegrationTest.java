@@ -99,14 +99,9 @@ public class MonitorablePluginsIntegrationTest {
     }
 
     private static Map<String, String> expectedTags(String config, String clazz) {
-        return expectedTags(config, clazz, Map.of());
-    }
-
-    private static Map<String, String> expectedTags(String config, String clazz, Map<String, String> extraTags) {
         Map<String, String> tags = new LinkedHashMap<>();
         tags.put("config", config);
         tags.put("class", clazz);
-        tags.putAll(extraTags);
         return tags;
     }
 
