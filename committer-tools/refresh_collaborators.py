@@ -115,7 +115,7 @@ def update_local_yaml_content(yaml_file_path: str, collaborators: List[str]) -> 
     collaborators.sort(key=str.casefold)
 
     def represent_none(self: RoundTripRepresenter, _: Any):
-        return self.represent_scalar('tag:yaml.org,2002:null', '~')
+        return self.represent_scalar("tag:yaml.org,2002:null", "~")
 
     with open(yaml_file_path, "r", encoding="utf-8") as file:
         yaml: YAML = YAML()
