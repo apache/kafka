@@ -166,7 +166,6 @@ public class Plugins {
         );
     }
 
-    @SuppressWarnings("unchecked")
     protected static <U> Class<? extends U> pluginClass(
             DelegatingClassLoader loader,
             String classOrAlias,

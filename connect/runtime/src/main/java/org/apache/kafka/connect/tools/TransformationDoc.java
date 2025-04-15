@@ -39,16 +39,7 @@ import java.util.List;
 
 public class TransformationDoc {
 
-    private static final class DocInfo {
-        final String transformationName;
-        final String overview;
-        final ConfigDef configDef;
-
-        private DocInfo(String transformationName, String overview, ConfigDef configDef) {
-            this.transformationName = transformationName;
-            this.overview = overview;
-            this.configDef = configDef;
-        }
+    private record DocInfo(String transformationName, String overview, ConfigDef configDef) {
     }
 
     private static final List<DocInfo> TRANSFORMATIONS = Arrays.asList(
