@@ -256,10 +256,6 @@ public class BrokerRegistration {
         return inControlledShutdown;
     }
 
-    public boolean isMigratingZkBroker() {
-        return isMigratingZkBroker;
-    }
-
     public List<Uuid> directories() {
         return directories;
     }

@@ -109,8 +109,7 @@ public class AbstractConfig {
      */
     @SuppressWarnings({"this-escape"})
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
-        Map<String, Object> originalMap = Utils.castToStringObjectMap(originals);
-        preProcessParsedConfig(originalMap);
+        Map<String, Object> originalMap = preProcessParsedConfig(Collections.unmodifiableMap(Utils.castToStringObjectMap(originals)));
         this.originals = resolveConfigVariables(configProviderProps, originalMap);
         this.values = definition.parse(this.originals);
         Map<String, Object> configUpdates = postProcessParsedConfig(Collections.unmodifiableMap(this.values));
@@ -144,7 +143,6 @@ public class AbstractConfig {
      */
     public AbstractConfig(ConfigDef definition, Map<?, ?> originals, boolean doLog) {
         this(definition, originals, Collections.emptyMap(), doLog);
-
     }
 
     /**
@@ -155,7 +153,7 @@ public class AbstractConfig {
      * @return a map of updates that should be applied to the configuration (will be validated to prevent bad updates)
      */
     protected Map<String, Object> preProcessParsedConfig(Map<String, Object> parsedValues) {
-        return Map.of();
+        return parsedValues;
     }
 
     /**

@@ -25,7 +25,6 @@ import org.apache.kafka.tiered.storage.TieredStorageTestContext;
 
 import java.io.PrintStream;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -60,7 +59,7 @@ public final class ShrinkReplicaAction implements TieredStorageTestAction {
         }
 
         Map<TopicPartition, Optional<NewPartitionReassignment>> proposed =
-                Collections.singletonMap(topicPartition, Optional.of(new NewPartitionReassignment(targetReplicaIds)));
+                Map.of(topicPartition, Optional.of(new NewPartitionReassignment(targetReplicaIds)));
         context.admin().alterPartitionReassignments(proposed).all().get();
 
         TestUtils.waitForCondition(() -> {

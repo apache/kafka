@@ -21,6 +21,7 @@ import kafka.log.LogManager
 import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.QuotaFactory.UNBOUNDED_QUOTA
 import kafka.server.epoch.util.MockBlockingSender
+import kafka.server.metadata.KRaftMetadataCache
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.FetchSessionHandler
 import org.apache.kafka.common.compress.Compression
@@ -67,7 +68,7 @@ class ReplicaFetcherThreadTest {
   private val brokerEndPoint = new BrokerEndPoint(0, "localhost", 1000)
   private val failedPartitions = new FailedPartitions
 
-  private val metadataCache = MetadataCache.kRaftMetadataCache(0, () => KRaftVersion.LATEST_PRODUCTION)
+  private val metadataCache = new KRaftMetadataCache(0, () => KRaftVersion.LATEST_PRODUCTION)
 
   private def initialFetchState(topicId: Option[Uuid], fetchOffset: Long, leaderEpoch: Int = 1): InitialFetchState = {
     InitialFetchState(topicId = topicId, leader = new BrokerEndPoint(0, "localhost", 9092),
@@ -99,8 +100,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaMgr,
       quota,
-      logContext.logPrefix,
-      () => metadataVersion)
+      logContext.logPrefix)
   }
 
   @Test
@@ -290,8 +290,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      logContext.logPrefix,
-      () => MetadataVersion.MINIMUM_VERSION
+      logContext.logPrefix
     ) {
       override def processPartitionData(
         topicPartition: TopicPartition,
@@ -422,8 +421,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      logContext.logPrefix,
-      () => MetadataVersion.MINIMUM_VERSION
+      logContext.logPrefix
     )
 
     thread.addPartitions(Map(
@@ -514,8 +512,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       quota,
-      logContext.logPrefix,
-      () => MetadataVersion.MINIMUM_VERSION
+      logContext.logPrefix
     )
 
     thread.addPartitions(Map(
@@ -619,8 +616,7 @@ class ReplicaFetcherThreadTest {
       failedPartitions,
       replicaManager,
       replicaQuota,
-      logContext.logPrefix,
-      () => MetadataVersion.MINIMUM_VERSION)
+      logContext.logPrefix)
 
     val leaderEpoch = 1
 

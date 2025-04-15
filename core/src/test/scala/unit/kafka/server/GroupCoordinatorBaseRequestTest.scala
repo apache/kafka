@@ -117,10 +117,6 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     cluster.brokers.values.stream.allMatch(b => b.config.unstableApiVersionsEnabled)
   }
 
-  protected def isNewGroupCoordinatorEnabled: Boolean = {
-    cluster.brokers.values.stream.allMatch(b => b.config.isNewGroupCoordinatorEnabled)
-  }
-
   protected def getTopicIds: Map[String, Uuid] = {
     cluster.controllers().get(cluster.controllerIds().iterator().next()).controller.findAllTopicIds(ANONYMOUS_CONTEXT).get().asScala.toMap
   }
@@ -139,7 +135,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   }
 
   protected def closeProducer(): Unit = {
-    if( producer != null )
+    if(producer != null)
       producer.close()
   }
 

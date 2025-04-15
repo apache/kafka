@@ -911,6 +911,8 @@ project(':server') {
     testImplementation libs.mockitoCore
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
+    testImplementation project(':test-common:test-common-internal-api')
+    testImplementation project(':test-common:test-common-runtime')
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -1972,7 +1974,13 @@ project(':clients:clients-integration-tests') {
     testImplementation libs.slf4jApi
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
+    testImplementation project(':metadata')
+    testImplementation project(':server')
+    testImplementation project(':storage')
+    testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':clients').sourceSets.test.output
     implementation project(':server-common')
+    testImplementation project(':metadata')
     implementation project(':group-coordinator')
     implementation project(':transaction-coordinator')
 
@@ -2240,6 +2248,7 @@ project(':storage') {
     testImplementation project(':server')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':transaction-coordinator')
     testImplementation libs.hamcrest
     testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
@@ -2730,6 +2739,7 @@ project(':streams') {
             ':streams:upgrade-system-tests-37:test',
             ':streams:upgrade-system-tests-38:test',
             ':streams:upgrade-system-tests-39:test',
+            ':streams:upgrade-system-tests-40:test',
             ':streams:examples:test'
     ]
   )
@@ -3244,6 +3254,21 @@ project(':streams:upgrade-system-tests-39') {
   }
 }
 
+project(':streams:upgrade-system-tests-40') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-40"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_40
+    testRuntimeOnly libs.junitJupiter
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
 project(':jmh-benchmarks') {
 
   apply plugin: 'com.gradleup.shadow'
@@ -3712,7 +3737,7 @@ project(':connect:mirror') {
     testImplementation project(':core')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':server')
-    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':server-common')
 
 
     testRuntimeOnly project(':connect:runtime')

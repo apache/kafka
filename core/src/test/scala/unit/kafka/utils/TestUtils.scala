@@ -802,7 +802,7 @@ object TestUtils extends Logging {
       timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): Unit = {
     val expectedBrokerIds = brokers.map(_.config.brokerId).toSet
     waitUntilTrue(() => brokers.forall(server =>
-      expectedBrokerIds == server.dataPlaneRequestProcessor.metadataCache.getAliveBrokers().map(_.id).toSet
+      expectedBrokerIds.forall(server.dataPlaneRequestProcessor.metadataCache.hasAliveBroker(_))
     ), "Timed out waiting for broker metadata to propagate to all servers", timeout)
   }
 
@@ -821,17 +821,19 @@ object TestUtils extends Logging {
     waitUntilTrue(
       () => brokers.forall { broker =>
         if (expectedNumPartitions == 0) {
-          broker.metadataCache.numPartitions(topic).isEmpty
+          broker.metadataCache.numPartitions(topic).isEmpty()
         } else {
-          broker.metadataCache.numPartitions(topic).contains(expectedNumPartitions)
+          broker.metadataCache.numPartitions(topic).orElse(null) == expectedNumPartitions
         }
       },
       s"Topic [$topic] metadata not propagated after 60000 ms", waitTimeMs = 60000L)
 
     // since the metadata is propagated, we should get the same metadata from each server
     (0 until expectedNumPartitions).map { i =>
-      new TopicPartition(topic, i) -> brokers.head.metadataCache.getLeaderAndIsr(topic, i).getOrElse(
-          throw new IllegalStateException(s"Cannot get topic: $topic, partition: $i in server metadata cache"))
+      new TopicPartition(topic, i) -> {
+        brokers.head.metadataCache.getLeaderAndIsr(topic, i).orElseThrow(() =>
+          new IllegalStateException(s"Cannot get topic: $topic, partition: $i in server metadata cache"))
+      }
     }.toMap
   }
 
@@ -850,7 +852,7 @@ object TestUtils extends Logging {
       timeout: Long = JTestUtils.DEFAULT_MAX_WAIT_MS): LeaderAndIsr = {
     waitUntilTrue(
       () => brokers.forall { broker =>
-        broker.metadataCache.getLeaderAndIsr(topic, partition) match {
+        OptionConverters.toScala(broker.metadataCache.getLeaderAndIsr(topic, partition)) match {
           case Some(partitionState) => FetchRequest.isValidBrokerId(partitionState.leader)
           case _ => false
         }
@@ -858,8 +860,8 @@ object TestUtils extends Logging {
       "Partition [%s,%d] metadata not propagated after %d ms".format(topic, partition, timeout),
       waitTimeMs = timeout)
 
-    brokers.head.metadataCache.getLeaderAndIsr(topic, partition).getOrElse(
-      throw new IllegalStateException(s"Cannot get topic: $topic, partition: $partition in server metadata cache"))
+    brokers.head.metadataCache.getLeaderAndIsr(topic, partition).orElseThrow(() =>
+      new IllegalStateException(s"Cannot get topic: $topic, partition: $partition in server metadata cache"))
   }
 
   /**

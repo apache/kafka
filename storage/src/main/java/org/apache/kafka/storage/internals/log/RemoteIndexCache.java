@@ -44,7 +44,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -318,7 +317,7 @@ public class RemoteIndexCache implements Closeable {
                         internalCache.put(uuid, entry);
                     } else {
                         // Delete all of them if any one of those indexes is not available for a specific segment id
-                        tryAll(Arrays.asList(
+                        tryAll(List.of(
                                 () -> {
                                     Files.deleteIfExists(offsetIndexFile.toPath());
                                     return null;
@@ -509,7 +508,6 @@ public class RemoteIndexCache implements Closeable {
         public Entry(OffsetIndex offsetIndex, TimeIndex timeIndex, TransactionIndex txnIndex) {
             this.offsetIndex = offsetIndex;
             this.timeIndex = timeIndex;
-            // If txn index does not exist on the source, it's an empty file on the index entry
             this.txnIndex = txnIndex;
             this.entrySizeBytes = estimatedEntrySize();
         }
@@ -546,7 +544,7 @@ public class RemoteIndexCache implements Closeable {
         private long estimatedEntrySize() {
             entryLock.readLock().lock();
             try {
-                return offsetIndex.sizeInBytes() + timeIndex.sizeInBytes() + Files.size(txnIndex.path());
+                return offsetIndex.sizeInBytes() + timeIndex.sizeInBytes() + Files.size(txnIndex.file().toPath());
             } catch (IOException e) {
                 log.warn("Error occurred when estimating remote index cache entry bytes size, just set 0 firstly.", e);
                 return 0L;
@@ -599,7 +597,7 @@ public class RemoteIndexCache implements Closeable {
                 if (!cleanStarted) {
                     cleanStarted = true;
 
-                    List<StorageAction<Void, Exception>> actions = Arrays.asList(() -> {
+                    List<StorageAction<Void, Exception>> actions = List.of(() -> {
                         offsetIndex.deleteIfExists();
                         return null;
                     }, () -> {

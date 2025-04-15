@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.server.common;
 
-import java.util.Collections;
 import java.util.Map;
 
 public enum KRaftVersion implements FeatureVersion {
@@ -74,9 +73,9 @@ public enum KRaftVersion implements FeatureVersion {
     @Override
     public Map<String, Short> dependencies() {
         if (this.featureLevel == 0) {
-            return Collections.emptyMap();
+            return Map.of();
         } else {
-            return Collections.singletonMap(
+            return Map.of(
                 MetadataVersion.FEATURE_NAME, MetadataVersion.IBP_3_9_IV0.featureLevel());
         }
     }

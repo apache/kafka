@@ -25,7 +25,7 @@ import java.util.Optional
 import java.util.Properties
 import java.util.stream.IntStream
 import kafka.log.LogTestUtils
-import kafka.raft.{KafkaMetadataLog, MetadataLogConfig}
+import kafka.raft.KafkaMetadataLog
 import kafka.server.KafkaRaftServer
 import kafka.tools.DumpLogSegments.{OffsetsMessageParser, ShareGroupStateMessageParser, TimeIndexDumpErrors, TransactionLogMessageParser}
 import kafka.utils.TestUtils
@@ -43,7 +43,7 @@ import org.apache.kafka.coordinator.share.generated.{ShareSnapshotKey, ShareSnap
 import org.apache.kafka.coordinator.transaction.generated.{TransactionLogKey, TransactionLogValue}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.MetadataRecordSerde
-import org.apache.kafka.raft.{KafkaRaftClient, OffsetAndEpoch, VoterSetTest}
+import org.apache.kafka.raft.{KafkaRaftClient, MetadataLogConfig, OffsetAndEpoch, VoterSetTest}
 import org.apache.kafka.server.common.{ApiMessageAndVersion, KRaftVersion}
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.log.remote.metadata.storage.serialization.RemoteLogMetadataSerde
@@ -544,16 +544,16 @@ class DumpLogSegmentsTest {
       logDir,
       time,
       time.scheduler,
-      MetadataLogConfig(
-        logSegmentBytes = 100 * 1024,
-        logSegmentMinBytes = 100 * 1024,
-        logSegmentMillis = 10 * 1000,
-        retentionMaxBytes = 100 * 1024,
-        retentionMillis = 60 * 1000,
-        maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-        maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-        fileDeleteDelayMs = ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
-        nodeId = 1
+      new MetadataLogConfig(
+        100 * 1024,
+        100 * 1024,
+        10 * 1000,
+        100 * 1024,
+        60 * 1000,
+        KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+        KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
+        ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
+        1
       )
     )
 
@@ -1037,6 +1037,7 @@ class DumpLogSegmentsTest {
   @Test
   def testShareGroupStateMessageParser(): Unit = {
     val parser = new ShareGroupStateMessageParser()
+    val timestamp = System.currentTimeMillis
 
     // The key is mandatory.
     assertEquals(
@@ -1051,7 +1052,7 @@ class DumpLogSegmentsTest {
     assertEquals(
       (
         Some("{\"type\":\"0\",\"data\":{\"groupId\":\"gs1\",\"topicId\":\"Uj5wn_FqTXirEASvVZRY1w\",\"partition\":0}}"),
-        Some("{\"version\":\"0\",\"data\":{\"snapshotEpoch\":0,\"stateEpoch\":0,\"leaderEpoch\":0,\"startOffset\":0,\"stateBatches\":[{\"firstOffset\":0,\"lastOffset\":4,\"deliveryState\":2,\"deliveryCount\":1}]}}")
+        Some(s"{\"version\":\"0\",\"data\":{\"snapshotEpoch\":0,\"stateEpoch\":0,\"leaderEpoch\":0,\"startOffset\":0,\"createTimestamp\":$timestamp,\"writeTimestamp\":$timestamp,\"stateBatches\":[{\"firstOffset\":0,\"lastOffset\":4,\"deliveryState\":2,\"deliveryCount\":1}]}}")
       ),
       parser.parse(serializedRecord(
         new ShareSnapshotKey()
@@ -1063,6 +1064,8 @@ class DumpLogSegmentsTest {
           .setStateEpoch(0)
           .setLeaderEpoch(0)
           .setStartOffset(0)
+          .setCreateTimestamp(timestamp)
+          .setWriteTimestamp(timestamp)
           .setStateBatches(List[ShareSnapshotValue.StateBatch](
             new ShareSnapshotValue.StateBatch()
               .setFirstOffset(0)
