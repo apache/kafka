@@ -389,7 +389,7 @@ public class ShareConsumerImplTest {
             () -> consumer.poll(Duration.ofMillis(100))
         );
         assertTrue(
-            exception.getMessage().contains("There are unacknowledged records from the previous fetch"),
+            exception.getMessage().contains("All records must be acknowledged in explicit acknowledgement mode."),
             "Unexpected error message: " + exception.getMessage()
         );
 
@@ -401,7 +401,7 @@ public class ShareConsumerImplTest {
             () -> consumer.poll(Duration.ofMillis(100))
         );
         assertTrue(
-            exception.getMessage().contains("There are unacknowledged records from the previous fetch"),
+            exception.getMessage().contains("All records must be acknowledged in explicit acknowledgement mode."),
             "Unexpected error message: " + exception.getMessage()
         );
 
