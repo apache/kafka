@@ -285,7 +285,7 @@ public interface ClusterInstance {
 
     default void createTopic(String topicName, int partitions, short replicas, Map<String, String> props) throws InterruptedException {
         try (Admin admin = admin()) {
-            admin.createTopics(Collections.singletonList(new NewTopic(topicName, partitions, replicas).configs(props)));
+            admin.createTopics(List.of(new NewTopic(topicName, partitions, replicas).configs(props)));
             waitForTopic(topicName, partitions);
         }
     }

@@ -48,8 +48,8 @@ import java.util.stream.Collectors;
 
 import scala.jdk.javaapi.CollectionConverters;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.fail;
 
 @ClusterTestDefaults(
     types = {Type.KRAFT},
@@ -63,8 +63,8 @@ public class ListOffsetsIntegrationTest {
     private static final String CUSTOM_CONFIG_TOPIC = "custom_topic";
     private static final short REPLICAS = 1;
     private static final int PARTITION = 1;
+    private final ClusterInstance clusterInstance;
     private Admin adminClient;
-    private ClusterInstance clusterInstance;
 
     ListOffsetsIntegrationTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;
@@ -84,7 +84,7 @@ public class ListOffsetsIntegrationTest {
 
     @ClusterTest
     public void testListMaxTimestampWithEmptyLog() throws InterruptedException, ExecutionException {
-        ListOffsetsResultInfo maxTimestampOffset = runFetchOffsets(adminClient, OffsetSpec.maxTimestamp(), TOPIC);
+        ListOffsetsResultInfo maxTimestampOffset = runFetchOffsets(OffsetSpec.maxTimestamp(), TOPIC);
         assertEquals(ListOffsetsResponse.UNKNOWN_OFFSET, maxTimestampOffset.offset());
         assertEquals(ListOffsetsResponse.UNKNOWN_TIMESTAMP, maxTimestampOffset.timestamp());
     }
@@ -173,11 +173,7 @@ public class ListOffsetsIntegrationTest {
             producer.flush();
 
             for (Future<RecordMetadata> future : futures) {
-                try {
-                    future.get();
-                } catch (InterruptedException | ExecutionException e) {
-                    fail();
-                }
+                assertDoesNotThrow(() -> future.get());
             }
         }
     }
@@ -211,7 +207,7 @@ public class ListOffsetsIntegrationTest {
     private void verifyListOffsets(String topic, int expectedMaxTimestampOffset) throws ExecutionException, InterruptedException {
 
         // case 0: test the offsets from leader's append path
-        checkListOffsets(adminClient, topic, expectedMaxTimestampOffset);
+        checkListOffsets(topic, expectedMaxTimestampOffset);
 
         // case 1: test the offsets from follower's append path.
         // we make a follower be the new leader to handle the ListOffsetRequest
@@ -238,14 +234,14 @@ public class ListOffsetsIntegrationTest {
                 return false;
             }
         }, String.format("expected leader: %d but actual: %d", newLeader, clusterInstance.getLeaderBrokerId(new TopicPartition(topic, 0))));
-        checkListOffsets(adminClient, topic, expectedMaxTimestampOffset);
+        checkListOffsets(topic, expectedMaxTimestampOffset);
 
         // case 2: test the offsets from recovery path.
         // server will rebuild offset index according to log files if the index files are nonexistent
         Set<String> indexFiles = clusterInstance.brokers().values().stream().flatMap(broker ->
                 CollectionConverters.asJava(broker.config().logDirs()).stream()
         ).collect(Collectors.toUnmodifiableSet());
-        clusterInstance.brokers().values().stream().forEach(b -> b.shutdown());
+        clusterInstance.brokers().values().forEach(b -> b.shutdown());
         indexFiles.forEach(root -> {
             File[] files = new File(String.format("%s/$s-0", root, topic)).listFiles();
             if (files != null)
@@ -255,24 +251,24 @@ public class ListOffsetsIntegrationTest {
                 });
         });
 
-        clusterInstance.brokers().values().stream().forEach(b -> {
+        clusterInstance.brokers().values().forEach(b -> {
             if (b.isShutdown())
                 b.startup();
         });
 
         Utils.closeQuietly(adminClient, "ListOffsetsAdminClient");
         adminClient = clusterInstance.admin(Map.of(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, clusterInstance.bootstrapServers()));
-        checkListOffsets(adminClient, topic, expectedMaxTimestampOffset);
+        checkListOffsets(topic, expectedMaxTimestampOffset);
     }
 
-    private static void checkListOffsets(Admin admin, String topic, int expectedMaxTimestampOffset) throws ExecutionException, InterruptedException {
-        ListOffsetsResultInfo earliestOffset = runFetchOffsets(admin, OffsetSpec.earliest(), topic);
+    private void checkListOffsets(String topic, int expectedMaxTimestampOffset) throws ExecutionException, InterruptedException {
+        ListOffsetsResultInfo earliestOffset = runFetchOffsets(OffsetSpec.earliest(), topic);
         assertEquals(0, earliestOffset.offset());
 
-        ListOffsetsResultInfo latestOffset = runFetchOffsets(admin, OffsetSpec.latest(), topic);
+        ListOffsetsResultInfo latestOffset = runFetchOffsets(OffsetSpec.latest(), topic);
         assertEquals(3, latestOffset.offset());
 
-        ListOffsetsResultInfo maxTimestampOffset = runFetchOffsets(admin, OffsetSpec.maxTimestamp(), topic);
+        ListOffsetsResultInfo maxTimestampOffset = runFetchOffsets(OffsetSpec.maxTimestamp(), topic);
         assertEquals(expectedMaxTimestampOffset, maxTimestampOffset.offset());
 
         // the epoch is related to the returned offset.
@@ -280,8 +276,7 @@ public class ListOffsetsIntegrationTest {
         assertEquals(Optional.of(0), maxTimestampOffset.leaderEpoch());
     }
 
-    private static ListOffsetsResultInfo runFetchOffsets(Admin adminClient,
-                                                OffsetSpec offsetSpec,
+    private ListOffsetsResultInfo runFetchOffsets(OffsetSpec offsetSpec,
                                                 String topic) throws InterruptedException, ExecutionException {
         TopicPartition tp = new TopicPartition(topic, 0);
         return adminClient.listOffsets(Map.of(tp, offsetSpec), new ListOffsetsOptions()).all().get().get(tp);
