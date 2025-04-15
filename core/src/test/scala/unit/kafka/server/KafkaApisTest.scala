@@ -86,7 +86,7 @@ import org.apache.kafka.metadata.{ConfigRepository, MetadataCache, MockConfigRep
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.{BrokerFeatures, ClientMetricsManager}
+import org.apache.kafka.server.{ClientMetricsManager, SimpleApiVersionManager}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
@@ -179,13 +179,8 @@ class KafkaApisTest extends Logging {
     overrideProperties.foreach( p => properties.put(p._1, p._2))
     val config = new KafkaConfig(properties)
 
-    val listenerType = ListenerType.BROKER
-    val enabledApis = ApiKeys.apisForListener(listenerType).asScala
-
     val apiVersionManager = new SimpleApiVersionManager(
-      listenerType,
-      enabledApis,
-      BrokerFeatures.defaultSupportedFeatures(true),
+      ListenerType.BROKER,
       true,
       () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0))
 
@@ -1805,6 +1800,136 @@ class KafkaApisTest extends Logging {
         kafkaApis.close()
       }
     }
+  }
+
+  @Test
+  def testInitProducerIdWithEnable2PcFailsWithoutTwoPhaseCommitAcl(): Unit = {
+    val transactionalId = "txnId"
+    addTopicToMetadataCache("topic", numPartitions = 1)
+
+    val initProducerIdRequest = new InitProducerIdRequest.Builder(
+      new InitProducerIdRequestData()
+        .setTransactionalId(transactionalId)
+        .setTransactionTimeoutMs(TimeUnit.MINUTES.toMillis(15).toInt)
+        .setEnable2Pc(true)
+        .setProducerId(RecordBatch.NO_PRODUCER_ID)
+        .setProducerEpoch(RecordBatch.NO_PRODUCER_EPOCH)
+    ).build(6.toShort) // Use version 6 which supports enable2Pc
+
+    val request = buildRequest(initProducerIdRequest)
+    val requestLocal = RequestLocal.withThreadConfinedCaching
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+
+    // Allow WRITE but deny TWO_PHASE_COMMIT
+    when(authorizer.authorize(
+      any(),
+      ArgumentMatchers.eq(Collections.singletonList(new Action(
+        AclOperation.WRITE,
+        new ResourcePattern(ResourceType.TRANSACTIONAL_ID, transactionalId, PatternType.LITERAL),
+        1,
+        true,
+        true)))
+    )).thenReturn(Collections.singletonList(AuthorizationResult.ALLOWED))
+
+    when(authorizer.authorize(
+      any(),
+      ArgumentMatchers.eq(Collections.singletonList(new Action(
+        AclOperation.TWO_PHASE_COMMIT,
+        new ResourcePattern(ResourceType.TRANSACTIONAL_ID, transactionalId, PatternType.LITERAL),
+        1,
+        true,
+        true)))
+    )).thenReturn(Collections.singletonList(AuthorizationResult.DENIED))
+
+    val capturedResponse = ArgumentCaptor.forClass(classOf[InitProducerIdResponse])
+
+    kafkaApis.handleInitProducerIdRequest(request, requestLocal)
+
+    verify(requestChannel).sendResponse(
+      ArgumentMatchers.eq(request),
+      capturedResponse.capture(),
+      ArgumentMatchers.eq(None)
+    )
+
+    assertEquals(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.code, capturedResponse.getValue.data.errorCode)
+  }
+
+  @Test
+  def testInitProducerIdWithEnable2PcSucceedsWithTwoPhaseCommitAcl(): Unit = {
+    val transactionalId = "txnId"
+    addTopicToMetadataCache("topic", numPartitions = 1)
+
+    val initProducerIdRequest = new InitProducerIdRequest.Builder(
+      new InitProducerIdRequestData()
+        .setTransactionalId(transactionalId)
+        .setTransactionTimeoutMs(TimeUnit.MINUTES.toMillis(15).toInt)
+        .setEnable2Pc(true)
+        .setProducerId(RecordBatch.NO_PRODUCER_ID)
+        .setProducerEpoch(RecordBatch.NO_PRODUCER_EPOCH)
+    ).build(6.toShort) // Use version 6 which supports enable2Pc
+
+    val request = buildRequest(initProducerIdRequest)
+    val requestLocal = RequestLocal.withThreadConfinedCaching
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+
+    // Both permissions are allowed
+    when(authorizer.authorize(
+      any(),
+      ArgumentMatchers.eq(Collections.singletonList(new Action(
+        AclOperation.WRITE,
+        new ResourcePattern(ResourceType.TRANSACTIONAL_ID, transactionalId, PatternType.LITERAL),
+        1,
+        true,
+        true)))
+    )).thenReturn(Collections.singletonList(AuthorizationResult.ALLOWED))
+
+    when(authorizer.authorize(
+      any(),
+      ArgumentMatchers.eq(Collections.singletonList(new Action(
+        AclOperation.TWO_PHASE_COMMIT,
+        new ResourcePattern(ResourceType.TRANSACTIONAL_ID, transactionalId, PatternType.LITERAL),
+        1,
+        true,
+        true)))
+    )).thenReturn(Collections.singletonList(AuthorizationResult.ALLOWED))
+
+    val responseCallback = ArgumentCaptor.forClass(classOf[InitProducerIdResult => Unit])
+
+    when(txnCoordinator.handleInitProducerId(
+      ArgumentMatchers.eq(transactionalId),
+      anyInt(),
+      ArgumentMatchers.eq(true), // enable2Pc = true
+      anyBoolean(),
+      any(),
+      responseCallback.capture(),
+      ArgumentMatchers.eq(requestLocal)
+    )).thenAnswer(_ => responseCallback.getValue.apply(InitProducerIdResult(15L, 0.toShort, Errors.NONE)))
+
+    kafkaApis.handleInitProducerIdRequest(request, requestLocal)
+
+    // Verify coordinator was called with enable2Pc=true
+    verify(txnCoordinator).handleInitProducerId(
+      ArgumentMatchers.eq(transactionalId),
+      anyInt(),
+      ArgumentMatchers.eq(true), // enable2Pc = true
+      anyBoolean(),
+      any(),
+      any(),
+      ArgumentMatchers.eq(requestLocal)
+    )
+
+    val capturedResponse = ArgumentCaptor.forClass(classOf[InitProducerIdResponse])
+    verify(requestChannel).sendResponse(
+      ArgumentMatchers.eq(request),
+      capturedResponse.capture(),
+      ArgumentMatchers.eq(None)
+    )
+
+    assertEquals(Errors.NONE.code, capturedResponse.getValue.data.errorCode)
+    assertEquals(15L, capturedResponse.getValue.data.producerId)
+    assertEquals(0, capturedResponse.getValue.data.producerEpoch)
   }
 
   @Test
