@@ -243,7 +243,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     }
   }
 
-  def metadataNodeIDConfig = getInt(KRaftConfigs.NODE_ID_CONFIG)
   val serverMaxStartupTimeMs = getLong(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG)
 
   def messageMaxBytes = getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG)

@@ -231,11 +231,11 @@ class KafkaRaftManager[T](
       dataDir,
       time,
       scheduler,
-      config.metadataNodeIDConfig,
-      KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-      KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-      ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
-      config = MetadataLogConfig.fromConfig(config)
+      config = new MetadataLogConfig(config,
+        KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+        KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
+        ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT),
+      config.nodeId
     )
   }
 

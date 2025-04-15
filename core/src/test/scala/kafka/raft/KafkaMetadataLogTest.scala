@@ -80,13 +80,21 @@ final class KafkaMetadataLogTest {
     props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG, Int.box(10 * 1024))
     assertThrows(classOf[InvalidConfigurationException], () => {
       val kafkaConfig = KafkaConfig.fromProps(props)
-      val metadataConfig = MetadataLogConfig.fromConfig(kafkaConfig)
+      val metadataConfig = new MetadataLogConfig(
+        kafkaConfig,
+        KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+        KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
+        ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT)
       buildMetadataLog(tempDir, mockTime, metadataConfig)
     })
 
     props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, Int.box(10240))
     val kafkaConfig = KafkaConfig.fromProps(props)
-    val metadataConfig = MetadataLogConfig.fromConfig(kafkaConfig)
+    val metadataConfig = new MetadataLogConfig(
+      kafkaConfig,
+      KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+      KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
+      ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT)
     buildMetadataLog(tempDir, mockTime, metadataConfig)
   }
 
@@ -478,7 +486,7 @@ final class KafkaMetadataLogTest {
     assertEquals(log.earliestSnapshotId(), log.latestSnapshotId())
     log.close()
 
-    mockTime.sleep(log.deleteDelayMillis)
+    mockTime.sleep(config.deleteDelayMillis)
     // Assert that the log dir doesn't contain any older snapshots
     Files
       .walk(logDir, 1)
@@ -649,7 +657,7 @@ final class KafkaMetadataLogTest {
     assertEquals(greaterSnapshotId, secondLog.latestSnapshotId().get)
     assertEquals(3 * numberOfRecords, secondLog.startOffset)
     assertEquals(epoch, secondLog.lastFetchedEpoch)
-    mockTime.sleep(log.deleteDelayMillis)
+    mockTime.sleep(config.deleteDelayMillis)
 
     // Assert that the log dir doesn't contain any older snapshots
     Files
@@ -902,7 +910,10 @@ final class KafkaMetadataLogTest {
       512,
       10 * 1000,
       256,
-      60 * 1000
+      60 * 1000,
+      512,
+      DefaultMetadataLogConfig.maxFetchSizeInBytes,
+      ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
@@ -936,7 +947,10 @@ final class KafkaMetadataLogTest {
       1024,
       10 * 1000,
       1024,
-      60 * 1000
+      60 * 1000,
+      100,
+      DefaultMetadataLogConfig.maxBatchSizeInBytes,
+      DefaultMetadataLogConfig.maxFetchSizeInBytes
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
@@ -967,7 +981,10 @@ final class KafkaMetadataLogTest {
       10240,
       10 * 1000,
       10240,
-      60 * 1000
+      60 * 1000,
+      100,
+      DefaultMetadataLogConfig.maxFetchSizeInBytes,
+      DefaultMetadataLogConfig.deleteDelayMillis
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
@@ -1008,7 +1025,10 @@ final class KafkaMetadataLogTest {
       10240,
       10 * 1000,
       10240,
-      60 * 1000
+      60 * 1000,
+      200,
+      DefaultMetadataLogConfig.maxFetchSizeInBytes,
+      DefaultMetadataLogConfig.deleteDelayMillis
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
@@ -1064,7 +1084,10 @@ object KafkaMetadataLogTest {
     100 * 1024,
     10 * 1000,
     100 * 1024,
-    60 * 1000
+    60 * 1000,
+    KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
+    KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
+    ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT
   )
 
   def buildMetadataLogAndDir(
@@ -1084,11 +1107,8 @@ object KafkaMetadataLogTest {
       logDir,
       time,
       time.scheduler,
-      1,
-      KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-      KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-      ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
-      DefaultMetadataLogConfig
+      metadataLogConfig,
+      1
     )
 
     (logDir.toPath, metadataLog, metadataLogConfig)

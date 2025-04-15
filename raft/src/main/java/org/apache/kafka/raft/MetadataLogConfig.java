@@ -95,34 +95,51 @@ public class MetadataLogConfig {
     private final long logSegmentMillis;
     private final long retentionMaxBytes;
     private final long retentionMillis;
+    private final int maxBatchSizeInBytes;
+    private final int maxFetchSizeInBytes;
+    private final long deleteDelayMillis;
 
     /**
      * Configuration for the metadata log
-     *
-     * @param logSegmentBytes    The maximum size of a single metadata log file
+     * @param logSegmentBytes The maximum size of a single metadata log file
      * @param logSegmentMinBytes The minimum size of a single metadata log file
-     * @param logSegmentMillis   The maximum time before a new metadata log file is rolled out
-     * @param retentionMaxBytes  The size of the metadata log and snapshots before deleting old snapshots and log files
-     * @param retentionMillis    The time to keep a metadata log file or snapshot before deleting it
+     * @param logSegmentMillis The maximum time before a new metadata log file is rolled out
+     * @param retentionMaxBytes The size of the metadata log and snapshots before deleting old snapshots and log files
+     * @param retentionMillis The time to keep a metadata log file or snapshot before deleting it
+     * @param maxBatchSizeInBytes The largest record batch size allowed in the metadata log
+     * @param maxFetchSizeInBytes The maximum number of bytes to read when fetching from the metadata log
+     * @param deleteDelayMillis The amount of time to wait before deleting a file from the filesystem
      */
     public MetadataLogConfig(int logSegmentBytes,
                              int logSegmentMinBytes,
                              long logSegmentMillis,
                              long retentionMaxBytes,
-                             long retentionMillis) {
+                             long retentionMillis,
+                             int maxBatchSizeInBytes,
+                             int maxFetchSizeInBytes,
+                             long deleteDelayMillis) {
         this.logSegmentBytes = logSegmentBytes;
         this.logSegmentMinBytes = logSegmentMinBytes;
         this.logSegmentMillis = logSegmentMillis;
         this.retentionMaxBytes = retentionMaxBytes;
         this.retentionMillis = retentionMillis;
+        this.maxBatchSizeInBytes = maxBatchSizeInBytes;
+        this.maxFetchSizeInBytes = maxFetchSizeInBytes;
+        this.deleteDelayMillis = deleteDelayMillis;
     }
 
-    public static MetadataLogConfig fromConfig(AbstractConfig config) {
-        return new MetadataLogConfig(config.getInt(METADATA_LOG_SEGMENT_BYTES_CONFIG),
-                config.getInt(METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG),
-                config.getLong(METADATA_LOG_SEGMENT_MILLIS_CONFIG),
-                config.getLong(METADATA_MAX_RETENTION_BYTES_CONFIG),
-                config.getLong(METADATA_MAX_RETENTION_MILLIS_CONFIG));
+    public MetadataLogConfig(AbstractConfig config,
+                             int maxBatchSizeInBytes,
+                             int maxFetchSizeInBytes,
+                             long deleteDelayMillis) {
+        this.logSegmentBytes = config.getInt(METADATA_LOG_SEGMENT_BYTES_CONFIG);
+        this.logSegmentMinBytes = config.getInt(METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG);
+        this.logSegmentMillis = config.getLong(METADATA_LOG_SEGMENT_MILLIS_CONFIG);
+        this.retentionMaxBytes = config.getLong(METADATA_MAX_RETENTION_BYTES_CONFIG);
+        this.retentionMillis = config.getLong(METADATA_MAX_RETENTION_MILLIS_CONFIG);
+        this.maxBatchSizeInBytes = maxBatchSizeInBytes;
+        this.maxFetchSizeInBytes = maxFetchSizeInBytes;
+        this.deleteDelayMillis = deleteDelayMillis;
     }
 
     public int logSegmentBytes() {
@@ -143,5 +160,17 @@ public class MetadataLogConfig {
 
     public long retentionMillis() {
         return retentionMillis;
+    }
+
+    public int maxBatchSizeInBytes() {
+        return maxBatchSizeInBytes;
+    }
+
+    public int maxFetchSizeInBytes() {
+        return maxFetchSizeInBytes;
+    }
+
+    public long deleteDelayMillis() {
+        return deleteDelayMillis;
     }
 }

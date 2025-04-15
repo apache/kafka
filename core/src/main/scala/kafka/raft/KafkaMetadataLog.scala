@@ -59,9 +59,7 @@ final class KafkaMetadataLog private (
   snapshots: mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]],
   topicPartition: TopicPartition,
   config: MetadataLogConfig,
-  nodeId: Int,
-  maxFetchSizeInBytes: Int,
-  val deleteDelayMillis: Long
+  nodeId: Int
 ) extends ReplicatedLog with Logging {
 
   this.logIdent = s"[MetadataLog partition=$topicPartition, nodeId=$nodeId] "
@@ -73,7 +71,7 @@ final class KafkaMetadataLog private (
       case _ => throw new IllegalArgumentException(s"Unhandled read isolation $readIsolation")
     }
 
-    val fetchInfo = log.read(startOffset, maxFetchSizeInBytes, isolation, true)
+    val fetchInfo = log.read(startOffset, config.maxFetchSizeInBytes, isolation, true)
 
     new LogFetchInfo(
       fetchInfo.records,
@@ -557,7 +555,7 @@ final class KafkaMetadataLog private (
       scheduler.scheduleOnce(
         "delete-snapshot-files",
         () => KafkaMetadataLog.deleteSnapshotFiles(log.dir.toPath, expiredSnapshots),
-        deleteDelayMillis
+        config.deleteDelayMillis
       )
     }
   }
@@ -584,14 +582,11 @@ object KafkaMetadataLog extends Logging {
     dataDir: File,
     time: Time,
     scheduler: Scheduler,
-    nodeId: Int,
-    maxBatchSizeBytes: Int,
-    maxFetchSizeBytes: Int,
-    logDeleteDelayMs: Long,
-    config: MetadataLogConfig
+    config: MetadataLogConfig,
+    nodeId: Int
   ): KafkaMetadataLog = {
     val props = new Properties()
-    props.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxBatchSizeBytes.toString)
+    props.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, config.maxBatchSizeInBytes.toString)
     props.setProperty(TopicConfig.SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
     props.setProperty(TopicConfig.SEGMENT_MS_CONFIG, config.logSegmentMillis.toString)
     props.setProperty(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT.toString)
@@ -639,9 +634,7 @@ object KafkaMetadataLog extends Logging {
       recoverSnapshots(log),
       topicPartition,
       config,
-      nodeId,
-      maxFetchSizeBytes,
-      logDeleteDelayMs
+      nodeId
     )
 
     // Print a warning if users have overridden the internal config
