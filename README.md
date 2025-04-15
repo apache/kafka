@@ -99,7 +99,7 @@ fail due to code changes. You can just run:
  
     ./gradlew processMessages processTestMessages
 
-See [Apache Kafka Message Definitions](/clients/src/main/resources/common/message/README.md) for details on Apache Kafka message protocol.
+See [Apache Kafka Message Definitions](clients/src/main/resources/common/message/README.md) for details on Apache Kafka message protocol.
 
 ### Running a Kafka broker
 
