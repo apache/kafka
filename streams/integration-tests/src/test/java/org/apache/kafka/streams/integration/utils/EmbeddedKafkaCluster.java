@@ -18,6 +18,7 @@ package org.apache.kafka.streams.integration.utils;
 
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.Config;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.ListTopicsOptions;
@@ -41,6 +42,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.test.KafkaClusterTestKit;
 import org.apache.kafka.common.test.TestKitNodes;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
 import org.apache.kafka.network.SocketServerConfigs;
@@ -59,6 +61,7 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
@@ -138,6 +141,16 @@ public class EmbeddedKafkaCluster {
         }
         this.brokerConfig = brokerConfig;
         this.time = new MockTime(mockTimeMillisStart, mockTimeNanoStart);
+    }
+
+    public static EmbeddedKafkaCluster withStreamsRebalanceProtocol(final int numBrokers) {
+        return withStreamsRebalanceProtocol(numBrokers, new Properties());
+    }
+
+    public static EmbeddedKafkaCluster withStreamsRebalanceProtocol(final int numBrokers, final Properties props) {
+        props.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,streams");
+        props.setProperty(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true");
+        return new EmbeddedKafkaCluster(numBrokers, props);
     }
 
     public void start() {
@@ -431,6 +444,19 @@ public class EmbeddedKafkaCluster {
                 }
             }
             return properties;
+        } catch (final InterruptedException | ExecutionException e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public void setStandbyReplicas(final String groupId, final int numStandbyReplicas) {
+        try (final Admin adminClient = createAdminClient()) {
+            adminClient.incrementalAlterConfigs(
+                Map.of(
+                    new ConfigResource(ConfigResource.Type.GROUP, groupId),
+                    List.of(new AlterConfigOp(new ConfigEntry(GroupConfig.STREAMS_NUM_STANDBY_REPLICAS_CONFIG, String.valueOf(numStandbyReplicas)), AlterConfigOp.OpType.SET))
+                )
+            ).all().get();
         } catch (final InterruptedException | ExecutionException e) {
             throw new RuntimeException(e);
         }
