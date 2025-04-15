@@ -539,6 +539,11 @@ subprojects {
   }
 
   test {
+
+    doFirst {
+      jvmArgs("-javaagent:${configurations.mockitoAgent.asPath}")
+    }
+
     maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 
@@ -551,10 +556,6 @@ subprojects {
     systemProperty("kafka.test.run.new", project.findProperty("kafka.test.run.new"))
     systemProperty("kafka.test.run.flaky", project.findProperty("kafka.test.run.flaky"))
     systemProperty("kafka.test.verbose", project.findProperty("kafka.test.verbose"))
-
-    doFirst {
-      jvmArgs("-javaagent:${configurations.mockitoAgent.asPath}")
-    }
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
@@ -3356,6 +3357,7 @@ project(':jmh-benchmarks') {
     mainClass = "-jar"
 
     doFirst {
+      jvmArgs("-javaagent:${configurations.mockitoAgent.asPath}")
       if (System.getProperty("jmhArgs")) {
           args System.getProperty("jmhArgs").split(' ')
       }
