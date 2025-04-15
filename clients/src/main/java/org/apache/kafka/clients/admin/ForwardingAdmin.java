@@ -159,6 +159,7 @@ public class ForwardingAdmin implements Admin {
     }
 
     @Override
+    @Deprecated
     public ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
         return delegate.listConsumerGroups(options);
     }

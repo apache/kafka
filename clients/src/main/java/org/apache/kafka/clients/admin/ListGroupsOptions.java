@@ -17,6 +17,7 @@
 
 package org.apache.kafka.clients.admin;
 
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.annotation.InterfaceStability;
@@ -32,8 +33,19 @@ import java.util.Set;
 @InterfaceStability.Evolving
 public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
 
-    private Set<GroupState> groupStates = Collections.emptySet();
-    private Set<GroupType> types = Collections.emptySet();
+    private Set<GroupState> groupStates = Set.of();
+    private Set<GroupType> types = Set.of();
+    private Set<String> protocolTypes = Set.of();
+
+    /**
+     * Only consumer groups will be returned by listGroups().
+     * This operation sets filters on group type and protocol type which select consumer groups.
+     */
+    public ListGroupsOptions forConsumerGroups() {
+        this.types = Set.of(GroupType.CLASSIC, GroupType.CONSUMER);
+        this.protocolTypes = Set.of("", ConsumerProtocol.PROTOCOL_TYPE);
+        return this;
+    }
 
     /**
      * If groupStates is set, only groups in these states will be returned by listGroups().
@@ -42,6 +54,11 @@ public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
      */
     public ListGroupsOptions inGroupStates(Set<GroupState> groupStates) {
         this.groupStates = (groupStates == null || groupStates.isEmpty()) ? Collections.emptySet() : Set.copyOf(groupStates);
+        return this;
+    }
+
+    public ListGroupsOptions withProtocolTypes(Set<String> protocolTypes) {
+        this.protocolTypes = (protocolTypes == null || protocolTypes.isEmpty()) ? Set.of() : Set.copyOf(protocolTypes);
         return this;
     }
 
@@ -59,6 +76,13 @@ public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
      */
     public Set<GroupState> groupStates() {
         return groupStates;
+    }
+
+    /**
+     * Returns the list of protocol types that are requested or empty if no protocol types have been specified.
+     */
+    public Set<String> protocolTypes() {
+        return protocolTypes;
     }
 
     /**
