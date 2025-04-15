@@ -262,14 +262,24 @@ class ReplicaManager(val config: KafkaConfig,
   val random = new Random
   def getHighWatermarkCheckpoints: Map[String, OffsetCheckpointFile] = highWatermarkCheckpoints
 
+  private var numLogDirFailureHandlerExceptions = 0
+
   private class LogDirFailureHandler(name: String, haltBrokerOnDirFailure: Boolean) extends ShutdownableThread(name) {
     override def doWork(): Unit = {
       val newOfflineLogDir = logDirFailureChannel.takeNextOfflineLogDir()
+
+      // haltBrokerOnDirFailure is only for pre-Kafka-1.0. The following check won't pass for li-kafka-server since it's on 3.0.
       if (haltBrokerOnDirFailure) {
         fatal(s"Halting broker because dir $newOfflineLogDir is offline")
         Exit.halt(1)
       }
-      handleLogDirFailure(newOfflineLogDir)
+      try {
+        handleLogDirFailure(newOfflineLogDir)
+      } catch {
+        case t: Throwable =>
+          numLogDirFailureHandlerExceptions += 1
+          error(s"Error handling failures for log dir $newOfflineLogDir", t)
+      }
     }
   }
 
@@ -285,6 +295,7 @@ class ReplicaManager(val config: KafkaConfig,
   newGauge("AtMinIsrPartitionCount", () => leaderPartitionsIterator.count(_.isAtMinIsr))
   newGauge("OneAboveMinIsrPartitionCount", () => leaderPartitionsIterator.count(_.isOneAboveMinIsr))
   newGauge("ReassigningPartitions", () => reassigningPartitionsCount)
+  newGauge("NumLogDirFailureHandlerExceptions", () => numLogDirFailureHandlerExceptions)
   Partition.ISR_STATES_TO_CREATE_METRICS.foreach(c =>
     newGauge(s"${c.getSimpleName}PartitionCount", () => numOfPartitionOfIsrState(c))
   )

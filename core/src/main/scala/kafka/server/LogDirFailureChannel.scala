@@ -20,6 +20,7 @@ package kafka.server
 
 import java.io.IOException
 import java.util.concurrent.{ArrayBlockingQueue, ConcurrentHashMap}
+import kafka.metrics.KafkaMetricsGroup
 
 import kafka.utils.Logging
 
@@ -38,6 +39,9 @@ class LogDirFailureChannel(logDirNum: Int) extends Logging {
 
   private val offlineLogDirs = new ConcurrentHashMap[String, String]
   private val offlineLogDirQueue = new ArrayBlockingQueue[String](logDirNum)
+  private var numOfflineLogDirsDetected = 0;
+
+  KafkaMetricsGroup.newGauge("NumOfflineLogDirsDetected", () => numOfflineLogDirsDetected)
 
   def hasOfflineLogDir(logDir: String): Boolean = {
     offlineLogDirs.containsKey(logDir)
@@ -48,6 +52,7 @@ class LogDirFailureChannel(logDirNum: Int) extends Logging {
    * set of offline log dirs and enqueue it to the logDirFailureEvent queue
    */
   def maybeAddOfflineLogDir(logDir: String, msg: => String, e: IOException): Unit = {
+    numOfflineLogDirsDetected += 1;
     error(msg, e)
     if (offlineLogDirs.putIfAbsent(logDir, logDir) == null)
       offlineLogDirQueue.add(logDir)
