@@ -54,25 +54,6 @@ object DynamicConfig {
     def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(brokerConfigs, props, customPropsAllowed = true)
   }
 
-  object Client {
-    private val clientConfigs = QuotaConfig.userAndClientQuotaConfigs()
-
-    def configKeys: util.Map[String, ConfigDef.ConfigKey] = clientConfigs.configKeys
-
-    def names: util.Set[String] = clientConfigs.names
-
-    def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(clientConfigs, props, customPropsAllowed = false)
-  }
-
-  object User {
-    private val userConfigs = QuotaConfig.scramMechanismsPlusUserAndClientQuotaConfigs()
-
-    def configKeys: util.Map[String, ConfigDef.ConfigKey] = userConfigs.configKeys
-
-    def names: util.Set[String] = userConfigs.names
-
-    def validate(props: Properties): util.Map[String, AnyRef] = DynamicConfig.validate(userConfigs, props, customPropsAllowed = false)
-  }
 
   object Ip {
     private val ipConfigs = QuotaConfig.ipConfigs
