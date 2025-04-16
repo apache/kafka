@@ -247,7 +247,8 @@ class KafkaRaftManager[T](
       controllerListenerName,
       config.saslMechanismControllerProtocol,
       time,
-      logContext
+      logContext,
+      metrics
     )
 
     val metricGroupPrefix = "raft-channel"

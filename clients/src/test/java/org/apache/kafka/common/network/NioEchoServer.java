@@ -126,11 +126,11 @@ public final class NioEchoServer extends Thread {
                 }
             }
             LogContext logContext = new LogContext();
+            this.metrics = new Metrics();
             if (channelBuilder == null)
                 channelBuilder = ChannelBuilders.serverChannelBuilder(listenerName, false,
                         securityProtocol, config, credentialCache, tokenCache, time, logContext,
-                        version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER));
-            this.metrics = new Metrics();
+                        version -> TestUtils.defaultApiVersionsResponse(ApiMessageType.ListenerType.BROKER), metrics);
             this.selector = new Selector(10000, failedAuthenticationDelayMs, metrics, time,
                     "MetricGroup", channelBuilder, logContext);
             acceptorThread = new AcceptorThread();

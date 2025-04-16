@@ -19,6 +19,9 @@ package org.apache.kafka.common.security.authenticator;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.types.Password;
+import org.apache.kafka.common.internals.Plugin;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.network.ConnectionMode;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
@@ -53,20 +56,30 @@ public class LoginManager {
     // dynamic configs (broker or client)
     private static final Map<LoginMetadata<Password>, LoginManager> DYNAMIC_INSTANCES = new HashMap<>();
 
-    private final Login login;
+    private final Plugin<Login> loginPlugin;
     private final LoginMetadata<?> loginMetadata;
     private final AuthenticateCallbackHandler loginCallbackHandler;
     private int refCount;
 
-    private LoginManager(JaasContext jaasContext, String saslMechanism, Map<String, ?> configs,
-                 LoginMetadata<?> loginMetadata) throws LoginException {
+    private LoginManager(
+        JaasContext jaasContext, 
+        String saslMechanism, 
+        Map<String, ?> configs,
+        LoginMetadata<?> loginMetadata,
+        ConnectionMode connectionMode,
+        Metrics metrics
+    ) throws LoginException {
         this.loginMetadata = loginMetadata;
-        this.login = Utils.newInstance(loginMetadata.loginClass);
+        Login login = Utils.newInstance(loginMetadata.loginClass);
+        if (connectionMode == ConnectionMode.SERVER)  
+            this.loginPlugin = Plugin.wrapInstance(login, metrics, SaslConfigs.SASL_LOGIN_CLASS, "mechanism", saslMechanism);
+        else
+            this.loginPlugin = Plugin.wrapInstance(login, metrics, SaslConfigs.SASL_LOGIN_CLASS);
         loginCallbackHandler = Utils.newInstance(loginMetadata.loginCallbackClass);
         try {
             loginCallbackHandler.configure(configs, saslMechanism, jaasContext.configurationEntries());
-            login.configure(configs, jaasContext.name(), jaasContext.configuration(), loginCallbackHandler);
-            login.login();
+            loginPlugin.get().configure(configs, jaasContext.name(), jaasContext.configuration(), loginCallbackHandler);
+            loginPlugin.get().login();
         } catch (Exception e) {
             closeResources();
             throw e;
@@ -94,11 +107,17 @@ public class LoginManager {
      *                      chosen based on this mechanism.
      * @param defaultLoginClass Default login class to use if an override is not specified in `configs`
      * @param configs Config options used to configure `Login` if a new login manager is created.
+     * @param connectionMode Connection mode for SSL and SASL connections.
      *
      */
-    public static LoginManager acquireLoginManager(JaasContext jaasContext, String saslMechanism,
-                                                   Class<? extends Login> defaultLoginClass,
-                                                   Map<String, ?> configs) throws LoginException {
+    public static LoginManager acquireLoginManager(
+        JaasContext jaasContext, 
+        String saslMechanism,
+        Class<? extends Login> defaultLoginClass,
+        Map<String, ?> configs,
+        ConnectionMode connectionMode,
+        Metrics metrics
+    ) throws LoginException {
         Class<? extends Login> loginClass = configuredClassOrDefault(configs, jaasContext,
                 saslMechanism, SaslConfigs.SASL_LOGIN_CLASS, defaultLoginClass);
         Class<? extends AuthenticateCallbackHandler> defaultLoginCallbackHandlerClass = OAuthBearerLoginModule.OAUTHBEARER_MECHANISM
@@ -113,14 +132,14 @@ public class LoginManager {
                 LoginMetadata<Password> loginMetadata = new LoginMetadata<>(jaasConfigValue, loginClass, loginCallbackClass, configs);
                 loginManager = DYNAMIC_INSTANCES.get(loginMetadata);
                 if (loginManager == null) {
-                    loginManager = new LoginManager(jaasContext, saslMechanism, configs, loginMetadata);
+                    loginManager = new LoginManager(jaasContext, saslMechanism, configs, loginMetadata, connectionMode, metrics);
                     DYNAMIC_INSTANCES.put(loginMetadata, loginManager);
                 }
             } else {
                 LoginMetadata<String> loginMetadata = new LoginMetadata<>(jaasContext.name(), loginClass, loginCallbackClass, configs);
                 loginManager = STATIC_INSTANCES.get(loginMetadata);
                 if (loginManager == null) {
-                    loginManager = new LoginManager(jaasContext, saslMechanism, configs, loginMetadata);
+                    loginManager = new LoginManager(jaasContext, saslMechanism, configs, loginMetadata, connectionMode, metrics);
                     STATIC_INSTANCES.put(loginMetadata, loginManager);
                 }
             }
@@ -130,11 +149,11 @@ public class LoginManager {
     }
 
     public Subject subject() {
-        return login.subject();
+        return loginPlugin.get().subject();
     }
 
     public String serviceName() {
-        return login.serviceName();
+        return loginPlugin.get().serviceName();
     }
 
     // Only for testing
@@ -161,7 +180,7 @@ public class LoginManager {
                 } else {
                     STATIC_INSTANCES.remove(loginMetadata);
                 }
-                login.close();
+                Utils.closeQuietly(loginPlugin, "login plugin");
                 loginCallbackHandler.close();
             }
             --refCount;
@@ -185,7 +204,7 @@ public class LoginManager {
         try {
             List<Callable<Void>> tasks = asList(
                     () -> {
-                        login.close();
+                        Utils.closeQuietly(loginPlugin, "login plugin");
                         return null;
                     },
                     () -> {
@@ -203,9 +222,9 @@ public class LoginManager {
     public static void closeAll() {
         synchronized (LoginManager.class) {
             for (LoginMetadata<String> key : new ArrayList<>(STATIC_INSTANCES.keySet()))
-                STATIC_INSTANCES.remove(key).login.close();
+                Utils.closeQuietly(STATIC_INSTANCES.remove(key).loginPlugin, "login plugin");
             for (LoginMetadata<Password> key : new ArrayList<>(DYNAMIC_INSTANCES.keySet()))
-                DYNAMIC_INSTANCES.remove(key).login.close();
+                Utils.closeQuietly(DYNAMIC_INSTANCES.remove(key).loginPlugin, "login plugin");
         }
     }
 

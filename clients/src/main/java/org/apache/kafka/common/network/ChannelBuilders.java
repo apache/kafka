@@ -21,6 +21,7 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.SslClientAuth;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.auth.KafkaPrincipalBuilder;
@@ -57,19 +58,21 @@ public class ChannelBuilders {
      * @param clientSaslMechanism SASL mechanism if mode is CLIENT, ignored otherwise
      * @param time the time instance
      * @param logContext the log context instance
+     * @param metrics the metrics instance
      *
      * @return the configured `ChannelBuilder`
      * @throws IllegalArgumentException if `mode` invariants described above is not maintained
      */
     public static ChannelBuilder clientChannelBuilder(
-            SecurityProtocol securityProtocol,
-            JaasContext.Type contextType,
-            AbstractConfig config,
-            ListenerName listenerName,
-            String clientSaslMechanism,
-            Time time,
-            LogContext logContext) {
-
+        SecurityProtocol securityProtocol,
+        JaasContext.Type contextType,
+        AbstractConfig config,
+        ListenerName listenerName,
+        String clientSaslMechanism,
+        Time time,
+        LogContext logContext,
+        Metrics metrics
+    ) {
         if (securityProtocol == SecurityProtocol.SASL_PLAINTEXT || securityProtocol == SecurityProtocol.SASL_SSL) {
             if (contextType == null)
                 throw new IllegalArgumentException("`contextType` must be non-null if `securityProtocol` is `" + securityProtocol + "`");
@@ -77,7 +80,7 @@ public class ChannelBuilders {
                 throw new IllegalArgumentException("`clientSaslMechanism` must be non-null in client mode if `securityProtocol` is `" + securityProtocol + "`");
         }
         return create(securityProtocol, ConnectionMode.CLIENT, contextType, config, listenerName, false, clientSaslMechanism,
-            null, null, time, logContext, null);
+            null, null, time, logContext, null, metrics);
     }
 
     /**
@@ -90,35 +93,42 @@ public class ChannelBuilders {
      * @param time the time instance
      * @param logContext the log context instance
      * @param apiVersionSupplier supplier for ApiVersions responses sent prior to authentication
+     * @param metrics the metrics instance
      *
      * @return the configured `ChannelBuilder`
      */
-    public static ChannelBuilder serverChannelBuilder(ListenerName listenerName,
-                                                      boolean isInterBrokerListener,
-                                                      SecurityProtocol securityProtocol,
-                                                      AbstractConfig config,
-                                                      CredentialCache credentialCache,
-                                                      DelegationTokenCache tokenCache,
-                                                      Time time,
-                                                      LogContext logContext,
-                                                      Function<Short, ApiVersionsResponse> apiVersionSupplier) {
+    public static ChannelBuilder serverChannelBuilder(
+        ListenerName listenerName,
+        boolean isInterBrokerListener,
+        SecurityProtocol securityProtocol,
+        AbstractConfig config,
+        CredentialCache credentialCache,
+        DelegationTokenCache tokenCache,
+        Time time,
+        LogContext logContext,
+        Function<Short, ApiVersionsResponse> apiVersionSupplier,
+        Metrics metrics
+    ) {
         return create(securityProtocol, ConnectionMode.SERVER, JaasContext.Type.SERVER, config, listenerName,
                 isInterBrokerListener, null, credentialCache, tokenCache, time, logContext,
-                apiVersionSupplier);
+                apiVersionSupplier, metrics);
     }
 
-    private static ChannelBuilder create(SecurityProtocol securityProtocol,
-                                         ConnectionMode connectionMode,
-                                         JaasContext.Type contextType,
-                                         AbstractConfig config,
-                                         ListenerName listenerName,
-                                         boolean isInterBrokerListener,
-                                         String clientSaslMechanism,
-                                         CredentialCache credentialCache,
-                                         DelegationTokenCache tokenCache,
-                                         Time time,
-                                         LogContext logContext,
-                                         Function<Short, ApiVersionsResponse> apiVersionSupplier) {
+    private static ChannelBuilder create(
+        SecurityProtocol securityProtocol,
+        ConnectionMode connectionMode,
+        JaasContext.Type contextType,
+        AbstractConfig config,
+        ListenerName listenerName,
+        boolean isInterBrokerListener,
+        String clientSaslMechanism,
+        CredentialCache credentialCache,
+        DelegationTokenCache tokenCache,
+        Time time,
+        LogContext logContext,
+        Function<Short, ApiVersionsResponse> apiVersionSupplier, 
+        Metrics metrics
+    ) {
         Map<String, Object> configs = channelBuilderConfigs(config, listenerName);
 
         ChannelBuilder channelBuilder;
@@ -176,7 +186,8 @@ public class ChannelBuilders {
                         sslClientAuthOverride,
                         time,
                         logContext,
-                        apiVersionSupplier);
+                        apiVersionSupplier,
+                        metrics);
                 break;
             case PLAINTEXT:
                 channelBuilder = new PlaintextChannelBuilder(listenerName);

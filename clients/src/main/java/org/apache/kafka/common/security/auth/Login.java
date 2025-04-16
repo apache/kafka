@@ -25,6 +25,14 @@ import javax.security.auth.login.LoginException;
 
 /**
  * Login interface for authentication.
+ * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the callback to register metrics. 
+ * The following tags are automatically added to all metrics registered: 
+ * <ul>
+ *     <li><code>config</code> set to <code>sasl.login.class</code></li>
+ *     <li><code>class</code> set to the Login class name</li>
+ *     <li><code>mechanism</code> set to SASL mechanism</li>
+ * </ul>
+ * Note: the <code>mechanism</code> tag is only set if the login module is used by servers.
  */
 public interface Login {
 

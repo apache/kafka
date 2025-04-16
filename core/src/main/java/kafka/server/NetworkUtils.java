@@ -47,7 +47,8 @@ public class NetworkUtils {
             config.interBrokerListenerName(),
             config.saslMechanismInterBrokerProtocol(),
             time,
-            logContext
+            logContext,
+            metrics
         );
 
         if (channelBuilder instanceof Reconfigurable) {

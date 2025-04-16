@@ -56,6 +56,7 @@
     <allow class="org.apache.kafka.common.message.ApiMessageType" exact-match="true" />
     <disallow pkg="org.apache.kafka.clients" />
     <allow pkg="org.apache.kafka.common" exact-match="true" />
+    <allow pkg="org.apache.kafka.common.metrics" />
     <allow pkg="org.apache.kafka.common.annotation" />
     <allow pkg="org.apache.kafka.common.config" exact-match="true" />
     <allow pkg="org.apache.kafka.common.internals" exact-match="true" />

@@ -124,7 +124,8 @@ class NodeToControllerChannelManagerImpl(
         controllerInfo.listenerName,
         controllerInfo.saslMechanism,
         time,
-        logContext
+        logContext,
+        metrics
       )
       channelBuilder match {
         case reconfigurable: Reconfigurable => config.addReconfigurable(reconfigurable)

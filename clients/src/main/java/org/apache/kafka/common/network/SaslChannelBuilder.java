@@ -22,6 +22,7 @@ import org.apache.kafka.common.config.SaslConfigs;
 import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs;
 import org.apache.kafka.common.memory.MemoryPool;
+import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.requests.ApiVersionsResponse;
 import org.apache.kafka.common.security.JaasContext;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
@@ -96,6 +97,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
     private final Time time;
     private final LogContext logContext;
     private final Logger log;
+    private final Metrics metrics;
 
     private SslFactory sslFactory;
     private Map<String, ?> configs;
@@ -112,7 +114,8 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                               String sslClientAuthOverride,
                               Time time,
                               LogContext logContext,
-                              Function<Short, ApiVersionsResponse> apiVersionSupplier) {
+                              Function<Short, ApiVersionsResponse> apiVersionSupplier,
+                              Metrics metrics) {
         this.connectionMode = connectionMode;
         this.jaasContexts = jaasContexts;
         this.loginManagers = new HashMap<>(jaasContexts.size());
@@ -130,6 +133,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
         this.logContext = logContext;
         this.log = logContext.logger(getClass());
         this.apiVersionSupplier = apiVersionSupplier;
+        this.metrics = metrics;
 
         if (connectionMode == ConnectionMode.SERVER && apiVersionSupplier == null) {
             throw new IllegalArgumentException("Server channel builder must provide an ApiVersionResponse supplier");
@@ -167,7 +171,7 @@ public class SaslChannelBuilder implements ChannelBuilder, ListenerReconfigurabl
                 String mechanism = entry.getKey();
                 // With static JAAS configuration, use KerberosLogin if Kerberos is enabled. With dynamic JAAS configuration,
                 // use KerberosLogin only for the LoginContext corresponding to GSSAPI
-                LoginManager loginManager = LoginManager.acquireLoginManager(entry.getValue(), mechanism, defaultLoginClass, configs);
+                LoginManager loginManager = LoginManager.acquireLoginManager(entry.getValue(), mechanism, defaultLoginClass, configs, connectionMode, metrics);
                 loginManagers.put(mechanism, loginManager);
                 Subject subject = loginManager.subject();
                 subjects.put(mechanism, subject);

@@ -64,7 +64,8 @@ object TransactionMarkerChannelManager {
       config.interBrokerListenerName,
       config.saslMechanismInterBrokerProtocol,
       time,
-      logContext
+      logContext,
+      metrics
     )
     channelBuilder match {
       case reconfigurable: Reconfigurable => config.addReconfigurable(reconfigurable)

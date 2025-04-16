@@ -872,7 +872,8 @@ private[kafka] class Processor(
       credentialProvider.tokenCache,
       time,
       logContext,
-      version => apiVersionManager.apiVersionResponse(0, version < 4)
+      version => apiVersionManager.apiVersionResponse(0, version < 4),
+      metrics
     )
   )
 

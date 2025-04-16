@@ -111,14 +111,18 @@ public final class ClientUtils {
      * @param config client configs
      * @param time the time implementation
      * @param logContext the logging context
+     * @param metrics the metrics instance
      *
      * @return configured ChannelBuilder based on the configs.
      */
-    public static ChannelBuilder createChannelBuilder(AbstractConfig config, Time time, LogContext logContext) {
+    public static ChannelBuilder createChannelBuilder(AbstractConfig config, 
+                                                      Time time, 
+                                                      LogContext logContext,
+                                                      Metrics metrics) {
         SecurityProtocol securityProtocol = SecurityProtocol.forName(config.getString(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG));
         String clientSaslMechanism = config.getString(SaslConfigs.SASL_MECHANISM);
         return ChannelBuilders.clientChannelBuilder(securityProtocol, JaasContext.Type.CLIENT, config, null,
-                clientSaslMechanism, time, logContext);
+                clientSaslMechanism, time, logContext, metrics);
     }
 
     static List<InetAddress> resolve(String host, HostResolver hostResolver) throws UnknownHostException {
@@ -221,7 +225,7 @@ public final class ClientUtils {
         Selector selector = null;
 
         try {
-            channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext);
+            channelBuilder = ClientUtils.createChannelBuilder(config, time, logContext, metrics);
             selector = new Selector(config.getLong(CommonClientConfigs.CONNECTIONS_MAX_IDLE_MS_CONFIG),
                     metrics,
                     time,
