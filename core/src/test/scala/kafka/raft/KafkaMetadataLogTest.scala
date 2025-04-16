@@ -695,7 +695,17 @@ final class KafkaMetadataLogTest {
     val leaderEpoch = 5
     val maxBatchSizeInBytes = 16384
     val recordSize = 64
-    val log = buildMetadataLog(tempDir, mockTime, DefaultMetadataLogConfig)
+    val config = new MetadataLogConfig(
+      DefaultMetadataLogConfig.logSegmentBytes,
+      DefaultMetadataLogConfig.logSegmentMinBytes,
+      DefaultMetadataLogConfig.logSegmentMillis,
+      DefaultMetadataLogConfig.retentionMaxBytes,
+      DefaultMetadataLogConfig.retentionMillis,
+      maxBatchSizeInBytes,
+      DefaultMetadataLogConfig.maxFetchSizeInBytes,
+      DefaultMetadataLogConfig.deleteDelayMillis
+    )
+    val log = buildMetadataLog(tempDir, mockTime, config)
 
     val oversizeBatch = buildFullBatch(leaderEpoch, recordSize, maxBatchSizeInBytes + recordSize)
     assertThrows(classOf[RecordTooLargeException], () => {
