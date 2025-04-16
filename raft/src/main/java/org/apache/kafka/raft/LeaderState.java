@@ -92,7 +92,16 @@ public class LeaderState<T> implements EpochState {
     // This is volatile because resignation can be requested from an external thread.
     private volatile boolean resignRequested = false;
 
-    // TODO: document this
+    /* Used to coordinate the upgrade of the kraft.version from 0 to 1. The upgrade is triggered by
+     * the clients to RaftClient.
+     *  1. if the kraft version is 0, the starting state is Voters. The voter set is the voters in
+     *     the static voter set with the leader updated.
+     *  2. as the leader receives UpdateRaftVoter requests, it updates the associated Voters. Only
+     *     after all of the voters have been updated will upgrades successfully complete.
+     *  3. a client of RaftClient triggers the upgrade and transition this state to Version.
+     *
+     * All transition are coordinated using optimistic locking by always calling AtomicReference#compareAndSet
+     */
     private final AtomicReference<KRaftVersionUpgrade> kraftVersionUpgradeState = new AtomicReference<>(
         KRaftVersionUpgrade.empty()
     );
@@ -438,10 +447,6 @@ public class LeaderState<T> implements EpochState {
         return kraftVersionUpgradeState.compareAndSet(oldVoters, newVoters);
     }
 
-    public void resetUpgradedKRaftVersion() {
-        kraftVersionUpgradeState.set(KRaftVersionUpgrade.empty());
-    }
-
     public Optional<KRaftVersionUpgrade.Voters> volatileVoters() {
         return kraftVersionUpgradeState.get().toVoters();
     }
@@ -471,42 +476,39 @@ public class LeaderState<T> implements EpochState {
         this.resignRequested = true;
     }
 
-    // TODO: document this. It is important to state that this method is called by a thread that is not the kraft driver
+    /**
+     * Upgrade the kraft version.
+     *
+     * This methods upgradeds the kraft version to {@code newVersion}. If the version is already
+     * {@code newVersion}, this is a noop operation.
+     *
+     * KRaft only supports upgrades, so {@code newVersion} must be greater than or equal to curent
+     * kraft version {@code persistedVersion}.
+     *
+     * For the upgrade to succeed all of the voters in the voter set must support the new kraft
+     * version. The upgrade from kraft version 0 to kraft version 1 generate one control batch
+     * with one control record setting the kraft version to 1 and one voters record setting the
+     * updated voter set.
+     *
+     * When {@code validateOnly} is true only the validation is perform and the control records are
+     * not generated.
+     *
+     * @param epoch the current epoch
+     * @param newVersion the new kraft version
+     * @param persistedVersion the kraft version persisted to disk
+     * @param persistedVoters the set of voters persisted to disk
+     * @param validateOnly determine if only validation should be performed
+     * @param currentTimeMs the current time
+     */
     public boolean maybeAppendUpgradedKRaftVersion(
         int epoch,
         KRaftVersion newVersion,
         KRaftVersion persistedVersion,
         VoterSet persistedVoters,
+        boolean validateOnly,
         long currentTimeMs
     ) {
-        if (epoch < epoch()) {
-            throw new NotLeaderException(
-                String.format(
-                    "Upgrade kraft version failed because the given epoch %s is stale. Current leader epoch is %s",
-                    epoch,
-                    this.epoch
-                )
-            );
-        } else if (epoch > epoch()) {
-            throw new IllegalArgumentException(
-                String.format(
-                    "Attempt to append from epoch %s which is larger than the current epoch of %s",
-                    epoch,
-                    this.epoch
-                )
-            );
-        } else if (persistedVersion.equals(newVersion)) {
-            return false;
-        } else if (persistedVersion.isMoreThan(newVersion)) {
-            throw new InvalidUpdateVersionException(
-                String.format(
-                    "Invalid upgrade of %s from version %s to %s",
-                    KRaftVersion.FEATURE_NAME,
-                    persistedVersion,
-                    newVersion
-                )
-            );
-        }
+        validateEpoch(epoch);
 
         var pendingVersion = kraftVersionUpgradeState.get().toVersion();
         if (pendingVersion.isPresent()) {
@@ -523,10 +525,22 @@ public class LeaderState<T> implements EpochState {
                     )
                 );
             }
+        } else if (persistedVersion.equals(newVersion)) {
+            return false;
+        } else if (persistedVersion.isMoreThan(newVersion)) {
+            throw new InvalidUpdateVersionException(
+                String.format(
+                    "Invalid upgrade of %s from version %s to %s because the new version is a downgrade",
+                    KRaftVersion.FEATURE_NAME,
+                    persistedVersion,
+                    newVersion
+                )
+            );
         }
 
+        // Upgrade to kraft.verion 1 is only supported; this needs to change when kraft.version 2 is added
         var inMemoryVoters = kraftVersionUpgradeState.get().toVoters().orElseThrow(() ->
-            new IllegalStateException(
+            new InvalidUpdateVersionException(
                 String.format(
                     "Invalid upgrade of %s from version %s to %s",
                     KRaftVersion.FEATURE_NAME,
@@ -538,9 +552,10 @@ public class LeaderState<T> implements EpochState {
         if (!inMemoryVoters.voters().voterIds().equals(persistedVoters.voterIds())) {
             throw new IllegalStateException(
                 String.format(
-                    "Invalid upgrade of %s to %s because not all of the supported versions are known",
+                    "Unable to update %s due to missing voters %s compared to %s",
                     KRaftVersion.FEATURE_NAME,
-                    newVersion
+                    inMemoryVoters.voters().voterIds(),
+                    persistedVoters.voterIds()
                 )
             );
         } else if (!inMemoryVoters.voters().supportsVersion(newVersion)) {
@@ -551,7 +566,13 @@ public class LeaderState<T> implements EpochState {
                     newVersion
                 )
             );
-        } else if (inMemoryVoters.voters().voterKeys().stream().anyMatch(voterKey -> voterKey.directoryId().isEmpty())) {
+        } else if (
+            inMemoryVoters
+                .voters()
+                .voterKeys()
+                .stream()
+                .anyMatch(voterKey -> voterKey.directoryId().isEmpty())
+        ) {
             throw new IllegalStateException(
                 String.format(
                     "Directory id must be known for all of the voters: %s",
@@ -560,54 +581,76 @@ public class LeaderState<T> implements EpochState {
             );
         }
 
-        /* Note that this only supports upgrades from kraft.version 0 to kraft.version 1. When
-         * kraft.version 2 is added, this logic needs to be revisited
-         */
-        var successful = kraftVersionUpgradeState.compareAndSet(
-            inMemoryVoters,
-            new KRaftVersionUpgrade.Version(newVersion)
-        );
-        if (!successful) {
-            throw new InvalidUpdateVersionException(
-                String.format(
-                    "Unable to upgrade version for %s to %s due to changing voters",
-                    KRaftVersion.FEATURE_NAME,
-                    newVersion
-                )
+        if (!validateOnly) {
+            /* Note that this only supports upgrades from kraft.version 0 to kraft.version 1. When
+             * kraft.version 2 is added, this logic needs to be revisited
+             */
+            var successful = kraftVersionUpgradeState.compareAndSet(
+                inMemoryVoters,
+                new KRaftVersionUpgrade.Version(newVersion)
             );
-        }
+            if (!successful) {
+                throw new InvalidUpdateVersionException(
+                    String.format(
+                        "Unable to upgrade version for %s to %s due to changing voters",
+                        KRaftVersion.FEATURE_NAME,
+                        newVersion
+                    )
+                );
+            }
 
-        // All of the validations succeeded; create control records for the upgrade
-        accumulator.appendControlMessages((baseOffset, batchEpoch, compression, buffer) -> {
-            try (MemoryRecordsBuilder builder = createControlRecordsBuilder(
-                    baseOffset,
-                    batchEpoch,
-                    compression,
-                    buffer,
-                    currentTimeMs
-                )
-            ) {
-                log.info("Appended kraft.version {} to the batch accumulator", newVersion);
-                builder.appendKRaftVersionMessage(
+            // All of the validations succeeded; create control records for the upgrade
+            accumulator.appendControlMessages((baseOffset, batchEpoch, compression, buffer) -> {
+                try (MemoryRecordsBuilder builder = createControlRecordsBuilder(
+                        baseOffset,
+                        batchEpoch,
+                        compression,
+                        buffer,
+                        currentTimeMs
+                    )
+                ) {
+                    log.info("Appended kraft.version {} to the batch accumulator", newVersion);
+                    builder.appendKRaftVersionMessage(
                         currentTimeMs,
                         new KRaftVersionRecord()
                             .setVersion(newVersion.kraftVersionRecordVersion())
                             .setKRaftVersion(newVersion.featureLevel())
-                );
-
-                if (!inMemoryVoters.voters().equals(persistedVoters)) {
-                    log.info("Appended voter set {} to the batch accumulator", inMemoryVoters.voters());
-                    builder.appendVotersMessage(
-                        currentTimeMs,
-                        inMemoryVoters.voters().toVotersRecord(newVersion.votersRecordVersion())
                     );
-                }
 
-                return builder.build();
-            }
-        });
+                    if (!inMemoryVoters.voters().equals(persistedVoters)) {
+                        log.info("Appended voter set {} to the batch accumulator", inMemoryVoters.voters());
+                        builder.appendVotersMessage(
+                            currentTimeMs,
+                            inMemoryVoters.voters().toVotersRecord(newVersion.votersRecordVersion())
+                        );
+                    }
+
+                    return builder.build();
+                }
+            });
+        }
 
         return true;
+    }
+
+    private void validateEpoch(int epoch) {
+        if (epoch < epoch()) {
+            throw new NotLeaderException(
+                String.format(
+                    "Upgrade kraft version failed because the given epoch %s is stale. Current leader epoch is %s",
+                    epoch,
+                    this.epoch
+                )
+            );
+        } else if (epoch > epoch()) {
+            throw new IllegalArgumentException(
+                String.format(
+                    "Attempt to append from epoch %s which is larger than the current epoch of %s",
+                    epoch,
+                    this.epoch
+                )
+            );
+        }
     }
 
     @Override

@@ -242,8 +242,14 @@ public interface RaftClient<T> extends AutoCloseable {
     /**
      * Request that the leader to upgrade the kraft version.
      *
+     * @param epoch the current leader epoch
      * @param version the new kraft version to upgrade to
+     * @param validateOnly whether to perform the upgrade
      * @throws ApiException when the upgrade failed
      */
-    void upgradeKRaftVersion(int epoch, KRaftVersion version);
+    void upgradeKRaftVersion(
+        int epoch,
+        KRaftVersion version,
+        boolean validateOnly
+    );
 }

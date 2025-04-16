@@ -2391,7 +2391,7 @@ public class KafkaRaftClientReconfigTest {
             );
         }
 
-        context.client.upgradeKRaftVersion(epoch, KRaftVersion.KRAFT_VERSION_1);
+        context.client.upgradeKRaftVersion(epoch, KRaftVersion.KRAFT_VERSION_1, false);
         assertEquals(KRaftVersion.KRAFT_VERSION_1, context.client.kraftVersion());
 
         var localLogEndOffset = context.log.endOffset().offset();
@@ -2436,7 +2436,7 @@ public class KafkaRaftClientReconfigTest {
         assertEquals(KRaftVersion.KRAFT_VERSION_0, context.client.kraftVersion());
         assertThrows(
             InvalidUpdateVersionException.class,
-            () -> context.client.upgradeKRaftVersion(epoch, KRaftVersion.KRAFT_VERSION_1)
+            () -> context.client.upgradeKRaftVersion(epoch, KRaftVersion.KRAFT_VERSION_1, false)
         );
 
         // Establish a HWM and fence previous leaders
@@ -2467,7 +2467,7 @@ public class KafkaRaftClientReconfigTest {
         assertEquals(KRaftVersion.KRAFT_VERSION_0, context.client.kraftVersion());
         assertThrows(
             InvalidUpdateVersionException.class,
-            () -> context.client.upgradeKRaftVersion(epoch, KRaftVersion.KRAFT_VERSION_1)
+            () -> context.client.upgradeKRaftVersion(epoch, KRaftVersion.KRAFT_VERSION_1, false)
         );
     }
 

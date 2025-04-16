@@ -21,7 +21,15 @@ import org.apache.kafka.server.common.KRaftVersion;
 
 import java.util.Optional;
 
-// TODO: Document this
+/**
+ * KRaftVersionUpgrade is a sum types for coordinating the upgrade of the kraft version.
+ *
+ * {@code Voters} is used to stored in-memory the latest voter set. {@code Version} is used to
+ * stored in-memory the upgraded kraft version.
+ *
+ * This type makes it possible to upgrade the kraft version by only using compare-and-swap and
+ * avoid blocking locks.
+ */
 public sealed interface KRaftVersionUpgrade {
     public record Empty() implements KRaftVersionUpgrade {
     }

@@ -260,9 +260,7 @@ public class FeatureControlManager {
         } else if (featureName.equals(KRaftVersion.FEATURE_NAME)) {
             if (upgradeType.equals(FeatureUpdate.UpgradeType.UPGRADE)) {
                 try {
-                    if (!validateOnly) {
-                        raftClient.upgradeKRaftVersion(currentClaimedEpoch, KRaftVersion.fromFeatureLevel(newVersion));
-                    }
+                    raftClient.upgradeKRaftVersion(currentClaimedEpoch, KRaftVersion.fromFeatureLevel(newVersion), validateOnly);
                     return ApiError.NONE;
                 } catch (ApiException e) {
                     return ApiError.fromThrowable(e);

@@ -2978,14 +2978,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             try {
                 while (iterator.hasNext()) {
                     BatchAccumulator.CompletedBatch<T> batch = iterator.next();
-
-                    // TODO: check if the batch contains a control batch and the value of the kraft version.
-                    // TODO: Need to reset the pending kraft version stored in the leader state
                     appendBatch(state, batch, currentTimeMs);
-
-                    // TODO: fix this
-                    // The kraft version was written to the log. Remove the stored in-memory state
-                    // state.resetUpgradedKRaftVersion();
                 }
                 flushLeaderLog(state, currentTimeMs);
             } finally {
@@ -3665,7 +3658,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     @Override
-    public void upgradeKRaftVersion(int epoch, KRaftVersion version) {
+    public void upgradeKRaftVersion(int epoch, KRaftVersion version, boolean validateOnly) {
         if (!isInitialized()) {
             throw new IllegalStateException("Cannot update the kraft version before the replica has been initialized");
         }
@@ -3679,6 +3672,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             version,
             partitionState.lastKraftVersion(),
             partitionState.lastVoterSet(),
+            validateOnly,
             time.milliseconds()
         );
     }

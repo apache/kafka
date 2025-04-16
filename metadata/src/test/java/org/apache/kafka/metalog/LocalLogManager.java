@@ -791,7 +791,9 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     }
 
     @Override
-    public void upgradeKRaftVersion(int epoch, KRaftVersion version) {
-        lastKRaftVersion = version;
+    public void upgradeKRaftVersion(int epoch, KRaftVersion version, boolean validateOnly) {
+        if (!validateOnly) {
+            lastKRaftVersion = version;
+        }
     }
 }

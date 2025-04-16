@@ -220,7 +220,7 @@ public final class UpdateVoterHandler {
             currentTimeMs
         );
 
-        // Reply immediately and don't wait for the change to commit for kraft version
+        // Reply immediately and don't wait for the change to commit
         return CompletableFuture.completedFuture(
             RaftUtil.updateVoterResponse(
                 Errors.NONE,
@@ -268,8 +268,6 @@ public final class UpdateVoterHandler {
                 new KRaftVersionUpgrade.Voters(newVoters)
             );
             if (!successful) {
-                // TODO: remove this
-                log.info("In-memory voter set {}", leaderState.volatileVoters());
                 log.info("Unable to update in-memory voters from {} to {}", inMemoryVoters, newVoters);
             }
         }

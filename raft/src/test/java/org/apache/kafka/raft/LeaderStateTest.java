@@ -766,6 +766,7 @@ public class LeaderStateTest {
                     KRaftVersion.KRAFT_VERSION_1,
                     KRaftVersion.KRAFT_VERSION_0,
                     persistedVoters,
+                    false,
                     time.milliseconds()
                 )
         );
@@ -778,6 +779,7 @@ public class LeaderStateTest {
                     KRaftVersion.KRAFT_VERSION_1,
                     KRaftVersion.KRAFT_VERSION_0,
                     persistedVoters,
+                    false,
                     time.milliseconds()
                 )
         );
@@ -790,6 +792,7 @@ public class LeaderStateTest {
                     KRaftVersion.KRAFT_VERSION_1,
                     KRaftVersion.KRAFT_VERSION_0,
                     persistedVoters,
+                    false,
                     time.milliseconds()
                 )
         );
@@ -800,6 +803,7 @@ public class LeaderStateTest {
                 KRaftVersion.KRAFT_VERSION_1,
                 KRaftVersion.KRAFT_VERSION_1,
                 persistedVoters,
+                false,
                 time.milliseconds()
             )
         );
@@ -838,6 +842,7 @@ public class LeaderStateTest {
                 KRaftVersion.KRAFT_VERSION_1,
                 KRaftVersion.KRAFT_VERSION_0,
                 persistedVoters,
+                false,
                 time.milliseconds()
             )
         );
@@ -852,6 +857,7 @@ public class LeaderStateTest {
                 KRaftVersion.KRAFT_VERSION_1,
                 KRaftVersion.KRAFT_VERSION_0,
                 persistedVoters,
+                false,
                 time.milliseconds()
             )
         );
