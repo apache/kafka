@@ -117,7 +117,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
     private static final Map<String, StreamsRebalanceData.TopicInfo> CHANGELOG_TOPICS = Map.of(
         CHANGELOG_TOPIC_1, new StreamsRebalanceData.TopicInfo(Optional.empty(), Optional.of((short) 1), Map.of()),
         CHANGELOG_TOPIC_2, new StreamsRebalanceData.TopicInfo(Optional.empty(), Optional.of((short) 2), Map.of()),
-        CHANGELOG_TOPIC_3, new StreamsRebalanceData.TopicInfo(Optional.empty(), Optional.of((short) 3), Map.of("config2", "value2", "config4", "value4"))
+        CHANGELOG_TOPIC_3, new StreamsRebalanceData.TopicInfo(Optional.empty(), Optional.of((short) 3), Map.of("config4", "value4", "config2", "value2"))
     );
     private static final Collection<Set<String>> COPARTITION_GROUP = Set.of(
         Set.of(SOURCE_TOPIC_1, REPARTITION_SOURCE_TOPIC_2),
@@ -663,7 +663,6 @@ class StreamsGroupHeartbeatRequestManagerTest {
             final StreamsRebalanceData.TopicInfo repartitionTopic = REPARTITION_SOURCE_TOPICS.get(topicInfo.name());
             assertEquals(repartitionTopic.numPartitions().get(), topicInfo.partitions());
             assertEquals(repartitionTopic.replicationFactor().get(), topicInfo.replicationFactor());
-            assertEquals(repartitionTopic.topicConfigs().size(), topicInfo.topicConfigs().size());
             assertEquals(repartitionTopic.topicConfigs().size(), topicInfo.topicConfigs().size());
             assertTrue(isSorted(topicInfo.topicConfigs(), Comparator.comparing(StreamsGroupHeartbeatRequestData.KeyValue::key)));
         });
