@@ -172,43 +172,6 @@ public class Sender implements Runnable {
         this.accumulator.deallocate(batch);
     }
 
-    /**
-     *  Get the in-flight batches that has reached delivery timeout.
-     */
-    private List<ProducerBatch> getExpiredInflightBatches(long now) {
-        List<ProducerBatch> expiredBatches = new ArrayList<>();
-
-        for (Iterator<Map.Entry<TopicPartition, List<ProducerBatch>>> batchIt = inFlightBatches.entrySet().iterator(); batchIt.hasNext();) {
-            Map.Entry<TopicPartition, List<ProducerBatch>> entry = batchIt.next();
-            List<ProducerBatch> partitionInFlightBatches = entry.getValue();
-            if (partitionInFlightBatches != null) {
-                Iterator<ProducerBatch> iter = partitionInFlightBatches.iterator();
-                while (iter.hasNext()) {
-                    ProducerBatch batch = iter.next();
-                    if (batch.hasReachedDeliveryTimeout(accumulator.getDeliveryTimeoutMs(), now)) {
-                        iter.remove();
-                        // expireBatches is called in Sender.sendProducerData, before client.poll.
-                        // The !batch.isDone() invariant should always hold. An IllegalStateException
-                        // exception will be thrown if the invariant is violated.
-                        if (!batch.isDone()) {
-                            expiredBatches.add(batch);
-                        } else {
-                            throw new IllegalStateException(batch.topicPartition + " batch created at " +
-                                batch.createdMs + " gets unexpected final state " + batch.finalState());
-                        }
-                    } else {
-                        accumulator.maybeUpdateNextBatchExpiryTime(batch);
-                        break;
-                    }
-                }
-                if (partitionInFlightBatches.isEmpty()) {
-                    batchIt.remove();
-                }
-            }
-        }
-        return expiredBatches;
-    }
-
     private void addToInflightBatches(List<ProducerBatch> batches) {
         for (ProducerBatch batch : batches) {
             List<ProducerBatch> inflightBatchList = inFlightBatches.computeIfAbsent(batch.topicPartition,
@@ -355,7 +318,8 @@ public class Sender implements Runnable {
         return false;
     }
 
-    private long sendProducerData(long now) {
+    // Visible for testing
+    protected long sendProducerData(long now) {
         MetadataSnapshot metadataSnapshot = metadata.fetchMetadataSnapshot();
         // get the list of partitions with data ready to send
         RecordAccumulator.ReadyCheckResult result = this.accumulator.ready(metadataSnapshot, now);
@@ -404,9 +368,7 @@ public class Sender implements Runnable {
         }
 
         accumulator.resetNextBatchExpiryTime();
-        List<ProducerBatch> expiredInflightBatches = getExpiredInflightBatches(now);
         List<ProducerBatch> expiredBatches = this.accumulator.expiredBatches(now);
-        expiredBatches.addAll(expiredInflightBatches);
 
         // Reset the producer id if an expired batch has previously been sent to the broker. Also update the metrics
         // for expired batches. see the documentation of @TransactionState.resetIdempotentProducerId to understand why
