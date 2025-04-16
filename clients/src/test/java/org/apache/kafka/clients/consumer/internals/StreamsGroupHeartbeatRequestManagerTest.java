@@ -665,7 +665,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             assertEquals(repartitionTopic.replicationFactor().get(), topicInfo.replicationFactor());
             assertEquals(repartitionTopic.topicConfigs().size(), topicInfo.topicConfigs().size());
             assertEquals(repartitionTopic.topicConfigs().size(), topicInfo.topicConfigs().size());
-            assertTrue(isSorted(topicInfo.topicConfigs(), Comparator.comparing(StreamsGroupHeartbeatRequestData.KeyValue::key).thenComparing(StreamsGroupHeartbeatRequestData.KeyValue::value)));
+            assertTrue(isSorted(topicInfo.topicConfigs(), Comparator.comparing(StreamsGroupHeartbeatRequestData.KeyValue::key)));
         });
         assertEquals(CHANGELOG_TOPICS.size(), subtopology1.stateChangelogTopics().size());
         subtopology1.stateChangelogTopics().forEach(topicInfo -> {
@@ -674,7 +674,7 @@ class StreamsGroupHeartbeatRequestManagerTest {
             final StreamsRebalanceData.TopicInfo changelogTopic = CHANGELOG_TOPICS.get(topicInfo.name());
             assertEquals(changelogTopic.replicationFactor().get(), topicInfo.replicationFactor());
             assertEquals(changelogTopic.topicConfigs().size(), topicInfo.topicConfigs().size());
-            assertTrue(isSorted(topicInfo.topicConfigs(), Comparator.comparing(StreamsGroupHeartbeatRequestData.KeyValue::key).thenComparing(StreamsGroupHeartbeatRequestData.KeyValue::value)));
+            assertTrue(isSorted(topicInfo.topicConfigs(), Comparator.comparing(StreamsGroupHeartbeatRequestData.KeyValue::key)));
         });
         assertEquals(2, subtopology1.copartitionGroups().size());
         final StreamsGroupHeartbeatRequestData.CopartitionGroup expectedCopartitionGroupData1 =
