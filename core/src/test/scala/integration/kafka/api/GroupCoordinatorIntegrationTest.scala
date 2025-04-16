@@ -283,7 +283,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
     val broker = cluster.brokers.asScala.head._2
     val log = broker.logManager.getLog(tp).get
     log.roll()
-    assertTrue(broker.logManager.cleaner.awaitCleaned(tp, 0))
+    assertTrue(broker.logManager.cleaner.awaitCleaned(tp, 0, 60000L))
   }
 
   private def withAdmin(f: Admin => Unit): Unit = {

@@ -382,7 +382,7 @@ class LogCleanerManagerTest extends Logging {
     assertEquals(0, cleanable.size, "should have 0 logs ready to be compacted")
 
     // log cleanup finished, and log can be picked up for compaction
-    cleanerManager.resumeCleaning(deletableLog.asScala.map(_.getKey).toList.asJava)
+    cleanerManager.resumeCleaning(deletableLog.asScala.map(_.getKey).toSet.asJava)
     val cleanable2 = cleanerManager.grabFilthiestCompactedLog(time, new PreCleanStats()).toScala
     assertEquals(1, cleanable2.size, "should have 1 logs ready to be compacted")
 
@@ -501,9 +501,9 @@ class LogCleanerManagerTest extends Logging {
     val pausedPartitions = cleanerManager.pauseCleaningForNonCompactedPartitions()
     // Log truncation happens due to unclean leader election
     cleanerManager.abortAndPauseCleaning(log.topicPartition)
-    cleanerManager.resumeCleaning(Seq(log.topicPartition).asJava)
+    cleanerManager.resumeCleaning(Set(log.topicPartition).asJava)
     // log cleanup finishes and pausedPartitions are resumed
-    cleanerManager.resumeCleaning(pausedPartitions.asScala.map(_.getKey).toList.asJava)
+    cleanerManager.resumeCleaning(pausedPartitions.asScala.map(_.getKey).toSet.asJava)
 
     assertEquals(Optional.empty(), cleanerManager.cleaningState(log.topicPartition))
   }
@@ -522,7 +522,7 @@ class LogCleanerManagerTest extends Logging {
     // Broker processes StopReplicaRequest with delete=true
     cleanerManager.abortCleaning(log.topicPartition)
     // log cleanup finishes and pausedPartitions are resumed
-    cleanerManager.resumeCleaning(pausedPartitions.asScala.map(_.getKey).toList.asJava)
+    cleanerManager.resumeCleaning(pausedPartitions.asScala.map(_.getKey).toSet.asJava)
 
     assertEquals(Optional.empty(), cleanerManager.cleaningState(log.topicPartition))
   }

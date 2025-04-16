@@ -1188,9 +1188,9 @@ class KRaftClusterTest {
     def assertConfigValue(expected: Int): Unit = {
       TestUtils.retry(60000) {
         assertEquals(expected, cluster.controllers().values().iterator().next().
-          quotaManagers.clientQuotaCallback.get.asInstanceOf[DummyClientQuotaCallback].value)
+          quotaManagers.clientQuotaCallbackPlugin.get.get.asInstanceOf[DummyClientQuotaCallback].value)
         assertEquals(expected, cluster.brokers().values().iterator().next().
-          quotaManagers.clientQuotaCallback.get.asInstanceOf[DummyClientQuotaCallback].value)
+          quotaManagers.clientQuotaCallbackPlugin.get.get.asInstanceOf[DummyClientQuotaCallback].value)
       }
     }
 
@@ -1229,9 +1229,9 @@ class KRaftClusterTest {
     def assertFoobarValue(expected: Int): Unit = {
       TestUtils.retry(60000) {
         assertEquals(expected, cluster.controllers().values().iterator().next().
-          authorizer.get.asInstanceOf[FakeConfigurableAuthorizer].foobar.get())
+          authorizerPlugin.get.get.asInstanceOf[FakeConfigurableAuthorizer].foobar.get())
         assertEquals(expected, cluster.brokers().values().iterator().next().
-          authorizer.get.asInstanceOf[FakeConfigurableAuthorizer].foobar.get())
+          authorizerPlugin.get.get.asInstanceOf[FakeConfigurableAuthorizer].foobar.get())
       }
     }
 
