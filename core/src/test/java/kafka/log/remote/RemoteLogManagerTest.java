@@ -16,7 +16,6 @@
  */
 package kafka.log.remote;
 
-import kafka.cluster.Partition;
 import kafka.server.KafkaConfig;
 
 import org.apache.kafka.common.Endpoint;
@@ -42,6 +41,7 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.StopPartition;
 import org.apache.kafka.server.config.ServerConfigs;
+import org.apache.kafka.server.log.remote.TopicPartitionLog;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManager;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManagerConfig;
 import org.apache.kafka.server.log.remote.storage.ClassLoaderAwareRemoteStorageManager;
@@ -132,8 +132,6 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-
-import scala.Option;
 
 import static kafka.log.remote.RemoteLogManager.isRemoteSegmentWithinLeaderEpochs;
 import static org.apache.kafka.common.record.TimestampType.CREATE_TIME;
@@ -848,8 +846,8 @@ public class RemoteLogManagerTest {
             return null;
         }).when(remoteStorageManager).deleteLogSegmentData(any(RemoteLogSegmentMetadata.class));
 
-        Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
-        Partition mockFollowerPartition = mockPartition(followerTopicIdPartition);
+        TopicPartitionLog mockLeaderPartition = mockPartition(leaderTopicIdPartition);
+        TopicPartitionLog mockFollowerPartition = mockPartition(followerTopicIdPartition);
         List<RemoteLogSegmentMetadata> list = listRemoteLogSegmentMetadata(leaderTopicIdPartition, segmentCount, 100, 1024, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
         // return the metadataList 3 times, then return empty list to simulate all segments are deleted
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition)).thenReturn(list.iterator()).thenReturn(Collections.emptyIterator());
@@ -963,7 +961,7 @@ public class RemoteLogManagerTest {
         }).when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
         when(rlmCopyQuotaManager.getThrottleTimeMs()).thenReturn(quotaAvailableThrottleTime);
 
-        Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
+        TopicPartitionLog mockLeaderPartition = mockPartition(leaderTopicIdPartition);
         List<RemoteLogSegmentMetadata> metadataList = listRemoteLogSegmentMetadata(leaderTopicIdPartition, segmentCount, 100, 1024, RemoteLogSegmentState.COPY_SEGMENT_FINISHED);
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition)).thenReturn(metadataList.iterator());
         when(remoteLogMetadataManager.listRemoteLogSegments(leaderTopicIdPartition, 0)).thenReturn(metadataList.iterator()).thenReturn(metadataList.iterator());
@@ -1106,7 +1104,7 @@ public class RemoteLogManagerTest {
         }).when(remoteStorageManager).copyLogSegmentData(any(RemoteLogSegmentMetadata.class), any(LogSegmentData.class));
         when(rlmCopyQuotaManager.getThrottleTimeMs()).thenReturn(quotaAvailableThrottleTime);
 
-        Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
+        TopicPartitionLog mockLeaderPartition = mockPartition(leaderTopicIdPartition);
 
         // This method is called by both Copy and Expiration task. On the first call, both tasks should see 175 bytes as
         // the local log segments size
@@ -1374,8 +1372,8 @@ public class RemoteLogManagerTest {
 
     @Test
     void testTopicIdCacheUpdates() throws RemoteStorageException {
-        Partition mockLeaderPartition = mockPartition(leaderTopicIdPartition);
-        Partition mockFollowerPartition = mockPartition(followerTopicIdPartition);
+        TopicPartitionLog mockLeaderPartition = mockPartition(leaderTopicIdPartition);
+        TopicPartitionLog mockFollowerPartition = mockPartition(followerTopicIdPartition);
 
         when(remoteLogMetadataManager.remoteLogSegmentMetadata(any(TopicIdPartition.class), anyInt(), anyLong()))
             .thenReturn(Optional.empty());
@@ -1702,7 +1700,7 @@ public class RemoteLogManagerTest {
         // 9999 -> refers to read from local, 999 -> refers to read from remote
         FileRecords.TimestampAndOffset expectedLocalResult = new FileRecords.TimestampAndOffset(timestamp + 9999, 9999, Optional.of(Integer.MAX_VALUE));
         FileRecords.TimestampAndOffset expectedRemoteResult = new FileRecords.TimestampAndOffset(timestamp + 999, 999, Optional.of(Integer.MAX_VALUE));
-        Partition mockFollowerPartition = mockPartition(tpId);
+        TopicPartitionLog mockFollowerPartition = mockPartition(tpId);
 
         LogSegment logSegmentBaseOffset50 = mockLogSegment(50L, timestamp, null);
         LogSegment logSegmentBaseOffset100 = mockLogSegment(100L, timestamp + 1, expectedLocalResult);
@@ -3783,14 +3781,13 @@ public class RemoteLogManagerTest {
         }
     }
 
-    private Partition mockPartition(TopicIdPartition topicIdPartition) {
+    private TopicPartitionLog mockPartition(TopicIdPartition topicIdPartition) {
         TopicPartition tp = topicIdPartition.topicPartition();
-        Partition partition = mock(Partition.class);
+        TopicPartitionLog partition = mock(TopicPartitionLog.class);
         UnifiedLog log = mock(UnifiedLog.class);
         when(partition.topicPartition()).thenReturn(tp);
-        when(partition.topic()).thenReturn(tp.topic());
         when(log.remoteLogEnabled()).thenReturn(true);
-        when(partition.log()).thenReturn(Option.apply(log));
+        when(partition.unifiedLog()).thenReturn(Optional.of(log));
         when(log.config()).thenReturn(new LogConfig(new Properties()));
         return partition;
     }

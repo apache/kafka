@@ -18,20 +18,21 @@
 package kafka.network
 
 import kafka.server.metadata.KRaftMetadataCache
-import kafka.server.{DefaultApiVersionManager, ForwardingManager, SimpleApiVersionManager}
+import org.apache.kafka.clients.NodeApiVersions
 import org.apache.kafka.common.errors.{InvalidRequestException, UnsupportedVersionException}
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.message.RequestHeaderData
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{RequestHeader, RequestTestUtils}
-import org.apache.kafka.server.BrokerFeatures
+import org.apache.kafka.server.{BrokerFeatures, DefaultApiVersionManager, SimpleApiVersionManager}
 import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion}
 import org.junit.jupiter.api.Assertions.{assertThrows, assertTrue}
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.Executable
 import org.mockito.Mockito.mock
 
-import java.util.Collections
+import java.util.function.Supplier
+import java.util.{Collections, Optional}
 
 class ProcessorTest {
 
@@ -44,7 +45,7 @@ class ProcessorTest {
     val e = assertThrows(classOf[InvalidRequestException],
       (() => Processor.parseRequestHeader(apiVersionManager, requestHeader)): Executable,
       "INIT_PRODUCER_ID with listener type CONTROLLER should throw InvalidRequestException exception")
-    assertTrue(e.toString.contains("disabled api"));
+    assertTrue(e.toString.contains("disabled api"))
   }
 
   @Test
@@ -55,26 +56,26 @@ class ProcessorTest {
       .setRequestApiKey(ApiKeys.LEADER_AND_ISR.id)
       .setRequestApiVersion(headerVersion)
       .setClientId("clientid")
-      .setCorrelationId(0);
+      .setCorrelationId(0)
     val requestHeader = RequestTestUtils.serializeRequestHeader(new RequestHeader(requestHeaderData, headerVersion))
-    val apiVersionManager = new DefaultApiVersionManager(ListenerType.BROKER, mock(classOf[ForwardingManager]),
-      BrokerFeatures.createDefault(true), new KRaftMetadataCache(0, () => KRaftVersion.LATEST_PRODUCTION), true)
+    val apiVersionManager = new DefaultApiVersionManager(ListenerType.BROKER, mock(classOf[Supplier[Optional[NodeApiVersions]]]),
+      BrokerFeatures.createDefault(true), new KRaftMetadataCache(0, () => KRaftVersion.LATEST_PRODUCTION), true, Optional.empty)
     val e = assertThrows(classOf[InvalidRequestException],
       (() => Processor.parseRequestHeader(apiVersionManager, requestHeader)): Executable,
       "LEADER_AND_ISR should throw InvalidRequestException exception")
-    assertTrue(e.toString.contains("Unsupported api"));
+    assertTrue(e.toString.contains("Unsupported api"))
   }
 
   @Test
   def testParseRequestHeaderWithUnsupportedApiVersion(): Unit = {
     val requestHeader = RequestTestUtils.serializeRequestHeader(
       new RequestHeader(ApiKeys.FETCH, 0, "clientid", 0))
-    val apiVersionManager = new DefaultApiVersionManager(ListenerType.BROKER, mock(classOf[ForwardingManager]),
-      BrokerFeatures.createDefault(true), new KRaftMetadataCache(0, () => KRaftVersion.LATEST_PRODUCTION), true)
+    val apiVersionManager = new DefaultApiVersionManager(ListenerType.BROKER, mock(classOf[Supplier[Optional[NodeApiVersions]]]),
+      BrokerFeatures.createDefault(true), new KRaftMetadataCache(0, () => KRaftVersion.LATEST_PRODUCTION), true, Optional.empty)
     val e = assertThrows(classOf[UnsupportedVersionException],
       (() => Processor.parseRequestHeader(apiVersionManager, requestHeader)): Executable,
       "FETCH v0 should throw UnsupportedVersionException exception")
-    assertTrue(e.toString.contains("unsupported version"));
+    assertTrue(e.toString.contains("unsupported version"))
   }
 
   /**
@@ -86,12 +87,12 @@ class ProcessorTest {
     for (version <- 0 to 2) {
       val requestHeader = RequestTestUtils.serializeRequestHeader(
         new RequestHeader(ApiKeys.PRODUCE, version.toShort, "clientid", 0))
-      val apiVersionManager = new DefaultApiVersionManager(ListenerType.BROKER, mock(classOf[ForwardingManager]),
-        BrokerFeatures.createDefault(true), new KRaftMetadataCache(0, () => KRaftVersion.LATEST_PRODUCTION), true)
+      val apiVersionManager = new DefaultApiVersionManager(ListenerType.BROKER, mock(classOf[Supplier[Optional[NodeApiVersions]]]),
+        BrokerFeatures.createDefault(true), new KRaftMetadataCache(0, () => KRaftVersion.LATEST_PRODUCTION), true, Optional.empty)
       val e = assertThrows(classOf[UnsupportedVersionException],
         (() => Processor.parseRequestHeader(apiVersionManager, requestHeader)): Executable,
         s"PRODUCE $version should throw UnsupportedVersionException exception")
-      assertTrue(e.toString.contains("unsupported version"));
+      assertTrue(e.toString.contains("unsupported version"))
     }
   }
 
