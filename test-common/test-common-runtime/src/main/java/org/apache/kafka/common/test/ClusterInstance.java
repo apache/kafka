@@ -357,11 +357,11 @@ public interface ClusterInstance {
     default List<Authorizer> authorizers() {
         List<Authorizer> authorizers = new ArrayList<>();
         authorizers.addAll(brokers().values().stream()
-                .filter(server -> server.authorizer().isDefined())
-                .map(server -> server.authorizer().get()).toList());
+                .filter(server -> server.authorizerPlugin().isDefined())
+                .map(server -> server.authorizerPlugin().get().get()).toList());
         authorizers.addAll(controllers().values().stream()
-                .filter(server -> server.authorizer().isDefined())
-                .map(server -> server.authorizer().get()).toList());
+                .filter(server -> server.authorizerPlugin().isDefined())
+                .map(server -> server.authorizerPlugin().get().get()).toList());
         return authorizers;
     }
 

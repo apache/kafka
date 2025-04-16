@@ -70,7 +70,7 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
       superuserAdminClient.createAcls(List(AclTokenOtherDescribe, AclTokenCreate, AclTokenDescribe).asJava).values
 
       brokers.foreach { s =>
-        TestUtils.waitAndVerifyAcls(TokenCreateAcl ++ TokenDescribeAcl, s.dataPlaneRequestProcessor.authorizer.get,
+        TestUtils.waitAndVerifyAcls(TokenCreateAcl ++ TokenDescribeAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get,
           new ResourcePattern(USER, clientPrincipal.toString, LITERAL))
       }
     }

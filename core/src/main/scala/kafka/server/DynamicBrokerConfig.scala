@@ -283,9 +283,11 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
    * directly. They are provided both old and new configs.
    */
   def addReconfigurables(kafkaServer: KafkaBroker): Unit = {
-    kafkaServer.authorizer match {
-      case Some(authz: Reconfigurable) => addReconfigurable(authz)
-      case _ =>
+    kafkaServer.authorizerPlugin.foreach { plugin =>
+      plugin.get match {
+        case authz: Reconfigurable => addReconfigurable(authz)
+        case _ =>
+      }
     }
     addReconfigurable(kafkaServer.kafkaYammerMetrics)
     addReconfigurable(new DynamicMetricsReporters(kafkaConfig.brokerId, kafkaServer.config, kafkaServer.metrics, kafkaServer.clusterId))
@@ -303,9 +305,11 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
    * Add reconfigurables to be notified when a dynamic controller config is updated.
    */
   def addReconfigurables(controller: ControllerServer): Unit = {
-    controller.authorizer match {
-      case Some(authz: Reconfigurable) => addReconfigurable(authz)
-      case _ =>
+    controller.authorizerPlugin.foreach { plugin =>
+      plugin.get match {
+        case authz: Reconfigurable => addReconfigurable(authz)
+        case _ =>
+      }
     }
     if (!kafkaConfig.processRoles.contains(ProcessRole.BrokerRole)) {
       // only add these if the controller isn't also running the broker role

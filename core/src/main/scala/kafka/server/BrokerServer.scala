@@ -27,6 +27,7 @@ import kafka.server.metadata._
 import kafka.server.share.{ShareCoordinatorMetadataCacheHelperImpl, SharePartitionManager}
 import kafka.utils.CoreUtils
 import org.apache.kafka.common.config.ConfigException
+import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
@@ -103,7 +104,7 @@ class BrokerServer(
 
   @volatile var dataPlaneRequestProcessor: KafkaApis = _
 
-  var authorizer: Option[Authorizer] = None
+  var authorizerPlugin: Option[Plugin[Authorizer]] = None
   @volatile var socketServer: SocketServer = _
   var dataPlaneRequestHandlerPool: KafkaRequestHandlerPool = _
 
@@ -412,8 +413,7 @@ class BrokerServer(
       )
 
       // Create and initialize an authorizer if one is configured.
-      authorizer = config.createNewAuthorizer()
-      authorizer.foreach(_.configure(config.originals))
+      authorizerPlugin = config.createNewAuthorizer(metrics, ProcessRole.BrokerRole.toString)
 
       // The FetchSessionCache is divided into config.numIoThreads shards, each responsible
       // for Math.max(1, shardNum * sessionIdRange) <= sessionId < (shardNum + 1) * sessionIdRange
@@ -456,7 +456,7 @@ class BrokerServer(
         configRepository = metadataCache,
         metadataCache = metadataCache,
         metrics = metrics,
-        authorizer = authorizer,
+        authorizerPlugin = authorizerPlugin,
         quotas = quotaManagers,
         fetchManager = fetchManager,
         sharePartitionManager = sharePartitionManager,
@@ -529,7 +529,7 @@ class BrokerServer(
           config.nodeId,
           sharedServer.metadataPublishingFaultHandler,
           "broker",
-          authorizer.toJava
+          authorizerPlugin.toJava
         ),
         sharedServer.initialBrokerMetadataLoadFaultHandler,
         sharedServer.metadataPublishingFaultHandler
@@ -586,7 +586,7 @@ class BrokerServer(
       // authorizer future is completed.
       val endpointReadyFutures = {
         val builder = new EndpointReadyFutures.Builder()
-        builder.build(authorizer.toJava,
+        builder.build(authorizerPlugin.toJava,
           new KafkaAuthorizerServerInfo(
             new ClusterResource(clusterId),
             config.nodeId,
@@ -645,7 +645,7 @@ class BrokerServer(
       .withGroupCoordinatorMetrics(new GroupCoordinatorMetrics(KafkaYammerMetrics.defaultRegistry, metrics))
       .withGroupConfigManager(groupConfigManager)
       .withPersister(persister)
-      .withAuthorizer(authorizer.toJava)
+      .withAuthorizerPlugin(authorizerPlugin.toJava)
       .build()
   }
 
@@ -765,7 +765,7 @@ class BrokerServer(
         CoreUtils.swallow(dataPlaneRequestHandlerPool.shutdown(), this)
       if (dataPlaneRequestProcessor != null)
         CoreUtils.swallow(dataPlaneRequestProcessor.close(), this)
-      authorizer.foreach(Utils.closeQuietly(_, "authorizer"))
+      authorizerPlugin.foreach(Utils.closeQuietly(_, "authorizer plugin"))
 
       /**
        * We must shutdown the scheduler early because otherwise, the scheduler could touch other
