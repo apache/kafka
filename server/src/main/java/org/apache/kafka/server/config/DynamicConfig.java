@@ -29,18 +29,18 @@ public class DynamicConfig {
 
 
     public static class Client {
-        private static final ConfigDef CONFIG_DEF = QuotaConfig.userAndClientQuotaConfigs();
+        private static final ConfigDef CLIENT_CONFIGS = QuotaConfig.userAndClientQuotaConfigs();
 
         public static Map<String, ConfigDef.ConfigKey> configKeys() {
-            return CONFIG_DEF.configKeys();
+            return CLIENT_CONFIGS.configKeys();
         }
 
         public static Set<String> names() {
-            return CONFIG_DEF.names();
+            return CLIENT_CONFIGS.names();
         }
 
         public static Map<String, Object> validate(Properties props) {
-            return DynamicConfig.validate(CONFIG_DEF, props, false);
+            return DynamicConfig.validate(CLIENT_CONFIGS, props, false);
         }
     }
 
