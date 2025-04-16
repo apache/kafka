@@ -38,6 +38,7 @@ import org.apache.kafka.network.RequestConvertToJson
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.network.EndPoint
 import org.apache.kafka.security.CredentialProvider
+import org.apache.kafka.server.{ApiVersionManager, SimpleApiVersionManager}
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
