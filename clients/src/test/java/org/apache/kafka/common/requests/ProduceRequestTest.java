@@ -111,7 +111,7 @@ public class ProduceRequestTest {
                 .setAcks((short) 1)
                 .setTimeoutMs(5000),
             false);
-        assertEquals(3, requestBuilder.oldestAllowedVersion());
+        assertEquals(ApiKeys.PRODUCE.oldestVersion(), requestBuilder.oldestAllowedVersion());
         assertEquals(ApiKeys.PRODUCE.latestVersion(), requestBuilder.latestAllowedVersion());
     }
 
@@ -132,8 +132,8 @@ public class ProduceRequestTest {
                         .setAcks((short) 1)
                         .setTimeoutMs(5000),
                 false);
-        assertEquals(3, requestBuilder.oldestAllowedVersion());
-        assertEquals(13, requestBuilder.latestAllowedVersion());
+        assertEquals(ApiKeys.PRODUCE.oldestVersion(), requestBuilder.oldestAllowedVersion());
+        assertEquals(ApiKeys.PRODUCE.latestVersion(), requestBuilder.latestAllowedVersion());
     }
 
     @Test

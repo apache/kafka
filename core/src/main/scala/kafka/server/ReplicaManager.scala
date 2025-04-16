@@ -594,7 +594,7 @@ class ReplicaManager(val config: KafkaConfig,
       case Right(partition) =>
         // Get topic id for an existing partition from disk if topicId is none get it from the metadata cache
         val topicId = partition.topicId.getOrElse(metadataCache.getTopicId(topicIdPartition.topic()))
-        // If topic id is set to zero or null fall back to non topic id aware behaviour
+        // If topic id is set to zero_uuid fall back to non topic id aware behaviour
         val topicIdNotProvided = topicIdPartition.topicId() == Uuid.ZERO_UUID
         if (topicIdNotProvided || topicId == topicIdPartition.topicId()) {
           partition
