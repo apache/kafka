@@ -1010,11 +1010,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest).build())
 
     val future = new CompletableFuture[OffsetCommitResponseData]()
-    when(groupCoordinator.commitOffsets(
-      requestChannelRequest.context,
-      offsetCommitRequest,
-      RequestLocal.noCaching.bufferSupplier
-    )).thenReturn(future)
+    when(groupCoordinator.commitOffsets(requestChannelRequest.context, offsetCommitRequest, RequestLocal.noCaching.bufferSupplier)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handle(
       requestChannelRequest,
@@ -1054,11 +1050,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new OffsetCommitRequest.Builder(offsetCommitRequest).build())
 
     val future = new CompletableFuture[OffsetCommitResponseData]()
-    when(groupCoordinator.commitOffsets(
-      requestChannelRequest.context,
-      offsetCommitRequest,
-      RequestLocal.noCaching.bufferSupplier
-    )).thenReturn(future)
+    when(groupCoordinator.commitOffsets(requestChannelRequest.context, offsetCommitRequest, RequestLocal.noCaching.bufferSupplier)).thenReturn(future)
 
     kafkaApis = createKafkaApis()
     kafkaApis.handle(
@@ -1151,11 +1143,7 @@ class KafkaApisTest extends Logging {
               .setCommittedOffset(50)).asJava)).asJava)
 
     val future = new CompletableFuture[OffsetCommitResponseData]()
-    when(groupCoordinator.commitOffsets(
-      requestChannelRequest.context,
-      expectedOffsetCommitRequest,
-      RequestLocal.noCaching.bufferSupplier
-    )).thenReturn(future)
+    when(groupCoordinator.commitOffsets(requestChannelRequest.context, expectedOffsetCommitRequest, RequestLocal.noCaching.bufferSupplier)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handle(
       requestChannelRequest,
@@ -1328,11 +1316,7 @@ class KafkaApisTest extends Logging {
 
     val future = new CompletableFuture[TxnOffsetCommitResponseData]()
     when(txnCoordinator.partitionFor(txnOffsetCommitRequest.transactionalId)).thenReturn(0)
-    when(groupCoordinator.commitTransactionalOffsets(
-      requestChannelRequest.context,
-      txnOffsetCommitRequest,
-      RequestLocal.noCaching.bufferSupplier
-    )).thenReturn(future)
+    when(groupCoordinator.commitTransactionalOffsets(requestChannelRequest.context, txnOffsetCommitRequest, RequestLocal.noCaching.bufferSupplier)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handle(
       requestChannelRequest,
@@ -1373,11 +1357,7 @@ class KafkaApisTest extends Logging {
 
     val future = new CompletableFuture[TxnOffsetCommitResponseData]()
     when(txnCoordinator.partitionFor(txnOffsetCommitRequest.transactionalId)).thenReturn(0)
-    when(groupCoordinator.commitTransactionalOffsets(
-      requestChannelRequest.context,
-      txnOffsetCommitRequest,
-      RequestLocal.noCaching.bufferSupplier
-    )).thenReturn(future)
+    when(groupCoordinator.commitTransactionalOffsets(requestChannelRequest.context, txnOffsetCommitRequest, RequestLocal.noCaching.bufferSupplier)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handle(
       requestChannelRequest,
@@ -1470,11 +1450,7 @@ class KafkaApisTest extends Logging {
 
     val future = new CompletableFuture[TxnOffsetCommitResponseData]()
     when(txnCoordinator.partitionFor(expectedTxnOffsetCommitRequest.transactionalId)).thenReturn(0)
-    when(groupCoordinator.commitTransactionalOffsets(
-      requestChannelRequest.context,
-      expectedTxnOffsetCommitRequest,
-      RequestLocal.noCaching.bufferSupplier
-    )).thenReturn(future)
+    when(groupCoordinator.commitTransactionalOffsets(requestChannelRequest.context, expectedTxnOffsetCommitRequest, RequestLocal.noCaching.bufferSupplier)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handle(
       requestChannelRequest,
@@ -1573,11 +1549,7 @@ class KafkaApisTest extends Logging {
     val requestLocal = RequestLocal.withThreadConfinedCaching
     val future = new CompletableFuture[TxnOffsetCommitResponseData]()
     when(txnCoordinator.partitionFor(offsetCommitRequest.data.transactionalId)).thenReturn(0)
-    when(groupCoordinator.commitTransactionalOffsets(
-      request.context,
-      offsetCommitRequest.data,
-      requestLocal.bufferSupplier
-    )).thenReturn(future)
+    when(groupCoordinator.commitTransactionalOffsets(request.context, offsetCommitRequest.data, requestLocal.bufferSupplier)).thenReturn(future)
 
     future.complete(new TxnOffsetCommitResponseData()
       .setTopics(List(
@@ -2918,11 +2890,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new DeleteGroupsRequest.Builder(deleteGroupsRequest).build())
 
     val future = new CompletableFuture[DeleteGroupsResponseData.DeletableGroupResultCollection]()
-    when(groupCoordinator.deleteGroups(
-      requestChannelRequest.context,
-      List("group-1", "group-2", "group-3").asJava,
-      RequestLocal.noCaching.bufferSupplier
-    )).thenReturn(future)
+    when(groupCoordinator.deleteGroups(requestChannelRequest.context, List("group-1", "group-2", "group-3").asJava, RequestLocal.noCaching.bufferSupplier)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handleDeleteGroupsRequest(
       requestChannelRequest,
@@ -2961,11 +2929,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new DeleteGroupsRequest.Builder(deleteGroupsRequest).build())
 
     val future = new CompletableFuture[DeleteGroupsResponseData.DeletableGroupResultCollection]()
-    when(groupCoordinator.deleteGroups(
-      requestChannelRequest.context,
-      List("group-1", "group-2", "group-3").asJava,
-      RequestLocal.noCaching.bufferSupplier
-    )).thenReturn(future)
+    when(groupCoordinator.deleteGroups(requestChannelRequest.context, List("group-1", "group-2", "group-3").asJava, RequestLocal.noCaching.bufferSupplier)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handleDeleteGroupsRequest(
       requestChannelRequest,
@@ -3020,11 +2984,7 @@ class KafkaApisTest extends Logging {
     }
 
     val future = new CompletableFuture[DeleteGroupsResponseData.DeletableGroupResultCollection]()
-    when(groupCoordinator.deleteGroups(
-      requestChannelRequest.context,
-      List("group-2", "group-3").asJava,
-      RequestLocal.noCaching.bufferSupplier
-    )).thenReturn(future)
+    when(groupCoordinator.deleteGroups(requestChannelRequest.context, List("group-2", "group-3").asJava, RequestLocal.noCaching.bufferSupplier)).thenReturn(future)
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
     kafkaApis.handleDeleteGroupsRequest(
       requestChannelRequest,
@@ -3068,10 +3028,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new DescribeGroupsRequest.Builder(describeGroupsRequest).build())
 
     val future = new CompletableFuture[util.List[DescribeGroupsResponseData.DescribedGroup]]()
-    when(groupCoordinator.describeGroups(
-      requestChannelRequest.context,
-      describeGroupsRequest.groups
-    )).thenReturn(future)
+    when(groupCoordinator.describeGroups(requestChannelRequest.context, describeGroupsRequest.groups)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handleDescribeGroupsRequest(requestChannelRequest)
 
@@ -3115,10 +3072,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new DescribeGroupsRequest.Builder(describeGroupsRequest).build())
 
     val future = new CompletableFuture[util.List[DescribeGroupsResponseData.DescribedGroup]]()
-    when(groupCoordinator.describeGroups(
-      requestChannelRequest.context,
-      describeGroupsRequest.groups
-    )).thenReturn(future)
+    when(groupCoordinator.describeGroups(requestChannelRequest.context, describeGroupsRequest.groups)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handleDescribeGroupsRequest(requestChannelRequest)
 
@@ -3169,10 +3123,7 @@ class KafkaApisTest extends Logging {
     }
 
     val future = new CompletableFuture[util.List[DescribeGroupsResponseData.DescribedGroup]]()
-    when(groupCoordinator.describeGroups(
-      requestChannelRequest.context,
-      List("group-2").asJava
-    )).thenReturn(future)
+    when(groupCoordinator.describeGroups(requestChannelRequest.context, List("group-2").asJava)).thenReturn(future)
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
     kafkaApis.handleDescribeGroupsRequest(requestChannelRequest)
 
@@ -3226,11 +3177,7 @@ class KafkaApisTest extends Logging {
 
     val requestLocal = RequestLocal.withThreadConfinedCaching
     val future = new CompletableFuture[OffsetDeleteResponseData]()
-    when(groupCoordinator.deleteOffsets(
-      request.context,
-      offsetDeleteRequest.data,
-      requestLocal.bufferSupplier
-    )).thenReturn(future)
+    when(groupCoordinator.deleteOffsets(request.context, offsetDeleteRequest.data, requestLocal.bufferSupplier)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handleOffsetDeleteRequest(request, requestLocal)
 
@@ -3319,11 +3266,7 @@ class KafkaApisTest extends Logging {
       ).asJava.iterator))
 
     val future = new CompletableFuture[OffsetDeleteResponseData]()
-    when(groupCoordinator.deleteOffsets(
-      requestChannelRequest.context,
-      expectedOffsetDeleteRequest,
-      RequestLocal.noCaching.bufferSupplier
-    )).thenReturn(future)
+    when(groupCoordinator.deleteOffsets(requestChannelRequest.context, expectedOffsetDeleteRequest, RequestLocal.noCaching.bufferSupplier)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handle(
       requestChannelRequest,
@@ -3424,11 +3367,7 @@ class KafkaApisTest extends Logging {
 
       // The group coordinator is called even if there are no
       // topic-partitions left after the validation.
-      when(groupCoordinator.deleteOffsets(
-        request.context,
-        new OffsetDeleteRequestData().setGroupId(group),
-        RequestLocal.noCaching.bufferSupplier
-      )).thenReturn(CompletableFuture.completedFuture(
+      when(groupCoordinator.deleteOffsets(request.context, new OffsetDeleteRequestData().setGroupId(group), RequestLocal.noCaching.bufferSupplier)).thenReturn(CompletableFuture.completedFuture(
         new OffsetDeleteResponseData()
       ))
       val kafkaApis = createKafkaApis()
@@ -3460,11 +3399,7 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(offsetDeleteRequest)
 
     val future = new CompletableFuture[OffsetDeleteResponseData]()
-    when(groupCoordinator.deleteOffsets(
-      request.context,
-      offsetDeleteRequest.data,
-      RequestLocal.noCaching.bufferSupplier
-    )).thenReturn(future)
+    when(groupCoordinator.deleteOffsets(request.context, offsetDeleteRequest.data, RequestLocal.noCaching.bufferSupplier)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handleOffsetDeleteRequest(request, RequestLocal.noCaching)
 
@@ -3494,11 +3429,7 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(offsetDeleteRequest)
 
     val future = new CompletableFuture[OffsetDeleteResponseData]()
-    when(groupCoordinator.deleteOffsets(
-      request.context,
-      new OffsetDeleteRequestData().setGroupId(group), // Nonexistent topics won't be passed to groupCoordinator.
-      RequestLocal.noCaching.bufferSupplier
-    )).thenReturn(future)
+    when(groupCoordinator.deleteOffsets(request.context, new OffsetDeleteRequestData().setGroupId(group), RequestLocal.noCaching.bufferSupplier)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handleOffsetDeleteRequest(request, RequestLocal.noCaching)
 
@@ -7584,11 +7515,7 @@ class KafkaApisTest extends Logging {
       .setSessionTimeoutMs(joinGroupRequest.sessionTimeoutMs)
 
     val future = new CompletableFuture[JoinGroupResponseData]()
-    when(groupCoordinator.joinGroup(
-      requestChannelRequest.context,
-      expectedJoinGroupRequest,
-      RequestLocal.noCaching.bufferSupplier
-    )).thenReturn(future)
+    when(groupCoordinator.joinGroup(requestChannelRequest.context, expectedJoinGroupRequest, RequestLocal.noCaching.bufferSupplier)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handleJoinGroupRequest(
       requestChannelRequest,
@@ -7627,11 +7554,7 @@ class KafkaApisTest extends Logging {
       .setSessionTimeoutMs(joinGroupRequest.sessionTimeoutMs)
 
     val future = new CompletableFuture[JoinGroupResponseData]()
-    when(groupCoordinator.joinGroup(
-      requestChannelRequest.context,
-      expectedJoinGroupRequest,
-      RequestLocal.noCaching.bufferSupplier
-    )).thenReturn(future)
+    when(groupCoordinator.joinGroup(requestChannelRequest.context, expectedJoinGroupRequest, RequestLocal.noCaching.bufferSupplier)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handleJoinGroupRequest(
       requestChannelRequest,
@@ -7665,11 +7588,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new JoinGroupRequest.Builder(joinGroupRequest).build())
 
     val future = new CompletableFuture[JoinGroupResponseData]()
-    when(groupCoordinator.joinGroup(
-      requestChannelRequest.context,
-      joinGroupRequest,
-      RequestLocal.noCaching.bufferSupplier
-    )).thenReturn(future)
+    when(groupCoordinator.joinGroup(requestChannelRequest.context, joinGroupRequest, RequestLocal.noCaching.bufferSupplier)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handleJoinGroupRequest(
       requestChannelRequest,
@@ -7717,11 +7636,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new JoinGroupRequest.Builder(joinGroupRequest).build())
 
     val future = new CompletableFuture[JoinGroupResponseData]()
-    when(groupCoordinator.joinGroup(
-      requestChannelRequest.context,
-      joinGroupRequest,
-      RequestLocal.noCaching.bufferSupplier
-    )).thenReturn(future)
+    when(groupCoordinator.joinGroup(requestChannelRequest.context, joinGroupRequest, RequestLocal.noCaching.bufferSupplier)).thenReturn(future)
 
     var response: JoinGroupResponse = null
     when(requestChannel.sendResponse(any(), any(), any())).thenAnswer { _ =>
@@ -7760,11 +7675,7 @@ class KafkaApisTest extends Logging {
       .setProtocolName(if (version >= 5) "range" else null)
 
     val future = new CompletableFuture[SyncGroupResponseData]()
-    when(groupCoordinator.syncGroup(
-      requestChannelRequest.context,
-      expectedSyncGroupRequest,
-      RequestLocal.noCaching.bufferSupplier
-    )).thenReturn(future)
+    when(groupCoordinator.syncGroup(requestChannelRequest.context, expectedSyncGroupRequest, RequestLocal.noCaching.bufferSupplier)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handleSyncGroupRequest(
       requestChannelRequest,
@@ -7797,11 +7708,7 @@ class KafkaApisTest extends Logging {
       .setProtocolName("range")
 
     val future = new CompletableFuture[SyncGroupResponseData]()
-    when(groupCoordinator.syncGroup(
-      requestChannelRequest.context,
-      expectedSyncGroupRequest,
-      RequestLocal.noCaching.bufferSupplier
-    )).thenReturn(future)
+    when(groupCoordinator.syncGroup(requestChannelRequest.context, expectedSyncGroupRequest, RequestLocal.noCaching.bufferSupplier)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handleSyncGroupRequest(
       requestChannelRequest,
@@ -7850,11 +7757,7 @@ class KafkaApisTest extends Logging {
       .setMemberId("member")
 
     val future = new CompletableFuture[SyncGroupResponseData]()
-    when(groupCoordinator.syncGroup(
-      requestChannelRequest.context,
-      expectedSyncGroupRequest,
-      RequestLocal.noCaching.bufferSupplier
-    )).thenReturn(future)
+    when(groupCoordinator.syncGroup(requestChannelRequest.context, expectedSyncGroupRequest, RequestLocal.noCaching.bufferSupplier)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handleSyncGroupRequest(
       requestChannelRequest,
@@ -7892,10 +7795,7 @@ class KafkaApisTest extends Logging {
       .setGenerationId(0)
 
     val future = new CompletableFuture[HeartbeatResponseData]()
-    when(groupCoordinator.heartbeat(
-      requestChannelRequest.context,
-      expectedHeartbeatRequest
-    )).thenReturn(future)
+    when(groupCoordinator.heartbeat(requestChannelRequest.context, expectedHeartbeatRequest)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handleHeartbeatRequest(requestChannelRequest)
 
@@ -7920,10 +7820,7 @@ class KafkaApisTest extends Logging {
       .setGenerationId(0)
 
     val future = new CompletableFuture[HeartbeatResponseData]()
-    when(groupCoordinator.heartbeat(
-      requestChannelRequest.context,
-      expectedHeartbeatRequest
-    )).thenReturn(future)
+    when(groupCoordinator.heartbeat(requestChannelRequest.context, expectedHeartbeatRequest)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handleHeartbeatRequest(requestChannelRequest)
 
@@ -7988,10 +7885,7 @@ class KafkaApisTest extends Logging {
         ).asJava)
 
       val future = new CompletableFuture[LeaveGroupResponseData]()
-      when(groupCoordinator.leaveGroup(
-        requestChannelRequest.context,
-        expectedLeaveGroupRequest
-      )).thenReturn(future)
+      when(groupCoordinator.leaveGroup(requestChannelRequest.context, expectedLeaveGroupRequest)).thenReturn(future)
       kafkaApis = createKafkaApis()
       kafkaApis.handleLeaveGroupRequest(requestChannelRequest)
 
@@ -8033,10 +7927,7 @@ class KafkaApisTest extends Logging {
       ).asJava)
 
     val future = new CompletableFuture[LeaveGroupResponseData]()
-    when(groupCoordinator.leaveGroup(
-      requestChannelRequest.context,
-      expectedLeaveGroupRequest
-    )).thenReturn(future)
+    when(groupCoordinator.leaveGroup(requestChannelRequest.context, expectedLeaveGroupRequest)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handleLeaveGroupRequest(requestChannelRequest)
 
@@ -8086,10 +7977,7 @@ class KafkaApisTest extends Logging {
       ).asJava)
 
     val future = new CompletableFuture[LeaveGroupResponseData]()
-    when(groupCoordinator.leaveGroup(
-      requestChannelRequest.context,
-      expectedLeaveGroupRequest
-    )).thenReturn(future)
+    when(groupCoordinator.leaveGroup(requestChannelRequest.context, expectedLeaveGroupRequest)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handleLeaveGroupRequest(requestChannelRequest)
 
@@ -8118,10 +8006,7 @@ class KafkaApisTest extends Logging {
       ).asJava)
 
     val future = new CompletableFuture[LeaveGroupResponseData]()
-    when(groupCoordinator.leaveGroup(
-      requestChannelRequest.context,
-      expectedLeaveGroupRequest
-    )).thenReturn(future)
+    when(groupCoordinator.leaveGroup(requestChannelRequest.context, expectedLeaveGroupRequest)).thenReturn(future)
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
@@ -8156,43 +8041,27 @@ class KafkaApisTest extends Logging {
       val requestChannelRequest = makeRequest(version)
 
       val group1Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-      when(groupCoordinator.fetchOffsets(
-        requestChannelRequest.context,
-        new OffsetFetchRequestData.OffsetFetchRequestGroup()
-          .setGroupId("group-1")
-          .setTopics(List(
-            new OffsetFetchRequestData.OffsetFetchRequestTopics()
-              .setName("foo")
-              .setPartitionIndexes(List[Integer](0, 1).asJava)).asJava),
-        false
-      )).thenReturn(group1Future)
+      when(groupCoordinator.fetchOffsets(requestChannelRequest.context, new OffsetFetchRequestData.OffsetFetchRequestGroup()
+        .setGroupId("group-1")
+        .setTopics(List(
+          new OffsetFetchRequestData.OffsetFetchRequestTopics()
+            .setName("foo")
+            .setPartitionIndexes(List[Integer](0, 1).asJava)).asJava), false)).thenReturn(group1Future)
 
       val group2Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-      when(groupCoordinator.fetchAllOffsets(
-        requestChannelRequest.context,
-        new OffsetFetchRequestData.OffsetFetchRequestGroup()
-          .setGroupId("group-2")
-          .setTopics(null),
-        false
-      )).thenReturn(group2Future)
+      when(groupCoordinator.fetchAllOffsets(requestChannelRequest.context, new OffsetFetchRequestData.OffsetFetchRequestGroup()
+        .setGroupId("group-2")
+        .setTopics(null), false)).thenReturn(group2Future)
 
       val group3Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-      when(groupCoordinator.fetchAllOffsets(
-        requestChannelRequest.context,
-        new OffsetFetchRequestData.OffsetFetchRequestGroup()
-          .setGroupId("group-3")
-          .setTopics(null),
-        false
-      )).thenReturn(group3Future)
+      when(groupCoordinator.fetchAllOffsets(requestChannelRequest.context, new OffsetFetchRequestData.OffsetFetchRequestGroup()
+        .setGroupId("group-3")
+        .setTopics(null), false)).thenReturn(group3Future)
 
       val group4Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-      when(groupCoordinator.fetchAllOffsets(
-        requestChannelRequest.context,
-        new OffsetFetchRequestData.OffsetFetchRequestGroup()
-          .setGroupId("group-4")
-          .setTopics(null),
-        false
-      )).thenReturn(group4Future)
+      when(groupCoordinator.fetchAllOffsets(requestChannelRequest.context, new OffsetFetchRequestData.OffsetFetchRequestGroup()
+        .setGroupId("group-4")
+        .setTopics(null), false)).thenReturn(group4Future)
       kafkaApis = createKafkaApis()
       kafkaApis.handleOffsetFetchRequest(requestChannelRequest)
 
@@ -8272,15 +8141,11 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = makeRequest(version)
 
     val future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-    when(groupCoordinator.fetchOffsets(
-      requestChannelRequest.context,
-      new OffsetFetchRequestData.OffsetFetchRequestGroup()
-        .setGroupId("group-1")
-        .setTopics(List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
-          .setName("foo")
-          .setPartitionIndexes(List[Integer](0, 1).asJava)).asJava),
-      false
-    )).thenReturn(future)
+    when(groupCoordinator.fetchOffsets(requestChannelRequest.context, new OffsetFetchRequestData.OffsetFetchRequestGroup()
+      .setGroupId("group-1")
+      .setTopics(List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+        .setName("foo")
+        .setPartitionIndexes(List[Integer](0, 1).asJava)).asJava), false)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handleOffsetFetchRequest(requestChannelRequest)
 
@@ -8347,13 +8212,9 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = makeRequest(version)
 
     val future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-    when(groupCoordinator.fetchAllOffsets(
-      requestChannelRequest.context,
-      new OffsetFetchRequestData.OffsetFetchRequestGroup()
-        .setGroupId("group-1")
-        .setTopics(null),
-      false
-    )).thenReturn(future)
+    when(groupCoordinator.fetchAllOffsets(requestChannelRequest.context, new OffsetFetchRequestData.OffsetFetchRequestGroup()
+      .setGroupId("group-1")
+      .setTopics(null), false)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handleOffsetFetchRequest(requestChannelRequest)
 
@@ -8444,25 +8305,17 @@ class KafkaApisTest extends Logging {
 
     // group-1 is allowed and bar is allowed.
     val group1Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-    when(groupCoordinator.fetchOffsets(
-      requestChannelRequest.context,
-      new OffsetFetchRequestData.OffsetFetchRequestGroup()
-        .setGroupId("group-1")
-        .setTopics(List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
-          .setName("bar")
-          .setPartitionIndexes(List[Integer](0).asJava)).asJava),
-      false
-    )).thenReturn(group1Future)
+    when(groupCoordinator.fetchOffsets(requestChannelRequest.context, new OffsetFetchRequestData.OffsetFetchRequestGroup()
+      .setGroupId("group-1")
+      .setTopics(List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+        .setName("bar")
+        .setPartitionIndexes(List[Integer](0).asJava)).asJava), false)).thenReturn(group1Future)
 
     // group-3 is allowed and bar is allowed.
     val group3Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-    when(groupCoordinator.fetchAllOffsets(
-      requestChannelRequest.context,
-      new OffsetFetchRequestData.OffsetFetchRequestGroup()
-        .setGroupId("group-3")
-        .setTopics(null),
-      false
-    )).thenReturn(group3Future)
+    when(groupCoordinator.fetchAllOffsets(requestChannelRequest.context, new OffsetFetchRequestData.OffsetFetchRequestGroup()
+      .setGroupId("group-3")
+      .setTopics(null), false)).thenReturn(group3Future)
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
@@ -8593,26 +8446,18 @@ class KafkaApisTest extends Logging {
 
     // group-1 and group-2 are allowed and bar is allowed.
     val group1Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-    when(groupCoordinator.fetchOffsets(
-      requestChannelRequest.context,
-      new OffsetFetchRequestData.OffsetFetchRequestGroup()
-        .setGroupId("group-1")
-        .setTopics(List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
-          .setName("bar")
-          .setPartitionIndexes(List[Integer](0).asJava)).asJava),
-      false
-    )).thenReturn(group1Future)
+    when(groupCoordinator.fetchOffsets(requestChannelRequest.context, new OffsetFetchRequestData.OffsetFetchRequestGroup()
+      .setGroupId("group-1")
+      .setTopics(List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+        .setName("bar")
+        .setPartitionIndexes(List[Integer](0).asJava)).asJava), false)).thenReturn(group1Future)
 
     val group2Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
-    when(groupCoordinator.fetchOffsets(
-      requestChannelRequest.context,
-      new OffsetFetchRequestData.OffsetFetchRequestGroup()
-        .setGroupId("group-2")
-        .setTopics(List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
-          .setName("bar")
-          .setPartitionIndexes(List[Integer](0).asJava)).asJava),
-      false
-    )).thenReturn(group1Future)
+    when(groupCoordinator.fetchOffsets(requestChannelRequest.context, new OffsetFetchRequestData.OffsetFetchRequestGroup()
+      .setGroupId("group-2")
+      .setTopics(List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
+        .setName("bar")
+        .setPartitionIndexes(List[Integer](0).asJava)).asJava), false)).thenReturn(group1Future)
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
@@ -8713,10 +8558,7 @@ class KafkaApisTest extends Logging {
       .setTypesFilter(if (version >= 5) List("classic", "consumer").asJava else List.empty.asJava)
 
     val future = new CompletableFuture[ListGroupsResponseData]()
-    when(groupCoordinator.listGroups(
-      requestChannelRequest.context,
-      expectedListGroupsRequest
-    )).thenReturn(future)
+    when(groupCoordinator.listGroups(requestChannelRequest.context, expectedListGroupsRequest)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handleListGroupsRequest(requestChannelRequest)
 
@@ -8757,10 +8599,7 @@ class KafkaApisTest extends Logging {
       .setTypesFilter(List("classic", "consumer").asJava)
 
     val future = new CompletableFuture[ListGroupsResponseData]()
-    when(groupCoordinator.listGroups(
-      requestChannelRequest.context,
-      expectedListGroupsRequest
-    )).thenReturn(future)
+    when(groupCoordinator.listGroups(requestChannelRequest.context, expectedListGroupsRequest)).thenReturn(future)
     kafkaApis = createKafkaApis()
     kafkaApis.handleListGroupsRequest(requestChannelRequest)
 
@@ -8853,10 +8692,7 @@ class KafkaApisTest extends Logging {
     val expectedListGroupsRequest = new ListGroupsRequestData()
 
     val future = new CompletableFuture[ListGroupsResponseData]()
-    when(groupCoordinator.listGroups(
-      requestChannelRequest.context,
-      expectedListGroupsRequest
-    )).thenReturn(future)
+    when(groupCoordinator.listGroups(requestChannelRequest.context, expectedListGroupsRequest)).thenReturn(future)
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
     kafkaApis.handleListGroupsRequest(requestChannelRequest)
 
@@ -9670,10 +9506,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new ConsumerGroupHeartbeatRequest.Builder(consumerGroupHeartbeatRequest).build())
 
     val future = new CompletableFuture[ConsumerGroupHeartbeatResponseData]()
-    when(groupCoordinator.consumerGroupHeartbeat(
-      requestChannelRequest.context,
-      consumerGroupHeartbeatRequest
-    )).thenReturn(future)
+    when(groupCoordinator.consumerGroupHeartbeat(requestChannelRequest.context, consumerGroupHeartbeatRequest)).thenReturn(future)
     kafkaApis = createKafkaApis(
       featureVersions = Seq(GroupVersion.GV_1)
     )
@@ -9696,10 +9529,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new ConsumerGroupHeartbeatRequest.Builder(consumerGroupHeartbeatRequest).build())
 
     val future = new CompletableFuture[ConsumerGroupHeartbeatResponseData]()
-    when(groupCoordinator.consumerGroupHeartbeat(
-      requestChannelRequest.context,
-      consumerGroupHeartbeatRequest
-    )).thenReturn(future)
+    when(groupCoordinator.consumerGroupHeartbeat(requestChannelRequest.context, consumerGroupHeartbeatRequest)).thenReturn(future)
     kafkaApis = createKafkaApis(
       featureVersions = Seq(GroupVersion.GV_1)
     )
@@ -9804,10 +9634,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
 
     val future = new CompletableFuture[StreamsGroupHeartbeatResult]()
-    when(groupCoordinator.streamsGroupHeartbeat(
-      requestChannelRequest.context,
-      streamsGroupHeartbeatRequest
-    )).thenReturn(future)
+    when(groupCoordinator.streamsGroupHeartbeat(requestChannelRequest.context, streamsGroupHeartbeatRequest)).thenReturn(future)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
     )
@@ -9869,10 +9696,7 @@ class KafkaApisTest extends Logging {
     }
 
     val future = new CompletableFuture[StreamsGroupHeartbeatResult]()
-    when(groupCoordinator.streamsGroupHeartbeat(
-      requestChannelRequest.context,
-      streamsGroupHeartbeatRequest
-    )).thenReturn(future)
+    when(groupCoordinator.streamsGroupHeartbeat(requestChannelRequest.context, streamsGroupHeartbeatRequest)).thenReturn(future)
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
       overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
@@ -9896,10 +9720,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
 
     val future = new CompletableFuture[StreamsGroupHeartbeatResult]()
-    when(groupCoordinator.streamsGroupHeartbeat(
-      requestChannelRequest.context,
-      streamsGroupHeartbeatRequest
-    )).thenReturn(future)
+    when(groupCoordinator.streamsGroupHeartbeat(requestChannelRequest.context, streamsGroupHeartbeatRequest)).thenReturn(future)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
     )
@@ -10066,10 +9887,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
 
     val future = new CompletableFuture[StreamsGroupHeartbeatResult]()
-    when(groupCoordinator.streamsGroupHeartbeat(
-      requestChannelRequest.context,
-      streamsGroupHeartbeatRequest
-    )).thenReturn(future)
+    when(groupCoordinator.streamsGroupHeartbeat(requestChannelRequest.context, streamsGroupHeartbeatRequest)).thenReturn(future)
 
     kafkaApis = createKafkaApis(
       overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
@@ -10095,10 +9913,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
 
     val future = new CompletableFuture[StreamsGroupHeartbeatResult]()
-    when(groupCoordinator.streamsGroupHeartbeat(
-      requestChannelRequest.context,
-      streamsGroupHeartbeatRequest
-    )).thenReturn(future)
+    when(groupCoordinator.streamsGroupHeartbeat(requestChannelRequest.context, streamsGroupHeartbeatRequest)).thenReturn(future)
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], isNotNull[util.List[Action]])).thenAnswer(invocation => {
@@ -10151,10 +9966,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new ConsumerGroupDescribeRequest.Builder(consumerGroupDescribeRequestData, true).build())
 
     val future = new CompletableFuture[util.List[ConsumerGroupDescribeResponseData.DescribedGroup]]()
-    when(groupCoordinator.consumerGroupDescribe(
-      any[RequestContext],
-      any[util.List[String]]
-    )).thenReturn(future)
+    when(groupCoordinator.consumerGroupDescribe(any[RequestContext], any[util.List[String]])).thenReturn(future)
     kafkaApis = createKafkaApis(
       featureVersions = Seq(GroupVersion.GV_1)
     )
@@ -10268,10 +10080,7 @@ class KafkaApisTest extends Logging {
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
 
     val future = new CompletableFuture[util.List[ConsumerGroupDescribeResponseData.DescribedGroup]]()
-    when(groupCoordinator.consumerGroupDescribe(
-      any[RequestContext],
-      any[util.List[String]]
-    )).thenReturn(future)
+    when(groupCoordinator.consumerGroupDescribe(any[RequestContext], any[util.List[String]])).thenReturn(future)
     future.complete(List().asJava)
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
@@ -10292,10 +10101,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new ConsumerGroupDescribeRequest.Builder(consumerGroupDescribeRequestData, true).build())
 
     val future = new CompletableFuture[util.List[ConsumerGroupDescribeResponseData.DescribedGroup]]()
-    when(groupCoordinator.consumerGroupDescribe(
-      any[RequestContext],
-      any[util.List[String]]
-    )).thenReturn(future)
+    when(groupCoordinator.consumerGroupDescribe(any[RequestContext], any[util.List[String]])).thenReturn(future)
     kafkaApis = createKafkaApis(
       featureVersions = Seq(GroupVersion.GV_1)
     )
@@ -10320,10 +10126,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new StreamsGroupDescribeRequest.Builder(streamsGroupDescribeRequestData, true).build())
 
     val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
-    when(groupCoordinator.streamsGroupDescribe(
-      any[RequestContext],
-      any[util.List[String]]
-    )).thenReturn(future)
+    when(groupCoordinator.streamsGroupDescribe(any[RequestContext], any[util.List[String]])).thenReturn(future)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
     )
@@ -10428,10 +10231,7 @@ class KafkaApisTest extends Logging {
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
 
     val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
-    when(groupCoordinator.streamsGroupDescribe(
-      any[RequestContext],
-      any[util.List[String]]
-    )).thenReturn(future)
+    when(groupCoordinator.streamsGroupDescribe(any[RequestContext], any[util.List[String]])).thenReturn(future)
     future.complete(List().asJava)
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
@@ -10452,10 +10252,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new StreamsGroupDescribeRequest.Builder(streamsGroupDescribeRequestData, true).build())
 
     val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
-    when(groupCoordinator.streamsGroupDescribe(
-      any[RequestContext],
-      any[util.List[String]]
-    )).thenReturn(future)
+    when(groupCoordinator.streamsGroupDescribe(any[RequestContext], any[util.List[String]])).thenReturn(future)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
     )
@@ -10500,10 +10297,7 @@ class KafkaApisTest extends Logging {
     }
 
     val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
-    when(groupCoordinator.streamsGroupDescribe(
-      any[RequestContext],
-      any[util.List[String]]
-    )).thenReturn(future)
+    when(groupCoordinator.streamsGroupDescribe(any[RequestContext], any[util.List[String]])).thenReturn(future)
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
       overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
@@ -10580,10 +10374,7 @@ class KafkaApisTest extends Logging {
     }
 
     val future = new CompletableFuture[util.List[ConsumerGroupDescribeResponseData.DescribedGroup]]()
-    when(groupCoordinator.consumerGroupDescribe(
-      any[RequestContext],
-      any[util.List[String]]
-    )).thenReturn(future)
+    when(groupCoordinator.consumerGroupDescribe(any[RequestContext], any[util.List[String]])).thenReturn(future)
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
       featureVersions = Seq(GroupVersion.GV_1)
@@ -10790,10 +10581,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new ShareGroupHeartbeatRequest.Builder(shareGroupHeartbeatRequest, true).build())
 
     val future = new CompletableFuture[ShareGroupHeartbeatResponseData]()
-    when(groupCoordinator.shareGroupHeartbeat(
-      requestChannelRequest.context,
-      shareGroupHeartbeatRequest
-    )).thenReturn(future)
+    when(groupCoordinator.shareGroupHeartbeat(requestChannelRequest.context, shareGroupHeartbeatRequest)).thenReturn(future)
     metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
@@ -10875,10 +10663,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new ShareGroupHeartbeatRequest.Builder(shareGroupHeartbeatRequest, true).build())
 
     val future = new CompletableFuture[ShareGroupHeartbeatResponseData]()
-    when(groupCoordinator.shareGroupHeartbeat(
-      requestChannelRequest.context,
-      shareGroupHeartbeatRequest
-    )).thenReturn(future)
+    when(groupCoordinator.shareGroupHeartbeat(requestChannelRequest.context, shareGroupHeartbeatRequest)).thenReturn(future)
     metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
@@ -11352,15 +11137,9 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build)
 
     val futureGroup1 = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
-    when(groupCoordinator.describeShareGroupOffsets(
-      requestChannelRequest.context,
-      describeShareGroupOffsetsRequestGroup1
-    )).thenReturn(futureGroup1)
+    when(groupCoordinator.describeShareGroupOffsets(requestChannelRequest.context, describeShareGroupOffsetsRequestGroup1)).thenReturn(futureGroup1)
     val futureGroup2 = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
-    when(groupCoordinator.describeShareGroupOffsets(
-      requestChannelRequest.context,
-      describeShareGroupOffsetsRequestGroup2
-    )).thenReturn(futureGroup2)
+    when(groupCoordinator.describeShareGroupOffsets(requestChannelRequest.context, describeShareGroupOffsetsRequestGroup2)).thenReturn(futureGroup2)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
     )
@@ -11469,23 +11248,17 @@ class KafkaApisTest extends Logging {
 
     // The group coordinator will only be asked for information about topics which are authorized
     val futureGroup1 = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
-    when(groupCoordinator.describeShareGroupOffsets(
-      requestChannelRequest.context,
-      new DescribeShareGroupOffsetsRequestGroup().setGroupId("group1").setTopics(
-        util.List.of(
-          new DescribeShareGroupOffsetsRequestTopic().setTopicName(topicName1).setPartitions(util.List.of(1, 2, 3)),
-        )
+    when(groupCoordinator.describeShareGroupOffsets(requestChannelRequest.context, new DescribeShareGroupOffsetsRequestGroup().setGroupId("group1").setTopics(
+      util.List.of(
+        new DescribeShareGroupOffsetsRequestTopic().setTopicName(topicName1).setPartitions(util.List.of(1, 2, 3)),
       )
-    )).thenReturn(futureGroup1)
+    ))).thenReturn(futureGroup1)
 
     val futureGroup2 = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
-    when(groupCoordinator.describeShareGroupOffsets(
-      requestChannelRequest.context,
-      new DescribeShareGroupOffsetsRequestGroup().setGroupId("group2").setTopics(
-        util.List.of(
-        )
+    when(groupCoordinator.describeShareGroupOffsets(requestChannelRequest.context, new DescribeShareGroupOffsetsRequestGroup().setGroupId("group2").setTopics(
+      util.List.of(
       )
-    )).thenReturn(futureGroup2)
+    ))).thenReturn(futureGroup2)
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
     val acls = Map(
@@ -11638,16 +11411,10 @@ class KafkaApisTest extends Logging {
 
     // The group coordinator is being asked for information about all topics, not just those which are authorized
     val futureGroup1 = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
-    when(groupCoordinator.describeShareGroupAllOffsets(
-      requestChannelRequest.context,
-      new DescribeShareGroupOffsetsRequestGroup().setGroupId("group1").setTopics(null)
-    )).thenReturn(futureGroup1)
+    when(groupCoordinator.describeShareGroupAllOffsets(requestChannelRequest.context, new DescribeShareGroupOffsetsRequestGroup().setGroupId("group1").setTopics(null))).thenReturn(futureGroup1)
 
     val futureGroup2 = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
-    when(groupCoordinator.describeShareGroupAllOffsets(
-      requestChannelRequest.context,
-      new DescribeShareGroupOffsetsRequestGroup().setGroupId("group2").setTopics(null)
-    )).thenReturn(futureGroup2)
+    when(groupCoordinator.describeShareGroupAllOffsets(requestChannelRequest.context, new DescribeShareGroupOffsetsRequestGroup().setGroupId("group2").setTopics(null))).thenReturn(futureGroup2)
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
     val acls = Map(
@@ -11799,15 +11566,9 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build)
 
     val futureGroup1 = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
-    when(groupCoordinator.describeShareGroupAllOffsets(
-      requestChannelRequest.context,
-      describeShareGroupOffsetsRequestGroup1
-    )).thenReturn(futureGroup1)
+    when(groupCoordinator.describeShareGroupAllOffsets(requestChannelRequest.context, describeShareGroupOffsetsRequestGroup1)).thenReturn(futureGroup1)
     val futureGroup2 = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
-    when(groupCoordinator.describeShareGroupAllOffsets(
-      requestChannelRequest.context,
-      describeShareGroupOffsetsRequestGroup2
-    )).thenReturn(futureGroup2)
+    when(groupCoordinator.describeShareGroupAllOffsets(requestChannelRequest.context, describeShareGroupOffsetsRequestGroup2)).thenReturn(futureGroup2)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
     )
@@ -11917,10 +11678,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest, true).build)
 
     val future = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
-    when(groupCoordinator.describeShareGroupOffsets(
-      requestChannelRequest.context,
-      describeShareGroupOffsetsRequestGroup
-    )).thenReturn(future)
+    when(groupCoordinator.describeShareGroupOffsets(requestChannelRequest.context, describeShareGroupOffsetsRequestGroup)).thenReturn(future)
     kafkaApis = createKafkaApis(
       overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
     )
@@ -12018,10 +11776,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new DeleteShareGroupOffsetsRequest.Builder(deleteShareGroupOffsetsRequestData, true).build)
 
     val resultFuture = new CompletableFuture[DeleteShareGroupOffsetsResponseData]
-    when(groupCoordinator.deleteShareGroupOffsets(
-      requestChannelRequest.context,
-      deleteShareGroupOffsetsGroupCoordinatorRequestData
-    )).thenReturn(resultFuture)
+    when(groupCoordinator.deleteShareGroupOffsets(requestChannelRequest.context, deleteShareGroupOffsetsGroupCoordinatorRequestData)).thenReturn(resultFuture)
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(buildExpectedActionsGroup(groupId))))
@@ -12119,10 +11874,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new DeleteShareGroupOffsetsRequest.Builder(deleteShareGroupOffsetsRequestData, true).build)
 
     val resultFuture = new CompletableFuture[DeleteShareGroupOffsetsResponseData]
-    when(groupCoordinator.deleteShareGroupOffsets(
-      requestChannelRequest.context,
-      deleteShareGroupOffsetsRequestData
-    )).thenReturn(resultFuture)
+    when(groupCoordinator.deleteShareGroupOffsets(requestChannelRequest.context, deleteShareGroupOffsetsRequestData)).thenReturn(resultFuture)
 
     kafkaApis = createKafkaApis(
       overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
@@ -12203,10 +11955,7 @@ class KafkaApisTest extends Logging {
 
     val requestChannelRequest = buildRequest(new DeleteShareGroupOffsetsRequest.Builder(deleteShareGroupOffsetsRequestData, true).build)
 
-    when(groupCoordinator.deleteShareGroupOffsets(
-      requestChannelRequest.context,
-      deleteShareGroupOffsetsRequestData
-    )).thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception))
+    when(groupCoordinator.deleteShareGroupOffsets(requestChannelRequest.context, deleteShareGroupOffsetsRequestData)).thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception))
 
     kafkaApis = createKafkaApis(
       overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
@@ -12249,10 +11998,7 @@ class KafkaApisTest extends Logging {
       .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
       .setErrorMessage(Errors.UNKNOWN_SERVER_ERROR.message())
 
-    when(groupCoordinator.deleteShareGroupOffsets(
-      requestChannelRequest.context,
-      deleteShareGroupOffsetsRequestData
-    )).thenReturn(CompletableFuture.completedFuture(groupCoordinatorResponse))
+    when(groupCoordinator.deleteShareGroupOffsets(requestChannelRequest.context, deleteShareGroupOffsetsRequestData)).thenReturn(CompletableFuture.completedFuture(groupCoordinatorResponse))
 
     kafkaApis = createKafkaApis(
       overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
@@ -12589,10 +12335,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new ShareGroupDescribeRequest.Builder(shareGroupDescribeRequestData, true).build())
 
     val future = new CompletableFuture[util.List[ShareGroupDescribeResponseData.DescribedGroup]]()
-    when(groupCoordinator.shareGroupDescribe(
-      any[RequestContext],
-      any[util.List[String]]
-    )).thenReturn(future)
+    when(groupCoordinator.shareGroupDescribe(any[RequestContext], any[util.List[String]])).thenReturn(future)
     metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
     kafkaApis = createKafkaApis(
       overrideProperties = configOverrides,
