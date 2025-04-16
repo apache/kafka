@@ -157,7 +157,10 @@ public class SenderTest {
 
     private static final String TOPIC_NAME = "test";
     private static final Uuid TOPIC_ID = Uuid.fromString("MKXx1fIkQy2J9jXHhK8m1w");
-    private static final Map<String, Uuid> TOPIC_IDS = new HashMap<>(Map.of(TOPIC_NAME, TOPIC_ID));
+    private static final Map<String, Uuid> TOPIC_IDS = Map.of(
+            TOPIC_NAME, TOPIC_ID,
+            "testSplitBatchAndSend", Uuid.fromString("2J9hK8m1wHMKjXfIkQyXx1")
+    );
     private final TopicPartition tp0 = new TopicPartition(TOPIC_NAME, 0);
     private final TopicPartition tp1 = new TopicPartition(TOPIC_NAME, 1);
     private final TopicPartition tp2 = new TopicPartition(TOPIC_NAME, 2);
@@ -2357,9 +2360,9 @@ public class SenderTest {
 
     @Test
     public void testIdempotentSplitBatchAndSend() throws Exception {
-        Uuid topicId = Uuid.fromString("2J9hK8m1wHMKjXfIkQyXx1");
-        TOPIC_IDS.put("testSplitBatchAndSend", topicId);
-        TopicIdPartition tpId = new TopicIdPartition(topicId, new TopicPartition("testSplitBatchAndSend", 1));
+        TopicIdPartition tpId = new TopicIdPartition(
+                TOPIC_IDS.getOrDefault("testSplitBatchAndSend", Uuid.ZERO_UUID),
+                new TopicPartition("testSplitBatchAndSend", 1));
         TransactionManager txnManager = createTransactionManager();
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
         setupWithTransactionState(txnManager);
@@ -2370,10 +2373,10 @@ public class SenderTest {
 
     @Test
     public void testTransactionalSplitBatchAndSend() throws Exception {
-        Uuid topicId = Uuid.fromString("2J9hK8m1wHMKjXfIkQyXx1");
-        TOPIC_IDS.put("testSplitBatchAndSend", topicId);
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
-        TopicIdPartition tpId = new TopicIdPartition(topicId, new TopicPartition("testSplitBatchAndSend", 1));
+        TopicIdPartition tpId = new TopicIdPartition(
+                TOPIC_IDS.getOrDefault("testSplitBatchAndSend", Uuid.ZERO_UUID),
+                new TopicPartition("testSplitBatchAndSend", 1));
 
         TransactionManager txnManager = new TransactionManager(logContext, "testSplitBatchAndSend", 60000, 100, apiVersions);
 
