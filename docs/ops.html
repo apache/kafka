@@ -4029,6 +4029,49 @@ foo
     It is generally useful to enable DEBUG logging on the KRaft controllers and the ZK brokers during the migration.
   </p>
 
+  <h3>Enter Migration Mode on the Brokers</h3>
+  <p>
+    Once the KRaft controller quorum has been started, the brokers will need to be reconfigured and restarted. Brokers
+    may be restarted in a rolling fashion to avoid impacting cluster availability. Each broker requires the
+    following configuration to communicate with the KRaft controllers and to enable the migration.
+  </p>
+
+  <ul>
+    <li><a href="#brokerconfigs_broker.id">broker.id</a>: Ensure <code>broker.id</code> is set to a non-negative integer even if <code>broker.id.generation.enable</code> is enabled (default is enabled). Additionally, ensure <code>broker.id</code> does not exceed <code>reserved.broker.max.id</code> to avoid failure.</li>
+    <li><a href="#brokerconfigs_controller.quorum.bootstrap.servers">controller.quorum.bootstrap.servers</a></li>
+    <li><a href="#brokerconfigs_controller.listener.names">controller.listener.names</a></li>
+    <li>The controller.listener.name should also be added to <a href="#brokerconfigs_listener.security.protocol.map">listener.security.property.map</a></li>
+    <li><a href="#brokerconfigs_zookeeper.metadata.migration.enable">zookeeper.metadata.migration.enable</a></li>
+  </ul>
+
+  <p>Here is a sample config for a broker that is ready for migration:</p>
+
+  <pre><code class="language-text"># Sample ZK broker server.properties listening on 9092
+broker.id=0
+listeners=PLAINTEXT://:9092
+advertised.listeners=PLAINTEXT://localhost:9092
+listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
+
+# Set the IBP
+inter.broker.protocol.version={{dotVersion}}
+
+# Enable the migration
+zookeeper.metadata.migration.enable=true
+
+# ZooKeeper client configuration
+zookeeper.connect=localhost:2181
+
+# KRaft controller quorum configuration
+controller.quorum.bootstrap.servers=localhost:9093
+controller.listener.names=CONTROLLER</code></pre>
+
+  <p>
+    <em>Note: Once the final ZK broker has been restarted with the necessary configuration, the migration will automatically begin.</em>
+    When the migration is complete, an INFO level log can be observed on the active controller:
+  </p>
+
+  <pre>Completed migration of metadata from Zookeeper to KRaft</pre>
+
   <h3>Provisioning the KRaft controller quorum</h3>
   <p>
     Two things are needed before the migration can begin. First, the brokers must be configured to support the migration and second,
@@ -4075,50 +4118,6 @@ inter.broker.listener.name=PLAINTEXT
 
   <p><em>Note: The KRaft cluster <code>node.id</code> values must be different from any existing ZK broker <code>broker.id</code>.
   In KRaft-mode, the brokers and controllers share the same Node ID namespace.</em></p>
-
-  <h3>Enter Migration Mode on the Brokers</h3>
-  <p>
-    Once the KRaft controller quorum has been started, the brokers will need to be reconfigured and restarted. Brokers
-    may be restarted in a rolling fashion to avoid impacting cluster availability. Each broker requires the
-    following configuration to communicate with the KRaft controllers and to enable the migration.
-  </p>
-
-  <ul>
-    <li><a href="#brokerconfigs_broker.id">broker.id</a>: Ensure <code>broker.id</code> is set to a non-negative integer even if <code>broker.id.generation.enable</code> is enabled (default is enabled). Additionally, ensure <code>broker.id</code> does not exceed <code>reserved.broker.max.id</code> to avoid failure.</li>
-    <li><a href="#brokerconfigs_controller.quorum.bootstrap.servers">controller.quorum.bootstrap.servers</a></li>
-    <li><a href="#brokerconfigs_controller.listener.names">controller.listener.names</a></li>
-    <li>The controller.listener.name should also be added to <a href="#brokerconfigs_listener.security.protocol.map">listener.security.property.map</a></li>
-    <li><a href="#brokerconfigs_zookeeper.metadata.migration.enable">zookeeper.metadata.migration.enable</a></li>
-  </ul>
-
-  <p>Here is a sample config for a broker that is ready for migration:</p>
-
-  <pre><code class="language-text"># Sample ZK broker server.properties listening on 9092
-broker.id=0
-listeners=PLAINTEXT://:9092
-advertised.listeners=PLAINTEXT://localhost:9092
-listener.security.protocol.map=PLAINTEXT:PLAINTEXT,CONTROLLER:PLAINTEXT
-
-# Set the IBP
-inter.broker.protocol.version={{dotVersion}}
-
-# Enable the migration
-zookeeper.metadata.migration.enable=true
-
-# ZooKeeper client configuration
-zookeeper.connect=localhost:2181
-
-# KRaft controller quorum configuration
-controller.quorum.bootstrap.servers=localhost:9093
-controller.listener.names=CONTROLLER</code></pre>
-
-  <p>
-    <em>Note: Once the final ZK broker has been restarted with the necessary configuration, the migration will automatically begin.</em>
-    When the migration is complete, an INFO level log can be observed on the active controller:
-  </p>
-
-  <pre>Completed migration of metadata from Zookeeper to KRaft</pre>
-
   <h3>Migrating brokers to KRaft</h3>
   <p>
     Once the KRaft controller completes the metadata migration, the brokers will still be running
@@ -4224,34 +4223,9 @@ listeners=CONTROLLER://:9093
         </td>
       </tr>
       <tr>
-        <td>Provisioning the KRaft controller quorum</td>
-        <td>
-          <ul>
-            <li>
-              Deprovision the KRaft controller quorum.
-            </li>
-            <li>
-              Then you are done.
-            </li>
-          </ul>
-        </td>
-        <td>
-        </td>
-      </tr>
-      <tr>
         <td>Enter Migration Mode on the brokers</td>
         <td>
           <ul>
-            <li>
-              Deprovision the KRaft controller quorum.
-            </li>
-            <li>
-              Using <code>zookeeper-shell.sh</code>, run <code>rmr /controller</code> so that one
-              of the brokers can become the new old-style controller. Additionally, run
-              <code>get /migration</code> followed by <code>rmr /migration</code> to clear the
-              migration state from ZooKeeper. This will allow you to re-attempt the migration
-              in the future. The data read from "/migration" can be useful for debugging.
-            </li>
             <li>
               On each broker, remove the <code>zookeeper.metadata.migration.enable</code>,
               <code>controller.listener.names</code>, and <code>controller.quorum.bootstrap.servers</code>
@@ -4271,6 +4245,41 @@ listeners=CONTROLLER://:9093
         </td>
       </tr>
       <tr>
+        <td>Provisioning the KRaft controller quorum</td>
+        <td>
+          <ul>
+            <li>
+              Deprovision the KRaft controller quorum.
+            </li>
+            <li>
+              Using <code>zookeeper-shell.sh</code>, run <code>rmr /migration to clear the migration state from
+              ZooKeeper. This will allow you to re-attempt the migration in the future.
+            </li>
+            <li>
+              Using <code>zookeeper-shell.sh</code>, run <code>rmr /controller</code> so that one
+              of the brokers can become the new old-style controller.
+            </li>
+            <li>
+              On each broker, remove the <code>zookeeper.metadata.migration.enable</code>,
+              <code>controller.listener.names</code>, and <code>controller.quorum.bootstrap.servers</code>
+              configurations, and replace <code>node.id</code> with <code>broker.id</code>.
+              Then perform a rolling restart of all brokers.
+            </li>
+            <li>
+              Then you are done.
+            </li>
+          </ul>
+        </td>
+        <td>
+          <li>
+            It is important to perform the <code>zookeeper-shell.sh</code> step <b>quickly</b>, to minimize the amount of
+            time that the cluster lacks a controller. Until the <code> /controller</code> znode is deleted,
+            you can also ignore any errors in the broker log about failing to connect to the Kraft controller.
+            Those error logs should disappear after second roll to pure zookeeper mode.
+          </li>
+        </td>
+      </tr>
+      <tr>
         <td>Migrating brokers to KRaft</td>
         <td>
           <ul>
@@ -4286,14 +4295,18 @@ listeners=CONTROLLER://:9093
               Deprovision the KRaft controller quorum.
             </li>
             <li>
+              Using <code>zookeeper-shell.sh</code>, run <code>rmr /migration to clear the migration state from
+              ZooKeeper. This will allow you to re-attempt the migration in the future.
+            </li>
+            <li>
               Using <code>zookeeper-shell.sh</code>, run <code>rmr /controller</code> so that one
               of the brokers can become the new old-style controller.
             </li>
             <li>
               On each broker, remove the <code>zookeeper.metadata.migration.enable</code>,
               <code>controller.listener.names</code>, and <code>controller.quorum.bootstrap.servers</code>
-              configurations.
-              Then perform a second rolling restart of all brokers.
+              configurations, and replace <code>node.id</code> with <code>broker.id</code>.
+              Then perform a rolling restart of all brokers.
             </li>
             <li>
               Then you are done.
