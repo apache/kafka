@@ -27,6 +27,7 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.clients.admin.EndpointType
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.acl.AclOperation._
+import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, SHARE_GROUP_STATE_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
 import org.apache.kafka.common.internals.{FatalExitError, Plugin, Topic}
@@ -34,7 +35,6 @@ import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.{AddPartit
 import org.apache.kafka.common.message.DeleteRecordsResponseData.{DeleteRecordsPartitionResult, DeleteRecordsTopicResult}
 import org.apache.kafka.common.message.DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic
 import org.apache.kafka.common.message.DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic
-import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData.ClientMetricsResource
 import org.apache.kafka.common.message.ListOffsetsRequestData.ListOffsetsPartition
 import org.apache.kafka.common.message.ListOffsetsResponseData.{ListOffsetsPartitionResponse, ListOffsetsTopicResponse}
 import org.apache.kafka.common.message.MetadataResponseData.{MetadataResponsePartition, MetadataResponseTopic}
@@ -228,7 +228,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         case ApiKeys.DESCRIBE_TOPIC_PARTITIONS => handleDescribeTopicPartitionsRequest(request)
         case ApiKeys.GET_TELEMETRY_SUBSCRIPTIONS => handleGetTelemetrySubscriptionsRequest(request)
         case ApiKeys.PUSH_TELEMETRY => handlePushTelemetryRequest(request)
-        case ApiKeys.LIST_CLIENT_METRICS_RESOURCES => handleListClientMetricsResources(request)
+        case ApiKeys.LIST_CONFIG_RESOURCES => handleListConfigResources(request)
         case ApiKeys.ADD_RAFT_VOTER => forwardToController(request)
         case ApiKeys.REMOVE_RAFT_VOTER => forwardToController(request)
         case ApiKeys.SHARE_GROUP_HEARTBEAT => handleShareGroupHeartbeat(request).exceptionally(handleError)
@@ -2849,16 +2849,45 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  def handleListClientMetricsResources(request: RequestChannel.Request): Unit = {
-    val listClientMetricsResourcesRequest = request.body[ListClientMetricsResourcesRequest]
+  def handleListConfigResources(request: RequestChannel.Request): Unit = {
+    val listConfigResourcesRequest = request.body[ListConfigResourcesRequest]
 
     if (!authHelper.authorize(request.context, DESCRIBE_CONFIGS, CLUSTER, CLUSTER_NAME)) {
-      requestHelper.sendMaybeThrottle(request, listClientMetricsResourcesRequest.getErrorResponse(Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
+      requestHelper.sendMaybeThrottle(request, listConfigResourcesRequest.getErrorResponse(Errors.CLUSTER_AUTHORIZATION_FAILED.exception))
     } else {
-      val data = new ListClientMetricsResourcesResponseData().setClientMetricsResources(
-        clientMetricsManager.listClientMetricsResources.stream.map(
-          name => new ClientMetricsResource().setName(name)).collect(Collectors.toList()))
-      requestHelper.sendMaybeThrottle(request, new ListClientMetricsResourcesResponse(data))
+      val data = new ListConfigResourcesResponseData()
+      val clientMetricsResources: util.List[ListConfigResourcesResponseData.ConfigResource] = clientMetricsManager.listClientMetricsResources.stream
+        .map(name =>
+          new ListConfigResourcesResponseData.ConfigResource().setResourceName(name).setResourceType(ConfigResource.Type.CLIENT_METRICS.id)
+        ).collect(Collectors.toList())
+
+      if (request.header.apiVersion() == 0) {
+        // Version 0 only supports client metrics.
+        data.setConfigResources(clientMetricsResources)
+      } else {
+        // From version 1, supports all ConfigResource.Type.
+        val topicConfigResources: util.List[ListConfigResourcesResponseData.ConfigResource] = metadataCache.getAllTopics.stream()
+          .map(name =>
+            new ListConfigResourcesResponseData.ConfigResource().setResourceName(name).setResourceType(ConfigResource.Type.TOPIC.id)
+          ).collect(Collectors.toList())
+        val groupConfigResources: util.List[ListConfigResourcesResponseData.ConfigResource] = groupConfigManager.groupIds().stream()
+          .map(id =>
+            new ListConfigResourcesResponseData.ConfigResource().setResourceName(id).setResourceType(ConfigResource.Type.GROUP.id)
+          ).collect(Collectors.toList())
+        val brokerConfigResources: util.List[ListConfigResourcesResponseData.ConfigResource] = metadataCache.getBrokerNodes(request.context.listenerName).stream
+          .map(node =>
+            new ListConfigResourcesResponseData.ConfigResource().setResourceName(node.id.toString).setResourceType(ConfigResource.Type.BROKER.id)
+          ).collect(Collectors.toList())
+        data.setConfigResources(
+          util.stream.Stream.of(
+            clientMetricsResources,
+            topicConfigResources,
+            groupConfigResources,
+            brokerConfigResources
+          ).flatMap(s => s.stream).collect(Collectors.toList())
+        )
+      }
+      requestHelper.sendMaybeThrottle(request, new ListConfigResourcesResponse(data))
     }
   }
 

@@ -16,24 +16,24 @@
  */
 package org.apache.kafka.common.requests;
 
-import org.apache.kafka.common.message.ListClientMetricsResourcesRequestData;
-import org.apache.kafka.common.message.ListClientMetricsResourcesResponseData;
+import org.apache.kafka.common.message.ListConfigResourcesRequestData;
+import org.apache.kafka.common.message.ListConfigResourcesResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
-public class ListClientMetricsResourcesRequest extends AbstractRequest {
-    public static class Builder extends AbstractRequest.Builder<ListClientMetricsResourcesRequest> {
-        public final ListClientMetricsResourcesRequestData data;
+public class ListConfigResourcesRequest extends AbstractRequest {
+    public static class Builder extends AbstractRequest.Builder<ListConfigResourcesRequest> {
+        public final ListConfigResourcesRequestData data;
 
-        public Builder(ListClientMetricsResourcesRequestData data) {
-            super(ApiKeys.LIST_CLIENT_METRICS_RESOURCES);
+        public Builder(ListConfigResourcesRequestData data) {
+            super(ApiKeys.LIST_CONFIG_RESOURCES);
             this.data = data;
         }
 
         @Override
-        public ListClientMetricsResourcesRequest build(short version) {
-            return new ListClientMetricsResourcesRequest(data, version);
+        public ListConfigResourcesRequest build(short version) {
+            return new ListConfigResourcesRequest(data, version);
         }
 
         @Override
@@ -42,28 +42,28 @@ public class ListClientMetricsResourcesRequest extends AbstractRequest {
         }
     }
 
-    private final ListClientMetricsResourcesRequestData data;
+    private final ListConfigResourcesRequestData data;
 
-    private ListClientMetricsResourcesRequest(ListClientMetricsResourcesRequestData data, short version) {
-        super(ApiKeys.LIST_CLIENT_METRICS_RESOURCES, version);
+    private ListConfigResourcesRequest(ListConfigResourcesRequestData data, short version) {
+        super(ApiKeys.LIST_CONFIG_RESOURCES, version);
         this.data = data;
     }
 
-    public ListClientMetricsResourcesRequestData data() {
+    public ListConfigResourcesRequestData data() {
         return data;
     }
 
     @Override
-    public ListClientMetricsResourcesResponse getErrorResponse(int throttleTimeMs, Throwable e) {
+    public ListConfigResourcesResponse getErrorResponse(int throttleTimeMs, Throwable e) {
         Errors error = Errors.forException(e);
-        ListClientMetricsResourcesResponseData response = new ListClientMetricsResourcesResponseData()
+        ListConfigResourcesResponseData response = new ListConfigResourcesResponseData()
             .setErrorCode(error.code())
             .setThrottleTimeMs(throttleTimeMs);
-        return new ListClientMetricsResourcesResponse(response);
+        return new ListConfigResourcesResponse(response);
     }
 
-    public static ListClientMetricsResourcesRequest parse(Readable readable, short version) {
-        return new ListClientMetricsResourcesRequest(new ListClientMetricsResourcesRequestData(
+    public static ListConfigResourcesRequest parse(Readable readable, short version) {
+        return new ListConfigResourcesRequest(new ListConfigResourcesRequestData(
             readable, version), version);
     }
 
