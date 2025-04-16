@@ -1006,26 +1006,36 @@ public class ConfigDef {
     public static class ValidList implements Validator {
 
         final ValidString validString;
+        final boolean isEmptyAllowed;
 
-        private ValidList(List<String> validStrings) {
+        private ValidList(List<String> validStrings, boolean isEmptyAllowed) {
             this.validString = new ValidString(validStrings);
+            this.isEmptyAllowed = isEmptyAllowed;
         }
 
+        @Deprecated
         public static ValidList in(String... validStrings) {
-            return new ValidList(Arrays.asList(validStrings));
+            return new ValidList(Arrays.asList(validStrings), true);
+        }
+
+        public static ValidList inWithEmptyCheck(boolean isEmptyAllowed, String... validStrings) {
+            return new ValidList(List.of(validStrings), isEmptyAllowed);
         }
 
         @Override
         public void ensureValid(final String name, final Object value) {
             @SuppressWarnings("unchecked")
             List<String> values = (List<String>) value;
+            if (!isEmptyAllowed && values.isEmpty()) {
+                throw new ConfigException("Configuration '" + name + "' must not be empty. Valid values include: " + validString);
+            }
             for (String string : values) {
                 validString.ensureValid(name, string);
             }
         }
 
         public String toString() {
-            return validString.toString();
+            return validString + (isEmptyAllowed ? "" : " (empty not allowed)");
         }
     }
 

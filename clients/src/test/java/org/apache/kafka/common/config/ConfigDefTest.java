@@ -170,7 +170,8 @@ public class ConfigDefTest {
                 new Object[]{"good", "values", "default"}, new Object[]{"bad", "inputs", "DEFAULT", null});
         testValidators(Type.STRING, CaseInsensitiveValidString.in("good", "values", "default"), "default",
             new Object[]{"gOOd", "VALUES", "default"}, new Object[]{"Bad", "iNPUts", null});
-        testValidators(Type.LIST, ConfigDef.ValidList.in("1", "2", "3"), "1", new Object[]{"1", "2", "3"}, new Object[]{"4", "5", "6"});
+        testValidators(Type.LIST, ConfigDef.ValidList.inWithEmptyCheck(true, "1", "2", "3"), "1", new Object[]{"1", "2", "3"}, new Object[]{"4", "5", "6"});
+        testValidators(Type.LIST, ConfigDef.ValidList.inWithEmptyCheck(false, "1", "2", "3"), "1", new Object[]{"1", "2", "3"}, new Object[]{""});
         testValidators(Type.STRING, new ConfigDef.NonNullValidator(), "a", new Object[]{"abb"}, new Object[] {null});
         testValidators(Type.STRING, ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), ValidString.in("a", "b")), "a", new Object[]{"a", "b"}, new Object[] {null, -1, "c"});
         testValidators(Type.STRING, new ConfigDef.NonEmptyStringWithoutControlChars(), "defaultname",
