@@ -23,7 +23,7 @@ import java.util.concurrent.{CompletableFuture, CountDownLatch, LinkedBlockingDe
 import joptsimple.{OptionException, OptionSpec}
 import kafka.network.SocketServer
 import kafka.raft.{DefaultExternalKRaftMetrics, KafkaRaftManager, RaftManager}
-import kafka.server.{KafkaConfig, KafkaRequestHandlerPool, SimpleApiVersionManager}
+import kafka.server.{KafkaConfig, KafkaRequestHandlerPool}
 import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.errors.InvalidConfigurationException
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
@@ -38,6 +38,7 @@ import org.apache.kafka.common.{TopicPartition, Uuid, protocol}
 import org.apache.kafka.raft.errors.NotLeaderException
 import org.apache.kafka.raft.{Batch, BatchReader, Endpoints, LeaderAndEpoch, QuorumConfig, RaftClient}
 import org.apache.kafka.security.CredentialProvider
+import org.apache.kafka.server.SimpleApiVersionManager
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion}
 import org.apache.kafka.server.common.serialization.RecordSerde
 import org.apache.kafka.server.config.KRaftConfigs
