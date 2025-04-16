@@ -60,6 +60,7 @@ import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
 import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
@@ -295,7 +296,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 Optional<TopicPartitionRemoteFetchInfo> topicPartitionRemoteFetchInfoOpt = maybePrepareRemoteStorageFetchInfo(topicPartitionData, replicaManagerReadResponse);
 
                 if (topicPartitionRemoteFetchInfoOpt.isPresent()) {
-                    return maybeProcessRemoteFetch(topicPartitionData, topicPartitionRemoteFetchInfoOpt.get(), replicaManagerReadResponse);
+                    return maybeProcessRemoteFetch(topicPartitionData, topicPartitionRemoteFetchInfoOpt.get());
                 }
                 maybeUpdateFetchOffsetMetadata(topicPartitionData, replicaManagerReadResponse);
                 if (anyPartitionHasLogReadError(replicaManagerReadResponse) || isMinBytesSatisfied(topicPartitionData, partitionMaxBytesStrategy.maxBytes(shareFetch.fetchParams().maxBytes, topicPartitionData.keySet(), topicPartitionData.size()))) {
@@ -596,7 +597,7 @@ public class DelayedShareFetch extends DelayedOperation {
         LinkedHashMap<TopicIdPartition, Long> topicPartitionData,
         LinkedHashMap<TopicIdPartition, LogReadResult> replicaManagerReadResponse
     ) {
-        Optional<TopicPartitionRemoteFetchInfo> remoteStorageFetchMetadataMap = Optional.empty();
+        Optional<TopicPartitionRemoteFetchInfo> topicPartitionRemoteFetchInfoOpt = Optional.empty();
         for (Map.Entry<TopicIdPartition, LogReadResult> entry : replicaManagerReadResponse.entrySet()) {
             TopicIdPartition topicIdPartition = entry.getKey();
             LogReadResult logReadResult = entry.getValue();
@@ -605,27 +606,26 @@ public class DelayedShareFetch extends DelayedOperation {
                 //  a single topic partition in a fetch request. Since, the logic of fetch is largely based on how consumer groups work,
                 //  we are following the same logic. However, this problem should be addressed as part of KAFKA-19133 which should help us perform
                 //  fetch for multiple remote fetch topic partition in a single share fetch request
-                remoteStorageFetchMetadataMap = Optional.of(new TopicPartitionRemoteFetchInfo(topicIdPartition, logReadResult.info().delayedRemoteStorageFetch.get()));
+                topicPartitionRemoteFetchInfoOpt = Optional.of(new TopicPartitionRemoteFetchInfo(topicIdPartition, logReadResult));
                 partitionsAcquired.put(topicIdPartition, topicPartitionData.get(topicIdPartition));
                 break;
             }
         }
-        return remoteStorageFetchMetadataMap;
+        return topicPartitionRemoteFetchInfoOpt;
     }
 
     private boolean maybeProcessRemoteFetch(
         LinkedHashMap<TopicIdPartition, Long> topicPartitionData,
-        TopicPartitionRemoteFetchInfo topicPartitionRemoteFetchInfo,
-        LinkedHashMap<TopicIdPartition, LogReadResult> replicaManagerReadResponse
+        TopicPartitionRemoteFetchInfo topicPartitionRemoteFetchInfo
     ) throws Exception {
         topicPartitionData.keySet().forEach(topicIdPartition -> {
             // topic partitions for which fetch would not be happening in this share fetch request.
             if (!topicPartitionRemoteFetchInfo.topicIdPartition().equals(topicIdPartition)) {
                 // Release acquisition lock for the topic partitions that were acquired but were not a part of remote fetch.
-                releasePartitionLocks(Set.of(topicIdPartition));
+                releasePartitionLocksAndAddToActionQueue(Set.of(topicIdPartition));
             }
         });
-        Optional<Exception> exceptionOpt = processRemoteFetchOrException(topicPartitionRemoteFetchInfo, replicaManagerReadResponse);
+        Optional<Exception> exceptionOpt = processRemoteFetchOrException(topicPartitionRemoteFetchInfo);
         if (exceptionOpt.isPresent()) {
             remoteStorageFetchException = exceptionOpt;
             throw exceptionOpt.get();
@@ -637,15 +637,12 @@ public class DelayedShareFetch extends DelayedOperation {
     /**
      * Returns an option containing an exception if a task for RemoteStorageFetchInfo could not be scheduled successfully else returns empty optional.
      * @param topicPartitionRemoteFetchInfo - The remote storage fetch topic partition information.
-     * @param replicaManagerReadResponse - The replica manager read response containing log read results for acquired topic partitions
      */
     private Optional<Exception> processRemoteFetchOrException(
-        TopicPartitionRemoteFetchInfo topicPartitionRemoteFetchInfo,
-        LinkedHashMap<TopicIdPartition, LogReadResult> replicaManagerReadResponse
+        TopicPartitionRemoteFetchInfo topicPartitionRemoteFetchInfo
     ) {
         TopicIdPartition remoteFetchTopicIdPartition = topicPartitionRemoteFetchInfo.topicIdPartition();
-        RemoteStorageFetchInfo remoteStorageFetchInfo = topicPartitionRemoteFetchInfo.remoteStorageFetchInfo();
-        LogReadResult logReadResult = replicaManagerReadResponse.get(remoteFetchTopicIdPartition);
+        RemoteStorageFetchInfo remoteStorageFetchInfo = topicPartitionRemoteFetchInfo.logReadResult().info().delayedRemoteStorageFetch.get();
 
         Future<Void> remoteFetchTask;
         CompletableFuture<RemoteLogReadResult> remoteFetchResult = new CompletableFuture<>();
@@ -664,7 +661,7 @@ public class DelayedShareFetch extends DelayedOperation {
         } catch (Exception e) {
             return Optional.of(e);
         }
-        remoteFetchOpt = Optional.of(new RemoteFetch(remoteFetchTopicIdPartition, logReadResult, remoteFetchTask, remoteFetchResult, remoteStorageFetchInfo));
+        remoteFetchOpt = Optional.of(new RemoteFetch(remoteFetchTopicIdPartition, topicPartitionRemoteFetchInfo.logReadResult(), remoteFetchTask, remoteFetchResult, remoteStorageFetchInfo));
         return Optional.empty();
     }
 
@@ -733,10 +730,10 @@ public class DelayedShareFetch extends DelayedOperation {
 
     /**
      * This function completes a share fetch request for which we have identified remoteFetch during tryComplete()
-     * Note - This function should only be called when we know that there is remote fetch in-flight/completed.
+     * Note - This function should only be called when we know that there is remote fetch in-flight/completed/expired.
      */
     private void completeRemoteStorageShareFetchRequest() {
-        LinkedHashMap<TopicIdPartition, Long> nonRemoteFetchTopicPartitionData = new LinkedHashMap<>();
+        LinkedHashMap<TopicIdPartition, Long> acquiredNonRemoteFetchTopicPartitionData = new LinkedHashMap<>();
         try {
             List<ShareFetchPartitionData> shareFetchPartitionData = new ArrayList<>();
             int readableBytes = 0;
@@ -789,20 +786,20 @@ public class DelayedShareFetch extends DelayedOperation {
                         nonRemoteFetchSharePartitions.put(topicIdPartition, sharePartition);
                     }
                 });
-                nonRemoteFetchTopicPartitionData = acquirablePartitions(nonRemoteFetchSharePartitions);
-                if (!nonRemoteFetchTopicPartitionData.isEmpty()) {
+                acquiredNonRemoteFetchTopicPartitionData = acquirablePartitions(nonRemoteFetchSharePartitions);
+                if (!acquiredNonRemoteFetchTopicPartitionData.isEmpty()) {
                     log.trace("Fetchable local share partitions for a remote share fetch request data: {} with groupId: {} fetch params: {}",
-                        nonRemoteFetchTopicPartitionData, shareFetch.groupId(), shareFetch.fetchParams());
+                        acquiredNonRemoteFetchTopicPartitionData, shareFetch.groupId(), shareFetch.fetchParams());
 
                     LinkedHashMap<TopicIdPartition, LogReadResult> responseData = readFromLog(
-                        nonRemoteFetchTopicPartitionData,
-                        partitionMaxBytesStrategy.maxBytes(shareFetch.fetchParams().maxBytes - readableBytes, nonRemoteFetchTopicPartitionData.keySet(), nonRemoteFetchTopicPartitionData.size()));
+                        acquiredNonRemoteFetchTopicPartitionData,
+                        partitionMaxBytesStrategy.maxBytes(shareFetch.fetchParams().maxBytes - readableBytes, acquiredNonRemoteFetchTopicPartitionData.keySet(), acquiredNonRemoteFetchTopicPartitionData.size()));
                     for (Map.Entry<TopicIdPartition, LogReadResult> entry : responseData.entrySet()) {
                         if (entry.getValue().info().delayedRemoteStorageFetch.isEmpty()) {
                             shareFetchPartitionData.add(
                                 new ShareFetchPartitionData(
                                     entry.getKey(),
-                                    nonRemoteFetchTopicPartitionData.get(entry.getKey()),
+                                    acquiredNonRemoteFetchTopicPartitionData.get(entry.getKey()),
                                     entry.getValue().toFetchPartitionData(false)
                                 )
                             );
@@ -812,7 +809,7 @@ public class DelayedShareFetch extends DelayedOperation {
             }
 
             // Update metric to record acquired to requested partitions.
-            double acquiredRatio = (double) (partitionsAcquired.size() + nonRemoteFetchTopicPartitionData.size()) / shareFetch.topicIdPartitions().size();
+            double acquiredRatio = (double) (partitionsAcquired.size() + acquiredNonRemoteFetchTopicPartitionData.size()) / shareFetch.topicIdPartitions().size();
             if (acquiredRatio > 0)
                 shareGroupMetrics.recordTopicPartitionsFetchRatio(shareFetch.groupId(), (int) (acquiredRatio * 100));
 
@@ -820,24 +817,32 @@ public class DelayedShareFetch extends DelayedOperation {
                 shareFetch, shareFetchPartitionData, sharePartitions, replicaManager, exceptionHandler);
             shareFetch.maybeComplete(remoteFetchResponse);
             log.trace("Remote share fetch request completed successfully, response: {}", remoteFetchResponse);
-        } catch (RuntimeException e) {
-            throw e;
+        } catch (InterruptedException | ExecutionException e) {
+            log.error("Exception occurred in completing remote fetch {} for delayed share fetch request {}", remoteFetchOpt.get(), e);
+            handleExceptionInCompletingRemoteStorageShareFetchRequest(acquiredNonRemoteFetchTopicPartitionData.keySet(), e);
         } catch (Exception e) {
-            log.error("Error processing delayed share fetch request", e);
-            Set<TopicIdPartition> topicIdPartitions = new LinkedHashSet<>(partitionsAcquired.keySet());
-            topicIdPartitions.addAll(nonRemoteFetchTopicPartitionData.keySet());
-            handleFetchException(shareFetch, topicIdPartitions, e);
+            log.error("Unexpected error in processing delayed share fetch request", e);
+            handleExceptionInCompletingRemoteStorageShareFetchRequest(acquiredNonRemoteFetchTopicPartitionData.keySet(), e);
         } finally {
             Set<TopicIdPartition> topicIdPartitions = new LinkedHashSet<>(partitionsAcquired.keySet());
-            topicIdPartitions.addAll(nonRemoteFetchTopicPartitionData.keySet());
+            topicIdPartitions.addAll(acquiredNonRemoteFetchTopicPartitionData.keySet());
             releasePartitionLocksAndAddToActionQueue(topicIdPartitions);
         }
+    }
+
+    private void handleExceptionInCompletingRemoteStorageShareFetchRequest(
+        Set<TopicIdPartition> acquiredNonRemoteFetchTopicPartitions,
+        Exception e
+    ) {
+        Set<TopicIdPartition> topicIdPartitions = new LinkedHashSet<>(partitionsAcquired.keySet());
+        topicIdPartitions.addAll(acquiredNonRemoteFetchTopicPartitions);
+        handleFetchException(shareFetch, topicIdPartitions, e);
     }
 
     /**
      * Cancel the remote storage read task, if it has not been executed yet and avoid interrupting the task if it is
      * already running as it may force closing opened/cached resources as transaction index.
-     * Note - This function should only be called when we know that there is a remote fetch in-flight/completed.
+     * Note - This function should only be called when we know that there is a remote fetch in-flight/expired.
      */
     private void cancelRemoteFetchTask() {
         boolean cancelled = remoteFetchOpt.get().remoteFetchTask().cancel(false);
@@ -868,13 +873,13 @@ public class DelayedShareFetch extends DelayedOperation {
 
     public record TopicPartitionRemoteFetchInfo(
         TopicIdPartition topicIdPartition,
-        RemoteStorageFetchInfo remoteStorageFetchInfo
+        LogReadResult logReadResult
     ) {
         @Override
         public String toString() {
             return "TopicPartitionRemoteFetchInfo(" +
                 "topicIdPartition=" + topicIdPartition +
-                ", remoteStorageFetchInfo=" + remoteStorageFetchInfo +
+                ", logReadResult=" + logReadResult +
                 ")";
         }
     }
