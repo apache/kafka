@@ -256,7 +256,7 @@ public class MirrorCheckpointConnector extends SourceConnector {
     Collection<GroupListing> listConsumerGroups()
             throws InterruptedException, ExecutionException {
         return adminCall(
-                () -> sourceAdminClient.listGroups(new ListGroupsOptions().forConsumerGroups()).valid().get(),
+                () -> sourceAdminClient.listGroups(ListGroupsOptions.forConsumerGroups()).valid().get(),
                 () -> "list consumer groups on " + config.sourceClusterAlias() + " cluster"
         );
     }

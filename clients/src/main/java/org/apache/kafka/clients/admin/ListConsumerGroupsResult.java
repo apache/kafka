@@ -27,7 +27,8 @@ import java.util.Collection;
  * The result of the {@link Admin#listConsumerGroups()} call.
  * @deprecated Since 4.1. Use {@link Admin#listGroups(ListGroupsOptions)} instead.
  */
-@Deprecated
+@Deprecated(since = "4.1")
+@SuppressWarnings("removal")
 public class ListConsumerGroupsResult {
     private final KafkaFutureImpl<Collection<ConsumerGroupListing>> all;
     private final KafkaFutureImpl<Collection<ConsumerGroupListing>> valid;

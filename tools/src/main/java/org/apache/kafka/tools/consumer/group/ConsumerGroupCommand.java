@@ -298,7 +298,7 @@ public class ConsumerGroupCommand {
 
         List<String> listConsumerGroups() {
             try {
-                ListGroupsResult result = adminClient.listGroups(withTimeoutMs(new ListGroupsOptions().forConsumerGroups()));
+                ListGroupsResult result = adminClient.listGroups(withTimeoutMs(ListGroupsOptions.forConsumerGroups()));
                 Collection<GroupListing> listings = result.all().get();
                 return listings.stream().map(GroupListing::groupId).collect(Collectors.toList());
             } catch (InterruptedException | ExecutionException e) {
@@ -307,9 +307,8 @@ public class ConsumerGroupCommand {
         }
 
         List<GroupListing> listConsumerGroupsWithFilters(Set<GroupType> types, Set<GroupState> states) throws ExecutionException, InterruptedException {
-            ListGroupsOptions listGroupsOptions = withTimeoutMs(new ListGroupsOptions());
+            ListGroupsOptions listGroupsOptions = withTimeoutMs(ListGroupsOptions.forConsumerGroups());
             listGroupsOptions
-                .forConsumerGroups()
                 .inGroupStates(states)
                 .withTypes(types);
             ListGroupsResult result = adminClient.listGroups(listGroupsOptions);

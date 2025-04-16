@@ -22,7 +22,6 @@ import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
-import java.util.Collections;
 import java.util.Set;
 
 /**
@@ -41,10 +40,10 @@ public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
      * Only consumer groups will be returned by listGroups().
      * This operation sets filters on group type and protocol type which select consumer groups.
      */
-    public ListGroupsOptions forConsumerGroups() {
-        this.types = Set.of(GroupType.CLASSIC, GroupType.CONSUMER);
-        this.protocolTypes = Set.of("", ConsumerProtocol.PROTOCOL_TYPE);
-        return this;
+    public static ListGroupsOptions forConsumerGroups() {
+        return new ListGroupsOptions()
+            .withTypes(Set.of(GroupType.CLASSIC, GroupType.CONSUMER))
+            .withProtocolTypes(Set.of("", ConsumerProtocol.PROTOCOL_TYPE));
     }
 
     /**
@@ -53,7 +52,7 @@ public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
      * This operation is supported by brokers with version 2.6.0 or later.
      */
     public ListGroupsOptions inGroupStates(Set<GroupState> groupStates) {
-        this.groupStates = (groupStates == null || groupStates.isEmpty()) ? Collections.emptySet() : Set.copyOf(groupStates);
+        this.groupStates = (groupStates == null || groupStates.isEmpty()) ? Set.of() : Set.copyOf(groupStates);
         return this;
     }
 

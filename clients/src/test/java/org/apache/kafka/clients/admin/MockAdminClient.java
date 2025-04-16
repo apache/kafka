@@ -735,6 +735,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public synchronized ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
         KafkaFutureImpl<Collection<Object>> future = new KafkaFutureImpl<>();
         future.complete(groupConfigs.keySet().stream().map(g -> new ConsumerGroupListing(g, false)).collect(Collectors.toList()));

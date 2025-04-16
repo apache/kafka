@@ -884,7 +884,7 @@ public interface Admin extends AutoCloseable {
      * @param options The options to use when listing the consumer groups.
      * @return The ListConsumerGroupsResult.
      */
-    @Deprecated
+    @Deprecated(since = "4.1", forRemoval = true)
     ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options);
 
     /**
@@ -896,7 +896,7 @@ public interface Admin extends AutoCloseable {
      *
      * @return The ListConsumerGroupsResult.
      */
-    @Deprecated
+    @Deprecated(since = "4.1", forRemoval = true)
     default ListConsumerGroupsResult listConsumerGroups() {
         return listConsumerGroups(new ListConsumerGroupsOptions());
     }

@@ -3658,7 +3658,8 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    @Deprecated
+    @SuppressWarnings("removal")
+    @Deprecated(since = "4.1", forRemoval = true)
     public ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
         final KafkaFutureImpl<Collection<Object>> all = new KafkaFutureImpl<>();
         final long nowMetadata = time.milliseconds();
