@@ -167,7 +167,7 @@ public class LogConfig extends AbstractConfig {
 
             .define(ServerLogConfigs.LOG_RETENTION_BYTES_CONFIG, LONG, ServerLogConfigs.LOG_RETENTION_BYTES_DEFAULT, HIGH, ServerLogConfigs.LOG_RETENTION_BYTES_DOC)
             .define(ServerLogConfigs.LOG_CLEANUP_INTERVAL_MS_CONFIG, LONG, ServerLogConfigs.LOG_CLEANUP_INTERVAL_MS_DEFAULT, atLeast(1), MEDIUM, ServerLogConfigs.LOG_CLEANUP_INTERVAL_MS_DOC)
-            .define(ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG, LIST, ServerLogConfigs.LOG_CLEANUP_POLICY_DEFAULT, ConfigDef.ValidList.in(TopicConfig.CLEANUP_POLICY_COMPACT, TopicConfig.CLEANUP_POLICY_DELETE), MEDIUM, ServerLogConfigs.LOG_CLEANUP_POLICY_DOC)
+            .define(ServerLogConfigs.LOG_CLEANUP_POLICY_CONFIG, LIST, ServerLogConfigs.LOG_CLEANUP_POLICY_DEFAULT, ConfigDef.ValidList.inWithEmptyCheck(false, TopicConfig.CLEANUP_POLICY_COMPACT, TopicConfig.CLEANUP_POLICY_DELETE, TopicConfig.CLEANUP_POLICY_NONE), MEDIUM, ServerLogConfigs.LOG_CLEANUP_POLICY_DOC)
             .define(ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_CONFIG, INT, ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DEFAULT, atLeast(4), MEDIUM, ServerLogConfigs.LOG_INDEX_SIZE_MAX_BYTES_DOC)
             .define(ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_CONFIG, INT, ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_DEFAULT, atLeast(0), MEDIUM, ServerLogConfigs.LOG_INDEX_INTERVAL_BYTES_DOC)
             .define(ServerLogConfigs.LOG_FLUSH_INTERVAL_MESSAGES_CONFIG, LONG, ServerLogConfigs.LOG_FLUSH_INTERVAL_MESSAGES_DEFAULT, atLeast(1), HIGH, ServerLogConfigs.LOG_FLUSH_INTERVAL_MESSAGES_DOC)
@@ -189,6 +189,7 @@ public class LogConfig extends AbstractConfig {
             .defineInternal(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, LONG, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT, atLeast(0), LOW, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DOC);
 
     private static final LogConfigDef CONFIG = new LogConfigDef();
+
     static {
         CONFIG.
                 define(TopicConfig.SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), MEDIUM,
@@ -221,7 +222,7 @@ public class LogConfig extends AbstractConfig {
                         TopicConfig.FILE_DELETE_DELAY_MS_DOC)
                 .define(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, DOUBLE, DEFAULT_MIN_CLEANABLE_DIRTY_RATIO, between(0, 1), MEDIUM,
                         TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_DOC)
-                .define(TopicConfig.CLEANUP_POLICY_CONFIG, LIST, ServerLogConfigs.LOG_CLEANUP_POLICY_DEFAULT, ValidList.in(TopicConfig.CLEANUP_POLICY_COMPACT,
+                .define(TopicConfig.CLEANUP_POLICY_CONFIG, LIST, ServerLogConfigs.LOG_CLEANUP_POLICY_DEFAULT, ValidList.inWithEmptyCheck(false, TopicConfig.CLEANUP_POLICY_COMPACT,
                         TopicConfig.CLEANUP_POLICY_DELETE), MEDIUM, TopicConfig.CLEANUP_POLICY_DOC)
                 .define(TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_CONFIG, BOOLEAN, DEFAULT_UNCLEAN_LEADER_ELECTION_ENABLE,
                         MEDIUM, TopicConfig.UNCLEAN_LEADER_ELECTION_ENABLE_DOC)
@@ -468,6 +469,7 @@ public class LogConfig extends AbstractConfig {
      * Validates the values of the given properties. Can be called by both client and server.
      * The `props` supplied should contain all the LogConfig properties and the default values are extracted from the
      * LogConfig class.
+     *
      * @param props The properties to be validated
      */
     public static void validateValues(Map<?, ?> props) {
@@ -484,6 +486,7 @@ public class LogConfig extends AbstractConfig {
      * Validates the values of the given properties. Should be called only by the broker.
      * The `props` supplied doesn't contain any topic-level configs, only broker-level configs.
      * The default values should be extracted from the KafkaConfig.
+     *
      * @param props The properties to be validated
      */
     public static void validateBrokerLogConfigValues(Map<?, ?> props,
@@ -499,9 +502,10 @@ public class LogConfig extends AbstractConfig {
      * Validates the values of the given properties. Should be called only by the broker.
      * The `newConfigs` supplied contains the topic-level configs,
      * The default values should be extracted from the KafkaConfig.
-     * @param existingConfigs                   The existing properties
-     * @param newConfigs                        The new properties to be validated
-     * @param isRemoteLogStorageSystemEnabled   true if system wise remote log storage is enabled
+     *
+     * @param existingConfigs                 The existing properties
+     * @param newConfigs                      The new properties to be validated
+     * @param isRemoteLogStorageSystemEnabled true if system wise remote log storage is enabled
      */
     private static void validateTopicLogConfigValues(Map<String, String> existingConfigs,
                                                      Map<?, ?> newConfigs,

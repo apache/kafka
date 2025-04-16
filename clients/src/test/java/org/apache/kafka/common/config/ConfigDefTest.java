@@ -54,15 +54,15 @@ public class ConfigDefTest {
     @Test
     public void testBasicTypes() {
         ConfigDef def = new ConfigDef().define("a", Type.INT, 5, Range.between(0, 14), Importance.HIGH, "docs")
-                                       .define("b", Type.LONG, Importance.HIGH, "docs")
-                                       .define("c", Type.STRING, "hello", Importance.HIGH, "docs")
-                                       .define("d", Type.LIST, Importance.HIGH, "docs")
-                                       .define("e", Type.DOUBLE, Importance.HIGH, "docs")
-                                       .define("f", Type.CLASS, Importance.HIGH, "docs")
-                                       .define("g", Type.BOOLEAN, Importance.HIGH, "docs")
-                                       .define("h", Type.BOOLEAN, Importance.HIGH, "docs")
-                                       .define("i", Type.BOOLEAN, Importance.HIGH, "docs")
-                                       .define("j", Type.PASSWORD, Importance.HIGH, "docs");
+                .define("b", Type.LONG, Importance.HIGH, "docs")
+                .define("c", Type.STRING, "hello", Importance.HIGH, "docs")
+                .define("d", Type.LIST, Importance.HIGH, "docs")
+                .define("e", Type.DOUBLE, Importance.HIGH, "docs")
+                .define("f", Type.CLASS, Importance.HIGH, "docs")
+                .define("g", Type.BOOLEAN, Importance.HIGH, "docs")
+                .define("h", Type.BOOLEAN, Importance.HIGH, "docs")
+                .define("i", Type.BOOLEAN, Importance.HIGH, "docs")
+                .define("j", Type.PASSWORD, Importance.HIGH, "docs");
 
         Properties props = new Properties();
         props.put("a", "1   ");
@@ -116,7 +116,7 @@ public class ConfigDefTest {
     @Test
     public void testDefinedTwice() {
         assertThrows(ConfigException.class, () -> new ConfigDef().define("a", Type.STRING,
-            Importance.HIGH, "docs").define("a", Type.INT, Importance.HIGH, "docs"));
+                Importance.HIGH, "docs").define("a", Type.INT, Importance.HIGH, "docs"));
     }
 
     @Test
@@ -147,13 +147,13 @@ public class ConfigDefTest {
     @Test
     public void testInvalidDefaultRange() {
         assertThrows(ConfigException.class, () -> new ConfigDef().define("name", Type.INT, -1,
-            Range.between(0, 10), Importance.HIGH, "docs"));
+                Range.between(0, 10), Importance.HIGH, "docs"));
     }
 
     @Test
     public void testInvalidDefaultString() {
         assertThrows(ConfigException.class, () -> new ConfigDef().define("name", Type.STRING, "bad",
-            ValidString.in("valid", "values"), Importance.HIGH, "docs"));
+                ValidString.in("valid", "values"), Importance.HIGH, "docs"));
     }
 
     @Test
@@ -169,10 +169,11 @@ public class ConfigDefTest {
         testValidators(Type.STRING, ValidString.in("good", "values", "default"), "default",
                 new Object[]{"good", "values", "default"}, new Object[]{"bad", "inputs", "DEFAULT", null});
         testValidators(Type.STRING, CaseInsensitiveValidString.in("good", "values", "default"), "default",
-            new Object[]{"gOOd", "VALUES", "default"}, new Object[]{"Bad", "iNPUts", null});
-        testValidators(Type.LIST, ConfigDef.ValidList.in("1", "2", "3"), "1", new Object[]{"1", "2", "3"}, new Object[]{"4", "5", "6"});
-        testValidators(Type.STRING, new ConfigDef.NonNullValidator(), "a", new Object[]{"abb"}, new Object[] {null});
-        testValidators(Type.STRING, ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), ValidString.in("a", "b")), "a", new Object[]{"a", "b"}, new Object[] {null, -1, "c"});
+                new Object[]{"gOOd", "VALUES", "default"}, new Object[]{"Bad", "iNPUts", null});
+        testValidators(Type.LIST, ConfigDef.ValidList.inWithEmptyCheck(true, "1", "2", "3"), "1", new Object[]{"1", "2", "3"}, new Object[]{"4", "5", "6"});
+        testValidators(Type.LIST, ConfigDef.ValidList.inWithEmptyCheck(false, "1", "2", "3"), "1", new Object[]{"1", "2", "3"}, new Object[]{""});
+        testValidators(Type.STRING, new ConfigDef.NonNullValidator(), "a", new Object[]{"abb"}, new Object[]{null});
+        testValidators(Type.STRING, ConfigDef.CompositeValidator.of(new ConfigDef.NonNullValidator(), ValidString.in("a", "b")), "a", new Object[]{"a", "b"}, new Object[]{null, -1, "c"});
         testValidators(Type.STRING, new ConfigDef.NonEmptyStringWithoutControlChars(), "defaultname",
                 new Object[]{"test", "name", "test/test", "test\u1234", "\u1324name\\", "/+%>&):??<&()?-", "+1", "\uD83D\uDE01", "\uF3B1", "     test   \n\r", "\n  hello \t"},
                 new Object[]{"nontrailing\nnotallowed", "as\u0001cii control char", "tes\rt", "test\btest", "1\t2", ""});
@@ -203,7 +204,7 @@ public class ConfigDefTest {
 
         ConfigDef def = new ConfigDef();
         def.define(key, Type.STRING, ConfigDef.NO_DEFAULT_VALUE,
-                   ValidString.in("ONE", "TWO", "THREE"), Importance.HIGH, "docs");
+                ValidString.in("ONE", "TWO", "THREE"), Importance.HIGH, "docs");
 
         Properties props = new Properties();
         props.put(key, "ONE");
@@ -215,17 +216,17 @@ public class ConfigDefTest {
     public void testGroupInference() {
         List<String> expected1 = Arrays.asList("group1", "group2");
         ConfigDef def1 = new ConfigDef()
-            .define("a", Type.INT, Importance.HIGH, "docs", "group1", 1, Width.SHORT, "a")
-            .define("b", Type.INT, Importance.HIGH, "docs", "group2", 1, Width.SHORT, "b")
-            .define("c", Type.INT, Importance.HIGH, "docs", "group1", 2, Width.SHORT, "c");
+                .define("a", Type.INT, Importance.HIGH, "docs", "group1", 1, Width.SHORT, "a")
+                .define("b", Type.INT, Importance.HIGH, "docs", "group2", 1, Width.SHORT, "b")
+                .define("c", Type.INT, Importance.HIGH, "docs", "group1", 2, Width.SHORT, "c");
 
         assertEquals(expected1, def1.groups());
 
         List<String> expected2 = Arrays.asList("group2", "group1");
         ConfigDef def2 = new ConfigDef()
-            .define("a", Type.INT, Importance.HIGH, "docs", "group2", 1, Width.SHORT, "a")
-            .define("b", Type.INT, Importance.HIGH, "docs", "group2", 2, Width.SHORT, "b")
-            .define("c", Type.INT, Importance.HIGH, "docs", "group1", 2, Width.SHORT, "c");
+                .define("a", Type.INT, Importance.HIGH, "docs", "group2", 1, Width.SHORT, "a")
+                .define("b", Type.INT, Importance.HIGH, "docs", "group2", 2, Width.SHORT, "b")
+                .define("c", Type.INT, Importance.HIGH, "docs", "group1", 2, Width.SHORT, "c");
 
         assertEquals(expected2, def2.groups());
     }
@@ -251,10 +252,10 @@ public class ConfigDefTest {
         expected.put("d", configD);
 
         ConfigDef def = new ConfigDef()
-            .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c"), new IntegerRecommender(false))
-            .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
-            .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true))
-            .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", singletonList("b"), new IntegerRecommender(false));
+                .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c"), new IntegerRecommender(false))
+                .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
+                .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true))
+                .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", singletonList("b"), new IntegerRecommender(false));
 
         Map<String, String> props = new HashMap<>();
         props.put("a", "1");
@@ -289,10 +290,10 @@ public class ConfigDefTest {
         expected.put("d", configD);
 
         ConfigDef def = new ConfigDef()
-            .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c"), new IntegerRecommender(false))
-            .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
-            .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true))
-            .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", singletonList("b"), new IntegerRecommender(false));
+                .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c"), new IntegerRecommender(false))
+                .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
+                .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true))
+                .define("d", Type.INT, Importance.HIGH, "docs", "group", 4, Width.SHORT, "d", singletonList("b"), new IntegerRecommender(false));
 
         Map<String, String> props = new HashMap<>();
         props.put("a", "1");
@@ -325,15 +326,15 @@ public class ConfigDefTest {
         expected.put("d", configD);
 
         ConfigDef def = new ConfigDef()
-            .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c", "d"), new IntegerRecommender(false))
-            .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
-            .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true));
+                .define("a", Type.INT, Importance.HIGH, "docs", "group", 1, Width.SHORT, "a", Arrays.asList("b", "c", "d"), new IntegerRecommender(false))
+                .define("b", Type.INT, Importance.HIGH, "docs", "group", 2, Width.SHORT, "b", new IntegerRecommender(true))
+                .define("c", Type.INT, Importance.HIGH, "docs", "group", 3, Width.SHORT, "c", new IntegerRecommender(true));
 
         Map<String, String> props = new HashMap<>();
         props.put("a", "1");
 
         List<ConfigValue> configs = def.validate(props);
-        for (ConfigValue config: configs) {
+        for (ConfigValue config : configs) {
             String name = config.name();
             ConfigValue expectedConfig = expected.get(name);
             assertEquals(expectedConfig, config);
@@ -352,7 +353,7 @@ public class ConfigDefTest {
         props.put("a", "non_integer");
 
         List<ConfigValue> configs = def.validate(props);
-        for (ConfigValue config: configs) {
+        for (ConfigValue config : configs) {
             String name = config.name();
             ConfigValue expectedConfig = expected.get(name);
             assertEquals(expectedConfig, config);
@@ -505,32 +506,32 @@ public class ConfigDefTest {
 
         final String expectedRst =
                 "``opt2``\n" +
-                "  docs2\n" +
-                "\n" +
-                "  * Type: int\n" +
-                "  * Importance: medium\n" +
-                "\n" +
-                "``opt1``\n" +
-                "  docs1\n" +
-                "\n" +
-                "  * Type: string\n" +
-                "  * Default: a\n" +
-                "  * Valid Values: [a, b, c]\n" +
-                "  * Importance: high\n" +
-                "\n" +
-                "``opt3``\n" +
-                "  docs3\n" +
-                "\n" +
-                "  * Type: list\n" +
-                "  * Default: a,b\n" +
-                "  * Importance: low\n" +
-                "\n" +
-                "``opt4``\n" +
-                "\n" +
-                "  * Type: boolean\n" +
-                "  * Default: false\n" +
-                "  * Importance: low\n" +
-                "\n";
+                        "  docs2\n" +
+                        "\n" +
+                        "  * Type: int\n" +
+                        "  * Importance: medium\n" +
+                        "\n" +
+                        "``opt1``\n" +
+                        "  docs1\n" +
+                        "\n" +
+                        "  * Type: string\n" +
+                        "  * Default: a\n" +
+                        "  * Valid Values: [a, b, c]\n" +
+                        "  * Importance: high\n" +
+                        "\n" +
+                        "``opt3``\n" +
+                        "  docs3\n" +
+                        "\n" +
+                        "  * Type: list\n" +
+                        "  * Default: a,b\n" +
+                        "  * Importance: low\n" +
+                        "\n" +
+                        "``opt4``\n" +
+                        "\n" +
+                        "  * Type: boolean\n" +
+                        "  * Default: false\n" +
+                        "  * Importance: low\n" +
+                        "\n";
 
         assertEquals(expectedRst, def.toRst());
     }
@@ -550,48 +551,48 @@ public class ConfigDefTest {
 
         final String expectedRst =
                 "``poor.opt``\n" +
-                "  Doc doc doc doc.\n" +
-                "\n" +
-                "  * Type: string\n" +
-                "  * Default: foo\n" +
-                "  * Importance: high\n" +
-                "\n" +
-                "Group One\n" +
-                "^^^^^^^^^\n" +
-                "\n" +
-                "``opt1.of.group1``\n" +
-                "  Doc doc.\n" +
-                "\n" +
-                "  * Type: string\n" +
-                "  * Default: a\n" +
-                "  * Valid Values: [a, b, c]\n" +
-                "  * Importance: high\n" +
-                "\n" +
-                "``opt2.of.group1``\n" +
-                "  Doc doc doc.\n" +
-                "\n" +
-                "  * Type: int\n" +
-                "  * Importance: medium\n" +
-                "  * Dependents: ``some.option1``, ``some.option2``\n" +
-                "\n" +
-                "Group Two\n" +
-                "^^^^^^^^^\n" +
-                "\n" +
-                "``opt1.of.group2``\n" +
-                "  Doc doc doc doc doc.\n" +
-                "\n" +
-                "  * Type: boolean\n" +
-                "  * Default: false\n" +
-                "  * Importance: high\n" +
-                "  * Dependents: ``some.option``\n" +
-                "\n" +
-                "``opt2.of.group2``\n" +
-                "  Doc doc doc doc.\n" +
-                "\n" +
-                "  * Type: boolean\n" +
-                "  * Default: false\n" +
-                "  * Importance: high\n" +
-                "\n";
+                        "  Doc doc doc doc.\n" +
+                        "\n" +
+                        "  * Type: string\n" +
+                        "  * Default: foo\n" +
+                        "  * Importance: high\n" +
+                        "\n" +
+                        "Group One\n" +
+                        "^^^^^^^^^\n" +
+                        "\n" +
+                        "``opt1.of.group1``\n" +
+                        "  Doc doc.\n" +
+                        "\n" +
+                        "  * Type: string\n" +
+                        "  * Default: a\n" +
+                        "  * Valid Values: [a, b, c]\n" +
+                        "  * Importance: high\n" +
+                        "\n" +
+                        "``opt2.of.group1``\n" +
+                        "  Doc doc doc.\n" +
+                        "\n" +
+                        "  * Type: int\n" +
+                        "  * Importance: medium\n" +
+                        "  * Dependents: ``some.option1``, ``some.option2``\n" +
+                        "\n" +
+                        "Group Two\n" +
+                        "^^^^^^^^^\n" +
+                        "\n" +
+                        "``opt1.of.group2``\n" +
+                        "  Doc doc doc doc doc.\n" +
+                        "\n" +
+                        "  * Type: boolean\n" +
+                        "  * Default: false\n" +
+                        "  * Importance: high\n" +
+                        "  * Dependents: ``some.option``\n" +
+                        "\n" +
+                        "``opt2.of.group2``\n" +
+                        "  Doc doc doc doc.\n" +
+                        "\n" +
+                        "  * Type: boolean\n" +
+                        "  * Default: false\n" +
+                        "  * Importance: high\n" +
+                        "\n";
 
         assertEquals(expectedRst, def.toEnrichedRst());
     }
@@ -729,34 +730,34 @@ public class ConfigDefTest {
     @Test
     public void testThrowsExceptionWhenListSizeExceedsLimit() {
         final ConfigException exception = assertThrows(ConfigException.class, () -> new ConfigDef().define("lst",
-                                                                                                           Type.LIST,
-                                                                                                           asList("a", "b"),
-                                                                                                           ListSize.atMostOfSize(1),
-                                                                                                           Importance.HIGH,
-                                                                                                           "lst doc"));
+                Type.LIST,
+                asList("a", "b"),
+                ListSize.atMostOfSize(1),
+                Importance.HIGH,
+                "lst doc"));
         assertEquals("Invalid value [a, b] for configuration lst: exceeds maximum list size of [1].",
-                     exception.getMessage());
+                exception.getMessage());
     }
 
     @Test
     public void testNoExceptionIsThrownWhenListSizeEqualsTheLimit() {
         final List<String> lst = asList("a", "b", "c");
         assertDoesNotThrow(() -> new ConfigDef().define("lst",
-                                                        Type.LIST,
-                                                        lst,
-                                                        ListSize.atMostOfSize(lst.size()),
-                                                        Importance.HIGH,
-                                                        "lst doc"));
+                Type.LIST,
+                lst,
+                ListSize.atMostOfSize(lst.size()),
+                Importance.HIGH,
+                "lst doc"));
     }
 
     @Test
     public void testNoExceptionIsThrownWhenListSizeIsBelowTheLimit() {
         assertDoesNotThrow(() -> new ConfigDef().define("lst",
-                                                        Type.LIST,
-                                                        asList("a", "b"),
-                                                        ListSize.atMostOfSize(3),
-                                                        Importance.HIGH,
-                                                        "lst doc"));
+                Type.LIST,
+                asList("a", "b"),
+                ListSize.atMostOfSize(3),
+                Importance.HIGH,
+                "lst doc"));
     }
 
     @Test
