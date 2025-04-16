@@ -65,6 +65,7 @@ import static org.apache.kafka.common.acl.AclOperation.DESCRIBE_CONFIGS;
 import static org.apache.kafka.common.acl.AclOperation.DESCRIBE_TOKENS;
 import static org.apache.kafka.common.acl.AclOperation.IDEMPOTENT_WRITE;
 import static org.apache.kafka.common.acl.AclOperation.READ;
+import static org.apache.kafka.common.acl.AclOperation.TWO_PHASE_COMMIT;
 import static org.apache.kafka.common.acl.AclOperation.WRITE;
 import static org.apache.kafka.common.acl.AclPermissionType.ALLOW;
 import static org.apache.kafka.common.acl.AclPermissionType.DENY;
@@ -160,8 +161,8 @@ public class AclCommandTest {
             Set.of(READ, DESCRIBE, DELETE),
             List.of(OPERATION, "Read", OPERATION, "Describe", OPERATION, "Delete")),
         TRANSACTIONAL_ID_RESOURCES, Map.entry(
-            Set.of(DESCRIBE, WRITE),
-            List.of(OPERATION, "Describe", OPERATION, "Write")),
+            Set.of(DESCRIBE, WRITE, TWO_PHASE_COMMIT),
+            List.of(OPERATION, "Describe", OPERATION, "Write", OPERATION, "TwoPhaseCommit")),
         TOKEN_RESOURCES, Map.entry(
             Set.of(DESCRIBE),
             List.of(OPERATION, "Describe")),

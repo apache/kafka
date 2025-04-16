@@ -27,7 +27,6 @@ import org.apache.kafka.server.config.ReplicationQuotaManagerConfig;
 import org.apache.kafka.server.quota.ClientQuotaCallback;
 import org.apache.kafka.server.quota.QuotaType;
 
-import java.util.Map;
 import java.util.Optional;
 
 import scala.Option;
@@ -150,7 +149,7 @@ public class QuotaFactory {
             clientQuotaCallback,
             metrics,
             QuotaConfig.CLIENT_QUOTA_CALLBACK_CLASS_CONFIG,
-            Map.of("role", role)
+            "role", role
         ));
     }
 

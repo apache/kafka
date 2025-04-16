@@ -374,7 +374,6 @@ public class QuorumControllerTest {
         }
     }
 
-    @Flaky("KAFKA-18845")
     @Test
     public void testUncleanShutdownBrokerElrEnabled() throws Throwable {
         List<Integer> allBrokers = List.of(1, 2, 3);
