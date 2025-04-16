@@ -3672,7 +3672,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     groupCoordinator.deleteShareGroupOffsets(
       request.context,
       new DeleteShareGroupOffsetsRequestData().setGroupId(groupId).setTopics(authorizedTopics)
-    ).handle[Unit] { (responseData, exception) => {
+    ).handle[Unit] {(responseData, exception) => {
       if (exception != null) {
         requestHelper.sendMaybeThrottle(request, deleteShareGroupOffsetsRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
       } else if (responseData.errorCode() != Errors.NONE.code) {
