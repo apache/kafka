@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.clients.admin;
 
+import kafka.server.KafkaBroker;
+
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerConfig;
@@ -23,6 +25,7 @@ import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.record.CompressionType;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.TestUtils;
@@ -44,6 +47,7 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import scala.jdk.javaapi.CollectionConverters;
@@ -91,12 +95,12 @@ public class ListOffsetsIntegrationTest {
 
     @ClusterTest
     public void testThreeCompressedRecordsInOneBatch() throws InterruptedException, ExecutionException {
-        produceMessagesInOneBatch("gzip", TOPIC);
+        produceMessagesInOneBatch(CompressionType.GZIP.name, TOPIC);
         verifyListOffsets(TOPIC, 1);
 
         // test LogAppendTime case
         setUpForLogAppendTimeCase();
-        produceMessagesInOneBatch("gzip", CUSTOM_CONFIG_TOPIC);
+        produceMessagesInOneBatch(CompressionType.GZIP.name, CUSTOM_CONFIG_TOPIC);
         // In LogAppendTime's case, the maxTimestampOffset should be the first message of the batch.
         // So in this one batch test, it'll be the first offset 0
         verifyListOffsets(CUSTOM_CONFIG_TOPIC, 0);
@@ -104,12 +108,12 @@ public class ListOffsetsIntegrationTest {
 
     @ClusterTest
     public void testThreeNonCompressedRecordsInOneBatch() throws ExecutionException, InterruptedException {
-        produceMessagesInOneBatch("none", TOPIC);
+        produceMessagesInOneBatch(CompressionType.NONE.name, TOPIC);
         verifyListOffsets(TOPIC, 1);
 
         // test LogAppendTime case
         setUpForLogAppendTimeCase();
-        produceMessagesInOneBatch("none", CUSTOM_CONFIG_TOPIC);
+        produceMessagesInOneBatch(CompressionType.NONE.name, CUSTOM_CONFIG_TOPIC);
         // In LogAppendTime's case, if the timestamps are the same, we choose the offset of the first record
         // thus, the maxTimestampOffset should be the first record of the batch.
         // So in this one batch test, it'll be the first offset which is 0
@@ -118,38 +122,38 @@ public class ListOffsetsIntegrationTest {
 
     @ClusterTest
     public void testThreeNonCompressedRecordsInSeparateBatch() throws ExecutionException, InterruptedException {
-        produceMessagesInOneBatch("none", TOPIC);
+        produceMessagesInOneBatch(CompressionType.NONE.name, TOPIC);
         verifyListOffsets(TOPIC, 1);
 
         // test LogAppendTime case
         setUpForLogAppendTimeCase();
-        produceMessagesInSeparateBatch("none", CUSTOM_CONFIG_TOPIC);
+        produceMessagesInSeparateBatch(CompressionType.NONE.name, CUSTOM_CONFIG_TOPIC);
         // In LogAppendTime's case, if the timestamp is different, it should be the last one
         verifyListOffsets(CUSTOM_CONFIG_TOPIC, 2);
     }
 
     @ClusterTest
     public void testThreeRecordsInOneBatchHavingDifferentCompressionTypeWithServer() throws InterruptedException, ExecutionException {
-        createTopicWithConfig(CUSTOM_CONFIG_TOPIC, Map.of(TopicConfig.COMPRESSION_TYPE_CONFIG, "lz4"));
-        produceMessagesInOneBatch("none", CUSTOM_CONFIG_TOPIC);
+        createTopicWithConfig(CUSTOM_CONFIG_TOPIC, Map.of(TopicConfig.COMPRESSION_TYPE_CONFIG, CompressionType.LZ4.name));
+        produceMessagesInOneBatch(CompressionType.NONE.name, CUSTOM_CONFIG_TOPIC);
         verifyListOffsets(CUSTOM_CONFIG_TOPIC, 1);
     }
 
     @ClusterTest
     public void testThreeRecordsInSeparateBatchHavingDifferentCompressionTypeWithServer() throws InterruptedException, ExecutionException {
-        createTopicWithConfig(CUSTOM_CONFIG_TOPIC, Map.of(TopicConfig.COMPRESSION_TYPE_CONFIG, "lz4"));
-        produceMessagesInOneBatch("none", CUSTOM_CONFIG_TOPIC);
+        createTopicWithConfig(CUSTOM_CONFIG_TOPIC, Map.of(TopicConfig.COMPRESSION_TYPE_CONFIG, CompressionType.LZ4.name));
+        produceMessagesInOneBatch(CompressionType.NONE.name, CUSTOM_CONFIG_TOPIC);
         verifyListOffsets(CUSTOM_CONFIG_TOPIC, 1);
     }
 
     @ClusterTest
     public void testThreeCompressedRecordsInSeparateBatch() throws InterruptedException, ExecutionException {
-        produceMessagesInSeparateBatch("none", TOPIC);
+        produceMessagesInSeparateBatch(CompressionType.NONE.name, TOPIC);
         verifyListOffsets(TOPIC, 1);
 
         // test LogAppendTime case
         setUpForLogAppendTimeCase();
-        produceMessagesInSeparateBatch("gzip", CUSTOM_CONFIG_TOPIC);
+        produceMessagesInSeparateBatch(CompressionType.GZIP.name, CUSTOM_CONFIG_TOPIC);
         // In LogAppendTime's case, the maxTimestampOffset is the message in the last batch since we advance the time
         // for each batch, So it'll be the last offset 2
         verifyListOffsets(CUSTOM_CONFIG_TOPIC, 2);
@@ -169,11 +173,11 @@ public class ListOffsetsIntegrationTest {
                 ProducerConfig.LINGER_MS_CONFIG, Integer.MAX_VALUE,
                 ProducerConfig.COMPRESSION_TYPE_CONFIG, compressionType))) {
 
-            List<Future<RecordMetadata>> futures = records.stream().map(record -> producer.send(record)).toList();
+            List<Future<RecordMetadata>> futures = records.stream().map(producer::send).toList();
             producer.flush();
 
             for (Future<RecordMetadata> future : futures) {
-                assertDoesNotThrow(() -> future.get());
+                assertDoesNotThrow(() -> future.get(600, TimeUnit.SECONDS));
             }
         }
     }
@@ -241,9 +245,9 @@ public class ListOffsetsIntegrationTest {
         Set<String> indexFiles = clusterInstance.brokers().values().stream().flatMap(broker ->
                 CollectionConverters.asJava(broker.config().logDirs()).stream()
         ).collect(Collectors.toUnmodifiableSet());
-        clusterInstance.brokers().values().forEach(b -> b.shutdown());
+        clusterInstance.brokers().values().forEach(KafkaBroker::shutdown);
         indexFiles.forEach(root -> {
-            File[] files = new File(String.format("%s/$s-0", root, topic)).listFiles();
+            File[] files = new File(String.format("%s/%s-0", root, topic)).listFiles();
             if (files != null)
                 Arrays.stream(files).forEach(f -> {
                     if (f.getName().endsWith(".index"))
