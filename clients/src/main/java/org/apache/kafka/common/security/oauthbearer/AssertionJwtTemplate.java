@@ -25,6 +25,25 @@ import java.util.Map;
  * providers require the same set of headers and claims; some may require a given header or claim while
  * other identity providers may prohibit it. In order to provide the most flexibility, the header
  * values and claims that are to be included in the JWT can be added via a template.
+ *
+ * <p/>
+ *
+ * Both the {@link #header()} and {@link #payload()} APIs return a map of Objects. This because the
+ * <a href="https://www.json.org/">JSON specification<a> allow values to be one of the following "types":
+ *
+ * <ul>
+ *   <li>object</li>
+ *   <li>array</li>
+ *   <li>string</li>
+ *   <li>number</li>
+ *   <li><code>true</code></li>
+ *   <li><code>false</code></li>
+ *   <li><code>null</code></li>
+ * </ul>
+ *
+ * However, because the maps must be converted into JSON, it's important that any nested types use standard
+ * Java type equivalents (Map, List, String, Integer, Double, and Boolean) so that the JSON library will
+ * know how to serialize the entire object graph.
  */
 public interface AssertionJwtTemplate extends Closeable {
 
@@ -42,6 +61,10 @@ public interface AssertionJwtTemplate extends Closeable {
      */
     Map<String, Object> payload();
 
+    /**
+     * Closes any resources used by this implementation. The default implementation of
+     * this method is a no op, for convenience to implementors.
+     */
     @Override
     default void close() {
         // Do nothing...

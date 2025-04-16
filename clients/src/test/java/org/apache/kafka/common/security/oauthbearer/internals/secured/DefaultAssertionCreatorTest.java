@@ -14,9 +14,11 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.oauthbearer;
+package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.security.oauthbearer.AssertionCreator;
+import org.apache.kafka.common.security.oauthbearer.AssertionJwtTemplate;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -48,7 +50,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
-import static org.apache.kafka.common.security.oauthbearer.DefaultAssertionCreator.TOKEN_SIGNING_ALGORITHM_RS256;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultAssertionCreator.TOKEN_SIGNING_ALGORITHM_RS256;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;

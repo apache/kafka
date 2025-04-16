@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
@@ -25,7 +26,7 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.function.BiFunction;
 
-import static org.apache.kafka.common.security.oauthbearer.CachedFile.staticCacheRefreshPolicy;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.staticCacheRefreshPolicy;
 
 /**
  * {@code AssertionJwtTemplateFile} is used by the user to specify a JSON file on disk that contains static values

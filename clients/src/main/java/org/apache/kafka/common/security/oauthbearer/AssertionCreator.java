@@ -85,6 +85,10 @@ public interface AssertionCreator extends Closeable {
      */
     String create(AssertionJwtTemplate template) throws GeneralSecurityException, IOException;
 
+    /**
+     * Closes any resources used by this implementation. The default implementation of
+     * this method is a no op, for convenience to implementors.
+     */
     @Override
     default void close() {
         // Do nothing...

@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtHttpClient;
+
 import javax.security.auth.spi.LoginModule;
 
 /**
@@ -55,6 +57,10 @@ public interface JwtRetriever extends OAuthBearerConfigurable {
      */
     String retrieve() throws JwtRetrieverException;
 
+    /**
+     * Closes any resources used by this implementation. The default implementation of
+     * this method is a no op, for convenience to implementors.
+     */
     @Override
     default void close() {
         // Do nothing...

@@ -42,8 +42,8 @@ import javax.security.sasl.SaslException;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.getConfiguredInstanceOrDefault;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.jaasOptions;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.getConfiguredInstanceOrDefault;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.jaasOptions;
 
 /**
  * <p>

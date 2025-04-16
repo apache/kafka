@@ -16,7 +16,16 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultAssertionCreator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.FileAssertionCreator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestGenerator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBearerRequestGenerator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtHttpClient;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtHttpResponseBodyHandler;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfig;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerJaasConfig;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.SslResource;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.StaticAssertionJwtTemplate;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
@@ -40,10 +49,10 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERT
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.jaasOptions;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.maybeCreateSslResource;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateFile;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUrl;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.jaasOptions;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.maybeCreateSslResource;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateFile;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateUrl;
 
 public class JwtBearerJwtRetriever implements JwtRetriever {
 

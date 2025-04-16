@@ -17,6 +17,8 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfig;
 
 import java.io.File;
 import java.util.List;
@@ -25,8 +27,8 @@ import java.util.Map;
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
-import static org.apache.kafka.common.security.oauthbearer.CachedFile.staticCacheRefreshPolicy;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateFileUrl;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.staticCacheRefreshPolicy;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateFileUrl;
 
 /**
  * A {@link JwtRetriever} that will load the contents of a file, interpreting them as a JWT in serialized form.

@@ -14,16 +14,18 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.oauthbearer;
+package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.KafkaException;
+import org.apache.kafka.common.security.oauthbearer.AssertionCreator;
+import org.apache.kafka.common.security.oauthbearer.AssertionJwtTemplate;
 
 import java.io.File;
 import java.io.IOException;
 import java.security.GeneralSecurityException;
 
-import static org.apache.kafka.common.security.oauthbearer.CachedFile.NOOP_TRANSFORMER;
-import static org.apache.kafka.common.security.oauthbearer.CachedFile.staticCacheRefreshPolicy;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.NOOP_TRANSFORMER;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.staticCacheRefreshPolicy;
 
 public class FileAssertionCreator implements AssertionCreator {
 

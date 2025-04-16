@@ -14,10 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.security.oauthbearer;
+package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SslConfigs;
+import org.apache.kafka.common.security.oauthbearer.JwtValidatorException;
+import org.apache.kafka.common.security.oauthbearer.OAuthBearerTest;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
@@ -36,16 +38,16 @@ import java.util.TreeSet;
 
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule.OAUTHBEARER_MECHANISM;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.getSslClientConfig;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.maybeCreateSslResource;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.throwIfURLIsNotAllowed;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateClaimExpiration;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateClaimIssuedAt;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateClaimNameOverride;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateClaimScopes;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateClaimSubject;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateFileUrl;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUrl;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.getSslClientConfig;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.maybeCreateSslResource;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.throwIfURLIsNotAllowed;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimExpiration;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimIssuedAt;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimNameOverride;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimScopes;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimSubject;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateFileUrl;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateUrl;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;

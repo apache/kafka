@@ -20,6 +20,8 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.BasicOAuthBearerToken;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JwksFileVerificationKeyResolver;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfig;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerJaasConfig;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.RefCountingMap;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwks;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwksVerificationKeyResolver;
@@ -63,14 +65,14 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_E
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.jaasOptions;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.maybeCreateSslResource;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.protocolMatches;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateClaimExpiration;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateClaimIssuedAt;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateClaimScopes;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateClaimSubject;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUrl;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.jaasOptions;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.maybeCreateSslResource;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.protocolMatches;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimExpiration;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimIssuedAt;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimScopes;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimSubject;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateUrl;
 import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
 
 /**

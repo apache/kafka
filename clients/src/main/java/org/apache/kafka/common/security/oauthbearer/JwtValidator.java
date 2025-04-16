@@ -56,6 +56,10 @@ public interface JwtValidator extends OAuthBearerConfigurable {
 
     OAuthBearerToken validate(String jwt) throws JwtValidatorException;
 
+    /**
+     * Closes any resources used by this implementation. The default implementation of
+     * this method is a no op, for convenience to implementors.
+     */
     @Override
     default void close() {
         // Do nothing...

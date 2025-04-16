@@ -33,7 +33,7 @@ import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
 
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateClaimNameOverride;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateClaimNameOverride;
 
 public class JwtBuilder {
 

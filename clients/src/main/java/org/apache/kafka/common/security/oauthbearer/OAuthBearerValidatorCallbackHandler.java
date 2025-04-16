@@ -34,7 +34,7 @@ import javax.security.auth.callback.UnsupportedCallbackException;
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.getConfiguredInstanceOrDefault;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.getConfiguredInstanceOrDefault;
 
 /**
  * <p>

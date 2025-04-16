@@ -18,6 +18,12 @@ package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsRequestGenerator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpRequestGenerator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtHttpClient;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtHttpResponseBodyHandler;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfig;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerJaasConfig;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.SslResource;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -40,10 +46,10 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.jaasOptions;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.maybeCreateSslResource;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.urlencodeHeader;
-import static org.apache.kafka.common.security.oauthbearer.OAuthBearerUtils.validateUrl;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.jaasOptions;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.maybeCreateSslResource;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.urlencodeHeader;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateUrl;
 
 /**
  * A {@link JwtRetriever} that will communicate with an OAuth/OIDC provider directly via HTTP to post client
