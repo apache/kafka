@@ -99,6 +99,8 @@ fail due to code changes. You can just run:
  
     ./gradlew processMessages processTestMessages
 
+See [Apache Kafka Message Definitions](clients/src/main/resources/common/message/README.md) for details on Apache Kafka message protocol.
+
 ### Running a Kafka broker
 
 Using compiled files:
@@ -110,6 +112,8 @@ Using compiled files:
 Using docker image:
 
     docker run -p 9092:9092 apache/kafka:latest
+
+See [docker/README.md](docker/README.md) for detailed information.
 
 ### Cleaning the build ###
     ./gradlew clean
@@ -263,9 +267,27 @@ default. See https://www.lightbend.com/blog/scala-inliner-optimizer for more det
 
 See [tests/README.md](tests/README.md).
 
+### Using Trogdor for testing ###
+
+We use Trogdor as a test framework for Apache Kafka. You can use it to run benchmarks and other workloads.
+
+See [trogdor/README.md](trogdor/README.md).
+
 ### Running in Vagrant ###
 
 See [vagrant/README.md](vagrant/README.md).
+
+### Release Kafka ###
+
+See [release/README.md](release/README.md).
+
+### Official Documentation ###
+
+See [docs/README.md](docs/README.md).
+
+### Kafka client examples ###
+
+See [examples/README.md](examples/README.md).
 
 ### Contribution ###
 
