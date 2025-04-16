@@ -97,10 +97,9 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       val topicId = topicNames.find { case (_, topicName) => topicName == topic}
         .map { case (topicId, _) => topicId }
         .getOrElse(Uuid.ZERO_UUID)
-      val topicName = if (version >= 13) "" else topic
       Errors.forCode(
         resp.data
-          .responses.find(topicName, topicId)
+          .responses.find("", topicId) // version is always >= 13 no need to use topic name
           .partitionResponses.asScala.find(_.index == part).get
           .errorCode
       )
