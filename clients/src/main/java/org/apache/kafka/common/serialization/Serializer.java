@@ -27,7 +27,7 @@ import java.util.Map;
  *
  * <p>This interface can be combined with {@link org.apache.kafka.common.ClusterResourceListener ClusterResourceListener}
  * to receive cluster metadata once it's available, as well as {@link org.apache.kafka.common.metrics.Monitorable Monitorable}
- * to enable the serializer to register metrics. For the later case, the following tags are automatically added to all
+ * to enable the serializer to register metrics. For the latter, the following tags are automatically added to all
  * metrics registered: {@code config} set to either {@code key.serializer} or {@code value.serializer},
  * and {@code class} set to the serializer class name.
  *
@@ -41,7 +41,7 @@ public interface Serializer<T> extends Closeable {
      * @param configs
      *        configs in key/value pairs
      * @param isKey
-     *        whether is for key or value
+     *        whether the serializer is used for the key or the value
      */
     default void configure(Map<String, ?> configs, boolean isKey) {
         // intentionally left blank
@@ -68,7 +68,7 @@ public interface Serializer<T> extends Closeable {
      *
      * <p>Note that the passed in {@link Headers} may be empty, but never {@code null}.
      * The implementation is allowed to modify the passed in headers, as a side effect of serialization.
-     * It is considered best practise to not delete or modify existing headers, but rather only add new ones.
+     * It is considered best practice to not delete or modify existing headers, but rather only add new ones.
      *
      * @param topic
      *        topic associated with data
