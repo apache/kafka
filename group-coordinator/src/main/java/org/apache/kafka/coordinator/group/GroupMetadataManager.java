@@ -36,6 +36,7 @@ import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
 import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -301,7 +302,7 @@ public class GroupMetadataManager {
         private MetadataImage metadataImage = null;
         private ShareGroupPartitionAssignor shareGroupAssignor = null;
         private GroupCoordinatorMetricsShard metrics;
-        private Optional<Authorizer> authorizer = null;
+        private Optional<Plugin<Authorizer>> authorizerPlugin = null;
         private List<TaskAssignor> streamsGroupAssignors = null;
 
         Builder withLogContext(LogContext logContext) {
@@ -359,8 +360,8 @@ public class GroupMetadataManager {
             return this;
         }
 
-        Builder withAuthorizer(Optional<Authorizer> authorizer) {
-            this.authorizer = authorizer;
+        Builder withAuthorizerPlugin(Optional<Plugin<Authorizer>> authorizerPlugin) {
+            this.authorizerPlugin = authorizerPlugin;
             return this;
         }
 
@@ -369,7 +370,7 @@ public class GroupMetadataManager {
             if (snapshotRegistry == null) snapshotRegistry = new SnapshotRegistry(logContext);
             if (metadataImage == null) metadataImage = MetadataImage.EMPTY;
             if (time == null) time = Time.SYSTEM;
-            if (authorizer == null) authorizer = Optional.empty();
+            if (authorizerPlugin == null) authorizerPlugin = Optional.empty();
 
             if (timer == null)
                 throw new IllegalArgumentException("Timer must be set.");
@@ -397,7 +398,7 @@ public class GroupMetadataManager {
                 config,
                 groupConfigManager,
                 shareGroupAssignor,
-                authorizer,
+                authorizerPlugin,
                 streamsGroupAssignors
             );
         }
@@ -526,7 +527,7 @@ public class GroupMetadataManager {
     /**
      * The authorizer to validate the regex subscription topics.
      */
-    private final Optional<Authorizer> authorizer;
+    private final Optional<Plugin<Authorizer>> authorizerPlugin;
 
     private GroupMetadataManager(
         SnapshotRegistry snapshotRegistry,
@@ -539,7 +540,7 @@ public class GroupMetadataManager {
         GroupCoordinatorConfig config,
         GroupConfigManager groupConfigManager,
         ShareGroupPartitionAssignor shareGroupAssignor,
-        Optional<Authorizer> authorizer,
+        Optional<Plugin<Authorizer>> authorizerPlugin,
         List<TaskAssignor> streamsGroupAssignors
     ) {
         this.logContext = logContext;
@@ -561,7 +562,7 @@ public class GroupMetadataManager {
         this.shareGroupPartitionMetadata = new TimelineHashMap<>(snapshotRegistry, 0);
         this.groupConfigManager = groupConfigManager;
         this.shareGroupAssignor = shareGroupAssignor;
-        this.authorizer = authorizer;
+        this.authorizerPlugin = authorizerPlugin;
         this.streamsGroupAssignors = streamsGroupAssignors.stream().collect(Collectors.toMap(TaskAssignor::name, Function.identity()));
     }
 
@@ -2968,7 +2969,8 @@ public class GroupMetadataManager {
             )).build();
     }
 
-    private void addInitializingTopicsRecords(String groupId, List<CoordinatorRecord> records, Map<Uuid, Set<Integer>> topicPartitionMap) {
+    // Visibility for tests
+    void addInitializingTopicsRecords(String groupId, List<CoordinatorRecord> records, Map<Uuid, Set<Integer>> topicPartitionMap) {
         if (topicPartitionMap == null || topicPartitionMap.isEmpty()) {
             return;
         }
@@ -2982,12 +2984,23 @@ public class GroupMetadataManager {
         // We must combine the existing information in the record with the topicPartitionMap argument.
         Map<Uuid, Set<Integer>> finalInitializingMap = mergeShareGroupInitMaps(currentMap.initializingTopics(), topicPartitionMap);
 
+        // If any initializing topics are also present in the deleting state
+        // we should remove them from deleting.
+        Set<Uuid> currentDeleting = new HashSet<>(currentMap.deletingTopics());
+        if (!currentDeleting.isEmpty()) {
+            finalInitializingMap.keySet().forEach(key -> {
+                if (currentDeleting.remove(key)) {
+                    log.warn("Initializing topic {} for share group {} found in deleting state as well, removing from deleting.", metadataImage.topics().getTopic(key).name(), groupId);
+                }
+            });
+        }
+
         records.add(
             newShareGroupStatePartitionMetadataRecord(
                 groupId,
                 attachTopicName(finalInitializingMap),
                 attachTopicName(currentMap.initializedTopics()),
-                attachTopicName(currentMap.deletingTopics())
+                attachTopicName(currentDeleting)
             )
         );
     }
@@ -3301,7 +3314,7 @@ public class GroupMetadataManager {
             Set<String> regexes = Collections.unmodifiableSet(subscribedRegularExpressions.keySet());
             executor.schedule(
                 key,
-                () -> refreshRegularExpressions(context, groupId, log, time, metadataImage, authorizer, regexes),
+                () -> refreshRegularExpressions(context, groupId, log, time, metadataImage, authorizerPlugin, regexes),
                 (result, exception) -> handleRegularExpressionsResult(groupId, memberId, result, exception)
             );
         }
@@ -3319,7 +3332,7 @@ public class GroupMetadataManager {
      * @param log           The log instance.
      * @param time          The time instance.
      * @param image         The metadata image to use for listing the topics.
-     * @param authorizer    The authorizer.
+     * @param authorizerPlugin    The authorizer.
      * @param regexes       The list of regular expressions that must be resolved.
      * @return The list of resolved regular expressions.
      *
@@ -3331,7 +3344,7 @@ public class GroupMetadataManager {
         Logger log,
         Time time,
         MetadataImage image,
-        Optional<Authorizer> authorizer,
+        Optional<Plugin<Authorizer>> authorizerPlugin,
         Set<String> regexes
     ) {
         long startTimeMs = time.milliseconds();
@@ -3362,7 +3375,7 @@ public class GroupMetadataManager {
 
         filterTopicDescribeAuthorizedTopics(
             context,
-            authorizer,
+            authorizerPlugin,
             resolvedRegexes
         );
 
@@ -3387,15 +3400,15 @@ public class GroupMetadataManager {
      * that the member is authorized to describe.
      *
      * @param context           The request context.
-     * @param authorizer        The authorizer.
+     * @param authorizerPlugin  The authorizer.
      * @param resolvedRegexes   The map of the regex pattern and its set of matched topics.
      */
     private static void filterTopicDescribeAuthorizedTopics(
         RequestContext context,
-        Optional<Authorizer> authorizer,
+        Optional<Plugin<Authorizer>> authorizerPlugin,
         Map<String, Set<String>> resolvedRegexes
     ) {
-        if (authorizer.isEmpty()) return;
+        if (authorizerPlugin.isEmpty()) return;
 
         Map<String, Integer> topicNameCount = new HashMap<>();
         resolvedRegexes.values().forEach(topicNames ->
@@ -3409,7 +3422,7 @@ public class GroupMetadataManager {
             return new Action(DESCRIBE, resource, entry.getValue(), true, false);
         }).collect(Collectors.toList());
 
-        List<AuthorizationResult> authorizationResults = authorizer.get().authorize(context, actions);
+        List<AuthorizationResult> authorizationResults = authorizerPlugin.get().get().authorize(context, actions);
         Set<String> deniedTopics = new HashSet<>();
         IntStream.range(0, actions.size()).forEach(i -> {
             if (authorizationResults.get(i) == AuthorizationResult.DENIED) {
@@ -8166,6 +8179,24 @@ public class GroupMetadataManager {
             shareGroupPartitionMetadata.get(shareGroupId).initializingTopics()
         );
 
+        // Ideally the deleting should be empty - if it is not then it implies
+        // that some previous share group delete or delete offsets command
+        // did not complete successfully. So, set up the delete request such that
+        // a retry for the same is possible. Since this is part of an admin operation
+        // retrying delete should not pose issues related to
+        // performance. Also, the share coordinator is idempotent on delete partitions.
+        Map<Uuid, Set<Integer>> deletingTopics = shareGroupPartitionMetadata.get(shareGroupId).deletingTopics().stream()
+            .map(tid -> Map.entry(tid, metadataImage.topics().getTopic(tid).partitions().keySet()))
+            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+
+        if (!deletingTopics.isEmpty()) {
+            log.info("Existing deleting entries found in share group {} - {}", shareGroupId, deletingTopics);
+            deleteCandidates = mergeShareGroupInitMaps(
+                deleteCandidates,
+                deletingTopics
+            );
+        }
+
         if (deleteCandidates.isEmpty()) {
             return Optional.empty();
         }
@@ -8181,7 +8212,8 @@ public class GroupMetadataManager {
             ));
         }
 
-        // Remove all initializing and initialized topic info from record and add deleting.
+        // Remove all initializing and initialized topic info from record and add deleting. There
+        // could be previous deleting topics due to offsets delete, we need to account for them as well.
         records.add(GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
             shareGroupId,
             Map.of(),
