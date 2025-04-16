@@ -1229,9 +1229,9 @@ class KRaftClusterTest {
     def assertFoobarValue(expected: Int): Unit = {
       TestUtils.retry(60000) {
         assertEquals(expected, cluster.controllers().values().iterator().next().
-          authorizer.get.asInstanceOf[FakeConfigurableAuthorizer].foobar.get())
+          authorizerPlugin.get.get.asInstanceOf[FakeConfigurableAuthorizer].foobar.get())
         assertEquals(expected, cluster.brokers().values().iterator().next().
-          authorizer.get.asInstanceOf[FakeConfigurableAuthorizer].foobar.get())
+          authorizerPlugin.get.get.asInstanceOf[FakeConfigurableAuthorizer].foobar.get())
       }
     }
 
