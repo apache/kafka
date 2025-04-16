@@ -404,7 +404,7 @@ public class AclCommand {
         }
     }
 
-    public static class AclCommandOptions extends CommandDefaultOptions {
+    public static final class AclCommandOptions extends CommandDefaultOptions {
 
         private final OptionSpec<String> bootstrapServerOpt;
         private final OptionSpec<String> bootstrapControllerOpt;
@@ -430,7 +430,6 @@ public class AclCommand {
         private final OptionSpecBuilder forceOpt;
         private final OptionSpec<String> userPrincipalOpt;
 
-        @SuppressWarnings("this-escape")
         public AclCommandOptions(String[] args) {
             super(args);
             bootstrapServerOpt = parser.accepts("bootstrap-server", "A list of host/port pairs to use for establishing the connection to the Kafka cluster." +

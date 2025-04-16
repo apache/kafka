@@ -30,11 +30,7 @@ import org.apache.kafka.common.utils.AbstractIterator;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.common.utils.CloseableIterator;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
-
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
@@ -50,7 +46,6 @@ import java.util.Objects;
  * or one of the {@link #builder(ByteBuffer, byte, Compression, TimestampType, long)} variants.
  */
 public class MemoryRecords extends AbstractRecords {
-    private static final Logger log = LoggerFactory.getLogger(MemoryRecords.class);
     public static final MemoryRecords EMPTY = MemoryRecords.readableRecords(ByteBuffer.allocate(0));
 
     private final ByteBuffer buffer;
@@ -109,11 +104,6 @@ public class MemoryRecords extends AbstractRecords {
 
         this.validBytes = bytes;
         return bytes;
-    }
-
-    @Override
-    public ConvertedRecords<MemoryRecords> downConvert(byte toMagic, long firstOffset, Time time) {
-        return RecordsUtil.downConvert(batches(), toMagic, firstOffset, time);
     }
 
     @Override
@@ -602,7 +592,7 @@ public class MemoryRecords extends AbstractRecords {
         return withRecords(magic, initialOffset, compression, TimestampType.CREATE_TIME, records);
     }
 
-    public static MemoryRecords withRecords(long initialOffset, Compression compression, Integer partitionLeaderEpoch, SimpleRecord... records) {
+    public static MemoryRecords withRecords(long initialOffset, Compression compression, int partitionLeaderEpoch, SimpleRecord... records) {
         return withRecords(RecordBatch.CURRENT_MAGIC_VALUE, initialOffset, compression, TimestampType.CREATE_TIME, RecordBatch.NO_PRODUCER_ID,
                 RecordBatch.NO_PRODUCER_EPOCH, RecordBatch.NO_SEQUENCE, partitionLeaderEpoch, false, records);
     }
@@ -688,8 +678,7 @@ public class MemoryRecords extends AbstractRecords {
     public static MemoryRecords withEndTransactionMarker(long initialOffset, long timestamp, int partitionLeaderEpoch,
                                                          long producerId, short producerEpoch,
                                                          EndTransactionMarker marker) {
-        int endTxnMarkerBatchSize = DefaultRecordBatch.RECORD_BATCH_OVERHEAD +
-                EndTransactionMarker.CURRENT_END_TXN_SCHEMA_RECORD_SIZE;
+        int endTxnMarkerBatchSize = DefaultRecordBatch.RECORD_BATCH_OVERHEAD + marker.endTxnMarkerValueSize();
         ByteBuffer buffer = ByteBuffer.allocate(endTxnMarkerBatchSize);
         writeEndTransactionalMarker(buffer, initialOffset, timestamp, partitionLeaderEpoch, producerId,
                 producerEpoch, marker);

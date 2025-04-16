@@ -18,11 +18,11 @@
 package kafka.server
 
 import org.apache.kafka.common.TopicPartition
-import org.apache.kafka.common.record.MemoryRecords
 import org.apache.kafka.common.requests.FetchResponse
-import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
+import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogStartOffsetIncrementReason}
 
+import java.util.Optional
 import scala.collection.mutable
 
 class ReplicaFetcherThread(name: String,
@@ -31,8 +31,7 @@ class ReplicaFetcherThread(name: String,
                            failedPartitions: FailedPartitions,
                            replicaMgr: ReplicaManager,
                            quota: ReplicaQuota,
-                           logPrefix: String,
-                           metadataVersionSupplier: () => MetadataVersion)
+                           logPrefix: String)
   extends AbstractFetcherThread(name = name,
                                 clientId = name,
                                 leader = leader,
@@ -47,7 +46,7 @@ class ReplicaFetcherThread(name: String,
   // Visible for testing
   private[server] val partitionsWithNewHighWatermark = mutable.Buffer[TopicPartition]()
 
-  override protected def latestEpoch(topicPartition: TopicPartition): Option[Int] = {
+  override protected def latestEpoch(topicPartition: TopicPartition): Optional[Integer] = {
     replicaMgr.localLogOrException(topicPartition).latestEpoch
   }
 
@@ -59,7 +58,7 @@ class ReplicaFetcherThread(name: String,
     replicaMgr.localLogOrException(topicPartition).logEndOffset
   }
 
-  override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Option[OffsetAndEpoch] = {
+  override protected def endOffsetForEpoch(topicPartition: TopicPartition, epoch: Int): Optional[OffsetAndEpoch] = {
     replicaMgr.localLogOrException(topicPartition).endOffsetForEpoch(epoch)
   }
 
@@ -98,15 +97,16 @@ class ReplicaFetcherThread(name: String,
   }
 
   // process fetched data
-  override def processPartitionData(topicPartition: TopicPartition,
-                                    fetchOffset: Long,
-                                    partitionData: FetchData): Option[LogAppendInfo] = {
+  override def processPartitionData(
+    topicPartition: TopicPartition,
+    fetchOffset: Long,
+    partitionLeaderEpoch: Int,
+    partitionData: FetchData
+  ): Option[LogAppendInfo] = {
     val logTrace = isTraceEnabled
     val partition = replicaMgr.getPartitionOrException(topicPartition)
     val log = partition.localLogOrException
     val records = toMemoryRecords(FetchResponse.recordsOrFail(partitionData))
-
-    maybeWarnIfOversizedRecords(records, topicPartition)
 
     if (fetchOffset != log.logEndOffset)
       throw new IllegalStateException("Offset mismatch for partition %s: fetched offset = %d, log end offset = %d.".format(
@@ -117,7 +117,7 @@ class ReplicaFetcherThread(name: String,
         .format(log.logEndOffset, topicPartition, records.sizeInBytes, partitionData.highWatermark))
 
     // Append the leader's messages to the log
-    val logAppendInfo = partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = false)
+    val logAppendInfo = partition.appendRecordsToFollowerOrFutureReplica(records, isFuture = false, partitionLeaderEpoch)
 
     if (logTrace)
       trace("Follower has replica log end offset %d after appending %d bytes of messages for partition %s"
@@ -127,7 +127,7 @@ class ReplicaFetcherThread(name: String,
     // For the follower replica, we do not need to keep its segment base offset and physical position.
     // These values will be computed upon becoming leader or handling a preferred read replica fetch.
     var maybeUpdateHighWatermarkMessage = s"but did not update replica high watermark"
-    log.maybeUpdateHighWatermark(partitionData.highWatermark).foreach { newHighWatermark =>
+    log.maybeUpdateHighWatermark(partitionData.highWatermark).ifPresent { newHighWatermark =>
       maybeUpdateHighWatermarkMessage = s"and updated replica high watermark to $newHighWatermark"
       partitionsWithNewHighWatermark += topicPartition
     }
@@ -155,15 +155,6 @@ class ReplicaFetcherThread(name: String,
       replicaMgr.completeDelayedFetchRequests(partitionsWithNewHighWatermark.toSeq)
       partitionsWithNewHighWatermark.clear()
     }
-  }
-
-  private def maybeWarnIfOversizedRecords(records: MemoryRecords, topicPartition: TopicPartition): Unit = {
-    // oversized messages don't cause replication to fail from fetch request version 3 (KIP-74)
-    if (metadataVersionSupplier().fetchRequestVersion <= 2 && records.sizeInBytes > 0 && records.validBytes <= 0)
-      error(s"Replication is failing due to a message that is greater than replica.fetch.max.bytes for partition $topicPartition. " +
-        "This generally occurs when the max.message.bytes has been overridden to exceed this value and a suitably large " +
-        "message has also been sent. To fix this problem increase replica.fetch.max.bytes in your broker config to be " +
-        "equal or larger than your settings for max.message.bytes, both at a broker and topic level.")
   }
 
   /**

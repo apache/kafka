@@ -1782,6 +1782,13 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * timeout. If the consumer is unable to complete offset commits and gracefully leave the group
      * before the timeout expires, the consumer is force closed. Note that {@link #wakeup()} cannot be
      * used to interrupt close.
+     * <p>
+     * The actual maximum wait time is bounded by the {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} setting, which
+     * only applies to operations performed with the broker (coordinator-related requests and
+     * fetch sessions). Even if a larger timeout is specified, the consumer will not wait longer than
+     * {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} for these requests to complete during the close operation.
+     * Note that the execution time of callbacks (such as {@link OffsetCommitCallback} and
+     * {@link ConsumerRebalanceListener}) does not consume time from the close timeout.
      *
      * @param timeout The maximum time to wait for consumer to close gracefully. The value must be
      *                non-negative. Specifying a timeout of zero means do not wait for pending requests to complete.
@@ -1791,6 +1798,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws org.apache.kafka.common.KafkaException for any other error during close
      */
     @Override
+    @SuppressWarnings("deprecation")
     public void close(Duration timeout) {
         delegate.close(timeout);
     }
@@ -1803,6 +1811,17 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void wakeup() {
         delegate.wakeup();
+    }
+
+    /**
+     * This method allows the caller to specify shutdown behavior using the {@link CloseOptions} class.
+     * If {@code null} is provided, the default behavior will be applied, equivalent to providing a new {@link CloseOptions} instance.
+     *
+     * @param option see {@link CloseOptions}
+     */
+    @Override
+    public void close(CloseOptions option) {
+        delegate.close(option);
     }
 
     // Functions below are for testing only

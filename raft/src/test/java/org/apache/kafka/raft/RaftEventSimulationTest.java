@@ -46,11 +46,12 @@ import net.jqwik.api.Property;
 import net.jqwik.api.Tag;
 import net.jqwik.api.constraints.IntRange;
 
+import org.mockito.Mockito;
+
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -855,7 +856,7 @@ public class RaftEventSimulationTest {
 
         private static Endpoints endpointsFromId(int nodeId, ListenerName listenerName) {
             return Endpoints.fromInetSocketAddresses(
-                Collections.singletonMap(
+                Map.of(
                     listenerName,
                     InetSocketAddress.createUnresolved(hostFromId(nodeId), PORT)
                 )
@@ -900,7 +901,7 @@ public class RaftEventSimulationTest {
                 FETCH_MAX_WAIT_MS,
                 true,
                 clusterId,
-                Collections.emptyList(),
+                List.of(),
                 endpointsFromId(nodeId, channel.listenerName()),
                 Feature.KRAFT_VERSION.supportedVersionRange(),
                 logContext,
@@ -962,7 +963,8 @@ public class RaftEventSimulationTest {
             client.initialize(
                 voterAddresses,
                 store,
-                metrics
+                metrics,
+                Mockito.mock(ExternalKRaftMetrics.class)
             );
         }
 

@@ -47,6 +47,8 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupTargetAssignmentMetadataKey;
@@ -477,7 +479,7 @@ public class GroupCoordinatorRecordHelpers {
                     .setGeneration(0)
                     .setLeader(null)
                     .setCurrentStateTimestamp(group.currentStateTimestampOrDefault())
-                    .setMembers(Collections.emptyList()),
+                    .setMembers(List.of()),
                 GROUP_METADATA_VALUE_VERSION
             )
         );
@@ -809,6 +811,68 @@ public class GroupCoordinatorRecordHelpers {
             new ShareGroupCurrentMemberAssignmentKey()
                 .setGroupId(groupId)
                 .setMemberId(memberId)
+        );
+    }
+
+    /**
+     * Creates a ShareGroupStatePartitionMetadata tombstone.
+     *
+     * @param groupId   The share group id.
+     * @return The record.
+     */
+    public static CoordinatorRecord newShareGroupStatePartitionMetadataTombstoneRecord(
+        String groupId
+    ) {
+        return CoordinatorRecord.tombstone(
+            new ShareGroupStatePartitionMetadataKey()
+                .setGroupId(groupId)
+        );
+    }
+
+    /**
+     * Creates a ShareGroupStatePartitionMetadata record.
+     *
+     * @param groupId   The share group id.
+     * @param initializedTopics  Topics which have been initialized.
+     * @param deletingTopics  Topics which are being deleted.
+     * @return The record.
+     */
+    public static CoordinatorRecord newShareGroupStatePartitionMetadataRecord(
+        String groupId,
+        Map<Uuid, Map.Entry<String, Set<Integer>>> initializingTopics,
+        Map<Uuid, Map.Entry<String, Set<Integer>>> initializedTopics,
+        Map<Uuid, String> deletingTopics
+    ) {
+        List<ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo> initializingTopicPartitionInfo = initializingTopics.entrySet().stream()
+            .map(entry -> new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                .setTopicId(entry.getKey())
+                .setTopicName(entry.getValue().getKey())
+                .setPartitions(entry.getValue().getValue().stream().toList()))
+            .toList();
+
+        List<ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo> initializedTopicPartitionInfo = initializedTopics.entrySet().stream()
+            .map(entry -> new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                .setTopicId(entry.getKey())
+                .setTopicName(entry.getValue().getKey())
+                .setPartitions(entry.getValue().getValue().stream().toList()))
+            .toList();
+
+        List<ShareGroupStatePartitionMetadataValue.TopicInfo> deletingTopicsInfo = deletingTopics.entrySet().stream()
+            .map(entry -> new ShareGroupStatePartitionMetadataValue.TopicInfo()
+                .setTopicId(entry.getKey())
+                .setTopicName(entry.getValue()))
+            .toList();
+
+        return CoordinatorRecord.record(
+            new ShareGroupStatePartitionMetadataKey()
+                .setGroupId(groupId),
+            new ApiMessageAndVersion(
+                new ShareGroupStatePartitionMetadataValue()
+                    .setInitializingTopics(initializingTopicPartitionInfo)
+                    .setInitializedTopics(initializedTopicPartitionInfo)
+                    .setDeletingTopics(deletingTopicsInfo),
+                (short) 0
+            )
         );
     }
 

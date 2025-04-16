@@ -21,7 +21,6 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
-import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 
@@ -37,6 +36,8 @@ public class ListShareGroupOffsetsSpec {
 
     /**
      * Set the topic partitions whose offsets are to be listed for a share group.
+     *
+     * @param topicPartitions List of topic partitions to include
      */
     public ListShareGroupOffsetsSpec topicPartitions(Collection<TopicPartition> topicPartitions) {
         this.topicPartitions = topicPartitions;
@@ -45,9 +46,10 @@ public class ListShareGroupOffsetsSpec {
 
     /**
      * Returns the topic partitions whose offsets are to be listed for a share group.
+     * {@code null} indicates that offsets of all partitions of the group are to be listed.
      */
     public Collection<TopicPartition> topicPartitions() {
-        return topicPartitions == null ? List.of() : topicPartitions;
+        return topicPartitions;
     }
 
     @Override

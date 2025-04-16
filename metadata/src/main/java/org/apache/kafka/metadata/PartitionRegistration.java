@@ -165,8 +165,12 @@ public class PartitionRegistration {
     public final int leaderEpoch;
     public final int partitionEpoch;
 
-    public static boolean electionWasClean(int newLeader, int[] isr) {
-        return newLeader == NO_LEADER || Replicas.contains(isr, newLeader);
+    public static boolean electionWasClean(int newLeader, int[] isr, int[] elr) {
+        return newLeader == NO_LEADER || Replicas.contains(isr, newLeader) || Replicas.contains(elr, newLeader);
+    }
+
+    public static boolean electionFromElr(int newLeader, int[] elr) {
+        return Replicas.contains(elr, newLeader);
     }
 
     private static List<Uuid> checkDirectories(PartitionRecord record) {
@@ -347,7 +351,7 @@ public class PartitionRegistration {
     }
 
     public void maybeLogPartitionChange(Logger log, String description, PartitionRegistration prev) {
-        if (!electionWasClean(leader, prev.isr)) {
+        if (!electionWasClean(leader, prev.isr, prev.elr)) {
             log.info("UNCLEAN partition change for {}: {}", description, diff(prev));
         } else if (log.isDebugEnabled()) {
             log.debug("partition change for {}: {}", description, diff(prev));
@@ -387,11 +391,16 @@ public class PartitionRegistration {
             setLeaderRecoveryState(leaderRecoveryState.value()).
             setLeaderEpoch(leaderEpoch).
             setPartitionEpoch(partitionEpoch);
-        if (options.metadataVersion().isElrSupported()) {
+        if (options.isEligibleLeaderReplicasEnabled()) {
             // The following are tagged fields, we should only set them when there are some contents, in order to save
             // spaces.
             if (elr.length > 0) record.setEligibleLeaderReplicas(Replicas.toList(elr));
             if (lastKnownElr.length > 0) record.setLastKnownElr(Replicas.toList(lastKnownElr));
+        }
+
+        if (options.metadataVersion() == null) {
+            options.handleLoss("the metadata version");
+            return new ApiMessageAndVersion(record, (short) 0);
         }
         if (options.metadataVersion().isDirectoryAssignmentSupported()) {
             record.setDirectories(Uuid.toList(directories));
@@ -460,12 +469,5 @@ public class PartitionRegistration {
                 ", leaderEpoch=" + leaderEpoch +
                 ", partitionEpoch=" + partitionEpoch +
                 ")";
-    }
-
-    public boolean hasSameAssignment(PartitionRegistration registration) {
-        return Arrays.equals(this.replicas, registration.replicas) &&
-            Arrays.equals(this.directories, registration.directories) &&
-            Arrays.equals(this.addingReplicas, registration.addingReplicas) &&
-            Arrays.equals(this.removingReplicas, registration.removingReplicas);
     }
 }

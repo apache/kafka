@@ -18,15 +18,15 @@
 package kafka.server
 
 import java.util.{Collections, Properties}
-import kafka.log.UnifiedLog
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
-import org.apache.kafka.server.config.{QuotaConfig, ZooKeeperInternals}
+import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.common.metrics.Quota._
 import org.apache.kafka.coordinator.group.GroupCoordinator
 import org.apache.kafka.server.ClientMetricsManager
 import org.apache.kafka.server.common.StopPartition
-import org.apache.kafka.storage.internals.log.{LogStartOffsetIncrementReason, ThrottledReplicaListValidator}
+import org.apache.kafka.server.log.remote.TopicPartitionLog
+import org.apache.kafka.storage.internals.log.{LogStartOffsetIncrementReason, ThrottledReplicaListValidator, UnifiedLog}
 
 import scala.jdk.CollectionConverters._
 import scala.collection.Seq
@@ -39,7 +39,7 @@ trait ConfigHandler {
 }
 
 /**
-  * The TopicConfigHandler will process topic config changes from ZooKeeper or the metadata log.
+  * The TopicConfigHandler will process topic config changes from the metadata log.
   * The callback provides the topic name and the full properties set.
   */
 class TopicConfigHandler(private val replicaManager: ReplicaManager,
@@ -54,7 +54,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     val wasRemoteLogEnabled = logs.exists(_.remoteLogEnabled())
     val wasCopyDisabled = logs.exists(_.config.remoteLogCopyDisable())
 
-    logManager.updateTopicConfig(topic, topicConfig, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled(),
+    logManager.updateTopicConfig(topic, topicConfig, kafkaConfig.remoteLogManagerConfig.isRemoteStorageSystemEnabled,
       wasRemoteLogEnabled)
     maybeUpdateRemoteLogComponents(topic, logs, wasRemoteLogEnabled, wasCopyDisabled)
   }
@@ -75,13 +75,13 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
     if (isRemoteLogEnabled && (!wasRemoteLogEnabled || (wasCopyDisabled && !isCopyDisabled))) {
       val topicIds = Collections.singletonMap(topic, replicaManager.metadataCache.getTopicId(topic))
       replicaManager.remoteLogManager.foreach(rlm =>
-        rlm.onLeadershipChange(leaderPartitions.toSet.asJava, followerPartitions.toSet.asJava, topicIds))
+        rlm.onLeadershipChange((leaderPartitions.toSet: Set[TopicPartitionLog]).asJava, (followerPartitions.toSet: Set[TopicPartitionLog]).asJava, topicIds))
     }
 
     // When copy disabled, we should stop leaderCopyRLMTask, but keep expirationTask
     if (isRemoteLogEnabled && !wasCopyDisabled && isCopyDisabled) {
       replicaManager.remoteLogManager.foreach(rlm => {
-        rlm.stopLeaderCopyRLMTasks(leaderPartitions.toSet.asJava)
+        rlm.stopLeaderCopyRLMTasks((leaderPartitions.toSet: Set[TopicPartitionLog] ).asJava)
       })
     }
 
@@ -146,7 +146,7 @@ class TopicConfigHandler(private val replicaManager: ReplicaManager,
 class BrokerConfigHandler(private val brokerConfig: KafkaConfig,
                           private val quotaManagers: QuotaManagers) extends ConfigHandler with Logging {
   def processConfigChanges(brokerId: String, properties: Properties): Unit = {
-    if (brokerId == ZooKeeperInternals.DEFAULT_STRING)
+    if (brokerId.isEmpty)
       brokerConfig.dynamicConfig.updateDefaultConfig(properties)
     else if (brokerConfig.brokerId == brokerId.trim.toInt) {
       brokerConfig.dynamicConfig.updateBrokerConfig(brokerConfig.brokerId, properties)

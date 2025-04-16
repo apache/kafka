@@ -198,12 +198,12 @@ public class TransactionManagerTest {
 
         this.brokerNode = new Node(0, "localhost", 2211);
         this.accumulator = new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
-                deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
+                deliveryTimeoutMs, metrics, metricGrpName, time, transactionManager,
                 new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, true,
                 MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics), this.time, REQUEST_TIMEOUT,
-                50, transactionManager, apiVersions);
+                50, transactionManager);
     }
 
     @Test
@@ -737,12 +737,12 @@ public class TransactionManagerTest {
         final int deliveryTimeout = 15000;
 
         RecordAccumulator accumulator = new RecordAccumulator(logContext, 16 * 1024, Compression.NONE, 0, 0L, 0L,
-                deliveryTimeout, metrics, "", time, apiVersions, transactionManager,
+                deliveryTimeout, metrics, "", time, transactionManager,
                 new BufferPool(1024 * 1024, 16 * 1024, metrics, time, ""));
 
         Sender sender = new Sender(logContext, this.client, this.metadata, accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics), this.time, requestTimeout,
-                0, transactionManager, apiVersions);
+                0, transactionManager);
 
         assertEquals(0, transactionManager.sequenceNumber(tp0));
 
@@ -769,7 +769,7 @@ public class TransactionManagerTest {
         // is reached even though the delivery timeout has expired and the
         // future has completed exceptionally.
         assertTrue(responseFuture1.isDone());
-        TestUtils.assertFutureThrows(responseFuture1, TimeoutException.class);
+        TestUtils.assertFutureThrows(TimeoutException.class, responseFuture1);
         assertFalse(transactionManager.hasInFlightRequest());
         assertEquals(1, client.inFlightRequestCount());
 
@@ -1048,12 +1048,12 @@ public class TransactionManagerTest {
 
         this.brokerNode = new Node(0, "localhost", 2211);
         this.accumulator = new RecordAccumulator(logContext, batchSize, Compression.NONE, 0, 0L, 0L,
-            deliveryTimeoutMs, metrics, metricGrpName, time, apiVersions, transactionManager,
+            deliveryTimeoutMs, metrics, metricGrpName, time, transactionManager,
             new BufferPool(totalSize, batchSize, metrics, time, metricGrpName));
 
         this.sender = new Sender(logContext, this.client, this.metadata, this.accumulator, true,
             MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(metrics), this.time, REQUEST_TIMEOUT,
-            50, transactionManager, apiVersions);
+            50, transactionManager);
 
         doInitTransactions();
         assertFalse(transactionManager.isTransactionV2Enabled());
@@ -1527,8 +1527,8 @@ public class TransactionManagerTest {
         assertAbortableError(TopicAuthorizationException.class);
         sender.runOnce();
 
-        TestUtils.assertFutureThrows(firstPartitionAppend, TransactionAbortedException.class);
-        TestUtils.assertFutureThrows(secondPartitionAppend, TransactionAbortedException.class);
+        TestUtils.assertFutureThrows(TransactionAbortedException.class, firstPartitionAppend);
+        TestUtils.assertFutureThrows(TransactionAbortedException.class, secondPartitionAppend);
     }
 
     @Test
@@ -1575,8 +1575,8 @@ public class TransactionManagerTest {
         // the pending transaction commit.
         sender.runOnce();
         assertTrue(commitResult.isCompleted());
-        TestUtils.assertFutureThrows(firstPartitionAppend, TopicAuthorizationException.class);
-        TestUtils.assertFutureThrows(secondPartitionAppend, TopicAuthorizationException.class);
+        TestUtils.assertFutureThrows(TopicAuthorizationException.class, firstPartitionAppend);
+        TestUtils.assertFutureThrows(TopicAuthorizationException.class, secondPartitionAppend);
         assertInstanceOf(TopicAuthorizationException.class, commitResult.error());
     }
 
@@ -2184,7 +2184,7 @@ public class TransactionManagerTest {
         runUntil(commitResult::isCompleted);  // commit should be cancelled with exception without being sent.
 
         assertThrows(KafkaException.class, commitResult::await);
-        TestUtils.assertFutureThrows(responseFuture, OutOfOrderSequenceException.class);
+        TestUtils.assertFutureThrows(OutOfOrderSequenceException.class, responseFuture);
 
         // Commit is not allowed, so let's abort and try again.
         TransactionalRequestResult abortResult = transactionManager.beginAbort();
@@ -2373,7 +2373,7 @@ public class TransactionManagerTest {
         assertTrue(abortResult.isSuccessful());
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
-        TestUtils.assertFutureThrows(responseFuture, TransactionAbortedException.class);
+        TestUtils.assertFutureThrows(TransactionAbortedException.class, responseFuture);
     }
 
     @Test
@@ -2399,7 +2399,7 @@ public class TransactionManagerTest {
         assertTrue(abortResult.isSuccessful());
         assertTrue(transactionManager.isReady());  // make sure we are ready for a transaction now.
 
-        TestUtils.assertFutureThrows(responseFuture, TransactionAbortedException.class);
+        TestUtils.assertFutureThrows(TransactionAbortedException.class, responseFuture);
     }
 
     @Test
@@ -3585,7 +3585,7 @@ public class TransactionManagerTest {
         initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         Sender sender = new Sender(logContext, this.client, this.metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(new Metrics(time)), this.time,
-                REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
+                REQUEST_TIMEOUT, 50, transactionManager);
         initializeIdempotentProducerId(producerId, epoch);
 
         ProducerBatch tp0b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");
@@ -3710,7 +3710,7 @@ public class TransactionManagerTest {
         initializeTransactionManager(Optional.empty(), transactionV2Enabled);
         Sender sender = new Sender(logContext, this.client, this.metadata, this.accumulator, false,
                 MAX_REQUEST_SIZE, ACKS_ALL, MAX_RETRIES, new SenderMetricsRegistry(new Metrics(time)), this.time,
-                REQUEST_TIMEOUT, 50, transactionManager, apiVersions);
+                REQUEST_TIMEOUT, 50, transactionManager);
         initializeIdempotentProducerId(producerId, epoch);
 
         ProducerBatch tp0b1 = writeIdempotentBatchWithValue(transactionManager, tp0, "1");

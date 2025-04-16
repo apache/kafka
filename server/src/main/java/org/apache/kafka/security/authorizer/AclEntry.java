@@ -23,7 +23,6 @@ import org.apache.kafka.common.resource.ResourceType;
 import org.apache.kafka.common.security.auth.KafkaPrincipal;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -39,6 +38,7 @@ import static org.apache.kafka.common.acl.AclOperation.DESCRIBE_CONFIGS;
 import static org.apache.kafka.common.acl.AclOperation.DESCRIBE_TOKENS;
 import static org.apache.kafka.common.acl.AclOperation.IDEMPOTENT_WRITE;
 import static org.apache.kafka.common.acl.AclOperation.READ;
+import static org.apache.kafka.common.acl.AclOperation.TWO_PHASE_COMMIT;
 import static org.apache.kafka.common.acl.AclOperation.WRITE;
 
 public class AclEntry {
@@ -60,9 +60,9 @@ public class AclEntry {
             case CLUSTER:
                 return new HashSet<>(Arrays.asList(CREATE, CLUSTER_ACTION, DESCRIBE_CONFIGS, ALTER_CONFIGS, IDEMPOTENT_WRITE, ALTER, DESCRIBE));
             case TRANSACTIONAL_ID:
-                return new HashSet<>(Arrays.asList(DESCRIBE, WRITE));
+                return new HashSet<>(Arrays.asList(DESCRIBE, WRITE, TWO_PHASE_COMMIT));
             case DELEGATION_TOKEN:
-                return Collections.singleton(DESCRIBE);
+                return Set.of(DESCRIBE);
             case USER:
                 return new HashSet<>(Arrays.asList(CREATE_TOKENS, DESCRIBE_TOKENS));
             default:

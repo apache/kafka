@@ -77,7 +77,7 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
             final CoordinatorRequestManager coordinatorRequestManager,
             final ShareMembershipManager membershipManager,
             final HeartbeatState heartbeatState,
-            final AbstractHeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState,
+            final HeartbeatRequestState heartbeatRequestState,
             final BackgroundEventHandler backgroundEventHandler,
             final Metrics metrics) {
         super(logContext, timer, config, coordinatorRequestManager, heartbeatRequestState, backgroundEventHandler,
@@ -181,6 +181,11 @@ public class ShareHeartbeatRequestManager extends AbstractHeartbeatRequestManage
     @Override
     public ShareMembershipManager membershipManager() {
         return membershipManager;
+    }
+
+    @Override
+    protected boolean shouldSendLeaveHeartbeatNow() {
+        return membershipManager().state() == MemberState.LEAVING;
     }
 
     /**

@@ -29,10 +29,10 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Test;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.TreeMap;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -44,7 +44,8 @@ public class ReconfigurableQuorumIntegrationTest {
     static void checkKRaftVersions(Admin admin, short finalized) throws Exception {
         FeatureMetadata featureMetadata = admin.describeFeatures().featureMetadata().get();
         if (finalized > 0) {
-            assertTrue(featureMetadata.finalizedFeatures().containsKey(KRaftVersion.FEATURE_NAME));
+            assertTrue(featureMetadata.finalizedFeatures().containsKey(KRaftVersion.FEATURE_NAME),
+                "finalizedFeatures does not contain " + KRaftVersion.FEATURE_NAME + ", finalizedFeatures: " + featureMetadata.finalizedFeatures());
             assertEquals(finalized, featureMetadata.finalizedFeatures().
                     get(KRaftVersion.FEATURE_NAME).minVersionLevel());
             assertEquals(finalized, featureMetadata.finalizedFeatures().
@@ -64,13 +65,13 @@ public class ReconfigurableQuorumIntegrationTest {
             new TestKitNodes.Builder().
                 setNumBrokerNodes(1).
                 setNumControllerNodes(1).
-                    build()).build()
-        ) {
+                build()
+        ).build()) {
             cluster.format();
             cluster.startup();
             try (Admin admin = Admin.create(cluster.clientProperties())) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
-                    checkKRaftVersions(admin, (short) 0);
+                    checkKRaftVersions(admin, KRaftVersion.KRAFT_VERSION_0.featureLevel());
                 });
             }
         }
@@ -82,14 +83,14 @@ public class ReconfigurableQuorumIntegrationTest {
             new TestKitNodes.Builder().
                 setNumBrokerNodes(1).
                 setNumControllerNodes(1).
-                setFeature(KRaftVersion.FEATURE_NAME, (short) 1).
-                    build()).build()
-        ) {
+                setFeature(KRaftVersion.FEATURE_NAME, KRaftVersion.KRAFT_VERSION_1.featureLevel()).
+                build()
+        ).build()) {
             cluster.format();
             cluster.startup();
             try (Admin admin = Admin.create(cluster.clientProperties())) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, () -> {
-                    checkKRaftVersions(admin, (short) 1);
+                    checkKRaftVersions(admin, KRaftVersion.KRAFT_VERSION_1.featureLevel());
                 });
             }
         }
@@ -110,15 +111,15 @@ public class ReconfigurableQuorumIntegrationTest {
             new TestKitNodes.Builder().
                 setNumBrokerNodes(1).
                 setNumControllerNodes(3).
-                setFeature(KRaftVersion.FEATURE_NAME, (short) 1).
-                    build()).build()
-        ) {
+                setFeature(KRaftVersion.FEATURE_NAME, KRaftVersion.KRAFT_VERSION_1.featureLevel()).
+                build()
+        ).build()) {
             cluster.format();
             cluster.startup();
             try (Admin admin = Admin.create(cluster.clientProperties())) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
-                    assertEquals(new HashSet<>(Arrays.asList(3000, 3001, 3002)), voters.keySet());
+                    assertEquals(new HashSet<>(List.of(3000, 3001, 3002)), voters.keySet());
                     for (int replicaId : new int[] {3000, 3001, 3002}) {
                         assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
                     }
@@ -135,7 +136,7 @@ public class ReconfigurableQuorumIntegrationTest {
             new TestKitNodes.Builder().
                 setNumBrokerNodes(1).
                 setNumControllerNodes(4).
-                setFeature(KRaftVersion.FEATURE_NAME, (short) 1).
+                setFeature(KRaftVersion.FEATURE_NAME, KRaftVersion.KRAFT_VERSION_1.featureLevel()).
                 build()).build()
         ) {
             cluster.format();
@@ -143,7 +144,7 @@ public class ReconfigurableQuorumIntegrationTest {
             try (Admin admin = Admin.create(cluster.clientProperties())) {
                 TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
-                    assertEquals(new HashSet<>(Arrays.asList(3000, 3001, 3002, 3003)), voters.keySet());
+                    assertEquals(new HashSet<>(List.of(3000, 3001, 3002, 3003)), voters.keySet());
                     for (int replicaId : new int[] {3000, 3001, 3002, 3003}) {
                         assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
                     }
@@ -152,7 +153,7 @@ public class ReconfigurableQuorumIntegrationTest {
                 admin.removeRaftVoter(3000, dirId).all().get();
                 TestUtils.retryOnExceptionWithTimeout(30_000, 10, () -> {
                     Map<Integer, Uuid> voters = findVoterDirs(admin);
-                    assertEquals(new HashSet<>(Arrays.asList(3001, 3002, 3003)), voters.keySet());
+                    assertEquals(new HashSet<>(List.of(3001, 3002, 3003)), voters.keySet());
                     for (int replicaId : new int[] {3001, 3002, 3003}) {
                         assertNotEquals(Uuid.ZERO_UUID, voters.get(replicaId));
                     }
@@ -160,7 +161,7 @@ public class ReconfigurableQuorumIntegrationTest {
                 admin.addRaftVoter(
                     3000,
                     dirId,
-                    Collections.singleton(new RaftVoterEndpoint("CONTROLLER", "example.com", 8080))
+                    Set.of(new RaftVoterEndpoint("CONTROLLER", "example.com", 8080))
                 ).all().get();
             }
         }

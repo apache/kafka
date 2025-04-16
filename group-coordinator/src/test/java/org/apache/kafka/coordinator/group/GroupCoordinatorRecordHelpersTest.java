@@ -45,6 +45,8 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.coordinator.group.modern.MemberState;
 import org.apache.kafka.coordinator.group.modern.TopicMetadata;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
@@ -55,10 +57,10 @@ import org.junit.jupiter.api.Test;
 
 import java.util.ArrayList;
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -282,6 +284,57 @@ public class GroupCoordinatorRecordHelpersTest {
         assertEquals(expectedRecord, newShareGroupEpochTombstoneRecord(
             "group-id"
         ));
+    }
+
+    @Test
+    public void testNewShareGroupPartitionMetadataRecord() {
+        String groupId = "group-id";
+        String topicName1 = "t1";
+        Uuid topicId1 = Uuid.randomUuid();
+        String topicName2 = "t2";
+        Uuid topicId2 = Uuid.randomUuid();
+        Set<Integer> partitions = new LinkedHashSet<>();
+        partitions.add(0);
+        partitions.add(1);
+
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new ShareGroupStatePartitionMetadataKey()
+                .setGroupId(groupId),
+            new ApiMessageAndVersion(
+                new ShareGroupStatePartitionMetadataValue()
+                    .setInitializedTopics(
+                        List.of(
+                            new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                                .setTopicId(topicId1)
+                                .setTopicName(topicName1)
+                                .setPartitions(List.of(0, 1))
+                        )
+                    )
+                    .setDeletingTopics(
+                        List.of(
+                            new ShareGroupStatePartitionMetadataValue.TopicInfo()
+                                .setTopicId(topicId2)
+                                .setTopicName(topicName2)
+                        )
+                    ),
+                (short) 0
+            )
+        );
+
+        CoordinatorRecord record = GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+            groupId,
+            Map.of(),
+            Map.of(
+                topicId1,
+                Map.entry(topicName1, partitions)
+            ),
+            Map.of(
+                topicId2,
+                topicName2
+            )
+        );
+
+        assertEquals(expectedRecord, record);
     }
 
     @Test
@@ -570,7 +623,7 @@ public class GroupCoordinatorRecordHelpersTest {
         assertThrows(IllegalStateException.class, () ->
             GroupCoordinatorRecordHelpers.newGroupMetadataRecord(
                 group,
-                Collections.emptyMap()
+                Map.of()
             ));
     }
 
@@ -620,7 +673,7 @@ public class GroupCoordinatorRecordHelpersTest {
         assertThrows(IllegalStateException.class, () ->
             GroupCoordinatorRecordHelpers.newGroupMetadataRecord(
                 group,
-                Collections.emptyMap()
+                Map.of()
             ));
     }
       
@@ -628,7 +681,7 @@ public class GroupCoordinatorRecordHelpersTest {
     public void testEmptyGroupMetadataRecord() {
         Time time = new MockTime();
 
-        List<GroupMetadataValue.MemberMetadata> expectedMembers = Collections.emptyList();
+        List<GroupMetadataValue.MemberMetadata> expectedMembers = List.of();
 
         CoordinatorRecord expectedRecord = CoordinatorRecord.record(
             new GroupMetadataKey()

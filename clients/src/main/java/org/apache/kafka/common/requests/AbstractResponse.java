@@ -25,7 +25,7 @@ import org.apache.kafka.common.protocol.SendBuilder;
 import java.nio.ByteBuffer;
 import java.util.Collection;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
@@ -52,7 +52,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
 
     // Visible for testing
     final ByteBuffer serialize(short version) {
-        return MessageUtil.toByteBuffer(data(), version);
+        return MessageUtil.toByteBufferAccessor(data(), version).buffer();
     }
 
     /**
@@ -71,14 +71,14 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
     }
 
     protected static Map<Errors, Integer> errorCounts(Collection<Errors> errors) {
-        Map<Errors, Integer> errorCounts = new HashMap<>();
+        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
         for (Errors error : errors)
             updateErrorCounts(errorCounts, error);
         return errorCounts;
     }
 
     protected static Map<Errors, Integer> apiErrorCounts(Map<?, ApiError> errors) {
-        Map<Errors, Integer> errorCounts = new HashMap<>();
+        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
         for (ApiError apiError : errors.values())
             updateErrorCounts(errorCounts, apiError.error());
         return errorCounts;
@@ -285,6 +285,10 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
                 return StreamsGroupDescribeResponse.parse(responseBuffer, version);
             case DESCRIBE_SHARE_GROUP_OFFSETS:
                 return DescribeShareGroupOffsetsResponse.parse(responseBuffer, version);
+            case ALTER_SHARE_GROUP_OFFSETS:
+                return AlterShareGroupOffsetsResponse.parse(responseBuffer, version);
+            case DELETE_SHARE_GROUP_OFFSETS:
+                return DeleteShareGroupOffsetsResponse.parse(responseBuffer, version);
             default:
                 throw new AssertionError(String.format("ApiKey %s is not currently handled in `parseResponse`, the " +
                         "code should be updated to do so.", apiKey));

@@ -27,7 +27,7 @@ import org.apache.kafka.common.record.RecordBatch;
 
 import java.nio.ByteBuffer;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
@@ -80,7 +80,7 @@ public class ListOffsetsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> errorCounts = new HashMap<>();
+        Map<Errors, Integer> errorCounts = new EnumMap<>(Errors.class);
         topics().forEach(topic ->
             topic.partitions().forEach(partition ->
                 updateErrorCounts(errorCounts, Errors.forCode(partition.errorCode()))

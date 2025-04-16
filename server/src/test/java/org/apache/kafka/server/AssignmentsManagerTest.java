@@ -57,8 +57,6 @@ import org.slf4j.LoggerFactory;
 
 import java.util.AbstractMap;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
@@ -111,14 +109,14 @@ public class AssignmentsManagerTest {
         delta.replay(new PartitionRecord().
             setPartitionId(0).
             setTopicId(TOPIC_1).
-            setReplicas(Arrays.asList(0, 1, 2)).
-            setIsr(Arrays.asList(0, 1, 2)).
+            setReplicas(List.of(0, 1, 2)).
+            setIsr(List.of(0, 1, 2)).
             setLeader(1));
         delta.replay(new PartitionRecord().
             setPartitionId(1).
             setTopicId(TOPIC_1).
-            setReplicas(Arrays.asList(1, 2, 3)).
-            setIsr(Arrays.asList(1, 2, 3)).
+            setReplicas(List.of(1, 2, 3)).
+            setIsr(List.of(1, 2, 3)).
             setLeader(1));
         delta.replay(new TopicRecord().
             setName("bar").
@@ -126,20 +124,20 @@ public class AssignmentsManagerTest {
         delta.replay(new PartitionRecord().
             setPartitionId(0).
             setTopicId(TOPIC_2).
-            setReplicas(Arrays.asList(0, 3, 2)).
-            setIsr(Arrays.asList(0, 3, 2)).
+            setReplicas(List.of(0, 3, 2)).
+            setIsr(List.of(0, 3, 2)).
             setLeader(1));
         delta.replay(new PartitionRecord().
             setPartitionId(1).
             setTopicId(TOPIC_2).
-            setReplicas(Arrays.asList(1, 2, 3)).
-            setIsr(Arrays.asList(2)).
+            setReplicas(List.of(1, 2, 3)).
+            setIsr(List.of(2)).
             setLeader(2));
         delta.replay(new PartitionRecord().
             setPartitionId(2).
             setTopicId(TOPIC_2).
-            setReplicas(Arrays.asList(3, 2, 1)).
-            setIsr(Arrays.asList(3, 2, 1)).
+            setReplicas(List.of(3, 2, 1)).
+            setIsr(List.of(3, 2, 1)).
             setLeader(3));
         TEST_IMAGE = delta.apply(MetadataProvenance.EMPTY);
     }
@@ -200,7 +198,7 @@ public class AssignmentsManagerTest {
             this.channelManager = new MockNodeToControllerChannelManager();
             this.assignmentsManager = new AssignmentsManager(
                     backoff, Time.SYSTEM, channelManager, 1, () -> TEST_IMAGE,
-                        t -> t.toString(), metricsRegistry);
+                    Uuid::toString, metricsRegistry);
             this.successes = new HashMap<>();
         }
 
@@ -226,11 +224,11 @@ public class AssignmentsManagerTest {
                 assertEquals(TOPIC_1, topicData.topicId());
                 assertEquals(0, topicData.partitions().get(0).partitionIndex());
                 return mockClientResponse(new AssignReplicasToDirsResponseData().
-                    setDirectories(Arrays.asList(new AssignReplicasToDirsResponseData.DirectoryData().
+                    setDirectories(List.of(new AssignReplicasToDirsResponseData.DirectoryData().
                         setId(DIR_1).
-                        setTopics(Arrays.asList(new AssignReplicasToDirsResponseData.TopicData().
+                        setTopics(List.of(new AssignReplicasToDirsResponseData.TopicData().
                             setTopicId(TOPIC_1).
-                            setPartitions(Arrays.asList(new AssignReplicasToDirsResponseData.PartitionData().
+                            setPartitions(List.of(new AssignReplicasToDirsResponseData.PartitionData().
                                 setPartitionIndex(0).
                                 setErrorCode((short) 0))))))));
             });
@@ -274,8 +272,7 @@ public class AssignmentsManagerTest {
 
     @Test
     public void testStartAndShutdown() throws Exception {
-        try (TestEnv testEnv = new TestEnv()) {
-        }
+        new TestEnv().close();
     }
 
     @Test
@@ -304,14 +301,10 @@ public class AssignmentsManagerTest {
     public void testUnSuccessfulRequestCausesRetransmission(String failureType) throws Exception {
         try (TestEnv testEnv = new TestEnv()) {
             testEnv.onAssignment(new TopicIdPartition(TOPIC_1, 0), DIR_1);
-            TestUtils.retryOnExceptionWithTimeout(60_000, () -> {
-                assertEquals(1, testEnv.assignmentsManager.numPending());
-            });
+            TestUtils.retryOnExceptionWithTimeout(60_000, () -> assertEquals(1, testEnv.assignmentsManager.numPending()));
             if (failureType.equals("invalidRequest")) {
-                testEnv.channelManager.completeCallback(req -> {
-                    return mockClientResponse(new AssignReplicasToDirsResponseData().
-                        setErrorCode(Errors.INVALID_REQUEST.code()));
-                });
+                testEnv.channelManager.completeCallback(req -> mockClientResponse(new AssignReplicasToDirsResponseData()
+                        .setErrorCode(Errors.INVALID_REQUEST.code())));
             } else if (failureType.equals("timeout")) {
                 testEnv.channelManager.completeCallback(req -> Optional.empty());
             }
@@ -333,16 +326,12 @@ public class AssignmentsManagerTest {
     @ValueSource(strings = {"missingTopic", "missingPartition", "notReplica"})
     public void testMismatchedInputDoesNotTriggerCompletion(String mismatchType) throws Exception {
         try (TestEnv testEnv = new TestEnv()) {
-            TopicIdPartition target;
-            if (mismatchType.equals("missingTopic")) {
-                target = new TopicIdPartition(TOPIC_3, 0);
-            } else if (mismatchType.equals("missingPartition")) {
-                target = new TopicIdPartition(TOPIC_1, 2);
-            } else if (mismatchType.equals("notReplica")) {
-                target = new TopicIdPartition(TOPIC_2, 0);
-            } else {
-                throw new RuntimeException("invalid mismatchType argument.");
-            }
+            TopicIdPartition target = switch (mismatchType) {
+                case "missingTopic" -> new TopicIdPartition(TOPIC_3, 0);
+                case "missingPartition" -> new TopicIdPartition(TOPIC_1, 2);
+                case "notReplica" -> new TopicIdPartition(TOPIC_2, 0);
+                default -> throw new RuntimeException("invalid mismatchType argument.");
+            };
             testEnv.onAssignment(target, DIR_1);
             TestUtils.retryOnExceptionWithTimeout(60_000, () -> {
                 assertEquals(0, testEnv.assignmentsManager.numPending());
@@ -387,9 +376,9 @@ public class AssignmentsManagerTest {
                     }
                 }
                 return mockClientResponse(new AssignReplicasToDirsResponseData().
-                    setDirectories(Arrays.asList(new AssignReplicasToDirsResponseData.DirectoryData().
+                    setDirectories(List.of(new AssignReplicasToDirsResponseData.DirectoryData().
                         setId(DIR_1).
-                        setTopics(Arrays.asList(new AssignReplicasToDirsResponseData.TopicData().
+                        setTopics(List.of(new AssignReplicasToDirsResponseData.TopicData().
                             setTopicId(TOPIC_1).
                             setPartitions(partitions))))));
             });
@@ -477,41 +466,40 @@ public class AssignmentsManagerTest {
         assignments.put(new TopicIdPartition(TOPIC_1, 4), DIR_1);
         assignments.put(new TopicIdPartition(TOPIC_2, 5), DIR_2);
         Map<TopicIdPartition, Assignment> targetAssignments = new LinkedHashMap<>();
-        assignments.entrySet().forEach(e -> targetAssignments.put(e.getKey(),
-            new Assignment(e.getKey(), e.getValue(), 0, () -> { })));
+        assignments.forEach((key, value) -> targetAssignments.put(key, new Assignment(key, value, 0, () -> { })));
         AssignReplicasToDirsRequestData built =
             AssignmentsManager.buildRequestData(8, 100L, targetAssignments);
         AssignReplicasToDirsRequestData expected = new AssignReplicasToDirsRequestData().
             setBrokerId(8).
             setBrokerEpoch(100L).
-            setDirectories(Arrays.asList(
+            setDirectories(List.of(
                 new AssignReplicasToDirsRequestData.DirectoryData().
                     setId(DIR_2).
-                    setTopics(Arrays.asList(
+                    setTopics(List.of(
                         new AssignReplicasToDirsRequestData.TopicData().
                             setTopicId(TOPIC_1).
-                            setPartitions(Collections.singletonList(
+                            setPartitions(List.of(
                                 new AssignReplicasToDirsRequestData.PartitionData().
                                     setPartitionIndex(2))),
                         new AssignReplicasToDirsRequestData.TopicData().
                             setTopicId(TOPIC_2).
-                            setPartitions(Collections.singletonList(
+                            setPartitions(List.of(
                                 new AssignReplicasToDirsRequestData.PartitionData().
                                     setPartitionIndex(5))))),
                 new AssignReplicasToDirsRequestData.DirectoryData().
                     setId(DIR_3).
-                    setTopics(Collections.singletonList(
+                    setTopics(List.of(
                         new AssignReplicasToDirsRequestData.TopicData().
                             setTopicId(TOPIC_1).
-                            setPartitions(Collections.singletonList(
+                            setPartitions(List.of(
                                 new AssignReplicasToDirsRequestData.PartitionData().
                                     setPartitionIndex(3))))),
                 new AssignReplicasToDirsRequestData.DirectoryData().
                     setId(DIR_1).
-                    setTopics(Collections.singletonList(
+                    setTopics(List.of(
                         new AssignReplicasToDirsRequestData.TopicData().
                             setTopicId(TOPIC_1).
-                            setPartitions(Arrays.asList(
+                            setPartitions(List.of(
                                 new AssignReplicasToDirsRequestData.PartitionData().
                                     setPartitionIndex(1),
                                 new AssignReplicasToDirsRequestData.PartitionData().

@@ -12,10 +12,7 @@
  */
 package kafka.api
 
-import kafka.log.UnifiedLog
-import org.apache.kafka.common.test.api.ClusterInstance
 import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, Type}
-import org.apache.kafka.common.test.api.ClusterTestExtensions
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.admin.{Admin, ConsumerGroupDescription}
 import org.apache.kafka.clients.consumer.{Consumer, GroupProtocol, OffsetAndMetadata}
@@ -26,17 +23,17 @@ import org.junit.jupiter.api.Assertions._
 import scala.jdk.CollectionConverters._
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.record.CompressionType
+import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.server.config.ServerConfigs
+import org.apache.kafka.storage.internals.log.UnifiedLog
 import org.junit.jupiter.api.Timeout
-import org.junit.jupiter.api.extension.ExtendWith
 
 import java.time.Duration
 import java.util.Collections
 import java.util.concurrent.TimeUnit
 
 @Timeout(120)
-@ExtendWith(value = Array(classOf[ClusterTestExtensions]))
 class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
 
   @ClusterTest(
@@ -286,7 +283,7 @@ class GroupCoordinatorIntegrationTest(cluster: ClusterInstance) {
     val broker = cluster.brokers.asScala.head._2
     val log = broker.logManager.getLog(tp).get
     log.roll()
-    assertTrue(broker.logManager.cleaner.awaitCleaned(tp, 0))
+    assertTrue(broker.logManager.cleaner.awaitCleaned(tp, 0, 60000L))
   }
 
   private def withAdmin(f: Admin => Unit): Unit = {

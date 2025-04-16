@@ -9,9 +9,7 @@
 [![CI](https://github.com/apache/kafka/actions/workflows/ci.yml/badge.svg?branch=trunk&event=push)](https://github.com/apache/kafka/actions/workflows/ci.yml?query=event%3Apush+branch%3Atrunk)
 [![Flaky Test Report](https://github.com/apache/kafka/actions/workflows/generate-reports.yml/badge.svg?branch=trunk&event=schedule)](https://github.com/apache/kafka/actions/workflows/generate-reports.yml?query=event%3Aschedule+branch%3Atrunk)
 
-[**Apache Kafka**](https://kafka.apache.org) is an open-source distributed event streaming platform used by thousands of
-
-companies for high-performance data pipelines, streaming analytics, data integration, and mission-critical applications.
+[**Apache Kafka**](https://kafka.apache.org) is an open-source distributed event streaming platform used by thousands of companies for high-performance data pipelines, streaming analytics, data integration, and mission-critical applications.
 
 You need to have [Java](http://www.oracle.com/technetwork/java/javase/downloads/index.html) installed.
 
@@ -44,7 +42,7 @@ Follow instructions in https://kafka.apache.org/quickstart
     ./gradlew test  # runs both unit and integration tests
     ./gradlew unitTest
     ./gradlew integrationTest
-    ./gradlew quarantinedTest  # runs the quarantined tests
+    ./gradlew test -Pkafka.test.run.flaky=true  # runs tests that are marked as flaky
 
     
 ### Force re-running tests without code change ###
@@ -79,10 +77,6 @@ The following example declares -PmaxTestRetries=1 and -PmaxTestRetryFailures=3 t
 
     ./gradlew test -PmaxTestRetries=1 -PmaxTestRetryFailures=3
 
-The quarantinedTest task also has no retries by default, but you can set maxQuarantineTestRetries and maxQuarantineTestRetryFailures to enable retries, similar to the test task.
-
-    ./gradlew quarantinedTest -PmaxQuarantineTestRetries=3 -PmaxQuarantineTestRetryFailures=20
-
 See [Test Retry Gradle Plugin](https://github.com/gradle/test-retry-gradle-plugin) for and [build.yml](.github/workflows/build.yml) more details.
 
 ### Generating test coverage reports ###
@@ -105,6 +99,8 @@ fail due to code changes. You can just run:
  
     ./gradlew processMessages processTestMessages
 
+See [Apache Kafka Message Definitions](clients/src/main/resources/common/message/README.md) for details on Apache Kafka message protocol.
+
 ### Running a Kafka broker
 
 Using compiled files:
@@ -115,7 +111,9 @@ Using compiled files:
 
 Using docker image:
 
-    docker run -p 9092:9092 apache/kafka:3.7.0
+    docker run -p 9092:9092 apache/kafka:latest
+
+See [docker/README.md](docker/README.md) for detailed information.
 
 ### Cleaning the build ###
     ./gradlew clean
@@ -269,9 +267,19 @@ default. See https://www.lightbend.com/blog/scala-inliner-optimizer for more det
 
 See [tests/README.md](tests/README.md).
 
+### Using Trogdor for testing ###
+
+We use Trogdor as a test framework for Apache Kafka. You can use it to run benchmarks and other workloads.
+
+See [trogdor/README.md](trogdor/README.md).
+
 ### Running in Vagrant ###
 
 See [vagrant/README.md](vagrant/README.md).
+
+### Kafka client examples ###
+
+See [examples/README.md](examples/README.md).
 
 ### Contribution ###
 

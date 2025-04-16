@@ -39,6 +39,7 @@ import java.util.SortedSet;
 import java.util.TreeSet;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation.REMAIN_IN_GROUP;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.REGEX_RESOLUTION_NOT_SUPPORTED_MSG;
 
 /**
@@ -81,7 +82,7 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
             final CoordinatorRequestManager coordinatorRequestManager,
             final ConsumerMembershipManager membershipManager,
             final HeartbeatState heartbeatState,
-            final AbstractHeartbeatRequestManager.HeartbeatRequestState heartbeatRequestState,
+            final HeartbeatRequestState heartbeatRequestState,
             final BackgroundEventHandler backgroundEventHandler,
             final Metrics metrics) {
         super(logContext, timer, config, coordinatorRequestManager, heartbeatRequestState, backgroundEventHandler,
@@ -209,6 +210,15 @@ public class ConsumerHeartbeatRequestManager extends AbstractHeartbeatRequestMan
     @Override
     public ConsumerMembershipManager membershipManager() {
         return membershipManager;
+    }
+
+    @Override
+    protected boolean shouldSendLeaveHeartbeatNow() {
+        // If the consumer has dynamic membership,
+        // we should skip the leaving heartbeat when leaveGroupOperation is REMAIN_IN_GROUP
+        if (membershipManager.groupInstanceId().isEmpty() && REMAIN_IN_GROUP == membershipManager.leaveGroupOperation())
+            return false;
+        return membershipManager().state() == MemberState.LEAVING;
     }
 
     /**

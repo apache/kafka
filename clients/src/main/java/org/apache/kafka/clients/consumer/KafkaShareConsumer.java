@@ -116,31 +116,33 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * {@code group.share.record.lock.partition.limit}. By limiting the duration of the acquisition lock and automatically
  * releasing the locks, the broker ensures delivery progresses even in the presence of consumer failures.
  * <p>
- * The consumer can choose to use implicit or explicit acknowledgement of the records it processes.
- * <p>If the application calls {@link #acknowledge(ConsumerRecord, AcknowledgeType)} for any record in the batch,
- * it is using <em>explicit acknowledgement</em>. In this case:
+ * The consumer can choose to use implicit or explicit acknowledgement of the records it processes by configuring the
+ * consumer {@code share.acknowledgement.mode} property.
+ * <p>
+ * If the application sets the property to "implicit" or does not set it at all, then the consumer is using
+ * <em>implicit acknowledgement</em>. In this mode, the application acknowledges delivery by:
  * <ul>
- *     <li>The application calls {@link #commitSync()} or {@link #commitAsync()} which commits the acknowledgements to Kafka.
- *     If any records in the batch were not acknowledged, they remain acquired and will be presented to the application
- *     in response to a future poll.</li>
- *     <li>The application calls {@link #poll(Duration)} without committing first, which commits the acknowledgements to
- *     Kafka asynchronously. In this case, no exception is thrown by a failure to commit the acknowledgement.
- *     If any records in the batch were not acknowledged, they remain acquired and will be presented to the application
- *     in response to a future poll.</li>
- *     <li>The application calls {@link #close()} which attempts to commit any pending acknowledgements and
- *     releases any remaining acquired records.</li>
- * </ul>
- * If the application does not call {@link #acknowledge(ConsumerRecord, AcknowledgeType)} for any record in the batch,
- * it is using <em>implicit acknowledgement</em>. In this case:
- * <ul>
- *     <li>The application calls {@link #commitSync()} or {@link #commitAsync()} which implicitly acknowledges all of
- *     the delivered records as processed successfully and commits the acknowledgements to Kafka.</li>
- *     <li>The application calls {@link #poll(Duration)} without committing, which also implicitly acknowledges all of
+ *     <li>Calling {@link #poll(Duration)} without committing, which also implicitly acknowledges all
  *     the delivered records and commits the acknowledgements to Kafka asynchronously. In this case, no exception is
  *     thrown by a failure to commit the acknowledgements.</li>
- *     <li>The application calls {@link #close()}  which releases any acquired records without acknowledgement.</li>
+ *     <li>Calling {@link #commitSync()} or {@link #commitAsync()} which implicitly acknowledges all
+ *     the delivered records as processed successfully and commits the acknowledgements to Kafka.</li>
+ *     <li>Calling {@link #close()} which releases any acquired records without acknowledgement.</li>
  * </ul>
- * <p>
+ * If the application sets the property to "explicit", then the consumer is using <em>explicit acknowledgment</em>.
+ * The application must acknowledge all records returned from {@link #poll(Duration)} using
+ * {@link #acknowledge(ConsumerRecord, AcknowledgeType)} before its next call to {@link #poll(Duration)}.
+ * If the application calls {@link #poll(Duration)} without having acknowledged all records, an
+ * {@link IllegalStateException} is thrown. The remaining unacknowledged records can still be acknowledged.
+ * In this mode, the application acknowledges delivery by:
+ * <ul>
+ *     <li>Calling {@link #poll(Duration)} after it has acknowledged all records, which commits the acknowledgements
+ *     to Kafka asynchronously. In this case, no exception is thrown by a failure to commit the acknowledgements.</li>
+ *     <li>Calling {@link #commitSync()} or {@link #commitAsync()} which commits any pending
+ *     acknowledgements to Kafka.</li>
+ *     <li>Calling {@link #close()} which attempts to commit any pending acknowledgements and releases
+ *     any remaining acquired records.</li>
+ * </ul>
  * The consumer guarantees that the records returned in the {@code ConsumerRecords} object for a specific topic-partition
  * are in order of increasing offset. For each topic-partition, Kafka guarantees that acknowledgements for the records
  * in a batch are performed atomically. This makes error handling significantly more straightforward because there can be
@@ -193,12 +195,14 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  *
  * <h4>Per-record acknowledgement (explicit acknowledgement)</h4>
  * This example demonstrates using different acknowledgement types depending on the outcome of processing the records.
+ * Here the {@code share.acknowledgement.mode} property is set to "explicit" so the consumer must explicitly acknowledge each record.
  * <pre>
  *     Properties props = new Properties();
  *     props.setProperty(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
  *     props.setProperty(&quot;group.id&quot;, &quot;test&quot;);
  *     props.setProperty(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
  *     props.setProperty(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
+ *     props.setProperty(&quot;share.acknowledgement.mode&quot;, &quot;explicit&quot;);
  *     KafkaShareConsumer&lt;String, String&gt; consumer = new KafkaShareConsumer&lt;&gt;(props);
  *     consumer.subscribe(Arrays.asList(&quot;foo&quot;));
  *     while (true) {
@@ -224,42 +228,6 @@ import static org.apache.kafka.common.utils.Utils.propsToMap;
  * The calls to {@link #acknowledge(ConsumerRecord, AcknowledgeType)} are simply updating local information in the consumer.
  * It is only once {@link #commitSync()} is called that the acknowledgements are committed by sending the new state
  * information to Kafka.
- *
- * <h4>Per-record acknowledgement, ending processing of the batch on an error (explicit acknowledgement)</h4>
- * This example demonstrates ending processing of a batch of records on the first error.
- * <pre>
- *     Properties props = new Properties();
- *     props.setProperty(&quot;bootstrap.servers&quot;, &quot;localhost:9092&quot;);
- *     props.setProperty(&quot;group.id&quot;, &quot;test&quot;);
- *     props.setProperty(&quot;key.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
- *     props.setProperty(&quot;value.deserializer&quot;, &quot;org.apache.kafka.common.serialization.StringDeserializer&quot;);
- *     KafkaShareConsumer&lt;String, String&gt; consumer = new KafkaShareConsumer&lt;&gt;(props);
- *     consumer.subscribe(Arrays.asList(&quot;foo&quot;));
- *     while (true) {
- *         ConsumerRecords&lt;String, String&gt; records = consumer.poll(Duration.ofMillis(100));
- *         for (ConsumerRecord&lt;String, String&gt; record : records) {
- *             try {
- *                 doProcessing(record);
- *                 consumer.acknowledge(record, AcknowledgeType.ACCEPT);
- *             } catch (Exception e) {
- *                 consumer.acknowledge(record, AcknowledgeType.REJECT);
- *                 break;
- *             }
- *         }
- *         consumer.commitSync();
- *     }
- * </pre>
- * There are the following cases in this example:
- * <ol>
- *     <li>The batch contains no records, in which case the application just polls again. The call to {@link #commitSync()}
- *     just does nothing because the batch was empty.</li>
- *     <li>All of the records in the batch are processed successfully. The calls to {@link #acknowledge(ConsumerRecord, AcknowledgeType)}
- *     specifying {@code AcknowledgeType.ACCEPT} mark all records in the batch as successfully processed.</li>
- *     <li>One of the records encounters an exception. The call to {@link #acknowledge(ConsumerRecord, AcknowledgeType)} specifying
- *     {@code AcknowledgeType.REJECT} rejects that record. Earlier records in the batch have already been marked as successfully
- *     processed. The call to {@link #commitSync()} commits the acknowledgements, but the records after the failed record
- *     remain acquired as part of the same delivery attempt and will be presented to the application in response to another poll.</li>
- * </ol>
  *
  * <h3>Reading Transactional Records</h3>
  * The way that share groups handle transactional records is controlled by the {@code group.share.isolation.level}</code>
@@ -403,11 +371,11 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
     public KafkaShareConsumer(Map<String, Object> configs,
                               Deserializer<K> keyDeserializer,
                               Deserializer<V> valueDeserializer) {
-        this(new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
+        this(new ShareConsumerConfig(ShareConsumerConfig.appendDeserializerToConfig(configs, keyDeserializer, valueDeserializer)),
                 keyDeserializer, valueDeserializer);
     }
 
-    KafkaShareConsumer(ConsumerConfig config,
+    KafkaShareConsumer(ShareConsumerConfig config,
                               Deserializer<K> keyDeserializer,
                               Deserializer<V> valueDeserializer) {
         delegate = CREATOR.create(config, keyDeserializer, valueDeserializer);
@@ -416,7 +384,7 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
     KafkaShareConsumer(final LogContext logContext,
                        final String clientId,
                        final String groupId,
-                       final ConsumerConfig config,
+                       final ShareConsumerConfig config,
                        final Deserializer<K> keyDeserializer,
                        final Deserializer<V> valueDeserializer,
                        final Time time,
@@ -701,6 +669,12 @@ public class KafkaShareConsumer<K, V> implements ShareConsumer<K, V> {
      * If the consumer is unable to complete acknowledgements and gracefully leave the group
      * before the timeout expires, the consumer is force closed. Note that {@link #wakeup()} cannot be
      * used to interrupt close.
+     * <p>
+     * The actual maximum wait time is bounded by the {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} setting, which
+     * only applies to operations performed with the broker (coordinator-related requests).
+     * Even if a larger timeout is specified, the consumer will not wait longer than
+     * {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} for these requests to complete during the close operation.
+     * Note that the execution time of callbacks (such as {@link AcknowledgementCommitCallback}) do not consume time from the close timeout.
      *
      * @param timeout The maximum time to wait for consumer to close gracefully. The value must be
      *                non-negative. Specifying a timeout of zero means do not wait for pending requests to complete.

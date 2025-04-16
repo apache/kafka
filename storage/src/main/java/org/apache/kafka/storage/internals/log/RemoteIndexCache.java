@@ -44,7 +44,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Iterator;
@@ -150,9 +149,7 @@ public class RemoteIndexCache implements Closeable {
     private Cache<Uuid, Entry> initEmptyCache(long maxSize) {
         return Caffeine.newBuilder()
                 .maximumWeight(maxSize)
-                .weigher((Uuid key, Entry entry) -> {
-                    return (int) entry.entrySizeBytes;
-                })
+                .weigher((Uuid key, Entry entry) -> (int) entry.entrySizeBytes)
                 // This listener is invoked each time an entry is being automatically removed due to eviction. The cache will invoke this listener
                 // during the atomic operation to remove the entry (refer: https://github.com/ben-manes/caffeine/wiki/Removal),
                 // hence, care must be taken to ensure that this operation is not expensive. Note that this listener is not invoked when
@@ -267,8 +264,9 @@ public class RemoteIndexCache implements Closeable {
         // Delete any .deleted or .tmp files remained from the earlier run of the broker.
         try (Stream<Path> paths = Files.list(cacheDir.toPath())) {
             paths.forEach(path -> {
-                if (path.endsWith(LogFileUtils.DELETED_FILE_SUFFIX) ||
-                        path.endsWith(TMP_FILE_SUFFIX)) {
+                String filename = path.getFileName().toString();
+                if (filename.endsWith(LogFileUtils.DELETED_FILE_SUFFIX) ||
+                        filename.endsWith(TMP_FILE_SUFFIX)) {
                     try {
                         if (Files.deleteIfExists(path)) {
                             log.debug("Deleted file path {} on cache initialization", path);
@@ -317,7 +315,7 @@ public class RemoteIndexCache implements Closeable {
                         internalCache.put(uuid, entry);
                     } else {
                         // Delete all of them if any one of those indexes is not available for a specific segment id
-                        tryAll(Arrays.asList(
+                        tryAll(List.of(
                                 () -> {
                                     Files.deleteIfExists(offsetIndexFile.toPath());
                                     return null;
@@ -597,7 +595,7 @@ public class RemoteIndexCache implements Closeable {
                 if (!cleanStarted) {
                     cleanStarted = true;
 
-                    List<StorageAction<Void, Exception>> actions = Arrays.asList(() -> {
+                    List<StorageAction<Void, Exception>> actions = List.of(() -> {
                         offsetIndex.deleteIfExists();
                         return null;
                     }, () -> {
@@ -727,10 +725,4 @@ public class RemoteIndexCache implements Closeable {
     public static String remoteTransactionIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         return generateFileNamePrefixForIndex(remoteLogSegmentMetadata) + LogFileUtils.TXN_INDEX_FILE_SUFFIX;
     }
-
-    // Visible for testing
-    public static String remoteDeletedSuffixIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
-        return generateFileNamePrefixForIndex(remoteLogSegmentMetadata) + LogFileUtils.DELETED_FILE_SUFFIX;
-    }
-
 }

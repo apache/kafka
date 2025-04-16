@@ -24,7 +24,6 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
 
 import java.net.InetSocketAddress;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -57,7 +56,7 @@ public final class VoterSet {
      *
      * @param voterIds the ids of the voters
      * @param listenerName the name of the listener
-     * @return the node information for all of the voter ids
+     * @return the node information for all the voter ids
      * @throws IllegalArgumentException if there are missing endpoints
      */
     public Set<Node> voterNodes(Stream<Integer> voterIds, ListenerName listenerName) {
@@ -156,6 +155,20 @@ public final class VoterSet {
      */
     public Set<VoterNode> voterNodes() {
         return new HashSet<>(voters.values());
+    }
+
+    /**
+     * Returns the number of voters in the voter set.
+     */
+    public int size() {
+        return voters.size();
+    }
+
+    /**
+     * Returns true if the voter set is empty, otherwise false
+     */
+    public boolean isEmpty() {
+        return voters.isEmpty();
     }
 
     /**
@@ -405,7 +418,7 @@ public final class VoterSet {
         }
     }
 
-    private static final VoterSet EMPTY = new VoterSet(Collections.emptyMap());
+    private static final VoterSet EMPTY = new VoterSet(Map.of());
     public static VoterSet empty() {
         return EMPTY;
     }
@@ -451,7 +464,7 @@ public final class VoterSet {
                     Map.Entry::getKey,
                     entry -> new VoterNode(
                         ReplicaKey.of(entry.getKey(), Uuid.ZERO_UUID),
-                        Endpoints.fromInetSocketAddresses(Collections.singletonMap(listener, entry.getValue())),
+                        Endpoints.fromInetSocketAddresses(Map.of(listener, entry.getValue())),
                         new SupportedVersionRange((short) 0, (short) 0)
                     )
                 )

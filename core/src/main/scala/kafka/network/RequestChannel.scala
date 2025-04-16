@@ -261,7 +261,7 @@ object RequestChannel extends Logging {
           apiRemoteTimeMs, apiThrottleTimeMs, responseQueueTimeMs,
           responseSendTimeMs, temporaryMemoryBytes,
           messageConversionsTimeMs)
-        val logPrefix = "Completed request: {}"
+        val logPrefix = "Completed request:{}"
         // log deprecated apis at `info` level to allow them to be selectively enabled
         if (header.isApiVersionDeprecated())
           requestLogger.info(logPrefix, desc)
@@ -340,7 +340,6 @@ object RequestChannel extends Logging {
 }
 
 class RequestChannel(val queueSize: Int,
-                     val metricNamePrefix: String,
                      time: Time,
                      val metrics: RequestChannelMetrics) {
   import RequestChannel._
@@ -349,13 +348,11 @@ class RequestChannel(val queueSize: Int,
 
   private val requestQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
   private val processors = new ConcurrentHashMap[Int, Processor]()
-  private val requestQueueSizeMetricName = metricNamePrefix.concat(RequestQueueSizeMetric)
-  private val responseQueueSizeMetricName = metricNamePrefix.concat(ResponseQueueSizeMetric)
   private val callbackQueue = new ArrayBlockingQueue[BaseRequest](queueSize)
 
-  metricsGroup.newGauge(requestQueueSizeMetricName, () => requestQueue.size)
+  metricsGroup.newGauge(RequestQueueSizeMetric, () => requestQueue.size)
 
-  metricsGroup.newGauge(responseQueueSizeMetricName, () => {
+  metricsGroup.newGauge(ResponseQueueSizeMetric, () => {
     processors.values.asScala.foldLeft(0) {(total, processor) =>
       total + processor.responseQueueSize
     }
@@ -365,13 +362,13 @@ class RequestChannel(val queueSize: Int,
     if (processors.putIfAbsent(processor.id, processor) != null)
       warn(s"Unexpected processor with processorId ${processor.id}")
 
-    metricsGroup.newGauge(responseQueueSizeMetricName, () => processor.responseQueueSize,
+    metricsGroup.newGauge(ResponseQueueSizeMetric, () => processor.responseQueueSize,
       Map(ProcessorMetricTag -> processor.id.toString).asJava)
   }
 
   def removeProcessor(processorId: Int): Unit = {
     processors.remove(processorId)
-    metricsGroup.removeMetric(responseQueueSizeMetricName, Map(ProcessorMetricTag -> processorId.toString).asJava)
+    metricsGroup.removeMetric(ResponseQueueSizeMetric, Map(ProcessorMetricTag -> processorId.toString).asJava)
   }
 
   /** Send a request to be handled, potentially blocking until there is room in the queue for the request */
