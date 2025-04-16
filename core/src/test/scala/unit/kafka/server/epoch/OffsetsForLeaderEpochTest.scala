@@ -50,7 +50,7 @@ class OffsetsForLeaderEpochTest {
 
   @BeforeEach
   def setUp(): Unit = {
-    quotaManager = QuotaFactory.instantiate(config, metrics, time, "")
+    quotaManager = QuotaFactory.instantiate(config, metrics, time, "", "")
   }
 
   @Test

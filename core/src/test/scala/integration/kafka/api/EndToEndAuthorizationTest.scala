@@ -251,8 +251,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     superuserAdminClient.createAcls(List(AclWildcardGroupRead).asJava).values
 
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, wildcardTopicResource)
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, wildcardGroupResource)
+      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, wildcardTopicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, wildcardGroupResource)
     }
   }
 
@@ -262,8 +262,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     superuserAdminClient.createAcls(List(AclPrefixedGroupRead).asJava).values
 
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, prefixedTopicResource)
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, prefixedGroupResource)
+      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, prefixedTopicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, prefixedGroupResource)
     }
   }
 
@@ -276,9 +276,9 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     superuserAdminClient.createAcls(List(AclGroupRead).asJava).values
 
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get,
+      TestUtils.waitAndVerifyAcls(TopicReadAcl ++ TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get,
         new ResourcePattern(TOPIC, tp.topic, LITERAL))
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, groupResource)
     }
   }
 
@@ -292,7 +292,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val superuserAdminClient = createSuperuserAdminClient()
     superuserAdminClient.createAcls(List(AclGroupRead).asJava).values
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, groupResource)
     }
   }
 
@@ -382,7 +382,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     superuserAdminClient.createAcls(List(AclTopicDescribe()).asJava).values
 
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicDescribeAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
+      TestUtils.waitAndVerifyAcls(TopicDescribeAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, topicResource)
     }
 
     val prop = new Properties()
@@ -450,8 +450,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     superuserAdminClient.createAcls(List(AclGroupRead).asJava).values
 
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
+      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, topicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, groupResource)
     }
 
     val producer = createProducer()
@@ -461,8 +461,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     superuserAdminClient.deleteAcls(List(AclTopicWrite().toFilter).asJava).values
 
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
+      TestUtils.waitAndVerifyAcls(TopicCreateAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, topicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, groupResource)
     }
   }
 
@@ -496,8 +496,8 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     superuserAdminClient.createAcls(List(AclGroupRead).asJava).values
 
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
-      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizer.get, groupResource)
+      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, topicResource)
+      TestUtils.waitAndVerifyAcls(GroupReadAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, groupResource)
     }
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)
@@ -513,7 +513,7 @@ abstract class EndToEndAuthorizationTest extends IntegrationTestHarness with Sas
     val superuserAdminClient = createSuperuserAdminClient()
     superuserAdminClient.createAcls(List(AclTopicWrite(), AclTopicCreate(), AclTopicDescribe()).asJava).values
     brokers.foreach { s =>
-      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizer.get, topicResource)
+      TestUtils.waitAndVerifyAcls(TopicWriteAcl ++ TopicDescribeAcl ++ TopicCreateAcl, s.dataPlaneRequestProcessor.authorizerPlugin.get, topicResource)
     }
     val producer = createProducer()
     sendRecords(producer, numRecords, tp)

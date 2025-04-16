@@ -16,9 +16,6 @@
  */
 package kafka.log.remote;
 
-import kafka.cluster.Partition;
-import kafka.server.DelayedRemoteListOffsets;
-
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
@@ -48,6 +45,7 @@ import org.apache.kafka.server.common.CheckpointFile;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.StopPartition;
 import org.apache.kafka.server.config.ServerConfigs;
+import org.apache.kafka.server.log.remote.TopicPartitionLog;
 import org.apache.kafka.server.log.remote.metadata.storage.ClassLoaderAwareRemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManager;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManagerConfig;
@@ -66,6 +64,7 @@ import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
+import org.apache.kafka.server.purgatory.DelayedRemoteListOffsets;
 import org.apache.kafka.server.purgatory.TopicPartitionOperationKey;
 import org.apache.kafka.server.quota.QuotaType;
 import org.apache.kafka.server.storage.log.FetchIsolation;
@@ -168,7 +167,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     private final BrokerTopicStats brokerTopicStats;
     private final Metrics metrics;
 
-    private final RemoteStorageManager remoteLogStorageManager;
+    private final RemoteStorageManager remoteStorageManager;
 
     private final RemoteLogMetadataManager remoteLogMetadataManager;
 
@@ -238,7 +237,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         this.brokerTopicStats = brokerTopicStats;
         this.metrics = metrics;
 
-        remoteLogStorageManager = createRemoteStorageManager();
+        remoteStorageManager = createRemoteStorageManager();
         remoteLogMetadataManager = createRemoteLogMetadataManager();
         rlmCopyQuotaManager = createRLMCopyQuotaManager();
         rlmFetchQuotaManager = createRLMFetchQuotaManager();
@@ -248,7 +247,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         copyThrottleTimeSensor = new RLMQuotaMetrics(metrics, "remote-copy-throttle-time", RemoteLogManager.class.getSimpleName(),
             "The %s time in millis remote copies was throttled by a broker", INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS).sensor();
 
-        indexCache = new RemoteIndexCache(rlmConfig.remoteLogIndexFileCacheTotalSizeBytes(), remoteLogStorageManager, logDir);
+        indexCache = new RemoteIndexCache(rlmConfig.remoteLogIndexFileCacheTotalSizeBytes(), remoteStorageManager, logDir);
         delayInMs = rlmConfig.remoteLogManagerTaskIntervalMs();
         rlmCopyThreadPool = new RLMScheduledThreadPool(rlmConfig.remoteLogManagerCopierThreadPoolSize(),
             "RLMCopyThreadPool", "kafka-rlm-copy-thread-pool-%d");
@@ -374,7 +373,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     private void configureRSM() {
         final Map<String, Object> rsmProps = new HashMap<>(rlmConfig.remoteStorageManagerProps());
         rsmProps.put(ServerConfigs.BROKER_ID_CONFIG, brokerId);
-        remoteLogStorageManager.configure(rsmProps);
+        remoteStorageManager.configure(rsmProps);
     }
 
     RemoteLogMetadataManager createRemoteLogMetadataManager() {
@@ -423,12 +422,12 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     }
 
     public RemoteStorageManager storageManager() {
-        return remoteLogStorageManager;
+        return remoteStorageManager;
     }
 
-    private Stream<Partition> filterPartitions(Set<Partition> partitions) {
+    private Stream<TopicPartitionLog> filterPartitions(Set<TopicPartitionLog> partitions) {
         // We are not specifically checking for internal topics etc here as `log.remoteLogEnabled()` already handles that.
-        return partitions.stream().filter(partition -> partition.log().exists(UnifiedLog::remoteLogEnabled));
+        return partitions.stream().filter(partition -> partition.unifiedLog().isPresent() && partition.unifiedLog().get().remoteLogEnabled());
     }
 
     private void cacheTopicPartitionIds(TopicIdPartition topicIdPartition) {
@@ -448,8 +447,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
      * @param partitionsBecomeFollower partitions that have become followers on this broker.
      * @param topicIds                 topic name to topic id mappings.
      */
-    public void onLeadershipChange(Set<Partition> partitionsBecomeLeader,
-                                   Set<Partition> partitionsBecomeFollower,
+    public void onLeadershipChange(Set<TopicPartitionLog> partitionsBecomeLeader,
+                                   Set<TopicPartitionLog> partitionsBecomeFollower,
                                    Map<String, Uuid> topicIds) {
         LOGGER.debug("Received leadership changes for leaders: {} and followers: {}", partitionsBecomeLeader, partitionsBecomeFollower);
 
@@ -458,12 +457,12 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         }
 
         Map<TopicIdPartition, Boolean> leaderPartitions = filterPartitions(partitionsBecomeLeader)
-                .collect(Collectors.toMap(p -> new TopicIdPartition(topicIds.get(p.topic()), p.topicPartition()),
-                        p -> p.log().exists(log -> log.config().remoteLogCopyDisable())));
+                .collect(Collectors.toMap(p -> new TopicIdPartition(topicIds.get(p.topicPartition().topic()), p.topicPartition()),
+                        p -> p.unifiedLog().isPresent() ? p.unifiedLog().get().config().remoteLogCopyDisable() : false));
 
         Map<TopicIdPartition, Boolean> followerPartitions = filterPartitions(partitionsBecomeFollower)
-                .collect(Collectors.toMap(p -> new TopicIdPartition(topicIds.get(p.topic()), p.topicPartition()),
-                        p -> p.log().exists(log -> log.config().remoteLogCopyDisable())));
+                .collect(Collectors.toMap(p -> new TopicIdPartition(topicIds.get(p.topicPartition().topic()), p.topicPartition()),
+                        p -> p.unifiedLog().isPresent() ? p.unifiedLog().get().config().remoteLogCopyDisable() : false));
 
         if (!leaderPartitions.isEmpty() || !followerPartitions.isEmpty()) {
             LOGGER.debug("Effective topic partitions after filtering compact and internal topics, leaders: {} and followers: {}",
@@ -483,8 +482,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         }
     }
 
-    public void stopLeaderCopyRLMTasks(Set<Partition> partitions) {
-        for (Partition partition : partitions) {
+    public void stopLeaderCopyRLMTasks(Set<TopicPartitionLog> partitions) {
+        for (TopicPartitionLog partition : partitions) {
             TopicPartition tp = partition.topicPartition();
             if (topicIdByPartitionMap.containsKey(tp)) {
                 TopicIdPartition tpId = new TopicIdPartition(topicIdByPartitionMap.get(tp), tp);
@@ -575,7 +574,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         Collection<Uuid> deletedSegmentIds = new ArrayList<>();
         for (RemoteLogSegmentMetadata metadata: metadataList) {
             deletedSegmentIds.add(metadata.remoteLogSegmentId().id());
-            remoteLogStorageManager.deleteLogSegmentData(metadata);
+            remoteStorageManager.deleteLogSegmentData(metadata);
         }
         indexCache.removeAll(deletedSegmentIds);
 
@@ -632,7 +631,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         InputStream remoteSegInputStream = null;
         try {
             // Search forward for the position of the last offset that is greater than or equal to the startingOffset
-            remoteSegInputStream = remoteLogStorageManager.fetchLogSegment(rlsMetadata, startPos);
+            remoteSegInputStream = remoteStorageManager.fetchLogSegment(rlsMetadata, startPos);
             RemoteLogInputStream remoteLogInputStream = new RemoteLogInputStream(remoteSegInputStream);
 
             while (true) {
@@ -1027,7 +1026,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             Optional<CustomMetadata> customMetadata;
             
             try {
-                customMetadata = remoteLogStorageManager.copyLogSegmentData(copySegmentStartedRlsm, segmentData);
+                customMetadata = remoteStorageManager.copyLogSegmentData(copySegmentStartedRlsm, segmentData);
             } catch (RemoteStorageException e) {
                 logger.info("Copy failed, cleaning segment {}", copySegmentStartedRlsm.remoteLogSegmentId());
                 try {
@@ -1492,7 +1491,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
 
             // Delete the segment in remote storage.
             try {
-                remoteLogStorageManager.deleteLogSegmentData(segmentMetadata);
+                remoteStorageManager.deleteLogSegmentData(segmentMetadata);
             } catch (RemoteStorageException e) {
                 brokerTopicStats.topicStats(topic).failedRemoteDeleteRequestRate().mark();
                 brokerTopicStats.allTopicsStats().failedRemoteDeleteRequestRate().mark();
@@ -1696,7 +1695,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 remoteLogSegmentMetadata = rlsMetadataOptional.get();
                 // Search forward for the position of the last offset that is greater than or equal to the target offset
                 startPos = lookupPositionForOffset(remoteLogSegmentMetadata, offset);
-                remoteSegInputStream = remoteLogStorageManager.fetchLogSegment(remoteLogSegmentMetadata, startPos);
+                remoteSegInputStream = remoteStorageManager.fetchLogSegment(remoteLogSegmentMetadata, startPos);
                 RemoteLogInputStream remoteLogInputStream = getRemoteLogInputStream(remoteSegInputStream);
                 enrichedRecordBatch = findFirstBatch(remoteLogInputStream, offset);
                 if (enrichedRecordBatch.batch == null) {
@@ -1707,7 +1706,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
             RecordBatch firstBatch = enrichedRecordBatch.batch;
             if (firstBatch == null)
                 return new FetchDataInfo(new LogOffsetMetadata(offset), MemoryRecords.EMPTY, false,
-                        includeAbortedTxns ? Optional.of(Collections.emptyList()) : Optional.empty());
+                        includeAbortedTxns ? Optional.of(List.of()) : Optional.empty());
 
             int firstBatchSize = firstBatch.sizeInBytes();
             // An empty record is sent instead of an incomplete batch when
@@ -1783,7 +1782,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         return new FetchDataInfo(fetchInfo.fetchOffsetMetadata,
                 fetchInfo.records,
                 fetchInfo.firstEntryIncomplete,
-                Optional.of(abortedTransactions.isEmpty() ? Collections.emptyList() : new ArrayList<>(abortedTransactions)));
+                Optional.of(abortedTransactions.isEmpty() ? List.of() : new ArrayList<>(abortedTransactions)));
     }
 
     /**
@@ -2045,7 +2044,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                 leaderCopyRLMTasks.values().forEach(RLMTaskWithFuture::cancel);
                 leaderExpirationRLMTasks.values().forEach(RLMTaskWithFuture::cancel);
                 followerRLMTasks.values().forEach(RLMTaskWithFuture::cancel);
-                Utils.closeQuietly(remoteLogStorageManager, "RemoteLogStorageManager");
+                Utils.closeQuietly(remoteStorageManager, "RemoteStorageManager");
                 Utils.closeQuietly(remoteLogMetadataManager, "RemoteLogMetadataManager");
                 Utils.closeQuietly(indexCache, "RemoteIndexCache");
 

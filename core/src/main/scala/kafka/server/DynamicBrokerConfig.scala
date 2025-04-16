@@ -21,7 +21,7 @@ import java.util
 import java.util.{Collections, Properties}
 import java.util.concurrent.CopyOnWriteArrayList
 import java.util.concurrent.locks.ReentrantReadWriteLock
-import kafka.log.{LogCleaner, LogManager}
+import kafka.log.LogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.raft.KafkaRaftManager
 import kafka.server.DynamicBrokerConfig._
@@ -35,17 +35,18 @@ import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
 import org.apache.kafka.common.network.{ListenerName, ListenerReconfigurable}
 import org.apache.kafka.common.security.authenticator.LoginManager
 import org.apache.kafka.common.utils.{BufferSupplier, ConfigUtils, Utils}
+import org.apache.kafka.config
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.KafkaRaftClient
-import org.apache.kafka.server.{ProcessRole, DynamicThreadPool}
+import org.apache.kafka.server.{DynamicThreadPool, ProcessRole}
 import org.apache.kafka.server.common.ApiMessageAndVersion
 import org.apache.kafka.server.config.{DynamicProducerStateManagerConfig, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.{ClientMetricsReceiverPlugin, MetricConfigs}
 import org.apache.kafka.server.telemetry.ClientTelemetry
 import org.apache.kafka.snapshot.RecordsSnapshotReader
-import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.storage.internals.log.{LogCleaner, LogConfig}
 
 import scala.collection._
 import scala.jdk.CollectionConverters._
@@ -88,7 +89,7 @@ object DynamicBrokerConfig {
   private[server] val DynamicProducerStateManagerConfig = Set(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_CONFIG, TransactionLogConfig.TRANSACTION_PARTITION_VERIFICATION_ENABLE_CONFIG)
 
   val AllDynamicConfigs = DynamicSecurityConfigs ++
-    LogCleaner.ReconfigurableConfigs ++
+    LogCleaner.RECONFIGURABLE_CONFIGS.asScala ++
     DynamicLogConfig.ReconfigurableConfigs ++
     DynamicThreadPool.RECONFIGURABLE_CONFIGS.asScala ++
     Set(MetricConfigs.METRIC_REPORTER_CLASSES_CONFIG) ++
@@ -282,9 +283,11 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
    * directly. They are provided both old and new configs.
    */
   def addReconfigurables(kafkaServer: KafkaBroker): Unit = {
-    kafkaServer.authorizer match {
-      case Some(authz: Reconfigurable) => addReconfigurable(authz)
-      case _ =>
+    kafkaServer.authorizerPlugin.foreach { plugin =>
+      plugin.get match {
+        case authz: Reconfigurable => addReconfigurable(authz)
+        case _ =>
+      }
     }
     addReconfigurable(kafkaServer.kafkaYammerMetrics)
     addReconfigurable(new DynamicMetricsReporters(kafkaConfig.brokerId, kafkaServer.config, kafkaServer.metrics, kafkaServer.clusterId))
@@ -302,9 +305,11 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
    * Add reconfigurables to be notified when a dynamic controller config is updated.
    */
   def addReconfigurables(controller: ControllerServer): Unit = {
-    controller.authorizer match {
-      case Some(authz: Reconfigurable) => addReconfigurable(authz)
-      case _ =>
+    controller.authorizerPlugin.foreach { plugin =>
+      plugin.get match {
+        case authz: Reconfigurable => addReconfigurable(authz)
+        case _ =>
+      }
     }
     if (!kafkaConfig.processRoles.contains(ProcessRole.BrokerRole)) {
       // only add these if the controller isn't also running the broker role
@@ -323,7 +328,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
     reconfigurables.add(reconfigurable)
   }
 
-  def addBrokerReconfigurable(reconfigurable: org.apache.kafka.server.config.BrokerReconfigurable): Unit = {
+  def addBrokerReconfigurable(reconfigurable: config.BrokerReconfigurable): Unit = {
     verifyReconfigurableConfigs(reconfigurable.reconfigurableConfigs.asScala)
     brokerReconfigurables.add(new BrokerReconfigurable {
       override def reconfigurableConfigs: Set[String] = reconfigurable.reconfigurableConfigs().asScala
@@ -617,7 +622,7 @@ class DynamicBrokerConfig(private val kafkaConfig: KafkaConfig) extends Logging 
 }
 
 /**
- * Implement [[org.apache.kafka.server.config.BrokerReconfigurable]] instead.
+ * Implement [[config.BrokerReconfigurable]] instead.
  */
 trait BrokerReconfigurable {
 
@@ -919,25 +924,31 @@ class DynamicClientQuotaCallback(
 
   override def reconfigurableConfigs(): util.Set[String] = {
     val configs = new util.HashSet[String]()
-    quotaManagers.clientQuotaCallback.ifPresent {
-      case callback: Reconfigurable => configs.addAll(callback.reconfigurableConfigs)
-      case _ =>
+    quotaManagers.clientQuotaCallbackPlugin.ifPresent { plugin =>
+      plugin.get() match {
+        case callback: Reconfigurable => configs.addAll(callback.reconfigurableConfigs)
+        case _ =>
+      }
     }
     configs
   }
 
   override def validateReconfiguration(configs: util.Map[String, _]): Unit = {
-    quotaManagers.clientQuotaCallback.ifPresent {
-      case callback: Reconfigurable => callback.validateReconfiguration(configs)
-      case _ =>
+    quotaManagers.clientQuotaCallbackPlugin.ifPresent { plugin =>
+      plugin.get() match {
+        case callback: Reconfigurable => callback.validateReconfiguration(configs)
+        case _ =>
+      }
     }
   }
 
   override def reconfigure(configs: util.Map[String, _]): Unit = {
-    quotaManagers.clientQuotaCallback.ifPresent {
-      case callback: Reconfigurable =>
-        serverConfig.dynamicConfig.maybeReconfigure(callback, serverConfig.dynamicConfig.currentKafkaConfig, configs)
-      case _ =>
+    quotaManagers.clientQuotaCallbackPlugin.ifPresent { plugin =>
+      plugin.get() match {
+        case callback: Reconfigurable =>
+          serverConfig.dynamicConfig.maybeReconfigure(callback, serverConfig.dynamicConfig.currentKafkaConfig, configs)
+        case _ =>
+      }
     }
   }
 }

@@ -64,7 +64,7 @@ class HighwatermarkPersistenceTest {
     scheduler.startup()
     val metrics = new Metrics
     val time = new MockTime
-    val quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
+    val quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "", "")
     // create replica manager
     val replicaManager = new ReplicaManager(
       metrics = metrics,
@@ -122,7 +122,7 @@ class HighwatermarkPersistenceTest {
     scheduler.startup()
     val metrics = new Metrics
     val time = new MockTime
-    val quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
+    val quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "", "")
     // create replica manager
     val replicaManager = new ReplicaManager(
       metrics = metrics,
