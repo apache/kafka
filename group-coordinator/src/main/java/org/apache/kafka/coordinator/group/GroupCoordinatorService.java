@@ -1321,7 +1321,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return completeDeleteShareGroupOffsets(groupId, successTopics, errorTopicResponses);
     }
 
-    private CompletableFuture<DeleteShareGroupOffsetsResponseData> persistDeleteShareGroupOffsets(
+    private CompletableFuture<DeleteShareGroupOffsetsResponseData> deleteState(
         String groupId,
         GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder resultHolder
     ) {
@@ -1354,7 +1354,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
         return persister.deleteState(resultHolder.deleteStateRequestParameters())
             .thenCompose(result -> handleDeleteShareGroupStateResult(groupId, result, errorTopicResponseList))
             .exceptionally(throwable -> {
-                log.error("Failed to delete share group state");
+                log.error("Failed to delete share group state due to: {}", throwable.getMessage(), throwable);
                 return DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(Errors.forException(throwable));
             });
     }
@@ -1661,7 +1661,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.initiateDeleteShareGroupOffsets(groupId, requestData)
         )
-            .thenCompose(resultHolder -> persistDeleteShareGroupOffsets(groupId, resultHolder))
+            .thenCompose(resultHolder -> deleteState(groupId, resultHolder))
             .exceptionally(exception -> handleOperationException(
                 "initiate-delete-share-group-offsets",
                 groupId,

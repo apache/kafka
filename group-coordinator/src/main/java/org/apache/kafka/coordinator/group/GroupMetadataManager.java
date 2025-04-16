@@ -8226,13 +8226,14 @@ public class GroupMetadataManager {
         Set<Uuid> deletingTopics = new HashSet<>(currentMap.deletingTopics());
 
         requestData.topics().forEach(topic -> {
-            Uuid topicId = metadataImage.topics().topicNameToIdView().get(topic.topicName());
-            if (topicId != null) {
+            TopicImage topicImage = metadataImage.topics().getTopic(topic.topicName());
+            if (topicImage != null) {
+                Uuid topicId = topicImage.id();
                 // A deleteState request to persister should only be sent with those topic partitions for which corresponding
                 // share partitions are initialized for the group.
-                if (currentMap.initializedTopics().containsKey(topicId)) {
+                if (initializedTopics.containsKey(topicId)) {
                     List<DeleteShareGroupStateRequestData.PartitionData> partitions = new ArrayList<>();
-                    currentMap.initializedTopics().get(topicId).forEach(partition ->
+                    initializedTopics.get(topicId).forEach(partition ->
                         partitions.add(new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition)));
                     deleteShareGroupStateRequestTopicsData.add(
                         new DeleteShareGroupStateRequestData.DeleteStateData()
@@ -8243,11 +8244,11 @@ public class GroupMetadataManager {
                     initializedTopics.remove(topicId);
                     // Adding the topic to deletingTopics map.
                     deletingTopics.add(topicId);
-                } else if (currentMap.deletingTopics().contains(topicId)) {
+                } else if (deletingTopics.contains(topicId)) {
                     // If the topic for which delete share group offsets request is sent is already present in the deletingTopics set,
                     // we will include that topic in the delete share group state request.
                     List<DeleteShareGroupStateRequestData.PartitionData> partitions = new ArrayList<>();
-                    metadataImage.topics().getTopic(topicId).partitions().keySet().forEach(partition ->
+                    topicImage.partitions().keySet().forEach(partition ->
                         partitions.add(new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition)));
                     deleteShareGroupStateRequestTopicsData.add(
                         new DeleteShareGroupStateRequestData.DeleteStateData()
@@ -8291,6 +8292,11 @@ public class GroupMetadataManager {
         List<CoordinatorRecord> records
     ) {
         ShareGroupStatePartitionMetadataInfo currentMap = shareGroupPartitionMetadata.get(groupId);
+
+        if (currentMap == null) {
+            return List.of();
+        }
+
         Set<Uuid> updatedDeletingTopics = new HashSet<>(currentMap.deletingTopics());
 
         topics.keySet().forEach(updatedDeletingTopics::remove);

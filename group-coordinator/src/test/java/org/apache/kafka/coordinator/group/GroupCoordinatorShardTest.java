@@ -37,7 +37,6 @@ import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
-import org.apache.kafka.common.requests.DeleteShareGroupOffsetsRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
@@ -2285,84 +2284,6 @@ public class GroupCoordinatorShardTest {
     }
 
     @Test
-    public void testCompleteDeleteShareGroupOffsetsGroupNotFound() {
-        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
-        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
-        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
-        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
-            new LogContext(),
-            groupMetadataManager,
-            offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
-            mock(GroupCoordinatorConfig.class),
-            coordinatorMetrics,
-            metricsShard
-        );
-
-        String groupId = "share-group";
-
-        GroupIdNotFoundException exception = new GroupIdNotFoundException("group Id not found");
-
-        doThrow(exception).when(groupMetadataManager).shareGroup(eq(groupId));
-
-        CoordinatorResult<DeleteShareGroupOffsetsResponseData, CoordinatorRecord> expectedResult =
-            new CoordinatorResult<>(
-                List.of(),
-                DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(
-                    Errors.GROUP_ID_NOT_FOUND.code(),
-                    exception.getMessage()
-                )
-            );
-
-        assertEquals(expectedResult, coordinator.completeDeleteShareGroupOffsets(groupId, Map.of(Uuid.randomUuid(), "topic-1"), List.of()));
-        verify(groupMetadataManager, times(1)).shareGroup(eq(groupId));
-        // Not called because of Group not found.
-        verify(groupMetadataManager, times(0)).sharePartitionsEligibleForOffsetDeletion(any(), any(), any(), any());
-    }
-
-    @Test
-    public void testCompleteDeleteShareGroupOffsetsNonEmptyShareGroup() {
-        GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
-        OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
-        CoordinatorMetrics coordinatorMetrics = mock(CoordinatorMetrics.class);
-        CoordinatorMetricsShard metricsShard = mock(CoordinatorMetricsShard.class);
-        GroupCoordinatorShard coordinator = new GroupCoordinatorShard(
-            new LogContext(),
-            groupMetadataManager,
-            offsetMetadataManager,
-            Time.SYSTEM,
-            new MockCoordinatorTimer<>(Time.SYSTEM),
-            mock(GroupCoordinatorConfig.class),
-            coordinatorMetrics,
-            metricsShard
-        );
-
-        String groupId = "share-group";
-
-        ShareGroup shareGroup = mock(ShareGroup.class);
-        GroupNotEmptyException exception = new GroupNotEmptyException("group is not empty");
-        doThrow(exception).when(shareGroup).validateDeleteGroup();
-
-        when(groupMetadataManager.shareGroup(eq(groupId))).thenReturn(shareGroup);
-
-        CoordinatorResult<DeleteShareGroupOffsetsResponseData, CoordinatorRecord> expectedResult =
-            new CoordinatorResult<>(
-                List.of(),
-                DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(
-                    Errors.NON_EMPTY_GROUP.code(),
-                    exception.getMessage()
-                )
-            );
-
-        assertEquals(expectedResult, coordinator.completeDeleteShareGroupOffsets(groupId, Map.of(Uuid.randomUuid(), "topic-1"), List.of()));
-        verify(groupMetadataManager, times(1)).shareGroup(eq(groupId));
-        // Not called because of Group not found.
-        verify(groupMetadataManager, times(0)).sharePartitionsEligibleForOffsetDeletion(any(), any(), any(), any());
-    }
-
-    @Test
     public void testCompleteDeleteShareGroupOffsetsSuccess() {
         GroupMetadataManager groupMetadataManager = mock(GroupMetadataManager.class);
         OffsetMetadataManager offsetMetadataManager = mock(OffsetMetadataManager.class);
@@ -2432,7 +2353,6 @@ public class GroupCoordinatorShardTest {
             );
 
         assertEquals(expectedResult, coordinator.completeDeleteShareGroupOffsets(groupId, topics, List.of()));
-        verify(groupMetadataManager, times(1)).shareGroup(eq(groupId));
         verify(groupMetadataManager, times(1)).completeDeleteShareGroupOffsets(any(), any(), any());
     }
 
@@ -2520,7 +2440,6 @@ public class GroupCoordinatorShardTest {
             );
 
         assertEquals(expectedResult, coordinator.completeDeleteShareGroupOffsets(groupId, topics, errorTopicResponseList));
-        verify(groupMetadataManager, times(1)).shareGroup(eq(groupId));
         verify(groupMetadataManager, times(1)).completeDeleteShareGroupOffsets(any(), any(), any());
     }
 }

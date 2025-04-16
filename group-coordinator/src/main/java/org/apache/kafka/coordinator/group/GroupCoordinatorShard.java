@@ -54,7 +54,6 @@ import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.DeleteShareGroupOffsetsRequest;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
@@ -764,49 +763,25 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList
     ) {
         List<CoordinatorRecord> records = new ArrayList<>();
-        try {
-            ShareGroup group = groupMetadataManager.shareGroup(groupId);
-            group.validateDeleteGroup();
+        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> topicResponseList = new ArrayList<>();
 
-            List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> topicResponseList = new ArrayList<>(List.of());
+        topicResponseList.addAll(
+            groupMetadataManager.completeDeleteShareGroupOffsets(
+                groupId,
+                topics,
+                records
+            )
+        );
 
-            topicResponseList.addAll(
-                groupMetadataManager.completeDeleteShareGroupOffsets(
-                    groupId,
-                    topics,
-                    records
-                )
-            );
+        topicResponseList.addAll(errorTopicResponseList);
 
-            topicResponseList.addAll(errorTopicResponseList);
-
-            return new CoordinatorResult<>(
-                records,
-                new DeleteShareGroupOffsetsResponseData()
-                    .setErrorCode(Errors.NONE.code())
-                    .setErrorMessage(null)
-                    .setResponses(topicResponseList)
-            );
-
-        } catch (GroupIdNotFoundException exception) {
-            log.error("groupId {} not found", groupId, exception);
-            return new CoordinatorResult<>(
-                records,
-                DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(
-                    Errors.GROUP_ID_NOT_FOUND.code(),
-                    exception.getMessage()
-                )
-            );
-        } catch (GroupNotEmptyException exception) {
-            log.error("Provided group {} is not empty", groupId);
-            return new CoordinatorResult<>(
-                records,
-                DeleteShareGroupOffsetsRequest.getErrorDeleteResponseData(
-                    Errors.NON_EMPTY_GROUP.code(),
-                    exception.getMessage()
-                )
-            );
-        }
+        return new CoordinatorResult<>(
+            records,
+            new DeleteShareGroupOffsetsResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setErrorMessage(null)
+                .setResponses(topicResponseList)
+        );
     }
 
     /**
