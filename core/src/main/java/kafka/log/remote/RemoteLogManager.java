@@ -16,8 +16,6 @@
  */
 package kafka.log.remote;
 
-import kafka.cluster.Partition;
-
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
@@ -47,6 +45,7 @@ import org.apache.kafka.server.common.CheckpointFile;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.StopPartition;
 import org.apache.kafka.server.config.ServerConfigs;
+import org.apache.kafka.server.log.remote.TopicPartitionLog;
 import org.apache.kafka.server.log.remote.metadata.storage.ClassLoaderAwareRemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManager;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManagerConfig;
@@ -426,9 +425,9 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         return remoteStorageManager;
     }
 
-    private Stream<Partition> filterPartitions(Set<Partition> partitions) {
+    private Stream<TopicPartitionLog> filterPartitions(Set<TopicPartitionLog> partitions) {
         // We are not specifically checking for internal topics etc here as `log.remoteLogEnabled()` already handles that.
-        return partitions.stream().filter(partition -> partition.log().exists(UnifiedLog::remoteLogEnabled));
+        return partitions.stream().filter(partition -> partition.unifiedLog().isPresent() && partition.unifiedLog().get().remoteLogEnabled());
     }
 
     private void cacheTopicPartitionIds(TopicIdPartition topicIdPartition) {
@@ -448,8 +447,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
      * @param partitionsBecomeFollower partitions that have become followers on this broker.
      * @param topicIds                 topic name to topic id mappings.
      */
-    public void onLeadershipChange(Set<Partition> partitionsBecomeLeader,
-                                   Set<Partition> partitionsBecomeFollower,
+    public void onLeadershipChange(Set<TopicPartitionLog> partitionsBecomeLeader,
+                                   Set<TopicPartitionLog> partitionsBecomeFollower,
                                    Map<String, Uuid> topicIds) {
         LOGGER.debug("Received leadership changes for leaders: {} and followers: {}", partitionsBecomeLeader, partitionsBecomeFollower);
 
@@ -458,12 +457,12 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         }
 
         Map<TopicIdPartition, Boolean> leaderPartitions = filterPartitions(partitionsBecomeLeader)
-                .collect(Collectors.toMap(p -> new TopicIdPartition(topicIds.get(p.topic()), p.topicPartition()),
-                        p -> p.log().exists(log -> log.config().remoteLogCopyDisable())));
+                .collect(Collectors.toMap(p -> new TopicIdPartition(topicIds.get(p.topicPartition().topic()), p.topicPartition()),
+                        p -> p.unifiedLog().isPresent() ? p.unifiedLog().get().config().remoteLogCopyDisable() : false));
 
         Map<TopicIdPartition, Boolean> followerPartitions = filterPartitions(partitionsBecomeFollower)
-                .collect(Collectors.toMap(p -> new TopicIdPartition(topicIds.get(p.topic()), p.topicPartition()),
-                        p -> p.log().exists(log -> log.config().remoteLogCopyDisable())));
+                .collect(Collectors.toMap(p -> new TopicIdPartition(topicIds.get(p.topicPartition().topic()), p.topicPartition()),
+                        p -> p.unifiedLog().isPresent() ? p.unifiedLog().get().config().remoteLogCopyDisable() : false));
 
         if (!leaderPartitions.isEmpty() || !followerPartitions.isEmpty()) {
             LOGGER.debug("Effective topic partitions after filtering compact and internal topics, leaders: {} and followers: {}",
@@ -483,8 +482,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         }
     }
 
-    public void stopLeaderCopyRLMTasks(Set<Partition> partitions) {
-        for (Partition partition : partitions) {
+    public void stopLeaderCopyRLMTasks(Set<TopicPartitionLog> partitions) {
+        for (TopicPartitionLog partition : partitions) {
             TopicPartition tp = partition.topicPartition();
             if (topicIdByPartitionMap.containsKey(tp)) {
                 TopicIdPartition tpId = new TopicIdPartition(topicIdByPartitionMap.get(tp), tp);
