@@ -78,6 +78,10 @@ public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
         return this;
     }
 
+    /**
+     * If protocol types is set, only groups of these protocol types will be returned by listGroups().
+     * Otherwise, all groups are returned.
+     */
     public ListGroupsOptions withProtocolTypes(Set<String> protocolTypes) {
         this.protocolTypes = (protocolTypes == null || protocolTypes.isEmpty()) ? Set.of() : Set.copyOf(protocolTypes);
         return this;
