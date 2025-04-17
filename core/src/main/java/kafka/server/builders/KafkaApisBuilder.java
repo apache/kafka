@@ -28,6 +28,7 @@ import kafka.server.QuotaFactory.QuotaManagers;
 import kafka.server.ReplicaManager;
 import kafka.server.share.SharePartitionManager;
 
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
@@ -58,7 +59,7 @@ public class KafkaApisBuilder {
     private ConfigRepository configRepository = null;
     private MetadataCache metadataCache = null;
     private Metrics metrics = null;
-    private Optional<Authorizer> authorizer = Optional.empty();
+    private Optional<Plugin<Authorizer>> authorizerPlugin = Optional.empty();
     private QuotaManagers quotas = null;
     private FetchManager fetchManager = null;
     private SharePartitionManager sharePartitionManager = null;
@@ -131,8 +132,8 @@ public class KafkaApisBuilder {
         return this;
     }
 
-    public KafkaApisBuilder setAuthorizer(Optional<Authorizer> authorizer) {
-        this.authorizer = authorizer;
+    public KafkaApisBuilder setAuthorizerPlugin(Optional<Plugin<Authorizer>> authorizerPlugin) {
+        this.authorizerPlugin = authorizerPlugin;
         return this;
     }
 
@@ -219,7 +220,7 @@ public class KafkaApisBuilder {
                              configRepository,
                              metadataCache,
                              metrics,
-                             OptionConverters.toScala(authorizer),
+                             OptionConverters.toScala(authorizerPlugin),
                              quotas,
                              fetchManager,
                              sharePartitionManager,

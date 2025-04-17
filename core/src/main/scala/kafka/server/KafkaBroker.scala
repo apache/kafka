@@ -22,7 +22,7 @@ import kafka.log.remote.RemoteLogManager
 import kafka.network.SocketServer
 import kafka.utils.Logging
 import org.apache.kafka.common.ClusterResource
-import org.apache.kafka.common.internals.ClusterResourceListeners
+import org.apache.kafka.common.internals.{ClusterResourceListeners, Plugin}
 import org.apache.kafka.common.metrics.{Metrics, MetricsReporter}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.token.delegation.internals.DelegationTokenCache
@@ -78,7 +78,7 @@ trait KafkaBroker extends Logging {
   // acquire lock while handling Fetch requests.
   val NumFetchSessionCacheShards: Int = 8
 
-  def authorizer: Option[Authorizer]
+  def authorizerPlugin: Option[Plugin[Authorizer]]
   def brokerState: BrokerState
   def clusterId: String
   def config: KafkaConfig
