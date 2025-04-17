@@ -1228,8 +1228,7 @@ public class DelayedShareFetchTest {
         // Remote fetch object gets created for delayed share fetch object.
         assertNotNull(delayedShareFetch.remoteFetch());
         // Verify the locks are released for local log read topic partitions tp0 and tp1.
-        Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(Set.of(tp0));
-        Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(Set.of(tp1));
+        Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(Set.of(tp0, tp1));
         assertTrue(delayedShareFetch.lock().tryLock());
         delayedShareFetch.lock().unlock();
     }
@@ -1459,24 +1458,19 @@ public class DelayedShareFetchTest {
     public void testRemoteStorageFetchRequestCompletionOnFutureCompletionSuccessfully() {
         ReplicaManager replicaManager = mock(ReplicaManager.class);
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
-        TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
 
         SharePartition sp0 = mock(SharePartition.class);
-        SharePartition sp1 = mock(SharePartition.class);
 
         // sp0 is acquirable, sp1 is not acquirable.
         when(sp0.maybeAcquireFetchLock()).thenReturn(true);
-        when(sp1.maybeAcquireFetchLock()).thenReturn(false);
         when(sp0.canAcquireRecords()).thenReturn(true);
-        when(sp1.canAcquireRecords()).thenReturn(false);
 
         LinkedHashMap<TopicIdPartition, SharePartition> sharePartitions = new LinkedHashMap<>();
         sharePartitions.put(tp0, sp0);
-        sharePartitions.put(tp1, sp1);
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, "grp", Uuid.randomUuid().toString(),
-            future, List.of(tp0, tp1), BATCH_SIZE, MAX_FETCH_RECORDS,
+            future, List.of(tp0), BATCH_SIZE, MAX_FETCH_RECORDS,
             BROKER_TOPIC_STATS);
 
         when(sp0.nextFetchOffset()).thenReturn(10L);
@@ -1504,7 +1498,7 @@ public class DelayedShareFetchTest {
             .withShareFetchData(shareFetch)
             .withSharePartitions(sharePartitions)
             .withReplicaManager(replicaManager)
-            .withPartitionMaxBytesStrategy(mockPartitionMaxBytes(Set.of(tp0, tp1)))
+            .withPartitionMaxBytesStrategy(mockPartitionMaxBytes(Set.of(tp0)))
             .build());
 
         when(sp0.acquire(any(), anyInt(), anyInt(), anyLong(), any(), any())).thenReturn(
@@ -1531,18 +1525,15 @@ public class DelayedShareFetchTest {
         TopicIdPartition tp0 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 1));
         TopicIdPartition tp2 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 2));
-        TopicIdPartition tp3 = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 3));
 
         SharePartition sp0 = mock(SharePartition.class);
         SharePartition sp1 = mock(SharePartition.class);
         SharePartition sp2 = mock(SharePartition.class);
-        SharePartition sp3 = mock(SharePartition.class);
 
         // Except tp3, all the topic partitions are acquirable.
         when(sp0.maybeAcquireFetchLock()).thenReturn(true);
         when(sp1.maybeAcquireFetchLock()).thenReturn(true);
         when(sp2.maybeAcquireFetchLock()).thenReturn(true);
-        when(sp3.maybeAcquireFetchLock()).thenReturn(false);
         when(sp0.canAcquireRecords()).thenReturn(true);
         when(sp1.canAcquireRecords()).thenReturn(true);
         when(sp2.canAcquireRecords()).thenReturn(true);
@@ -1551,11 +1542,10 @@ public class DelayedShareFetchTest {
         sharePartitions.put(tp0, sp0);
         sharePartitions.put(tp1, sp1);
         sharePartitions.put(tp2, sp2);
-        sharePartitions.put(tp3, sp3);
 
         CompletableFuture<Map<TopicIdPartition, ShareFetchResponseData.PartitionData>> future = new CompletableFuture<>();
         ShareFetch shareFetch = new ShareFetch(FETCH_PARAMS, "grp", Uuid.randomUuid().toString(),
-            future, List.of(tp0, tp1, tp2, tp3), BATCH_SIZE, MAX_FETCH_RECORDS,
+            future, List.of(tp0, tp1, tp2), BATCH_SIZE, MAX_FETCH_RECORDS,
             BROKER_TOPIC_STATS);
 
         when(sp0.nextFetchOffset()).thenReturn(10L);
@@ -1678,8 +1668,6 @@ public class DelayedShareFetchTest {
             .build());
 
         when(sp0.acquire(any(), anyInt(), anyInt(), anyLong(), any(), any())).thenReturn(
-            createShareAcquiredRecords(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
-        when(sp1.acquire(any(), anyInt(), anyInt(), anyLong(), any(), any())).thenReturn(
             createShareAcquiredRecords(new ShareFetchResponseData.AcquiredRecords().setFirstOffset(0).setLastOffset(3).setDeliveryCount((short) 1)));
 
         assertFalse(delayedShareFetch.isCompleted());
