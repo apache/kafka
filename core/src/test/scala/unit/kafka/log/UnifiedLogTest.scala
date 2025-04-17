@@ -17,7 +17,6 @@
 
 package kafka.log
 
-import kafka.log.remote.RemoteLogManager
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.compress.Compression
@@ -36,7 +35,7 @@ import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.config.KRaftConfigs
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
-import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
+import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, DelayedRemoteListOffsets}
 import org.apache.kafka.server.storage.log.{FetchIsolation, UnexpectedAppendOffsetException}

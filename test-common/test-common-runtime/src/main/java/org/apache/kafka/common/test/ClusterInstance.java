@@ -278,10 +278,14 @@ public interface ClusterInstance {
     default void waitTopicDeletion(String topic) throws InterruptedException {
         waitForTopic(topic, 0);
     }
-    
+
     default void createTopic(String topicName, int partitions, short replicas) throws InterruptedException {
+        createTopic(topicName, partitions, replicas, Map.of());
+    }
+
+    default void createTopic(String topicName, int partitions, short replicas, Map<String, String> props) throws InterruptedException {
         try (Admin admin = admin()) {
-            admin.createTopics(Collections.singletonList(new NewTopic(topicName, partitions, replicas)));
+            admin.createTopics(List.of(new NewTopic(topicName, partitions, replicas).configs(props)));
             waitForTopic(topicName, partitions);
         }
     }

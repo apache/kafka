@@ -17,12 +17,13 @@
 package org.apache.kafka.common.errors;
 
 /**
- * Indicates that a group is already at its configured maximum capacity and cannot accommodate more members
+ * Indicates that a new share session could not be opened because the limit of share sessions has been reached.
  */
-public class GroupMaxSizeReachedException extends ApiException {
+public class ShareSessionLimitReachedException extends RetriableException {
+
     private static final long serialVersionUID = 1L;
 
-    public GroupMaxSizeReachedException(String message) {
+    public ShareSessionLimitReachedException(String message) {
         super(message);
     }
 }

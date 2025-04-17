@@ -14,16 +14,12 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.log.remote;
-
-import kafka.utils.TestUtils;
+package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Utils;
-import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
-import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.storage.internals.checkpoint.LeaderEpochCheckpointFile;
 import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
@@ -31,6 +27,7 @@ import org.apache.kafka.storage.internals.log.AsyncOffsetReadFutureHolder;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.storage.internals.log.OffsetResultHolder;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
+import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
