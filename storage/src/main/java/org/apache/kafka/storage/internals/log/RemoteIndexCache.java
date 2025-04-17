@@ -159,7 +159,7 @@ public class RemoteIndexCache implements Closeable {
     }
 
     // Visible for testing
-    public int expiredIdxPendingForDeletion() {
+    int expiredIdxPendingForDeletion() {
         return cleanerScheduler.pendingTaskSize();
     }
 
@@ -209,7 +209,6 @@ public class RemoteIndexCache implements Closeable {
                     entry.cleanup();
                     log.debug("Cleaned up index entry {}", entry);
                 } catch (Exception ex) {
-                    // do not exit for exceptions other than InterruptedException
                     log.error("Error occurred while cleaning up expired entry: {}", entry, ex);
                 }
             };
@@ -220,12 +219,12 @@ public class RemoteIndexCache implements Closeable {
     }
 
     // Visible for testing
-    public void setFileDeleteDelayMs(int fileDeleteDelayMs) {
+    void setFileDeleteDelayMs(int fileDeleteDelayMs) {
         this.fileDeleteDelayMs = fileDeleteDelayMs;
     }
 
     // Visible for testing
-    public KafkaScheduler cleanerScheduler() {
+    KafkaScheduler cleanerScheduler() {
         return cleanerScheduler;
     }
 
