@@ -226,7 +226,7 @@ public class RemoteIndexCacheTest {
         long estimateEntryBytesSize = estimateOneEntryBytesSize();
         // close existing cache created in test setup before creating a new one
         Utils.closeQuietly(cache, "RemoteIndexCache created for unit test");
-        cache = new RemoteIndexCache(2 * estimateEntryBytesSize, rsm, tpDir.toString());
+        cache = new RemoteIndexCache(2 * estimateEntryBytesSize, rsm, logDir.toString());
         TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         List<RemoteLogSegmentMetadata> metadataList = generateRemoteLogSegmentMetadata(3, tpId);
 
@@ -477,7 +477,7 @@ public class RemoteIndexCacheTest {
         long estimateEntryBytesSize = estimateOneEntryBytesSize();
         // close existing cache created in test setup before creating a new one
         Utils.closeQuietly(cache, "RemoteIndexCache created for unit test");
-        cache = new RemoteIndexCache(2 * estimateEntryBytesSize, rsm, tpDir.toString());
+        cache = new RemoteIndexCache(2 * estimateEntryBytesSize, rsm, logDir.toString());
         TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("foo", 0));
         List<RemoteLogSegmentMetadata> metadataList = generateRemoteLogSegmentMetadata(3, tpId);
 
@@ -512,7 +512,7 @@ public class RemoteIndexCacheTest {
         cache.close();
 
         // Reload the cache from the disk and check the cache size is same as earlier
-        RemoteIndexCache reloadedCache = new RemoteIndexCache(2 * estimateEntryBytesSize, rsm, tpDir.toString());
+        RemoteIndexCache reloadedCache = new RemoteIndexCache(2 * estimateEntryBytesSize, rsm, logDir.toString());
         assertEquals(2, reloadedCache.internalCache().asMap().size());
         reloadedCache.close();
 
@@ -1222,14 +1222,14 @@ public class RemoteIndexCacheTest {
     private long estimateOneEntryBytesSize() throws IOException, RemoteStorageException {
         TopicPartition tp = new TopicPartition("estimate-entry-bytes-size", 0);
         TopicIdPartition tpId = new TopicIdPartition(Uuid.randomUuid(), tp);
-        File tpDir = new File(logDir, tpId.toString());
-        Files.createDirectory(tpDir.toPath());
         RemoteStorageManager rsm = mock(RemoteStorageManager.class);
         mockRsmFetchIndex(rsm);
-        RemoteIndexCache cache = new RemoteIndexCache(2L, rsm, tpDir.toString());
+        RemoteIndexCache cache = new RemoteIndexCache(2L, rsm, logDir.toString());
         List<RemoteLogSegmentMetadata> metadataList = generateRemoteLogSegmentMetadata(1, tpId);
         RemoteIndexCache.Entry entry = cache.getIndexEntry(metadataList.get(0));
         long entrySizeInBytes = entry.entrySizeBytes();
+        entry.markForCleanup();
+        entry.cleanup();
         Utils.closeQuietly(cache, "RemoteIndexCache created for estimating entry size");
         return entrySizeInBytes;
     }
