@@ -36,14 +36,36 @@ public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
     private Set<GroupType> types = Set.of();
     private Set<String> protocolTypes = Set.of();
 
+    // Types filter is supported by brokers with version 4.0.0 or later. Older brokers only support
+    // classic groups, so listing consumer groups on an older broker does not need to use a types filter.
+    private boolean regularConsumerGroupTypes = false;
+
     /**
      * Only consumer groups will be returned by listGroups().
      * This operation sets filters on group type and protocol type which select consumer groups.
      */
     public static ListGroupsOptions forConsumerGroups() {
         return new ListGroupsOptions()
-            .withTypes(Set.of(GroupType.CLASSIC, GroupType.CONSUMER))
+            .withTypes(Set.of(GroupType.CLASSIC, GroupType.CONSUMER), true)
             .withProtocolTypes(Set.of("", ConsumerProtocol.PROTOCOL_TYPE));
+    }
+
+    /**
+     * Only share groups will be returned by listGroups().
+     * This operation sets a filter on group type which select share groups.
+     */
+    public static ListGroupsOptions forShareGroups() {
+        return new ListGroupsOptions()
+            .withTypes(Set.of(GroupType.SHARE));
+    }
+
+    /**
+     * Only streams groups will be returned by listGroups().
+     * This operation sets a filter on group type which select streams groups.
+     */
+    public static ListGroupsOptions forStreamsGroups() {
+        return new ListGroupsOptions()
+            .withTypes(Set.of(GroupType.STREAMS));
     }
 
     /**
@@ -66,7 +88,12 @@ public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
      * Otherwise, all groups are returned.
      */
     public ListGroupsOptions withTypes(Set<GroupType> types) {
+        return this.withTypes(types, false);
+    }
+
+    ListGroupsOptions withTypes(Set<GroupType> types, boolean regularConsumerGroupTypes) {
         this.types = (types == null || types.isEmpty()) ? Set.of() : Set.copyOf(types);
+        this.regularConsumerGroupTypes = regularConsumerGroupTypes;
         return this;
     }
 
@@ -89,5 +116,9 @@ public class ListGroupsOptions extends AbstractOptions<ListGroupsOptions> {
      */
     public Set<GroupType> types() {
         return types;
+    }
+
+    boolean regularConsumerGroupTypes() {
+        return regularConsumerGroupTypes;
     }
 }

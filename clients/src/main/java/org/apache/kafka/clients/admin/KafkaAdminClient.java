@@ -3524,44 +3524,62 @@ public class KafkaAdminClient extends AdminClient {
                 for (final Node node : allNodes) {
                     final long nowList = time.milliseconds();
                     runnable.call(new Call("listGroups", deadline, new ConstantNodeIdProvider(node.id())) {
+
+                        // If only regular consumer group types are required, we can try an earlier request version if
+                        // UnsupportedVersionException is thrown
+                        final boolean canTryEarlierRequestVersion = options.regularConsumerGroupTypes();
+                        boolean tryUsingEarlierRequestVersion = false;
+
                         @Override
                         ListGroupsRequest.Builder createRequest(int timeoutMs) {
-                            List<String> groupTypes = options.types()
-                                .stream()
-                                .map(GroupType::toString)
-                                .collect(Collectors.toList());
-                            List<String> groupStates = options.groupStates()
-                                .stream()
-                                .map(GroupState::toString)
-                                .collect(Collectors.toList());
-                            return new ListGroupsRequest.Builder(new ListGroupsRequestData()
-                                .setTypesFilter(groupTypes)
-                                .setStatesFilter(groupStates)
-                            );
+                            if (tryUsingEarlierRequestVersion) {
+                                List<String> groupStates = options.groupStates()
+                                    .stream()
+                                    .map(GroupState::toString)
+                                    .collect(Collectors.toList());
+                                return new ListGroupsRequest.Builder(new ListGroupsRequestData()
+                                    .setStatesFilter(groupStates)
+                                );
+                            } else {
+                                List<String> groupTypes = options.types()
+                                    .stream()
+                                    .map(GroupType::toString)
+                                    .collect(Collectors.toList());
+                                List<String> groupStates = options.groupStates()
+                                    .stream()
+                                    .map(GroupState::toString)
+                                    .collect(Collectors.toList());
+                                return new ListGroupsRequest.Builder(new ListGroupsRequestData()
+                                    .setTypesFilter(groupTypes)
+                                    .setStatesFilter(groupStates)
+                                );
+                            }
                         }
 
                         private void maybeAddGroup(ListGroupsResponseData.ListedGroup group) {
-                            final String groupId = group.groupId();
-                            final Optional<GroupType> type;
-                            if (group.groupType() == null || group.groupType().isEmpty()) {
-                                type = Optional.empty();
-                            } else {
-                                type = Optional.of(GroupType.parse(group.groupType()));
+                            String protocolType = group.protocolType();
+                            if (options.protocolTypes().isEmpty() || options.protocolTypes().contains(protocolType)) {
+                                final String groupId = group.groupId();
+                                final Optional<GroupType> type;
+                                if (group.groupType() == null || group.groupType().isEmpty()) {
+                                    type = Optional.empty();
+                                } else {
+                                    type = Optional.of(GroupType.parse(group.groupType()));
+                                }
+                                final Optional<GroupState> groupState;
+                                if (group.groupState() == null || group.groupState().isEmpty()) {
+                                    groupState = Optional.empty();
+                                } else {
+                                    groupState = Optional.of(GroupState.parse(group.groupState()));
+                                }
+                                final GroupListing groupListing = new GroupListing(
+                                    groupId,
+                                    type,
+                                    protocolType,
+                                    groupState
+                                );
+                                results.addListing(groupListing);
                             }
-                            final String protocolType = group.protocolType();
-                            final Optional<GroupState> groupState;
-                            if (group.groupState() == null || group.groupState().isEmpty()) {
-                                groupState = Optional.empty();
-                            } else {
-                                groupState = Optional.of(GroupState.parse(group.groupState()));
-                            }
-                            final GroupListing groupListing = new GroupListing(
-                                groupId,
-                                type,
-                                protocolType,
-                                groupState
-                            );
-                            results.addListing(groupListing);
                         }
 
                         @Override
@@ -3580,6 +3598,23 @@ public class KafkaAdminClient extends AdminClient {
                                 }
                                 results.tryComplete(node);
                             }
+                        }
+
+                        @Override
+                        boolean handleUnsupportedVersionException(final UnsupportedVersionException exception) {
+                            // If we cannot try the earlier request version, give up
+                            if (!canTryEarlierRequestVersion) {
+                                return false;
+                            }
+
+                            // If have already tried the earlier request version, give up
+                            if (tryUsingEarlierRequestVersion) {
+                                return false;
+                            }
+
+                            // Have a try using the earlier request version
+                            tryUsingEarlierRequestVersion = true;
+                            return true;
                         }
 
                         @Override
