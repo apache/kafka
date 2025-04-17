@@ -183,8 +183,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
     private static class ShutdownProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
 
-        private ProcessorContext<KOut, VOut> context;
-
         final List<String> valueList;
 
         ShutdownProcessor(final List<String> valueList) {
@@ -192,8 +190,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         }
 
         @Override
-        public void init(final ProcessorContext<KOut, VOut> context) {} {
-            this.context = context;
+        public void init(final ProcessorContext<KOut, VOut> context) {
         }
 
         @Override
