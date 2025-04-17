@@ -307,6 +307,9 @@ public class TransactionManager {
             if (!isEpochBump) {
                 transitionTo(State.INITIALIZING);
                 log.info("Invoking InitProducerId for the first time in order to acquire a producer ID");
+                if (keepPreparedTxn) {
+                    log.info("Invoking InitProducerId with keepPreparedTxn set to true for 2PC transactions");
+                }
             } else {
                 log.info("Invoking InitProducerId with current producer ID and epoch {} in order to bump the epoch", producerIdAndEpoch);
             }
