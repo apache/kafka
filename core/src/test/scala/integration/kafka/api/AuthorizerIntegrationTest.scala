@@ -2616,7 +2616,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
         .setMemberId(memberId)
         .setMemberEpoch(0)
         .setRebalanceTimeoutMs(5 * 60 * 1000)
-        .setTopicPartitions(Collections.emptyList())
+        .setTopicPartitions(util.List.of())
         .setSubscribedTopicRegex("^top.*")).build()
     val resource = Set[ResourceType](GROUP, TOPIC)
     val response = sendRequestAndVerifyResponseError(request, resource, isAuthorized = true, listenerName = listenerName)
