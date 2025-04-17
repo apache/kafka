@@ -4047,9 +4047,8 @@ class KafkaApisTest extends Logging {
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenThrow(
       Errors.INVALID_REQUEST.exception()
-    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1), new ShareSession(
-      new ShareSessionKey(groupId, memberId), cachedSharePartitions, 0L, 0L, 2
-    )))
+    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1),
+      new ShareSession(new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2)))
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
@@ -4303,9 +4302,8 @@ class KafkaApisTest extends Logging {
       new TopicIdPartition(topicId, partitionIndex, topicName), false))
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any()))
-      .thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1), new ShareSession(
-        new ShareSessionKey(groupId, memberId), cachedSharePartitions, 0L, 0L, 2))
-      )
+      .thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1),
+        new ShareSession(new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2)))
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
@@ -4366,9 +4364,8 @@ class KafkaApisTest extends Logging {
       new TopicIdPartition(topicId, partitionIndex, topicName), false))
 
     when(sharePartitionManager.newContext(any(), any(), any(), any(), any()))
-      .thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1), new ShareSession(
-        new ShareSessionKey(groupId, memberId), cachedSharePartitions, 0L, 0L, 2))
-      )
+      .thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1),
+        new ShareSession(new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2)))
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
@@ -4727,10 +4724,10 @@ class KafkaApisTest extends Logging {
       new ShareSessionContext(new ShareRequestMetadata(memberId, 0), util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
-    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1), new ShareSession(
-      new ShareSessionKey(groupId, memberId), cachedSharePartitions, 0L, 0L, 2))
-    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 2), new ShareSession(
-      new ShareSessionKey(groupId, memberId), cachedSharePartitions, 0L, 10L, 3))
+    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1),
+      new ShareSession(new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2))
+    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 2),
+      new ShareSession(new ShareSessionKey(groupId, memberId), cachedSharePartitions, 3))
     )
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
@@ -4996,10 +4993,10 @@ class KafkaApisTest extends Logging {
         new TopicIdPartition(topicId2, new TopicPartition(topicName2, 0)),
         new TopicIdPartition(topicId2, new TopicPartition(topicName2, 1))
       ))
-    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1), new ShareSession(
-      new ShareSessionKey(groupId, memberId), cachedSharePartitions1, 0L, 0L, 2))
-    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 2), new ShareSession(
-      new ShareSessionKey(groupId, memberId), cachedSharePartitions2, 0L, 0L, 3))
+    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1),
+      new ShareSession(new ShareSessionKey(groupId, memberId), cachedSharePartitions1, 2))
+    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 2),
+      new ShareSession(new ShareSessionKey(groupId, memberId), cachedSharePartitions2, 3))
     ).thenReturn(new FinalContext())
 
     when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
@@ -5978,9 +5975,8 @@ class KafkaApisTest extends Logging {
       new ShareSessionContext(new ShareRequestMetadata(memberId, 0), util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
-    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1), new ShareSession(
-      new ShareSessionKey(groupId, memberId), cachedSharePartitions, 0L, 0L, 2))
-    )
+    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1),
+      new ShareSession(new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2)))
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
