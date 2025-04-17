@@ -17,9 +17,6 @@
 
 package kafka.admin
 
-import java.nio.charset.StandardCharsets
-import java.util.concurrent.{ExecutionException, TimeUnit}
-import java.util.{Collections, Properties}
 import joptsimple._
 import kafka.server.DynamicConfig
 import kafka.utils.Implicits._
@@ -32,14 +29,16 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity, ClientQuotaFilter, ClientQuotaFilterComponent}
 import org.apache.kafka.common.security.scram.internals.ScramMechanism
 import org.apache.kafka.common.utils.{Exit, Utils}
-import org.apache.kafka.server.config.DynamicConfig.{Client, User}
 import org.apache.kafka.server.config.{ConfigType, QuotaConfig}
 import org.apache.kafka.server.util.{CommandDefaultOptions, CommandLineUtils}
 import org.apache.kafka.storage.internals.log.LogConfig
 
 import java.net.{InetAddress, UnknownHostException}
-import scala.jdk.CollectionConverters._
+import java.nio.charset.StandardCharsets
+import java.util.concurrent.{ExecutionException, TimeUnit}
+import java.util.{Collections, Properties}
 import scala.collection._
+import scala.jdk.CollectionConverters._
 
 /**
  * This script can be used to change configs for topics/clients/users/brokers/ips/client-metrics/groups dynamically
@@ -530,8 +529,8 @@ object ConfigCommand extends Logging {
     val addConfig: OptionSpec[String] = parser.accepts("add-config", "Key Value pairs of configs to add. Square brackets can be used to group values which contain commas: 'k1=v1,k2=[v1,v2,v2],k3=v3'. The following is a list of valid configurations: " +
       "For entity-type '" + TopicType + "': " + LogConfig.configNames.asScala.map("\t" + _).mkString(nl, nl, nl) +
       "For entity-type '" + BrokerType + "': " + DynamicConfig.Broker.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
-      "For entity-type '" + UserType + "': " + User.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
-      "For entity-type '" + ClientType + "': " + Client.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+      "For entity-type '" + UserType + "': " + QuotaConfig.scramMechanismsPlusUserAndClientQuotaConfigs().names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
+      "For entity-type '" + ClientType + "': " + QuotaConfig.userAndClientQuotaConfigs().names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
       "For entity-type '" + IpType + "': " + DynamicConfig.Ip.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
       "For entity-type '" + ClientMetricsType + "': " + DynamicConfig.ClientMetrics.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
       "For entity-type '" + GroupType + "': " + DynamicConfig.Group.names.asScala.toSeq.sorted.map("\t" + _).mkString(nl, nl, nl) +
