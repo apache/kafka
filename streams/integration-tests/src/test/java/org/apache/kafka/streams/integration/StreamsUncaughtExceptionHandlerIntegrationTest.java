@@ -23,6 +23,8 @@ import org.apache.kafka.common.serialization.IntegerSerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
+import org.apache.kafka.common.utils.LogCaptureAppender;
+import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -39,10 +41,12 @@ import org.apache.kafka.streams.kstream.Named;
 import org.apache.kafka.streams.processor.api.Processor;
 import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.Record;
+import org.apache.kafka.streams.processor.internals.StreamThread;
 import org.apache.kafka.streams.state.Stores;
 import org.apache.kafka.streams.state.internals.KeyValueStoreBuilder;
 import org.apache.kafka.test.TestUtils;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.AfterAll;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeAll;
@@ -183,8 +187,6 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
     private static class ShutdownProcessor<KIn, VIn, KOut, VOut> implements Processor<KIn, VIn, KOut, VOut> {
 
-        private ProcessorContext<KOut, VOut> context;
-
         final List<String> valueList;
 
         ShutdownProcessor(final List<String> valueList) {
@@ -192,8 +194,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         }
 
         @Override
-        public void init(final ProcessorContext<KOut, VOut> context) {} {
-            this.context = context;
+        public void init(final ProcessorContext<KOut, VOut> context) {
         }
 
         @Override
@@ -334,11 +335,14 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
         properties.put(StreamsConfig.NUM_STREAM_THREADS_CONFIG, numThreads);
 
         final Topology topology = builder.build();
-
-        try (final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, properties);
-             final KafkaStreams kafkaStreams2 = new KafkaStreams(topology, properties)) {
+        final MockTime time = new MockTime(0L);
+        
+        try (final KafkaStreams kafkaStreams1 = new KafkaStreams(topology, properties, time);
+             final KafkaStreams kafkaStreams2 = new KafkaStreams(topology, properties, time);
+             final LogCaptureAppender logCaptureAppender = LogCaptureAppender.createAndRegister()) {
             kafkaStreams1.setUncaughtExceptionHandler(exception -> SHUTDOWN_APPLICATION);
             kafkaStreams2.setUncaughtExceptionHandler(exception -> SHUTDOWN_APPLICATION);
+            logCaptureAppender.setClassLogger(StreamThread.class, Level.WARN);
 
             startApplicationAndWaitUntilRunning(asList(kafkaStreams1, kafkaStreams2));
 
@@ -346,6 +350,8 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
             waitForApplicationState(asList(kafkaStreams1, kafkaStreams2), KafkaStreams.State.ERROR, DEFAULT_DURATION);
 
             assertThat(processorValueCollector.size(), equalTo(1));
+            assertThat("Shutdown warning log message should be exported exactly once",
+                    logCaptureAppender.getMessages("WARN").stream().filter(msg -> msg.contains("Detected that shutdown was requested")).count(), equalTo(1L));
         }
     }
 
