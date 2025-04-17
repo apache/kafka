@@ -17,7 +17,6 @@
 package kafka.server.share;
 
 import kafka.cluster.Partition;
-import kafka.log.remote.RemoteLogManager;
 import kafka.server.LogReadResult;
 import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
@@ -34,6 +33,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.requests.FetchRequest;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
 import org.apache.kafka.server.purgatory.DelayedOperationKey;
 import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
 import org.apache.kafka.server.share.SharePartitionKey;
