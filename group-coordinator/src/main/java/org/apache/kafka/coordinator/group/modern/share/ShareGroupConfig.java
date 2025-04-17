@@ -97,7 +97,7 @@ public class ShareGroupConfig {
     private final String shareGroupPersisterClassName;
 
     public ShareGroupConfig(AbstractConfig config) {
-        // Share groups are enabled in two cases:
+        // Share groups are enabled in either of the two following cases:
         // 1. The internal configuration to enable it is explicitly set
         // 2. the share rebalance protocol is enabled.
         Set<String> protocols = config.getList(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG)
