@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.record.Records;
+import org.apache.kafka.server.config.ServerLogConfigs;
 
 import java.util.concurrent.TimeUnit;
 
@@ -128,18 +129,15 @@ public class MetadataLogConfig {
         this.deleteDelayMillis = deleteDelayMillis;
     }
 
-    public MetadataLogConfig(AbstractConfig config,
-                             int maxBatchSizeInBytes,
-                             int maxFetchSizeInBytes,
-                             long deleteDelayMillis) {
+    public MetadataLogConfig(AbstractConfig config) {
         this.logSegmentBytes = config.getInt(METADATA_LOG_SEGMENT_BYTES_CONFIG);
         this.logSegmentMinBytes = config.getInt(METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG);
         this.logSegmentMillis = config.getLong(METADATA_LOG_SEGMENT_MILLIS_CONFIG);
         this.retentionMaxBytes = config.getLong(METADATA_MAX_RETENTION_BYTES_CONFIG);
         this.retentionMillis = config.getLong(METADATA_MAX_RETENTION_MILLIS_CONFIG);
-        this.maxBatchSizeInBytes = maxBatchSizeInBytes;
-        this.maxFetchSizeInBytes = maxFetchSizeInBytes;
-        this.deleteDelayMillis = deleteDelayMillis;
+        this.maxBatchSizeInBytes = KafkaRaftClient.MAX_BATCH_SIZE_BYTES;
+        this.maxFetchSizeInBytes = KafkaRaftClient.MAX_FETCH_SIZE_BYTES;
+        this.deleteDelayMillis = ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT;
     }
 
     public int logSegmentBytes() {

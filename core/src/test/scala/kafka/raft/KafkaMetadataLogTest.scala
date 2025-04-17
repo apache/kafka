@@ -80,21 +80,13 @@ final class KafkaMetadataLogTest {
     props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG, Int.box(10 * 1024))
     assertThrows(classOf[InvalidConfigurationException], () => {
       val kafkaConfig = KafkaConfig.fromProps(props)
-      val metadataConfig = new MetadataLogConfig(
-        kafkaConfig,
-        KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-        KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-        ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT)
+      val metadataConfig = new MetadataLogConfig(kafkaConfig)
       buildMetadataLog(tempDir, mockTime, metadataConfig)
     })
 
     props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, Int.box(10240))
     val kafkaConfig = KafkaConfig.fromProps(props)
-    val metadataConfig = new MetadataLogConfig(
-      kafkaConfig,
-      KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-      KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-      ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT)
+    val metadataConfig = new MetadataLogConfig(kafkaConfig)
     buildMetadataLog(tempDir, mockTime, metadataConfig)
   }
 
