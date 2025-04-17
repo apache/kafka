@@ -553,7 +553,7 @@ final class KafkaMetadataLog private (
     if (expiredSnapshots.nonEmpty) {
       scheduler.scheduleOnce(
         "delete-snapshot-files",
-        () => KafkaMetadataLog.deleteSnapshotFiles(log.dir.toPath, expiredSnapshots, this),
+        () => KafkaMetadataLog.deleteSnapshotFiles(log.dir.toPath, expiredSnapshots),
         config.deleteDelayMillis
       )
     }
@@ -698,12 +698,10 @@ object KafkaMetadataLog extends Logging {
 
   private def deleteSnapshotFiles(
     logDir: Path,
-    expiredSnapshots: mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]],
-    logging: Logging
-  ): Unit = {
+    expiredSnapshots: mutable.TreeMap[OffsetAndEpoch, Option[FileRawSnapshotReader]]): Unit = {
     expiredSnapshots.foreach { case (snapshotId, snapshotReader) =>
       snapshotReader.foreach { reader =>
-        Utils.closeQuietly(reader, "reader")
+        Utils.closeQuietly(reader, "FileRawSnapshotReader")
       }
       Snapshots.deleteIfExists(logDir, snapshotId)
     }
