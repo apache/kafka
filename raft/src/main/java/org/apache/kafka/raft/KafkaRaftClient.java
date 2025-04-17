@@ -80,6 +80,7 @@ import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
 import org.apache.kafka.raft.internals.KRaftVersionUpgrade;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
+import org.apache.kafka.raft.internals.Pair;
 import org.apache.kafka.raft.internals.RecordsBatchReader;
 import org.apache.kafka.raft.internals.RemoveVoterHandler;
 import org.apache.kafka.raft.internals.ThresholdPurgatory;
@@ -2754,17 +2755,27 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     }
 
     /**
-     * Attempt to send a request. Return the time to wait before the request can be retried.
+     * Attempt to send a request.
+     *
+     * Return if the request was send and the time to wait before the request can be retried.
+     *
+     * @param currentTimeMs the current time
+     * @param destination the node receiving the request
+     * @param requestSupplier the function that creates the request
+     * @return the first element in the pair indicates if the request was sent; the second element
+     *         in the pair indicates the time to wait before retrying.
      */
-    private long maybeSendRequest(
+    private Pair<Boolean, Long> maybeSendRequest(
         long currentTimeMs,
         Node destination,
         Supplier<ApiMessage> requestSupplier
     )  {
+        var requestSent = false;
+
         if (requestManager.isBackingOff(destination, currentTimeMs)) {
             long remainingBackoffMs = requestManager.remainingBackoffMs(destination, currentTimeMs);
             logger.debug("Connection for {} is backing off for {} ms", destination, remainingBackoffMs);
-            return remainingBackoffMs;
+            return Pair.of(requestSent, remainingBackoffMs);
         }
 
         if (requestManager.isReady(destination, currentTimeMs)) {
@@ -2796,10 +2807,14 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
             requestManager.onRequestSent(destination, correlationId, currentTimeMs);
             channel.send(requestMessage);
+            requestSent = true;
             logger.trace("Sent outbound request: {}", requestMessage);
         }
 
-        return requestManager.remainingRequestTimeMs(destination, currentTimeMs);
+        return Pair.of(
+            requestSent,
+            requestManager.remainingRequestTimeMs(destination, currentTimeMs)
+        );
     }
 
     private EndQuorumEpochRequestData buildEndQuorumEpochRequest(
@@ -2821,7 +2836,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         long minBackoffMs = Long.MAX_VALUE;
         for (Node destination : destinations) {
-            long backoffMs = maybeSendRequest(currentTimeMs, destination, requestSupplier);
+            long backoffMs = maybeSendRequest(currentTimeMs, destination, requestSupplier).second();
             if (backoffMs < minBackoffMs) {
                 minBackoffMs = backoffMs;
             }
@@ -2841,7 +2856,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 currentTimeMs,
                 destinationSupplier.apply(voter.id()),
                 () -> requestSupplier.apply(voter)
-            );
+            ).second();
             minBackoffMs = Math.min(minBackoffMs, backoffMs);
         }
         return minBackoffMs;
@@ -2892,11 +2907,13 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
     private long maybeSendFetchToAnyBootstrap(long currentTimeMs) {
         Optional<Node> readyNode = requestManager.findReadyBootstrapServer(currentTimeMs);
-        return readyNode.map(node -> maybeSendRequest(
-            currentTimeMs,
-            node,
-            this::buildFetchRequest
-        )).orElseGet(() -> requestManager.backoffBeforeAvailableBootstrapServer(currentTimeMs));
+        return readyNode.map(
+            node -> maybeSendRequest(
+                currentTimeMs,
+                node,
+                this::buildFetchRequest
+            ).second()
+        ).orElseGet(() -> requestManager.backoffBeforeAvailableBootstrapServer(currentTimeMs));
     }
 
     private FetchSnapshotRequestData buildFetchSnapshotRequest(OffsetAndEpoch snapshotId, long snapshotSize) {
@@ -3206,12 +3223,16 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             transitionToProspective(currentTimeMs);
             backoffMs = 0;
         } else if (state.hasUpdateVoterPeriodExpired(currentTimeMs)) {
+            final boolean resetUpdateVoterTimer;
             if (partitionState.lastKraftVersion().isReconfigSupported() &&
                 partitionState.lastVoterSet().voterNodeNeedsUpdate(quorum.localVoterNodeOrThrow())
             ) {
                 // When the cluster supports reconfiguration, send an updated voter configuration
                 // if the one in the log doesn't match the local configuration.
-                backoffMs = maybeSendUpdateVoterRequest(state, currentTimeMs);
+                var sendResult = maybeSendUpdateVoterRequest(state, currentTimeMs);
+                // Update the request timer if the request was sent
+                resetUpdateVoterTimer = sendResult.first();
+                backoffMs = sendResult.second();
             } else if (!partitionState.lastKraftVersion().isReconfigSupported() &&
                 !state.hasUpdatedLeader()
             ) {
@@ -3219,11 +3240,19 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 // voter information to every new leader. This is because leaders don't persist voter
                 // information when reconfiguration has not been enabled. The updated voter information
                 // is required to be able to upgrade the cluster from kraft.version 0.
-                backoffMs = maybeSendUpdateVoterRequest(state, currentTimeMs);
+                var sendResult = maybeSendUpdateVoterRequest(state, currentTimeMs);
+                // Update the request timer if the request was sent
+                resetUpdateVoterTimer = sendResult.first();
+                backoffMs = sendResult.second();
             } else {
+                // Reset the update voter timer since there was no need to update the voter
+                resetUpdateVoterTimer = true;
                 backoffMs = maybeSendFetchToBestNode(state, currentTimeMs);
             }
-            state.resetUpdateVoterPeriod(currentTimeMs);
+
+            if (resetUpdateVoterTimer) {
+                state.resetUpdateVoterPeriod(currentTimeMs);
+            }
         } else {
             backoffMs = maybeSendFetchToBestNode(state, currentTimeMs);
         }
@@ -3281,7 +3310,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             currentTimeMs,
             state.leaderNode(channel.listenerName()),
             requestSupplier
-        );
+        ).second();
     }
 
     private UpdateRaftVoterRequestData buildUpdateVoterRequest() {
@@ -3294,7 +3323,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private long maybeSendUpdateVoterRequest(FollowerState state, long currentTimeMs) {
+    private Pair<Boolean, Long> maybeSendUpdateVoterRequest(FollowerState state, long currentTimeMs) {
         return maybeSendRequest(
             currentTimeMs,
             state.leaderNode(channel.listenerName()),

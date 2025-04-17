@@ -258,8 +258,18 @@ public final class UpdateVoterHandler {
                 inMemoryVoters.get(),
                 new KRaftVersionUpgrade.Voters(newVoters)
             );
-            if (!successful) {
-                log.info("Unable to update in-memory voters from {} to {}", inMemoryVoters, newVoters);
+            if (successful) {
+                log.info(
+                    "Updated in-memory voters from {} to {}",
+                    inMemoryVoters.get().voters(),
+                    newVoters
+                );
+            } else {
+                log.info(
+                    "Unable to update in-memory voters from {} to {}",
+                    inMemoryVoters.get().voters(),
+                    newVoters
+                );
                 return CompletableFuture.completedFuture(
                     RaftUtil.updateVoterResponse(
                         Errors.REQUEST_TIMED_OUT,
