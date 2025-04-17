@@ -32,8 +32,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.Endpoints
-import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.raft.{Endpoints, MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.FaultHandler
@@ -59,7 +58,7 @@ class RaftManagerTest {
       props.setProperty(ServerLogConfigs.LOG_DIR_CONFIG, value.toString)
     }
     metadataDir.foreach { value =>
-      props.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, value.toString)
+      props.setProperty(MetadataLogConfig.METADATA_LOG_DIR_CONFIG, value.toString)
     }
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, processRoles.mkString(","))
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
