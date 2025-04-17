@@ -445,10 +445,6 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
                                    Map<String, Uuid> topicIds) {
         LOGGER.debug("Received leadership changes for leaders: {} and followers: {}", partitionsBecomeLeader, partitionsBecomeFollower);
 
-        if (rlmConfig.isRemoteStorageSystemEnabled()) {
-            throw new KafkaException("RemoteLogManager is not configured when remote storage system is enabled");
-        }
-
         Map<TopicIdPartition, Boolean> leaderPartitions = filterPartitions(partitionsBecomeLeader)
                 .collect(Collectors.toMap(p -> new TopicIdPartition(topicIds.get(p.topicPartition().topic()), p.topicPartition()),
                         p -> p.unifiedLog().isPresent() ? p.unifiedLog().get().config().remoteLogCopyDisable() : false));
