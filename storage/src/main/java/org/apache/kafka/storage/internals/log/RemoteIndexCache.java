@@ -164,12 +164,12 @@ public class RemoteIndexCache implements Closeable {
     }
 
     // Visible for testing
-    public Cache<Uuid, Entry> internalCache() {
+    Cache<Uuid, Entry> internalCache() {
         return internalCache;
     }
 
     // Visible for testing
-    public File cacheDir() {
+    File cacheDir() {
         return cacheDir;
     }
 
@@ -486,32 +486,30 @@ public class RemoteIndexCache implements Closeable {
             this.entrySizeBytes = estimatedEntrySize();
         }
 
-        // Visible for testing
         public OffsetIndex offsetIndex() {
             return offsetIndex;
         }
 
-        // Visible for testing
         public TimeIndex timeIndex() {
             return timeIndex;
         }
 
-        // Visible for testing
         public TransactionIndex txnIndex() {
             return txnIndex;
         }
 
         // Visible for testing
-        public boolean isCleanStarted() {
+        boolean isCleanStarted() {
             return cleanStarted;
         }
 
         // Visible for testing
-        public boolean isMarkedForCleanup() {
+        boolean isMarkedForCleanup() {
             return markedForCleanup;
         }
 
-        public long entrySizeBytes() {
+        // Visible for testing
+        long entrySizeBytes() {
             return entrySizeBytes;
         }
 
@@ -550,7 +548,7 @@ public class RemoteIndexCache implements Closeable {
             }
         }
 
-        public void markForCleanup() throws IOException {
+        void markForCleanup() throws IOException {
             entryLock.writeLock().lock();
             try {
                 if (!markedForCleanup) {
@@ -564,7 +562,7 @@ public class RemoteIndexCache implements Closeable {
             }
         }
 
-        public void cleanup() throws IOException {
+        void cleanup() throws IOException {
             entryLock.writeLock().lock();
             try {
                 // no-op if clean is done already
@@ -675,28 +673,28 @@ public class RemoteIndexCache implements Closeable {
         return startOffset + "_" + segmentId.toString();
     }
 
-    public static File remoteOffsetIndexFile(File dir, RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
+    static File remoteOffsetIndexFile(File dir, RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         return new File(dir, remoteOffsetIndexFileName(remoteLogSegmentMetadata));
     }
 
-    public static String remoteOffsetIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
+    static String remoteOffsetIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         String prefix = generateFileNamePrefixForIndex(remoteLogSegmentMetadata);
         return prefix + LogFileUtils.INDEX_FILE_SUFFIX;
     }
 
-    public static File remoteTimeIndexFile(File dir, RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
+    static File remoteTimeIndexFile(File dir, RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         return new File(dir, remoteTimeIndexFileName(remoteLogSegmentMetadata));
     }
 
-    public static String remoteTimeIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
+    static String remoteTimeIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         return generateFileNamePrefixForIndex(remoteLogSegmentMetadata) + TIME_INDEX_FILE_SUFFIX;
     }
 
-    public static File remoteTransactionIndexFile(File dir, RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
+    static File remoteTransactionIndexFile(File dir, RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         return new File(dir, remoteTransactionIndexFileName(remoteLogSegmentMetadata));
     }
 
-    public static String remoteTransactionIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
+    static String remoteTransactionIndexFileName(RemoteLogSegmentMetadata remoteLogSegmentMetadata) {
         return generateFileNamePrefixForIndex(remoteLogSegmentMetadata) + LogFileUtils.TXN_INDEX_FILE_SUFFIX;
     }
 }
