@@ -98,7 +98,7 @@ public class ShareGroupConfig {
 
     public ShareGroupConfig(AbstractConfig config) {
         // Share groups are enabled in either of the two following cases:
-        // 1. The internal configuration to enable it is explicitly set
+        // 1. The internal configuration to enable it is explicitly set; or
         // 2. the share rebalance protocol is enabled.
         Set<String> protocols = config.getList(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG)
             .stream().map(String::toUpperCase).collect(Collectors.toSet());
