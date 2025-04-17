@@ -277,14 +277,6 @@ See [trogdor/README.md](trogdor/README.md).
 
 See [vagrant/README.md](vagrant/README.md).
 
-### Release Kafka ###
-
-See [release/README.md](release/README.md).
-
-### Official Documentation ###
-
-See [docs/README.md](docs/README.md).
-
 ### Kafka client examples ###
 
 See [examples/README.md](examples/README.md).

@@ -35,7 +35,6 @@ import org.apache.kafka.common.message.TxnOffsetCommitResponseData.TxnOffsetComm
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
-import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -48,6 +47,7 @@ import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetricsShard;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.timeline.SnapshotRegistry;
 import org.apache.kafka.timeline.TimelineHashMap;
 import org.apache.kafka.timeline.TimelineHashSet;
@@ -290,7 +290,7 @@ public class OffsetMetadataManager {
      * @param request The actual request.
      */
     private Group validateOffsetCommit(
-        RequestContext context,
+        AuthorizableRequestContext context,
         OffsetCommitRequestData request
     ) throws ApiException {
         Group group;
@@ -305,7 +305,7 @@ public class OffsetMetadataManager {
                 log.info("[GroupId {}] Creating a simple consumer group via manual offset commit.", request.groupId());
                 group = groupMetadataManager.getOrMaybeCreateClassicGroup(request.groupId(), true);
             } else {
-                if (context.header.apiVersion() >= 9) {
+                if (context.requestVersion() >= 9) {
                     // Starting from version 9 of the OffsetCommit API, we return GROUP_ID_NOT_FOUND
                     // if the group does not exist. This error works for both the old and the new
                     // protocol for clients using this version of the API.
@@ -323,7 +323,7 @@ public class OffsetMetadataManager {
             request.groupInstanceId(),
             request.generationIdOrMemberEpoch(),
             false,
-            context.apiVersion()
+            context.requestVersion()
         );
 
         return group;
@@ -336,7 +336,7 @@ public class OffsetMetadataManager {
      * @param request The actual request.
      */
     private Group validateTransactionalOffsetCommit(
-        RequestContext context,
+        AuthorizableRequestContext context,
         TxnOffsetCommitRequestData request
     ) throws ApiException {
         Group group;
@@ -360,7 +360,7 @@ public class OffsetMetadataManager {
                 request.groupInstanceId(),
                 request.generationId(),
                 true,
-                context.apiVersion()
+                context.requestVersion()
             );
         } catch (StaleMemberEpochException ex) {
             throw Errors.ILLEGAL_GENERATION.exception();
@@ -438,7 +438,7 @@ public class OffsetMetadataManager {
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<OffsetCommitResponseData, CoordinatorRecord> commitOffset(
-        RequestContext context,
+        AuthorizableRequestContext context,
         OffsetCommitRequestData request
     ) throws ApiException {
         Group group = validateOffsetCommit(context, request);
@@ -511,7 +511,7 @@ public class OffsetMetadataManager {
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<TxnOffsetCommitResponseData, CoordinatorRecord> commitTransactionalOffset(
-        RequestContext context,
+        AuthorizableRequestContext context,
         TxnOffsetCommitRequestData request
     ) throws ApiException {
         validateTransactionalOffsetCommit(context, request);
@@ -623,7 +623,7 @@ public class OffsetMetadataManager {
     /**
      * Deletes offsets as part of a DeleteGroups request.
      * Populates the record list passed in with records to update the state machine.
-     * Validations are done in {@link GroupCoordinatorShard#deleteGroups(RequestContext, List)}
+     * Validations are done in {@link GroupCoordinatorShard#deleteGroups(AuthorizableRequestContext, List)}
      *
      * @param groupId The id of the given group.
      * @param records The record list to populate.
