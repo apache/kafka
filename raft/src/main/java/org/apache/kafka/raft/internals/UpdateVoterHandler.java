@@ -213,24 +213,13 @@ public final class UpdateVoterHandler {
             );
         }
 
-        storeUpdatedVoters(
+        return storeUpdatedVoters(
             leaderState,
+            voterKey,
             inMemoryVoters,
             updatedVoters.get(),
+            requestListenerName,
             currentTimeMs
-        );
-
-        // Reply immediately and don't wait for the change to commit
-        return CompletableFuture.completedFuture(
-            RaftUtil.updateVoterResponse(
-                Errors.NONE,
-                requestListenerName,
-                new LeaderAndEpoch(
-                    localId,
-                    leaderState.epoch()
-                ),
-                leaderState.leaderEndpoints()
-            )
         );
     }
 
@@ -252,10 +241,12 @@ public final class UpdateVoterHandler {
             voters.updateVoterIgnoringDirectoryId(updatedVoter);
     }
 
-    private void storeUpdatedVoters(
+    private CompletableFuture<UpdateRaftVoterResponseData> storeUpdatedVoters(
         LeaderState<?> leaderState,
+        ReplicaKey voterKey,
         Optional<KRaftVersionUpgrade.Voters> inMemoryVoters,
         VoterSet newVoters,
+        ListenerName requestListenerName,
         long currentTimeMs
     ) {
         if (inMemoryVoters.isEmpty()) {
@@ -269,7 +260,33 @@ public final class UpdateVoterHandler {
             );
             if (!successful) {
                 log.info("Unable to update in-memory voters from {} to {}", inMemoryVoters, newVoters);
+                return CompletableFuture.completedFuture(
+                    RaftUtil.updateVoterResponse(
+                        Errors.REQUEST_TIMED_OUT,
+                        requestListenerName,
+                        new LeaderAndEpoch(
+                            localId,
+                            leaderState.epoch()
+                        ),
+                        leaderState.leaderEndpoints()
+                    )
+                );
             }
         }
+
+        // Reset the check quorum state since the leader received a successful request
+        leaderState.updateCheckQuorumForFollowingVoter(voterKey, currentTimeMs);
+
+        return CompletableFuture.completedFuture(
+            RaftUtil.updateVoterResponse(
+                Errors.NONE,
+                requestListenerName,
+                new LeaderAndEpoch(
+                    localId,
+                    leaderState.epoch()
+                ),
+                leaderState.leaderEndpoints()
+            )
+        );
     }
 }

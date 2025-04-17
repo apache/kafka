@@ -559,6 +559,7 @@ public class LeaderState<T> implements EpochState {
                 )
             );
         } else if (!inMemoryVoters.voters().supportsVersion(newVersion)) {
+            log.info("Not all voters support kraft version {}: {}", newVersion, inMemoryVoters.voters());
             throw new InvalidUpdateVersionException(
                 String.format(
                     "Invalid upgrade of %s to %s because not all of the voters support it",

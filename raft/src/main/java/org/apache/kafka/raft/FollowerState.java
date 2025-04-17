@@ -142,7 +142,7 @@ public class FollowerState implements EpochState {
     private long updateVoterPeriodMs() {
         // Allow for a few rounds of fetch request before attempting to update
         // the voter state
-        return fetchTimeoutMs * 3L;
+        return fetchTimeoutMs;
     }
 
     public boolean hasUpdateVoterPeriodExpired(long currentTimeMs) {

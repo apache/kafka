@@ -20,12 +20,12 @@ package org.apache.kafka.controller;
 import org.apache.kafka.clients.admin.FeatureUpdate;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.metadata.FeatureLevelRecord;
+import org.apache.kafka.common.metadata.NoOpRecord;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.ApiError;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.metadata.FinalizedControllerFeatures;
 import org.apache.kafka.metadata.VersionRange;
-import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.EligibleLeaderReplicasVersion;
 import org.apache.kafka.server.common.Feature;
@@ -57,7 +57,8 @@ public class FeatureControlManager {
         private LogContext logContext = null;
         private SnapshotRegistry snapshotRegistry = null;
         private QuorumFeatures quorumFeatures = null;
-        private RaftClient<?> raftClient = null;
+        private KRaftVersionAccessor kraftVersionAccessor = null;
+
         private ClusterFeatureSupportDescriber clusterSupportDescriber = new ClusterFeatureSupportDescriber() {
             @Override
             public Iterator<Entry<Integer, Map<String, VersionRange>>> brokerSupported() {
@@ -90,8 +91,8 @@ public class FeatureControlManager {
             return this;
         }
 
-        Builder setRaftClient(RaftClient<?> raftClient) {
-            this.raftClient = raftClient;
+        Builder setKRaftVersionAccessor(KRaftVersionAccessor kraftVersionAccessor) {
+            this.kraftVersionAccessor = kraftVersionAccessor;
             return this;
         }
 
@@ -105,8 +106,22 @@ public class FeatureControlManager {
                         MetadataVersion.latestProduction().featureLevel()));
                 quorumFeatures = new QuorumFeatures(0, localSupportedFeatures, List.of(0));
             }
-            if (raftClient == null) {
-                throw new IllegalStateException("Must specify and raft client");
+            if (kraftVersionAccessor == null) {
+                kraftVersionAccessor = new KRaftVersionAccessor() {
+                    private KRaftVersion version = KRaftVersion.LATEST_PRODUCTION;
+
+                    @Override
+                    public KRaftVersion kraftVersion() {
+                        return version;
+                    }
+
+                    @Override
+                    public void upgradeKRaftVersion(int epoch, KRaftVersion version, boolean validateOnly) {
+                        if (!validateOnly) {
+                            this.version = version;
+                        }
+                    }
+                };
             }
 
             return new FeatureControlManager(
@@ -114,7 +129,7 @@ public class FeatureControlManager {
                 quorumFeatures,
                 snapshotRegistry,
                 clusterSupportDescriber,
-                raftClient
+                kraftVersionAccessor
             );
         }
     }
@@ -142,23 +157,23 @@ public class FeatureControlManager {
     private final ClusterFeatureSupportDescriber clusterSupportDescriber;
 
     /**
-     * The interface that used to mutate the Raft log.
+     * The interface for reading and upgrading the kraft version.
      */
-    private final RaftClient<?> raftClient;
+    private final KRaftVersionAccessor kraftVersionAccessor;
 
     private FeatureControlManager(
         LogContext logContext,
         QuorumFeatures quorumFeatures,
         SnapshotRegistry snapshotRegistry,
         ClusterFeatureSupportDescriber clusterSupportDescriber,
-        RaftClient<?> raftClient
+        KRaftVersionAccessor kraftVersionAccessor
     ) {
         this.log = logContext.logger(FeatureControlManager.class);
         this.quorumFeatures = quorumFeatures;
         this.finalizedVersions = new TimelineHashMap<>(snapshotRegistry, 0);
         this.metadataVersion = new TimelineObject<>(snapshotRegistry, Optional.empty());
         this.clusterSupportDescriber = clusterSupportDescriber;
-        this.raftClient = raftClient;
+        this.kraftVersionAccessor = kraftVersionAccessor;
     }
 
     ControllerResult<ApiError> updateFeatures(
@@ -227,7 +242,7 @@ public class FeatureControlManager {
         if (featureName.equals(MetadataVersion.FEATURE_NAME)) {
             currentVersion = metadataVersionOrThrow().featureLevel();
         } else if (featureName.equals(KRaftVersion.FEATURE_NAME)) {
-            currentVersion = raftClient.kraftVersion().featureLevel();
+            currentVersion = kraftVersionAccessor.kraftVersion().featureLevel();
         } else {
             currentVersion = finalizedVersions.getOrDefault(featureName, (short) 0);
         }
@@ -260,7 +275,15 @@ public class FeatureControlManager {
         } else if (featureName.equals(KRaftVersion.FEATURE_NAME)) {
             if (upgradeType.equals(FeatureUpdate.UpgradeType.UPGRADE)) {
                 try {
-                    raftClient.upgradeKRaftVersion(currentClaimedEpoch, KRaftVersion.fromFeatureLevel(newVersion), validateOnly);
+                    kraftVersionAccessor.upgradeKRaftVersion(
+                        currentClaimedEpoch,
+                        KRaftVersion.fromFeatureLevel(newVersion),
+                        validateOnly
+                    );
+                    /* Add the noop record so that there is at least one offset to wait on to
+                     * complete the upgrade RPC
+                     */
+                    records.add(new ApiMessageAndVersion(new NoOpRecord(), (short) 0));
                     return ApiError.NONE;
                 } catch (ApiException e) {
                     return ApiError.fromThrowable(e);

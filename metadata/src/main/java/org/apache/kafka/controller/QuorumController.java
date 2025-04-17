@@ -1519,7 +1519,7 @@ public final class QuorumController implements Controller {
             setQuorumFeatures(quorumFeatures).
             setSnapshotRegistry(snapshotRegistry).
             setClusterFeatureSupportDescriber(clusterSupportDescriber).
-            setRaftClient(raftClient).
+            setKRaftVersionAccessor(new RaftClientKRaftVersionAccessor(raftClient)).
             build();
         this.clusterControl = new ClusterControlManager.Builder().
             setLogContext(logContext).

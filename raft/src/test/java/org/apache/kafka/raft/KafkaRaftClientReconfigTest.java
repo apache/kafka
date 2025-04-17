@@ -76,6 +76,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class KafkaRaftClientReconfigTest {
+    private static final int NUMBER_FETCH_TIMEOUTS_IN_UPDATE_PERIOD = 1;
 
     @Test
     public void testLeaderWritesBootstrapRecords() throws Exception {
@@ -2091,8 +2092,8 @@ public class KafkaRaftClientReconfigTest {
             .withLocalListeners(localListeners)
             .build();
 
-        // waiting for 3 times the fetch timeout sends an update voter
-        for (int i = 0; i < 3; i++) {
+        // waiting for FETCH request until the UpdateRaftVoter request is set
+        for (int i = 0; i < NUMBER_FETCH_TIMEOUTS_IN_UPDATE_PERIOD; i++) {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
@@ -2164,8 +2165,8 @@ public class KafkaRaftClientReconfigTest {
             .withLocalListeners(localListeners)
             .build();
 
-        // waiting for 3 times the fetch timeout sends an update voter
-        for (int i = 0; i < 3; i++) {
+        // waiting for FETCH request until the UpdateRaftVoter request is set
+        for (int i = 0; i < NUMBER_FETCH_TIMEOUTS_IN_UPDATE_PERIOD; i++) {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
@@ -2255,8 +2256,8 @@ public class KafkaRaftClientReconfigTest {
             .withLocalListeners(localListeners)
             .build();
 
-        // waiting for 3 times the fetch timeout sends an update voter
-        for (int i = 0; i < 3; i++) {
+        // waiting for FETCH request until the UpdateRaftVoter request is set
+        for (int i = 0; i < NUMBER_FETCH_TIMEOUTS_IN_UPDATE_PERIOD; i++) {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
@@ -2303,8 +2304,8 @@ public class KafkaRaftClientReconfigTest {
         context.deliverRequest(context.beginEpochRequest(newEpoch, voter1.id()));
         context.pollUntilResponse();
 
-        // waiting for 3 times the fetch timeout sends an update voter
-        for (int i = 0; i < 3; i++) {
+        // waiting for FETCH request until the UpdateRaftVoter request is set
+        for (int i = 0; i < NUMBER_FETCH_TIMEOUTS_IN_UPDATE_PERIOD; i++) {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             fetchRequest = context.assertSentFetchRequest();
@@ -2486,8 +2487,8 @@ public class KafkaRaftClientReconfigTest {
             .withElectedLeader(epoch, voter1.id())
             .build();
 
-        // waiting for 3 times the fetch timeout sends an update voter
-        for (int i = 0; i < 3; i++) {
+        // waiting for FETCH request until the UpdateRaftVoter request is set
+        for (int i = 0; i < NUMBER_FETCH_TIMEOUTS_IN_UPDATE_PERIOD; i++) {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
@@ -2547,8 +2548,8 @@ public class KafkaRaftClientReconfigTest {
             .withLocalListeners(localListeners)
             .build();
 
-        // waiting for 3 times the fetch timeout sends an update voter
-        for (int i = 0; i < 3; i++) {
+        // waiting for FETCH request until the UpdateRaftVoter request is set
+        for (int i = 0; i < NUMBER_FETCH_TIMEOUTS_IN_UPDATE_PERIOD; i++) {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();
             RaftRequest.Outbound fetchRequest = context.assertSentFetchRequest();
