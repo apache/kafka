@@ -31,7 +31,7 @@ import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.DynamicThreadPool
 import org.apache.kafka.server.authorizer._
@@ -673,11 +673,11 @@ class DynamicBrokerConfigTest {
   @Test
   def testNonInternalValuesDoesNotExposeInternalConfigs(): Unit = {
     val props = TestUtils.createBrokerConfig(0, port = 8181)
-    props.put(KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, "1024")
+    props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, "1024")
     val config = new KafkaConfig(props)
-    assertFalse(config.nonInternalValues.containsKey(KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG))
+    assertFalse(config.nonInternalValues.containsKey(MetadataLogConfig.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG))
     config.updateCurrentConfig(new KafkaConfig(props))
-    assertFalse(config.nonInternalValues.containsKey(KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG))
+    assertFalse(config.nonInternalValues.containsKey(MetadataLogConfig.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG))
   }
 
   @Test

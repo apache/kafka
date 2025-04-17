@@ -36,7 +36,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.network.EndPoint
-import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.server.config.{DelegationTokenManagerConfigs, KRaftConfigs, QuotaConfig, ReplicationConfigs, ServerConfigs, ServerLogConfigs, ServerTopicConfigSynonyms}
 import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
 import org.apache.kafka.server.metrics.MetricConfigs
@@ -44,7 +44,6 @@ import org.apache.kafka.storage.internals.log.CleanerConfig
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.function.Executable
-
 import org.apache.kafka.common.test.{TestUtils => JTestUtils}
 
 import scala.jdk.CollectionConverters._
@@ -790,13 +789,13 @@ class KafkaConfigTest {
         case KRaftConfigs.BROKER_HEARTBEAT_INTERVAL_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KRaftConfigs.BROKER_SESSION_TIMEOUT_MS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KRaftConfigs.NODE_ID_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case KRaftConfigs.METADATA_LOG_DIR_CONFIG => // ignore string
-        case KRaftConfigs.METADATA_LOG_SEGMENT_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case KRaftConfigs.METADATA_LOG_SEGMENT_MILLIS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case KRaftConfigs.METADATA_MAX_RETENTION_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
-        case KRaftConfigs.METADATA_MAX_RETENTION_MILLIS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case MetadataLogConfig.METADATA_LOG_DIR_CONFIG => // ignore string
+        case MetadataLogConfig.METADATA_LOG_SEGMENT_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case MetadataLogConfig.METADATA_MAX_RETENTION_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case MetadataLogConfig.METADATA_MAX_RETENTION_MILLIS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number")
         case KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG => // ignore string
-        case KRaftConfigs.METADATA_MAX_IDLE_INTERVAL_MS_CONFIG  => assertPropertyInvalid(baseProperties, name, "not_a_number")
+        case MetadataLogConfig.METADATA_MAX_IDLE_INTERVAL_MS_CONFIG  => assertPropertyInvalid(baseProperties, name, "not_a_number")
 
         case ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG => //ignore string
         case ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG => //ignore string
@@ -1494,7 +1493,7 @@ class KafkaConfigTest {
     val props = new Properties()
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, "broker")
     props.setProperty(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
-    props.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, metadataDir)
+    props.setProperty(MetadataLogConfig.METADATA_LOG_DIR_CONFIG, metadataDir)
     props.setProperty(ServerLogConfigs.LOG_DIR_CONFIG, dataDir)
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, "1")
     props.setProperty(QuorumConfig.QUORUM_VOTERS_CONFIG, "2@localhost:9093")
@@ -1674,12 +1673,12 @@ class KafkaConfigTest {
     val validValue = 100
     val props = new Properties()
     props.putAll(kraftProps())
-    props.setProperty(KRaftConfigs.METADATA_SNAPSHOT_MAX_INTERVAL_MS_CONFIG, validValue.toString)
+    props.setProperty(MetadataLogConfig.METADATA_SNAPSHOT_MAX_INTERVAL_MS_CONFIG, validValue.toString)
 
     val config = KafkaConfig.fromProps(props)
     assertEquals(validValue, config.metadataSnapshotMaxIntervalMs)
 
-    props.setProperty(KRaftConfigs.METADATA_SNAPSHOT_MAX_INTERVAL_MS_CONFIG, "-1")
+    props.setProperty(MetadataLogConfig.METADATA_SNAPSHOT_MAX_INTERVAL_MS_CONFIG, "-1")
     val errorMessage = assertThrows(classOf[ConfigException], () => KafkaConfig.fromProps(props)).getMessage
 
     assertEquals(
