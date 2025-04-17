@@ -1461,7 +1461,7 @@ public class DelayedShareFetchTest {
 
         SharePartition sp0 = mock(SharePartition.class);
 
-        // sp0 is acquirable, sp1 is not acquirable.
+        // sp0 is acquirable.
         when(sp0.maybeAcquireFetchLock()).thenReturn(true);
         when(sp0.canAcquireRecords()).thenReturn(true);
 
@@ -1530,7 +1530,7 @@ public class DelayedShareFetchTest {
         SharePartition sp1 = mock(SharePartition.class);
         SharePartition sp2 = mock(SharePartition.class);
 
-        // Except tp3, all the topic partitions are acquirable.
+        // All the topic partitions are acquirable.
         when(sp0.maybeAcquireFetchLock()).thenReturn(true);
         when(sp1.maybeAcquireFetchLock()).thenReturn(true);
         when(sp2.maybeAcquireFetchLock()).thenReturn(true);
