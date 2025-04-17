@@ -331,8 +331,17 @@ public class DelayedShareFetch extends DelayedOperation {
                 releasePartitionLocks(topicPartitionData.keySet());
                 partitionsAcquired.clear();
                 localPartitionsAlreadyFetched.clear();
+                return forceComplete();
+            } else {
+                boolean completedByMe = forceComplete();
+                // If invocation of forceComplete is not successful, then that means the request is already completed
+                // hence release the acquired locks. This can occur in case of remote storage fetch if there is a thread that
+                // completes the operation (due to expiration) right before a different thread is about to enter tryComplete.
+                if (!completedByMe) {
+                    releasePartitionLocks(partitionsAcquired.keySet());
+                }
+                return completedByMe;
             }
-            return forceComplete();
         }
     }
 
