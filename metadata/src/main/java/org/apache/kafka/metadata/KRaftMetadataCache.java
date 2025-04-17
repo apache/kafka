@@ -44,7 +44,6 @@ import org.apache.kafka.server.common.MetadataVersion;
 
 import org.slf4j.Logger;
 
-import java.util.AbstractMap;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -55,8 +54,6 @@ import java.util.Map.Entry;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.Set;
-import java.util.Spliterator;
-import java.util.Spliterators;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -64,7 +61,7 @@ import java.util.function.Function;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
-import java.util.stream.StreamSupport;
+import java.util.stream.Stream;
 
 public class KRaftMetadataCache implements MetadataCache {
     private final Logger log;
@@ -82,40 +79,60 @@ public class KRaftMetadataCache implements MetadataCache {
         this.log = new LogContext("[MetadataCache brokerId=" + brokerId + "] ").logger(KRaftMetadataCache.class);
     }
 
-    // This method is the main hotspot when it comes to the performance of metadata requests,
-    // we should be careful about adding additional logic here.
-    // filterUnavailableEndpoints exists to support v0 MetadataResponses
-    private List<Integer> maybeFilterAliveReplicas(MetadataImage image, int[] brokers, ListenerName listenerName, boolean filterUnavailableEndpoints) {
-        if (!filterUnavailableEndpoints) {
-            return Replicas.toList(brokers);
-        } else {
-            List<Integer> res = new ArrayList<>(brokers.length);
-            for (int brokerId : brokers) {
-                Optional.ofNullable(image.cluster().broker(brokerId)).ifPresent(b -> {
-                    if (!b.fenced() && b.listeners().containsKey(listenerName.value())) {
-                        res.add(brokerId);
-                    }
-                });
+    /**
+     * Filter the alive replicas. It returns all brokers when filterUnavailableEndpoints is false.
+     * Otherwise, it filters the brokers that are fenced or do not have the listener.
+     * <p>
+     * This method is the main hotspot when it comes to the performance of metadata requests,
+     * we should be careful about adding additional logic here.
+     * @param image                      The metadata image.
+     * @param brokers                    The list of brokers to filter.
+     * @param listenerName               The listener name.
+     * @param filterUnavailableEndpoints Whether to filter the unavailable endpoints. This field is to support v0 MetadataResponse.
+     */
+    private List<Integer> maybeFilterAliveReplicas(
+        MetadataImage image,
+        int[] brokers,
+        ListenerName listenerName,
+        boolean filterUnavailableEndpoints
+    ) {
+        if (!filterUnavailableEndpoints) return Replicas.toList(brokers);
+        List<Integer> res = new ArrayList<>(brokers.length);
+        for (int brokerId : brokers) {
+            BrokerRegistration broker = image.cluster().broker(brokerId);
+            if (broker != null && !broker.fenced() && broker.listeners().containsKey(listenerName.value())) {
+                res.add(brokerId);
             }
-            return res;
         }
+        return res;
     }
 
     public MetadataImage currentImage() {
         return currentImage;
     }
 
-    // errorUnavailableEndpoints exists to support v0 MetadataResponses
-    // If errorUnavailableListeners=true, return LISTENER_NOT_FOUND if listener is missing on the broker.
-    // Otherwise, return LEADER_NOT_AVAILABLE for broker unavailable and missing listener (Metadata response v5 and below).
-    private Optional<Iterator<MetadataResponsePartition>> getPartitionMetadata(
+    /**
+     * Get the partition metadata for the given topic and listener. If errorUnavailableEndpoints is true,
+     * it uses all brokers in the partitions. Otherwise, it filters the unavailable endpoints.
+     * If errorUnavailableListeners is true, it returns LISTENER_NOT_FOUND if the listener is missing on the broker.
+     * Otherwise, it returns LEADER_NOT_AVAILABLE for broker unavailable.
+     *
+     * @param image                     The metadata image.
+     * @param topicName                 The name of the topic.
+     * @param listenerName              The listener name.
+     * @param errorUnavailableEndpoints Whether to filter the unavailable endpoints. This field is to support v0 MetadataResponse.
+     * @param errorUnavailableListeners Whether to return LISTENER_NOT_FOUND or LEADER_NOT_AVAILABLE.
+     */
+    private List<MetadataResponsePartition> getPartitionMetadata(
         MetadataImage image,
         String topicName,
         ListenerName listenerName,
         boolean errorUnavailableEndpoints,
         boolean errorUnavailableListeners
     ) {
-        return Optional.ofNullable(image.topics().getTopic(topicName)).map(topic -> topic.partitions().entrySet().stream().map(entry -> {
+        TopicImage topicImage = image.topics().getTopic(topicName);
+        if (topicImage == null) return List.of();
+        return topicImage.partitions().entrySet().stream().map(entry -> {
             int partitionId = entry.getKey();
             PartitionRegistration partition = entry.getValue();
             List<Integer> filteredReplicas = maybeFilterAliveReplicas(image, partition.replicas, listenerName, errorUnavailableEndpoints);
@@ -158,7 +175,7 @@ public class KRaftMetadataCache implements MetadataCache {
                     .setIsrNodes(filteredIsr)
                     .setOfflineReplicas(offlineReplicas);
             }
-        }).iterator());
+        }).toList();
     }
 
     /**
@@ -181,57 +198,40 @@ public class KRaftMetadataCache implements MetadataCache {
         int maxCount
     ) {
         TopicImage topic = image.topics().getTopic(topicName);
-        if (topic == null) {
-            return new AbstractMap.SimpleEntry<>(Optional.empty(), -1);
-        } else {
-            List<DescribeTopicPartitionsResponsePartition> result = new ArrayList<>();
-            Set<Integer> partitions = topic.partitions().keySet();
-            int upperIndex = Math.min(topic.partitions().size(), startIndex + maxCount);
-            int nextIndex = (upperIndex < partitions.size()) ? upperIndex : -1;
-            for (int partitionId = startIndex; partitionId < upperIndex; partitionId++) {
-                PartitionRegistration partition = topic.partitions().get(partitionId);
-                if (partition != null) {
-                    List<Integer> filteredReplicas = maybeFilterAliveReplicas(image, partition.replicas, listenerName, false);
-                    List<Integer> filteredIsr = maybeFilterAliveReplicas(image, partition.isr, listenerName, false);
-                    List<Integer> offlineReplicas = getOfflineReplicas(image, partition, listenerName);
-                    Optional<Node> maybeLeader = getAliveEndpoint(image, partition.leader, listenerName);
-                    if (maybeLeader.isEmpty()) {
-                        result.add(new DescribeTopicPartitionsResponsePartition()
-                            .setPartitionIndex(partitionId)
-                            .setLeaderId(MetadataResponse.NO_LEADER_ID)
-                            .setLeaderEpoch(partition.leaderEpoch)
-                            .setReplicaNodes(filteredReplicas)
-                            .setIsrNodes(filteredIsr)
-                            .setOfflineReplicas(offlineReplicas)
-                            .setEligibleLeaderReplicas(Replicas.toList(partition.elr))
-                            .setLastKnownElr(Replicas.toList(partition.lastKnownElr)));
-                    } else {
-                        result.add(new DescribeTopicPartitionsResponsePartition()
-                            .setPartitionIndex(partitionId)
-                            .setLeaderId(maybeLeader.get().id())
-                            .setLeaderEpoch(partition.leaderEpoch)
-                            .setReplicaNodes(filteredReplicas)
-                            .setIsrNodes(filteredIsr)
-                            .setOfflineReplicas(offlineReplicas)
-                            .setEligibleLeaderReplicas(Replicas.toList(partition.elr))
-                            .setLastKnownElr(Replicas.toList(partition.lastKnownElr)));
-                    }
-                } else {
-                    log.warn("The partition {} does not exist for {}", partitionId, topicName);
-                }
+        if (topic == null) return Map.entry(Optional.empty(), -1);
+        List<DescribeTopicPartitionsResponsePartition> result = new ArrayList<>();
+        final Set<Integer> partitions = topic.partitions().keySet();
+        final int upperIndex = Math.min(topic.partitions().size(), startIndex + maxCount);
+        for (int partitionId = startIndex; partitionId < upperIndex; partitionId++) {
+            PartitionRegistration partition = topic.partitions().get(partitionId);
+            if (partition == null) {
+                log.warn("The partition {} does not exist for {}", partitionId, topicName);
+                continue;
             }
-            return new AbstractMap.SimpleEntry<>(Optional.of(result), nextIndex);
+            List<Integer> filteredReplicas = maybeFilterAliveReplicas(image, partition.replicas, listenerName, false);
+            List<Integer> filteredIsr = maybeFilterAliveReplicas(image, partition.isr, listenerName, false);
+            List<Integer> offlineReplicas = getOfflineReplicas(image, partition, listenerName);
+            Optional<Node> maybeLeader = getAliveEndpoint(image, partition.leader, listenerName);
+            result.add(new DescribeTopicPartitionsResponsePartition()
+                .setPartitionIndex(partitionId)
+                .setLeaderId(maybeLeader.map(Node::id).orElse(MetadataResponse.NO_LEADER_ID))
+                .setLeaderEpoch(partition.leaderEpoch)
+                .setReplicaNodes(filteredReplicas)
+                .setIsrNodes(filteredIsr)
+                .setOfflineReplicas(offlineReplicas)
+                .setEligibleLeaderReplicas(Replicas.toList(partition.elr))
+                .setLastKnownElr(Replicas.toList(partition.lastKnownElr)));
         }
+        return Map.entry(Optional.of(result), (upperIndex < partitions.size()) ? upperIndex : -1);
     }
 
     private List<Integer> getOfflineReplicas(MetadataImage image, PartitionRegistration partition, ListenerName listenerName) {
         List<Integer> offlineReplicas = new ArrayList<>(0);
         for (int brokerId : partition.replicas) {
-            Optional.ofNullable(image.cluster().broker(brokerId)).ifPresentOrElse(broker -> {
-                if (isReplicaOffline(partition, listenerName, broker)) {
-                    offlineReplicas.add(brokerId);
-                }
-            }, () -> offlineReplicas.add(brokerId));
+            BrokerRegistration broker = image.cluster().broker(brokerId);
+            if (broker == null || isReplicaOffline(partition, listenerName, broker)) {
+                offlineReplicas.add(brokerId);
+            }
         }
         return offlineReplicas;
     }
@@ -251,10 +251,10 @@ public class KRaftMetadataCache implements MetadataCache {
      * @return None if broker is not alive or if the broker does not have a listener named `listenerName`.
      */
     private Optional<Node> getAliveEndpoint(MetadataImage image, int id, ListenerName listenerName) {
-        return Optional.ofNullable(image.cluster().broker(id)).flatMap(b -> b.node(listenerName.value()));
+        return image.cluster().broker(id) == null ? Optional.empty() :
+            image.cluster().broker(id).node(listenerName.value());
     }
 
-    // errorUnavailableEndpoints exists to support v0 MetadataResponses
     @Override
     public List<MetadataResponseTopic> getTopicMetadata(
         Set<String> topics,
@@ -263,17 +263,16 @@ public class KRaftMetadataCache implements MetadataCache {
         boolean errorUnavailableListeners
     ) {
         MetadataImage image = currentImage;
-        return topics.stream().flatMap(topic ->
-            getPartitionMetadata(image, topic, listenerName, errorUnavailableEndpoints, errorUnavailableListeners)
-                .stream()
-                .map(partitionMetadata ->
-                    new MetadataResponseTopic().setErrorCode(Errors.NONE.code())
-                        .setName(topic)
-                        .setTopicId(Optional.ofNullable(image.topics().getTopic(topic).id()).orElse(Uuid.ZERO_UUID))
-                        .setIsInternal(Topic.isInternal(topic))
-                        .setPartitions(StreamSupport.stream(Spliterators.spliteratorUnknownSize(partitionMetadata, Spliterator.ORDERED), false)
-                            .collect(Collectors.toList())))
-        ).collect(Collectors.toList());
+        return topics.stream().flatMap(topic -> {
+            List<MetadataResponsePartition> partitions = getPartitionMetadata(image, topic, listenerName, errorUnavailableEndpoints, errorUnavailableListeners);
+            if (partitions.isEmpty()) return Stream.empty();
+            return Stream.of(new MetadataResponseTopic()
+                .setErrorCode(Errors.NONE.code())
+                .setName(topic)
+                .setTopicId(image.topics().getTopic(topic) == null ? Uuid.ZERO_UUID : image.topics().getTopic(topic).id())
+                .setIsInternal(Topic.isInternal(topic))
+                .setPartitions(partitions));
+        }).toList();
     }
 
     @Override
@@ -346,7 +345,7 @@ public class KRaftMetadataCache implements MetadataCache {
 
     @Override
     public Uuid getTopicId(String topicName) {
-        return Optional.ofNullable(currentImage.topics().topicsByName().get(topicName)).map(TopicImage::id).orElse(Uuid.ZERO_UUID);
+        return currentImage.topics().getTopic(topicName) == null ? Uuid.ZERO_UUID : currentImage.topics().getTopic(topicName).id();
     }
 
     @Override
@@ -356,17 +355,17 @@ public class KRaftMetadataCache implements MetadataCache {
 
     @Override
     public boolean hasAliveBroker(int brokerId) {
-        return Optional.ofNullable(currentImage.cluster().broker(brokerId)).filter(b -> !b.fenced()).isPresent();
+        return currentImage.cluster().broker(brokerId) != null && !currentImage.cluster().broker(brokerId).fenced();
     }
 
     @Override
     public boolean isBrokerFenced(int brokerId) {
-        return Optional.ofNullable(currentImage.cluster().broker(brokerId)).filter(BrokerRegistration::fenced).isPresent();
+        return currentImage.cluster().broker(brokerId) != null && currentImage.cluster().broker(brokerId).fenced();
     }
 
     @Override
     public boolean isBrokerShuttingDown(int brokerId) {
-        return Optional.ofNullable(currentImage.cluster().broker(brokerId)).filter(BrokerRegistration::inControlledShutdown).isPresent();
+        return currentImage.cluster().broker(brokerId) != null && currentImage.cluster().broker(brokerId).inControlledShutdown();
     }
 
     @Override
@@ -424,31 +423,27 @@ public class KRaftMetadataCache implements MetadataCache {
 
     @Override
     public Map<Integer, Node> getPartitionReplicaEndpoints(TopicPartition tp, ListenerName listenerName) {
+        TopicImage topic = currentImage.topics().getTopic(tp.topic());
+        if (topic == null) return Map.of();
+        PartitionRegistration partition = topic.partitions().get(tp.partition());
+        if (partition == null) return Map.of();
         Map<Integer, Node> result = new HashMap<>();
-        Optional.ofNullable(currentImage.topics().getTopic(tp.topic()))
-            .flatMap(topic -> Optional.ofNullable(topic.partitions().get(tp.partition())))
-            .ifPresent(partition -> {
-                for (int replicaId : partition.replicas) {
-                    BrokerRegistration broker = currentImage.cluster().broker(replicaId);
-                    if (broker != null && !broker.fenced()) {
-                        broker.node(listenerName.value()).ifPresent(node -> {
-                            if (!node.isEmpty()) {
-                                result.put(replicaId, node);
-                            }
-                        });
+        for (int replicaId : partition.replicas) {
+            BrokerRegistration broker = currentImage.cluster().broker(replicaId);
+            if (broker != null && !broker.fenced()) {
+                broker.node(listenerName.value()).ifPresent(node -> {
+                    if (!node.isEmpty()) {
+                        result.put(replicaId, node);
                     }
-                }
-            });
+                });
+            }
+        }
         return result;
     }
 
     @Override
     public Optional<Integer> getRandomAliveBrokerId() {
-        return getRandomAliveBroker(currentImage);
-    }
-
-    private Optional<Integer> getRandomAliveBroker(MetadataImage image) {
-        List<Integer> aliveBrokers = image.cluster().brokers().values().stream()
+        List<Integer> aliveBrokers = currentImage.cluster().brokers().values().stream()
             .filter(Predicate.not(BrokerRegistration::fenced))
             .map(BrokerRegistration::id).toList();
         if (aliveBrokers.isEmpty()) {
