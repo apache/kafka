@@ -33,7 +33,6 @@ import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse
 import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.RequestLocal
-import org.apache.kafka.server.config.KRaftConfigs
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
 import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -57,6 +56,7 @@ import org.mockito.Mockito.{doAnswer, doThrow, spy}
 import net.jqwik.api.AfterFailureMode
 import net.jqwik.api.ForAll
 import net.jqwik.api.Property
+import org.apache.kafka.server.config.KRaftConfigs
 
 import java.io._
 import java.nio.ByteBuffer
