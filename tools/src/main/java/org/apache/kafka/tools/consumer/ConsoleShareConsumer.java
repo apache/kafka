@@ -17,6 +17,7 @@
 package org.apache.kafka.tools.consumer;
 
 import org.apache.kafka.clients.consumer.AcknowledgeType;
+import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.KafkaShareConsumer;
 import org.apache.kafka.clients.consumer.ShareConsumer;
@@ -36,6 +37,7 @@ import java.time.Duration;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.Optional;
+import java.util.Properties;
 import java.util.concurrent.CountDownLatch;
 
 
@@ -66,7 +68,11 @@ public class ConsoleShareConsumer {
         messageCount = 0;
         long timeoutMs = opts.timeoutMs() >= 0 ? opts.timeoutMs() : Long.MAX_VALUE;
 
-        ShareConsumer<byte[], byte[]> consumer = new KafkaShareConsumer<>(opts.consumerProps(), new ByteArrayDeserializer(), new ByteArrayDeserializer());
+        Properties consumerProps = opts.consumerProps();
+        // Set share acknowledgement mode to explicit.
+        consumerProps.put(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, "explicit");
+
+        ShareConsumer<byte[], byte[]> consumer = new KafkaShareConsumer<>(consumerProps, new ByteArrayDeserializer(), new ByteArrayDeserializer());
         ConsumerWrapper consumerWrapper = new ConsumerWrapper(opts.topicArg(), consumer, timeoutMs);
 
         addShutdownHook(consumerWrapper);

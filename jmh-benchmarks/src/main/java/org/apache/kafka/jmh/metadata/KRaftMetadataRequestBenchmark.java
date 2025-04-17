@@ -195,7 +195,7 @@ public class KRaftMetadataRequestBenchmark {
                 setConfigRepository(new MockConfigRepository()).
                 setMetadataCache(metadataCache).
                 setMetrics(metrics).
-                setAuthorizer(Optional.empty()).
+                setAuthorizerPlugin(Optional.empty()).
                 setQuotas(quotaManagers).
                 setFetchManager(fetchManager).
                 setSharePartitionManager(sharePartitionManager).
