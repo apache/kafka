@@ -19,6 +19,7 @@ package org.apache.kafka.clients.admin;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Set;
