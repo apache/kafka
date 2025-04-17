@@ -3732,9 +3732,10 @@ public class RemoteLogManagerTest {
         appendRLMConfig(props);
         props.put(RemoteLogManagerConfig.REMOTE_STORAGE_MANAGER_CLASS_NAME_PROP, MonitorableNoOpRemoteStorageManager.class.getName());
         props.put(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_CLASS_NAME_PROP, MonitorableNoOpRemoteLogMetadataManager.class.getName());
-        KafkaConfig config = KafkaConfig.fromProps(props);
+        config = configs(props);
+
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(
-                config.remoteLogManagerConfig(),
+                config,
                 brokerId,
                 logDir,
                 clusterId,
