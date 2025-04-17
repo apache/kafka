@@ -73,7 +73,7 @@ public class RaftVoterEndpoint {
     /**
      * @deprecated Since 4.1. Use {@link #listener()} instead. This function will be removed in 5.0.
      */
-    @Deprecated
+    @Deprecated(since = "4.1", forRemoval = true)
     public String name() {
         return listener;
     }

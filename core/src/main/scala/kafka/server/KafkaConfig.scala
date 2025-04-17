@@ -22,7 +22,7 @@ import java.util.concurrent.TimeUnit
 import java.util.Properties
 import kafka.utils.{CoreUtils, Logging}
 import kafka.utils.Implicits._
-import org.apache.kafka.common.{Endpoint, Reconfigurable}
+import org.apache.kafka.common.{Endpoint, KafkaException, Reconfigurable}
 import org.apache.kafka.common.config.{ConfigDef, ConfigException, ConfigResource, TopicConfig}
 import org.apache.kafka.common.config.ConfigDef.ConfigKey
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
@@ -143,6 +143,14 @@ object KafkaConfig {
       output.put(KRaftConfigs.NODE_ID_CONFIG, brokerId)
     }
     output
+  }
+
+  private def parseListenerName(connectionString: String): String = {
+    val firstColon = connectionString.indexOf(':')
+    if (firstColon < 0) {
+      throw new KafkaException(s"Unable to parse a listener name from $connectionString")
+    }
+    connectionString.substring(0, firstColon).toUpperCase(util.Locale.ROOT)
   }
 }
 
@@ -572,7 +580,7 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
       // check controller listener names (they won't appear in listeners when process.roles=broker)
       // as well as listeners for occurrences of SSL or SASL_*
       if (controllerListenerNames.exists(isSslOrSasl) ||
-        Csv.parseCsvList(getString(SocketServerConfigs.LISTENERS_CONFIG)).asScala.exists(listenerValue => isSslOrSasl(Endpoint.parseListenerName(listenerValue)))) {
+        Csv.parseCsvList(getString(SocketServerConfigs.LISTENERS_CONFIG)).asScala.exists(listenerValue => isSslOrSasl(KafkaConfig.parseListenerName(listenerValue)))) {
         mapValue // don't add default mappings since we found something that is SSL or SASL_*
       } else {
         // add the PLAINTEXT mappings for all controller listener names that are not explicitly PLAINTEXT
