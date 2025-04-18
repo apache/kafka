@@ -1617,7 +1617,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         /**
          * Creates a new PreparedTxnState from a serialized string representation
          * 
-         * @param serializedState       the serialized string to deserialize.
+         * @param serializedState               The serialized string to deserialize.
          * @throws IllegalArgumentException if the serialized string is not in the expected format
          */
         public PreparedTxnState(String serializedState) {
@@ -1643,28 +1643,18 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         /**
          * Creates a new PreparedTxnState with the given producer ID and epoch
          * 
-         * @param producerId the producer ID
-         * @param epoch the producer epoch
+         * @param producerId        The producer ID
+         * @param epoch             The producer epoch
          */
         public PreparedTxnState(long producerId, short epoch) {
             this.producerId = producerId;
             this.epoch = epoch;
         }
-        
-        /**
-         * Returns the producer ID
-         * 
-         * @return the producer ID
-         */
+
         public long producerId() {
             return producerId;
         }
-        
-        /**
-         * Returns the producer epoch
-         * 
-         * @return the producer epoch
-         */
+
         public short epoch() {
             return epoch;
         }
