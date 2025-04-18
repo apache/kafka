@@ -785,6 +785,63 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
+     * Prepares the current transaction for a two-phase commit. This method will flush all pending messages
+     * and transition the producer into a mode where only {@link #commitTransaction()}, {@link #abortTransaction()},
+     * or completeTransaction(PreparedTxnState) may be called.
+     * <p>
+     * This method is used as part of a two-phase commit protocol:
+     * <ol>
+     *   <li>Prepare the transaction by calling this method. This returns a {@link PreparedTxnState} if successful.</li>
+     *   <li>Make any external system changes that need to be atomic with this transaction.</li>
+     *   <li>Complete the transaction by calling {@link #commitTransaction()} or {@link #abortTransaction()}.</li>
+     * </ol>
+     * <p>
+     * If the 2PC (two-phase commit) feature is not enabled, an {@code INVALID_TXN_STATE} error will be returned.
+     * <p>
+     * After this method returns successfully, the producer is in a prepared state and no further messages may be sent
+     * until the transaction is completed via {@link #commitTransaction()} or {@link #abortTransaction()}.
+     *
+     * @return the prepared transaction state to use when completing the transaction
+     * @throws IllegalStateException if no transactional.id has been configured or no transaction has been started
+     * @throws org.apache.kafka.common.errors.InvalidTxnStateException if the producer is not in a state where preparing
+     *         a transaction is possible, such as if the transaction has already been prepared or 2PC is not enabled
+     * @throws ProducerFencedException fatal error indicating another producer with the same transactional.id is active
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
+     *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
+     * @throws org.apache.kafka.common.errors.AuthorizationException fatal error indicating that the configured
+     *         transactional.id is not authorized. See the exception for more details
+     * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
+     * @throws TimeoutException if the time taken for preparing the transaction has surpassed <code>max.block.ms</code>
+     * @throws InterruptException if the thread is interrupted while blocked
+     */
+    @Override
+    public PreparedTxnState prepareTransaction() throws ProducerFencedException {
+        throwIfNoTransactionManager();
+        throwIfProducerClosed();
+
+        if (!transactionManager.isTransactionV2Enabled() || !transactionManager.is2PCEnabled()) {
+            throw new IllegalStateException("Cannot prepare a transaction when 2PC is not enabled");
+        }
+
+        // Flush all pending messages first to make sure everything is sent
+        log.info("Preparing transaction for two-phase commit");
+        long prepareStart = time.nanoseconds();
+        flush();
+
+        // Mark the transaction as prepared internally
+        TransactionalRequestResult result = transactionManager.beginPrepare();
+        sender.wakeup();
+        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
+
+        producerMetrics.recordPrepareTxn(time.nanoseconds() - prepareStart);
+
+        return new PreparedTxnState(
+            transactionManager.producerIdAndEpoch().producerId,
+            transactionManager.producerIdAndEpoch().epoch
+        );
+    }
+
+    /**
      * Commits the ongoing transaction. This method will flush any unsent records before actually committing the transaction.
      * <p>
      * Further, if any of the {@link #send(ProducerRecord)} calls which were part of the transaction hit irrecoverable
@@ -1002,6 +1059,14 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         try {
             throwIfProducerClosed();
+            
+            // Check if we're in a prepared transaction state, in which case send is not allowed
+            if (transactionManager != null && transactionManager.isTransactional() && 
+                transactionManager.isInPreparingState()) {
+                throw new IllegalStateException("Cannot send messages when the transaction is in a prepared state. " +
+                    "You can only call commitTransaction(), abortTransaction(), or completeTransaction().");
+            }
+            
             // first make sure the metadata for the topic is available
             long nowMs = time.milliseconds();
             ClusterAndWaitTime clusterAndWaitTime;
