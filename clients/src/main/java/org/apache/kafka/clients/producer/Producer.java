@@ -25,6 +25,7 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.metrics.KafkaMetric;
+import org.apache.kafka.clients.producer.KafkaProducer.PreparedTxnState;
 
 import java.io.Closeable;
 import java.time.Duration;
@@ -61,6 +62,11 @@ public interface Producer<K, V> extends Closeable {
      */
     void sendOffsetsToTransaction(Map<TopicPartition, OffsetAndMetadata> offsets,
                                   ConsumerGroupMetadata groupMetadata) throws ProducerFencedException;
+
+    /**
+     * See {@link KafkaProducer#prepareTransaction()}
+     */
+    PreparedTxnState prepareTransaction() throws ProducerFencedException;
 
     /**
      * See {@link KafkaProducer#commitTransaction()}
