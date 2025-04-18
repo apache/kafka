@@ -647,27 +647,20 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * @throws InterruptException if the thread is interrupted while blocked
      */
     public void initTransactions() {
-        throwIfNoTransactionManager();
-        throwIfProducerClosed();
-        long now = time.nanoseconds();
-        TransactionalRequestResult result = transactionManager.initializeTransactions();
-        sender.wakeup();
-        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
-        producerMetrics.recordInit(time.nanoseconds() - now);
-        transactionManager.maybeUpdateTransactionV2Enabled(true);
+        initTransactions(false);
     }
 
     /**
      * Initialize the transactional state for this producer, similar to {@link #initTransactions()} but
-     * with additional handling for two-phase commit (2PC). Must be called before any send operations
-     * that require a {@code transactionalId}.
+     * with additional capabilities to keep a previously prepared transaction.
+     * Must be called before any send operations that require a {@code transactionalId}.
      * <p>
      * Unlike the standard {@link #initTransactions()}, when {@code keepPreparedTxn} is set to
-     * {@code true}, the producer does <em>not</em> automatically abort existing transactions
-     * in the “prepare” phase. Instead, it enters a recovery mode allowing only finalization
-     * of those previously prepared transactions. This behavior is crucial for 2PC scenarios,
-     * where transactions should remain intact until the external transaction manager decides
-     * whether to commit or abort.
+     * {@code true}, the producer does <em>not</em> automatically abort existing transactions.
+     * Instead, it enters a recovery mode allowing only finalization of those previously prepared transactions.
+     *
+     * This behavior is especially crucial for 2PC scenarios, where transactions should remain intact
+     * until the external transaction manager decides whether to commit or abort.
      * <p>
      * When {@code keepPreparedTxn} is {@code false}, this behaves like the normal transactional
      * initialization, aborting any unfinished transactions and resetting the producer for
