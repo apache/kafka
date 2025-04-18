@@ -23,6 +23,7 @@ import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
@@ -203,6 +204,7 @@ public class TransactionManager {
         INITIALIZING,
         READY,
         IN_TRANSACTION,
+        PREPARING_TRANSACTION,
         COMMITTING_TRANSACTION,
         ABORTING_TRANSACTION,
         ABORTABLE_ERROR,
@@ -218,13 +220,15 @@ public class TransactionManager {
                     return source == INITIALIZING || source == COMMITTING_TRANSACTION || source == ABORTING_TRANSACTION;
                 case IN_TRANSACTION:
                     return source == READY;
-                case COMMITTING_TRANSACTION:
+                case PREPARING_TRANSACTION:
                     return source == IN_TRANSACTION;
+                case COMMITTING_TRANSACTION:
+                    return source == IN_TRANSACTION || source == PREPARING_TRANSACTION;
                 case ABORTING_TRANSACTION:
-                    return source == IN_TRANSACTION || source == ABORTABLE_ERROR;
+                    return source == IN_TRANSACTION || source == PREPARING_TRANSACTION || source == ABORTABLE_ERROR;
                 case ABORTABLE_ERROR:
                     return source == IN_TRANSACTION || source == COMMITTING_TRANSACTION || source == ABORTABLE_ERROR
-                            || source == INITIALIZING;
+                            || source == INITIALIZING || source == PREPARING_TRANSACTION;
                 case FATAL_ERROR:
                 default:
                     // We can transition to FATAL_ERROR unconditionally.
@@ -333,6 +337,23 @@ public class TransactionManager {
         throwIfPendingState("beginTransaction");
         maybeFailWithError();
         transitionTo(State.IN_TRANSACTION);
+    }
+
+    /**
+     * Begin preparing a transaction for a two-phase commit.
+     * This transitions the transaction to the PREPARING_TRANSACTION state.
+     * 
+     * @return a TransactionalRequestResult that can be waited on for to prepare to complete
+     */
+    public synchronized TransactionalRequestResult beginPrepare() {
+        ensureTransactional();
+        throwIfPendingState("prepareTransaction");
+        maybeFailWithError();
+        transitionTo(State.PREPARING_TRANSACTION);
+        // Return an empty result that completes immediately
+        TransactionalRequestResult result = new TransactionalRequestResult("prepareTransaction");
+        result.done();
+        return result;
     }
 
     public synchronized TransactionalRequestResult beginCommit() {
@@ -490,6 +511,10 @@ public class TransactionManager {
 
     public boolean isTransactionV2Enabled() {
         return isTransactionV2Enabled;
+    }
+
+    public boolean is2PCEnabled(){
+        return enable2PC;
     }
 
     synchronized boolean hasPartitionsToAdd() {
@@ -1061,6 +1086,15 @@ public class TransactionManager {
     // visible for testing
     synchronized boolean isInitializing() {
         return isTransactional() && currentState == State.INITIALIZING;
+    }
+
+    /**
+     * Check if the transaction is in the preparing state.
+     * 
+     * @return true if the current state is PREPARING_TRANSACTION
+     */
+    public synchronized boolean isInPreparingState() {
+        return currentState == State.PREPARING_TRANSACTION;
     }
 
     void handleCoordinatorReady() {
@@ -1909,5 +1943,16 @@ public class TransactionManager {
         }
     }
 
-
+    /**
+     * Returns a PreparedTxnState object containing the current producer ID and epoch.
+     * This is used when preparing a transaction for a two-phase commit.
+     *
+     * @return a PreparedTxnState with the current producer ID and epoch
+     */
+    public KafkaProducer.PreparedTxnState getPreparedTransactionState() {
+        return new KafkaProducer.PreparedTxnState(
+            this.producerIdAndEpoch.producerId,
+            this.producerIdAndEpoch.epoch
+        );
+    }
 }
