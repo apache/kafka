@@ -198,8 +198,7 @@ public class WorkerTestUtils {
                 false,
                 transformationPlugin,
                 TestPlugins.noOpLoaderSwap());
-        TransformationChain<T, R> realTransformationChainRetriableException = new TransformationChain(List.of(stage), toleranceOperator);
-        TransformationChain<T, R> transformationChainRetriableException = Mockito.spy(realTransformationChainRetriableException);
-        return transformationChainRetriableException;
+        TransformationChain<T, R> realTransformationChainRetriableException = new TransformationChain<>(List.of(stage), toleranceOperator);
+        return Mockito.spy(realTransformationChainRetriableException);
     }
 }

@@ -14,9 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.log.remote;
-
-import kafka.cluster.Partition;
+package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.KafkaException;
@@ -47,22 +45,12 @@ import org.apache.kafka.server.common.CheckpointFile;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.StopPartition;
 import org.apache.kafka.server.config.ServerConfigs;
+import org.apache.kafka.server.log.remote.TopicPartitionLog;
 import org.apache.kafka.server.log.remote.metadata.storage.ClassLoaderAwareRemoteLogMetadataManager;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManager;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManagerConfig;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaMetrics;
-import org.apache.kafka.server.log.remote.storage.ClassLoaderAwareRemoteStorageManager;
-import org.apache.kafka.server.log.remote.storage.CustomMetadataSizeLimitExceededException;
-import org.apache.kafka.server.log.remote.storage.LogSegmentData;
-import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
-import org.apache.kafka.server.log.remote.storage.RemoteLogMetadataManager;
-import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
-import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
-import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
-import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
-import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
-import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
 import org.apache.kafka.server.purgatory.DelayedRemoteListOffsets;
@@ -195,7 +183,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     // topic ids that are received on leadership changes, this map is cleared on stop partitions
     private final ConcurrentMap<TopicPartition, Uuid> topicIdByPartitionMap = new ConcurrentHashMap<>();
     private final String clusterId;
-    private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
+    // For compatibility, metrics are defined to be under the `kafka.log.remote.RemoteLogManager` class
+    private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.log.remote", "RemoteLogManager");
 
     // The endpoint for remote log metadata manager to connect to
     private Optional<Endpoint> endpoint = Optional.empty();
@@ -426,9 +415,9 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         return remoteStorageManager;
     }
 
-    private Stream<Partition> filterPartitions(Set<Partition> partitions) {
+    private Stream<TopicPartitionLog> filterPartitions(Set<TopicPartitionLog> partitions) {
         // We are not specifically checking for internal topics etc here as `log.remoteLogEnabled()` already handles that.
-        return partitions.stream().filter(partition -> partition.log().exists(UnifiedLog::remoteLogEnabled));
+        return partitions.stream().filter(partition -> partition.unifiedLog().isPresent() && partition.unifiedLog().get().remoteLogEnabled());
     }
 
     private void cacheTopicPartitionIds(TopicIdPartition topicIdPartition) {
@@ -448,8 +437,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
      * @param partitionsBecomeFollower partitions that have become followers on this broker.
      * @param topicIds                 topic name to topic id mappings.
      */
-    public void onLeadershipChange(Set<Partition> partitionsBecomeLeader,
-                                   Set<Partition> partitionsBecomeFollower,
+    public void onLeadershipChange(Set<TopicPartitionLog> partitionsBecomeLeader,
+                                   Set<TopicPartitionLog> partitionsBecomeFollower,
                                    Map<String, Uuid> topicIds) {
         LOGGER.debug("Received leadership changes for leaders: {} and followers: {}", partitionsBecomeLeader, partitionsBecomeFollower);
 
@@ -458,12 +447,12 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         }
 
         Map<TopicIdPartition, Boolean> leaderPartitions = filterPartitions(partitionsBecomeLeader)
-                .collect(Collectors.toMap(p -> new TopicIdPartition(topicIds.get(p.topic()), p.topicPartition()),
-                        p -> p.log().exists(log -> log.config().remoteLogCopyDisable())));
+                .collect(Collectors.toMap(p -> new TopicIdPartition(topicIds.get(p.topicPartition().topic()), p.topicPartition()),
+                        p -> p.unifiedLog().isPresent() ? p.unifiedLog().get().config().remoteLogCopyDisable() : false));
 
         Map<TopicIdPartition, Boolean> followerPartitions = filterPartitions(partitionsBecomeFollower)
-                .collect(Collectors.toMap(p -> new TopicIdPartition(topicIds.get(p.topic()), p.topicPartition()),
-                        p -> p.log().exists(log -> log.config().remoteLogCopyDisable())));
+                .collect(Collectors.toMap(p -> new TopicIdPartition(topicIds.get(p.topicPartition().topic()), p.topicPartition()),
+                        p -> p.unifiedLog().isPresent() ? p.unifiedLog().get().config().remoteLogCopyDisable() : false));
 
         if (!leaderPartitions.isEmpty() || !followerPartitions.isEmpty()) {
             LOGGER.debug("Effective topic partitions after filtering compact and internal topics, leaders: {} and followers: {}",
@@ -483,8 +472,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
         }
     }
 
-    public void stopLeaderCopyRLMTasks(Set<Partition> partitions) {
-        for (Partition partition : partitions) {
+    public void stopLeaderCopyRLMTasks(Set<TopicPartitionLog> partitions) {
+        for (TopicPartitionLog partition : partitions) {
             TopicPartition tp = partition.topicPartition();
             if (topicIdByPartitionMap.containsKey(tp)) {
                 TopicIdPartition tpId = new TopicIdPartition(topicIdByPartitionMap.get(tp), tp);

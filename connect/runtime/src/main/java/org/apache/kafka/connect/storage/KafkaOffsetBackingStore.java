@@ -265,7 +265,7 @@ public class KafkaOffsetBackingStore extends KafkaTopicBasedBackingStore impleme
 
     @Override
     public Future<Map<ByteBuffer, ByteBuffer>> get(final Collection<ByteBuffer> keys) {
-        ConvertingFutureCallback<Void, Map<ByteBuffer, ByteBuffer>> future = new ConvertingFutureCallback<Void, Map<ByteBuffer, ByteBuffer>>() {
+        ConvertingFutureCallback<Void, Map<ByteBuffer, ByteBuffer>> future = new ConvertingFutureCallback<>() {
             @Override
             public Map<ByteBuffer, ByteBuffer> convert(Void result) {
                 Map<ByteBuffer, ByteBuffer> values = new HashMap<>();
