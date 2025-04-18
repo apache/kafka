@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.log.remote;
+package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.KafkaException;
@@ -50,18 +50,7 @@ import org.apache.kafka.server.log.remote.metadata.storage.ClassLoaderAwareRemot
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManager;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManagerConfig;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaMetrics;
-import org.apache.kafka.server.log.remote.storage.ClassLoaderAwareRemoteStorageManager;
-import org.apache.kafka.server.log.remote.storage.CustomMetadataSizeLimitExceededException;
-import org.apache.kafka.server.log.remote.storage.LogSegmentData;
-import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
-import org.apache.kafka.server.log.remote.storage.RemoteLogMetadataManager;
-import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
-import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
-import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
-import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
-import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
-import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.purgatory.DelayedOperationPurgatory;
 import org.apache.kafka.server.purgatory.DelayedRemoteListOffsets;
@@ -194,7 +183,8 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     // topic ids that are received on leadership changes, this map is cleared on stop partitions
     private final ConcurrentMap<TopicPartition, Uuid> topicIdByPartitionMap = new ConcurrentHashMap<>();
     private final String clusterId;
-    private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup(this.getClass());
+    // For compatibility, metrics are defined to be under the `kafka.log.remote.RemoteLogManager` class
+    private final KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.log.remote", "RemoteLogManager");
 
     // The endpoint for remote log metadata manager to connect to
     private Optional<Endpoint> endpoint = Optional.empty();
