@@ -288,13 +288,16 @@ public class FeatureControlManager {
                 } catch (ApiException e) {
                     return ApiError.fromThrowable(e);
                 }
+            } else if (newVersion != currentVersion) {
+                return invalidUpdateVersion(
+                    featureName,
+                    newVersion,
+                    "Can't downgrade the version of this feature."
+                );
+            } else {
+                // Version didn't change
+                return ApiError.NONE;
             }
-
-            return invalidUpdateVersion(
-                featureName,
-                newVersion,
-                "Can't downgrade the version of this feature."
-            );
         } else {
             // Validate dependencies for features that are not metadata.version
             try {
