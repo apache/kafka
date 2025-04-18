@@ -94,11 +94,13 @@ public class LeaderState<T> implements EpochState {
 
     /* Used to coordinate the upgrade of the kraft.version from 0 to 1. The upgrade is triggered by
      * the clients to RaftClient.
-     *  1. if the kraft version is 0, the starting state is Voters. The voter set is the voters in
-     *     the static voter set with the leader updated.
-     *  2. as the leader receives UpdateRaftVoter requests, it updates the associated Voters. Only
-     *     after all of the voters have been updated will upgrades successfully complete.
-     *  3. a client of RaftClient triggers the upgrade and transition this state to Version.
+     *  1. if the kraft version is 0, the starting state is the Voters type. The voter set is the voters in
+     *     the static voter set with the leader updated. See KRaftVersionUpgrade for details on the
+     *     Voters type.
+     *  2. as the leader receives UpdateRaftVoter requests, it updates the associated Voters type. Only
+     *     after all of the voters have been updated will an upgrade successfully complete.
+     *  3. a client of RaftClient triggers the upgrade and transition this state to the Version
+     *     type. See KRaftVersionUpgrade for details on the Version type.
      *
      * All transition are coordinated using optimistic locking by always calling AtomicReference#compareAndSet
      */
@@ -479,7 +481,7 @@ public class LeaderState<T> implements EpochState {
     /**
      * Upgrade the kraft version.
      *
-     * This methods upgradeds the kraft version to {@code newVersion}. If the version is already
+     * This methods upgrades the kraft version to {@code newVersion}. If the version is already
      * {@code newVersion}, this is a noop operation.
      *
      * KRaft only supports upgrades, so {@code newVersion} must be greater than or equal to curent
@@ -493,7 +495,7 @@ public class LeaderState<T> implements EpochState {
      * When {@code validateOnly} is true only the validation is perform and the control records are
      * not generated.
      *
-     * @param epoch the current epoch
+     * @param currentEpoch the current epoch
      * @param newVersion the new kraft version
      * @param persistedVersion the kraft version persisted to disk
      * @param persistedVoters the set of voters persisted to disk
@@ -501,14 +503,14 @@ public class LeaderState<T> implements EpochState {
      * @param currentTimeMs the current time
      */
     public boolean maybeAppendUpgradedKRaftVersion(
-        int epoch,
+        int currentEpoch,
         KRaftVersion newVersion,
         KRaftVersion persistedVersion,
         VoterSet persistedVoters,
         boolean validateOnly,
         long currentTimeMs
     ) {
-        validateEpoch(epoch);
+        validateEpoch(currentEpoch);
 
         var pendingVersion = kraftVersionUpgradeState.get().toVersion();
         if (pendingVersion.isPresent()) {
@@ -552,8 +554,9 @@ public class LeaderState<T> implements EpochState {
         if (!inMemoryVoters.voters().voterIds().equals(persistedVoters.voterIds())) {
             throw new IllegalStateException(
                 String.format(
-                    "Unable to update %s due to missing voters %s compared to %s",
+                    "Unable to update %s to %s due to missing voters %s compared to %s",
                     KRaftVersion.FEATURE_NAME,
+                    newVersion,
                     inMemoryVoters.voters().voterIds(),
                     persistedVoters.voterIds()
                 )
@@ -634,21 +637,21 @@ public class LeaderState<T> implements EpochState {
         return true;
     }
 
-    private void validateEpoch(int epoch) {
-        if (epoch < epoch()) {
+    private void validateEpoch(int currentEpoch) {
+        if (currentEpoch < epoch()) {
             throw new NotLeaderException(
                 String.format(
                     "Upgrade kraft version failed because the given epoch %s is stale. Current leader epoch is %s",
-                    epoch,
-                    this.epoch
+                    currentEpoch,
+                    epoch()
                 )
             );
-        } else if (epoch > epoch()) {
+        } else if (currentEpoch > epoch()) {
             throw new IllegalArgumentException(
                 String.format(
                     "Attempt to append from epoch %s which is larger than the current epoch of %s",
-                    epoch,
-                    this.epoch
+                    currentEpoch,
+                    epoch()
                 )
             );
         }

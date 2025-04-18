@@ -2412,7 +2412,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         int responseEpoch = data.currentLeader().leaderEpoch();
 
         final Endpoints leaderEndpoints;
-        if (responseLeaderId.isPresent() && data.currentLeader().host().isEmpty()) {
+        if (responseLeaderId.isPresent() && !data.currentLeader().host().isEmpty()) {
             leaderEndpoints = Endpoints.fromInetSocketAddresses(
                 Map.of(
                     channel.listenerName(),
@@ -2757,7 +2757,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     /**
      * Attempt to send a request.
      *
-     * Return if the request was send and the time to wait before the request can be retried.
+     * Return if the request was sent and the time to wait before the request can be retried.
      *
      * @param currentTimeMs the current time
      * @param destination the node receiving the request
@@ -3211,6 +3211,25 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         }
     }
 
+    private boolean shouldSendUpdateVoteRequest(FollowerState state) {
+        var version = partitionState.lastKraftVersion();
+        /* When the cluster supports reconfiguration, send an updated voter configuration if the
+         * one in the log doesn't match the local configuration.
+         */
+        var sendWhenReconfigSupported = version.isReconfigSupported() &&
+            partitionState.lastVoterSet().voterNodeNeedsUpdate(quorum.localVoterNodeOrThrow());
+
+        /* When the cluster doesn't support reconfiguration, the voter needs to send its voter
+         * information to every new leader. This is because leaders don't persist voter information
+         * when reconfiguration has not been enabled. The updated voter information is required to
+         * be able to upgrade the cluster from kraft.version 0.
+         */
+        var sendWhenReconfigNotSupported = !version.isReconfigSupported() &&
+            !state.hasUpdatedLeader();
+
+        return sendWhenReconfigSupported || sendWhenReconfigNotSupported;
+    }
+
     private long pollFollowerAsVoter(FollowerState state, long currentTimeMs) {
         GracefulShutdown shutdown = this.shutdown.get();
         final long backoffMs;
@@ -3224,22 +3243,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             backoffMs = 0;
         } else if (state.hasUpdateVoterPeriodExpired(currentTimeMs)) {
             final boolean resetUpdateVoterTimer;
-            if (partitionState.lastKraftVersion().isReconfigSupported() &&
-                partitionState.lastVoterSet().voterNodeNeedsUpdate(quorum.localVoterNodeOrThrow())
-            ) {
-                // When the cluster supports reconfiguration, send an updated voter configuration
-                // if the one in the log doesn't match the local configuration.
-                var sendResult = maybeSendUpdateVoterRequest(state, currentTimeMs);
-                // Update the request timer if the request was sent
-                resetUpdateVoterTimer = sendResult.first();
-                backoffMs = sendResult.second();
-            } else if (!partitionState.lastKraftVersion().isReconfigSupported() &&
-                !state.hasUpdatedLeader()
-            ) {
-                // When the cluster doesn't support reconfiguration, the voter needs to send its
-                // voter information to every new leader. This is because leaders don't persist voter
-                // information when reconfiguration has not been enabled. The updated voter information
-                // is required to be able to upgrade the cluster from kraft.version 0.
+            if (shouldSendUpdateVoteRequest(state)) {
                 var sendResult = maybeSendUpdateVoterRequest(state, currentTimeMs);
                 // Update the request timer if the request was sent
                 resetUpdateVoterTimer = sendResult.first();
