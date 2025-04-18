@@ -8255,6 +8255,151 @@ class KafkaApisTest extends Logging {
 
   @ParameterizedTest
   @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
+  def testHandleOffsetFetchWithUnknownTopicIds(version: Short): Unit = {
+    // We only test with topic ids.
+    if (version < 10) return
+
+    val foo = "foo"
+    val bar = "bar"
+    val fooId = Uuid.randomUuid()
+    val barId = Uuid.randomUuid()
+    addTopicToMetadataCache(foo, topicId = fooId, numPartitions = 2)
+
+    def makeRequest(version: Short): RequestChannel.Request = {
+      buildRequest(
+        new OffsetFetchRequest.Builder(
+          new OffsetFetchRequestData()
+            .setGroups(List(
+              new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group-1")
+                .setTopics(List(
+                  new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName(foo)
+                    .setTopicId(fooId)
+                    .setPartitionIndexes(List[Integer](0).asJava),
+                  // bar does not exist so it must return UNKNOWN_TOPIC_ID.
+                  new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName(bar)
+                    .setTopicId(barId)
+                    .setPartitionIndexes(List[Integer](0).asJava)
+                ).asJava),
+              new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group-2")
+                .setTopics(null)
+            ).asJava),
+          false
+        ).build(version)
+      )
+    }
+
+    val requestChannelRequest = makeRequest(version)
+
+    val group1Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
+    when(groupCoordinator.fetchOffsets(
+      requestChannelRequest.context,
+      new OffsetFetchRequestData.OffsetFetchRequestGroup()
+        .setGroupId("group-1")
+        .setTopics(List(
+          new OffsetFetchRequestData.OffsetFetchRequestTopics()
+            .setTopicId(fooId)
+            .setName("foo")
+            .setPartitionIndexes(List[Integer](0).asJava)).asJava),
+      false
+    )).thenReturn(group1Future)
+
+    val group2Future = new CompletableFuture[OffsetFetchResponseData.OffsetFetchResponseGroup]()
+    when(groupCoordinator.fetchAllOffsets(
+      requestChannelRequest.context,
+      new OffsetFetchRequestData.OffsetFetchRequestGroup()
+        .setGroupId("group-2")
+        .setTopics(null),
+      false
+    )).thenReturn(group2Future)
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val group1Response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+      .setGroupId("group-1")
+      .setTopics(List(
+        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+          .setTopicId(fooId)
+          .setName(foo)
+          .setPartitions(List(
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(0)
+              .setCommittedOffset(100)
+              .setCommittedLeaderEpoch(1)
+          ).asJava)
+      ).asJava)
+
+    val group2Response = new OffsetFetchResponseData.OffsetFetchResponseGroup()
+      .setGroupId("group-2")
+      .setTopics(List(
+        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+          .setName(foo)
+          .setPartitions(List(
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(0)
+              .setCommittedOffset(100)
+              .setCommittedLeaderEpoch(1)
+          ).asJava),
+        // bar does not exist so it must be filtered out.
+        new OffsetFetchResponseData.OffsetFetchResponseTopics()
+          .setName(bar)
+          .setPartitions(List(
+            new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+              .setPartitionIndex(0)
+              .setCommittedOffset(100)
+              .setCommittedLeaderEpoch(1)
+          ).asJava)
+      ).asJava)
+
+    val expectedResponse = new OffsetFetchResponseData()
+      .setGroups(List(
+        new OffsetFetchResponseData.OffsetFetchResponseGroup()
+          .setGroupId("group-1")
+          .setTopics(List(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+              .setTopicId(fooId)
+              .setPartitions(List(
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(0)
+                  .setCommittedOffset(100)
+                  .setCommittedLeaderEpoch(1)
+              ).asJava),
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+              .setTopicId(barId)
+              .setPartitions(List(
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(0)
+                  .setCommittedOffset(-1)
+                  .setErrorCode(Errors.UNKNOWN_TOPIC_ID.code)
+              ).asJava)
+          ).asJava),
+        new OffsetFetchResponseData.OffsetFetchResponseGroup()
+          .setGroupId("group-2")
+          .setTopics(List(
+            new OffsetFetchResponseData.OffsetFetchResponseTopics()
+              .setTopicId(fooId)
+              .setPartitions(List(
+                new OffsetFetchResponseData.OffsetFetchResponsePartitions()
+                  .setPartitionIndex(0)
+                  .setCommittedOffset(100)
+                  .setCommittedLeaderEpoch(1)
+              ).asJava)
+          ).asJava)
+      ).asJava)
+
+    group1Future.complete(group1Response)
+    group2Future.complete(group2Response)
+
+    val response = verifyNoThrottling[OffsetFetchResponse](requestChannelRequest)
+    assertEquals(expectedResponse, response.data)
+  }
+
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
   def testHandleOffsetFetchWithSingleGroup(version: Short): Unit = {
     // The single group builder does not support topic ids.
     if (version >= 10) return
@@ -8621,27 +8766,55 @@ class KafkaApisTest extends Logging {
     assertEquals(expectedOffsetFetchResponse, response.data)
   }
 
-  // TODO Add test for unknown topic id
-  // TODO Add test for topic id provided by coordinator that should not be overriden.
+  @ParameterizedTest
+  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
+  def testHandleOffsetFetchWithUnauthorizedTopicAndTopLevelError(version: Short): Unit = {
+    // We don't test the non batched API.
+    if (version < 8) return
 
-  // TODO Parameterize it.
-  @Test
-  def testHandleOffsetFetchWithUnauthorizedTopicAndTopLevelError(): Unit = {
+    val foo = "foo"
+    val bar = "bar"
+    val fooId = Uuid.randomUuid()
+    val barId = Uuid.randomUuid()
+    addTopicToMetadataCache(foo, topicId = fooId, numPartitions = 2)
+    addTopicToMetadataCache(bar, topicId = barId, numPartitions = 2)
+
     def makeRequest(version: Short): RequestChannel.Request = {
-      val groups = Map(
-        "group-1" -> List(
-          new TopicPartition("foo", 0),
-          new TopicPartition("bar", 0)
-        ).asJava,
-        "group-2" -> List(
-          new TopicPartition("foo", 0),
-          new TopicPartition("bar", 0)
-        ).asJava
-      ).asJava
-      buildRequest(new OffsetFetchRequest.Builder(groups, false, false).build(version))
+      buildRequest(
+        new OffsetFetchRequest.Builder(
+          new OffsetFetchRequestData()
+            .setGroups(List(
+              new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group-1")
+                .setTopics(List(
+                  new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName(foo)
+                    .setTopicId(fooId)
+                    .setPartitionIndexes(List[Integer](0).asJava),
+                  new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName(bar)
+                    .setTopicId(barId)
+                    .setPartitionIndexes(List[Integer](0).asJava)
+                ).asJava),
+              new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group-2")
+                .setTopics(List(
+                  new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName(foo)
+                    .setTopicId(fooId)
+                    .setPartitionIndexes(List[Integer](0).asJava),
+                  new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName(bar)
+                    .setTopicId(barId)
+                    .setPartitionIndexes(List[Integer](0).asJava)
+                ).asJava)
+            ).asJava),
+          false
+        ).build(version)
+      )
     }
 
-    val requestChannelRequest = makeRequest(ApiKeys.OFFSET_FETCH.latestVersion(false))
+    val requestChannelRequest = makeRequest(version)
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
 
@@ -8669,7 +8842,8 @@ class KafkaApisTest extends Logging {
       new OffsetFetchRequestData.OffsetFetchRequestGroup()
         .setGroupId("group-1")
         .setTopics(List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
-          .setName("bar")
+          .setName(bar)
+          .setTopicId(if (version >= 10) barId else Uuid.ZERO_UUID)
           .setPartitionIndexes(List[Integer](0).asJava)).asJava),
       false
     )).thenReturn(group1Future)
@@ -8680,7 +8854,8 @@ class KafkaApisTest extends Logging {
       new OffsetFetchRequestData.OffsetFetchRequestGroup()
         .setGroupId("group-2")
         .setTopics(List(new OffsetFetchRequestData.OffsetFetchRequestTopics()
-          .setName("bar")
+          .setName(bar)
+          .setTopicId(if (version >= 10) barId else Uuid.ZERO_UUID)
           .setPartitionIndexes(List[Integer](0).asJava)).asJava),
       false
     )).thenReturn(group1Future)
