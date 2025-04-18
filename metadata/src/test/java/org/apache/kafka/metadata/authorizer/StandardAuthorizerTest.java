@@ -27,6 +27,8 @@ import org.apache.kafka.common.acl.AclOperation;
 import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.errors.AuthorizerNotReadyException;
 import org.apache.kafka.common.errors.TimeoutException;
+import org.apache.kafka.common.metrics.Metrics;
+import org.apache.kafka.common.metrics.internals.PluginMetricsImpl;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourcePattern;
 import org.apache.kafka.common.resource.ResourcePatternFilter;
@@ -49,8 +51,6 @@ import org.slf4j.LoggerFactory;
 import java.net.InetAddress;
 import java.util.ArrayList;
 import java.util.Collection;
-import java.util.HashMap;
-import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
@@ -101,12 +101,9 @@ public class StandardAuthorizerTest {
         "127.0.0.1",
         9020);
 
-    public static class AuthorizerTestServerInfo implements AuthorizerServerInfo {
-        private final Collection<Endpoint> endpoints;
-
-        public AuthorizerTestServerInfo(Collection<Endpoint> endpoints) {
+    public record AuthorizerTestServerInfo(Collection<Endpoint> endpoints) implements AuthorizerServerInfo {
+        public AuthorizerTestServerInfo {
             assertFalse(endpoints.isEmpty());
-            this.endpoints = endpoints;
         }
 
         @Override
@@ -117,11 +114,6 @@ public class StandardAuthorizerTest {
         @Override
         public int brokerId() {
             return 0;
-        }
-
-        @Override
-        public Collection<Endpoint> endpoints() {
-            return endpoints;
         }
 
         @Override
@@ -141,15 +133,17 @@ public class StandardAuthorizerTest {
         }
     }
 
+    private final Metrics metrics = new Metrics();
+
     @Test
     public void testGetConfiguredSuperUsers() {
         assertEquals(Set.of(),
             getConfiguredSuperUsers(Map.of()));
         assertEquals(Set.of(),
             getConfiguredSuperUsers(Map.of(SUPER_USERS_CONFIG, " ")));
-        assertEquals(new HashSet<>(List.of("User:bob", "User:alice")),
+        assertEquals(Set.of("User:bob", "User:alice"),
             getConfiguredSuperUsers(Map.of(SUPER_USERS_CONFIG, "User:bob;User:alice ")));
-        assertEquals(new HashSet<>(List.of("User:bob", "User:alice")),
+        assertEquals(Set.of("User:bob", "User:alice"),
             getConfiguredSuperUsers(Map.of(SUPER_USERS_CONFIG, ";  User:bob  ;  User:alice ")));
         assertEquals("expected a string in format principalType:principalName but got bob",
             assertThrows(IllegalArgumentException.class, () -> getConfiguredSuperUsers(
@@ -167,13 +161,10 @@ public class StandardAuthorizerTest {
 
     @Test
     public void testAllowEveryoneIfNoAclFoundConfigEnabled() throws Exception {
-        StandardAuthorizer authorizer = new StandardAuthorizer();
-        HashMap<String, Object> configs = new HashMap<>();
-        configs.put(SUPER_USERS_CONFIG, "User:alice;User:chris");
-        configs.put(ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "true");
-        authorizer.configure(configs);
-        authorizer.start(new AuthorizerTestServerInfo(List.of(PLAINTEXT)));
-        authorizer.completeInitialLoad();
+        Map<String, Object> configs = Map.of(
+            SUPER_USERS_CONFIG, "User:alice;User:chris",
+            ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "true");
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer(configs);
 
         List<StandardAclWithId> acls = List.of(
                 withId(new StandardAcl(TOPIC, "topic1", LITERAL, "User:Alice", WILDCARD, READ, ALLOW))
@@ -197,13 +188,10 @@ public class StandardAuthorizerTest {
 
     @Test
     public void testAllowEveryoneIfNoAclFoundConfigDisabled() throws Exception {
-        StandardAuthorizer authorizer = new StandardAuthorizer();
-        HashMap<String, Object> configs = new HashMap<>();
-        configs.put(SUPER_USERS_CONFIG, "User:alice;User:chris");
-        configs.put(ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "false");
-        authorizer.configure(configs);
-        authorizer.start(new AuthorizerTestServerInfo(List.of(PLAINTEXT)));
-        authorizer.completeInitialLoad();
+        Map<String, Object> configs = Map.of(
+            SUPER_USERS_CONFIG, "User:alice;User:chris",
+            ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "false");
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer(configs);
 
         List<StandardAclWithId> acls = List.of(
                 withId(new StandardAcl(TOPIC, "topic1", LITERAL, "User:Alice", WILDCARD, READ, ALLOW))
@@ -227,31 +215,35 @@ public class StandardAuthorizerTest {
 
     @Test
     public void testConfigure() {
-        StandardAuthorizer authorizer = new StandardAuthorizer();
-        HashMap<String, Object> configs = new HashMap<>();
-        configs.put(SUPER_USERS_CONFIG, "User:alice;User:chris");
-        configs.put(ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "true");
-        authorizer.configure(configs);
-        assertEquals(new HashSet<>(List.of("User:alice", "User:chris")), authorizer.superUsers());
+        Map<String, Object> configs = Map.of(
+            SUPER_USERS_CONFIG, "User:alice;User:chris",
+            ALLOW_EVERYONE_IF_NO_ACL_IS_FOUND_CONFIG, "true");
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer(configs);
+        assertEquals(Set.of("User:alice", "User:chris"), authorizer.superUsers());
         assertEquals(ALLOWED, authorizer.defaultResult());
     }
 
-    static Action newAction(AclOperation aclOperation,
+    private static Action newAction(AclOperation aclOperation,
                             ResourceType resourceType,
                             String resourceName) {
         return new Action(aclOperation,
             new ResourcePattern(resourceType, resourceName, LITERAL), 1, false, false);
     }
 
-    static StandardAuthorizer createAndInitializeStandardAuthorizer() {
+    private StandardAuthorizer createAndInitializeStandardAuthorizer() {
+        return createAndInitializeStandardAuthorizer(Map.of(SUPER_USERS_CONFIG, "User:superman"));
+    }
+
+    private StandardAuthorizer createAndInitializeStandardAuthorizer(Map<String, Object> configs) {
         StandardAuthorizer authorizer = new StandardAuthorizer();
-        authorizer.configure(Map.of(SUPER_USERS_CONFIG, "User:superman"));
+        authorizer.configure(configs);
+        authorizer.withPluginMetrics(new PluginMetricsImpl(metrics, Map.of()));
         authorizer.start(new AuthorizerTestServerInfo(List.of(PLAINTEXT)));
         authorizer.completeInitialLoad();
         return authorizer;
     }
 
-    static StandardAcl newFooAcl(AclOperation op, AclPermissionType permission) {
+    private static StandardAcl newFooAcl(AclOperation op, AclPermissionType permission) {
         return new StandardAcl(
             TOPIC,
             "foo_",
@@ -262,7 +254,7 @@ public class StandardAuthorizerTest {
             permission);
     }
 
-    static StandardAclWithId withId(StandardAcl acl) {
+    private static StandardAclWithId withId(StandardAcl acl) {
         return new StandardAclWithId(new Uuid(acl.hashCode(), acl.hashCode()), acl);
     }
 
@@ -311,7 +303,7 @@ public class StandardAuthorizerTest {
             newFooAcl(ALTER_CONFIGS, DENY)));
     }
 
-    static StandardAcl newBarAcl(AclOperation op, AclPermissionType permission) {
+    private static StandardAcl newBarAcl(AclOperation op, AclPermissionType permission) {
         return new StandardAcl(
             GROUP,
             "bar",
@@ -641,7 +633,7 @@ public class StandardAuthorizerTest {
         authorizer.configure(Map.of(SUPER_USERS_CONFIG, "User:superman"));
         Map<Endpoint, ? extends CompletionStage<Void>> futures2 = authorizer.
             start(new AuthorizerTestServerInfo(List.of(PLAINTEXT, CONTROLLER)));
-        assertEquals(new HashSet<>(List.of(PLAINTEXT, CONTROLLER)), futures2.keySet());
+        assertEquals(Set.of(PLAINTEXT, CONTROLLER), futures2.keySet());
         assertFalse(futures2.get(PLAINTEXT).toCompletableFuture().isDone());
         assertTrue(futures2.get(CONTROLLER).toCompletableFuture().isDone());
     }
@@ -656,6 +648,7 @@ public class StandardAuthorizerTest {
     public void testAuthorizationPriorToCompleteInitialLoad() throws Exception {
         StandardAuthorizer authorizer = new StandardAuthorizer();
         authorizer.configure(Map.of(SUPER_USERS_CONFIG, "User:superman"));
+        authorizer.withPluginMetrics(new PluginMetricsImpl(new Metrics(), Map.of()));
         assertThrows(AuthorizerNotReadyException.class, () ->
             authorizer.authorize(new MockAuthorizableRequestContext.Builder().
                     setPrincipal(new KafkaPrincipal(USER_TYPE, "bob")).build(),
@@ -687,7 +680,7 @@ public class StandardAuthorizerTest {
         authorizer.configure(Map.of(SUPER_USERS_CONFIG, "User:superman"));
         Map<Endpoint, ? extends CompletionStage<Void>> futures = authorizer.
             start(new AuthorizerTestServerInfo(List.of(PLAINTEXT, CONTROLLER)));
-        assertEquals(new HashSet<>(List.of(PLAINTEXT, CONTROLLER)), futures.keySet());
+        assertEquals(Set.of(PLAINTEXT, CONTROLLER), futures.keySet());
         assertFalse(futures.get(PLAINTEXT).toCompletableFuture().isDone());
         assertTrue(futures.get(CONTROLLER).toCompletableFuture().isDone());
         authorizer.completeInitialLoad(new TimeoutException("timed out"));
@@ -722,5 +715,18 @@ public class StandardAuthorizerTest {
                         newAction(DESCRIBE, TOPIC, "fooa"),
                         newAction(WRITE, TOPIC, "bar"),
                         newAction(READ, TOPIC, "baz"))));
+    }
+
+    @Test
+    public void testAuthorizerMetrics() throws Exception {
+        // There's always 1 metrics by default, the metrics count
+        assertEquals(1, metrics.metrics().size());
+        StandardAuthorizer authorizer = createAndInitializeStandardAuthorizer();
+
+        assertEquals(List.of(ALLOWED), authorizer.authorize(
+                new MockAuthorizableRequestContext.Builder().setPrincipal(new KafkaPrincipal(USER_TYPE, "superman")).build(),
+                List.of(newAction(READ, TOPIC, "green"))));
+        // StandardAuthorizer has 4 metrics
+        assertEquals(5, metrics.metrics().size());
     }
 }

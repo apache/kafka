@@ -17,11 +17,9 @@
 
 package org.apache.kafka.queue;
 
-import org.slf4j.Logger;
 
 import java.util.OptionalLong;
-import java.util.concurrent.RejectedExecutionException;
-import java.util.function.Function;
+import java.util.function.UnaryOperator;
 
 
 public interface EventQueue extends AutoCloseable {
@@ -44,30 +42,12 @@ public interface EventQueue extends AutoCloseable {
         default void handleException(Throwable e) {}
     }
 
-    abstract class FailureLoggingEvent implements Event {
-        private final Logger log;
-
-        public FailureLoggingEvent(Logger log) {
-            this.log = log;
-        }
-
-        @Override
-        public void handleException(Throwable e) {
-            if (e instanceof RejectedExecutionException) {
-                log.info("Not processing {} because the event queue is closed.", this);
-            } else {
-                log.error("Unexpected error handling {}", this, e);
-            }
-        }
-
-        @Override
-        public String toString() {
-            return this.getClass().getSimpleName();
-        }
-    }
-
-    class NoDeadlineFunction implements Function<OptionalLong, OptionalLong> {
+    class NoDeadlineFunction implements UnaryOperator<OptionalLong> {
         public static final NoDeadlineFunction INSTANCE = new NoDeadlineFunction();
+        
+        private NoDeadlineFunction() {
+            
+        }
 
         @Override
         public OptionalLong apply(OptionalLong ignored) {
@@ -75,7 +55,7 @@ public interface EventQueue extends AutoCloseable {
         }
     }
 
-    class DeadlineFunction implements Function<OptionalLong, OptionalLong> {
+    class DeadlineFunction implements UnaryOperator<OptionalLong> {
         private final long deadlineNs;
 
         public DeadlineFunction(long deadlineNs) {
@@ -88,7 +68,7 @@ public interface EventQueue extends AutoCloseable {
         }
     }
 
-    class EarliestDeadlineFunction implements Function<OptionalLong, OptionalLong> {
+    class EarliestDeadlineFunction implements UnaryOperator<OptionalLong> {
         private final long newDeadlineNs;
 
         public EarliestDeadlineFunction(long newDeadlineNs) {
@@ -107,28 +87,13 @@ public interface EventQueue extends AutoCloseable {
         }
     }
 
-    class LatestDeadlineFunction implements Function<OptionalLong, OptionalLong> {
-        private final long newDeadlineNs;
-
-        public LatestDeadlineFunction(long newDeadlineNs) {
-            this.newDeadlineNs = newDeadlineNs;
-        }
-
-        @Override
-        public OptionalLong apply(OptionalLong prevDeadlineNs) {
-            if (prevDeadlineNs.isEmpty()) {
-                return OptionalLong.of(newDeadlineNs);
-            } else if (prevDeadlineNs.getAsLong() > newDeadlineNs) {
-                return prevDeadlineNs;
-            } else {
-                return OptionalLong.of(newDeadlineNs);
-            }
-        }
-    }
-
     class VoidEvent implements Event {
         public static final VoidEvent INSTANCE = new VoidEvent();
-
+        
+        private VoidEvent() {
+            
+        }
+        
         @Override
         public void run() throws Exception {
         }
@@ -182,7 +147,7 @@ public interface EventQueue extends AutoCloseable {
      * @param event                 The event to schedule.
      */
     default void scheduleDeferred(String tag,
-                                  Function<OptionalLong, OptionalLong> deadlineNsCalculator,
+                                  UnaryOperator<OptionalLong> deadlineNsCalculator,
                                   Event event) {
         enqueue(EventInsertionType.DEFERRED, tag, deadlineNsCalculator, event);
     }
@@ -224,7 +189,7 @@ public interface EventQueue extends AutoCloseable {
      */
     void enqueue(EventInsertionType insertionType,
                  String tag,
-                 Function<OptionalLong, OptionalLong> deadlineNsCalculator,
+                 UnaryOperator<OptionalLong> deadlineNsCalculator,
                  Event event);
 
     /**
