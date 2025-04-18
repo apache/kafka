@@ -152,7 +152,8 @@ class RemoteLogOffsetReaderTest {
                     tp -> Optional.empty(),
                     (tp, logStartOffset) -> { },
                     new BrokerTopicStats(true),
-                    new Metrics()
+                    new Metrics(),
+                    Optional.empty()
             );
         }
 
