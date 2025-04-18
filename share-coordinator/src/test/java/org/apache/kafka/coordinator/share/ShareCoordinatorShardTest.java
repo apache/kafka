@@ -1700,6 +1700,7 @@ class ShareCoordinatorShardTest {
         shard.replay(offset + 2, producerId, producerEpoch, records.get(0));
 
         assertEquals(timestamp + delta, shard.getShareStateMapValue(key1).writeTimestamp());
+        assertEquals(timestamp + sleep, shard.getShareStateMapValue(key0).writeTimestamp());
     }
 
     private static ShareGroupOffset groupOffset(ApiMessage record) {
