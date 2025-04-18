@@ -14,14 +14,13 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.log.remote;
+package org.apache.kafka.server.log.remote.storage;
 
 import kafka.utils.TestUtils;
 
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManager;
-import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
 import org.apache.kafka.storage.internals.log.FetchDataInfo;
 import org.apache.kafka.storage.internals.log.LogOffsetMetadata;
 import org.apache.kafka.storage.internals.log.RemoteLogReadResult;
