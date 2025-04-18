@@ -59,7 +59,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(
     types = {Type.KRAFT},
-    brokers = BROKER_COUNT, 
+    brokers = BROKER_COUNT,
     serverProperties = {
         @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = OFFSETS_TOPIC_PARTITIONS),
         @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = OFFSETS_TOPIC_REPLICATION),
@@ -84,7 +84,7 @@ public class PlaintextConsumerCommitTest {
     public void setup() throws InterruptedException {
         cluster.createTopic(topic, 2, (short) BROKER_COUNT);
     }
-    
+
     @ClusterTest
     public void testClassicConsumerAutoCommitOnClose() throws InterruptedException {
         testAutoCommitOnClose(GroupProtocol.CLASSIC);
@@ -112,7 +112,7 @@ public class PlaintextConsumerCommitTest {
             assertEquals(500, anotherConsumer.committed(Set.of(tp1)).get(tp1).offset());
         }
     }
-    
+
     @ClusterTest
     public void testClassicConsumerAutoCommitOnCloseAfterWakeup() throws InterruptedException {
         testAutoCommitOnCloseAfterWakeup(GroupProtocol.CLASSIC);
@@ -187,11 +187,11 @@ public class PlaintextConsumerCommitTest {
     }
 
     private void testAsyncCommit(GroupProtocol groupProtocol) throws InterruptedException {
-        // Ensure the __consumer_offsets topic is created to prevent transient issues, 
+        // Ensure the __consumer_offsets topic is created to prevent transient issues,
         // such as RetriableCommitFailedException during async offset commits.
         cluster.createTopic(
-            Topic.GROUP_METADATA_TOPIC_NAME, 
-            Integer.parseInt(OFFSETS_TOPIC_PARTITIONS), 
+            Topic.GROUP_METADATA_TOPIC_NAME,
+            Integer.parseInt(OFFSETS_TOPIC_PARTITIONS),
             Short.parseShort(OFFSETS_TOPIC_REPLICATION)
         );
         try (var consumer = createConsumer(groupProtocol, false)) {
@@ -199,7 +199,7 @@ public class PlaintextConsumerCommitTest {
 
             var callback = new CountConsumerCommitCallback();
             var count = 5;
-            for (var i = 1; i <= count; i++) 
+            for (var i = 1; i <= count; i++)
                 consumer.commitAsync(Map.of(tp, new OffsetAndMetadata(i)), callback);
 
             TestUtils.waitForCondition(() -> {
@@ -253,8 +253,8 @@ public class PlaintextConsumerCommitTest {
             };
 
             changeConsumerSubscriptionAndValidateAssignment(
-                consumer, 
-                List.of(topic), 
+                consumer,
+                List.of(topic),
                 Set.of(tp, tp1),
                 rebalanceListener
             );
@@ -263,11 +263,11 @@ public class PlaintextConsumerCommitTest {
 
             // change subscription to trigger rebalance
             var commitCountBeforeRebalance = MockConsumerInterceptor.ON_COMMIT_COUNT.intValue();
-            var expectedAssignment = Set.of(tp, tp1, new TopicPartition(topic2, 0), new TopicPartition(topic2, 1)); 
+            var expectedAssignment = Set.of(tp, tp1, new TopicPartition(topic2, 0), new TopicPartition(topic2, 1));
             changeConsumerSubscriptionAndValidateAssignment(
-                consumer, 
-                List.of(topic, topic2), 
-                expectedAssignment, 
+                consumer,
+                List.of(topic, topic2),
+                expectedAssignment,
                 rebalanceListener
             );
 
@@ -276,7 +276,6 @@ public class PlaintextConsumerCommitTest {
             assertEquals(10, committed1.get(tp).offset());
             var committed2 = consumer.committed(Set.of(tp1));
             assertEquals(20, committed2.get(tp1).offset());
-            assertTrue(MockConsumerInterceptor.ON_COMMIT_COUNT.intValue() > commitCountBeforeRebalance);
 
             // In both CLASSIC and CONSUMER protocols, interceptors are executed in poll and close.
             // However, in the CONSUMER protocol, the assignment may be changed outside a poll, so
@@ -284,7 +283,9 @@ public class PlaintextConsumerCommitTest {
             if (groupProtocol == GroupProtocol.CONSUMER) {
                 consumer.poll(Duration.ZERO);
             }
-            
+
+            assertTrue(MockConsumerInterceptor.ON_COMMIT_COUNT.intValue() > commitCountBeforeRebalance);
+
             // verify commits are intercepted on close
             var commitCountBeforeClose = MockConsumerInterceptor.ON_COMMIT_COUNT.intValue();
             consumer.close();
@@ -316,7 +317,7 @@ public class PlaintextConsumerCommitTest {
 
             var pos1 = consumer.position(tp);
             var pos2 = consumer.position(tp1);
-            
+
             consumer.commitSync(Map.of(tp, new OffsetAndMetadata(3L)));
 
             assertEquals(3, consumer.committed(Set.of(tp)).get(tp).offset());
@@ -336,7 +337,7 @@ public class PlaintextConsumerCommitTest {
             assertEquals(7, consumer.committed(Collections.singleton(tp1)).get(tp1).offset());
         }
     }
-    
+
     @ClusterTest
     public void testClassicConsumerAutoCommitOnRebalance() throws InterruptedException {
         testAutoCommitOnRebalance(GroupProtocol.CLASSIC);
@@ -352,7 +353,7 @@ public class PlaintextConsumerCommitTest {
         cluster.createTopic(topic2, 2, (short) BROKER_COUNT);
         try (var consumer = createConsumer(groupProtocol, true)) {
             sendRecords();
-            
+
             var rebalanceListener = new ConsumerRebalanceListener() {
                 @Override
                 public void onPartitionsAssigned(Collection<TopicPartition> partitions) {
@@ -362,7 +363,7 @@ public class PlaintextConsumerCommitTest {
 
                 @Override
                 public void onPartitionsRevoked(Collection<TopicPartition> partitions) {
-                    
+
                 }
             };
 
@@ -382,7 +383,7 @@ public class PlaintextConsumerCommitTest {
             assertEquals(500, consumer.committed(Set.of(tp1)).get(tp1).offset());
         }
     }
-    
+
     @ClusterTest
     public void testClassicConsumerSubscribeAndCommitSync() throws InterruptedException {
         testSubscribeAndCommitSync(GroupProtocol.CLASSIC);
@@ -519,7 +520,7 @@ public class PlaintextConsumerCommitTest {
             ENABLE_AUTO_COMMIT_CONFIG, enableAutoCommit
         ));
     }
-    
+
     private void sendRecords() {
         try (Producer<byte[], byte[]> producer = cluster.producer()) {
             sendRecords(producer, 10000, tp, System.currentTimeMillis());
@@ -535,8 +536,8 @@ public class PlaintextConsumerCommitTest {
     }
 
     private void sendRecords(
-        Producer<byte[], byte[]> producer, 
-        int numRecords, 
+        Producer<byte[], byte[]> producer,
+        int numRecords,
         TopicPartition topicPartition,
         long startingTimestamp
     ) {
@@ -585,10 +586,10 @@ public class PlaintextConsumerCommitTest {
     private static class RetryCommitCallback implements OffsetCommitCallback {
         private boolean isComplete = false;
         private Optional<Exception> error = Optional.empty();
-        
+
         private final Consumer<byte[], byte[]> consumer;
         private final Map<TopicPartition, OffsetAndMetadata> offsetsOpt;
-        
+
         public RetryCommitCallback(
             Consumer<byte[], byte[]> consumer,
             Map<TopicPartition, OffsetAndMetadata> offsetsOpt
@@ -627,9 +628,9 @@ public class PlaintextConsumerCommitTest {
     }
 
     private void changeConsumerSubscriptionAndValidateAssignment(
-        Consumer<byte[], byte[]> consumer, 
-        List<String> topicsToSubscribe, 
-        Set<TopicPartition> expectedAssignment, 
+        Consumer<byte[], byte[]> consumer,
+        List<String> topicsToSubscribe,
+        Set<TopicPartition> expectedAssignment,
         ConsumerRebalanceListener rebalanceListener
     ) throws InterruptedException {
         consumer.subscribe(topicsToSubscribe, rebalanceListener);
@@ -662,7 +663,7 @@ public class PlaintextConsumerCommitTest {
             assertEquals(("value " + i).length(), record.serializedValueSize());
         }
     }
-    
+
     protected <K, V> List<ConsumerRecord<K, V>> consumeRecords(
         Consumer<K, V> consumer,
         int numRecords
