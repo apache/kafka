@@ -16,13 +16,11 @@
  */
 package org.apache.kafka.clients.consumer.internals;
 
-import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.clients.consumer.OffsetOutOfRangeException;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.Errors;
@@ -37,7 +35,6 @@ import java.util.ArrayDeque;
 import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
-import java.util.Map;
 import java.util.Optional;
 import java.util.Queue;
 
@@ -263,21 +260,10 @@ public class FetchCollector<K, V> {
         Iterator<? extends RecordBatch> batches = FetchResponse.recordsOrFail(partition).batches().iterator();
 
         if (!batches.hasNext() && FetchResponse.recordsSize(partition) > 0) {
-            if (completedFetch.requestVersion < 3) {
-                // Implement the pre KIP-74 behavior of throwing a RecordTooLargeException.
-                Map<TopicPartition, Long> recordTooLargePartitions = Collections.singletonMap(tp, fetchOffset);
-                throw new RecordTooLargeException("There are some messages at [Partition=Offset]: " +
-                        recordTooLargePartitions + " whose size is larger than the fetch size " + fetchConfig.fetchSize +
-                        " and hence cannot be returned. Please considering upgrading your broker to 0.10.1.0 or " +
-                        "newer to avoid this issue. Alternately, increase the fetch size on the client (using " +
-                        ConsumerConfig.MAX_PARTITION_FETCH_BYTES_CONFIG + ")",
-                        recordTooLargePartitions);
-            } else {
-                // This should not happen with brokers that support FetchRequest/Response V3 or higher (i.e. KIP-74)
-                throw new KafkaException("Failed to make progress reading messages at " + tp + "=" +
-                        fetchOffset + ". Received a non-empty fetch response from the server, but no " +
-                        "complete records were found.");
-            }
+            // This should not happen with brokers that support FetchRequest/Response V4 or higher (i.e. KIP-74)
+            throw new KafkaException("Failed to make progress reading messages at " + tp + "=" +
+                    fetchOffset + ". Received a non-empty fetch response from the server, but no " +
+                    "complete records were found.");
         }
 
         if (!updatePartitionState(partition, tp)) {
