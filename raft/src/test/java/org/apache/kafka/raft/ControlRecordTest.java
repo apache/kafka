@@ -34,24 +34,16 @@ public final class ControlRecordTest {
     @Test
     void testCtr() {
         // Valid constructions
-        ControlRecord.of(ControlRecordType.LEADER_CHANGE, new LeaderChangeMessage());
-        ControlRecord.of(ControlRecordType.SNAPSHOT_HEADER, new SnapshotHeaderRecord());
-        ControlRecord.of(ControlRecordType.SNAPSHOT_FOOTER, new SnapshotFooterRecord());
-        ControlRecord.of(ControlRecordType.KRAFT_VERSION, new KRaftVersionRecord());
-        ControlRecord.of(ControlRecordType.KRAFT_VOTERS, new VotersRecord());
+        ControlRecord.of(new LeaderChangeMessage());
+        ControlRecord.of(new SnapshotHeaderRecord());
+        ControlRecord.of(new SnapshotFooterRecord());
+        ControlRecord.of(new KRaftVersionRecord());
+        ControlRecord.of(new VotersRecord());
 
         // Invalid constructions
         assertThrows(
             IllegalArgumentException.class,
-            () -> ControlRecord.of(ControlRecordType.ABORT, new SnapshotFooterRecord())
-        );
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> ControlRecord.of(ControlRecordType.LEADER_CHANGE, new SnapshotHeaderRecord())
-        );
-        assertThrows(
-            IllegalArgumentException.class,
-            () -> ControlRecord.of(ControlRecordType.SNAPSHOT_FOOTER, Mockito.mock(ApiMessage.class))
+            () -> ControlRecord.of(Mockito.mock(ApiMessage.class))
         );
     }
 

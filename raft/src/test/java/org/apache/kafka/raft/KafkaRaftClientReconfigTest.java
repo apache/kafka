@@ -87,25 +87,21 @@ public class KafkaRaftClientReconfigTest {
         List<List<ControlRecord>> expectedBootstrapRecords = List.of(
             List.of(
                 ControlRecord.of(
-                    ControlRecordType.SNAPSHOT_HEADER,
                     new SnapshotHeaderRecord()
                         .setVersion((short) 0)
                         .setLastContainedLogTimestamp(0)
                 ),
                 ControlRecord.of(
-                    ControlRecordType.KRAFT_VERSION,
                     new KRaftVersionRecord()
                         .setVersion(ControlRecordUtils.KRAFT_VERSION_CURRENT_VERSION)
                         .setKRaftVersion((short) 1)
                 ),
                 ControlRecord.of(
-                    ControlRecordType.KRAFT_VOTERS,
                     voters.toVotersRecord(ControlRecordUtils.KRAFT_VOTERS_CURRENT_VERSION)
                 )
             ),
             List.of(
                 ControlRecord.of(
-                    ControlRecordType.SNAPSHOT_FOOTER,
                     new SnapshotFooterRecord()
                         .setVersion((short) 0)
                 )

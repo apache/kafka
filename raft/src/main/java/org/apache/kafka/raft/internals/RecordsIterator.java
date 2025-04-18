@@ -343,18 +343,12 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
     }
 
     private static ControlRecord decodeControlRecord(Optional<ByteBuffer> key, Optional<ByteBuffer> value) {
-        if (key.isEmpty()) {
-            throw new IllegalArgumentException("Missing key in the record when a key was expected");
-        } else if (key.get().remaining() == 0) {
+        if (key.get().remaining() == 0) {
             throw new IllegalArgumentException("Got an unexpected empty key in the record");
         }
-
-        if (value.isEmpty()) {
-            throw new IllegalArgumentException("Missing value in the record when a value was expected");
-        } else if (value.get().remaining() == 0) {
+        if (value.get().remaining() == 0) {
             throw new IllegalArgumentException("Got an unexpected empty value in the record");
         }
-
         return ControlRecord.of(key, value);
     }
 }
