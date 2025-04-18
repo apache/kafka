@@ -350,4 +350,8 @@ public class OffsetFetchRequest extends AbstractRequest {
     public OffsetFetchRequestData data() {
         return data;
     }
+
+    public static boolean useTopicIds(short version) {
+        return version >= 10;
+    }
 }

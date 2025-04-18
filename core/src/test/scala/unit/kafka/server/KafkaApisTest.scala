@@ -8377,7 +8377,7 @@ class KafkaApisTest extends Logging {
       buildRequest(new OffsetFetchRequest.Builder(groups, false, false).build(version))
     }
 
-    val requestChannelRequest = makeRequest(ApiKeys.OFFSET_FETCH.latestVersion)
+    val requestChannelRequest = makeRequest(ApiKeys.OFFSET_FETCH.latestVersion(false))
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
 
@@ -8528,7 +8528,7 @@ class KafkaApisTest extends Logging {
       buildRequest(new OffsetFetchRequest.Builder(groups, false, false).build(version))
     }
 
-    val requestChannelRequest = makeRequest(ApiKeys.OFFSET_FETCH.latestVersion)
+    val requestChannelRequest = makeRequest(ApiKeys.OFFSET_FETCH.latestVersion(false))
 
     val authorizer: Authorizer = mock(classOf[Authorizer])
 
