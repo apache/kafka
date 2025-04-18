@@ -812,10 +812,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         producerMetrics.recordPrepareTxn(time.nanoseconds() - prepareStart);
 
-        return new PreparedTxnState(
-            transactionManager.producerIdAndEpoch().producerId,
-            transactionManager.producerIdAndEpoch().epoch
-        );
+        return transactionManager.getPreparedTransactionState();
     }
 
     /**
