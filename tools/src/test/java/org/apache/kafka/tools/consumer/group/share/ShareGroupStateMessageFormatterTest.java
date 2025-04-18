@@ -160,6 +160,13 @@ public class ShareGroupStateMessageFormatterTest extends CoordinatorRecordMessag
                 """
             ),
             Arguments.of(
+                MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_SNAPSHOT_KEY).array(),
+                null,
+                """
+                    {"key":{"type":0,"data":{"groupId":"gs1","topicId":"gtb2stGYRk-vWZ2zAozmoA","partition":0}},"value":null}
+                """
+            ),
+            Arguments.of(
                 MessageUtil.toVersionPrefixedByteBuffer((short) 1, SHARE_UPDATE_KEY).array(),
                 MessageUtil.toVersionPrefixedByteBuffer((short) 0, SHARE_UPDATE_VALUE).array(),
                 """

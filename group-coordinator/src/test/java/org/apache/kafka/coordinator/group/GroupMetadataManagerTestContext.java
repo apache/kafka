@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
+import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
@@ -472,7 +473,7 @@ public class GroupMetadataManagerTestContext {
         private ShareGroupPartitionAssignor shareGroupAssignor = new MockPartitionAssignor("share");
         private final List<ShareGroupBuilder> shareGroupBuilders = new ArrayList<>();
         private final Map<String, Object> config = new HashMap<>();
-        private Optional<Authorizer> authorizer = Optional.empty();
+        private Optional<Plugin<Authorizer>> authorizerPlugin = Optional.empty();
         private List<TaskAssignor> streamsGroupAssignors = Collections.singletonList(new MockTaskAssignor("mock"));
 
         public Builder withConfig(String key, Object value) {
@@ -505,8 +506,8 @@ public class GroupMetadataManagerTestContext {
             return this;
         }
 
-        public Builder withAuthorizer(Authorizer authorizer) {
-            this.authorizer = Optional.of(authorizer);
+        public Builder withAuthorizerPlugin(Plugin<Authorizer> authorizerPlugin) {
+            this.authorizerPlugin = Optional.of(authorizerPlugin);
             return this;
         }
         
@@ -544,7 +545,7 @@ public class GroupMetadataManagerTestContext {
                     .withGroupCoordinatorMetricsShard(metrics)
                     .withShareGroupAssignor(shareGroupAssignor)
                     .withGroupConfigManager(groupConfigManager)
-                    .withAuthorizer(authorizer)
+                    .withAuthorizerPlugin(authorizerPlugin)
                     .withStreamsGroupAssignors(streamsGroupAssignors)
                     .build(),
                 groupConfigManager

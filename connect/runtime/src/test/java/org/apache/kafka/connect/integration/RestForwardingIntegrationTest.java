@@ -215,7 +215,7 @@ public class RestForwardingIntegrationTest {
                 "\"name\": \"blah\"," +
                 "\"config\": {}" +
                 "}";
-        StringEntity entity = new StringEntity(jsonBody, StandardCharsets.UTF_8.name());
+        StringEntity entity = new StringEntity(jsonBody, StandardCharsets.UTF_8);
         entity.setContentType("application/json");
         request.setEntity(entity);
         HttpResponse httpResponse = executeRequest(followerUrl, request);
