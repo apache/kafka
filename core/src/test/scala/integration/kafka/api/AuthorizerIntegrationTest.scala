@@ -20,7 +20,7 @@ import java.util.regex.Pattern
 import java.util.{Collections, Optional, Properties}
 import kafka.utils.{TestInfoUtils, TestUtils}
 import kafka.utils.TestUtils.waitUntilTrue
-import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, NewTopic}
+import org.apache.kafka.clients.admin.{Admin, AlterConfigOp, ListGroupsOptions, NewTopic}
 import org.apache.kafka.clients.consumer._
 import org.apache.kafka.clients.producer._
 import org.apache.kafka.common.acl.AclOperation._
@@ -1669,19 +1669,19 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     removeAllClientAcls()
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, DESCRIBE, ALLOW)), clusterResource)
     // it should list both groups (due to cluster describe permission)
-    assertEquals(Set(group, group2), adminClient.listConsumerGroups().all().get().asScala.map(_.groupId()).toSet)
+    assertEquals(Set(group, group2), adminClient.listGroups(ListGroupsOptions.forConsumerGroups()).all().get().asScala.map(_.groupId()).toSet)
 
     // now replace cluster describe with group read permission
     removeAllClientAcls()
     addAndVerifyAcls(Set(new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, READ, ALLOW)), groupResource)
     // it should list only one group now
-    val groupList = adminClient.listConsumerGroups().all().get().asScala.toList
+    val groupList = adminClient.listGroups(ListGroupsOptions.forConsumerGroups()).all().get().asScala.toList
     assertEquals(1, groupList.length)
     assertEquals(group, groupList.head.groupId)
 
     // now remove all acls and verify describe group access is required to list any group
     removeAllClientAcls()
-    val listGroupResult = adminClient.listConsumerGroups()
+    val listGroupResult = adminClient.listGroups(ListGroupsOptions.forConsumerGroups())
     assertEquals(List(), listGroupResult.errors().get().asScala.toList)
     assertEquals(List(), listGroupResult.all().get().asScala.toList)
     otherConsumer.close()
@@ -2550,7 +2550,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
-  def testConsumerGroupHeartbeaWithRegex(quorum: String): Unit = {
+  def testConsumerGroupHeartbeatWithRegex(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
     val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
     addAndVerifyAcls(Set(allowAllOpsAcl), groupResource)
@@ -2562,7 +2562,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
-  def testConsumerGroupHeartbeaWithRegexWithoutTopicDescribeAcl(quorum: String): Unit = {
+  def testConsumerGroupHeartbeatWithRegexWithoutTopicDescribeAcl(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
     val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
     addAndVerifyAcls(Set(allowAllOpsAcl), groupResource)
@@ -2573,7 +2573,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
-  def testConsumerGroupHeartbeaWithRegexWithDifferentMemberAcls(quorum: String): Unit = {
+  def testConsumerGroupHeartbeatWithRegexWithDifferentMemberAcls(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic, numPartitions = 2)
     val allowAllOpsAcl = new AccessControlEntry(clientPrincipalString, WILDCARD_HOST, ALL, ALLOW)
     addAndVerifyAcls(Set(allowAllOpsAcl), groupResource)

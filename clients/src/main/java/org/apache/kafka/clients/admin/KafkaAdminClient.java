@@ -3614,6 +3614,7 @@ public class KafkaAdminClient extends AdminClient {
                 .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
     }
 
+    @Deprecated
     private static final class ListConsumerGroupsResults {
         private final List<Throwable> errors;
         private final HashMap<String, ConsumerGroupListing> listings;
@@ -3657,6 +3658,8 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
+    @SuppressWarnings("removal")
+    @Deprecated(since = "4.1", forRemoval = true)
     public ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
         final KafkaFutureImpl<Collection<Object>> all = new KafkaFutureImpl<>();
         final long nowMetadata = time.milliseconds();
