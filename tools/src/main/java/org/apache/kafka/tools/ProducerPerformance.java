@@ -51,7 +51,6 @@ public class ProducerPerformance {
 
     public static final String DEFAULT_TRANSACTION_ID_PREFIX = "performance-producer-";
     public static final long DEFAULT_TRANSACTION_DURATION_MS = 3000L;
-    public static final int DEFAULT_REPORTING_INTERVAL_MS = 5000;
 
     public static void main(String[] args) throws Exception {
         ProducerPerformance perf = new ProducerPerformance();
@@ -77,12 +76,10 @@ public class ProducerPerformance {
             SplittableRandom random = new SplittableRandom(0);
             ProducerRecord<byte[], byte[]> record;
 
-            System.out.println("DEBUG: config.warmupRecords=" + config.warmupRecords + ", (config.warmupRecords > 0)=" + (config.warmupRecords > 0));
-
             if (config.warmupRecords > 0) {
                 System.out.println("Warmup first " + config.warmupRecords + " records. Steady state results will print after the complete test summary.");
             }
-            stats = new Stats(config.numRecords, DEFAULT_REPORTING_INTERVAL_MS);
+            stats = new Stats(config.numRecords);
             long startMs = System.currentTimeMillis();
 
             ThroughputThrottler throttler = new ThroughputThrottler(config.throughput, startMs);
@@ -102,7 +99,7 @@ public class ProducerPerformance {
 
                 long sendStartMs = System.currentTimeMillis();
                 if ( config.warmupRecords > 0 && i == config.warmupRecords ) {
-                    steadyStateStats = new Stats(config.numRecords - config.warmupRecords, DEFAULT_REPORTING_INTERVAL_MS, config.warmupRecords > 0);
+                    steadyStateStats = new Stats(config.numRecords - config.warmupRecords, config.warmupRecords > 0);
                     stats.steadyStateActive = true;
                 }
                 cb = new PerfCallback(sendStartMs, payload.length, stats, steadyStateStats);
@@ -378,11 +375,11 @@ public class ProducerPerformance {
         private final boolean isSteadyState;
         private boolean steadyStateActive;
 
-        public Stats(long numRecords, int reportingInterval) {
-            this(numRecords, reportingInterval, false);
+        public Stats(long numRecords) {
+            this(numRecords, false);
         }
 
-        public Stats(long numRecords, int reportingInterval, boolean isSteadyState) {
+        public Stats(long numRecords, boolean isSteadyState) {
             this.start = System.currentTimeMillis();
             this.windowStart = System.currentTimeMillis();
             this.iteration = 0;
@@ -395,7 +392,7 @@ public class ProducerPerformance {
             this.windowTotalLatency = 0;
             this.windowBytes = 0;
             this.totalLatency = 0;
-            this.reportingInterval = reportingInterval;
+            this.reportingInterval = 5000;
             this.isSteadyState = isSteadyState;
             this.steadyStateActive = isSteadyState;
         }
