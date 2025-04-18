@@ -14,9 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.log.remote;
-
-import kafka.server.KafkaConfig;
+package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.Endpoint;
 import org.apache.kafka.common.KafkaException;
@@ -24,6 +22,7 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
+import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.errors.ReplicaNotAvailableException;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.Metrics;
@@ -42,19 +41,7 @@ import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.log.remote.TopicPartitionLog;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManager;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManagerConfig;
-import org.apache.kafka.server.log.remote.storage.ClassLoaderAwareRemoteStorageManager;
-import org.apache.kafka.server.log.remote.storage.LogSegmentData;
-import org.apache.kafka.server.log.remote.storage.NoOpRemoteLogMetadataManager;
-import org.apache.kafka.server.log.remote.storage.NoOpRemoteStorageManager;
-import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig;
-import org.apache.kafka.server.log.remote.storage.RemoteLogMetadataManager;
-import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentId;
-import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata.CustomMetadata;
-import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadataUpdate;
-import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentState;
-import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
-import org.apache.kafka.server.log.remote.storage.RemoteStorageManager;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageManager.IndexType;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
@@ -131,12 +118,12 @@ import java.util.function.BiConsumer;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
-import static kafka.log.remote.RemoteLogManager.isRemoteSegmentWithinLeaderEpochs;
 import static org.apache.kafka.common.record.TimestampType.CREATE_TIME;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_CONSUMER_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_PRODUCER_PREFIX;
 import static org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig.REMOTE_LOG_METADATA_TOPIC_PARTITIONS_PROP;
+import static org.apache.kafka.server.log.remote.storage.RemoteLogManager.isRemoteSegmentWithinLeaderEpochs;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM;
 import static org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig.DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS;
@@ -204,7 +191,7 @@ public class RemoteLogManagerTest {
     private final RemoteStorageManager remoteStorageManager = mock(RemoteStorageManager.class);
     private final RemoteLogMetadataManager remoteLogMetadataManager = mock(RemoteLogMetadataManager.class);
     private final RLMQuotaManager rlmCopyQuotaManager = mock(RLMQuotaManager.class);
-    private KafkaConfig config;
+    private RemoteLogManagerConfig config;
 
     private BrokerTopicStats brokerTopicStats = null;
     private final Metrics metrics = new Metrics(time);
@@ -236,10 +223,10 @@ public class RemoteLogManagerTest {
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, "100");
         appendRLMConfig(props);
-        config = KafkaConfig.fromProps(props);
-        brokerTopicStats = new BrokerTopicStats(config.remoteLogManagerConfig().isRemoteStorageSystemEnabled());
+        config = configs(props);
+        brokerTopicStats = new BrokerTopicStats(config.isRemoteStorageSystemEnabled());
 
-        remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
+        remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
                 brokerTopicStats, metrics) {
@@ -261,6 +248,10 @@ public class RemoteLogManagerTest {
             }
         };
         doReturn(true).when(remoteLogMetadataManager).isReady(any(TopicIdPartition.class));
+    }
+
+    private RemoteLogManagerConfig configs(Properties props) {
+        return new RemoteLogManagerConfig(new AbstractConfig(RemoteLogManagerConfig.configDef(), props));
     }
 
     @AfterEach
@@ -353,9 +344,9 @@ public class RemoteLogManagerTest {
         props.put(configPrefix + key, "world");
         props.put("remote.log.metadata.y", "z");
         appendRLMConfig(props);
-        KafkaConfig config = KafkaConfig.fromProps(props);
+        RemoteLogManagerConfig config = configs(props);
 
-        Map<String, Object> metadataMangerConfig = config.remoteLogManagerConfig().remoteLogMetadataManagerProps();
+        Map<String, Object> metadataMangerConfig = config.remoteLogMetadataManagerProps();
         assertEquals(props.get(configPrefix + key), metadataMangerConfig.get(key));
         assertFalse(metadataMangerConfig.containsKey("remote.log.metadata.y"));
     }
@@ -370,9 +361,9 @@ public class RemoteLogManagerTest {
         props.put(configPrefix + key, "world");
         props.put("remote.storage.manager.y", "z");
         appendRLMConfig(props);
-        KafkaConfig config = KafkaConfig.fromProps(props);
+        RemoteLogManagerConfig config = configs(props);
 
-        Map<String, Object> remoteStorageManagerConfig = config.remoteLogManagerConfig().remoteStorageManagerProps();
+        Map<String, Object> remoteStorageManagerConfig = config.remoteStorageManagerProps();
         assertEquals(props.get(configPrefix + key), remoteStorageManagerConfig.get(key));
         assertFalse(remoteStorageManagerConfig.containsKey("remote.storage.manager.y"));
     }
@@ -401,9 +392,9 @@ public class RemoteLogManagerTest {
         // override common security.protocol by adding "RLMM prefix" and "remote log metadata common client prefix"
         props.put(DEFAULT_REMOTE_LOG_METADATA_MANAGER_CONFIG_PREFIX + REMOTE_LOG_METADATA_COMMON_CLIENT_PREFIX + "security.protocol", "SSL");
         appendRLMConfig(props);
-        KafkaConfig config = KafkaConfig.fromProps(props);
+        RemoteLogManagerConfig config = configs(props);
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(
-                config.remoteLogManagerConfig(),
+                config,
                 brokerId,
                 logDir,
                 clusterId,
@@ -1354,7 +1345,7 @@ public class RemoteLogManagerTest {
     void testGetClassLoaderAwareRemoteStorageManager() throws Exception {
         ClassLoaderAwareRemoteStorageManager rsmManager = mock(ClassLoaderAwareRemoteStorageManager.class);
         try (RemoteLogManager remoteLogManager =
-            new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
+            new RemoteLogManager(config, brokerId, logDir, clusterId, time,
                     t -> Optional.empty(),
                     (topicPartition, offset) -> { },
                     brokerTopicStats, metrics) {
@@ -1745,7 +1736,7 @@ public class RemoteLogManagerTest {
         });
 
         when(mockLog.logEndOffset()).thenReturn(300L);
-        remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
+        remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
                 partition -> Optional.of(mockLog),
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
                 brokerTopicStats, metrics) {
@@ -1803,7 +1794,7 @@ public class RemoteLogManagerTest {
     @Test
     public void testRemoveMetricsOnClose() throws IOException {
         try (MockedConstruction<KafkaMetricsGroup> mockMetricsGroupCtor = mockConstruction(KafkaMetricsGroup.class)) {
-            RemoteLogManager remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId,
+            RemoteLogManager remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId,
                     time, tp -> Optional.of(mockLog), (topicPartition, offset) -> {
             }, brokerTopicStats, metrics) {
                 public RemoteStorageManager createRemoteStorageManager() {
@@ -2200,7 +2191,7 @@ public class RemoteLogManagerTest {
                     else
                         return Collections.emptyIterator();
                 });
-        try (RemoteLogManager remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
+        try (RemoteLogManager remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
                 brokerTopicStats, metrics) {
@@ -2225,7 +2216,7 @@ public class RemoteLogManagerTest {
         when(remoteLogMetadataManager.listRemoteLogSegments(eq(leaderTopicIdPartition), anyInt()))
                 .thenReturn(Collections.emptyIterator());
 
-        try (RemoteLogManager remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
+        try (RemoteLogManager remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> { },
                 brokerTopicStats, metrics) {
@@ -2259,7 +2250,7 @@ public class RemoteLogManagerTest {
                 });
 
         AtomicLong logStartOffset = new AtomicLong(0);
-        try (RemoteLogManager remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
+        try (RemoteLogManager remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) ->  logStartOffset.set(offset),
                 brokerTopicStats, metrics) {
@@ -2313,7 +2304,7 @@ public class RemoteLogManagerTest {
             }
         };
 
-        remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
+        remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
                 brokerTopicStats, metrics) {
@@ -2967,7 +2958,7 @@ public class RemoteLogManagerTest {
     @Test
     public void testDeleteRetentionMsOnExpiredSegment() throws RemoteStorageException, IOException {
         AtomicLong logStartOffset = new AtomicLong(0);
-        try (RemoteLogManager remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
+        try (RemoteLogManager remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> logStartOffset.set(offset),
                 brokerTopicStats, metrics) {
@@ -3128,7 +3119,7 @@ public class RemoteLogManagerTest {
         );
 
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(
-                config.remoteLogManagerConfig(),
+                config,
                 brokerId,
                 logDir,
                 clusterId,
@@ -3205,7 +3196,7 @@ public class RemoteLogManagerTest {
         );
 
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(
-                config.remoteLogManagerConfig(),
+                config,
                 brokerId,
                 logDir,
                 clusterId,
@@ -3290,7 +3281,7 @@ public class RemoteLogManagerTest {
 
 
         try (RemoteLogManager remoteLogManager = new RemoteLogManager(
-                config.remoteLogManagerConfig(),
+                config,
                 brokerId,
                 logDir,
                 clusterId,
@@ -3337,8 +3328,8 @@ public class RemoteLogManagerTest {
         Properties defaultProps = new Properties();
         defaultProps.putAll(brokerConfig);
         appendRLMConfig(defaultProps);
-        KafkaConfig defaultRlmConfig = KafkaConfig.fromProps(defaultProps);
-        RLMQuotaManagerConfig defaultConfig = RemoteLogManager.copyQuotaManagerConfig(defaultRlmConfig.remoteLogManagerConfig());
+        RemoteLogManagerConfig defaultRlmConfig = configs(defaultProps);
+        RLMQuotaManagerConfig defaultConfig = RemoteLogManager.copyQuotaManagerConfig(defaultRlmConfig);
         assertEquals(DEFAULT_REMOTE_LOG_MANAGER_COPY_MAX_BYTES_PER_SECOND, defaultConfig.quotaBytesPerSecond());
         assertEquals(DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM, defaultConfig.numQuotaSamples());
         assertEquals(DEFAULT_REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS, defaultConfig.quotaWindowSizeSeconds());
@@ -3349,9 +3340,9 @@ public class RemoteLogManagerTest {
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_NUM_PROP, 31);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPY_QUOTA_WINDOW_SIZE_SECONDS_PROP, 1);
         appendRLMConfig(customProps);
-        KafkaConfig config = KafkaConfig.fromProps(customProps);
+        RemoteLogManagerConfig config = configs(customProps);
 
-        RLMQuotaManagerConfig rlmCopyQuotaManagerConfig = RemoteLogManager.copyQuotaManagerConfig(config.remoteLogManagerConfig());
+        RLMQuotaManagerConfig rlmCopyQuotaManagerConfig = RemoteLogManager.copyQuotaManagerConfig(config);
         assertEquals(100L, rlmCopyQuotaManagerConfig.quotaBytesPerSecond());
         assertEquals(31, rlmCopyQuotaManagerConfig.numQuotaSamples());
         assertEquals(1, rlmCopyQuotaManagerConfig.quotaWindowSizeSeconds());
@@ -3362,9 +3353,9 @@ public class RemoteLogManagerTest {
         Properties defaultProps = new Properties();
         defaultProps.putAll(brokerConfig);
         appendRLMConfig(defaultProps);
-        KafkaConfig defaultRlmConfig = KafkaConfig.fromProps(defaultProps);
+        RemoteLogManagerConfig defaultRlmConfig = configs(defaultProps);
 
-        RLMQuotaManagerConfig defaultConfig = RemoteLogManager.fetchQuotaManagerConfig(defaultRlmConfig.remoteLogManagerConfig());
+        RLMQuotaManagerConfig defaultConfig = RemoteLogManager.fetchQuotaManagerConfig(defaultRlmConfig);
         assertEquals(DEFAULT_REMOTE_LOG_MANAGER_FETCH_MAX_BYTES_PER_SECOND, defaultConfig.quotaBytesPerSecond());
         assertEquals(DEFAULT_REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_NUM, defaultConfig.numQuotaSamples());
         assertEquals(DEFAULT_REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS, defaultConfig.quotaWindowSizeSeconds());
@@ -3375,8 +3366,8 @@ public class RemoteLogManagerTest {
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_NUM_PROP, 31);
         customProps.put(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_FETCH_QUOTA_WINDOW_SIZE_SECONDS_PROP, 1);
         appendRLMConfig(customProps);
-        KafkaConfig rlmConfig = KafkaConfig.fromProps(customProps);
-        RLMQuotaManagerConfig rlmFetchQuotaManagerConfig = RemoteLogManager.fetchQuotaManagerConfig(rlmConfig.remoteLogManagerConfig());
+        RemoteLogManagerConfig rlmConfig = configs(customProps);
+        RLMQuotaManagerConfig rlmFetchQuotaManagerConfig = RemoteLogManager.fetchQuotaManagerConfig(rlmConfig);
         assertEquals(100L, rlmFetchQuotaManagerConfig.quotaBytesPerSecond());
         assertEquals(31, rlmFetchQuotaManagerConfig.numQuotaSamples());
         assertEquals(1, rlmFetchQuotaManagerConfig.quotaWindowSizeSeconds());
@@ -3646,7 +3637,7 @@ public class RemoteLogManagerTest {
         when(remoteStorageManager.fetchLogSegment(any(RemoteLogSegmentMetadata.class), anyInt()))
                 .thenReturn(fileInputStream);
 
-        RemoteLogManager remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
+        RemoteLogManager remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
                 tp -> Optional.of(mockLog),
                 (topicPartition, offset) -> currentLogStartOffset.set(offset),
                 brokerTopicStats, metrics) {
@@ -3687,9 +3678,9 @@ public class RemoteLogManagerTest {
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_STORAGE_SYSTEM_ENABLE_PROP, "true");
         props.setProperty(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_TASK_INTERVAL_MS_PROP, "30000");
         appendRLMConfig(props);
-        config = KafkaConfig.fromProps(props);
+        config = configs(props);
 
-        remoteLogManager = new RemoteLogManager(config.remoteLogManagerConfig(), brokerId, logDir, clusterId, time,
+        remoteLogManager = new RemoteLogManager(config, brokerId, logDir, clusterId, time,
             tp -> Optional.of(mockLog),
             (topicPartition, offset) -> currentLogStartOffset.set(offset),
             brokerTopicStats, metrics) {
