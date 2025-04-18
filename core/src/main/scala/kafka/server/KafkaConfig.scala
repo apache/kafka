@@ -40,7 +40,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.share.ShareCoordinatorConfig
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.security.authorizer.AuthorizerUtils
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.authorizer.Authorizer
@@ -239,18 +239,12 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   }
 
   def metadataLogDir: String = {
-    Option(getString(KRaftConfigs.METADATA_LOG_DIR_CONFIG)) match {
+    Option(getString(MetadataLogConfig.METADATA_LOG_DIR_CONFIG)) match {
       case Some(dir) => dir
       case None => logDirs.head
     }
   }
 
-  def metadataLogSegmentBytes = getInt(KRaftConfigs.METADATA_LOG_SEGMENT_BYTES_CONFIG)
-  def metadataLogSegmentMillis = getLong(KRaftConfigs.METADATA_LOG_SEGMENT_MILLIS_CONFIG)
-  def metadataRetentionBytes = getLong(KRaftConfigs.METADATA_MAX_RETENTION_BYTES_CONFIG)
-  def metadataRetentionMillis = getLong(KRaftConfigs.METADATA_MAX_RETENTION_MILLIS_CONFIG)
-  def metadataNodeIDConfig = getInt(KRaftConfigs.NODE_ID_CONFIG)
-  def metadataLogSegmentMinBytes = getInt(KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG)
   val serverMaxStartupTimeMs = getLong(KRaftConfigs.SERVER_MAX_STARTUP_TIME_MS_CONFIG)
 
   def messageMaxBytes = getInt(ServerConfigs.MESSAGE_MAX_BYTES_CONFIG)
@@ -264,10 +258,10 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
   }
 
   /************* Metadata Configuration ***********/
-  val metadataSnapshotMaxNewRecordBytes = getLong(KRaftConfigs.METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES_CONFIG)
-  val metadataSnapshotMaxIntervalMs = getLong(KRaftConfigs.METADATA_SNAPSHOT_MAX_INTERVAL_MS_CONFIG)
+  val metadataSnapshotMaxNewRecordBytes = getLong(MetadataLogConfig.METADATA_SNAPSHOT_MAX_NEW_RECORD_BYTES_CONFIG)
+  val metadataSnapshotMaxIntervalMs = getLong(MetadataLogConfig.METADATA_SNAPSHOT_MAX_INTERVAL_MS_CONFIG)
   val metadataMaxIdleIntervalNs: Option[Long] = {
-    val value = TimeUnit.NANOSECONDS.convert(getInt(KRaftConfigs.METADATA_MAX_IDLE_INTERVAL_MS_CONFIG).toLong, TimeUnit.MILLISECONDS)
+    val value = TimeUnit.NANOSECONDS.convert(getInt(MetadataLogConfig.METADATA_MAX_IDLE_INTERVAL_MS_CONFIG).toLong, TimeUnit.MILLISECONDS)
     if (value > 0) Some(value) else None
   }
 
