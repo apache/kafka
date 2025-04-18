@@ -38,14 +38,14 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class KafkaRaftClientClusterAuthTest {
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
-    void testClusterAuthorizationFailedInFetch(boolean withKip853Rpc) throws Exception {
+    void testClusterAuthorizationFailedInFetch(boolean isReconfigSupported) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
-                .withKip853Rpc(withKip853Rpc)
+                .withRaftProtocol(isReconfigSupported ? RaftProtocol.KIP_853_PROTOCOL : RaftProtocol.KIP_595_PROTOCOL)
                 .withElectedLeader(epoch, otherNodeId)
                 .build();
 
@@ -66,7 +66,7 @@ public class KafkaRaftClientClusterAuthTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
-    void testClusterAuthorizationFailedInBeginQuorumEpoch(boolean withKip853Rpc) throws Exception {
+    void testClusterAuthorizationFailedInBeginQuorumEpoch(boolean isReconfigSupported) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
@@ -75,7 +75,7 @@ public class KafkaRaftClientClusterAuthTest {
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
                 .updateRandom(r -> r.mockNextInt(DEFAULT_ELECTION_TIMEOUT_MS, 0))
                 .withUnknownLeader(epoch - 1)
-                .withKip853Rpc(withKip853Rpc)
+                .withRaftProtocol(isReconfigSupported ? RaftProtocol.KIP_853_PROTOCOL : RaftProtocol.KIP_595_PROTOCOL)
                 .build();
 
         context.time.sleep(context.electionTimeoutMs());
@@ -96,7 +96,7 @@ public class KafkaRaftClientClusterAuthTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
-    void testClusterAuthorizationFailedInVote(boolean withKip853Rpc) throws Exception {
+    void testClusterAuthorizationFailedInVote(boolean isReconfigSupported) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         int epoch = 5;
@@ -104,7 +104,7 @@ public class KafkaRaftClientClusterAuthTest {
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
                 .withUnknownLeader(epoch - 1)
-                .withKip853Rpc(withKip853Rpc)
+                .withRaftProtocol(isReconfigSupported ? RaftProtocol.KIP_853_PROTOCOL : RaftProtocol.KIP_595_PROTOCOL)
                 .build();
 
         // Become a candidate
@@ -122,14 +122,14 @@ public class KafkaRaftClientClusterAuthTest {
 
     @ParameterizedTest
     @ValueSource(booleans = { true, false })
-    void testClusterAuthorizationFailedInEndQuorumEpoch(boolean withKip853Rpc) throws Exception {
+    void testClusterAuthorizationFailedInEndQuorumEpoch(boolean isReconfigSupported) throws Exception {
         int localId = randomReplicaId();
         int otherNodeId = localId + 1;
         Set<Integer> voters = Set.of(localId, otherNodeId);
 
         RaftClientTestContext context = new RaftClientTestContext.Builder(localId, voters)
                 .withUnknownLeader(1)
-                .withKip853Rpc(withKip853Rpc)
+                .withRaftProtocol(isReconfigSupported ? RaftProtocol.KIP_853_PROTOCOL : RaftProtocol.KIP_595_PROTOCOL)
                 .build();
 
         context.unattachedToLeader();
