@@ -5507,14 +5507,11 @@ class KafkaApisTest extends Logging {
       ))
     )
 
-    val erroneousPartitions: util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData] = new util.HashMap()
-    erroneousPartitions.put(
+    val erroneousPartitions = util.Map.of[TopicIdPartition, ShareFetchResponseData.PartitionData](
       tp2,
       new ShareFetchResponseData.PartitionData()
         .setPartitionIndex(1)
-        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code)
-    )
-    erroneousPartitions.put(
+        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code),
       tp3,
       new ShareFetchResponseData.PartitionData()
         .setPartitionIndex(0)
@@ -10733,8 +10730,8 @@ class KafkaApisTest extends Logging {
     val request = buildRequest(new ListClientMetricsResourcesRequest.Builder(new ListClientMetricsResourcesRequestData()).build())
     metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
 
-    val resources = new mutable.HashSet[String]
-    when(clientMetricsManager.listClientMetricsResources).thenReturn(resources.asJava)
+    val resources = new util.HashSet[String]
+    when(clientMetricsManager.listClientMetricsResources).thenReturn(resources)
     kafkaApis = createKafkaApis()
     kafkaApis.handle(request, RequestLocal.noCaching)
     val response = verifyNoThrottling[ListClientMetricsResourcesResponse](request)
