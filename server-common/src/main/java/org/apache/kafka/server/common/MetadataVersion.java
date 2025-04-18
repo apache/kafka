@@ -117,6 +117,9 @@ public enum MetadataVersion {
     // Enables share groups. Note, share groups are for preview only in 4.1. (KIP-932).
     IBP_4_1_IV1(27, "4.1", "IV1", false),
 
+    // Enables "streams" groups. Note, streams groups are for early access only in 4.1. (KIP-1071).
+    IBP_4_1_IV2(28, "4.1", "IV2", false),
+
     // Insert any additional IBP_4_1_IVx versions above this comment, and bump the feature level of
     // IBP_4_2_IV0 accordingly. When 4.2 development begins, IBP_4_2_IV0 will cease to be
     // a placeholder.
@@ -127,7 +130,8 @@ public enum MetadataVersion {
     // *** SHARE GROUPS BECOME PRODUCTION-READY IN THE FUTURE. ITS DEFINITION ALLOWS A SHARE   ***
     // *** GROUPS FEATURE TO BE DEFINED IN 4.1 BUT TURNED OFF BY DEFAULT, ABLE TO BE TURNED ON ***
     // *** DYNAMICALLY TO TRY OUT THE PREVIEW CAPABILITY.                                      ***
-    IBP_4_2_IV0(28, "4.2", "IV0", false);
+    IBP_4_2_IV0(29, "4.2", "IV0", false);
+
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version
