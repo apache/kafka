@@ -81,7 +81,7 @@
         "about": "The group ID." },
       { "name": "Topics", "type": "[]OffsetFetchResponseTopics", "versions": "8+",
         "about": "The responses per topic.", "fields": [
-        { "name": "Name", "type": "string", "versions": "8+", "entityType": "topicName", "ignorable": true,
+        { "name": "Name", "type": "string", "versions": "8-9", "entityType": "topicName", "ignorable": true,
           "about": "The topic name." },
         { "name":  "TopicId", "type": "uuid", "versions": "10+", "ignorable": true,
           "about": "The topic ID." },

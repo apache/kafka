@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestGroup;
@@ -71,7 +72,8 @@ public class OffsetFetchRequest extends AbstractRequest {
                        boolean requireStable,
                        List<TopicPartition> partitions,
                        boolean throwOnFetchStableOffsetsUnsupported) {
-            super(ApiKeys.OFFSET_FETCH);
+            // It can only be used with topic names.
+            super(ApiKeys.OFFSET_FETCH, ApiKeys.OFFSET_FETCH.oldestVersion(), (short) 9);
 
             OffsetFetchRequestData.OffsetFetchRequestGroup group =
                 new OffsetFetchRequestData.OffsetFetchRequestGroup()
@@ -103,7 +105,8 @@ public class OffsetFetchRequest extends AbstractRequest {
         public Builder(Map<String, List<TopicPartition>> groupIdToTopicPartitionMap,
                        boolean requireStable,
                        boolean throwOnFetchStableOffsetsUnsupported) {
-            super(ApiKeys.OFFSET_FETCH);
+            // It can only be used with topic names.
+            super(ApiKeys.OFFSET_FETCH, ApiKeys.OFFSET_FETCH.oldestVersion(), (short) 9);
 
             List<OffsetFetchRequestGroup> groups = new ArrayList<>();
             for (Entry<String, List<TopicPartition>> entry : groupIdToTopicPartitionMap.entrySet()) {
@@ -131,6 +134,12 @@ public class OffsetFetchRequest extends AbstractRequest {
             this.data = new OffsetFetchRequestData()
                 .setGroups(groups)
                 .setRequireStable(requireStable);
+            this.throwOnFetchStableOffsetsUnsupported = throwOnFetchStableOffsetsUnsupported;
+        }
+
+        public Builder(OffsetFetchRequestData data, boolean throwOnFetchStableOffsetsUnsupported) {
+            super(ApiKeys.OFFSET_FETCH);
+            this.data = data;
             this.throwOnFetchStableOffsetsUnsupported = throwOnFetchStableOffsetsUnsupported;
         }
 

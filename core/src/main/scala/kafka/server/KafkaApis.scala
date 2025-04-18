@@ -1056,7 +1056,7 @@ class KafkaApis(val requestChannel: RequestChannel,
               // If the topic is not provided by the group coordinator, we set it
               // using the metadata cache.
               if (topic.topicId == Uuid.ZERO_UUID) {
-                metadataCache.getTopicName(topic.topicId).ifPresent(name => topic.setName(name))
+                topic.setTopicId(metadataCache.getTopicId(topic.name))
               }
               // If we don't have the topic id at all, we skip the topic because
               // we can not serialize it without it.
