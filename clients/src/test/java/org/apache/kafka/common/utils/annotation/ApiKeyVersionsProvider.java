@@ -23,16 +23,36 @@ import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.ArgumentsProvider;
 import org.junit.jupiter.params.support.AnnotationConsumer;
 
+import java.util.stream.IntStream;
 import java.util.stream.Stream;
 
 public class ApiKeyVersionsProvider implements ArgumentsProvider, AnnotationConsumer<ApiKeyVersionsSource> {
     private ApiKeys apiKey;
+    private short fromVersion;
+    private short toVersion;
 
     public void accept(ApiKeyVersionsSource source) {
         apiKey = source.apiKey();
+        fromVersion = source.fromVersion() == -1 ? apiKey.oldestVersion() : source.fromVersion();
+        toVersion = source.toVersion() == -1 ? apiKey.latestVersion(source.enableUnstableLastVersion()) : source.toVersion();
+
+        if (fromVersion > toVersion) {
+            throw new IllegalArgumentException(String.format("The fromVersion %s is larger than the toVersion %s",
+                fromVersion, toVersion));
+        }
+
+        if (fromVersion < apiKey.oldestVersion()) {
+            throw new IllegalArgumentException(String.format("The fromVersion %s is older than the oldest version %s",
+                fromVersion, apiKey.oldestVersion()));
+        }
+
+        if (toVersion < apiKey.latestVersion(source.enableUnstableLastVersion())) {
+            throw new IllegalArgumentException(String.format("The toVersion %s is newer than the latest version %s",
+                fromVersion, apiKey.latestVersion(source.enableUnstableLastVersion())));
+        }
     }
 
     public Stream<? extends Arguments> provideArguments(ExtensionContext context) {
-        return apiKey.allVersions().stream().map(Arguments::of);
+        return IntStream.rangeClosed(fromVersion, toVersion).mapToObj(i -> Arguments.of((short) i));
     }
 }
