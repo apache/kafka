@@ -831,7 +831,7 @@ public class ClassicGroup implements Group {
         String groupInstanceId,
         int generationId,
         boolean isTransactional,
-        short apiVersion
+        int apiVersion
     ) throws CoordinatorNotAvailableException, UnknownMemberIdException, IllegalGenerationException, FencedInstanceIdException {
         if (isInState(DEAD)) {
             throw Errors.COORDINATOR_NOT_AVAILABLE.exception();

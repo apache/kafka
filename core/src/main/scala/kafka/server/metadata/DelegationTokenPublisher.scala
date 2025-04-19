@@ -17,11 +17,11 @@
 
 package kafka.server.metadata
 
-import kafka.server.DelegationTokenManager
 import kafka.server.KafkaConfig
 import kafka.utils.Logging
 import org.apache.kafka.image.loader.LoaderManifest
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
+import org.apache.kafka.server.DelegationTokenManager
 import org.apache.kafka.server.fault.FaultHandler
 
 
