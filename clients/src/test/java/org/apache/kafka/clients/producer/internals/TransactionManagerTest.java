@@ -163,12 +163,12 @@ public class TransactionManagerTest {
     }
 
     private void initializeTransactionManager(Optional<String> transactionalId, boolean transactionV2Enabled) {
-        initializeTransactionManager(transactionalId, transactionV2Enabled, TransactionManager.DEFAULT_INVALID_TRANSITION_ATTEMPT_POLICY);
+        initializeTransactionManager(transactionalId, transactionV2Enabled, TransactionManager.DEFAULT_INVALID_STATE_TRANSITION_ATTEMPT_HANDLER);
     }
 
     private void initializeTransactionManager(Optional<String> transactionalId,
                                               boolean transactionV2Enabled,
-                                              TransactionManager.InvalidTransitionAttemptPolicy invalidTransitionAttemptPolicy) {
+                                              TransactionManager.InvalidStateTransitionAttemptHandler invalidStateTransitionAttemptHandler) {
         Metrics metrics = new Metrics(time);
 
         apiVersions.update("0", new NodeApiVersions(Arrays.asList(
@@ -195,7 +195,7 @@ public class TransactionManagerTest {
             finalizedFeaturesEpoch));
         finalizedFeaturesEpoch += 1;
         this.transactionManager = new TransactionManager(logContext, transactionalId.orElse(null),
-                transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions, invalidTransitionAttemptPolicy);
+                transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions, invalidStateTransitionAttemptHandler);
 
         int batchSize = 16 * 1024;
         int deliveryTimeoutMs = 3000;
@@ -3805,10 +3805,11 @@ public class TransactionManagerTest {
 
     @Test
     public void testBackgroundInvalidStateTransitionIsFatal() {
-        // Usually the policy is the poison the transaction manager only by the Sender thread, but for the
-        // test the policy is forced to true to mimic it being called from the Sender.
-        TransactionManager.InvalidTransitionAttemptPolicy policy = () -> true;
-        initializeTransactionManager(Optional.of(transactionalId), true, policy);
+        // The default logic is to poison the transaction manager on an invalid state transition attempt if that
+        // attempt happens on the Sender thread. Here the logic is altered to always poison on invalid attempts to
+        // mimic as though it's being invoked by the Sender.
+        TransactionManager.InvalidStateTransitionAttemptHandler testHandler = () -> true;
+        initializeTransactionManager(Optional.of(transactionalId), true, testHandler);
         doInitTransactions();
         assertTrue(transactionManager.isTransactional());
 
