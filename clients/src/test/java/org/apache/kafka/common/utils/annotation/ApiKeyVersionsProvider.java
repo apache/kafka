@@ -46,7 +46,7 @@ public class ApiKeyVersionsProvider implements ArgumentsProvider, AnnotationCons
                 fromVersion, apiKey.oldestVersion()));
         }
 
-        if (toVersion < apiKey.latestVersion(source.enableUnstableLastVersion())) {
+        if (toVersion > apiKey.latestVersion(source.enableUnstableLastVersion())) {
             throw new IllegalArgumentException(String.format("The toVersion %s is newer than the latest version %s",
                 fromVersion, apiKey.latestVersion(source.enableUnstableLastVersion())));
         }
