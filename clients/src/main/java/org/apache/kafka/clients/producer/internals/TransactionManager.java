@@ -222,6 +222,63 @@ public class TransactionManager {
         this.apiVersions = apiVersions;
     }
 
+    /**
+     * During its normal course of operations, the transaction manager transitions through different internal
+     * states (i.e. by updating {@link #currentState}) to one of those defined in {@link State}. These state transitions
+     * result from actions on one of the following classes of threads:
+     *
+     * <ul>
+     *     <li><em>Application</em> threads that invokes {@link Producer} API calls</li>
+     *     <li><em>{@link Sender}</em> thread operations</li>
+     * </ul>
+     *
+     * When an invalid state transition is detected during execution on an <em>application</em> thread, the
+     * {@link #currentState} is <em>not updated</em> and an {@link IllegalStateException} is thrown. This gives the
+     * application the opportunity to fix the issue without permanently poisoning the state of the
+     * transaction manager. The {@link Producer} API calls that perform a state transition include:
+     *
+     * <ul>
+     *     <li>{@link Producer#initTransactions()} calls {@link #initializeTransactions()}</li>
+     *     <li>{@link Producer#beginTransaction()} calls {@link #beginTransaction()}</li>
+     *     <li>{@link Producer#commitTransaction()}} calls {@link #beginCommit()}</li>
+     *     <li>{@link Producer#abortTransaction()} calls {@link #beginAbort()}
+     *     </li>
+     *     <li>{@link Producer#sendOffsetsToTransaction(Map, ConsumerGroupMetadata)} calls
+     *         {@link #sendOffsetsToTransaction(Map, ConsumerGroupMetadata)}
+     *     </li>
+     *     <li>{@link Producer#send(ProducerRecord)} (and its variants) calls
+     *         {@link #maybeAddPartition(TopicPartition)} and
+     *         {@link #maybeTransitionToErrorState(RuntimeException)}
+     *     </li>
+     * </ul>
+     *
+     * <p/>
+     *
+     * The {@link Producer} is implemented such that much of its work delegated to and performed asynchronously on the
+     * <em>{@link Sender}</em> thread. This includes record batching, network I/O, broker response handlers, etc. If an
+     * invalid state transition is detected in the <em>{@link Sender}</em> thread, in addition to throwing an
+     * {@link IllegalStateException}, the transaction manager intentionally "poisons" itself by setting its
+     * {@link #currentState} to {@link State#FATAL_ERROR}, a state from which it cannot recover.
+     *
+     * <p/>
+     *
+     * It's important to prevent possible corruption when the transaction manager has determined that it is in a
+     * fatal state. Subsequent transaction operations attempted via either the <em>application</em> or the
+     * <em>{@link Sender}</em> thread should fail. This is achieved when these operations invoke the
+     * {@link #maybeFailWithError()} method, as it causes a {@link KafkaException} to be thrown, ensuring the stated
+     * transactional guarantees are not violated.
+     *
+     * <p/>
+     *
+     * See KAFKA-14831 for more detail.
+     *
+     * @return {@code true} to set state to {@link State#FATAL_ERROR} before throwing an exception,
+     *         {@code false} to throw an exception without first changing the state
+     */
+    protected boolean shouldPoisonStateOnInvalidTransition() {
+        return Thread.currentThread() instanceof Sender.SenderThread;
+    }
+
     public synchronized TransactionalRequestResult initializeTransactions() {
         return initializeTransactions(ProducerIdAndEpoch.NONE);
     }
@@ -1006,7 +1063,7 @@ public class TransactionManager {
             String message = idString + "Invalid transition attempted from state "
                     + currentState.name() + " to state " + target.name();
 
-            if (shouldSetToFatalErrorState()) {
+            if (shouldPoisonStateOnInvalidTransition()) {
                 currentState = State.FATAL_ERROR;
                 lastError = new IllegalStateException(message);
                 throw lastError;
@@ -1027,63 +1084,6 @@ public class TransactionManager {
             log.debug("Transition from state {} to {}", currentState, target);
 
         currentState = target;
-    }
-
-    /**
-     * During its normal course of operations, the transaction manager transitions through different internal
-     * states (i.e. by updating {@link #currentState}) to one of those defined in {@link State}. These state transitions
-     * result from actions on one of the following classes of threads:
-     *
-     * <ul>
-     *     <li><em>Application</em> threads that invokes {@link Producer} API calls</li>
-     *     <li><em>{@link Sender}</em> thread operations</li>
-     * </ul>
-     *
-     * When an invalid state transition is detected during execution on an <em>application</em> thread, the
-     * {@link #currentState} is <em>not updated</em> and an {@link IllegalStateException} is thrown. This gives the
-     * application the opportunity to fix the issue without permanently poisoning the state of the
-     * transaction manager. The {@link Producer} API calls that perform a state transition include:
-     *
-     * <ul>
-     *     <li>{@link Producer#initTransactions()} calls {@link #initializeTransactions()}</li>
-     *     <li>{@link Producer#beginTransaction()} calls {@link #beginTransaction()}</li>
-     *     <li>{@link Producer#commitTransaction()}} calls {@link #beginCommit()}</li>
-     *     <li>{@link Producer#abortTransaction()} calls {@link #beginAbort()}
-     *     </li>
-     *     <li>{@link Producer#sendOffsetsToTransaction(Map, ConsumerGroupMetadata)} calls
-     *         {@link #sendOffsetsToTransaction(Map, ConsumerGroupMetadata)}
-     *     </li>
-     *     <li>{@link Producer#send(ProducerRecord)} (and its variants) calls
-     *         {@link #maybeAddPartition(TopicPartition)} and
-     *         {@link #maybeTransitionToErrorState(RuntimeException)}
-     *     </li>
-     * </ul>
-     *
-     * <p/>
-     *
-     * The {@link Producer} is implemented such that much of its work delegated to and performed asynchronously on the
-     * <em>{@link Sender}</em> thread. This includes record batching, network I/O, broker response handlers, etc. If an
-     * invalid state transition is detected in the <em>{@link Sender}</em> thread, in addition to throwing an
-     * {@link IllegalStateException}, the transaction manager intentionally "poisons" itself by setting its
-     * {@link #currentState} to {@link State#FATAL_ERROR}, a state from which it cannot recover.
-     *
-     * <p/>
-     *
-     * It's important to prevent possible corruption when the transaction manager has determined that it is in a
-     * fatal state. Subsequent transaction operations attempted via either the <em>application</em> or the
-     * <em>{@link Sender}</em> thread should fail. This is achieved when these operations invoke the
-     * {@link #maybeFailWithError()} method, as it causes a {@link KafkaException} to be thrown, ensuring the stated
-     * transactional guarantees are not violated.
-     *
-     * <p/>
-     *
-     * See KAFKA-14831 for more detail.
-     *
-     * @return {@code true} to set state to {@link State#FATAL_ERROR} before throwing an exception,
-     *         {@code false} to throw an exception without first changing the state
-     */
-    protected boolean shouldSetToFatalErrorState() {
-        return Thread.currentThread() instanceof Sender.SenderThread;
     }
 
     private void ensureTransactional() {

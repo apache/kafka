@@ -453,7 +453,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.errors = this.metrics.sensor("errors");
             this.sender = newSender(logContext, kafkaClient, this.metadata);
             String ioThreadName = NETWORK_THREAD_PREFIX + " | " + clientId;
-            this.ioThread = new Sender.SenderThread(ioThreadName, this.sender);
+            this.ioThread = new Sender.SenderThread(ioThreadName, this.sender, true);
             this.ioThread.start();
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());

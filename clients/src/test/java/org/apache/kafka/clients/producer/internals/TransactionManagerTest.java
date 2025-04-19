@@ -4378,7 +4378,7 @@ public class TransactionManagerTest {
 
     private static class TestableTransactionManager extends TransactionManager {
 
-        private Optional<Boolean> shouldSetToFatalErrorStateOverride;
+        private Optional<Boolean> shouldPoisonStateOnInvalidTransitionOverride;
 
         public TestableTransactionManager(LogContext logContext,
                                           String transactionalId,
@@ -4386,16 +4386,16 @@ public class TransactionManagerTest {
                                           long retryBackoffMs,
                                           ApiVersions apiVersions) {
             super(logContext, transactionalId, transactionTimeoutMs, retryBackoffMs, apiVersions);
-            this.shouldSetToFatalErrorStateOverride = Optional.empty();
+            this.shouldPoisonStateOnInvalidTransitionOverride = Optional.empty();
         }
 
         private void setShouldSetToFatalErrorStateOverride(boolean override) {
-            shouldSetToFatalErrorStateOverride = Optional.of(override);
+            shouldPoisonStateOnInvalidTransitionOverride = Optional.of(override);
         }
 
         @Override
-        protected boolean shouldSetToFatalErrorState() {
-            return shouldSetToFatalErrorStateOverride.orElseGet(super::shouldSetToFatalErrorState);
+        protected boolean shouldPoisonStateOnInvalidTransition() {
+            return shouldPoisonStateOnInvalidTransitionOverride.orElseGet(super::shouldPoisonStateOnInvalidTransition);
         }
     }
 }

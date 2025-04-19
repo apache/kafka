@@ -1072,8 +1072,8 @@ public class Sender implements Runnable {
 
     public static class SenderThread extends KafkaThread {
 
-        public SenderThread(final String name, Runnable runnable) {
-            super(name, runnable, true);
+        public SenderThread(final String name, Runnable runnable, boolean daemon) {
+            super(name, runnable, daemon);
         }
     }
 }
