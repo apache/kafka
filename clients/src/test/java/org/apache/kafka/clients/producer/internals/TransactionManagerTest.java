@@ -3799,13 +3799,11 @@ public class TransactionManagerTest {
 
     @Test
     public void testBackgroundInvalidStateTransitionIsFatal() {
-        // The default logic is to poison the transaction manager on an invalid state transition attempt if that
-        // attempt happens on the Sender thread. Here the logic is altered to always poison on invalid attempts to
-        // mimic as though it's being invoked by the Sender.
         initializeTransactionManager(Optional.of(transactionalId), true);
-        transactionManager.setShouldSetToFatalErrorStateOverride(true);
         doInitTransactions();
         assertTrue(transactionManager.isTransactional());
+
+        transactionManager.setShouldSetToFatalErrorStateOverride(true);
 
         // Intentionally perform an operation that will cause an invalid state transition. The detection of this
         // will result in a poisoning of the transaction manager for all subsequent transactional operations since
@@ -4376,6 +4374,10 @@ public class TransactionManagerTest {
         ProducerTestUtils.runUntil(sender, condition);
     }
 
+    /**
+     * This subclass exists only to optionally change the default behavior related to poisoning the state
+     * on invalid state transition attempts.
+     */
     private static class TestableTransactionManager extends TransactionManager {
 
         private Optional<Boolean> shouldPoisonStateOnInvalidTransitionOverride;
@@ -4395,6 +4397,7 @@ public class TransactionManagerTest {
 
         @Override
         protected boolean shouldPoisonStateOnInvalidTransition() {
+            // If there's an override, use it, otherwise invoke the default (i.e. super class) logic.
             return shouldPoisonStateOnInvalidTransitionOverride.orElseGet(super::shouldPoisonStateOnInvalidTransition);
         }
     }
