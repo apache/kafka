@@ -62,7 +62,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Future;
-import java.util.concurrent.RejectedExecutionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.locks.Lock;
 import java.util.function.BiConsumer;
@@ -304,7 +303,7 @@ public class DelayedShareFetch extends DelayedOperation {
                     localPartitionsAlreadyFetched = replicaManagerReadResponse;
                     boolean completedByMe = forceComplete();
                     // If invocation of forceComplete is not successful, then that means the request is already completed
-                    // hence release the acquired locks.
+                    // hence the acquired locks are already released.
                     if (!completedByMe) {
                         releasePartitionLocks(partitionsAcquired.keySet());
                     }
@@ -335,7 +334,7 @@ public class DelayedShareFetch extends DelayedOperation {
             } else {
                 boolean completedByMe = forceComplete();
                 // If invocation of forceComplete is not successful, then that means the request is already completed
-                // hence release the acquired locks. This can occur in case of remote storage fetch if there is a thread that
+                // hence the acquired locks are already released. This can occur in case of remote storage fetch if there is a thread that
                 // completes the operation (due to expiration) right before a different thread is about to enter tryComplete.
                 if (!completedByMe) {
                     releasePartitionLocks(partitionsAcquired.keySet());
@@ -626,7 +625,7 @@ public class DelayedShareFetch extends DelayedOperation {
     private boolean maybeProcessRemoteFetch(
         LinkedHashMap<TopicIdPartition, Long> topicPartitionData,
         TopicPartitionRemoteFetchInfo topicPartitionRemoteFetchInfo
-    ) throws Exception {
+    ) {
         Set<TopicIdPartition> nonRemoteFetchTopicPartitions = new LinkedHashSet<>();
         topicPartitionData.keySet().forEach(topicIdPartition -> {
             // topic partitions for which fetch would not be happening in this share fetch request.
@@ -637,19 +636,16 @@ public class DelayedShareFetch extends DelayedOperation {
         // Release fetch lock for the topic partitions that were acquired but were not a part of remote fetch and add
         // them to the delayed actions queue.
         releasePartitionLocksAndAddToActionQueue(nonRemoteFetchTopicPartitions);
-        Optional<Exception> exceptionOpt = processRemoteFetchOrException(topicPartitionRemoteFetchInfo);
-        if (exceptionOpt.isPresent()) {
-            throw exceptionOpt.get();
-        }
+        processRemoteFetchOrException(topicPartitionRemoteFetchInfo);
         // Check if remote fetch can be completed.
         return maybeCompletePendingRemoteFetch();
     }
 
     /**
-     * Returns an option containing an exception if a task for RemoteStorageFetchInfo could not be scheduled successfully else returns empty optional.
-     * @param topicPartitionRemoteFetchInfo - The remote storage fetch topic partition information.
+     * Throws an exception if a task for remote storage fetch could not be scheduled successfully else updates remoteFetchOpt.
+     * @param topicPartitionRemoteFetchInfo - The remote storage fetch information.
      */
-    private Optional<Exception> processRemoteFetchOrException(
+    private void processRemoteFetchOrException(
         TopicPartitionRemoteFetchInfo topicPartitionRemoteFetchInfo
     ) {
         TopicIdPartition remoteFetchTopicIdPartition = topicPartitionRemoteFetchInfo.topicIdPartition();
@@ -665,17 +661,12 @@ public class DelayedShareFetch extends DelayedOperation {
                     replicaManager.completeDelayedShareFetchRequest(new DelayedShareFetchGroupKey(shareFetch.groupId(), remoteFetchTopicIdPartition.topicId(), remoteFetchTopicIdPartition.partition()));
                 }
             );
-        } catch (RejectedExecutionException e) {
-            // Return the error if any in scheduling the remote fetch task.
-            log.warn("Unable to fetch data from remote storage", e);
-            remoteStorageFetchException = Optional.of(e);
-            return Optional.of(e);
         } catch (Exception e) {
+            // Throw the error if any in scheduling the remote fetch task.
             remoteStorageFetchException = Optional.of(e);
-            return Optional.of(e);
+            throw e;
         }
         remoteFetchOpt = Optional.of(new RemoteFetch(remoteFetchTopicIdPartition, topicPartitionRemoteFetchInfo.logReadResult(), remoteFetchTask, remoteFetchResult, remoteStorageFetchInfo));
-        return Optional.empty();
     }
 
     /**
