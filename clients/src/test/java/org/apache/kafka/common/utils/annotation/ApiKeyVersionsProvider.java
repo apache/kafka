@@ -33,22 +33,26 @@ public class ApiKeyVersionsProvider implements ArgumentsProvider, AnnotationCons
 
     public void accept(ApiKeyVersionsSource source) {
         apiKey = source.apiKey();
-        fromVersion = source.fromVersion() == -1 ? apiKey.oldestVersion() : source.fromVersion();
-        toVersion = source.toVersion() == -1 ? apiKey.latestVersion(source.enableUnstableLastVersion()) : source.toVersion();
+
+        short oldestVersion = apiKey.oldestVersion();
+        short latestVersion = apiKey.latestVersion(source.enableUnstableLastVersion());
+
+        fromVersion = source.fromVersion() == -1 ? oldestVersion : source.fromVersion();
+        toVersion = source.toVersion() == -1 ? latestVersion : source.toVersion();
 
         if (fromVersion > toVersion) {
             throw new IllegalArgumentException(String.format("The fromVersion %s is larger than the toVersion %s",
                 fromVersion, toVersion));
         }
 
-        if (fromVersion < apiKey.oldestVersion()) {
+        if (fromVersion < oldestVersion) {
             throw new IllegalArgumentException(String.format("The fromVersion %s is older than the oldest version %s",
-                fromVersion, apiKey.oldestVersion()));
+                fromVersion, oldestVersion));
         }
 
-        if (toVersion > apiKey.latestVersion(source.enableUnstableLastVersion())) {
+        if (toVersion > latestVersion) {
             throw new IllegalArgumentException(String.format("The toVersion %s is newer than the latest version %s",
-                fromVersion, apiKey.latestVersion(source.enableUnstableLastVersion())));
+                fromVersion, latestVersion));
         }
     }
 
