@@ -17,6 +17,7 @@
 package org.apache.kafka.common.utils.annotation;
 
 import org.apache.kafka.common.protocol.ApiKeys;
+
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtensionContext;
 
