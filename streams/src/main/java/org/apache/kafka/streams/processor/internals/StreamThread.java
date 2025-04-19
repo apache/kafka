@@ -448,7 +448,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             logContext,
             stateUpdaterEnabled);
 
-        final Tasks tasks = new Tasks(new LogContext(logPrefix));
+        final Tasks tasks = new Tasks(logContext);
         final boolean processingThreadsEnabled =
             InternalConfig.processingThreadsEnabled(config.originals());
 
