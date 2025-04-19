@@ -279,7 +279,7 @@ public class ActiveTaskCreatorTest {
             "clientId-StreamThread-0",
             0,
             uuid,
-            new LogContext().logger(ActiveTaskCreator.class),
+            new LogContext(),
             false,
             false);
 
