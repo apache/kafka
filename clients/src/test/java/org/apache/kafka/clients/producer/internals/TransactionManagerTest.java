@@ -149,7 +149,7 @@ public class TransactionManagerTest {
 
     private RecordAccumulator accumulator = null;
     private Sender sender = null;
-    private TransactionManager transactionManager = null;
+    private TestableTransactionManager transactionManager = null;
     private Node brokerNode = null;
     private long finalizedFeaturesEpoch = 0;
 
@@ -163,12 +163,6 @@ public class TransactionManagerTest {
     }
 
     private void initializeTransactionManager(Optional<String> transactionalId, boolean transactionV2Enabled) {
-        initializeTransactionManager(transactionalId, transactionV2Enabled, TransactionManager.DEFAULT_INVALID_STATE_TRANSITION_ATTEMPT_HANDLER);
-    }
-
-    private void initializeTransactionManager(Optional<String> transactionalId,
-                                              boolean transactionV2Enabled,
-                                              TransactionManager.InvalidStateTransitionAttemptHandler invalidStateTransitionAttemptHandler) {
         Metrics metrics = new Metrics(time);
 
         apiVersions.update("0", new NodeApiVersions(Arrays.asList(
@@ -194,8 +188,8 @@ public class TransactionManagerTest {
                 .setMinVersionLevel(transactionV2Enabled ? (short) 2 : (short) 1)),
             finalizedFeaturesEpoch));
         finalizedFeaturesEpoch += 1;
-        this.transactionManager = new TransactionManager(logContext, transactionalId.orElse(null),
-                transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions, invalidStateTransitionAttemptHandler);
+        this.transactionManager = new TestableTransactionManager(logContext, transactionalId.orElse(null),
+                transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions);
 
         int batchSize = 16 * 1024;
         int deliveryTimeoutMs = 3000;
@@ -1044,7 +1038,7 @@ public class TransactionManagerTest {
                 .setMaxVersionLevel((short) 1)
                 .setMinVersionLevel((short) 1)),
             0));
-        this.transactionManager = new TransactionManager(logContext, transactionalId,
+        this.transactionManager = new TestableTransactionManager(logContext, transactionalId,
             transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions);
 
         int batchSize = 16 * 1024;
@@ -3808,8 +3802,8 @@ public class TransactionManagerTest {
         // The default logic is to poison the transaction manager on an invalid state transition attempt if that
         // attempt happens on the Sender thread. Here the logic is altered to always poison on invalid attempts to
         // mimic as though it's being invoked by the Sender.
-        TransactionManager.InvalidStateTransitionAttemptHandler testHandler = () -> true;
-        initializeTransactionManager(Optional.of(transactionalId), true, testHandler);
+        initializeTransactionManager(Optional.of(transactionalId), true);
+        transactionManager.setShouldSetToFatalErrorStateOverride(true);
         doInitTransactions();
         assertTrue(transactionManager.isTransactional());
 
@@ -4382,4 +4376,26 @@ public class TransactionManagerTest {
         ProducerTestUtils.runUntil(sender, condition);
     }
 
+    private static class TestableTransactionManager extends TransactionManager {
+
+        private Optional<Boolean> shouldSetToFatalErrorStateOverride;
+
+        public TestableTransactionManager(LogContext logContext,
+                                          String transactionalId,
+                                          int transactionTimeoutMs,
+                                          long retryBackoffMs,
+                                          ApiVersions apiVersions) {
+            super(logContext, transactionalId, transactionTimeoutMs, retryBackoffMs, apiVersions);
+            this.shouldSetToFatalErrorStateOverride = Optional.empty();
+        }
+
+        private void setShouldSetToFatalErrorStateOverride(boolean override) {
+            shouldSetToFatalErrorStateOverride = Optional.of(override);
+        }
+
+        @Override
+        protected boolean shouldSetToFatalErrorState() {
+            return shouldSetToFatalErrorStateOverride.orElseGet(super::shouldSetToFatalErrorState);
+        }
+    }
 }
