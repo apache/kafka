@@ -737,7 +737,11 @@ public class TransactionManager {
     }
 
     synchronized void handleFailedBatch(ProducerBatch batch, RuntimeException exception, boolean adjustSequenceNumbers) {
-        if (!isStaleBatch(batch) && !hasFatalError())
+        // Compare the metadata in the batch with cached producer ID and epoch. If the producer IDs are the *same*
+        // but the epochs are *different*, consider the batch as stale.
+        boolean isStaleBatch = batch.producerId() == producerIdAndEpoch.producerId && batch.producerEpoch() != producerIdAndEpoch.epoch;
+
+        if (!isStaleBatch && !hasFatalError())
             maybeTransitionToErrorState(exception);
 
         removeInFlightBatch(batch);
@@ -747,7 +751,7 @@ public class TransactionManager {
                             "since the producer is already in fatal error state", batch, batch.producerId(),
                     batch.producerEpoch(), batch.baseSequence(), exception);
             return;
-        } else if (isStaleBatch(batch)) {
+        } else if (isStaleBatch) {
             log.debug("Ignoring stale batch {} with producer id {}, epoch {}, and sequence number {} " +
                     "since the producer has been re-initialized with producer id {} and epoch {}", batch, batch.producerId(),
                 batch.producerEpoch(), batch.baseSequence(), producerIdAndEpoch.producerId, producerIdAndEpoch.epoch, exception);
@@ -777,14 +781,6 @@ public class TransactionManager {
                 }
             }
         }
-    }
-
-    /**
-     * Returns {@code true} if the given {@link ProducerBatch} has the same producer ID but a different epoch than the
-     * {@link #producerIdAndEpoch cached producer ID and epoch}.
-     */
-    synchronized boolean isStaleBatch(ProducerBatch batch) {
-        return batch.producerId() == producerIdAndEpoch.producerId && batch.producerEpoch() != producerIdAndEpoch.epoch;
     }
 
     synchronized boolean hasInflightBatches(TopicPartition topicPartition) {
