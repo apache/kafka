@@ -3803,7 +3803,7 @@ public class TransactionManagerTest {
         doInitTransactions();
         assertTrue(transactionManager.isTransactional());
 
-        transactionManager.setShouldSetToFatalErrorStateOverride(true);
+        transactionManager.setShouldPoisonStateOnInvalidTransitionOverride(true);
 
         // Intentionally perform an operation that will cause an invalid state transition. The detection of this
         // will result in a poisoning of the transaction manager for all subsequent transactional operations since
@@ -4391,7 +4391,7 @@ public class TransactionManagerTest {
             this.shouldPoisonStateOnInvalidTransitionOverride = Optional.empty();
         }
 
-        private void setShouldSetToFatalErrorStateOverride(boolean override) {
+        private void setShouldPoisonStateOnInvalidTransitionOverride(boolean override) {
             shouldPoisonStateOnInvalidTransitionOverride = Optional.of(override);
         }
 
