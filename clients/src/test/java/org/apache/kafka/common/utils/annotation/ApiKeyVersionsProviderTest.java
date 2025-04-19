@@ -23,7 +23,7 @@ import org.junit.jupiter.api.extension.ExtensionContext;
 
 import java.util.List;
 import java.util.stream.Collectors;
-import java.util.stream.Stream;
+import java.util.stream.IntStream;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -69,8 +69,9 @@ public class ApiKeyVersionsProviderTest {
             .map(arg -> (Short) arg.get()[0])
             .collect(Collectors.toList());
 
-        List<Short> expected = Stream.iterate(oldest, v -> (short) (v + 1))
-            .limit(latest - oldest + 1)
+        List<Short> expected = IntStream
+            .rangeClosed(oldest, latest)
+            .mapToObj(i -> (short) i)
             .collect(Collectors.toList());
 
         assertEquals(expected, versions);
