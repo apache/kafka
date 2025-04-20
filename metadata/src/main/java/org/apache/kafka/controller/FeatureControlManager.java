@@ -287,6 +287,8 @@ public class FeatureControlManager {
                     return ApiError.NONE;
                 } catch (ApiException e) {
                     return ApiError.fromThrowable(e);
+                } catch (IllegalArgumentException e) {
+                    return invalidUpdateVersion(featureName, newVersion, e.getMessage());
                 }
             } else if (newVersion != currentVersion) {
                 return invalidUpdateVersion(

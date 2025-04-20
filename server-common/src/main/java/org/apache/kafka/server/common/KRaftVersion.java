@@ -52,7 +52,7 @@ public enum KRaftVersion implements FeatureVersion {
             case 1:
                 return KRAFT_VERSION_1;
             default:
-                throw new RuntimeException("Unknown KRaft feature level: " + (int) version);
+                throw new IllegalArgumentException("Unknown KRaft feature level: " + (int) version);
         }
     }
 

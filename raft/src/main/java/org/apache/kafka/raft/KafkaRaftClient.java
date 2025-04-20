@@ -80,9 +80,9 @@ import org.apache.kafka.raft.internals.KRaftControlRecordStateMachine;
 import org.apache.kafka.raft.internals.KRaftVersionUpgrade;
 import org.apache.kafka.raft.internals.KafkaRaftMetrics;
 import org.apache.kafka.raft.internals.MemoryBatchReader;
-import org.apache.kafka.raft.internals.Pair;
 import org.apache.kafka.raft.internals.RecordsBatchReader;
 import org.apache.kafka.raft.internals.RemoveVoterHandler;
+import org.apache.kafka.raft.internals.RequestSendResult;
 import org.apache.kafka.raft.internals.ThresholdPurgatory;
 import org.apache.kafka.raft.internals.UpdateVoterHandler;
 import org.apache.kafka.server.common.KRaftVersion;
@@ -2765,7 +2765,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
      * @return the first element in the pair indicates if the request was sent; the second element
      *         in the pair indicates the time to wait before retrying.
      */
-    private Pair<Boolean, Long> maybeSendRequest(
+    private RequestSendResult maybeSendRequest(
         long currentTimeMs,
         Node destination,
         Supplier<ApiMessage> requestSupplier
@@ -2775,7 +2775,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         if (requestManager.isBackingOff(destination, currentTimeMs)) {
             long remainingBackoffMs = requestManager.remainingBackoffMs(destination, currentTimeMs);
             logger.debug("Connection for {} is backing off for {} ms", destination, remainingBackoffMs);
-            return Pair.of(requestSent, remainingBackoffMs);
+            return RequestSendResult.of(requestSent, remainingBackoffMs);
         }
 
         if (requestManager.isReady(destination, currentTimeMs)) {
@@ -2811,7 +2811,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             logger.trace("Sent outbound request: {}", requestMessage);
         }
 
-        return Pair.of(
+        return RequestSendResult.of(
             requestSent,
             requestManager.remainingRequestTimeMs(destination, currentTimeMs)
         );
@@ -2836,7 +2836,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     ) {
         long minBackoffMs = Long.MAX_VALUE;
         for (Node destination : destinations) {
-            long backoffMs = maybeSendRequest(currentTimeMs, destination, requestSupplier).second();
+            long backoffMs = maybeSendRequest(currentTimeMs, destination, requestSupplier)
+                .timeToWaitMs();
             if (backoffMs < minBackoffMs) {
                 minBackoffMs = backoffMs;
             }
@@ -2856,7 +2857,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 currentTimeMs,
                 destinationSupplier.apply(voter.id()),
                 () -> requestSupplier.apply(voter)
-            ).second();
+            ).timeToWaitMs();
             minBackoffMs = Math.min(minBackoffMs, backoffMs);
         }
         return minBackoffMs;
@@ -2912,7 +2913,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
                 currentTimeMs,
                 node,
                 this::buildFetchRequest
-            ).second()
+            ).timeToWaitMs()
         ).orElseGet(() -> requestManager.backoffBeforeAvailableBootstrapServer(currentTimeMs));
     }
 
@@ -3246,8 +3247,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             if (shouldSendUpdateVoteRequest(state)) {
                 var sendResult = maybeSendUpdateVoterRequest(state, currentTimeMs);
                 // Update the request timer if the request was sent
-                resetUpdateVoterTimer = sendResult.first();
-                backoffMs = sendResult.second();
+                resetUpdateVoterTimer = sendResult.requestSent();
+                backoffMs = sendResult.timeToWaitMs();
             } else {
                 // Reset the update voter timer since there was no need to update the voter
                 resetUpdateVoterTimer = true;
@@ -3314,7 +3315,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             currentTimeMs,
             state.leaderNode(channel.listenerName()),
             requestSupplier
-        ).second();
+        ).timeToWaitMs();
     }
 
     private UpdateRaftVoterRequestData buildUpdateVoterRequest() {
@@ -3327,7 +3328,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
-    private Pair<Boolean, Long> maybeSendUpdateVoterRequest(FollowerState state, long currentTimeMs) {
+    private RequestSendResult maybeSendUpdateVoterRequest(FollowerState state, long currentTimeMs) {
         return maybeSendRequest(
             currentTimeMs,
             state.leaderNode(channel.listenerName()),

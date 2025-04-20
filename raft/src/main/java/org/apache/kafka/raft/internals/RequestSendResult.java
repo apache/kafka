@@ -16,15 +16,15 @@
  */
 package org.apache.kafka.raft.internals;
 
-import java.util.Objects;
-
-public record Pair<T, U>(T first, U second) {
-    public Pair {
-        Objects.requireNonNull(first, "The first argument is null");
-        Objects.requireNonNull(second, "The second argument is null");
-    }
-
-    public static <T, U> Pair<T, U> of(T first, U second) {
-        return new Pair<>(first, second);
+/**
+ * Type to capture the atempt to send a request.
+ *
+ * @param requestSent true if the request was sent
+ * @param timeToWaitMs the amount of time to wait in milliseconds before attempting to resend the
+ *                     request.
+ */
+public record RequestSendResult(boolean requestSent, long timeToWaitMs) {
+    public static RequestSendResult of(boolean requestSent, long timeToWaitMs) {
+        return new RequestSendResult(requestSent, timeToWaitMs);
     }
 }
