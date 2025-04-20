@@ -29,6 +29,7 @@
     <allow pkg="org.junit" />
     <allow pkg="org.hamcrest" />
     <allow pkg="org.mockito" />
+    <allow pkg="org.opentest4j" />
     <allow pkg="java.security" />
     <allow pkg="javax.net.ssl" />
     <allow pkg="javax.security" />
@@ -74,8 +75,12 @@
                 </subpackage>
                 <subpackage name="storage">
                     <allow pkg="com.yammer.metrics.core" />
-                    <allow pkg="org.apache.kafka.server.metrics" />
                     <allow pkg="org.apache.kafka.common.test" />
+                    <allow pkg="org.apache.kafka.server.metrics" />
+                    <allow pkg="org.apache.kafka.server.purgatory" />
+                    <allow pkg="org.apache.kafka.server.quota" />
+                    <allow pkg="org.apache.kafka.server.storage.log" />
+                    <allow pkg="org.apache.kafka.server.util" />
                 </subpackage>
             </subpackage>
         </subpackage>

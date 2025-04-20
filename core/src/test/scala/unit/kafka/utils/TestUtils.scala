@@ -33,7 +33,7 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.{ConfigException, ConfigResource}
 import org.apache.kafka.common.errors.{OperationNotAttemptedException, TopicExistsException, UnknownTopicOrPartitionException}
 import org.apache.kafka.common.header.Header
-import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.internals.{Plugin, Topic}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.network.{ClientInformation, ConnectionMode, ListenerName}
@@ -943,16 +943,6 @@ object TestUtils extends Logging {
     } finally outputStream.close()
   }
 
-  // Note: Call this method in the test itself, rather than the @AfterEach method.
-  // Because of the assert, if assertNoNonDaemonThreads fails, nothing after would be executed.
-  def assertNoNonDaemonThreads(threadNamePrefix: String): Unit = {
-    val nonDaemonThreads = Thread.getAllStackTraces.keySet.asScala.filter { t =>
-      !t.isDaemon && t.isAlive && t.getName.startsWith(threadNamePrefix)
-    }
-    val threadCount = nonDaemonThreads.size
-    assertEquals(0, threadCount, s"Found unexpected $threadCount NonDaemon threads=${nonDaemonThreads.map(t => t.getName).mkString(", ")}")
-  }
-
   /**
    * Create new LogManager instance with default configuration for testing
    */
@@ -1132,16 +1122,22 @@ object TestUtils extends Logging {
   }
 
   def waitAndVerifyAcls(expected: Set[AccessControlEntry],
-                        authorizer: JAuthorizer,
+                        authorizerPlugin: Plugin[JAuthorizer],
                         resource: ResourcePattern,
                         accessControlEntryFilter: AccessControlEntryFilter = AccessControlEntryFilter.ANY): Unit = {
-    val newLine = scala.util.Properties.lineSeparator
+    waitAndVerifyAcls(expected, authorizerPlugin.get, resource, accessControlEntryFilter)
+  }
 
+  def waitAndVerifyAcls(expected: Set[AccessControlEntry],
+                        authorizer: JAuthorizer,
+                        resource: ResourcePattern,
+                        accessControlEntryFilter: AccessControlEntryFilter): Unit = {
+    val newLine = scala.util.Properties.lineSeparator
     val filter = new AclBindingFilter(resource.toFilter, accessControlEntryFilter)
     waitUntilTrue(() => authorizer.acls(filter).asScala.map(_.entry).toSet == expected,
       s"expected acls:${expected.mkString(newLine + "\t", newLine + "\t", newLine)}" +
         s"but got:${authorizer.acls(filter).asScala.map(_.entry).mkString(newLine + "\t", newLine + "\t", newLine)}",
-        45000)
+      45000)
   }
 
   def consumeTopicRecords[K, V, B <: KafkaBroker](
@@ -1441,12 +1437,12 @@ object TestUtils extends Logging {
     controllers: Seq[ControllerServer],
   ): JAuthorizer = {
     if (controllers.isEmpty) {
-      brokers.head.authorizer.get
+      brokers.head.authorizerPlugin.get.get
     } else {
       var result: JAuthorizer = null
       TestUtils.retry(120000) {
         val active = controllers.filter(_.controller.isActive).head
-        result = active.authorizer.get
+        result = active.authorizerPlugin.get.get
       }
       result
     }

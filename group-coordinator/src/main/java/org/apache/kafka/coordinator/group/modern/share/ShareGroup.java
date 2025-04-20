@@ -186,7 +186,7 @@ public class ShareGroup extends ModernGroup<ShareGroupMember> {
         String groupInstanceId,
         int memberEpoch,
         boolean isTransactional,
-        short apiVersion
+        int apiVersion
     ) {
         throw new GroupIdNotFoundException(String.format("Group %s is not a consumer group.", groupId));
     }
