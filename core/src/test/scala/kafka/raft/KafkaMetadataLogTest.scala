@@ -84,7 +84,7 @@ final class KafkaMetadataLogTest {
       buildMetadataLog(tempDir, mockTime, metadataConfig)
     })
 
-    props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, Int.box(10240))
+    props.put(LogConfig.INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, Int.box(10240))
     val kafkaConfig = KafkaConfig.fromProps(props)
     val metadataConfig = new MetadataLogConfig(kafkaConfig)
     buildMetadataLog(tempDir, mockTime, metadataConfig)
@@ -689,7 +689,7 @@ final class KafkaMetadataLogTest {
     val recordSize = 64
     val config = new MetadataLogConfig(
       DefaultMetadataLogConfig.logSegmentBytes,
-      DefaultMetadataLogConfig.logSegmentMinBytes,
+      DefaultMetadataLogConfig.logSegmentBytes,
       DefaultMetadataLogConfig.logSegmentMillis,
       DefaultMetadataLogConfig.retentionMaxBytes,
       DefaultMetadataLogConfig.retentionMillis,

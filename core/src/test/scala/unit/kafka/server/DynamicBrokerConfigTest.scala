@@ -673,11 +673,11 @@ class DynamicBrokerConfigTest {
   @Test
   def testNonInternalValuesDoesNotExposeInternalConfigs(): Unit = {
     val props = TestUtils.createBrokerConfig(0, port = 8181)
-    props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, "1024")
+    props.put(LogConfig.INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, "1024")
     val config = new KafkaConfig(props)
-    assertFalse(config.nonInternalValues.containsKey(MetadataLogConfig.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG))
+    assertFalse(config.nonInternalValues.containsKey(LogConfig.INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG))
     config.updateCurrentConfig(new KafkaConfig(props))
-    assertFalse(config.nonInternalValues.containsKey(MetadataLogConfig.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG))
+    assertFalse(config.nonInternalValues.containsKey(LogConfig.INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG))
   }
 
   @Test
