@@ -38,6 +38,7 @@ import org.apache.kafka.server.config.ServerConfigs;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.EnumSource;
 
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletionStage;
@@ -84,7 +85,9 @@ public class AuthorizerUtilsTest {
 
     public static class MonitorableAuthorizer implements Authorizer, Monitorable {
 
-        private final Map<String, String> extraTags = Map.of("k1", "v1");
+        private final LinkedHashMap<String, String> extraTags = new LinkedHashMap<>() {{
+                put("k1", "v1");
+            }};
         private final AtomicInteger counter = new AtomicInteger();
         private boolean configured = false;
         private MetricName metricName = null;

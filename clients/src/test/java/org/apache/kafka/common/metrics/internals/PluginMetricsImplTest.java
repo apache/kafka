@@ -35,9 +35,9 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 
 public class PluginMetricsImplTest {
 
-    private final LinkedHashMap<String, String> extraTags = new LinkedHashMap<>(){{
-        put("my-tag", "my-value");
-    }};
+    private final LinkedHashMap<String, String> extraTags = new LinkedHashMap<>() {{
+            put("my-tag", "my-value");
+        }};
     private Map<String, String> tags;
     private Metrics metrics;
     private int initialMetrics;

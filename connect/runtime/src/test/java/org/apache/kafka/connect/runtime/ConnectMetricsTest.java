@@ -64,9 +64,9 @@ public class ConnectMetricsTest {
         WorkerConfig.KEY_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter",
         WorkerConfig.VALUE_CONVERTER_CLASS_CONFIG, "org.apache.kafka.connect.json.JsonConverter");
     private static final ConnectorTaskId CONNECTOR_TASK_ID = new ConnectorTaskId("connector", 0);
-    private static final LinkedHashMap<String, String> TAGS = new LinkedHashMap<>(){{
-        put("t1", "v1");
-    }};
+    private static final LinkedHashMap<String, String> TAGS = new LinkedHashMap<>() {{
+            put("t1", "v1");
+        }};
 
     private ConnectMetrics metrics;
 
