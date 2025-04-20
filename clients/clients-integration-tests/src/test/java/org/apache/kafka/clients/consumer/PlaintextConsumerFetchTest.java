@@ -30,7 +30,8 @@ import org.junit.jupiter.api.BeforeEach;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -77,14 +78,14 @@ public class PlaintextConsumerFetchTest {
         this.cluster = cluster;
     }
 
-    @ClusterTest
-    public void testClassicConsumerFetchInvalidOffset() {
-        testFetchInvalidOffset(GroupProtocol.CLASSIC);
-    }
-    
     @BeforeEach
     public void setup() throws InterruptedException {
         cluster.createTopic(topic, 2, (short) BROKER_COUNT);
+    }
+
+    @ClusterTest
+    public void testClassicConsumerFetchInvalidOffset() {
+        testFetchInvalidOffset(GroupProtocol.CLASSIC);
     }
 
     @ClusterTest
@@ -451,39 +452,35 @@ public class PlaintextConsumerFetchTest {
 
             List<ConsumerRecord<byte[], byte[]>> consumerRecords = consumeRecords(consumer, producerRecords.size());
 
-            var expected = new HashSet<>();
-            for (ProducerRecord<byte[], byte[]> record : producerRecords) {
-                expected.add(new RecordInformation(
-                    record.topic(),
-                    record.partition(),
-                    new String(record.key()),
-                    new String(record.value()),
-                    record.timestamp())
-                );
+            Map<TopicPartition, List<ConsumerRecord<byte[], byte[]>>> consumedByPartition = new HashMap<>();
+            for (var record : consumerRecords) {
+                var tp = new TopicPartition(record.topic(), record.partition());
+                consumedByPartition.computeIfAbsent(tp, k -> new ArrayList<>()).add(record);
             }
 
-            var actual = new HashSet<>();
-            for (ConsumerRecord<byte[], byte[]> record : consumerRecords) {
-                actual.add(new RecordInformation(
-                    record.topic(),
-                    record.partition(),
-                    new String(record.key()),
-                    new String(record.value()),
-                    record.timestamp())
-                );
+            Map<TopicPartition, List<ProducerRecord<byte[], byte[]>>> producedByPartition = new HashMap<>();
+            for (var record : producerRecords) {
+                var tp = new TopicPartition(record.topic(), record.partition());
+                producedByPartition.computeIfAbsent(tp, k -> new ArrayList<>()).add(record);
             }
 
-            assertEquals(expected, actual);
+            for (var partition : partitions) {
+                var produced = producedByPartition.getOrDefault(partition, Collections.emptyList());
+                var consumed = consumedByPartition.getOrDefault(partition, Collections.emptyList());
+
+                assertEquals(produced.size(), consumed.size(), "Records count mismatch for " + partition);
+
+                for (var i = 0; i < produced.size(); i++) {
+                    var producerRecord = produced.get(i);
+                    var consumerRecord = consumed.get(i);
+
+                    assertEquals(producerRecord.topic(), consumerRecord.topic());
+                    assertEquals(producerRecord.partition(), consumerRecord.partition());
+                    assertArrayEquals(producerRecord.key(), consumerRecord.key());
+                    assertArrayEquals(producerRecord.value(), consumerRecord.value());
+                    assertEquals(producerRecord.timestamp(), consumerRecord.timestamp());
+                }
+            }
         }
-    }
-    
-    private record RecordInformation(
-        String topic,
-        int partition,
-        String key,
-        String value,
-        long timestamp
-    ) {
-        
     }
 }
