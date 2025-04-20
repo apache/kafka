@@ -1992,7 +1992,7 @@ class KafkaApisTest extends Logging {
       ArgumentMatchers.eq(epoch),
       ArgumentMatchers.eq(Set(tp1)),
       verifyPartitionsCallback.capture(),
-    )).thenAnswer(_ => verifyPartitionsCallback.getValue.apply(AddPartitionsToTxnResponse.resultForTransaction(transactionalId2, Map(tp1 -> Errors.PRODUCER_FENCED).asJava)))
+    )).thenAnswer(_ => verifyPartitionsCallback.getValue.apply(AddPartitionsToTxnResponse.resultForTransaction(transactionalId2, util.Map.of(tp1, Errors.PRODUCER_FENCED))))
     kafkaApis = createKafkaApis()
     kafkaApis.handleAddPartitionsToTxnRequest(request, requestLocal)
 
@@ -3013,9 +3013,9 @@ class KafkaApisTest extends Logging {
       any[util.List[Action]]
     )).thenAnswer { invocation =>
       val actions = invocation.getArgument(1, classOf[util.List[Action]])
-      actions.asScala.map { action =>
-        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
-      }.asJava
+      actions.stream()
+        .map(action => acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED))
+        .toList
     }
 
     val future = new CompletableFuture[DeleteGroupsResponseData.DeletableGroupResultCollection]()
@@ -3162,9 +3162,9 @@ class KafkaApisTest extends Logging {
       any[util.List[Action]]
     )).thenAnswer { invocation =>
       val actions = invocation.getArgument(1, classOf[util.List[Action]])
-      actions.asScala.map { action =>
-        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
-      }.asJava
+      actions.stream().
+        map(action => acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED))
+        .toList
     }
 
     val future = new CompletableFuture[util.List[DescribeGroupsResponseData.DescribedGroup]]()
@@ -3682,13 +3682,12 @@ class KafkaApisTest extends Logging {
 
     when(authorizer.authorize(any[RequestContext], argThat((t: java.util.List[Action]) => t.containsAll(expectedActions))))
       .thenAnswer { invocation =>
-        val actions = invocation.getArgument(1).asInstanceOf[util.List[Action]].asScala
-        actions.map { action =>
-          if (action.resourcePattern().name().equals(authorizedTopic))
-            AuthorizationResult.ALLOWED
-          else
-            AuthorizationResult.DENIED
-        }.asJava
+        val actions = invocation.getArgument(1, classOf[util.List[Action]])
+        val results = new util.ArrayList[AuthorizationResult]()
+        actions.forEach { a =>
+          results.add(if (a.resourcePattern.name == authorizedTopic) AuthorizationResult.ALLOWED else AuthorizationResult.DENIED)
+        }
+        results
       }
 
     // 3. Set up MetadataCache
@@ -8422,9 +8421,9 @@ class KafkaApisTest extends Logging {
       any[util.List[Action]]
     )).thenAnswer { invocation =>
       val actions = invocation.getArgument(1, classOf[util.List[Action]])
-      actions.asScala.map { action =>
-        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
-      }.asJava
+      actions.stream()
+        .map(action => acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED))
+        .toList
     }
 
     // group-1 is allowed and bar is allowed.
@@ -8571,9 +8570,9 @@ class KafkaApisTest extends Logging {
       any[util.List[Action]]
     )).thenAnswer { invocation =>
       val actions = invocation.getArgument(1, classOf[util.List[Action]])
-      actions.asScala.map { action =>
-        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
-      }.asJava
+      actions.stream()
+        .map(action => acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED))
+        .toList
     }
 
     // group-1 and group-2 are allowed and bar is allowed.
@@ -8902,7 +8901,7 @@ class KafkaApisTest extends Logging {
     assertEquals(clusterId, describeClusterResponse.data.clusterId)
     assertEquals(8096, describeClusterResponse.data.clusterAuthorizedOperations)
     assertEquals(util.Set.copyOf(metadataCache.getAliveBrokerNodes(plaintextListener)),
-      describeClusterResponse.nodes.asScala.values.toSet.asJava)
+      new util.HashSet(describeClusterResponse.nodes.values))
   }
 
   /**
@@ -9741,9 +9740,9 @@ class KafkaApisTest extends Logging {
       any[util.List[Action]]
     )).thenAnswer { invocation =>
       val actions = invocation.getArgument(1, classOf[util.List[Action]])
-      actions.asScala.map { action =>
-        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
-      }.asJava
+      actions.stream()
+        .map(action => acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED))
+        .toList
     }
 
     kafkaApis = createKafkaApis(
@@ -9848,9 +9847,9 @@ class KafkaApisTest extends Logging {
       any[util.List[Action]]
     )).thenAnswer { invocation =>
       val actions = invocation.getArgument(1, classOf[util.List[Action]])
-      actions.asScala.map { action =>
-        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
-      }.asJava
+      actions.stream()
+        .map(action => acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED))
+        .toList
     }
 
     val future = new CompletableFuture[StreamsGroupHeartbeatResult]()
@@ -9953,9 +9952,9 @@ class KafkaApisTest extends Logging {
       any[util.List[Action]]
     )).thenAnswer { invocation =>
       val actions = invocation.getArgument(1, classOf[util.List[Action]])
-      actions.asScala.map { action =>
-        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
-      }.asJava
+      actions.stream()
+        .map(action => acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED))
+        .toList
     }
 
     kafkaApis = createKafkaApis(
@@ -10088,15 +10087,18 @@ class KafkaApisTest extends Logging {
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], isNotNull[util.List[Action]])).thenAnswer(invocation => {
       val actions = invocation.getArgument(1).asInstanceOf[util.List[Action]]
-      actions.asScala.map { action =>
-        if (action.resourcePattern.name.equals("test") && action.operation() == AclOperation.CREATE && action.resourcePattern().resourceType() == ResourceType.TOPIC) {
+      val results: util.List[AuthorizationResult] = new util.ArrayList[AuthorizationResult](actions.size())
+      actions.forEach { action =>
+        val result = if (action.resourcePattern.name == "test" && action.operation == AclOperation.CREATE && action.resourcePattern.resourceType == ResourceType.TOPIC) {
           AuthorizationResult.DENIED
-        } else if (action.operation() == AclOperation.CREATE && action.resourcePattern().resourceType() == ResourceType.CLUSTER) {
+        } else if (action.operation == AclOperation.CREATE && action.resourcePattern.resourceType == ResourceType.CLUSTER) {
           AuthorizationResult.DENIED
         } else {
           AuthorizationResult.ALLOWED
         }
-      }.asJava
+        results.add(result)
+      }
+      results
     })
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
@@ -10479,9 +10481,9 @@ class KafkaApisTest extends Logging {
       any[util.List[Action]]
     )).thenAnswer { invocation =>
       val actions = invocation.getArgument(1, classOf[util.List[Action]])
-      actions.asScala.map { action =>
-        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
-      }.asJava
+      actions.stream()
+        .map(action => acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED))
+        .toList
     }
 
     val future = new CompletableFuture[util.List[StreamsGroupDescribeResponseData.DescribedGroup]]()
@@ -10559,9 +10561,9 @@ class KafkaApisTest extends Logging {
       any[util.List[Action]]
     )).thenAnswer { invocation =>
       val actions = invocation.getArgument(1, classOf[util.List[Action]])
-      actions.asScala.map { action =>
-        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
-      }.asJava
+      actions.stream()
+        .map(action => acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED))
+        .toList
     }
 
     val future = new CompletableFuture[util.List[ConsumerGroupDescribeResponseData.DescribedGroup]]()
@@ -10838,9 +10840,9 @@ class KafkaApisTest extends Logging {
       any[util.List[Action]]
     )).thenAnswer { invocation =>
       val actions = invocation.getArgument(1, classOf[util.List[Action]])
-      actions.asScala.map { action =>
-        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
-      }.asJava
+      actions.stream()
+        .map(action => acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED))
+        .toList
     }
 
     kafkaApis = createKafkaApis(
@@ -10978,9 +10980,9 @@ class KafkaApisTest extends Logging {
       any[util.List[Action]]
     )).thenAnswer { invocation =>
       val actions = invocation.getArgument(1, classOf[util.List[Action]])
-      actions.asScala.map { action =>
-        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
-      }.asJava
+      actions.stream()
+        .map(action => acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED))
+        .toList
     }
      val member0 = new ShareGroupDescribeResponseData.Member()
       .setMemberId("member0")
@@ -11485,9 +11487,9 @@ class KafkaApisTest extends Logging {
       any[util.List[Action]]
     )).thenAnswer { invocation =>
       val actions = invocation.getArgument(1, classOf[util.List[Action]])
-      actions.asScala.map { action =>
-        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
-      }.asJava
+      actions.stream()
+        .map(action => acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED))
+        .toList
     }
     kafkaApis = createKafkaApis(
       overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
@@ -11647,9 +11649,9 @@ class KafkaApisTest extends Logging {
       any[util.List[Action]]
     )).thenAnswer { invocation =>
       val actions = invocation.getArgument(1, classOf[util.List[Action]])
-      actions.asScala.map { action =>
-        acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED)
-      }.asJava
+      actions.stream()
+        .map(action => acls.getOrElse(action.resourcePattern.name, AuthorizationResult.DENIED))
+        .toList
     }
     kafkaApis = createKafkaApis(
       overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
