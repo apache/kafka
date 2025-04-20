@@ -902,6 +902,7 @@ project(':server') {
     implementation project(':transaction-coordinator')
     implementation project(':raft')
     implementation project(':share-coordinator')
+    implementation project(':storage:storage-api')
     implementation libs.jacksonDatabind
     implementation libs.metrics
     implementation libs.slf4jApi
@@ -913,6 +914,7 @@ project(':server') {
     testImplementation testLog4j2Libs
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
+    testImplementation project(':storage:storage-api').sourceSets.test.output
 
     testRuntimeOnly runtimeTestLibs
   }
