@@ -17,7 +17,6 @@
 
 package kafka.log
 
-import kafka.log.remote.RemoteLogManager
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.common.compress.Compression
@@ -34,9 +33,8 @@ import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse
 import org.apache.kafka.common.utils.{BufferSupplier, Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.common.RequestLocal
-import org.apache.kafka.server.config.KRaftConfigs
 import org.apache.kafka.server.log.remote.metadata.storage.TopicBasedRemoteLogMetadataManagerConfig
-import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManagerConfig}
+import org.apache.kafka.server.log.remote.storage.{NoOpRemoteLogMetadataManager, NoOpRemoteStorageManager, RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.purgatory.{DelayedOperationPurgatory, DelayedRemoteListOffsets}
 import org.apache.kafka.server.storage.log.{FetchIsolation, UnexpectedAppendOffsetException}
@@ -58,6 +56,7 @@ import org.mockito.Mockito.{doAnswer, doThrow, spy}
 import net.jqwik.api.AfterFailureMode
 import net.jqwik.api.ForAll
 import net.jqwik.api.Property
+import org.apache.kafka.server.config.KRaftConfigs
 
 import java.io._
 import java.nio.ByteBuffer
@@ -2237,7 +2236,8 @@ class UnifiedLogTest {
       _ => Optional.empty[UnifiedLog](),
       (_, _) => {},
       brokerTopicStats,
-      new Metrics()))
+      new Metrics(),
+      Optional.empty))
     remoteLogManager.setDelayedOperationPurgatory(purgatory)
 
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 200, indexIntervalBytes = 1,
@@ -2334,7 +2334,8 @@ class UnifiedLogTest {
       _ => Optional.empty[UnifiedLog](),
       (_, _) => {},
       brokerTopicStats,
-      new Metrics()))
+      new Metrics(),
+      Optional.empty))
     remoteLogManager.setDelayedOperationPurgatory(purgatory)
 
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 200, indexIntervalBytes = 1,

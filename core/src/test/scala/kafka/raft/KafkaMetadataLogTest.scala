@@ -76,35 +76,17 @@ final class KafkaMetadataLogTest {
     props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9093")
     props.put(KRaftConfigs.NODE_ID_CONFIG, Int.box(2))
     props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
-    props.put(KRaftConfigs.METADATA_LOG_SEGMENT_BYTES_CONFIG, Int.box(10240))
-    props.put(KRaftConfigs.METADATA_LOG_SEGMENT_MILLIS_CONFIG, Int.box(10 * 1024))
+    props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_BYTES_CONFIG, Int.box(10240))
+    props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG, Int.box(10 * 1024))
     assertThrows(classOf[InvalidConfigurationException], () => {
       val kafkaConfig = KafkaConfig.fromProps(props)
-      val metadataConfig = new MetadataLogConfig(
-        kafkaConfig.metadataLogSegmentBytes,
-        kafkaConfig.metadataLogSegmentMinBytes,
-        kafkaConfig.metadataLogSegmentMillis,
-        kafkaConfig.metadataRetentionBytes,
-        kafkaConfig.metadataRetentionMillis,
-        KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-        KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-        ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
-        kafkaConfig.metadataNodeIDConfig)
+      val metadataConfig = new MetadataLogConfig(kafkaConfig)
       buildMetadataLog(tempDir, mockTime, metadataConfig)
     })
 
-    props.put(KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, Int.box(10240))
+    props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, Int.box(10240))
     val kafkaConfig = KafkaConfig.fromProps(props)
-    val metadataConfig = new MetadataLogConfig(
-      kafkaConfig.metadataLogSegmentBytes,
-      kafkaConfig.metadataLogSegmentMinBytes,
-      kafkaConfig.metadataLogSegmentMillis,
-      kafkaConfig.metadataRetentionBytes,
-      kafkaConfig.metadataRetentionMillis,
-      KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-      KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-      ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
-      kafkaConfig.metadataNodeIDConfig)
+    val metadataConfig = new MetadataLogConfig(kafkaConfig)
     buildMetadataLog(tempDir, mockTime, metadataConfig)
   }
 
@@ -713,8 +695,7 @@ final class KafkaMetadataLogTest {
       DefaultMetadataLogConfig.retentionMillis,
       maxBatchSizeInBytes,
       DefaultMetadataLogConfig.maxFetchSizeInBytes,
-      DefaultMetadataLogConfig.deleteDelayMillis,
-      DefaultMetadataLogConfig.nodeId
+      DefaultMetadataLogConfig.deleteDelayMillis
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
@@ -934,8 +915,7 @@ final class KafkaMetadataLogTest {
       60 * 1000,
       512,
       DefaultMetadataLogConfig.maxFetchSizeInBytes,
-      ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
-      1
+      ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
@@ -972,8 +952,7 @@ final class KafkaMetadataLogTest {
       60 * 1000,
       100,
       DefaultMetadataLogConfig.maxBatchSizeInBytes,
-      DefaultMetadataLogConfig.maxFetchSizeInBytes,
-      DefaultMetadataLogConfig.nodeId
+      DefaultMetadataLogConfig.maxFetchSizeInBytes
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
@@ -1007,8 +986,7 @@ final class KafkaMetadataLogTest {
       60 * 1000,
       100,
       DefaultMetadataLogConfig.maxFetchSizeInBytes,
-      DefaultMetadataLogConfig.deleteDelayMillis,
-      DefaultMetadataLogConfig.nodeId
+      DefaultMetadataLogConfig.deleteDelayMillis
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
@@ -1052,8 +1030,7 @@ final class KafkaMetadataLogTest {
       60 * 1000,
       200,
       DefaultMetadataLogConfig.maxFetchSizeInBytes,
-      DefaultMetadataLogConfig.deleteDelayMillis,
-      DefaultMetadataLogConfig.nodeId
+      DefaultMetadataLogConfig.deleteDelayMillis
     )
     val log = buildMetadataLog(tempDir, mockTime, config)
 
@@ -1112,8 +1089,7 @@ object KafkaMetadataLogTest {
     60 * 1000,
     KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
     KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-    ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
-    1
+    ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT
   )
 
   def buildMetadataLogAndDir(
@@ -1133,7 +1109,8 @@ object KafkaMetadataLogTest {
       logDir,
       time,
       time.scheduler,
-      metadataLogConfig
+      metadataLogConfig,
+      1
     )
 
     (logDir.toPath, metadataLog, metadataLogConfig)

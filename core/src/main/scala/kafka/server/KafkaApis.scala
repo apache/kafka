@@ -29,7 +29,7 @@ import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.acl.AclOperation._
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.Topic.{GROUP_METADATA_TOPIC_NAME, SHARE_GROUP_STATE_TOPIC_NAME, TRANSACTION_STATE_TOPIC_NAME, isInternal}
-import org.apache.kafka.common.internals.{FatalExitError, Topic}
+import org.apache.kafka.common.internals.{FatalExitError, Plugin, Topic}
 import org.apache.kafka.common.message.AddPartitionsToTxnResponseData.{AddPartitionsToTxnResult, AddPartitionsToTxnResultCollection}
 import org.apache.kafka.common.message.DeleteRecordsResponseData.{DeleteRecordsPartitionResult, DeleteRecordsTopicResult}
 import org.apache.kafka.common.message.DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic
@@ -99,7 +99,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val configRepository: ConfigRepository,
                 val metadataCache: MetadataCache,
                 val metrics: Metrics,
-                val authorizer: Option[Authorizer],
+                val authorizerPlugin: Option[Plugin[Authorizer]],
                 val quotas: QuotaManagers,
                 val fetchManager: FetchManager,
                 val sharePartitionManager: SharePartitionManager,
@@ -115,9 +115,9 @@ class KafkaApis(val requestChannel: RequestChannel,
   type FetchResponseStats = Map[TopicPartition, RecordValidationStats]
   this.logIdent = "[KafkaApi-%d] ".format(brokerId)
   val configHelper = new ConfigHelper(metadataCache, config, configRepository)
-  val authHelper = new AuthHelper(authorizer)
+  val authHelper = new AuthHelper(authorizerPlugin)
   val requestHelper = new RequestHandlerHelper(requestChannel, quotas, time)
-  val aclApis = new AclApis(authHelper, authorizer, requestHelper, ProcessRole.BrokerRole, config)
+  val aclApis = new AclApis(authHelper, authorizerPlugin, requestHelper, ProcessRole.BrokerRole, config)
   val configManager = new ConfigAdminManager(brokerId, config, configRepository)
   val describeTopicPartitionsRequestHandler = new DescribeTopicPartitionsRequestHandler(
     metadataCache, authHelper, config)
@@ -2598,7 +2598,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
 
           // Clients are not allowed to see topics that are not authorized for Describe.
-          if (authorizer.isDefined) {
+          if (authorizerPlugin.isDefined) {
             val topicsToCheck = response.groups.stream()
               .flatMap(group => group.members.stream)
               .flatMap(member => util.stream.Stream.of(member.assignment, member.targetAssignment))
@@ -2779,7 +2779,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
 
           // Clients are not allowed to see topics that are not authorized for Describe.
-          if (authorizer.isDefined) {
+          if (authorizerPlugin.isDefined) {
             val topicsToCheck = response.groups.stream()
               .filter(group => group.topology != null)
               .flatMap(group => group.topology.subtopologies.stream)
@@ -2950,7 +2950,7 @@ class KafkaApis(val requestChannel: RequestChannel,
           }
 
           // Clients are not allowed to see topics that are not authorized for Describe.
-          if (authorizer.isDefined) {
+          if (authorizerPlugin.isDefined) {
             val topicsToCheck = response.groups.stream()
               .flatMap(group => group.members.stream)
               .flatMap(member => member.assignment.topicPartitions.stream)

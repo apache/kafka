@@ -552,9 +552,9 @@ class DumpLogSegmentsTest {
         60 * 1000,
         KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
         KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-        ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
-        1
-      )
+        ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT
+      ),
+      1
     )
 
     val lastContainedLogTimestamp = 10000
