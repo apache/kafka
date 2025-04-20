@@ -207,4 +207,24 @@ class SchedulerTest {
       tickExecutor.shutdownNow()
     }
   }
+
+  @Test
+  def testPendingTaskSize(): Unit = {
+    val latch1 = new CountDownLatch(1)
+    val latch2 = new CountDownLatch(2)
+    val task1 = new Runnable {
+      override def run(): Unit = {
+        latch1.await()
+      }
+    }
+    scheduler.scheduleOnce("task1", task1, 0)
+    scheduler.scheduleOnce("task2", () => latch2.countDown(), 5)
+    scheduler.scheduleOnce("task3", () => latch2.countDown(), 5)
+    assertEquals(2, scheduler.pendingTaskSize())
+    latch1.countDown()
+    latch2.await()
+    assertEquals(0, scheduler.pendingTaskSize())
+    scheduler.shutdown()
+    assertEquals(0, scheduler.pendingTaskSize())
+  }
 }
