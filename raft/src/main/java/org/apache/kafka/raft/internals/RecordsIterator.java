@@ -349,6 +349,6 @@ public final class RecordsIterator<T> implements Iterator<Batch<T>>, AutoCloseab
         if (value.get().remaining() == 0) {
             throw new IllegalArgumentException("Got an unexpected empty value in the record");
         }
-        return ControlRecord.of(key, value);
+        return ControlRecord.of(key.get(), value.get());
     }
 }

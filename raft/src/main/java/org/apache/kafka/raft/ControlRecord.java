@@ -35,14 +35,14 @@ public final class ControlRecord {
     private final ControlRecordType recordType;
     private final ApiMessage message;
 
-    public static ControlRecord of(Optional<ByteBuffer> key, Optional<ByteBuffer> value) {
-        ControlRecordType recordType = ControlRecordType.parse(key.get());
+    public static ControlRecord of(ByteBuffer key, ByteBuffer value) {
+        ControlRecordType recordType = ControlRecordType.parse(key);
         final ApiMessage message = switch (recordType) {
-            case LEADER_CHANGE -> ControlRecordUtils.deserializeLeaderChangeMessage(value.get());
-            case SNAPSHOT_HEADER -> ControlRecordUtils.deserializeSnapshotHeaderRecord(value.get());
-            case SNAPSHOT_FOOTER -> ControlRecordUtils.deserializeSnapshotFooterRecord(value.get());
-            case KRAFT_VERSION -> ControlRecordUtils.deserializeKRaftVersionRecord(value.get());
-            case KRAFT_VOTERS -> ControlRecordUtils.deserializeVotersRecord(value.get());
+            case LEADER_CHANGE -> ControlRecordUtils.deserializeLeaderChangeMessage(value);
+            case SNAPSHOT_HEADER -> ControlRecordUtils.deserializeSnapshotHeaderRecord(value);
+            case SNAPSHOT_FOOTER -> ControlRecordUtils.deserializeSnapshotFooterRecord(value);
+            case KRAFT_VERSION -> ControlRecordUtils.deserializeKRaftVersionRecord(value);
+            case KRAFT_VOTERS -> ControlRecordUtils.deserializeVotersRecord(value);
             default -> throw new IllegalArgumentException(String.format("Unknown control record type %s", recordType));
         };
         return new ControlRecord(recordType, message);
