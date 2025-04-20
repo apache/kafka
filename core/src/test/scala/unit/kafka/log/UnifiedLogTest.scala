@@ -2236,7 +2236,8 @@ class UnifiedLogTest {
       _ => Optional.empty[UnifiedLog](),
       (_, _) => {},
       brokerTopicStats,
-      new Metrics()))
+      new Metrics(),
+      Optional.empty))
     remoteLogManager.setDelayedOperationPurgatory(purgatory)
 
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 200, indexIntervalBytes = 1,
@@ -2333,7 +2334,8 @@ class UnifiedLogTest {
       _ => Optional.empty[UnifiedLog](),
       (_, _) => {},
       brokerTopicStats,
-      new Metrics()))
+      new Metrics(),
+      Optional.empty))
     remoteLogManager.setDelayedOperationPurgatory(purgatory)
 
     val logConfig = LogTestUtils.createLogConfig(segmentBytes = 200, indexIntervalBytes = 1,
