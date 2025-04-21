@@ -1735,11 +1735,9 @@ public class ShareConsumerTest {
     public void testShareAutoOffsetResetEarliestAfterLsoMovement() {
         alterShareAutoOffsetReset("group1", "earliest");
         try (
-            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1");
             Producer<byte[], byte[]> producer = createProducer();
             Admin adminClient = createAdminClient()
         ) {
-            shareConsumer.subscribe(Set.of(tp.topic()));
 
             ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
             // We write 10 records to the topic, so they would be written from offsets 0-9 on the topic.
@@ -2019,6 +2017,29 @@ public class ShareConsumerTest {
 
         shutdownExecutorService(service);
 
+        verifyShareGroupStateTopicRecordsProduced();
+    }
+
+    @ClusterTest
+    public void testDeliveryCountNotIncreaseAfterSessionClose() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer()) {
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null, "key".getBytes(), "value".getBytes());
+            // We write 10 records to the topic, so they would be written from offsets 0-9 on the topic.
+            for (int i = 0; i < 10; i++) {
+                assertDoesNotThrow(() -> producer.send(record).get(), "Failed to send records");
+            }
+        }
+
+        // Perform the fetch, close in a loop.
+        for (int count = 0; count < ShareGroupConfig.SHARE_GROUP_DELIVERY_COUNT_LIMIT_DEFAULT; count++) {
+            consumeMessages(new AtomicInteger(0), 10, "group1", 1, 10, false);
+        }
+
+        // If the delivery count is increased, consumer will get nothing.
+        int consumedMessageCount = consumeMessages(new AtomicInteger(0), 10, "group1", 1, 10, true);
+        // The records returned belong to offsets 0-9.
+        assertEquals(10, consumedMessageCount);
         verifyShareGroupStateTopicRecordsProduced();
     }
 

@@ -189,6 +189,16 @@ public class SharePartition {
     }
 
     /**
+     * The DeliveryCountOps is used to specify the behavior on the delivery count: increase, decrease,
+     * or do nothing.
+     */
+    enum DeliveryCountOps {
+        INCREASE,
+        DECREASE,
+        NOOPS
+    }
+
+    /**
      * The group id of the share partition belongs to.
      */
     private final String groupId;
@@ -820,7 +830,7 @@ public class SharePartition {
                     continue;
                 }
 
-                InFlightState updateResult = inFlightBatch.tryUpdateBatchState(RecordState.ACQUIRED, true, maxDeliveryCount, memberId);
+                InFlightState updateResult = inFlightBatch.tryUpdateBatchState(RecordState.ACQUIRED, DeliveryCountOps.INCREASE, maxDeliveryCount, memberId);
                 if (updateResult == null) {
                     log.info("Unable to acquire records for the batch: {} in share partition: {}-{}",
                         inFlightBatch, groupId, topicIdPartition);
@@ -1012,10 +1022,9 @@ public class SharePartition {
             }
             if (offsetState.getValue().state == RecordState.ACQUIRED) {
                 // These records were fetched but they were not actually delivered to the client.
-                offsetState.getValue().tryReleaseDeliveryCount();
                 InFlightState updateResult = offsetState.getValue().startStateTransition(
                         offsetState.getKey() < startOffset ? RecordState.ARCHIVED : recordState,
-                        false,
+                        DeliveryCountOps.DECREASE,
                         this.maxDeliveryCount,
                         EMPTY_MEMBER_ID
                 );
@@ -1059,10 +1068,9 @@ public class SharePartition {
                 inFlightBatch, groupId, topicIdPartition);
 
         if (inFlightBatch.batchState() == RecordState.ACQUIRED) {
-            inFlightBatch.tryReleaseDeliveryCount();
             InFlightState updateResult = inFlightBatch.startBatchStateTransition(
                     inFlightBatch.lastOffset() < startOffset ? RecordState.ARCHIVED : recordState,
-                    false,
+                    DeliveryCountOps.DECREASE,
                     this.maxDeliveryCount,
                     EMPTY_MEMBER_ID
             );
@@ -1605,8 +1613,8 @@ public class SharePartition {
                     continue;
                 }
 
-                InFlightState updateResult =  offsetState.getValue().tryUpdateState(RecordState.ACQUIRED, true, maxDeliveryCount,
-                    memberId);
+                InFlightState updateResult =  offsetState.getValue().tryUpdateState(RecordState.ACQUIRED, DeliveryCountOps.INCREASE,
+                    maxDeliveryCount, memberId);
                 if (updateResult == null) {
                     log.trace("Unable to acquire records for the offset: {} in batch: {}"
                             + " for the share partition: {}-{}", offsetState.getKey(), inFlightBatch,
@@ -1878,7 +1886,7 @@ public class SharePartition {
                         recordStateDefault;
                 InFlightState updateResult = offsetState.getValue().startStateTransition(
                     recordState,
-                    false,
+                    DeliveryCountOps.NOOPS,
                     this.maxDeliveryCount,
                     EMPTY_MEMBER_ID
                 );
@@ -1931,7 +1939,7 @@ public class SharePartition {
             // is only important when the batch is acquired.
             InFlightState updateResult = inFlightBatch.startBatchStateTransition(
                 recordState,
-                false,
+                DeliveryCountOps.NOOPS,
                 this.maxDeliveryCount,
                 EMPTY_MEMBER_ID
             );
@@ -2390,7 +2398,7 @@ public class SharePartition {
         if (inFlightBatch.batchState() == RecordState.ACQUIRED) {
             InFlightState updateResult = inFlightBatch.tryUpdateBatchState(
                     inFlightBatch.lastOffset() < startOffset ? RecordState.ARCHIVED : RecordState.AVAILABLE,
-                    false,
+                    DeliveryCountOps.NOOPS,
                     maxDeliveryCount,
                     EMPTY_MEMBER_ID);
             if (updateResult == null) {
@@ -2436,7 +2444,7 @@ public class SharePartition {
             }
             InFlightState updateResult = offsetState.getValue().tryUpdateState(
                     offsetState.getKey() < startOffset ? RecordState.ARCHIVED : RecordState.AVAILABLE,
-                    false,
+                    DeliveryCountOps.NOOPS,
                     maxDeliveryCount,
                     EMPTY_MEMBER_ID);
             if (updateResult == null) {
@@ -2645,13 +2653,6 @@ public class SharePartition {
             return batchState.deliveryCount;
         }
 
-        void tryReleaseDeliveryCount() {
-            if (batchState == null) {
-                throw new IllegalStateException("The batch delivery count is not available as the offset state is maintained");
-            }
-            batchState.tryReleaseDeliveryCount();
-        }
-
         // Visible for testing.
         AcquisitionLockTimerTask batchAcquisitionLockTimeoutTask() {
             return inFlightState().acquisitionLockTimeoutTask;
@@ -2677,19 +2678,19 @@ public class SharePartition {
             inFlightState().archive(newMemberId);
         }
 
-        private InFlightState tryUpdateBatchState(RecordState newState, boolean incrementDeliveryCount, int maxDeliveryCount, String newMemberId) {
+        private InFlightState tryUpdateBatchState(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId) {
             if (batchState == null) {
                 throw new IllegalStateException("The batch state update is not available as the offset state is maintained");
             }
-            return batchState.tryUpdateState(newState, incrementDeliveryCount, maxDeliveryCount, newMemberId);
+            return batchState.tryUpdateState(newState, ops, maxDeliveryCount, newMemberId);
         }
 
-        private InFlightState startBatchStateTransition(RecordState newState, boolean incrementDeliveryCount, int maxDeliveryCount,
+        private InFlightState startBatchStateTransition(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount,
                                                         String newMemberId) {
             if (batchState == null) {
                 throw new IllegalStateException("The batch state update is not available as the offset state is maintained");
             }
-            return batchState.startStateTransition(newState, incrementDeliveryCount, maxDeliveryCount, newMemberId);
+            return batchState.startStateTransition(newState, ops, maxDeliveryCount, newMemberId);
         }
 
         private void maybeInitializeOffsetStateUpdate() {
@@ -2805,24 +2806,32 @@ public class SharePartition {
          * if the state update is unsuccessful.
          *
          * @param newState The new state of the records.
-         * @param incrementDeliveryCount Whether to increment the delivery count.
+         * @param ops      The behavior on the delivery count.
          *
          * @return {@code InFlightState} if update succeeds, null otherwise. Returning state
          *         helps update chaining.
          */
-        private InFlightState tryUpdateState(RecordState newState, boolean incrementDeliveryCount, int maxDeliveryCount, String newMemberId) {
+        private InFlightState tryUpdateState(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId) {
+            boolean decreaseFlag = false;
             try {
+                if (ops == DeliveryCountOps.DECREASE && newState != RecordState.ARCHIVED) {
+                    deliveryCount--;
+                    decreaseFlag = true;
+                }
                 if (newState == RecordState.AVAILABLE && deliveryCount >= maxDeliveryCount) {
                     newState = RecordState.ARCHIVED;
                 }
                 state = state.validateTransition(newState);
-                if (incrementDeliveryCount && newState != RecordState.ARCHIVED) {
+                if (ops == DeliveryCountOps.INCREASE && newState != RecordState.ARCHIVED) {
                     deliveryCount++;
                 }
                 memberId = newMemberId;
                 return this;
             } catch (IllegalStateException e) {
                 log.error("Failed to update state of the records", e);
+                if (decreaseFlag) {
+                    deliveryCount++;
+                }
                 return null;
             }
         }
@@ -2832,15 +2841,9 @@ public class SharePartition {
             memberId = newMemberId;
         }
 
-        private InFlightState startStateTransition(RecordState newState, boolean incrementDeliveryCount, int maxDeliveryCount, String newMemberId) {
+        private InFlightState startStateTransition(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId) {
             rollbackState = new InFlightState(state, deliveryCount, memberId, acquisitionLockTimeoutTask);
-            return tryUpdateState(newState, incrementDeliveryCount, maxDeliveryCount, newMemberId);
-        }
-
-        private void tryReleaseDeliveryCount() {
-            if (deliveryCount > 0 && state != RecordState.ARCHIVED) {
-                deliveryCount--;
-            }
+            return tryUpdateState(newState, ops, maxDeliveryCount, newMemberId);
         }
 
         private void completeStateTransition(boolean commit) {

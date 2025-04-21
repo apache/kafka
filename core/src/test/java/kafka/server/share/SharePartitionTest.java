@@ -4029,9 +4029,9 @@ public class SharePartitionTest {
         fetchAcquiredRecords(sharePartition, records2, 2);
         fetchAcquiredRecords(sharePartition, records3, 5);
 
-        sharePartition.acknowledge(MEMBER_ID, new ArrayList<>(Arrays.asList(
-            new ShareAcknowledgementBatch(13, 16, Collections.singletonList((byte) 2)),
-            new ShareAcknowledgementBatch(20, 24, Collections.singletonList((byte) 2))
+        sharePartition.acknowledge(MEMBER_ID, new ArrayList<>(List.of(
+            new ShareAcknowledgementBatch(13, 16, List.of((byte) 2)),
+            new ShareAcknowledgementBatch(20, 24, List.of((byte) 2))
         )));
 
         assertEquals(25, sharePartition.nextFetchOffset());
@@ -4777,11 +4777,11 @@ public class SharePartitionTest {
 
         // Check cached state.
         Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
-        expectedOffsetStateMap.put(5L, new InFlightState(RecordState.ARCHIVED, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(5L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(6L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(7L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(8L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(9L, new InFlightState(RecordState.ARCHIVED, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(9L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
 
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(5L).offsetState());
 
@@ -4792,10 +4792,10 @@ public class SharePartitionTest {
         assertEquals(RecordState.ACQUIRED, sharePartition.cachedState().get(15L).batchState());
 
         expectedOffsetStateMap = new HashMap<>();
-        expectedOffsetStateMap.put(20L, new InFlightState(RecordState.ARCHIVED, (short) 0, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(21L, new InFlightState(RecordState.ARCHIVED, (short) 0, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(22L, new InFlightState(RecordState.ARCHIVED, (short) 0, EMPTY_MEMBER_ID));
-        expectedOffsetStateMap.put(23L, new InFlightState(RecordState.ARCHIVED, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(20L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(21L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(22L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(23L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(24L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
 
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(20L).offsetState());
@@ -4866,12 +4866,48 @@ public class SharePartitionTest {
         assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(5L).batchState());
 
         Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
-        expectedOffsetStateMap.put(10L, new InFlightState(RecordState.ARCHIVED, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(10L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(11L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(12L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(13L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
         expectedOffsetStateMap.put(14L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
 
+        assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
+    }
+
+    @Test
+    public void testReleaseAcquiredRecordsDecreaseDeliveryCount() {
+        SharePartition sharePartition = SharePartitionBuilder.builder().withState(SharePartitionState.ACTIVE).build();
+
+        fetchAcquiredRecords(sharePartition, memoryRecords(5, 5), 5);
+        fetchAcquiredRecords(sharePartition, memoryRecords(5, 10), 5);
+
+        sharePartition.acknowledge(MEMBER_ID, List.of(new ShareAcknowledgementBatch(12, 13, List.of((byte) 1))));
+
+        // LSO is at 11.
+        sharePartition.updateCacheAndOffsets(11);
+
+        assertEquals(15, sharePartition.nextFetchOffset());
+        assertEquals(11, sharePartition.startOffset());
+        assertEquals(14, sharePartition.endOffset());
+        assertEquals(2, sharePartition.cachedState().size());
+
+        // Release acquired records.
+        CompletableFuture<Void> releaseResult = sharePartition.releaseAcquiredRecords(MEMBER_ID);
+        assertNull(releaseResult.join());
+        assertFalse(releaseResult.isCompletedExceptionally());
+
+        // Check delivery count.
+        assertEquals(EMPTY_MEMBER_ID, sharePartition.cachedState().get(5L).batchMemberId());
+        assertEquals(RecordState.ARCHIVED, sharePartition.cachedState().get(5L).batchState());
+        assertEquals(1, sharePartition.cachedState().get(5L).batchDeliveryCount());
+
+        Map<Long, InFlightState> expectedOffsetStateMap = new HashMap<>();
+        expectedOffsetStateMap.put(10L, new InFlightState(RecordState.ARCHIVED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(11L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(12L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(13L, new InFlightState(RecordState.ACKNOWLEDGED, (short) 1, EMPTY_MEMBER_ID));
+        expectedOffsetStateMap.put(14L, new InFlightState(RecordState.AVAILABLE, (short) 0, EMPTY_MEMBER_ID));
         assertEquals(expectedOffsetStateMap, sharePartition.cachedState().get(10L).offsetState());
     }
 
