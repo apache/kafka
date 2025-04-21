@@ -38,6 +38,7 @@ import org.apache.kafka.common.metadata.UnregisterBrokerRecord;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.BrokerRegistrationFencingChange;
 import org.apache.kafka.metadata.BrokerRegistrationInControlledShutdownChange;
@@ -71,6 +72,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
+import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 
@@ -92,6 +94,7 @@ public class ClusterControlManager {
         private FeatureControlManager featureControl = null;
         private BrokerShutdownHandler brokerShutdownHandler = null;
         private String interBrokerListenerName = "PLAINTEXT";
+        private QuorumControllerMetrics metrics = null;
 
         Builder setLogContext(LogContext logContext) {
             this.logContext = logContext;
@@ -138,6 +141,11 @@ public class ClusterControlManager {
             return this;
         }
 
+        Builder setMetrics(QuorumControllerMetrics metrics) {
+            this.metrics = metrics;
+            return this;
+        }
+
         ClusterControlManager build() {
             if (logContext == null) {
                 logContext = new LogContext();
@@ -157,6 +165,9 @@ public class ClusterControlManager {
             if (brokerShutdownHandler == null) {
                 throw new RuntimeException("You must specify BrokerShutdownHandler");
             }
+            if (metrics == null) {
+                metrics = new QuorumControllerMetrics(Optional.empty(), time, 0);
+            }
             return new ClusterControlManager(logContext,
                 clusterId,
                 time,
@@ -165,7 +176,8 @@ public class ClusterControlManager {
                 replicaPlacer,
                 featureControl,
                 brokerShutdownHandler,
-                interBrokerListenerName
+                interBrokerListenerName,
+                metrics
             );
         }
     }
@@ -269,6 +281,11 @@ public class ClusterControlManager {
      */
     private final TimelineHashMap<Uuid, Integer> directoryToBroker;
 
+    /**
+     * Manages the kafka.controller:type=KafkaController,name=TimeSinceLastHeartbeatReceivedMs,broker=<brokerId> metrics.
+     */
+    private final QuorumControllerMetrics metrics;
+
     private ClusterControlManager(
         LogContext logContext,
         String clusterId,
@@ -278,7 +295,8 @@ public class ClusterControlManager {
         ReplicaPlacer replicaPlacer,
         FeatureControlManager featureControl,
         BrokerShutdownHandler brokerShutdownHandler,
-        String interBrokerListenerName
+        String interBrokerListenerName,
+        QuorumControllerMetrics metrics
     ) {
         this.logContext = logContext;
         this.clusterId = clusterId;
@@ -295,6 +313,7 @@ public class ClusterControlManager {
         this.directoryToBroker = new TimelineHashMap<>(snapshotRegistry, 0);
         this.brokerShutdownHandler = brokerShutdownHandler;
         this.interBrokerListenerName = interBrokerListenerName;
+        this.metrics = metrics;
     }
 
     ReplicaPlacer replicaPlacer() {
@@ -308,9 +327,12 @@ public class ClusterControlManager {
         heartbeatManager = new BrokerHeartbeatManager(logContext, time, sessionTimeoutNs);
         long nowNs = time.nanoseconds();
         for (BrokerRegistration registration : brokerRegistrations.values()) {
-            heartbeatManager.register(registration.id(), registration.fenced());
+            int brokerId = registration.id();
+            heartbeatManager.register(brokerId, registration.fenced());
             heartbeatManager.tracker().updateContactTime(
-                new BrokerIdAndEpoch(registration.id(), registration.epoch()), nowNs);
+                new BrokerIdAndEpoch(brokerId, registration.epoch()), nowNs);
+            metrics.addTimeSinceLastHeartbeatMetric(brokerId);
+            metrics.updateBrokerContactTime(brokerId, MILLISECONDS.convert(nowNs, NANOSECONDS));
         }
     }
 
@@ -429,6 +451,7 @@ public class ClusterControlManager {
                 log.info("No previous registration found for broker {}. New incarnation ID is " +
                         "{}.  Generated {} record(s) to clean up previous incarnations. New broker " +
                         "epoch is {}.", brokerId, request.incarnationId(), numRecordsAdded, newBrokerEpoch);
+                metrics.addTimeSinceLastHeartbeatMetric(brokerId);
             } else {
                 log.info("Registering a new incarnation of broker {}. Previous incarnation ID " +
                         "was {}; new incarnation ID is {}. Generated {} record(s) to clean up " +
