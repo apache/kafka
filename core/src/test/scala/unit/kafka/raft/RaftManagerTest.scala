@@ -22,7 +22,6 @@ import java.nio.channels.OverlappingFileLockException
 import java.nio.file.{Files, Path, StandardOpenOption}
 import java.util.Properties
 import java.util.concurrent.CompletableFuture
-import kafka.log.LogManager
 import kafka.server.KafkaConfig
 import kafka.tools.TestRaftServer.ByteArraySerde
 import kafka.utils.TestUtils
@@ -35,6 +34,7 @@ import org.apache.kafka.raft.{Endpoints, MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.FaultHandler
+import org.apache.kafka.storage.internals.log.LogManager
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -164,7 +164,7 @@ class RaftManagerTest {
       )
     )
 
-    val lockPath = metadataDir.getOrElse(logDir.head).resolve(LogManager.LockFileName)
+    val lockPath = metadataDir.getOrElse(logDir.head).resolve(LogManager.LOCK_FILE_NAME)
     assertTrue(fileLocked(lockPath))
 
     raftManager.shutdown()
@@ -188,7 +188,7 @@ class RaftManagerTest {
       )
     )
 
-    val lockPath = metadataDir.getOrElse(logDir.head).resolve(LogManager.LockFileName)
+    val lockPath = metadataDir.getOrElse(logDir.head).resolve(LogManager.LOCK_FILE_NAME)
     assertTrue(fileLocked(lockPath))
 
     raftManager.shutdown()
