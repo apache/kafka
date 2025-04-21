@@ -220,7 +220,7 @@ public class TransactionManager {
                 case IN_TRANSACTION:
                     return source == READY;
                 case PREPARING_TRANSACTION:
-                    return source == IN_TRANSACTION;
+                    return source == IN_TRANSACTION || source == INITIALIZING;
                 case COMMITTING_TRANSACTION:
                     return source == IN_TRANSACTION || source == PREPARING_TRANSACTION;
                 case ABORTING_TRANSACTION:
@@ -1487,7 +1487,15 @@ public class TransactionManager {
                 ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(initProducerIdResponse.data().producerId(),
                         initProducerIdResponse.data().producerEpoch());
                 setProducerIdAndEpoch(producerIdAndEpoch);
-                transitionTo(State.READY);
+                
+                // If this is a 2PC-enabled transaction with keepPreparedTxn=true, transition directly 
+                // to PREPARING_TRANSACTION
+                if (enable2PC && builder.build().data().keepPreparedTxn() && !isEpochBump) {
+                    transitionTo(State.PREPARING_TRANSACTION);
+                } else {
+                    transitionTo(State.READY);
+                }
+                
                 lastError = null;
                 if (this.isEpochBump) {
                     resetSequenceNumbers();
