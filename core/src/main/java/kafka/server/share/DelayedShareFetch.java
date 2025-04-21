@@ -301,13 +301,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 if (anyPartitionHasLogReadError(replicaManagerReadResponse) || isMinBytesSatisfied(topicPartitionData, partitionMaxBytesStrategy.maxBytes(shareFetch.fetchParams().maxBytes, topicPartitionData.keySet(), topicPartitionData.size()))) {
                     partitionsAcquired = topicPartitionData;
                     localPartitionsAlreadyFetched = replicaManagerReadResponse;
-                    boolean completedByMe = forceComplete();
-                    // If invocation of forceComplete is not successful, then that means the request is already completed
-                    // hence the acquired locks are already released.
-                    if (!completedByMe) {
-                        releasePartitionLocks(partitionsAcquired.keySet());
-                    }
-                    return completedByMe;
+                    return forceCompleteRequest();
                 } else {
                     log.debug("minBytes is not satisfied for the share fetch request for group {}, member {}, " +
                             "topic partitions {}", shareFetch.groupId(), shareFetch.memberId(),
@@ -332,14 +326,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 localPartitionsAlreadyFetched.clear();
                 return forceComplete();
             } else {
-                boolean completedByMe = forceComplete();
-                // If invocation of forceComplete is not successful, then that means the request is already completed
-                // hence the acquired locks are already released. This can occur in case of remote storage fetch if there is a thread that
-                // completes the operation (due to expiration) right before a different thread is about to enter tryComplete.
-                if (!completedByMe) {
-                    releasePartitionLocks(partitionsAcquired.keySet());
-                }
-                return completedByMe;
+                return forceCompleteRequest();
             }
         }
     }
@@ -696,13 +683,7 @@ public class DelayedShareFetch extends DelayedOperation {
         }
 
         if (canComplete || remoteFetchOpt.get().remoteFetchResult().isDone()) { // Case d
-            boolean completedByMe = forceComplete();
-            // If invocation of forceComplete is not successful, then that means the request is already completed
-            // hence release the acquired locks.
-            if (!completedByMe) {
-                releasePartitionLocks(partitionsAcquired.keySet());
-            }
-            return completedByMe;
+            return forceCompleteRequest();
         } else
             return false;
     }
@@ -854,6 +835,16 @@ public class DelayedShareFetch extends DelayedOperation {
             log.debug("Remote fetch task for RemoteStorageFetchInfo: {} could not be cancelled and its isDone value is {}",
                 remoteFetchOpt.get().remoteFetchInfo(), remoteFetchOpt.get().remoteFetchTask().isDone());
         }
+    }
+
+    private boolean forceCompleteRequest() {
+        boolean completedByMe = forceComplete();
+        // If the delayed operation is completed by me, the acquired locks are already released in onComplete().
+        // Otherwise, we need to release the acquired locks.
+        if (!completedByMe) {
+            releasePartitionLocksAndAddToActionQueue(partitionsAcquired.keySet());
+        }
+        return completedByMe;
     }
 
     public record RemoteFetch(
