@@ -159,7 +159,7 @@ ext {
     libs.log4j2Api,
     libs.log4j2Core
   ]
-
+  
 }
 
 allprojects {
@@ -552,7 +552,7 @@ subprojects {
         maxFailures = userMaxTestRetryFailures
       }
     }
-
+    
     finalizedBy("copyTestXml")
   }
 
