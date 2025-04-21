@@ -1841,7 +1841,6 @@ public class KafkaRaftClientReconfigTest {
         );
     }
 
-    // KAFKA-16538 is going to allow UpdateVoter RPC when the kraft.version is 0
     @Test
     void testUpdateVoterWithKraftVersion0() throws Exception {
         ReplicaKey local = replicaKey(randomReplicaId(), true);
@@ -2413,6 +2412,109 @@ public class KafkaRaftClientReconfigTest {
         );
         controlRecord = recordsIterator.next();
         verifyVotersRecord(updatedVoters, controlRecord.key(), controlRecord.value());
+    }
+
+    @Test
+    void testUpdateVoterAfterKRaftVersionUpgrade() throws Exception {
+        var local = replicaKey(randomReplicaId(), true);
+        var voter1 = replicaKey(local.id() + 1, true);
+        var voter2  = replicaKey(local.id() + 2, true);
+
+        VoterSet startingVoters = VoterSetTest.voterSet(
+            VoterSetTest.voterMap(IntStream.of(local.id(), voter1.id(), voter2.id()), false)
+        );
+
+        var context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withRaftProtocol(RaftProtocol.KIP_853_PROTOCOL)
+            .withStartingVoters(startingVoters, KRaftVersion.KRAFT_VERSION_0)
+            .build();
+
+        context.unattachedToLeader();
+        var epoch = context.currentEpoch();
+
+        // Establish a HWM and fence previous leaders
+        for (var voter : List.of(voter1, voter2)) {
+            context.deliverRequest(
+                context.fetchRequest(epoch, voter, context.log.endOffset().offset(), epoch, 0)
+            );
+            context.pollUntilResponse();
+            context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
+        }
+
+        // Update voters so that they supports kraft version 1
+        for (var voter : List.of(voter1, voter2)) {
+            context.deliverRequest(
+                context.updateVoterRequest(
+                    voter,
+                    Feature.KRAFT_VERSION.supportedVersionRange(),
+                    startingVoters.listeners(voter.id())
+                )
+            );
+            context.pollUntilResponse();
+            context.assertSentUpdateVoterResponse(
+                Errors.NONE,
+                OptionalInt.of(local.id()),
+                epoch
+            );
+        }
+
+        context.client.upgradeKRaftVersion(epoch, KRaftVersion.KRAFT_VERSION_1, false);
+        assertEquals(KRaftVersion.KRAFT_VERSION_1, context.client.kraftVersion());
+
+        // Push the control records to the log
+        context.client.poll();
+        // Advance the HWM to the LEO
+        for (var voter : List.of(voter1, voter2)) {
+            context.deliverRequest(
+                context.fetchRequest(epoch, voter, context.log.endOffset().offset(), epoch, 0)
+            );
+            context.pollUntilResponse();
+            context.assertSentFetchPartitionResponse(Errors.NONE, epoch, OptionalInt.of(local.id()));
+        }
+
+        // Check that it can still handle update voter request after upgrade
+        Endpoints newVoter1Listeners = Endpoints.fromInetSocketAddresses(
+            Map.of(
+                // first entry
+                context.channel.listenerName(),
+                InetSocketAddress.createUnresolved(
+                    "localhost",
+                    9990 + voter1.id()
+                ),
+                // second entry
+                ListenerName.normalised("ANOTHER_LISTENER"),
+                InetSocketAddress.createUnresolved(
+                    "localhost",
+                    8990 + voter1.id()
+                )
+            )
+        );
+        context.deliverRequest(
+            context.updateVoterRequest(
+                voter1,
+                Feature.KRAFT_VERSION.supportedVersionRange(),
+                newVoter1Listeners
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentUpdateVoterResponse(
+            Errors.NONE,
+            OptionalInt.of(local.id()),
+            epoch
+        );
+
+        // Push the control records to the log
+        var localLogEndOffset = context.log.endOffset().offset();
+        context.client.poll();
+
+        // check that the leader wrote voters control record to the log;
+        var records = context.log.read(localLogEndOffset, Isolation.UNCOMMITTED).records;
+        var batch = records.batches().iterator().next();
+        assertTrue(batch.isControlBatch());
+        var recordsIterator = batch.iterator();
+        var controlRecord = recordsIterator.next();
+        assertEquals(ControlRecordType.KRAFT_VOTERS, ControlRecordType.parse(controlRecord.key()));
+        ControlRecordUtils.deserializeVotersRecord(controlRecord.value());
     }
 
     @Test

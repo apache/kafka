@@ -224,6 +224,7 @@ public class FeatureControlManager {
             new IllegalStateException("Unknown metadata version for FeatureControlManager"));
     }
 
+    @SuppressWarnings({ "CyclomaticComplexity" })
     private ApiError updateFeature(
         String featureName,
         short newVersion,
