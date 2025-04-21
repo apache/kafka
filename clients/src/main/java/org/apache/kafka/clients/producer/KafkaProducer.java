@@ -435,7 +435,6 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                     metrics,
                     PRODUCER_METRIC_GROUP_NAME,
                     time,
-                    apiVersions,
                     transactionManager,
                     new BufferPool(this.totalMemorySize, batchSize, metrics, time, PRODUCER_METRIC_GROUP_NAME));
 
@@ -538,8 +537,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 time,
                 requestTimeoutMs,
                 producerConfig.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG),
-                this.transactionManager,
-                apiVersions);
+                this.transactionManager);
     }
 
     private static Compression configureCompression(ProducerConfig config) {

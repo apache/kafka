@@ -96,12 +96,15 @@ public final class SnapshotFileReader implements AutoCloseable {
             return;
         }
         FileChannelRecordBatch batch = batchIterator.next();
+        lastOffset = batch.lastOffset();
+        if (!batchIterator.hasNext()) {
+            highWaterMark = OptionalLong.of(lastOffset);
+        }
         if (batch.isControlBatch()) {
             handleControlBatch(batch);
         } else {
             handleMetadataBatch(batch);
         }
-        lastOffset = batch.lastOffset();
         scheduleHandleNextBatch();
     }
 
@@ -187,8 +190,6 @@ public final class SnapshotFileReader implements AutoCloseable {
     class ShutdownEvent implements EventQueue.Event {
         @Override
         public void run() throws Exception {
-            // Expose the high water mark only once we've shut down.
-            highWaterMark = OptionalLong.of(lastOffset);
 
             if (fileRecords != null) {
                 fileRecords.close();

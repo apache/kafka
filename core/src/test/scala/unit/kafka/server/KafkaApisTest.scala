@@ -32,7 +32,7 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER}
 import org.apache.kafka.common.errors.{ClusterAuthorizationException, UnsupportedVersionException}
-import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.internals.{Plugin, Topic}
 import org.apache.kafka.common.internals.Topic.SHARE_GROUP_STATE_TOPIC_NAME
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.AddPartitionsToTxnRequestData.{AddPartitionsToTxnTopic, AddPartitionsToTxnTopicCollection, AddPartitionsToTxnTransaction, AddPartitionsToTxnTransactionCollection}
@@ -75,7 +75,7 @@ import org.apache.kafka.common.resource.{PatternType, Resource, ResourcePattern,
 import org.apache.kafka.common.security.auth.{KafkaPrincipal, KafkaPrincipalSerde, SecurityProtocol}
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource
 import org.apache.kafka.common.utils.{ImplicitLinkedHashCollection, ProducerIdAndEpoch, SecurityUtils, Utils}
-import org.apache.kafka.coordinator.group.GroupConfig.{CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_SESSION_TIMEOUT_MS_CONFIG, SHARE_AUTO_OFFSET_RESET_CONFIG, SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_RECORD_LOCK_DURATION_MS_CONFIG, SHARE_SESSION_TIMEOUT_MS_CONFIG, STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, STREAMS_NUM_STANDBY_REPLICAS_CONFIG, STREAMS_SESSION_TIMEOUT_MS_CONFIG}
+import org.apache.kafka.coordinator.group.GroupConfig.{CONSUMER_HEARTBEAT_INTERVAL_MS_CONFIG, CONSUMER_SESSION_TIMEOUT_MS_CONFIG, SHARE_AUTO_OFFSET_RESET_CONFIG, SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, SHARE_ISOLATION_LEVEL_CONFIG, SHARE_RECORD_LOCK_DURATION_MS_CONFIG, SHARE_SESSION_TIMEOUT_MS_CONFIG, STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, STREAMS_NUM_STANDBY_REPLICAS_CONFIG, STREAMS_SESSION_TIMEOUT_MS_CONFIG}
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.coordinator.group.{GroupConfig, GroupConfigManager, GroupCoordinator, GroupCoordinatorConfig}
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult
@@ -86,7 +86,7 @@ import org.apache.kafka.metadata.{ConfigRepository, MetadataCache, MockConfigRep
 import org.apache.kafka.network.metrics.{RequestChannelMetrics, RequestMetrics}
 import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.{BrokerFeatures, ClientMetricsManager}
+import org.apache.kafka.server.{ClientMetricsManager, SimpleApiVersionManager}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
 import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
@@ -179,13 +179,8 @@ class KafkaApisTest extends Logging {
     overrideProperties.foreach( p => properties.put(p._1, p._2))
     val config = new KafkaConfig(properties)
 
-    val listenerType = ListenerType.BROKER
-    val enabledApis = ApiKeys.apisForListener(listenerType).asScala
-
     val apiVersionManager = new SimpleApiVersionManager(
-      listenerType,
-      enabledApis,
-      BrokerFeatures.defaultSupportedFeatures(true),
+      ListenerType.BROKER,
       true,
       () => new FinalizedFeatures(MetadataVersion.latestTesting(), Collections.emptyMap[String, java.lang.Short], 0))
 
@@ -204,7 +199,7 @@ class KafkaApisTest extends Logging {
       configRepository = configRepository,
       metadataCache = metadataCache,
       metrics = metrics,
-      authorizer = authorizer,
+      authorizerPlugin = authorizer.map(Plugin.wrapInstance(_, null, "authorizer.class.name")),
       quotas = quotas,
       fetchManager = fetchManager,
       sharePartitionManager = sharePartitionManager,
@@ -340,6 +335,7 @@ class KafkaApisTest extends Logging {
     cgConfigs.put(SHARE_HEARTBEAT_INTERVAL_MS_CONFIG, GroupCoordinatorConfig.SHARE_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT.toString)
     cgConfigs.put(SHARE_RECORD_LOCK_DURATION_MS_CONFIG, ShareGroupConfig.SHARE_GROUP_RECORD_LOCK_DURATION_MS_DEFAULT.toString)
     cgConfigs.put(SHARE_AUTO_OFFSET_RESET_CONFIG, GroupConfig.SHARE_AUTO_OFFSET_RESET_DEFAULT)
+    cgConfigs.put(SHARE_ISOLATION_LEVEL_CONFIG, GroupConfig.SHARE_ISOLATION_LEVEL_DEFAULT)
     cgConfigs.put(STREAMS_HEARTBEAT_INTERVAL_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_HEARTBEAT_INTERVAL_MS_DEFAULT.toString)
     cgConfigs.put(STREAMS_SESSION_TIMEOUT_MS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_SESSION_TIMEOUT_MS_DEFAULT.toString)
     cgConfigs.put(STREAMS_NUM_STANDBY_REPLICAS_CONFIG, GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_DEFAULT.toString)
@@ -1804,6 +1800,136 @@ class KafkaApisTest extends Logging {
         kafkaApis.close()
       }
     }
+  }
+
+  @Test
+  def testInitProducerIdWithEnable2PcFailsWithoutTwoPhaseCommitAcl(): Unit = {
+    val transactionalId = "txnId"
+    addTopicToMetadataCache("topic", numPartitions = 1)
+
+    val initProducerIdRequest = new InitProducerIdRequest.Builder(
+      new InitProducerIdRequestData()
+        .setTransactionalId(transactionalId)
+        .setTransactionTimeoutMs(TimeUnit.MINUTES.toMillis(15).toInt)
+        .setEnable2Pc(true)
+        .setProducerId(RecordBatch.NO_PRODUCER_ID)
+        .setProducerEpoch(RecordBatch.NO_PRODUCER_EPOCH)
+    ).build(6.toShort) // Use version 6 which supports enable2Pc
+
+    val request = buildRequest(initProducerIdRequest)
+    val requestLocal = RequestLocal.withThreadConfinedCaching
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+
+    // Allow WRITE but deny TWO_PHASE_COMMIT
+    when(authorizer.authorize(
+      any(),
+      ArgumentMatchers.eq(Collections.singletonList(new Action(
+        AclOperation.WRITE,
+        new ResourcePattern(ResourceType.TRANSACTIONAL_ID, transactionalId, PatternType.LITERAL),
+        1,
+        true,
+        true)))
+    )).thenReturn(Collections.singletonList(AuthorizationResult.ALLOWED))
+
+    when(authorizer.authorize(
+      any(),
+      ArgumentMatchers.eq(Collections.singletonList(new Action(
+        AclOperation.TWO_PHASE_COMMIT,
+        new ResourcePattern(ResourceType.TRANSACTIONAL_ID, transactionalId, PatternType.LITERAL),
+        1,
+        true,
+        true)))
+    )).thenReturn(Collections.singletonList(AuthorizationResult.DENIED))
+
+    val capturedResponse = ArgumentCaptor.forClass(classOf[InitProducerIdResponse])
+
+    kafkaApis.handleInitProducerIdRequest(request, requestLocal)
+
+    verify(requestChannel).sendResponse(
+      ArgumentMatchers.eq(request),
+      capturedResponse.capture(),
+      ArgumentMatchers.eq(None)
+    )
+
+    assertEquals(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED.code, capturedResponse.getValue.data.errorCode)
+  }
+
+  @Test
+  def testInitProducerIdWithEnable2PcSucceedsWithTwoPhaseCommitAcl(): Unit = {
+    val transactionalId = "txnId"
+    addTopicToMetadataCache("topic", numPartitions = 1)
+
+    val initProducerIdRequest = new InitProducerIdRequest.Builder(
+      new InitProducerIdRequestData()
+        .setTransactionalId(transactionalId)
+        .setTransactionTimeoutMs(TimeUnit.MINUTES.toMillis(15).toInt)
+        .setEnable2Pc(true)
+        .setProducerId(RecordBatch.NO_PRODUCER_ID)
+        .setProducerEpoch(RecordBatch.NO_PRODUCER_EPOCH)
+    ).build(6.toShort) // Use version 6 which supports enable2Pc
+
+    val request = buildRequest(initProducerIdRequest)
+    val requestLocal = RequestLocal.withThreadConfinedCaching
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+
+    // Both permissions are allowed
+    when(authorizer.authorize(
+      any(),
+      ArgumentMatchers.eq(Collections.singletonList(new Action(
+        AclOperation.WRITE,
+        new ResourcePattern(ResourceType.TRANSACTIONAL_ID, transactionalId, PatternType.LITERAL),
+        1,
+        true,
+        true)))
+    )).thenReturn(Collections.singletonList(AuthorizationResult.ALLOWED))
+
+    when(authorizer.authorize(
+      any(),
+      ArgumentMatchers.eq(Collections.singletonList(new Action(
+        AclOperation.TWO_PHASE_COMMIT,
+        new ResourcePattern(ResourceType.TRANSACTIONAL_ID, transactionalId, PatternType.LITERAL),
+        1,
+        true,
+        true)))
+    )).thenReturn(Collections.singletonList(AuthorizationResult.ALLOWED))
+
+    val responseCallback = ArgumentCaptor.forClass(classOf[InitProducerIdResult => Unit])
+
+    when(txnCoordinator.handleInitProducerId(
+      ArgumentMatchers.eq(transactionalId),
+      anyInt(),
+      ArgumentMatchers.eq(true), // enable2Pc = true
+      anyBoolean(),
+      any(),
+      responseCallback.capture(),
+      ArgumentMatchers.eq(requestLocal)
+    )).thenAnswer(_ => responseCallback.getValue.apply(InitProducerIdResult(15L, 0.toShort, Errors.NONE)))
+
+    kafkaApis.handleInitProducerIdRequest(request, requestLocal)
+
+    // Verify coordinator was called with enable2Pc=true
+    verify(txnCoordinator).handleInitProducerId(
+      ArgumentMatchers.eq(transactionalId),
+      anyInt(),
+      ArgumentMatchers.eq(true), // enable2Pc = true
+      anyBoolean(),
+      any(),
+      any(),
+      ArgumentMatchers.eq(requestLocal)
+    )
+
+    val capturedResponse = ArgumentCaptor.forClass(classOf[InitProducerIdResponse])
+    verify(requestChannel).sendResponse(
+      ArgumentMatchers.eq(request),
+      capturedResponse.capture(),
+      ArgumentMatchers.eq(None)
+    )
+
+    assertEquals(Errors.NONE.code, capturedResponse.getValue.data.errorCode)
+    assertEquals(15L, capturedResponse.getValue.data.producerId)
+    assertEquals(0, capturedResponse.getValue.data.producerEpoch)
   }
 
   @Test
@@ -5732,7 +5858,7 @@ class KafkaApisTest extends Logging {
       0,
       Errors.TOPIC_AUTHORIZATION_FAILED.code,
       Errors.NONE.code,
-      null,
+      MemoryRecords.EMPTY,
       Collections.emptyList[AcquiredRecords](),
       partitionData1
     )
@@ -5771,7 +5897,7 @@ class KafkaApisTest extends Logging {
       0,
       Errors.UNKNOWN_TOPIC_OR_PARTITION.code,
       Errors.NONE.code,
-      null,
+      MemoryRecords.EMPTY,
       Collections.emptyList[AcquiredRecords](),
       partitionData4
     )
