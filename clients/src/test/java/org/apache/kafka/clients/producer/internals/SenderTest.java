@@ -3073,6 +3073,16 @@ public class SenderTest {
         // Sender will try to send and fail with TransactionAbortableException instead of COORDINATOR_LOAD_IN_PROGRESS, because we're in abortable state
         sender.runOnce();
         assertFutureFailure(future2, TransactionAbortableException.class);
+
+
+        // Verify transaction API requests also fail with TransactionAbortableException
+        try {
+            txnManager.beginCommit();
+            fail("Expected beginCommit() to fail with TransactionAbortableException when in abortable error state");
+        } catch (KafkaException e) {
+            assertEquals(TransactionAbortableException.class, e.getCause().getClass());
+        }
+
     }
 
     @Test
