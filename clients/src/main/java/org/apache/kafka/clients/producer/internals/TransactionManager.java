@@ -137,7 +137,6 @@ public class TransactionManager {
      * transaction manager. The {@link Producer} API calls that perform a state transition include:
      *
      * <ul>
-     *     <li>{@link Producer#initTransactions()} calls {@link #initializeTransactions()}</li>
      *     <li>{@link Producer#initTransactions(boolean)} calls {@link #initializeTransactions(boolean)}</li>
      *     <li>{@link Producer#beginTransaction()} calls {@link #beginTransaction()}</li>
      *     <li>{@link Producer#commitTransaction()}} calls {@link #beginCommit()}</li>
@@ -281,10 +280,6 @@ public class TransactionManager {
 
     void setPoisonStateOnInvalidTransition(boolean shouldPoisonState) {
         shouldPoisonStateOnInvalidTransition.set(shouldPoisonState);
-    }
-
-    public synchronized TransactionalRequestResult initializeTransactions() {
-        return initializeTransactions(ProducerIdAndEpoch.NONE, false);
     }
 
     synchronized TransactionalRequestResult initializeTransactions(ProducerIdAndEpoch producerIdAndEpoch) {

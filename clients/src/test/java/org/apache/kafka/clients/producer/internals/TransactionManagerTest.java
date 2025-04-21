@@ -1074,7 +1074,7 @@ public class TransactionManagerTest {
     public void testDisconnectAndRetry() {
         // This is called from the initTransactions method in the producer as the first order of business.
         // It finds the coordinator and then gets a PID.
-        transactionManager.initializeTransactions();
+        transactionManager.initializeTransactions(false);
         prepareFindCoordinatorResponse(Errors.NONE, true, CoordinatorType.TRANSACTION, transactionalId);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) == null);
 
@@ -1087,12 +1087,12 @@ public class TransactionManagerTest {
     public void testInitializeTransactionsTwiceRaisesError() {
         doInitTransactions(producerId, epoch);
         assertTrue(transactionManager.hasProducerId());
-        assertThrows(IllegalStateException.class, () -> transactionManager.initializeTransactions());
+        assertThrows(IllegalStateException.class, () -> transactionManager.initializeTransactions(false));
     }
 
     @Test
     public void testUnsupportedFindCoordinator() {
-        transactionManager.initializeTransactions();
+        transactionManager.initializeTransactions(false);
         client.prepareUnsupportedVersionResponse(body -> {
             FindCoordinatorRequest findCoordinatorRequest = (FindCoordinatorRequest) body;
             assertEquals(CoordinatorType.forId(findCoordinatorRequest.data().keyType()), CoordinatorType.TRANSACTION);
@@ -1109,7 +1109,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testUnsupportedInitTransactions() {
-        transactionManager.initializeTransactions();
+        transactionManager.initializeTransactions(false);
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
         assertFalse(transactionManager.hasError());
@@ -1254,7 +1254,7 @@ public class TransactionManagerTest {
     public void testLookupCoordinatorOnDisconnectAfterSend() {
         // This is called from the initTransactions method in the producer as the first order of business.
         // It finds the coordinator and then gets a PID.
-        TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
+        TransactionalRequestResult initPidResult = transactionManager.initializeTransactions(false);
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
@@ -1286,7 +1286,7 @@ public class TransactionManagerTest {
     public void testLookupCoordinatorOnDisconnectBeforeSend() {
         // This is called from the initTransactions method in the producer as the first order of business.
         // It finds the coordinator and then gets a PID.
-        TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
+        TransactionalRequestResult initPidResult = transactionManager.initializeTransactions(false);
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
@@ -1317,7 +1317,7 @@ public class TransactionManagerTest {
     public void testLookupCoordinatorOnNotCoordinatorError() {
         // This is called from the initTransactions method in the producer as the first order of business.
         // It finds the coordinator and then gets a PID.
-        TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
+        TransactionalRequestResult initPidResult = transactionManager.initializeTransactions(false);
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
@@ -1342,7 +1342,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testTransactionalIdAuthorizationFailureInFindCoordinator() {
-        TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
+        TransactionalRequestResult initPidResult = transactionManager.initializeTransactions(false);
         prepareFindCoordinatorResponse(Errors.TRANSACTIONAL_ID_AUTHORIZATION_FAILED, false,
                 CoordinatorType.TRANSACTION, transactionalId);
 
@@ -1357,7 +1357,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testTransactionalIdAuthorizationFailureInInitProducerId() {
-        TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
+        TransactionalRequestResult initPidResult = transactionManager.initializeTransactions(false);
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
@@ -1657,7 +1657,7 @@ public class TransactionManagerTest {
         assertFalse(result.isAcked());
         assertFalse(transactionManager.hasOngoingTransaction());
 
-        assertThrows(IllegalStateException.class, transactionManager::initializeTransactions);
+        assertThrows(IllegalStateException.class, () -> transactionManager.initializeTransactions(false));
         assertThrows(IllegalStateException.class, transactionManager::beginTransaction);
         assertThrows(IllegalStateException.class, transactionManager::beginCommit);
         assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
@@ -1691,7 +1691,7 @@ public class TransactionManagerTest {
         assertFalse(result.isAcked());
         assertFalse(transactionManager.hasOngoingTransaction());
 
-        assertThrows(IllegalStateException.class, transactionManager::initializeTransactions);
+        assertThrows(IllegalStateException.class, () -> transactionManager.initializeTransactions(false));
         assertThrows(IllegalStateException.class, transactionManager::beginTransaction);
         assertThrows(IllegalStateException.class, transactionManager::beginAbort);
         assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
@@ -1705,7 +1705,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testRetryInitTransactionsAfterTimeout() {
-        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        TransactionalRequestResult result = transactionManager.initializeTransactions(false);
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
@@ -1726,10 +1726,10 @@ public class TransactionManagerTest {
         assertThrows(IllegalStateException.class, transactionManager::beginCommit);
         assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
 
-        assertSame(result, transactionManager.initializeTransactions());
+        assertSame(result, transactionManager.initializeTransactions(false));
         result.await();
         assertTrue(result.isAcked());
-        assertThrows(IllegalStateException.class, transactionManager::initializeTransactions);
+        assertThrows(IllegalStateException.class, () -> transactionManager.initializeTransactions(false));
 
         transactionManager.beginTransaction();
         assertTrue(transactionManager.hasOngoingTransaction());
@@ -1971,7 +1971,7 @@ public class TransactionManagerTest {
     })
     public void testRetriableErrors(Errors error) {
         // Ensure FindCoordinator retries.
-        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        TransactionalRequestResult result = transactionManager.initializeTransactions(false);
         prepareFindCoordinatorResponse(error, false, CoordinatorType.TRANSACTION, transactionalId);
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
@@ -2005,7 +2005,7 @@ public class TransactionManagerTest {
     @Test
     public void testCoordinatorNotAvailable() {
         // Ensure FindCoordinator with COORDINATOR_NOT_AVAILABLE error retries.
-        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        TransactionalRequestResult result = transactionManager.initializeTransactions(false);
         prepareFindCoordinatorResponse(Errors.COORDINATOR_NOT_AVAILABLE, false, CoordinatorType.TRANSACTION, transactionalId);
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
@@ -2028,7 +2028,7 @@ public class TransactionManagerTest {
     }
 
     private void verifyProducerFencedForInitProducerId(Errors error) {
-        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        TransactionalRequestResult result = transactionManager.initializeTransactions(false);
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
@@ -3826,7 +3826,7 @@ public class TransactionManagerTest {
         assertThrows(IllegalStateException.class, () -> transactionManager.beginAbort());
         assertThrows(IllegalStateException.class, () -> transactionManager.beginCommit());
         assertThrows(IllegalStateException.class, () -> transactionManager.maybeAddPartition(tp0));
-        assertThrows(IllegalStateException.class, () -> transactionManager.initializeTransactions());
+        assertThrows(IllegalStateException.class, () -> transactionManager.initializeTransactions(false));
         assertThrows(IllegalStateException.class, () -> transactionManager.sendOffsetsToTransaction(Collections.emptyMap(), new ConsumerGroupMetadata("fake-group-id")));
     }
 
@@ -3863,7 +3863,7 @@ public class TransactionManagerTest {
 
     @Test
     public void testTransactionAbortableExceptionInInitProducerId() {
-        TransactionalRequestResult initPidResult = transactionManager.initializeTransactions();
+        TransactionalRequestResult initPidResult = transactionManager.initializeTransactions(false);
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
@@ -4343,7 +4343,7 @@ public class TransactionManagerTest {
     }
 
     private void doInitTransactions(long producerId, short epoch) {
-        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        TransactionalRequestResult result = transactionManager.initializeTransactions(false);
         prepareFindCoordinatorResponse(Errors.NONE, false, CoordinatorType.TRANSACTION, transactionalId);
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));

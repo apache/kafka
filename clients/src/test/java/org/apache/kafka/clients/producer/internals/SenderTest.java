@@ -619,7 +619,7 @@ public class SenderTest {
                 60000, 100L, new ApiVersions(), false);
         setupWithTransactionState(transactionManager, false, null, false);
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, (short) 0);
-        transactionManager.initializeTransactions();
+        transactionManager.initializeTransactions(false);
         sender.runOnce();
 
         // Process metadata response, prepare FindCoordinator and InitProducerId responses.
@@ -671,7 +671,7 @@ public class SenderTest {
                 60000, 100L, new ApiVersions(), false);
         setupWithTransactionState(transactionManager, false, null, true);
         ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(producerId, (short) 0);
-        transactionManager.initializeTransactions();
+        transactionManager.initializeTransactions(false);
         sender.runOnce();
 
         Node node = metadata.fetch().nodes().get(0);
@@ -3719,7 +3719,7 @@ public class SenderTest {
     }
 
     private void doInitTransactions(TransactionManager transactionManager, ProducerIdAndEpoch producerIdAndEpoch) {
-        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        TransactionalRequestResult result = transactionManager.initializeTransactions(false);
         prepareFindCoordinatorResponse(Errors.NONE, transactionManager.transactionalId());
         sender.runOnce();
         sender.runOnce();
