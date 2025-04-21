@@ -22,7 +22,6 @@ import java.nio.channels.OverlappingFileLockException
 import java.nio.file.{Files, Path, StandardOpenOption}
 import java.util.Properties
 import java.util.concurrent.CompletableFuture
-import kafka.log.LogManager
 import kafka.server.KafkaConfig
 import kafka.tools.TestRaftServer.ByteArraySerde
 import kafka.utils.TestUtils
@@ -31,11 +30,11 @@ import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.raft.Endpoints
-import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.raft.{Endpoints, MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerLogConfigs}
 import org.apache.kafka.server.fault.FaultHandler
+import org.apache.kafka.storage.internals.log.LogManager
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
@@ -58,7 +57,7 @@ class RaftManagerTest {
       props.setProperty(ServerLogConfigs.LOG_DIR_CONFIG, value.toString)
     }
     metadataDir.foreach { value =>
-      props.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, value.toString)
+      props.setProperty(MetadataLogConfig.METADATA_LOG_DIR_CONFIG, value.toString)
     }
     props.setProperty(KRaftConfigs.PROCESS_ROLES_CONFIG, processRoles.mkString(","))
     props.setProperty(KRaftConfigs.NODE_ID_CONFIG, nodeId.toString)
@@ -165,7 +164,7 @@ class RaftManagerTest {
       )
     )
 
-    val lockPath = metadataDir.getOrElse(logDir.head).resolve(LogManager.LockFileName)
+    val lockPath = metadataDir.getOrElse(logDir.head).resolve(LogManager.LOCK_FILE_NAME)
     assertTrue(fileLocked(lockPath))
 
     raftManager.shutdown()
@@ -189,7 +188,7 @@ class RaftManagerTest {
       )
     )
 
-    val lockPath = metadataDir.getOrElse(logDir.head).resolve(LogManager.LockFileName)
+    val lockPath = metadataDir.getOrElse(logDir.head).resolve(LogManager.LOCK_FILE_NAME)
     assertTrue(fileLocked(lockPath))
 
     raftManager.shutdown()

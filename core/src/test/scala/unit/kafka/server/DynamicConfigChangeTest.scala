@@ -18,7 +18,6 @@ package kafka.server
 
 import kafka.cluster.Partition
 import kafka.integration.KafkaServerTestHarness
-import kafka.log.remote.RemoteLogManager
 import kafka.utils.TestUtils.random
 import kafka.utils._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -36,6 +35,7 @@ import org.apache.kafka.coordinator.group.GroupConfig
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.config.{QuotaConfig, ServerLogConfigs}
 import org.apache.kafka.server.log.remote.TopicPartitionLog
+import org.apache.kafka.server.log.remote.storage.RemoteLogManager
 import org.apache.kafka.storage.internals.log.{LogConfig, UnifiedLog}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions._

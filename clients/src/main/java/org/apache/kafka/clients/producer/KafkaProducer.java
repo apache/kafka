@@ -1546,6 +1546,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         private final String recordLogString;
         private volatile int partition = RecordMetadata.UNKNOWN_PARTITION;
         private volatile TopicPartition topicPartition;
+        private final Headers headers;
 
         private AppendCallbacks(Callback userCallback, ProducerInterceptors<K, V> interceptors, ProducerRecord<K, V> record) {
             this.userCallback = userCallback;
@@ -1554,6 +1555,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // whole lifetime of the batch.
             // We don't want to have an NPE here, because the interceptors would not be notified (see .doSend).
             topic = record != null ? record.topic() : null;
+            if (record != null) {
+                headers = record.headers();
+            } else {
+                headers = new RecordHeaders();
+                ((RecordHeaders) headers).setReadOnly();
+            }
             recordPartition = record != null ? record.partition() : null;
             recordLogString = log.isTraceEnabled() && record != null ? record.toString() : "";
         }
@@ -1563,7 +1570,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             if (metadata == null) {
                 metadata = new RecordMetadata(topicPartition(), -1, -1, RecordBatch.NO_TIMESTAMP, -1, -1);
             }
-            this.interceptors.onAcknowledgement(metadata, exception);
+            this.interceptors.onAcknowledgement(metadata, exception, headers);
             if (this.userCallback != null)
                 this.userCallback.onCompletion(metadata, exception);
         }
