@@ -2215,6 +2215,7 @@ project(':storage') {
   }
 
   dependencies {
+    implementation project(':metadata')
     implementation project(':storage:storage-api')
     implementation project(':server-common')
     implementation project(':clients')
