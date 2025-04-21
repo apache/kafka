@@ -68,10 +68,6 @@ public class ShareSession {
         return cachedSize;
     }
 
-    public synchronized void cachedSize(int size) {
-        cachedSize = size;
-    }
-
     public synchronized ImplicitLinkedHashCollection<CachedSharePartition> partitionMap() {
         return partitionMap;
     }
@@ -118,6 +114,11 @@ public class ShareSession {
         return result;
     }
 
+    /**
+     * Updates the cached size of the session to represent the current partitionMap size.
+     * @return The difference between the current cached size and the previously stored cached size. This is required to
+     *         update the total number of share partitions stored in the share session cache.
+     */
     public synchronized int updateCachedSize() {
         var previousSize = cachedSize;
         cachedSize = partitionMap.size();
