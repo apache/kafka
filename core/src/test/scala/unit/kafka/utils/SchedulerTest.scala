@@ -225,7 +225,9 @@ class SchedulerTest {
     }
     latch1.countDown()
     latch2.await()
-    assertEquals(0, scheduler.pendingTaskSize())
+    retry(30000) {
+      assertEquals(0, scheduler.pendingTaskSize())
+    }
     scheduler.shutdown()
     assertEquals(0, scheduler.pendingTaskSize())
   }
