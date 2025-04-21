@@ -236,14 +236,7 @@ public class KafkaProducerTest {
 
     @Test
     public void testAcksAndIdempotenceForIdempotentProducers() {
-        Properties baseProps = new Properties() {{
-                setProperty(
-                    ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-                setProperty(
-                    ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-                setProperty(
-                    ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            }};
+        Properties baseProps = baseProperties();
 
         Properties validProps = new Properties() {{
                 putAll(baseProps);
@@ -346,11 +339,7 @@ public class KafkaProducerTest {
 
     @Test
     public void testRetriesAndIdempotenceForIdempotentProducers() {
-        Properties baseProps = new Properties() {{
-                setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-                setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-                setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            }};
+        Properties baseProps = baseProperties();
 
         Properties validProps = new Properties() {{
                 putAll(baseProps);
@@ -412,13 +401,18 @@ public class KafkaProducerTest {
             "Must set retries to non-zero when using the transactional producer.");
     }
 
-    @Test
-    public void testInflightRequestsAndIdempotenceForIdempotentProducers() {
+    private static Properties baseProperties() {
         Properties baseProps = new Properties() {{
                 setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
                 setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
                 setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
             }};
+        return baseProps;
+    }
+
+    @Test
+    public void testInflightRequestsAndIdempotenceForIdempotentProducers() {
+        Properties baseProps = baseProperties();
 
         Properties validProps = new Properties() {{
                 putAll(baseProps);
@@ -2881,7 +2875,9 @@ public class KafkaProducerTest {
 
     private static final String NAME = "name";
     private static final String DESCRIPTION = "description";
-    private static final LinkedHashMap<String, String> TAGS = new LinkedHashMap<>() {{put("k", "v");}};
+    private static final LinkedHashMap<String, String> TAGS = new LinkedHashMap<>() {{
+            put("k", "v");
+        }};
     private static final double VALUE = 123.0;
 
     public static class MonitorableSerializer extends MockSerializer implements Monitorable {
