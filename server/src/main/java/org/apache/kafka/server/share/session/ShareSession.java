@@ -118,6 +118,12 @@ public class ShareSession {
         return result;
     }
 
+    public synchronized int updateCachedSize() {
+        var previousSize = cachedSize;
+        cachedSize = partitionMap.size();
+        return previousSize != -1 ? cachedSize - previousSize : cachedSize;
+    }
+
     public static String partitionsToLogString(Collection<TopicIdPartition> partitions, Boolean traceEnabled) {
         if (traceEnabled) {
             return String.format("( %s )", String.join(", ", partitions.toString()));
