@@ -115,12 +115,14 @@ public class ShareSessionCache {
      * @param session  The session.
      */
     public synchronized void updateNumPartitions(ShareSession session) {
-        int oldSize = session.cachedSize();
-        if (oldSize != -1) {
-            numPartitions = numPartitions - oldSize;
+        synchronized (session) {
+            int oldSize = session.cachedSize();
+            if (oldSize != -1) {
+                numPartitions = numPartitions - oldSize;
+            }
+            session.cachedSize(session.size());
+            numPartitions = numPartitions + session.cachedSize();
         }
-        session.cachedSize(session.size());
-        numPartitions = numPartitions + session.cachedSize();
     }
 
     /**
