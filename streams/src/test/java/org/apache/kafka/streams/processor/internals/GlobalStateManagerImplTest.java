@@ -632,7 +632,7 @@ public class GlobalStateManagerImplTest {
         assertThat(cause, instanceOf(TimeoutException.class));
         assertThat(cause.getMessage(), equalTo("KABOOM!"));
 
-        assertEquals(numberOfCalls.get(), 1);
+        assertEquals(1, numberOfCalls.get());
     }
 
     @Test
@@ -673,7 +673,7 @@ public class GlobalStateManagerImplTest {
         );
         assertThat(expected.getMessage(), equalTo("Global task did not make progress to restore state within 100 ms. Adjust `task.timeout.ms` if needed."));
 
-        assertEquals(numberOfCalls.get(), 2);
+        assertEquals(2, numberOfCalls.get());
     }
 
     @Test
@@ -714,7 +714,7 @@ public class GlobalStateManagerImplTest {
         );
         assertThat(expected.getMessage(), equalTo("Global task did not make progress to restore state within 1000 ms. Adjust `task.timeout.ms` if needed."));
 
-        assertEquals(numberOfCalls.get(), 11);
+        assertEquals(11, numberOfCalls.get());
     }
 
     @Test
@@ -798,7 +798,7 @@ public class GlobalStateManagerImplTest {
         assertThat(cause, instanceOf(TimeoutException.class));
         assertThat(cause.getMessage(), equalTo("KABOOM!"));
 
-        assertEquals(numberOfCalls.get(), 1);
+        assertEquals(1, numberOfCalls.get());
     }
 
     @Test
@@ -839,7 +839,7 @@ public class GlobalStateManagerImplTest {
         );
         assertThat(expected.getMessage(), equalTo("Global task did not make progress to restore state within 100 ms. Adjust `task.timeout.ms` if needed."));
 
-        assertEquals(numberOfCalls.get(), 2);
+        assertEquals(2, numberOfCalls.get());
     }
 
     @Test
@@ -880,7 +880,7 @@ public class GlobalStateManagerImplTest {
         );
         assertThat(expected.getMessage(), equalTo("Global task did not make progress to restore state within 1000 ms. Adjust `task.timeout.ms` if needed."));
 
-        assertEquals(numberOfCalls.get(), 11);
+        assertEquals(11, numberOfCalls.get());
     }
 
     @Test
@@ -964,7 +964,7 @@ public class GlobalStateManagerImplTest {
         assertThat(cause, instanceOf(TimeoutException.class));
         assertThat(cause.getMessage(), equalTo("KABOOM!"));
 
-        assertEquals(numberOfCalls.get(), 1);
+        assertEquals(1, numberOfCalls.get());
     }
 
     @Test
@@ -1005,7 +1005,7 @@ public class GlobalStateManagerImplTest {
         );
         assertThat(expected.getMessage(), equalTo("Global task did not make progress to restore state within 100 ms. Adjust `task.timeout.ms` if needed."));
 
-        assertEquals(numberOfCalls.get(), 2);
+        assertEquals(2, numberOfCalls.get());
     }
 
     @Test
@@ -1046,7 +1046,7 @@ public class GlobalStateManagerImplTest {
         );
         assertThat(expected.getMessage(), equalTo("Global task did not make progress to restore state within 1000 ms. Adjust `task.timeout.ms` if needed."));
 
-        assertEquals(numberOfCalls.get(), 11);
+        assertEquals(11, numberOfCalls.get());
     }
 
     @Test
