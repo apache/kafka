@@ -930,6 +930,7 @@ project(':server') {
     implementation project(':transaction-coordinator')
     implementation project(':raft')
     implementation project(':share-coordinator')
+    implementation project(':storage:storage-api')
     implementation libs.jacksonDatabind
     implementation libs.metrics
     implementation libs.slf4jApi
@@ -941,6 +942,7 @@ project(':server') {
     testImplementation testLog4j2Libs
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
+    testImplementation project(':storage:storage-api').sourceSets.test.output
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -2256,6 +2258,7 @@ project(':storage') {
   }
 
   dependencies {
+    implementation project(':metadata')
     implementation project(':storage:storage-api')
     implementation project(':server-common')
     implementation project(':clients')
@@ -2270,6 +2273,7 @@ project(':storage') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':storage:storage-api').sourceSets.test.output
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':test-common:test-common-util')
@@ -2443,6 +2447,7 @@ project(':tools') {
     implementation project(':group-coordinator')
     implementation project(':coordinator-common')
     implementation project(':share-coordinator')
+    implementation project(':raft')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv

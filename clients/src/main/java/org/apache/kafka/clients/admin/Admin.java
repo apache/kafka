@@ -879,10 +879,12 @@ public interface Admin extends AutoCloseable {
 
     /**
      * List the consumer groups available in the cluster.
+     * @deprecated Since 4.1. Use {@link Admin#listGroups(ListGroupsOptions)} instead.
      *
      * @param options The options to use when listing the consumer groups.
      * @return The ListConsumerGroupsResult.
      */
+    @Deprecated(since = "4.1", forRemoval = true)
     ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options);
 
     /**
@@ -890,9 +892,11 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This is a convenience method for {@link #listConsumerGroups(ListConsumerGroupsOptions)} with default options.
      * See the overload for more details.
+     * @deprecated Since 4.1. Use {@link Admin#listGroups(ListGroupsOptions)} instead.
      *
      * @return The ListConsumerGroupsResult.
      */
+    @Deprecated(since = "4.1", forRemoval = true)
     default ListConsumerGroupsResult listConsumerGroups() {
         return listConsumerGroups(new ListConsumerGroupsOptions());
     }

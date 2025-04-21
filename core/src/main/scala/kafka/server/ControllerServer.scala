@@ -24,6 +24,7 @@ import kafka.server.QuotaFactory.QuotaManagers
 import scala.collection.immutable
 import kafka.server.metadata.{ClientQuotaMetadataManager, DelegationTokenPublisher, DynamicClientQuotaPublisher, DynamicConfigPublisher, DynamicTopicClusterQuotaPublisher, KRaftMetadataCache, KRaftMetadataCachePublisher, ScramPublisher}
 import kafka.utils.{CoreUtils, Logging}
+import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.message.ApiMessageType.ListenerType
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.metrics.Metrics
@@ -82,7 +83,7 @@ class ControllerServer(
   var status: ProcessStatus = SHUTDOWN
 
   var linuxIoMetricsCollector: LinuxIoMetricsCollector = _
-  @volatile var authorizer: Option[Authorizer] = None
+  @volatile var authorizerPlugin: Option[Plugin[Authorizer]] = None
   var tokenCache: DelegationTokenCache = _
   var credentialProvider: CredentialProvider = _
   var socketServer: SocketServer = _
@@ -138,8 +139,7 @@ class ControllerServer(
         metricsGroup.newGauge("linux-disk-write-bytes", () => linuxIoMetricsCollector.writeBytes())
       }
 
-      authorizer = config.createNewAuthorizer()
-      authorizer.foreach(_.configure(config.originals))
+      authorizerPlugin = config.createNewAuthorizer(metrics, ProcessRole.ControllerRole.toString)
 
       metadataCache = new KRaftMetadataCache(config.nodeId, () => raftManager.client.kraftVersion())
 
@@ -181,7 +181,7 @@ class ControllerServer(
 
       val endpointReadyFutures = {
         val builder = new EndpointReadyFutures.Builder()
-        builder.build(authorizer.toJava,
+        builder.build(authorizerPlugin.toJava,
           new KafkaAuthorizerServerInfo(
             new ClusterResource(clusterId),
             config.nodeId,
@@ -260,9 +260,11 @@ class ControllerServer(
 
       // If we are using a ClusterMetadataAuthorizer, requests to add or remove ACLs must go
       // through the controller.
-      authorizer match {
-        case Some(a: ClusterMetadataAuthorizer) => a.setAclMutator(controller)
-        case _ =>
+      authorizerPlugin.foreach { plugin =>
+        plugin.get match {
+          case a: ClusterMetadataAuthorizer => a.setAclMutator(controller)
+          case _ =>
+        }
       }
 
       quotaManagers = QuotaFactory.instantiate(config,
@@ -271,7 +273,7 @@ class ControllerServer(
         s"controller-${config.nodeId}-", ProcessRole.ControllerRole.toString)
       clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
-        authorizer,
+        authorizerPlugin,
         quotaManagers,
         time,
         controller,
@@ -376,7 +378,7 @@ class ControllerServer(
         config.nodeId,
         sharedServer.metadataPublishingFaultHandler,
         "controller",
-        authorizer.toJava
+        authorizerPlugin.toJava
       ))
 
       // Install all metadata publishers.
@@ -468,7 +470,7 @@ class ControllerServer(
         CoreUtils.swallow(quotaManagers.shutdown(), this)
       Utils.closeQuietly(controller, "controller")
       Utils.closeQuietly(quorumControllerMetrics, "quorum controller metrics")
-      authorizer.foreach(Utils.closeQuietly(_, "authorizer"))
+      authorizerPlugin.foreach(Utils.closeQuietly(_, "authorizer plugin"))
       createTopicPolicy.foreach(policy => Utils.closeQuietly(policy, "create topic policy"))
       alterConfigPolicy.foreach(policy => Utils.closeQuietly(policy, "alter config policy"))
       socketServerFirstBoundPortFuture.completeExceptionally(new RuntimeException("shutting down"))
