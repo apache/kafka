@@ -30,8 +30,8 @@ import org.junit.jupiter.api.BeforeEach;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
@@ -132,6 +132,7 @@ public class PlaintextConsumerFetchTest {
     private void testFetchOutOfRangeOffsetResetConfigEarliest(GroupProtocol groupProtocol) throws InterruptedException {
         Map<String, Object> config = Map.of(
             GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT),
+            // ensure no in-flight fetch request so that the offset can be reset immediately
             FETCH_MAX_WAIT_MS_CONFIG, 0
         );
         try (Consumer<byte[], byte[]> consumer = cluster.consumer(config)) {
@@ -162,6 +163,7 @@ public class PlaintextConsumerFetchTest {
         Map<String, Object> config = Map.of(
             GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT),
             AUTO_OFFSET_RESET_CONFIG, "latest",
+            // ensure no in-flight fetch request so that the offset can be reset immediately
             FETCH_MAX_WAIT_MS_CONFIG, 0
         );
         try (Consumer<byte[], byte[]> consumer = cluster.consumer(config);
@@ -269,16 +271,16 @@ public class PlaintextConsumerFetchTest {
     }
 
     @ClusterTest
-    public void testClassicConsumerFetchRecordLargerThanFetchMaxBytes() {
+    public void testClassicConsumerFetchRecordLargerThanFetchMaxBytes() throws InterruptedException {
         testFetchRecordLargerThanFetchMaxBytes(GroupProtocol.CLASSIC);
     }
 
     @ClusterTest
-    public void testAsyncConsumerFetchRecordLargerThanFetchMaxBytes() {
+    public void testAsyncConsumerFetchRecordLargerThanFetchMaxBytes() throws InterruptedException {
         testFetchRecordLargerThanFetchMaxBytes(GroupProtocol.CONSUMER);
     }
 
-    private void testFetchRecordLargerThanFetchMaxBytes(GroupProtocol groupProtocol) {
+    private void testFetchRecordLargerThanFetchMaxBytes(GroupProtocol groupProtocol) throws InterruptedException {
         int maxFetchBytes = 10 * 1024;
         checkLargeRecord(Map.of(
             GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT),
@@ -287,16 +289,16 @@ public class PlaintextConsumerFetchTest {
     }
 
     @ClusterTest
-    public void testClassicConsumerFetchRecordLargerThanMaxPartitionFetchBytes() {
+    public void testClassicConsumerFetchRecordLargerThanMaxPartitionFetchBytes() throws InterruptedException {
         testFetchRecordLargerThanMaxPartitionFetchBytes(GroupProtocol.CLASSIC);
     }
 
     @ClusterTest
-    public void testAsyncConsumerFetchRecordLargerThanMaxPartitionFetchBytes() {
+    public void testAsyncConsumerFetchRecordLargerThanMaxPartitionFetchBytes() throws InterruptedException {
         testFetchRecordLargerThanMaxPartitionFetchBytes(GroupProtocol.CONSUMER);
     }
 
-    private void testFetchRecordLargerThanMaxPartitionFetchBytes(GroupProtocol groupProtocol) {
+    private void testFetchRecordLargerThanMaxPartitionFetchBytes(GroupProtocol groupProtocol) throws InterruptedException {
         int maxFetchBytes = 10 * 1024;
         checkLargeRecord(Map.of(
             GROUP_PROTOCOL_CONFIG, groupProtocol.name().toLowerCase(Locale.ROOT),
@@ -304,7 +306,7 @@ public class PlaintextConsumerFetchTest {
         ), maxFetchBytes + 1);
     }
 
-    private void checkLargeRecord(Map<String, Object> config, int producerRecordSize) {
+    private void checkLargeRecord(Map<String, Object> config, int producerRecordSize) throws InterruptedException {
         try (Consumer<byte[], byte[]> consumer = cluster.consumer(config);
              Producer<byte[], byte[]> producer = cluster.producer()
         ) {
@@ -319,8 +321,8 @@ public class PlaintextConsumerFetchTest {
 
             // consuming a record that is too large should succeed since KIP-74
             consumer.assign(List.of(tp));
-            var records = consumer.poll(Duration.ofMillis(20000));
-            assertEquals(1, records.count());
+            var records = consumeRecords(consumer, 1);
+            assertEquals(1, records.size());
             var consumerRecord = records.iterator().next();
             assertEquals(0L, consumerRecord.offset());
             assertEquals(tp.topic(), consumerRecord.topic());
@@ -391,8 +393,9 @@ public class PlaintextConsumerFetchTest {
 
             // we should only get the small record in the first `poll`
             consumer.assign(List.of(tp));
-            var records = consumer.poll(Duration.ofMillis(20000));
-            assertEquals(1, records.count());
+            
+            var records = consumeRecords(consumer, 1);
+            assertEquals(1, records.size());
             var consumerRecord = records.iterator().next();
             assertEquals(0L, consumerRecord.offset());
             assertEquals(tp.topic(), consumerRecord.topic());
@@ -434,7 +437,7 @@ public class PlaintextConsumerFetchTest {
                 cluster.createTopic(topicName, partitionCount, (short) BROKER_COUNT);
             }
 
-            List<TopicPartition> partitions = new ArrayList<>();
+            Set<TopicPartition> partitions = new HashSet<>();
             for (var topic : topics) {
                 for (var i = 0; i < partitionCount; i++) {
                     partitions.add(new TopicPartition(topic, i));
@@ -443,7 +446,7 @@ public class PlaintextConsumerFetchTest {
 
             assertEquals(0, consumer.assignment().size());
             consumer.subscribe(topics);
-            awaitAssignment(consumer, Set.copyOf(partitions));
+            awaitAssignment(consumer, partitions);
 
             List<ProducerRecord<byte[], byte[]>> producerRecords = new ArrayList<>();
             for (var partition : partitions) {
@@ -465,8 +468,8 @@ public class PlaintextConsumerFetchTest {
             }
 
             for (var partition : partitions) {
-                var produced = producedByPartition.getOrDefault(partition, Collections.emptyList());
-                var consumed = consumedByPartition.getOrDefault(partition, Collections.emptyList());
+                var produced = producedByPartition.getOrDefault(partition, List.of());
+                var consumed = consumedByPartition.getOrDefault(partition, List.of());
 
                 assertEquals(produced.size(), consumed.size(), "Records count mismatch for " + partition);
 

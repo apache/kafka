@@ -34,6 +34,9 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class ClientsTestUtils {
 
+    private static final String KEY_PREFIX = "key ";
+    private static final String VALUE_PREFIX = "value ";
+
     private ClientsTestUtils() {}
 
     public static <K, V> List<ConsumerRecord<K, V>> consumeRecords(
@@ -72,11 +75,11 @@ public class ClientsTestUtils {
 
             assertEquals(offset, record.offset());
             var keyAndValueIndex = startingKeyAndValueIndex + i;
-            assertEquals("key " + keyAndValueIndex, new String(record.key()));
-            assertEquals("value " + keyAndValueIndex, new String(record.value()));
+            assertEquals(KEY_PREFIX + keyAndValueIndex, new String(record.key()));
+            assertEquals(VALUE_PREFIX + keyAndValueIndex, new String(record.value()));
             // this is true only because K and V are byte arrays
-            assertEquals(("key " + keyAndValueIndex).length(), record.serializedKeySize());
-            assertEquals(("value " + keyAndValueIndex).length(), record.serializedValueSize());
+            assertEquals((KEY_PREFIX + keyAndValueIndex).length(), record.serializedKeySize());
+            assertEquals((VALUE_PREFIX + keyAndValueIndex).length(), record.serializedValueSize());
         }
     }
 
@@ -121,12 +124,7 @@ public class ClientsTestUtils {
         int numRecords,
         long startingTimestamp
     ) {
-        try (Producer<byte[], byte[]> producer = cluster.producer()) {
-            for (var i = 0; i < numRecords; i++) {
-                sendRecord(producer, tp, startingTimestamp, i, -1);
-            }
-            producer.flush();
-        }
+        sendRecords(cluster, tp, numRecords, startingTimestamp, -1);
     }
 
     public static void sendRecords(
@@ -134,7 +132,7 @@ public class ClientsTestUtils {
         TopicPartition tp,
         int numRecords
     ) {
-        sendRecords(cluster, tp, numRecords, System.currentTimeMillis(), -1);
+        sendRecords(cluster, tp, numRecords, System.currentTimeMillis());
     }
 
     public static List<ProducerRecord<byte[], byte[]>> sendRecords(
@@ -189,8 +187,8 @@ public class ClientsTestUtils {
             tp.topic(),
             tp.partition(),
             timestamp,
-            ("key " + numRecord).getBytes(),
-            ("value " + numRecord).getBytes()
+            (KEY_PREFIX + numRecord).getBytes(),
+            (VALUE_PREFIX + numRecord).getBytes()
         );
         producer.send(record);
         return record;
