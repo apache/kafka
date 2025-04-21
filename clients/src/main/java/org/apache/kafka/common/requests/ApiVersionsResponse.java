@@ -157,12 +157,12 @@ public class ApiVersionsResponse extends AbstractResponse {
         // to the client indicating UNSUPPORTED_VERSION. When the client receives the response, it
         // falls back while parsing it which means that the version received by this
         // method is not necessarily the real one. It may be version 0 as well.
-        Readable redableCopy = readable.slice();
+        Readable readableCopy = readable.slice();
         try {
             return new ApiVersionsResponse(new ApiVersionsResponseData(readable, version));
         } catch (RuntimeException e) {
             if (version != 0)
-                return new ApiVersionsResponse(new ApiVersionsResponseData(redableCopy, (short) 0));
+                return new ApiVersionsResponse(new ApiVersionsResponseData(readableCopy, (short) 0));
             else
                 throw e;
         }
