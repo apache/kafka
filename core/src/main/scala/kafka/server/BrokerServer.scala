@@ -220,8 +220,6 @@ class BrokerServer(
         brokerTopicStats,
         logDirFailureChannel)
 
-      remoteLogManagerOpt = createRemoteLogManager()
-
       lifecycleManager = new BrokerLifecycleManager(config,
         time,
         s"broker-${config.nodeId}-",
@@ -279,6 +277,8 @@ class BrokerServer(
           config.effectiveAdvertisedBrokerListeners.map(_.toPublic()).asJava).
             withWildcardHostnamesResolved().
             withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
+
+      remoteLogManagerOpt = createRemoteLogManager(listenerInfo)
 
       alterPartitionManager = AlterPartitionManager(
         config,
@@ -470,23 +470,6 @@ class BrokerServer(
       dataPlaneRequestHandlerPool = new KafkaRequestHandlerPool(config.nodeId,
         socketServer.dataPlaneRequestChannel, dataPlaneRequestProcessor, time,
         config.numIoThreads, "RequestHandlerAvgIdlePercent")
-
-      // Start RemoteLogManager before initializing broker metadata publishers.
-      remoteLogManagerOpt.foreach { rlm =>
-        val listenerName = config.remoteLogManagerConfig.remoteLogMetadataManagerListenerName()
-        if (listenerName != null) {
-          val endpoint = listenerInfo.listeners().values().stream
-            .filter(e =>
-              e.listenerName().isPresent &&
-                ListenerName.normalised(e.listenerName().get()).equals(ListenerName.normalised(listenerName))
-            )
-            .findFirst()
-            .orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
-              listenerName, "Should be set as a listener name within valid broker listener name list: " + listenerInfo.listeners().values()))
-          rlm.onEndPointCreated(endpoint)
-        }
-        rlm.startup()
-      }
 
       metadataPublishers.add(new MetadataVersionConfigValidator(config, sharedServer.metadataPublishingFaultHandler))
       brokerMetadataPublisher = new BrokerMetadataPublisher(config,
@@ -712,16 +695,31 @@ class BrokerServer(
     }
   }
 
-  protected def createRemoteLogManager(): Option[RemoteLogManager] = {
-    if (config.remoteLogManagerConfig.isRemoteStorageSystemEnabled()) {
-      Some(new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
+  protected def createRemoteLogManager(listenerInfo: ListenerInfo): Option[RemoteLogManager] = {
+    if (config.remoteLogManagerConfig.isRemoteStorageSystemEnabled) {
+      val listenerName = config.remoteLogManagerConfig.remoteLogMetadataManagerListenerName()
+      val endpoint = if (listenerName != null) {
+        Some(listenerInfo.listeners().values().stream
+          .filter(e =>
+            e.listenerName().isPresent &&
+              ListenerName.normalised(e.listenerName().get()).equals(ListenerName.normalised(listenerName))
+          )
+          .findFirst()
+          .orElseThrow(() => new ConfigException(RemoteLogManagerConfig.REMOTE_LOG_METADATA_MANAGER_LISTENER_NAME_PROP,
+            listenerName, "Should be set as a listener name within valid broker listener name list: " + listenerInfo.listeners().values())))
+      } else {
+        None
+      }
+
+      val rlm = new RemoteLogManager(config.remoteLogManagerConfig, config.brokerId, config.logDirs.head, clusterId, time,
         (tp: TopicPartition) => logManager.getLog(tp).toJava,
         (tp: TopicPartition, remoteLogStartOffset: java.lang.Long) => {
           logManager.getLog(tp).foreach { log =>
             log.updateLogStartOffsetFromRemoteTier(remoteLogStartOffset)
           }
         },
-        brokerTopicStats, metrics))
+        brokerTopicStats, metrics, endpoint.toJava)
+      Some(rlm)
     } else {
       None
     }
