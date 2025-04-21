@@ -205,7 +205,7 @@ public class SenderTest {
         }));
         return Collections.unmodifiableMap(partitionRecords);
     }
- 
+
     @Test
     public void testSimple() throws Exception {
         long offset = 0;
@@ -3032,7 +3032,51 @@ public class SenderTest {
     }
 
     @Test
-    public void testSenderShouldRetryWithBackoffOnRetriableError() {
+    public void testSenderShouldTransitionToAbortableAfterRetriesExhausted() throws InterruptedException {
+        ProducerIdAndEpoch producerIdAndEpoch = new ProducerIdAndEpoch(123456L, (short) 0);
+        TransactionManager txnManager = new TransactionManager(
+                logContext,
+                "testRetriableException",
+                60000,
+                RETRY_BACKOFF_MS,
+                apiVersions
+        );
+
+        // Setup with transaction state and initialize transactions with single retry
+        setupWithTransactionState(txnManager, false, null, 1);
+        doInitTransactions(txnManager, producerIdAndEpoch);
+
+        // Begin transaction and add partition
+        txnManager.beginTransaction();
+        txnManager.maybeAddPartition(tp0);
+        client.prepareResponse(buildAddPartitionsToTxnResponseData(0, Collections.singletonMap(tp0, Errors.NONE)));
+        sender.runOnce();
+
+        // First produce request
+        appendToAccumulator(tp0);
+        client.prepareResponse(produceResponse(tp0, -1, Errors.COORDINATOR_LOAD_IN_PROGRESS, -1));
+        sender.runOnce();
+
+        // Sleep for retry backoff
+        time.sleep(RETRY_BACKOFF_MS);
+
+        // Second attempt to process record - PREPARE the response before sending
+        client.prepareResponse(produceResponse(tp0, -1, Errors.COORDINATOR_LOAD_IN_PROGRESS, -1));
+        sender.runOnce();
+
+        // Now transaction should be in abortable state after retry is exhausted
+        assertTrue(txnManager.hasAbortableError());
+
+        // Second produce request - should fail with TransactionAbortableException
+        Future<RecordMetadata> future2 = appendToAccumulator(tp0);
+        client.prepareResponse(produceResponse(tp0, -1, Errors.NONE, -1));
+        // Sender will try to send and fail with TransactionAbortableException instead of COORDINATOR_LOAD_IN_PROGRESS, because we're in abortable state
+        sender.runOnce();
+        assertFutureFailure(future2, TransactionAbortableException.class);
+    }
+
+    @Test
+    public void testSenderShouldRetryWithBackoffOnRetriableError() throws InterruptedException {
         final long producerId = 343434L;
         TransactionManager transactionManager = createTransactionManager();
         setupWithTransactionState(transactionManager);
@@ -3672,6 +3716,10 @@ public class SenderTest {
 
     private void setupWithTransactionState(TransactionManager transactionManager, boolean guaranteeOrder, BufferPool customPool) {
         setupWithTransactionState(transactionManager, guaranteeOrder, customPool, true, Integer.MAX_VALUE, 0);
+    }
+
+    private void setupWithTransactionState(TransactionManager transactionManager, boolean guaranteeOrder, BufferPool customPool, int retries) {
+        setupWithTransactionState(transactionManager, guaranteeOrder, customPool, true, retries, 0);
     }
 
     private void setupWithTransactionState(
