@@ -19,11 +19,21 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
+import org.apache.kafka.image.ClusterImage;
+import org.apache.kafka.image.TopicImage;
+import org.apache.kafka.metadata.BrokerRegistration;
 
+import com.google.common.hash.HashCode;
+import com.google.common.hash.HashFunction;
+import com.google.common.hash.Hasher;
+import com.google.common.hash.Hashing;
+
+import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
@@ -208,5 +218,51 @@ public interface Group {
      */
     default boolean shouldExpire() {
         return true;
+    }
+
+    /**
+     * Computes the hash of the topics in a group.
+     *
+     * @param topicHashes The map of topic hashes. Key is topic name and value is the topic hash.
+     * @return The hash of the group.
+     */
+    static long computeGroupHash(Map<String, Long> topicHashes) {
+        return Hashing.combineOrdered(
+            topicHashes.entrySet()
+                .stream()
+                .sorted(Map.Entry.comparingByKey())
+                .map(e -> HashCode.fromLong(e.getValue()))
+                .toList()
+        ).asLong();
+    }
+
+    /**
+     * Computes the hash of the topic id, name, number of partitions, and partition racks by Murmur3.
+     *
+     * @param topicImage   The topic image.
+     * @param clusterImage The cluster image.
+     * @return The hash of the topic.
+     */
+    static long computeTopicHash(TopicImage topicImage, ClusterImage clusterImage) {
+        HashFunction hf = Hashing.murmur3_128();
+        Hasher topicHasher = hf.newHasher()
+            .putByte((byte) 0) // magic byte
+            .putLong(topicImage.id().hashCode()) // topic Id
+            .putString(topicImage.name(), StandardCharsets.UTF_8) // topic name
+            .putInt(topicImage.partitions().size()); // number of partitions
+
+        topicImage.partitions().entrySet().stream().sorted(Map.Entry.comparingByKey()).forEach(entry -> {
+            topicHasher.putInt(entry.getKey()); // partition id
+            String racks = Arrays.stream(entry.getValue().replicas)
+                .mapToObj(clusterImage::broker)
+                .filter(Objects::nonNull)
+                .map(BrokerRegistration::rack)
+                .filter(Optional::isPresent)
+                .map(Optional::get)
+                .sorted()
+                .collect(Collectors.joining(";"));
+            topicHasher.putString(racks, StandardCharsets.UTF_8); // sorted racks with separator ";"
+        });
+        return topicHasher.hash().asLong();
     }
 }
