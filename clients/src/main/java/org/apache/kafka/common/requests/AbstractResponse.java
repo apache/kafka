@@ -21,6 +21,7 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.protocol.SendBuilder;
 
 import java.nio.ByteBuffer;
@@ -110,7 +111,7 @@ public abstract class AbstractResponse implements AbstractRequestResponse {
         return AbstractResponse.parseResponse(apiKey, new ByteBufferAccessor(buffer), apiVersion);
     }
 
-    public static AbstractResponse parseResponse(ApiKeys apiKey, ByteBufferAccessor readable, short version) {
+    public static AbstractResponse parseResponse(ApiKeys apiKey, Readable readable, short version) {
         switch (apiKey) {
             case PRODUCE:
                 return ProduceResponse.parse(readable, version);

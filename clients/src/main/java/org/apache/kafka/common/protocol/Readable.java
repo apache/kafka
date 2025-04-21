@@ -38,6 +38,7 @@ public interface Readable {
     int readVarint();
     long readVarlong();
     int remaining();
+    Readable slice();
 
     default String readString(int length) {
         byte[] arr = readArray(length);
