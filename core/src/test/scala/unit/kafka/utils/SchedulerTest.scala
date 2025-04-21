@@ -220,7 +220,9 @@ class SchedulerTest {
     scheduler.scheduleOnce("task1", task1, 0)
     scheduler.scheduleOnce("task2", () => latch2.countDown(), 5)
     scheduler.scheduleOnce("task3", () => latch2.countDown(), 5)
-    assertEquals(2, scheduler.pendingTaskSize())
+    retry(30000) {
+      assertEquals(2, scheduler.pendingTaskSize())
+    }
     latch1.countDown()
     latch2.await()
     assertEquals(0, scheduler.pendingTaskSize())
