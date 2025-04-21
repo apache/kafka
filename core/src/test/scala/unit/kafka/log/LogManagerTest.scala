@@ -23,15 +23,14 @@ import org.apache.directory.api.util.FileUtils
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.errors.OffsetOutOfRangeException
 import org.apache.kafka.common.utils.{Time, Utils}
-import org.apache.kafka.common.{DirectoryId, KafkaException, TopicIdPartition, TopicPartition, Uuid}
+import org.apache.kafka.common.{DirectoryId, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.apache.kafka.image.{TopicImage, TopicsImage}
-import org.apache.kafka.metadata.{ConfigRepository, LeaderRecoveryState, MockConfigRepository, PartitionRegistration}
+import org.apache.kafka.metadata.{ConfigRepository, MockConfigRepository}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
-import org.mockito.{ArgumentCaptor, ArgumentMatchers, Mockito}
+import org.mockito.{ArgumentCaptor, ArgumentMatchers}
 import org.mockito.Mockito.{doAnswer, doNothing, mock, never, spy, times, verify}
 
 import java.io._
@@ -39,12 +38,12 @@ import java.lang.{Long => JLong}
 import java.nio.file.Files
 import java.nio.file.attribute.PosixFilePermission
 import java.util
-import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap, Future}
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import java.util.{Collections, Optional, OptionalLong, Properties}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.{FileLock, KafkaScheduler, MockTime, Scheduler}
-import org.apache.kafka.storage.internals.log.{CleanerConfig, FetchDataInfo, LogConfig, LogDirFailureChannel, LogMetricNames, LogOffsetsListener, LogStartOffsetIncrementReason, ProducerStateManagerConfig, RemoteIndexCache, UnifiedLog}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, FetchDataInfo, LogConfig, LogDirFailureChannel, LogMetricNames, LogManager => JLogManager, LogOffsetsListener, LogStartOffsetIncrementReason, ProducerStateManagerConfig, RemoteIndexCache, UnifiedLog}
 import org.apache.kafka.storage.internals.checkpoint.{CleanShutdownFileHandler, OffsetCheckpointFile}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.function.Executable
@@ -56,7 +55,6 @@ import scala.jdk.CollectionConverters._
 import scala.util.{Failure, Try}
 
 class LogManagerTest {
-  import LogManagerTest._
 
   val time = new MockTime()
   val maxRollInterval = 100
@@ -592,7 +590,7 @@ class LogManagerTest {
     }
 
     logManager.checkpointLogRecoveryOffsets()
-    val checkpoints = new OffsetCheckpointFile(new File(logDir, LogManager.RecoveryPointCheckpointFile), null).read()
+    val checkpoints = new OffsetCheckpointFile(new File(logDir, JLogManager.RECOVERY_POINT_CHECKPOINT_FILE), null).read()
 
     topicPartitions.zip(logs).foreach { case (tp, log) =>
       assertEquals(checkpoints.get(tp), log.recoveryPoint, "Recovery point should equal checkpoint")
@@ -672,7 +670,7 @@ class LogManagerTest {
 
     logManager.checkpointRecoveryOffsetsInDir(logDir)
 
-    val checkpoints = new OffsetCheckpointFile(new File(logDir, LogManager.RecoveryPointCheckpointFile), null).read()
+    val checkpoints = new OffsetCheckpointFile(new File(logDir, JLogManager.RECOVERY_POINT_CHECKPOINT_FILE), null).read()
 
     tps.zip(allLogs).foreach { case (tp, log) =>
       assertEquals(checkpoints.get(tp), log.recoveryPoint,
@@ -1095,36 +1093,6 @@ class LogManagerTest {
   }
 
   @Test
-  def testWaitForAllToComplete(): Unit = {
-    var invokedCount = 0
-    val success: Future[Boolean] = Mockito.mock(classOf[Future[Boolean]])
-    Mockito.when(success.get()).thenAnswer { _ =>
-      invokedCount += 1
-      true
-    }
-    val failure: Future[Boolean] = Mockito.mock(classOf[Future[Boolean]])
-    Mockito.when(failure.get()).thenAnswer{ _ =>
-      invokedCount += 1
-      throw new RuntimeException
-    }
-
-    var failureCount = 0
-    // all futures should be evaluated
-    assertFalse(LogManager.waitForAllToComplete(Seq(success, failure), _ => failureCount += 1))
-    assertEquals(2, invokedCount)
-    assertEquals(1, failureCount)
-    assertFalse(LogManager.waitForAllToComplete(Seq(failure, success), _ => failureCount += 1))
-    assertEquals(4, invokedCount)
-    assertEquals(2, failureCount)
-    assertTrue(LogManager.waitForAllToComplete(Seq(success, success), _ => failureCount += 1))
-    assertEquals(6, invokedCount)
-    assertEquals(2, failureCount)
-    assertFalse(LogManager.waitForAllToComplete(Seq(failure, failure), _ => failureCount += 1))
-    assertEquals(8, invokedCount)
-    assertEquals(4, failureCount)
-  }
-
-  @Test
   def testLoadDirectoryIds(): Unit = {
     val dirs: Seq[File] = Seq.fill(5)(TestUtils.tempDir())
     writeMetaProperties(dirs.head)
@@ -1161,7 +1129,7 @@ class LogManagerTest {
       remoteStorageSystemEnable = true
     )
 
-    val checkpointFile = new File(logDir, LogManager.LogStartOffsetCheckpointFile)
+    val checkpointFile = new File(logDir, JLogManager.LOG_START_OFFSET_CHECKPOINT_FILE)
     val checkpoint = new OffsetCheckpointFile(checkpointFile, null)
     val topicPartition = new TopicPartition("test", 0)
     val log = logManager.getOrCreateLog(topicPartition, topicId = Optional.empty)
@@ -1192,7 +1160,7 @@ class LogManagerTest {
 
   @Test
   def testCheckpointLogStartOffsetForNormalTopic(): Unit = {
-    val checkpointFile = new File(logDir, LogManager.LogStartOffsetCheckpointFile)
+    val checkpointFile = new File(logDir, JLogManager.LOG_START_OFFSET_CHECKPOINT_FILE)
     val checkpoint = new OffsetCheckpointFile(checkpointFile, null)
     val topicPartition = new TopicPartition("test", 0)
     val log = logManager.getOrCreateLog(topicPartition, topicId = Optional.empty)
@@ -1233,65 +1201,6 @@ class LogManagerTest {
       new File(dir, MetaPropertiesEnsemble.META_PROPERTIES_NAME).getAbsolutePath, false)
   }
 
-  val foo0 = new TopicIdPartition(Uuid.fromString("Sl08ZXU2QW6uF5hIoSzc8w"), new TopicPartition("foo", 0))
-  val foo1 = new TopicIdPartition(Uuid.fromString("Sl08ZXU2QW6uF5hIoSzc8w"), new TopicPartition("foo", 1))
-  val bar0 = new TopicIdPartition(Uuid.fromString("69O438ZkTSeqqclTtZO2KA"), new TopicPartition("bar", 0))
-  val bar1 = new TopicIdPartition(Uuid.fromString("69O438ZkTSeqqclTtZO2KA"), new TopicPartition("bar", 1))
-  val baz0 = new TopicIdPartition(Uuid.fromString("2Ik9_5-oRDOKpSXd2SuG5w"), new TopicPartition("baz", 0))
-  val baz1 = new TopicIdPartition(Uuid.fromString("2Ik9_5-oRDOKpSXd2SuG5w"), new TopicPartition("baz", 1))
-  val baz2 = new TopicIdPartition(Uuid.fromString("2Ik9_5-oRDOKpSXd2SuG5w"), new TopicPartition("baz", 2))
-  val quux0 = new TopicIdPartition(Uuid.fromString("YS9owjv5TG2OlsvBM0Qw6g"), new TopicPartition("quux", 0))
-  val recreatedFoo0 = new TopicIdPartition(Uuid.fromString("_dOOzPe3TfiWV21Lh7Vmqg"), new TopicPartition("foo", 0))
-  val recreatedFoo1 = new TopicIdPartition(Uuid.fromString("_dOOzPe3TfiWV21Lh7Vmqg"), new TopicPartition("foo", 1))
-
-  @Test
-  def testIsStrayKraftReplicaWithEmptyImage(): Unit = {
-    val image: TopicsImage = topicsImage(Seq())
-    val onDisk = Seq(foo0, foo1, bar0, bar1, quux0).map(mockLog)
-    assertTrue(onDisk.forall(log => LogManager.isStrayKraftReplica(0, image, log)))
-  }
-
-  @Test
-  def testIsStrayKraftReplicaInImage(): Unit = {
-    val image: TopicsImage = topicsImage(Seq(
-      topicImage(Map(
-        foo0 -> Seq(0, 1, 2),
-      )),
-      topicImage(Map(
-        bar0 -> Seq(0, 1, 2),
-        bar1 -> Seq(0, 1, 2),
-      ))
-    ))
-    val onDisk = Seq(foo0, foo1, bar0, bar1, quux0).map(mockLog)
-    val expectedStrays = Set(foo1, quux0).map(_.topicPartition())
-
-    onDisk.foreach(log => assertEquals(expectedStrays.contains(log.topicPartition), LogManager.isStrayKraftReplica(0, image, log)))
-  }
-
-  @Test
-  def testIsStrayKraftReplicaInImageWithRemoteReplicas(): Unit = {
-    val image: TopicsImage = topicsImage(Seq(
-      topicImage(Map(
-        foo0 -> Seq(0, 1, 2),
-      )),
-      topicImage(Map(
-        bar0 -> Seq(1, 2, 3),
-        bar1 -> Seq(2, 3, 0),
-      ))
-    ))
-    val onDisk = Seq(foo0, bar0, bar1).map(mockLog)
-    val expectedStrays = Set(bar0).map(_.topicPartition)
-
-    onDisk.foreach(log => assertEquals(expectedStrays.contains(log.topicPartition), LogManager.isStrayKraftReplica(0, image, log)))
-  }
-
-  @Test
-  def testIsStrayKraftMissingTopicId(): Unit = {
-    val log = Mockito.mock(classOf[UnifiedLog])
-    Mockito.when(log.topicId).thenReturn(Optional.empty)
-    assertTrue(LogManager.isStrayKraftReplica(0, topicsImage(Seq()), log))
-  }
-
   /**
    * Test LogManager takes file lock by default and the lock is released after shutdown.
    */
@@ -1302,12 +1211,12 @@ class LogManagerTest {
 
     try {
       // ${tmpLogDir}.lock is acquired by tmpLogManager
-      val fileLock = new FileLock(new File(tmpLogDir, LogManager.LockFileName))
+      val fileLock = new FileLock(new File(tmpLogDir, JLogManager.LOCK_FILE_NAME))
       assertFalse(fileLock.tryLock())
     } finally {
       // ${tmpLogDir}.lock is removed after shutdown
       tmpLogManager.shutdown()
-      val f = new File(tmpLogDir, LogManager.LockFileName)
+      val f = new File(tmpLogDir, JLogManager.LOCK_FILE_NAME)
       assertFalse(f.exists())
     }
   }
@@ -1374,58 +1283,5 @@ class LogManagerTest {
       permissions.add(PosixFilePermission.OTHERS_WRITE)
       Files.setPosixFilePermissions(logDir.toPath, permissions)
     }
-  }
-}
-
-object LogManagerTest {
-  def mockLog(
-    topicIdPartition: TopicIdPartition
-  ): UnifiedLog = {
-    val log = Mockito.mock(classOf[UnifiedLog])
-    Mockito.when(log.topicId).thenReturn(Optional.of(topicIdPartition.topicId()))
-    Mockito.when(log.topicPartition).thenReturn(topicIdPartition.topicPartition())
-    log
-  }
-
-  def topicImage(
-    partitions: Map[TopicIdPartition, Seq[Int]]
-  ): TopicImage = {
-    var topicName: String = null
-    var topicId: Uuid = null
-    partitions.keySet.foreach {
-      partition => if (topicId == null) {
-        topicId = partition.topicId()
-      } else if (!topicId.equals(partition.topicId())) {
-        throw new IllegalArgumentException("partition topic IDs did not match")
-      }
-        if (topicName == null) {
-          topicName = partition.topic()
-        } else if (!topicName.equals(partition.topic())) {
-          throw new IllegalArgumentException("partition topic names did not match")
-        }
-    }
-    if (topicId == null) {
-      throw new IllegalArgumentException("Invalid empty partitions map.")
-    }
-    val partitionRegistrations = partitions.map { case (partition, replicas) =>
-      Int.box(partition.partition()) -> new PartitionRegistration.Builder().
-        setReplicas(replicas.toArray).
-        setDirectories(DirectoryId.unassignedArray(replicas.size)).
-        setIsr(replicas.toArray).
-        setLeader(replicas.head).
-        setLeaderRecoveryState(LeaderRecoveryState.RECOVERED).
-        setLeaderEpoch(0).
-        setPartitionEpoch(0).
-        build()
-    }
-    new TopicImage(topicName, topicId, partitionRegistrations.asJava)
-  }
-
-  def topicsImage(
-    topics: Seq[TopicImage]
-  ): TopicsImage = {
-    var retval = TopicsImage.EMPTY
-    topics.foreach { t => retval = retval.including(t) }
-    retval
   }
 }
