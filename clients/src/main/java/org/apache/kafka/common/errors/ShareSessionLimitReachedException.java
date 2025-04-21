@@ -14,23 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.common.utils.annotation;
+package org.apache.kafka.common.errors;
 
-import org.apache.kafka.common.protocol.ApiKeys;
+/**
+ * Indicates that a new share session could not be opened because the limit of share sessions has been reached.
+ */
+public class ShareSessionLimitReachedException extends RetriableException {
 
-import org.junit.jupiter.params.provider.ArgumentsSource;
+    private static final long serialVersionUID = 1L;
 
-import java.lang.annotation.ElementType;
-import java.lang.annotation.Retention;
-import java.lang.annotation.RetentionPolicy;
-import java.lang.annotation.Target;
-
-@Target({ElementType.METHOD})
-@Retention(RetentionPolicy.RUNTIME)
-@ArgumentsSource(ApiKeyVersionsProvider.class)
-public @interface ApiKeyVersionsSource {
-    ApiKeys apiKey();
-    short fromVersion() default -1;
-    short toVersion() default -1;
-    boolean enableUnstableLastVersion() default true;
+    public ShareSessionLimitReachedException(String message) {
+        super(message);
+    }
 }

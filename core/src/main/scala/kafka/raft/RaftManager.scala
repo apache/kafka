@@ -45,7 +45,6 @@ import org.apache.kafka.raft.{Endpoints, ExternalKRaftMetrics, FileQuorumStateSt
 import org.apache.kafka.server.ProcessRole
 import org.apache.kafka.server.common.Feature
 import org.apache.kafka.server.common.serialization.RecordSerde
-import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.util.{FileLock, KafkaScheduler}
 import org.apache.kafka.server.fault.FaultHandler
 import org.apache.kafka.server.util.timer.SystemTimer
@@ -231,15 +230,8 @@ class KafkaRaftManager[T](
       dataDir,
       time,
       scheduler,
-      config = new MetadataLogConfig(config.metadataLogSegmentBytes,
-        config.metadataLogSegmentMinBytes,
-        config.metadataLogSegmentMillis,
-        config.metadataRetentionBytes,
-        config.metadataRetentionMillis,
-        KafkaRaftClient.MAX_BATCH_SIZE_BYTES,
-        KafkaRaftClient.MAX_FETCH_SIZE_BYTES,
-        ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
-        config.metadataNodeIDConfig)
+      config = new MetadataLogConfig(config),
+      config.nodeId
     )
   }
 
