@@ -324,7 +324,7 @@ public class DelayedShareFetch extends DelayedOperation {
                 releasePartitionLocks(topicPartitionData.keySet());
                 partitionsAcquired.clear();
                 localPartitionsAlreadyFetched.clear();
-                return forceComplete();
+                return forceCompleteRequest();
             } else {
                 return forceCompleteRequest();
             }
@@ -702,6 +702,9 @@ public class DelayedShareFetch extends DelayedOperation {
     }
 
     private void releasePartitionLocksAndAddToActionQueue(Set<TopicIdPartition> topicIdPartitions) {
+        if (topicIdPartitions.isEmpty()) {
+            return;
+        }
         // Releasing the lock to move ahead with the next request in queue.
         releasePartitionLocks(topicIdPartitions);
         // If we have a fetch request completed for a topic-partition, we release the locks for that partition,
