@@ -66,7 +66,6 @@ import org.apache.kafka.common.requests.DeleteShareGroupOffsetsRequest;
 import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DescribeShareGroupOffsetsRequest;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
-import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.ShareGroupDescribeRequest;
 import org.apache.kafka.common.requests.StreamsGroupDescribeRequest;
 import org.apache.kafka.common.requests.TransactionResult;
@@ -88,6 +87,7 @@ import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
@@ -364,11 +364,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#consumerGroupHeartbeat(RequestContext, ConsumerGroupHeartbeatRequestData)}.
+     * See {@link GroupCoordinator#consumerGroupHeartbeat(AuthorizableRequestContext, ConsumerGroupHeartbeatRequestData)}.
      */
     @Override
     public CompletableFuture<ConsumerGroupHeartbeatResponseData> consumerGroupHeartbeat(
-        RequestContext context,
+        AuthorizableRequestContext context,
         ConsumerGroupHeartbeatRequestData request
     ) {
         if (!isActive.get()) {
@@ -395,11 +395,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
 
     /**
      * See
-     * {@link GroupCoordinator#streamsGroupHeartbeat(RequestContext, org.apache.kafka.common.message.StreamsGroupHeartbeatRequestData)}.
+     * {@link GroupCoordinator#streamsGroupHeartbeat(AuthorizableRequestContext, StreamsGroupHeartbeatRequestData)}.
      */
     @Override
     public CompletableFuture<StreamsGroupHeartbeatResult> streamsGroupHeartbeat(
-        RequestContext context,
+        AuthorizableRequestContext context,
         StreamsGroupHeartbeatRequestData request
     ) {
         if (!isActive.get()) {
@@ -432,11 +432,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#shareGroupHeartbeat(RequestContext, ShareGroupHeartbeatRequestData)}.
+     * See {@link GroupCoordinator#shareGroupHeartbeat(AuthorizableRequestContext, ShareGroupHeartbeatRequestData)}.
      */
     @Override
     public CompletableFuture<ShareGroupHeartbeatResponseData> shareGroupHeartbeat(
-        RequestContext context,
+        AuthorizableRequestContext context,
         ShareGroupHeartbeatRequestData request
     ) {
         if (!isActive.get()) {
@@ -592,11 +592,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#joinGroup(RequestContext, JoinGroupRequestData, BufferSupplier)}.
+     * See {@link GroupCoordinator#joinGroup(AuthorizableRequestContext, JoinGroupRequestData, BufferSupplier)}.
      */
     @Override
     public CompletableFuture<JoinGroupResponseData> joinGroup(
-        RequestContext context,
+        AuthorizableRequestContext context,
         JoinGroupRequestData request,
         BufferSupplier bufferSupplier
     ) {
@@ -646,11 +646,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#syncGroup(RequestContext, SyncGroupRequestData, BufferSupplier)}.
+     * See {@link GroupCoordinator#syncGroup(AuthorizableRequestContext, SyncGroupRequestData, BufferSupplier)}.
      */
     @Override
     public CompletableFuture<SyncGroupResponseData> syncGroup(
-        RequestContext context,
+        AuthorizableRequestContext context,
         SyncGroupRequestData request,
         BufferSupplier bufferSupplier
     ) {
@@ -690,11 +690,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#heartbeat(RequestContext, HeartbeatRequestData)}.
+     * See {@link GroupCoordinator#heartbeat(AuthorizableRequestContext, HeartbeatRequestData)}.
      */
     @Override
     public CompletableFuture<HeartbeatResponseData> heartbeat(
-        RequestContext context,
+        AuthorizableRequestContext context,
         HeartbeatRequestData request
     ) {
         if (!isActive.get()) {
@@ -733,11 +733,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#leaveGroup(RequestContext, LeaveGroupRequestData)}.
+     * See {@link GroupCoordinator#leaveGroup(AuthorizableRequestContext, LeaveGroupRequestData)}.
      */
     @Override
     public CompletableFuture<LeaveGroupResponseData> leaveGroup(
-        RequestContext context,
+        AuthorizableRequestContext context,
         LeaveGroupRequestData request
     ) {
         if (!isActive.get()) {
@@ -782,11 +782,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#listGroups(RequestContext, ListGroupsRequestData)}.
+     * See {@link GroupCoordinator#listGroups(AuthorizableRequestContext, ListGroupsRequestData)}.
      */
     @Override
     public CompletableFuture<ListGroupsResponseData> listGroups(
-        RequestContext context,
+        AuthorizableRequestContext context,
         ListGroupsRequestData request
     ) {
         if (!isActive.get()) {
@@ -827,11 +827,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#consumerGroupDescribe(RequestContext, List)}.
+     * See {@link GroupCoordinator#consumerGroupDescribe(AuthorizableRequestContext, List)}.
      */
     @Override
     public CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> consumerGroupDescribe(
-        RequestContext context,
+        AuthorizableRequestContext context,
         List<String> groupIds
     ) {
         if (!isActive.get()) {
@@ -879,11 +879,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#streamsGroupDescribe(RequestContext, List)}.
+     * See {@link GroupCoordinator#streamsGroupDescribe(AuthorizableRequestContext, List)}.
      */
     @Override
     public CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> streamsGroupDescribe(
-        RequestContext context,
+        AuthorizableRequestContext context,
         List<String> groupIds
     ) {
         if (!isActive.get()) {
@@ -931,11 +931,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
     
     /**
-     * See {@link GroupCoordinator#shareGroupDescribe(RequestContext, List)}.
+     * See {@link GroupCoordinator#shareGroupDescribe(AuthorizableRequestContext, List)}.
      */
     @Override
     public CompletableFuture<List<DescribedGroup>> shareGroupDescribe(
-        RequestContext context,
+        AuthorizableRequestContext context,
         List<String> groupIds
     ) {
         if (!isActive.get()) {
@@ -983,11 +983,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#describeGroups(RequestContext, List)}.
+     * See {@link GroupCoordinator#describeGroups(AuthorizableRequestContext, List)}.
      */
     @Override
     public CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> describeGroups(
-        RequestContext context,
+        AuthorizableRequestContext context,
         List<String> groupIds
     ) {
         if (!isActive.get()) {
@@ -1037,11 +1037,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#deleteGroups(RequestContext, List, BufferSupplier)}.
+     * See {@link GroupCoordinator#deleteGroups(AuthorizableRequestContext, List, BufferSupplier)}.
      */
     @Override
     public CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> deleteGroups(
-        RequestContext context,
+        AuthorizableRequestContext context,
         List<String> groupIds,
         BufferSupplier bufferSupplier
     ) {
@@ -1141,7 +1141,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     private CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> handleDeleteGroups(
-        RequestContext context,
+        AuthorizableRequestContext context,
         TopicPartition topicPartition,
         List<String> groupIds
     ) {
@@ -1296,11 +1296,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#fetchOffsets(RequestContext, OffsetFetchRequestData.OffsetFetchRequestGroup, boolean)}.
+     * See {@link GroupCoordinator#fetchOffsets(AuthorizableRequestContext, OffsetFetchRequestData.OffsetFetchRequestGroup, boolean)}.
      */
     @Override
     public CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> fetchOffsets(
-        RequestContext context,
+        AuthorizableRequestContext context,
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
         boolean requireStable
     ) {
@@ -1351,11 +1351,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#fetchAllOffsets(RequestContext, OffsetFetchRequestData.OffsetFetchRequestGroup, boolean)}.
+     * See {@link GroupCoordinator#fetchAllOffsets(AuthorizableRequestContext, OffsetFetchRequestData.OffsetFetchRequestGroup, boolean)}.
      */
     @Override
     public CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> fetchAllOffsets(
-        RequestContext context,
+        AuthorizableRequestContext context,
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
         boolean requireStable
     ) {
@@ -1406,11 +1406,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#describeShareGroupOffsets(RequestContext, DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup)}.
+     * See {@link GroupCoordinator#describeShareGroupOffsets(AuthorizableRequestContext, DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup)}.
      */
     @Override
     public CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> describeShareGroupOffsets(
-        RequestContext context,
+        AuthorizableRequestContext context,
         DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData
     ) {
         if (!isActive.get()) {
@@ -1468,11 +1468,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#describeShareGroupAllOffsets(RequestContext, DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup)}.
+     * See {@link GroupCoordinator#describeShareGroupAllOffsets(AuthorizableRequestContext, DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup)}.
      */
     @Override
     public CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> describeShareGroupAllOffsets(
-        RequestContext context,
+        AuthorizableRequestContext context,
         DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup requestData
     ) {
         if (!isActive.get()) {
@@ -1561,11 +1561,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#deleteShareGroupOffsets(RequestContext, DeleteShareGroupOffsetsRequestData)}.
+     * See {@link GroupCoordinator#deleteShareGroupOffsets(AuthorizableRequestContext, DeleteShareGroupOffsetsRequestData)}.
      */
     @Override
     public CompletableFuture<DeleteShareGroupOffsetsResponseData> deleteShareGroupOffsets(
-        RequestContext context,
+        AuthorizableRequestContext context,
         DeleteShareGroupOffsetsRequestData requestData
     ) {
         if (!isActive.get()) {
@@ -1635,11 +1635,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#commitOffsets(RequestContext, OffsetCommitRequestData, BufferSupplier)}.
+     * See {@link GroupCoordinator#commitOffsets(AuthorizableRequestContext, OffsetCommitRequestData, BufferSupplier)}.
      */
     @Override
     public CompletableFuture<OffsetCommitResponseData> commitOffsets(
-        RequestContext context,
+        AuthorizableRequestContext context,
         OffsetCommitRequestData request,
         BufferSupplier bufferSupplier
     ) {
@@ -1673,11 +1673,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#commitTransactionalOffsets(RequestContext, TxnOffsetCommitRequestData, BufferSupplier)}.
+     * See {@link GroupCoordinator#commitTransactionalOffsets(AuthorizableRequestContext, TxnOffsetCommitRequestData, BufferSupplier)}.
      */
     @Override
     public CompletableFuture<TxnOffsetCommitResponseData> commitTransactionalOffsets(
-        RequestContext context,
+        AuthorizableRequestContext context,
         TxnOffsetCommitRequestData request,
         BufferSupplier bufferSupplier
     ) {
@@ -1703,7 +1703,7 @@ public class GroupCoordinatorService implements GroupCoordinator {
             request.producerEpoch(),
             Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.commitTransactionalOffset(context, request),
-            context.apiVersion()
+            context.requestVersion()
         ).exceptionally(exception -> handleOperationException(
             "txn-commit-offset",
             request,
@@ -1714,11 +1714,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
-     * See {@link GroupCoordinator#deleteOffsets(RequestContext, OffsetDeleteRequestData, BufferSupplier)}.
+     * See {@link GroupCoordinator#deleteOffsets(AuthorizableRequestContext, OffsetDeleteRequestData, BufferSupplier)}.
      */
     @Override
     public CompletableFuture<OffsetDeleteResponseData> deleteOffsets(
-        RequestContext context,
+        AuthorizableRequestContext context,
         OffsetDeleteRequestData request,
         BufferSupplier bufferSupplier
     ) {

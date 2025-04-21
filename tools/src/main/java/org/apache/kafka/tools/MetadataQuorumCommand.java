@@ -29,6 +29,7 @@ import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.metadata.properties.MetaProperties;
 import org.apache.kafka.metadata.properties.MetaPropertiesEnsemble;
 import org.apache.kafka.network.SocketServerConfigs;
+import org.apache.kafka.raft.MetadataLogConfig;
 import org.apache.kafka.server.config.KRaftConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.util.CommandLineUtils;
@@ -359,8 +360,8 @@ public class MetadataQuorumCommand {
     }
 
     static String getMetadataDirectory(Properties props) throws TerseException {
-        if (props.containsKey(KRaftConfigs.METADATA_LOG_DIR_CONFIG)) {
-            return props.getProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG);
+        if (props.containsKey(MetadataLogConfig.METADATA_LOG_DIR_CONFIG)) {
+            return props.getProperty(MetadataLogConfig.METADATA_LOG_DIR_CONFIG);
         }
         if (props.containsKey(ServerLogConfigs.LOG_DIRS_CONFIG)) {
             String[] logDirs = props.getProperty(ServerLogConfigs.LOG_DIRS_CONFIG).trim().split(",");
@@ -368,7 +369,7 @@ public class MetadataQuorumCommand {
                 return logDirs[0];
             }
         }
-        throw new TerseException("Neither " + KRaftConfigs.METADATA_LOG_DIR_CONFIG + " nor " +
+        throw new TerseException("Neither " + MetadataLogConfig.METADATA_LOG_DIR_CONFIG + " nor " +
             ServerLogConfigs.LOG_DIRS_CONFIG + " were found. Is this a valid controller " +
             "configuration file?");
     }
