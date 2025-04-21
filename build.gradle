@@ -159,7 +159,7 @@ ext {
     libs.log4j2Api,
     libs.log4j2Core
   ]
-  
+
 }
 
 allprojects {
@@ -552,7 +552,7 @@ subprojects {
         maxFailures = userMaxTestRetryFailures
       }
     }
-    
+
     finalizedBy("copyTestXml")
   }
 
@@ -2010,6 +2010,7 @@ project(':raft') {
   dependencies {
     implementation project(':server-common')
     implementation project(':clients')
+    implementation project(':storage')
     implementation libs.jacksonDatabind
     implementation libs.slf4jApi
 

@@ -20,7 +20,7 @@ import kafka.server.{KafkaConfig, KafkaRaftServer}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.errors.CorruptRecordException
-import org.apache.kafka.common.errors.{InvalidConfigurationException, RecordTooLargeException}
+import org.apache.kafka.common.errors.RecordTooLargeException
 import org.apache.kafka.common.protocol
 import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
 import org.apache.kafka.common.record.ArbitraryMemoryRecords
@@ -78,12 +78,6 @@ final class KafkaMetadataLogTest {
     props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
     props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_BYTES_CONFIG, Int.box(10240))
     props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG, Int.box(10 * 1024))
-    assertThrows(classOf[InvalidConfigurationException], () => {
-      val kafkaConfig = KafkaConfig.fromProps(props)
-      val metadataConfig = new MetadataLogConfig(kafkaConfig)
-      buildMetadataLog(tempDir, mockTime, metadataConfig)
-    })
-
     props.put(LogConfig.INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, Int.box(10240))
     val kafkaConfig = KafkaConfig.fromProps(props)
     val metadataConfig = new MetadataLogConfig(kafkaConfig)

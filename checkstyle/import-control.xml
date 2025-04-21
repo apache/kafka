@@ -46,7 +46,7 @@
   <allow pkg="org.apache.kafka.common.utils" />
   <allow pkg="org.apache.kafka.common.errors" exact-match="true" />
   <allow pkg="org.apache.kafka.common.memory" />
- 
+
   <!-- anyone can use internal test apis -->
   <allow pkg="org.apache.kafka.common.test.api" />
 
@@ -480,6 +480,7 @@
     <allow pkg="org.apache.kafka.clients" />
     <allow class="org.apache.kafka.common.compress.Compression" exact-match="true" />
     <allow pkg="org.apache.kafka.common.config" />
+    <allow pkg="org.apache.kafka.storage" />
     <allow pkg="org.apache.kafka.common.feature" />
     <allow pkg="org.apache.kafka.common.message" />
     <allow pkg="org.apache.kafka.common.metadata" />

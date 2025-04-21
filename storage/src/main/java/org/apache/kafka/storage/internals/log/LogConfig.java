@@ -121,14 +121,13 @@ public class LogConfig extends AbstractConfig {
 
     // Visible for testing
     public static final String SERVER_DEFAULT_HEADER_NAME = "Server Default Property";
-    // only for testing 
+    // only for testing
     public static final String INTERNAL_SEGMENT_BYTES_CONFIG = "internal.segment.bytes";
     public static final String LOG_SEGMENT_BYTES_DOC = "Setting the maximum size of a single log file. This should be used for testing only.";
-    // only for testing 
+    // only for testing
     public static final String INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG = "metadata.log.segment.min.bytes";
-    private static final String INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_DOC = 
+    private static final String INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_DOC =
             "Override the minimum size for a single metadata log file. This should be used for testing only.";
-    private static final int METADATA_LOG_SEGMENT_MIN_BYTES_DEFAULT = 8 * 1024 * 1024;
 
     public static final int DEFAULT_SEGMENT_BYTES = 1024 * 1024 * 1024;
     public static final long DEFAULT_SEGMENT_MS = 24 * 7 * 60 * 60 * 1000L;
@@ -198,7 +197,7 @@ public class LogConfig extends AbstractConfig {
             .defineInternal(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, LONG, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT, atLeast(0), LOW, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DOC)
             .defineInternal(INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, LOW, LOG_SEGMENT_BYTES_DOC)
             .defineInternal(INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, INT, null, null, LOW, INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_DOC);
-    
+
 
     private static final LogConfigDef CONFIG = new LogConfigDef();
     static {
