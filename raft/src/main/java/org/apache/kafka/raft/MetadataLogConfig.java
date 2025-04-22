@@ -88,7 +88,7 @@ public class MetadataLogConfig {
             .define(METADATA_MAX_IDLE_INTERVAL_MS_CONFIG, INT, METADATA_MAX_IDLE_INTERVAL_MS_DEFAULT, atLeast(0), LOW, METADATA_MAX_IDLE_INTERVAL_MS_DOC);
 
     private final int logSegmentBytes;
-    private final Integer internalLogSegmentMinBytes;
+    private final Integer internalLogSegmentBytes;
     private final long logSegmentMillis;
     private final long retentionMaxBytes;
     private final long retentionMillis;
@@ -99,7 +99,7 @@ public class MetadataLogConfig {
     /**
      * Configuration for the metadata log
      * @param logSegmentBytes The maximum size of a single metadata log file
-     * @param internalLogSegmentMinBytes The minimum size of a single metadata log file
+     * @param internalLogSegmentBytes the internal log segment size for the metadata log
      * @param logSegmentMillis The maximum time before a new metadata log file is rolled out
      * @param retentionMaxBytes The size of the metadata log and snapshots before deleting old snapshots and log files
      * @param retentionMillis The time to keep a metadata log file or snapshot before deleting it
@@ -108,7 +108,7 @@ public class MetadataLogConfig {
      * @param deleteDelayMillis The amount of time to wait before deleting a file from the filesystem
      */
     public MetadataLogConfig(int logSegmentBytes,
-                             int internalLogSegmentMinBytes,
+                             int internalLogSegmentBytes,
                              long logSegmentMillis,
                              long retentionMaxBytes,
                              long retentionMillis,
@@ -116,7 +116,7 @@ public class MetadataLogConfig {
                              int maxFetchSizeInBytes,
                              long deleteDelayMillis) {
         this.logSegmentBytes = logSegmentBytes;
-        this.internalLogSegmentMinBytes = internalLogSegmentMinBytes;
+        this.internalLogSegmentBytes = internalLogSegmentBytes;
         this.logSegmentMillis = logSegmentMillis;
         this.retentionMaxBytes = retentionMaxBytes;
         this.retentionMillis = retentionMillis;
@@ -127,7 +127,7 @@ public class MetadataLogConfig {
 
     public MetadataLogConfig(AbstractConfig config) {
         this.logSegmentBytes = config.getInt(METADATA_LOG_SEGMENT_BYTES_CONFIG);
-        this.internalLogSegmentMinBytes = config.getInt(LogConfig.INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG);
+        this.internalLogSegmentBytes = config.getInt(LogConfig.INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG);
         this.logSegmentMillis = config.getLong(METADATA_LOG_SEGMENT_MILLIS_CONFIG);
         this.retentionMaxBytes = config.getLong(METADATA_MAX_RETENTION_BYTES_CONFIG);
         this.retentionMillis = config.getLong(METADATA_MAX_RETENTION_MILLIS_CONFIG);
@@ -137,7 +137,7 @@ public class MetadataLogConfig {
     }
 
     public int logSegmentBytes() {
-        if (internalLogSegmentMinBytes != null) return internalLogSegmentMinBytes;
+        if (internalLogSegmentBytes != null) return internalLogSegmentBytes;
         return logSegmentBytes;
     }
 

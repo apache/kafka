@@ -28,7 +28,7 @@ import org.apache.kafka.common.errors.CorruptRecordException
 import org.apache.kafka.common.record.{MemoryRecords, Records}
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.common.{KafkaException, TopicPartition, Uuid}
-import org.apache.kafka.raft.{Isolation, KafkaRaftClient, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, MetadataLogConfig, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, SegmentPosition, ValidOffsetAndEpoch}
+import org.apache.kafka.raft.{Isolation, LogAppendInfo, LogFetchInfo, LogOffsetMetadata, MetadataLogConfig, OffsetAndEpoch, OffsetMetadata, ReplicatedLog, SegmentPosition, ValidOffsetAndEpoch}
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.Scheduler
@@ -592,12 +592,6 @@ object KafkaMetadataLog extends Logging {
     validateConfig(defaultLogConfig)
 
     val metadataLog: KafkaMetadataLog = createMetadataLog(topicPartition, topicId, dataDir, time, scheduler, config, nodeId, defaultLogConfig)
-
-    // Print a warning if users have overridden the internal config
-    if (config.logSegmentBytes() != KafkaRaftClient.MAX_BATCH_SIZE_BYTES) {
-      metadataLog.error(s"Overriding ${LogConfig.INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG} is only supported for testing. Setting " +
-        s"this value too low may lead to an inability to write batches of metadata records.")
-    }
     // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower
     // when the follower crashes after downloading a snapshot from the leader but before it could truncate the log fully.
     metadataLog.truncateToLatestSnapshot()
