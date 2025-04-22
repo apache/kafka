@@ -25,39 +25,33 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.File;
 import java.io.IOException;
+import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
-import java.security.KeyFactory;
 import java.security.PrivateKey;
-import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Base64;
-import java.util.function.BiFunction;
+import java.util.Optional;
 
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.staticCacheRefreshPolicy;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.sign;
 
 public class DefaultAssertionCreator implements AssertionCreator {
 
-    private static final BiFunction<File, String, PrivateKey> PRIVATE_KEY_TRANSFORMER = (file, privateKeySecret) -> {
-        try {
-            byte[] pkcs8EncodedBytes = Base64.getDecoder().decode(privateKeySecret);
-            PKCS8EncodedKeySpec keySpec = new PKCS8EncodedKeySpec(pkcs8EncodedBytes);
-            KeyFactory keyFactory = KeyFactory.getInstance("RSA");
-            return keyFactory.generatePrivate(keySpec);
-        } catch (GeneralSecurityException e) {
-            throw new KafkaException("An error occurred generating the OAuth assertion private key from " + file.getPath(), e);
-        }
-    };
-
     private final String algorithm;
     private final CachedFile<PrivateKey> privateKeyFile;
 
-    public DefaultAssertionCreator(String algorithm, File privateKeyFile) {
+    public DefaultAssertionCreator(String algorithm, File privateKeyFile, Optional<String> passphrase) {
         this.algorithm = algorithm;
-        this.privateKeyFile = new CachedFile<>(
-            privateKeyFile,
-            PRIVATE_KEY_TRANSFORMER,
-            staticCacheRefreshPolicy()
-        );
+
+        CachedFile.FileTransformer<PrivateKey> privateKeyTransformer = (file, privateKeyContents) -> {
+            try {
+                return OAuthBearerUtils.privateKey(privateKeyContents.getBytes(StandardCharsets.UTF_8), passphrase);
+            } catch (GeneralSecurityException | IOException e) {
+                throw new KafkaException("An error occurred generating the OAuth assertion private key from " + file.getPath(), e);
+            }
+        };
+
+        CachedFile.FileRefreshPolicy<PrivateKey> privateKeyFileRefreshPolicy = staticCacheRefreshPolicy();
+        this.privateKeyFile = new CachedFile<>(privateKeyFile, privateKeyTransformer, privateKeyFileRefreshPolicy);
     }
 
     @Override

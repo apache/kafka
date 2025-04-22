@@ -24,7 +24,6 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import java.io.File;
 import java.util.Collections;
 import java.util.Map;
-import java.util.function.BiFunction;
 
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.staticCacheRefreshPolicy;
 
@@ -119,7 +118,7 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.Cac
 public class FileAssertionJwtTemplate implements AssertionJwtTemplate {
 
     @SuppressWarnings("unchecked")
-    private static final BiFunction<File, String, CachedTemplate> JSON_TRANSFORMER = (file, json) -> {
+    private static final CachedFile.FileTransformer<CachedTemplate> JSON_TRANSFORMER = (file, json) -> {
         try {
             ObjectMapper mapper = new ObjectMapper();
             Map<String, Object> map = (Map<String, Object>) mapper.readValue(json, Map.class);

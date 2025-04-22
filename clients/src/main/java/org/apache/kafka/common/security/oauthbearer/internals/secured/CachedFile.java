@@ -25,26 +25,27 @@ import java.util.function.BiFunction;
 
 public class CachedFile<T> {
 
-    public static final BiFunction<File, String, String> NOOP_TRANSFORMER = (file, contents) -> contents;
+    public interface FileTransformer<T> extends BiFunction<File, String, T> { }
+    public interface FileRefreshPolicy<T> extends BiFunction<File, CachedFileInfo<T>, Boolean> { }
+
+    public static final FileTransformer<String> NOOP_TRANSFORMER = (file, contents) -> contents;
 
     protected final File file;
-    protected final BiFunction<File, String, T> transformer;
-    protected final BiFunction<File, CachedFileInfo<T>, Boolean> cacheRefreshPolicy;
+    protected final FileTransformer<T> transformer;
+    protected final FileRefreshPolicy<T> cacheRefreshPolicy;
     protected CachedFileInfo<T> cachedFileInfo;
 
-    public CachedFile(File file,
-                      BiFunction<File, String, T> transformer,
-                      BiFunction<File, CachedFileInfo<T>, Boolean> cacheRefreshPolicy) {
+    public CachedFile(File file, FileTransformer<T> transformer, FileRefreshPolicy<T> cacheRefreshPolicy) {
         this.file = file;
         this.transformer = transformer;
         this.cacheRefreshPolicy = cacheRefreshPolicy;
     }
 
-    public static <T> BiFunction<File, CachedFileInfo<T>, Boolean> staticCacheRefreshPolicy() {
+    public static <T> FileRefreshPolicy<T> staticCacheRefreshPolicy() {
         return (file, cachedFileInfo) -> cachedFileInfo == null;
     }
 
-    public static <T> BiFunction<File, CachedFileInfo<T>, Boolean> lastModifiedCacheRefreshPolicy() {
+    public static <T> FileRefreshPolicy<T> lastModifiedCacheRefreshPolicy() {
         return (file, cachedFileInfo) -> cachedFileInfo == null || cachedFileInfo.lastModified() != file.lastModified();
     }
 

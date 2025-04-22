@@ -48,6 +48,7 @@ import java.util.Base64;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.TOKEN_SIGNING_ALGORITHM_RS256;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.getSignature;
@@ -61,10 +62,31 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class DefaultAssertionCreatorTest {
 
     @Test
+    public void testPrivateKey() throws Exception {
+        KeyPair keyPair = generateKeyPair();
+        Builder builder = new Builder()
+            .setPrivateKeyFile(generatePrivateKey(keyPair.getPrivate()));
+        AssertionJwtTemplate jwtTemplate = new LayeredAssertionJwtTemplate(
+            new StaticAssertionJwtTemplate(Map.of("kid", "test-id"), Map.of()),
+            new DynamicAssertionJwtTemplate(
+                new MockTime(),
+                builder.algorithm,
+                3600,
+                60,
+                false
+            )
+        );
+
+        AssertionCreator assertionCreator = builder.build();
+        String assertion = assertionCreator.create(jwtTemplate);
+        assertClaims(builder, keyPair.getPublic(), assertion);
+    }
+
+    @Test
     public void testPrivateKeyId() throws Exception {
         KeyPair keyPair = generateKeyPair();
         Builder builder = new Builder()
-            .setPrivateKeyFile(generatePrivateKeySecret(keyPair.getPrivate()));
+            .setPrivateKeyFile(generatePrivateKey(keyPair.getPrivate()));
 
         AssertionJwtTemplate jwtTemplate = new LayeredAssertionJwtTemplate(
             new StaticAssertionJwtTemplate(Map.of("kid", "test-id"), Map.of()),
@@ -88,29 +110,8 @@ public class DefaultAssertionCreatorTest {
     }
 
     @Test
-    public void testPrivateKeySecret() throws Exception {
-        KeyPair keyPair = generateKeyPair();
-        Builder builder = new Builder()
-            .setPrivateKeyFile(generatePrivateKeySecret(keyPair.getPrivate()));
-        AssertionJwtTemplate jwtTemplate = new LayeredAssertionJwtTemplate(
-            new StaticAssertionJwtTemplate(Map.of("kid", "test-id"), Map.of()),
-            new DynamicAssertionJwtTemplate(
-                new MockTime(),
-                builder.algorithm,
-                3600,
-                60,
-                false
-            )
-        );
-
-        AssertionCreator assertionCreator = builder.build();
-        String assertion = assertionCreator.create(jwtTemplate);
-        assertClaims(builder, keyPair.getPublic(), assertion);
-    }
-
-    @Test
-    public void testInvalidPrivateKeySecret() throws Exception {
-        File privateKeyFile = generatePrivateKeySecret();
+    public void testInvalidPrivateKey() throws Exception {
+        File privateKeyFile = generatePrivateKey();
         long originalFileLength = privateKeyFile.length();
         int bytesToTruncate = 10;       // A single byte isn't enough
 
@@ -138,7 +139,7 @@ public class DefaultAssertionCreatorTest {
     public void testAlgorithm(String algorithm) throws Exception {
         KeyPair keyPair = generateKeyPair();
         Builder builder = new Builder()
-            .setPrivateKeyFile(generatePrivateKeySecret(keyPair.getPrivate()))
+            .setPrivateKeyFile(generatePrivateKey(keyPair.getPrivate()))
             .setAlgorithm(algorithm);
         AssertionCreator assertionCreator = builder.build();
 
@@ -165,7 +166,7 @@ public class DefaultAssertionCreatorTest {
     public void testInvalidAlgorithm() throws IOException, GeneralSecurityException {
         PrivateKey privateKey = generateKeyPair().getPrivate();
         Builder builder = new Builder()
-            .setPrivateKeyFile(generatePrivateKeySecret(privateKey))
+            .setPrivateKeyFile(generatePrivateKey(privateKey))
             .setAlgorithm("thisisnotvalid");
         assertThrows(NoSuchAlgorithmException.class, () -> getSignature(builder.algorithm));
         assertThrows(
@@ -191,7 +192,7 @@ public class DefaultAssertionCreatorTest {
             .build();
     }
 
-    private File generatePrivateKeySecret(PrivateKey privateKey) throws IOException {
+    private File generatePrivateKey(PrivateKey privateKey) throws IOException {
         File file = File.createTempFile("private-", ".key");
         byte[] bytes = Base64.getEncoder().encode(privateKey.getEncoded());
 
@@ -202,8 +203,8 @@ public class DefaultAssertionCreatorTest {
         return file;
     }
 
-    private File generatePrivateKeySecret() throws IOException {
-        return generatePrivateKeySecret(generateKeyPair().getPrivate());
+    private File generatePrivateKey() throws IOException {
+        return generatePrivateKey(generateKeyPair().getPrivate());
     }
 
     private KeyPair generateKeyPair() {
@@ -221,6 +222,7 @@ public class DefaultAssertionCreatorTest {
         private final Time time = new MockTime();
         private String algorithm = TOKEN_SIGNING_ALGORITHM_RS256;
         private File privateKeyFile;
+        private Optional<String> passphrase = Optional.empty();
 
         public Builder setAlgorithm(String algorithm) {
             this.algorithm = algorithm;
@@ -232,8 +234,13 @@ public class DefaultAssertionCreatorTest {
             return this;
         }
 
+        public Builder setPassphrase(String passphrase) {
+            this.passphrase = Optional.of(passphrase);
+            return this;
+        }
+
         private DefaultAssertionCreator build() {
-            return new DefaultAssertionCreator(algorithm, privateKeyFile);
+            return new DefaultAssertionCreator(algorithm, privateKeyFile, passphrase);
         }
     }
 }

@@ -49,6 +49,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOF
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_ALGORITHM;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.dynamicAssertionJwtTemplate;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.fileAssertionJwtTemplate;
@@ -101,8 +102,8 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
         } else {
             String algorithm = oauthConfig.getString(SASL_OAUTHBEARER_ASSERTION_ALGORITHM);
             File privateKeyFile = validateFile(oauthConfig, SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE);
-            assertionCreator = new DefaultAssertionCreator(algorithm, privateKeyFile);
-
+            Optional<String> passphrase = oauthConfig.maybeGetString(SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE);
+            assertionCreator = new DefaultAssertionCreator(algorithm, privateKeyFile, passphrase);
             List<AssertionJwtTemplate> templates = new ArrayList<>();
             fileAssertionJwtTemplate(oauthConfig).ifPresent(templates::add);
             staticAssertionJwtTemplate(oauthConfig).ifPresent(templates::add);

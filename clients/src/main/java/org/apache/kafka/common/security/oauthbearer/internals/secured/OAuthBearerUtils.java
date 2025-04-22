@@ -31,14 +31,17 @@ import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.File;
+import java.io.IOException;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
 import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
+import java.security.KeyFactory;
 import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
 import java.security.Signature;
+import java.security.spec.PKCS8EncodedKeySpec;
 import java.util.Arrays;
 import java.util.Base64;
 import java.util.Collection;
@@ -52,6 +55,11 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.stream.Collectors;
 
+import javax.crypto.Cipher;
+import javax.crypto.EncryptedPrivateKeyInfo;
+import javax.crypto.SecretKey;
+import javax.crypto.SecretKeyFactory;
+import javax.crypto.spec.PBEKeySpec;
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
@@ -71,6 +79,31 @@ public class OAuthBearerUtils {
 
     public static final String TOKEN_SIGNING_ALGORITHM_RS256 = "RS256";
     public static final String TOKEN_SIGNING_ALGORITHM_ES256 = "ES256";
+
+    /**
+     * Inspired by {@code org.apache.kafka.common.security.ssl.DefaultSslEngineFactory.PemStore}, which is not
+     * visible to reuse directly.
+     */
+    public static PrivateKey privateKey(byte[] privateKeyContents,
+                                        Optional<String> passphrase) throws GeneralSecurityException, IOException {
+        PKCS8EncodedKeySpec keySpec;
+
+        if (passphrase.isPresent()) {
+            EncryptedPrivateKeyInfo keyInfo = new EncryptedPrivateKeyInfo(privateKeyContents);
+            String algorithm = keyInfo.getAlgName();
+            SecretKeyFactory secretKeyFactory = SecretKeyFactory.getInstance(algorithm);
+            SecretKey pbeKey = secretKeyFactory.generateSecret(new PBEKeySpec(passphrase.get().toCharArray()));
+            Cipher cipher = Cipher.getInstance(algorithm);
+            cipher.init(Cipher.DECRYPT_MODE, pbeKey, keyInfo.getAlgParameters());
+            keySpec = keyInfo.getKeySpec(cipher);
+        } else {
+            byte[] pkcs8EncodedBytes = Base64.getDecoder().decode(privateKeyContents);
+            keySpec = new PKCS8EncodedKeySpec(pkcs8EncodedBytes);
+        }
+
+        KeyFactory keyFactory = KeyFactory.getInstance("RSA");
+        return keyFactory.generatePrivate(keySpec);
+    }
 
     public static Signature getSignature(String algorithm) throws GeneralSecurityException {
         if (algorithm.equalsIgnoreCase(TOKEN_SIGNING_ALGORITHM_RS256)) {

@@ -19,12 +19,10 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 import org.apache.kafka.common.security.oauthbearer.AssertionJwtTemplate;
 import org.apache.kafka.common.utils.Time;
 
-import org.jose4j.lang.ByteUtil;
-
-import java.util.Base64;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.UUID;
 
 public class DynamicAssertionJwtTemplate implements AssertionJwtTemplate {
 
@@ -56,7 +54,6 @@ public class DynamicAssertionJwtTemplate implements AssertionJwtTemplate {
 
     @Override
     public Map<String, Object> payload() {
-        Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
         long currentTimeSecs = time.milliseconds() / 1000L;
 
         Map<String, Object> values = new HashMap<>();
@@ -64,10 +61,8 @@ public class DynamicAssertionJwtTemplate implements AssertionJwtTemplate {
         values.put("exp", currentTimeSecs + expSeconds);
         values.put("nbf", currentTimeSecs - nbfSeconds);
 
-        if (includeJti) {
-            String jti = encoder.encodeToString(ByteUtil.randomBytes(16));
-            values.put("jti", jti);
-        }
+        if (includeJti)
+            values.put("jti", UUID.randomUUID().toString());
 
         return Collections.unmodifiableMap(values);
     }
