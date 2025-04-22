@@ -19,32 +19,23 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.oauthbearer.AssertionCreator;
 import org.apache.kafka.common.security.oauthbearer.AssertionJwtTemplate;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.File;
 import java.io.IOException;
-import java.nio.charset.StandardCharsets;
 import java.security.GeneralSecurityException;
 import java.security.KeyFactory;
-import java.security.NoSuchAlgorithmException;
 import java.security.PrivateKey;
-import java.security.Signature;
 import java.security.spec.PKCS8EncodedKeySpec;
-import java.time.Duration;
 import java.util.Base64;
-import java.util.HashMap;
-import java.util.Map;
 import java.util.function.BiFunction;
 
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.CachedFile.staticCacheRefreshPolicy;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.sign;
 
 public class DefaultAssertionCreator implements AssertionCreator {
-
-    static final String TOKEN_SIGNING_ALGORITHM_RS256 = "RS256";
-    static final String TOKEN_SIGNING_ALGORITHM_ES256 = "ES256";
 
     private static final BiFunction<File, String, PrivateKey> PRIVATE_KEY_TRANSFORMER = (file, privateKeySecret) -> {
         try {
@@ -57,12 +48,10 @@ public class DefaultAssertionCreator implements AssertionCreator {
         }
     };
 
-    private final Time time;
     private final String algorithm;
     private final CachedFile<PrivateKey> privateKeyFile;
 
-    public DefaultAssertionCreator(Time time, String algorithm, File privateKeyFile) {
-        this.time = time;
+    public DefaultAssertionCreator(String algorithm, File privateKeyFile) {
         this.algorithm = algorithm;
         this.privateKeyFile = new CachedFile<>(
             privateKeyFile,
@@ -75,54 +64,11 @@ public class DefaultAssertionCreator implements AssertionCreator {
     public String create(AssertionJwtTemplate template) throws GeneralSecurityException, IOException {
         ObjectMapper mapper = new ObjectMapper();
         Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
-        String header = encodeHeader(template, mapper, encoder);
-        String payload = encodePayload(template, mapper, encoder);
+        String header = encoder.encodeToString(Utils.utf8(mapper.writeValueAsString(template.header())));
+        String payload = encoder.encodeToString(Utils.utf8(mapper.writeValueAsString(template.payload())));
         String content = header + "." + payload;
         PrivateKey privateKey = privateKeyFile.transformed();
-        String signedContent = sign(privateKey, content);
+        String signedContent = sign(algorithm, privateKey, content);
         return content + "." + signedContent;
-    }
-
-    String encodeHeader(AssertionJwtTemplate template,
-                        ObjectMapper mapper,
-                        Base64.Encoder encoder) throws IOException {
-        Map<String, Object> values = new HashMap<>(template.header());
-        values.put("alg", algorithm);
-        values.put("typ", "JWT");
-
-        String json = mapper.writeValueAsString(values);
-        return encoder.encodeToString(Utils.utf8(json));
-    }
-
-    String encodePayload(AssertionJwtTemplate template,
-                         ObjectMapper mapper,
-                         Base64.Encoder encoder) throws IOException {
-        long currentTimeSecs = time.milliseconds() / 1000L;
-        long expirationSecs = currentTimeSecs + Duration.ofMinutes(60).toSeconds();
-
-        Map<String, Object> values = new HashMap<>(template.payload());
-        values.put("iat", currentTimeSecs);
-        values.put("exp", expirationSecs);
-
-        String json = mapper.writeValueAsString(values);
-        return encoder.encodeToString(Utils.utf8(json));
-    }
-
-    Signature getSignature() throws GeneralSecurityException {
-        if (algorithm.equalsIgnoreCase(TOKEN_SIGNING_ALGORITHM_RS256)) {
-            return Signature.getInstance("SHA256withRSA");
-        } else if (algorithm.equalsIgnoreCase(TOKEN_SIGNING_ALGORITHM_ES256)) {
-            return Signature.getInstance("SHA256withECDSA");
-        } else {
-            throw new NoSuchAlgorithmException(String.format("Unsupported signing algorithm: %s", algorithm));
-        }
-    }
-
-    String sign(PrivateKey privateKey, String contentToSign) throws GeneralSecurityException {
-        Signature signature = getSignature();
-        signature.initSign(privateKey);
-        signature.update(contentToSign.getBytes(StandardCharsets.UTF_8));
-        byte[] signedContent = signature.sign();
-        return Base64.getUrlEncoder().withoutPadding().encodeToString(signedContent);
     }
 }

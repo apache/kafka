@@ -22,6 +22,7 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpReques
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBearerRequestGenerator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtHttpClient;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtHttpResponseBodyHandler;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.LayeredAssertionJwtTemplate;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfig;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerJaasConfig;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.SslResource;
@@ -35,6 +36,7 @@ import java.net.http.HttpClient;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -47,10 +49,12 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_RETRY_BACKOF
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_ALGORITHM;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.dynamicAssertionJwtTemplate;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.fileAssertionJwtTemplate;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.jaasOptions;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.maybeCreateSslResource;
+import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.staticAssertionJwtTemplate;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateFile;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateUrl;
 
@@ -93,14 +97,17 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
         if (oauthConfig.containsKey(SASL_OAUTHBEARER_ASSERTION_FILE)) {
             File assertionFile = validateFile(oauthConfig, SASL_OAUTHBEARER_ASSERTION_FILE);
             assertionCreator = new FileAssertionCreator(assertionFile);
-            assertionJwtTemplate = new StaticAssertionJwtTemplate(Map.of());
+            assertionJwtTemplate = new StaticAssertionJwtTemplate();
         } else {
             String algorithm = oauthConfig.getString(SASL_OAUTHBEARER_ASSERTION_ALGORITHM);
             File privateKeyFile = validateFile(oauthConfig, SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE);
-            assertionCreator = new DefaultAssertionCreator(time, algorithm, privateKeyFile);
+            assertionCreator = new DefaultAssertionCreator(algorithm, privateKeyFile);
 
-            File assertionTemplateFile = validateFile(oauthConfig, SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE);
-            assertionJwtTemplate = new FileAssertionJwtTemplate(assertionTemplateFile);
+            List<AssertionJwtTemplate> templates = new ArrayList<>();
+            fileAssertionJwtTemplate(oauthConfig).ifPresent(templates::add);
+            staticAssertionJwtTemplate(oauthConfig).ifPresent(templates::add);
+            templates.add(dynamicAssertionJwtTemplate(oauthConfig, time));
+            assertionJwtTemplate = new LayeredAssertionJwtTemplate(templates);
         }
 
         requestGenerator = new JwtBearerRequestGenerator(

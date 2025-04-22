@@ -21,19 +21,29 @@ import org.apache.kafka.common.config.AbstractConfig;
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.security.oauthbearer.AssertionJwtTemplate;
 import org.apache.kafka.common.security.oauthbearer.ClientCredentialsJwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.FileAssertionJwtTemplate;
 import org.apache.kafka.common.security.oauthbearer.JwtValidatorException;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerConfigurable;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
+import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
 
 import java.io.File;
 import java.net.MalformedURLException;
 import java.net.URISyntaxException;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.security.GeneralSecurityException;
+import java.security.NoSuchAlgorithmException;
+import java.security.PrivateKey;
+import java.security.Signature;
 import java.util.Arrays;
+import java.util.Base64;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
@@ -45,11 +55,79 @@ import java.util.stream.Collectors;
 import javax.security.auth.login.AppConfigurationEntry;
 
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_ALGORITHM;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_MINUTES;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_JTI_INCLUDE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_MINUTES;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_CONFIG;
 import static org.apache.kafka.common.config.internals.BrokerSecurityConfigs.ALLOWED_SASL_OAUTHBEARER_URLS_DEFAULT;
 
 public class OAuthBearerUtils {
+
+    public static final String TOKEN_SIGNING_ALGORITHM_RS256 = "RS256";
+    public static final String TOKEN_SIGNING_ALGORITHM_ES256 = "ES256";
+
+    public static Signature getSignature(String algorithm) throws GeneralSecurityException {
+        if (algorithm.equalsIgnoreCase(TOKEN_SIGNING_ALGORITHM_RS256)) {
+            return Signature.getInstance("SHA256withRSA");
+        } else if (algorithm.equalsIgnoreCase(TOKEN_SIGNING_ALGORITHM_ES256)) {
+            return Signature.getInstance("SHA256withECDSA");
+        } else {
+            throw new NoSuchAlgorithmException(String.format("Unsupported signing algorithm: %s", algorithm));
+        }
+    }
+
+    public static String sign(String algorithm, PrivateKey privateKey, String contentToSign) throws GeneralSecurityException {
+        Signature signature = getSignature(algorithm);
+        signature.initSign(privateKey);
+        signature.update(contentToSign.getBytes(StandardCharsets.UTF_8));
+        byte[] signedContent = signature.sign();
+        return Base64.getUrlEncoder().withoutPadding().encodeToString(signedContent);
+    }
+
+    public static Optional<AssertionJwtTemplate> fileAssertionJwtTemplate(OAuthBearerConfig oauthConfig) {
+        if (oauthConfig.containsKey(SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE)) {
+            File assertionTemplateFile = validateFile(oauthConfig, SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE);
+            return Optional.of(new FileAssertionJwtTemplate(assertionTemplateFile));
+        } else {
+            return Optional.empty();
+        }
+    }
+
+    public static Optional<AssertionJwtTemplate> staticAssertionJwtTemplate(OAuthBearerConfig oauthConfig) {
+        if (oauthConfig.containsKey(SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD) ||
+            oauthConfig.containsKey(SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS) ||
+            oauthConfig.containsKey(SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB)) {
+            Map<String, Object> staticClaimsPayload = new HashMap<>();
+
+            if (oauthConfig.containsKey(SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD))
+                staticClaimsPayload.put("aud", oauthConfig.getString(SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD));
+
+            if (oauthConfig.containsKey(SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS))
+                staticClaimsPayload.put("iss", oauthConfig.getString(SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS));
+
+            if (oauthConfig.containsKey(SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB))
+                staticClaimsPayload.put("sub", oauthConfig.getString(SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB));
+
+            Map<String, Object> header = Map.of();
+            return Optional.of(new StaticAssertionJwtTemplate(header, staticClaimsPayload));
+        } else {
+            return Optional.empty();
+        }
+    }
+
+    public static AssertionJwtTemplate dynamicAssertionJwtTemplate(OAuthBearerConfig oauthConfig, Time time) {
+        String algorithm = oauthConfig.getString(SASL_OAUTHBEARER_ASSERTION_ALGORITHM);
+        int expSeconds = oauthConfig.getInt(SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_MINUTES);
+        int nbfSeconds = oauthConfig.getInt(SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_MINUTES);
+        boolean includeJti = oauthConfig.getBoolean(SASL_OAUTHBEARER_ASSERTION_CLAIM_JTI_INCLUDE);
+        return new DynamicAssertionJwtTemplate(time, algorithm, expSeconds, nbfSeconds, includeJti);
+    }
 
     public static Map<String, Object> jaasOptions(String saslMechanism, List<AppConfigurationEntry> jaasConfigEntries) {
         if (!OAuthBearerLoginModule.OAUTHBEARER_MECHANISM.equals(saslMechanism))

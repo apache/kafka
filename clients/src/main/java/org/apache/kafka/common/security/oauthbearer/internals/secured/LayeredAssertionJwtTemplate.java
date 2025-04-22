@@ -18,32 +18,41 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.security.oauthbearer.AssertionJwtTemplate;
 
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
-public class StaticAssertionJwtTemplate implements AssertionJwtTemplate {
+public class LayeredAssertionJwtTemplate implements AssertionJwtTemplate {
 
-    private final Map<String, Object> header;
+    private final List<AssertionJwtTemplate> templates;
 
-    private final Map<String, Object> payload;
-
-    public StaticAssertionJwtTemplate() {
-        this.header = Map.of();
-        this.payload = Map.of();
+    public LayeredAssertionJwtTemplate(AssertionJwtTemplate... templates) {
+        this.templates = Arrays.asList(templates);
     }
 
-    public StaticAssertionJwtTemplate(Map<String, Object> header, Map<String, Object> payload) {
-        this.header = Collections.unmodifiableMap(header);
-        this.payload = Collections.unmodifiableMap(payload);
+    public LayeredAssertionJwtTemplate(List<AssertionJwtTemplate> templates) {
+        this.templates = Collections.unmodifiableList(templates);
     }
 
     @Override
     public Map<String, Object> header() {
-        return header;
+        Map<String, Object> header = new HashMap<>();
+
+        for (AssertionJwtTemplate template : templates)
+            header.putAll(template.header());
+
+        return Collections.unmodifiableMap(header);
     }
 
     @Override
     public Map<String, Object> payload() {
-        return payload;
+        Map<String, Object> payload = new HashMap<>();
+
+        for (AssertionJwtTemplate template : templates)
+            payload.putAll(template.payload());
+
+        return Collections.unmodifiableMap(payload);
     }
 }
