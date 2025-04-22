@@ -8254,11 +8254,9 @@ class KafkaApisTest extends Logging {
   }
 
   @ParameterizedTest
-  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
+  // We only test with topic ids.
+  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH, fromVersion = 10)
   def testHandleOffsetFetchWithUnknownTopicIds(version: Short): Unit = {
-    // We only test with topic ids.
-    if (version < 10) return
-
     val foo = "foo"
     val bar = "bar"
     val fooId = Uuid.randomUuid()
@@ -8399,11 +8397,9 @@ class KafkaApisTest extends Logging {
   }
 
   @ParameterizedTest
-  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
+  // The single group builder does not support topic ids.
+  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH, toVersion = 9)
   def testHandleOffsetFetchWithSingleGroup(version: Short): Unit = {
-    // The single group builder does not support topic ids.
-    if (version >= 10) return
-
     def makeRequest(version: Short): RequestChannel.Request = {
       buildRequest(new OffsetFetchRequest.Builder(
         "group-1",
@@ -8476,12 +8472,10 @@ class KafkaApisTest extends Logging {
   }
 
   @ParameterizedTest
-  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
+  // Version 1 does not support fetching all offsets request. We are not
+  // interested in testing these here.
+  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH, fromVersion = 2)
   def testHandleOffsetFetchAllOffsetsWithSingleGroup(version: Short): Unit = {
-    // Version 1 does not support fetching all offsets request. We are not
-    // interested in testing these here.
-    if (version < 2) return
-
     val foo = "foo"
     val fooId = Uuid.randomUuid()
     addTopicToMetadataCache(foo, topicId = fooId, numPartitions = 2)
@@ -8571,11 +8565,9 @@ class KafkaApisTest extends Logging {
   }
 
   @ParameterizedTest
-  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
+  // We don't test the non batched API.
+  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH, fromVersion = 8)
   def testHandleOffsetFetchAuthorization(version: Short): Unit = {
-    // We don't test the non batched API.
-    if (version < 8) return
-
     val foo = "foo"
     val bar = "bar"
     val fooId = Uuid.randomUuid()
@@ -8767,11 +8759,9 @@ class KafkaApisTest extends Logging {
   }
 
   @ParameterizedTest
-  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
+  // We don't test the non batched API.
+  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH, fromVersion = 8)
   def testHandleOffsetFetchWithUnauthorizedTopicAndTopLevelError(version: Short): Unit = {
-    // We don't test the non batched API.
-    if (version < 8) return
-
     val foo = "foo"
     val bar = "bar"
     val fooId = Uuid.randomUuid()
