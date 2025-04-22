@@ -181,7 +181,7 @@ public class StandbyTask extends AbstractTask implements Task {
     @Override
     public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
         if (!clean) {
-            log.warn("Skipped preparing {} standby task with id {} for commit since the task is getting closed dirty.", state(), id);
+            log.debug("Skipped preparing {} standby task with id {} for commit since the task is getting closed dirty.", state(), id);
             return null;
         }
         switch (state()) {

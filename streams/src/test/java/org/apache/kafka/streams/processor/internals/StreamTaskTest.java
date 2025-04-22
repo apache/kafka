@@ -646,6 +646,22 @@ public class StreamTaskTest {
     }
 
     @Test
+    public void shouldNotGetOffsetsIfPrepareCommitDirty() {
+        when(stateManager.taskId()).thenReturn(taskId);
+        when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);
+        task = createStatefulTask(createConfig("100"), false);
+
+        task.addRecords(partition1, List.of(getConsumerRecordWithOffsetAsTimestamp(partition1, 0)));
+        task.addRecords(partition2, List.of(getConsumerRecordWithOffsetAsTimestamp(partition2, 0)));
+
+        assertTrue(task.process(0L));
+        assertTrue(task.commitNeeded());
+
+        // committableOffsetsAndMetadata() has not been called, otherwise prepareCommit() would have returned a map
+        assertNull(task.prepareCommit(false));
+    }
+
+    @Test
     public void shouldProcessRecordsAfterPrepareCommitWhenEosDisabled() {
         when(stateManager.taskId()).thenReturn(taskId);
         when(stateManager.taskType()).thenReturn(TaskType.ACTIVE);

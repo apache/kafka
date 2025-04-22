@@ -444,7 +444,7 @@ public class StreamTask extends AbstractTask implements ProcessorNodePunctuator,
                     // TODO: this should be removed after we decouple caching with emitting
                     flush();
                     if (!clean) {
-                        log.warn("Skipped preparing {} task with id {} for commit since the task is getting closed dirty.", state(), id);
+                        log.debug("Skipped preparing {} task with id {} for commit since the task is getting closed dirty.", state(), id);
                         return null;
                     }
                     hasPendingTxCommit = eosEnabled;
