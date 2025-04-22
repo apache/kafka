@@ -25,7 +25,7 @@ import java.util.Optional;
  * KRaftVersionUpgrade is a sum types for coordinating the upgrade of the kraft version.
  *
  * {@code Voters} is used to stored in-memory the latest voter set. {@code Version} is used to
- * stored in-memory the upgraded kraft version.
+ * store in-memory the upgraded kraft version.
  *
  * This type makes it possible to upgrade the kraft version by only using compare-and-swap and
  * avoid blocking locks.

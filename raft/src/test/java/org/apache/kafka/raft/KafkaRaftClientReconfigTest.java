@@ -17,6 +17,7 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.Node;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.errors.InvalidUpdateVersionException;
 import org.apache.kafka.common.feature.SupportedVersionRange;
@@ -1703,6 +1704,53 @@ public class KafkaRaftClientReconfigTest {
     }
 
     @Test
+    public void testInvalidUpdateVoter() throws Exception {
+        ReplicaKey local = replicaKey(randomReplicaId(), true);
+        ReplicaKey follower = replicaKey(local.id() + 1, true);
+
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(local, follower));
+
+        RaftClientTestContext context = new RaftClientTestContext.Builder(local.id(), local.directoryId().get())
+            .withKip853Rpc(true)
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withUnknownLeader(3)
+            .build();
+
+        context.unattachedToLeader();
+        int epoch = context.currentEpoch();
+
+        // missing directory id
+        context.deliverRequest(
+            context.updateVoterRequest(
+                ReplicaKey.of(follower.id(), Uuid.ZERO_UUID),
+                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Endpoints.empty()
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentUpdateVoterResponse(
+            Errors.INVALID_REQUEST,
+            OptionalInt.of(local.id()),
+            epoch
+        );
+
+        // missing endpoints
+        context.deliverRequest(
+            context.updateVoterRequest(
+                follower,
+                Feature.KRAFT_VERSION.supportedVersionRange(),
+                Endpoints.empty()
+            )
+        );
+        context.pollUntilResponse();
+        context.assertSentUpdateVoterResponse(
+            Errors.INVALID_REQUEST,
+            OptionalInt.of(local.id()),
+            epoch
+        );
+    }
+
+    @Test
     void testUpdateVoterOldEpoch() throws Exception {
         ReplicaKey local = replicaKey(randomReplicaId(), true);
         ReplicaKey follower = replicaKey(local.id() + 1, true);
@@ -2091,7 +2139,7 @@ public class KafkaRaftClientReconfigTest {
             .withLocalListeners(localListeners)
             .build();
 
-        // waiting for FETCH request until the UpdateRaftVoter request is set
+        // waiting for FETCH requests until the UpdateRaftVoter request is sent
         for (int i = 0; i < NUMBER_FETCH_TIMEOUTS_IN_UPDATE_PERIOD; i++) {
             context.time.sleep(context.fetchTimeoutMs - 1);
             context.pollUntilRequest();

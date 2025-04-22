@@ -128,6 +128,9 @@ public final class UpdateVoterHandler {
         } else {
             inMemoryVoters = leaderState.volatileVoters();
             if (inMemoryVoters.isEmpty()) {
+                /* This can happen if the remote voter sends an update voter request before the
+                 * updated kraft version has been written to the log
+                 */
                 return CompletableFuture.completedFuture(
                     RaftUtil.updateVoterResponse(
                         Errors.REQUEST_TIMED_OUT,

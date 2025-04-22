@@ -758,6 +758,7 @@ public class LeaderStateTest {
             KRaftVersion.KRAFT_VERSION_0
         );
 
+        // none of the remove voters support kraft version 1 since the starting version is 0.
         assertThrows(
             InvalidUpdateVersionException.class,
             () ->
@@ -771,6 +772,7 @@ public class LeaderStateTest {
                 )
         );
 
+        // epoch is less than the leader's epoch
         assertThrows(
             NotLeaderException.class,
             () ->
@@ -784,6 +786,7 @@ public class LeaderStateTest {
                 )
         );
 
+        // epoch is greater than the leader's epoch
         assertThrows(
             IllegalArgumentException.class,
             () ->
@@ -797,6 +800,7 @@ public class LeaderStateTest {
                 )
         );
 
+        // noop since the upgrade version is already 1
         assertFalse(
             state.maybeAppendUpgradedKRaftVersion(
                 epoch,
