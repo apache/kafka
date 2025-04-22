@@ -14,7 +14,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package kafka.log.remote;
+package org.apache.kafka.server.log.remote.storage;
 
 import org.apache.kafka.common.errors.OffsetOutOfRangeException;
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManager;

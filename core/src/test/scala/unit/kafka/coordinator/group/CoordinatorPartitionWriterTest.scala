@@ -180,7 +180,7 @@ class CoordinatorPartitionWriterTest {
       "transactional-id",
       10L,
       5.toShort,
-      ApiKeys.TXN_OFFSET_COMMIT.latestVersion()
+      ApiKeys.TXN_OFFSET_COMMIT.latestVersion().toInt
     )
 
     if (error == Errors.NONE) {

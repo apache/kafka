@@ -33,11 +33,7 @@ public class DeleteShareGroupStateRequest extends AbstractRequest {
         private final DeleteShareGroupStateRequestData data;
 
         public Builder(DeleteShareGroupStateRequestData data) {
-            this(data, true);
-        }
-
-        public Builder(DeleteShareGroupStateRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.DELETE_SHARE_GROUP_STATE, enableUnstableLastVersion);
+            super(ApiKeys.DELETE_SHARE_GROUP_STATE);
             this.data = data;
         }
 
