@@ -3264,15 +3264,13 @@ public class KafkaAdminClientTest {
     }
 
     @Test
-    public void testListGroupsWithTypesOlderBrokerVersion() {
+    public void testListGroupsWithTypesOlderBrokerVersion() throws Exception {
         ApiVersion listGroupV4 = new ApiVersion()
             .setApiKey(ApiKeys.LIST_GROUPS.id)
             .setMinVersion((short) 0)
             .setMaxVersion((short) 4);
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
-            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(Collections.singletonList(listGroupV4)));
-
-            env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
+            env.kafkaClient().setNodeApiVersions(NodeApiVersions.create(List.of(listGroupV4)));
 
             // Check that we cannot set a type filter with an older broker.
             env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
@@ -3280,9 +3278,34 @@ public class KafkaAdminClientTest {
                 request instanceof ListGroupsRequest && !((ListGroupsRequest) request).data().typesFilter().isEmpty()
             );
 
-            ListGroupsOptions options = new ListGroupsOptions().withTypes(singleton(GroupType.CLASSIC));
+            ListGroupsOptions options = new ListGroupsOptions().withTypes(Set.of(GroupType.SHARE));
             ListGroupsResult result = env.adminClient().listGroups(options);
             TestUtils.assertFutureThrows(UnsupportedVersionException.class, result.all());
+
+            // But a type filter which is just classic groups is permitted with an older broker, because they
+            // only know about classic groups so the types filter can be omitted.
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
+
+            env.kafkaClient().prepareResponseFrom(
+                expectListGroupsRequestWithFilters(Set.of(), Set.of()),
+                new ListGroupsResponse(new ListGroupsResponseData()
+                    .setErrorCode(Errors.NONE.code())
+                    .setGroups(List.of(
+                        new ListGroupsResponseData.ListedGroup()
+                            .setGroupId("group-1")
+                            .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                            .setGroupState(GroupState.STABLE.toString())))),
+                env.cluster().nodeById(0));
+
+            options = new ListGroupsOptions().withTypes(Set.of(GroupType.CLASSIC));
+            result = env.adminClient().listGroups(options);
+
+            Collection<GroupListing> listing = result.all().get();
+            assertEquals(1, listing.size());
+            List<GroupListing> expected = List.of(
+                new GroupListing("group-1", Optional.empty(), ConsumerProtocol.PROTOCOL_TYPE, Optional.of(GroupState.STABLE))
+            );
+            assertEquals(expected, listing);
         }
     }
 
@@ -3577,13 +3600,7 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
 
-            // Check we can list groups with older broker if we don't specify states
-            // First attempt to build request will require v5 (type filter), but the broker only supports v3
-            env.kafkaClient().prepareUnsupportedVersionResponse(request ->
-                request instanceof ListGroupsRequest &&
-                    !((ListGroupsRequest) request).data().typesFilter().isEmpty()
-            );
-            // Second attempt to build request will use v3 (neither type nor state filter)
+            // Check we can list groups v3 with older broker if we don't specify states, and use just consumer group types which can be omitted.
             env.kafkaClient().prepareResponseFrom(
                 new ListGroupsResponse(new ListGroupsResponseData()
                     .setErrorCode(Errors.NONE.code())
@@ -3602,13 +3619,7 @@ public class KafkaAdminClientTest {
 
             // But we cannot set a state filter with older broker
             env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
-            // First attempt to build request will require v5 (type and state filter), but the broker only supports v3
-            env.kafkaClient().prepareUnsupportedVersionResponse(request ->
-                request instanceof ListGroupsRequest &&
-                    !((ListGroupsRequest) request).data().typesFilter().isEmpty() &&
-                    !((ListGroupsRequest) request).data().statesFilter().isEmpty()
-            );
-            // Second attempt to build request will require v4 (state filter only), but the broker only support v3
+
             env.kafkaClient().prepareUnsupportedVersionResponse(request ->
                 request instanceof ListGroupsRequest &&
                     !((ListGroupsRequest) request).data().statesFilter().isEmpty()
@@ -3631,14 +3642,7 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
 
-            // Check if we can list groups with older broker if we specify states and don't specify types.
-            // First attempt to build request will require v5 (type and state filter), but the broker only supports v4
-            env.kafkaClient().prepareUnsupportedVersionResponse(request ->
-                request instanceof ListGroupsRequest &&
-                    !((ListGroupsRequest) request).data().typesFilter().isEmpty() &&
-                    !((ListGroupsRequest) request).data().statesFilter().isEmpty()
-            );
-            // Second attempt to build request will use v4 (state filter)
+            // Check if we can list groups v4 with older broker if we specify states and don't specify types.
             env.kafkaClient().prepareResponseFrom(
                 expectListGroupsRequestWithFilters(Set.of(GroupState.STABLE.toString()), Set.of()),
                 new ListGroupsResponse(new ListGroupsResponseData()
@@ -3667,7 +3671,7 @@ public class KafkaAdminClientTest {
                 request instanceof ListGroupsRequest && !((ListGroupsRequest) request).data().typesFilter().isEmpty()
             );
 
-            options = ListGroupsOptions.forConsumerGroups().withTypes(Set.of(GroupType.CLASSIC));
+            options = ListGroupsOptions.forConsumerGroups().withTypes(Set.of(GroupType.SHARE));
             result = env.adminClient().listGroups(options);
             TestUtils.assertFutureThrows(UnsupportedVersionException.class, result.all());
         }
@@ -3984,9 +3988,31 @@ public class KafkaAdminClientTest {
                 request instanceof ListGroupsRequest && !((ListGroupsRequest) request).data().typesFilter().isEmpty()
             );
 
-            options = new ListConsumerGroupsOptions().withTypes(Set.of(GroupType.CLASSIC));
+            options = new ListConsumerGroupsOptions().withTypes(Set.of(GroupType.SHARE));
             result = env.adminClient().listConsumerGroups(options);
             TestUtils.assertFutureThrows(UnsupportedVersionException.class, result.all());
+
+            // But a type filter which is just classic groups is permitted with an older broker, because they
+            // only know about classic groups so the types filter can be omitted.
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
+
+            env.kafkaClient().prepareResponseFrom(
+                expectListGroupsRequestWithFilters(Set.of(), Set.of()),
+                new ListGroupsResponse(new ListGroupsResponseData()
+                    .setErrorCode(Errors.NONE.code())
+                    .setGroups(List.of(
+                        new ListGroupsResponseData.ListedGroup()
+                            .setGroupId("group-1")
+                            .setProtocolType(ConsumerProtocol.PROTOCOL_TYPE)
+                            .setGroupState(GroupState.STABLE.toString())))),
+                env.cluster().nodeById(0));
+
+            options = new ListConsumerGroupsOptions().withTypes(Set.of(GroupType.CLASSIC));
+            result = env.adminClient().listConsumerGroups(options);
+
+            listing = result.all().get();
+            assertEquals(1, listing.size());
+            assertEquals(expected, listing);
         }
     }
 
