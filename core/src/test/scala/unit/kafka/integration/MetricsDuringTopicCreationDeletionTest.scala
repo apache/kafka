@@ -27,17 +27,6 @@ import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, Typ
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 
-//@ClusterTestDefaults(
-//  types = Array(Type.KRAFT),
-//  serverProperties = Array(
-//    new ClusterConfigProperty(key = ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, value = "true"),
-//    new ClusterConfigProperty(key = ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, value = "false"),
-//    // speed up the test for UnderReplicatedPartitions, which relies on the ISR expiry thread to execute concurrently with topic creation
-//    // But the replica.lag.time.max.ms value still need to consider the slow Jenkins testing environment
-//    new ClusterConfigProperty(key = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_CONFIG, value = "4000"),
-//    new ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
-//  )
-//)
 class MetricsDuringTopicCreationDeletionTest(clusterInstance: ClusterInstance) {
 
   private val topicName = "topic"
@@ -76,9 +65,11 @@ class MetricsDuringTopicCreationDeletionTest(clusterInstance: ClusterInstance) {
     types = Array(Type.KRAFT),
     serverProperties = Array(
       new ClusterConfigProperty(key = ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, value = "true"),
+      new ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000"),
       new ClusterConfigProperty(key = ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, value = "false"),
-      new ClusterConfigProperty(key = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_CONFIG, value = "4000"),
-      new ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000")
+      // speed up the test for UnderReplicatedPartitions, which relies on the ISR expiry thread to execute concurrently with topic creation
+      // But the replica.lag.time.max.ms value still need to consider the slow Jenkins testing environment
+      new ClusterConfigProperty(key = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_CONFIG, value = "4000")
     )
   )
   def testMetricsDuringTopicCreateDelete(): Unit = {
@@ -135,7 +126,6 @@ class MetricsDuringTopicCreationDeletionTest(clusterInstance: ClusterInstance) {
           case e: Exception => e.printStackTrace()
         }
       }
-
       // Delete topics
       for (topic <- topics if running) {
         try {
