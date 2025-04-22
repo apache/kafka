@@ -3799,7 +3799,6 @@ public class TransactionManagerTest {
 
     @Test
     public void testBackgroundInvalidStateTransitionIsFatal() {
-        initializeTransactionManager(Optional.of(transactionalId), true);
         doInitTransactions();
         assertTrue(transactionManager.isTransactional());
 
