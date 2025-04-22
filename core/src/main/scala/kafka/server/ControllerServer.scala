@@ -273,7 +273,7 @@ class ControllerServer(
         time,
         s"controller-${config.nodeId}-", ProcessRole.ControllerRole.toString)
       clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
-      tokenManager = new DelegationTokenManager(config, tokenCache, time)
+      tokenManager = new DelegationTokenManager(new DelegationTokenManagerConfigs(config), tokenCache)
       controllerApis = new ControllerApis(socketServer.dataPlaneRequestChannel,
         authorizerPlugin,
         quotaManagers,

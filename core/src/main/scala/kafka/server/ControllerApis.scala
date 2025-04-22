@@ -19,7 +19,7 @@ package kafka.server
 
 import java.{lang, util}
 import java.nio.ByteBuffer
-import java.util.{Collections, OptionalLong}
+import java.util.{Collections, Optional, OptionalLong}
 import java.util.Map.Entry
 import java.util.concurrent.CompletableFuture
 import java.util.function.Consumer
@@ -59,6 +59,7 @@ import org.apache.kafka.common.security.token.delegation.{DelegationToken, Token
 import org.apache.kafka.server.{ApiVersionManager, DelegationTokenManager, ProcessRole}
 import org.apache.kafka.server.authorizer.Authorizer
 import org.apache.kafka.server.common.{ApiMessageAndVersion, RequestLocal}
+import org.apache.kafka.server.config.DelegationTokenManagerConfigs
 
 import scala.jdk.CollectionConverters._
 
@@ -1025,7 +1026,7 @@ class ControllerApis(
 
     if (!allowTokenRequests(request))
       sendResponseCallback(Errors.DELEGATION_TOKEN_REQUEST_NOT_ALLOWED, Collections.emptyList)
-    else if (!config.tokenAuthEnabled)
+    else if (!new DelegationTokenManagerConfigs(config).tokenAuthEnabled)
       sendResponseCallback(Errors.DELEGATION_TOKEN_AUTH_DISABLED, Collections.emptyList)
     else {
       val requestPrincipal = request.context.principal
@@ -1034,8 +1035,8 @@ class ControllerApis(
         sendResponseCallback(Errors.NONE, Collections.emptyList)
       }
       else {
-        val owners = Option(describeTokenRequest.data.owners)
-          .map(_.asScala.map(p => new KafkaPrincipal(p.principalType, p.principalName)).toList)
+        val owners = Optional.ofNullable(describeTokenRequest.data.owners)
+          .map(o => o.stream().map(p => new KafkaPrincipal(p.principalType, p.principalName)).toList)
         def authorizeToken(tokenId: String) = authHelper.authorize(request.context, DESCRIBE, DELEGATION_TOKEN, tokenId)
         def authorizeRequester(owner: KafkaPrincipal) = authHelper.authorize(request.context, DESCRIBE_TOKENS, USER, owner.toString)
         def eligible(token: TokenInformation) = DelegationTokenManager.filterToken(requestPrincipal, owners, token, authorizeToken, authorizeRequester)
