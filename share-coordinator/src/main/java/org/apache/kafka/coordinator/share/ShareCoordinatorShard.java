@@ -515,6 +515,16 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         DeleteShareGroupStateRequestData.PartitionData partitionData = topicData.partitions().get(0);
         SharePartitionKey key = SharePartitionKey.getInstance(request.groupId(), topicData.topicId(), partitionData.partition());
 
+        if (!shareStateMap.containsKey(key)) {
+            log.warn("Attempted to delete non-existent share partition {}.", key);
+            return new CoordinatorResult<>(List.of(), new DeleteShareGroupStateResponseData().setResults(
+                List.of(DeleteShareGroupStateResponse.toResponseDeleteStateResult(key.topicId(),
+                    List.of(DeleteShareGroupStateResponse.toResponsePartitionResult(
+                        key.partition()))
+                ))
+            ));
+        }
+
         CoordinatorRecord record = generateTombstoneRecord(key);
         // build successful response if record is correctly created
         DeleteShareGroupStateResponseData responseData = new DeleteShareGroupStateResponseData().setResults(

@@ -815,6 +815,21 @@ public class GroupCoordinatorRecordHelpers {
     }
 
     /**
+     * Creates a ShareGroupStatePartitionMetadata tombstone.
+     *
+     * @param groupId   The share group id.
+     * @return The record.
+     */
+    public static CoordinatorRecord newShareGroupStatePartitionMetadataTombstoneRecord(
+        String groupId
+    ) {
+        return CoordinatorRecord.tombstone(
+            new ShareGroupStatePartitionMetadataKey()
+                .setGroupId(groupId)
+        );
+    }
+
+    /**
      * Creates a ShareGroupStatePartitionMetadata record.
      *
      * @param groupId   The share group id.

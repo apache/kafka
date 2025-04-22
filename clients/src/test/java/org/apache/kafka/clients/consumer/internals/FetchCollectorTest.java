@@ -26,7 +26,6 @@ import org.apache.kafka.common.errors.TopicAuthorizationException;
 import org.apache.kafka.common.internals.ClusterResourceListeners;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.record.EndTransactionMarker;
@@ -921,8 +920,7 @@ public class FetchCollectorTest {
                     topicPartition,
                     partitionData,
                     metricsAggregator,
-                    fetchOffset,
-                    ApiKeys.FETCH.latestVersion());
+                    fetchOffset);
         }
     }
 
