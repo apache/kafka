@@ -296,7 +296,7 @@ public class TestPlugins {
         try {
             for (TestPackage testPackage : TestPackage.values()) {
                 if (pluginJars.containsKey(testPackage)) {
-                    log.debug("Skipping recompilation of " + testPackage.resourceDir());
+                    log.debug("Skipping recompilation of {}", testPackage.resourceDir());
                 }
                 pluginJars.put(testPackage, createPluginJar(testPackage.resourceDir(), testPackage.removeRuntimeClasses()));
             }
@@ -376,9 +376,7 @@ public class TestPlugins {
     }
 
     public static Function<ClassLoader, LoaderSwap> noOpLoaderSwap() {
-        return classLoader -> {
-            return new LoaderSwap(Thread.currentThread().getContextClassLoader());
-        };
+        return classLoader -> new LoaderSwap(Thread.currentThread().getContextClassLoader());
     }
 
     private static TestPlugin[] defaultPlugins() {
@@ -430,7 +428,7 @@ public class TestPlugins {
             classFiles = stream
                     .sorted(Comparator.reverseOrder())
                     .map(Path::toFile)
-                    .collect(Collectors.toList());
+                    .toList();
         }
         for (File classFile : classFiles) {
             if (!classFile.delete()) {
@@ -487,7 +485,7 @@ public class TestPlugins {
                     .filter(Files::isRegularFile)
                     .filter(path -> !path.toFile().getName().endsWith(".java"))
                     .filter(path -> !removeRuntimeClasses.test(path.toFile().getName()))
-                    .collect(Collectors.toList());
+                    .toList();
         }
         for (Path path : paths) {
             try (InputStream in = new BufferedInputStream(Files.newInputStream(path))) {

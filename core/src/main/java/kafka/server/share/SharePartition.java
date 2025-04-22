@@ -31,8 +31,11 @@ import org.apache.kafka.common.errors.LeaderNotAvailableException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
+import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.ControlRecordType;
+import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupConfig;
@@ -54,6 +57,7 @@ import org.apache.kafka.server.share.persister.PersisterStateBatch;
 import org.apache.kafka.server.share.persister.ReadShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.TopicData;
 import org.apache.kafka.server.share.persister.WriteShareGroupStateParameters;
+import org.apache.kafka.server.storage.log.FetchIsolation;
 import org.apache.kafka.server.storage.log.FetchPartitionData;
 import org.apache.kafka.server.util.timer.Timer;
 import org.apache.kafka.server.util.timer.TimerTask;
@@ -63,12 +67,17 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.NavigableMap;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.PriorityQueue;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -85,7 +94,7 @@ import static kafka.server.share.ShareFetchUtils.recordLockDurationMsOrDefault;
  * consumers. The class maintains the state of the records that have been fetched from the leader
  * and are in-flight.
  */
-@SuppressWarnings("ClassDataAbstractionCoupling")
+@SuppressWarnings({"ClassDataAbstractionCoupling", "ClassFanOutComplexity"})
 public class SharePartition {
 
     private static final Logger log = LoggerFactory.getLogger(SharePartition.class);
@@ -686,6 +695,7 @@ public class SharePartition {
      *                           if the records are already part of the same fetch batch.
      * @param fetchOffset        The fetch offset for which the records are fetched.
      * @param fetchPartitionData The fetched records for the share partition.
+     * @param isolationLevel      The isolation level for the share fetch request.
      * @return The acquired records for the share partition.
      */
     @SuppressWarnings("cyclomaticcomplexity") // Consider refactoring to avoid suppression
@@ -694,7 +704,8 @@ public class SharePartition {
         int batchSize,
         int maxFetchRecords,
         long fetchOffset,
-        FetchPartitionData fetchPartitionData
+        FetchPartitionData fetchPartitionData,
+        FetchIsolation isolationLevel
     ) {
         log.trace("Received acquire request for share partition: {}-{} memberId: {}", groupId, topicIdPartition, memberId);
         if (stateNotActive() || maxFetchRecords <= 0) {
@@ -739,8 +750,9 @@ public class SharePartition {
             if (subMap.isEmpty()) {
                 log.trace("No cached data exists for the share partition for requested fetch batch: {}-{}",
                     groupId, topicIdPartition);
-                return acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
+                ShareAcquiredRecords shareAcquiredRecords = acquireNewBatchRecords(memberId, fetchPartitionData.records.batches(),
                     firstBatch.baseOffset(), lastBatch.lastOffset(), batchSize, maxFetchRecords);
+                return maybeFilterAbortedTransactionalAcquiredRecords(fetchPartitionData, isolationLevel, shareAcquiredRecords);
             }
 
             log.trace("Overlap exists with in-flight records. Acquire the records if available for"
@@ -850,6 +862,7 @@ public class SharePartition {
             }
             if (!result.isEmpty()) {
                 maybeUpdateReadGapFetchOffset(result.get(result.size() - 1).lastOffset() + 1);
+                return maybeFilterAbortedTransactionalAcquiredRecords(fetchPartitionData, isolationLevel, new ShareAcquiredRecords(result, acquiredCount));
             }
             return new ShareAcquiredRecords(result, acquiredCount);
         } finally {
@@ -1169,7 +1182,7 @@ public class SharePartition {
 
             // Though such batches can be removed from the cache, but it is better to archive them so
             // that they are never acquired again.
-            boolean anyRecordArchived = archiveAvailableRecords(fetchOffset, baseOffset, subMap);
+            boolean anyRecordArchived = archiveRecords(fetchOffset, baseOffset, subMap, RecordState.AVAILABLE);
 
             // If we have transitioned the state of any batch/offset from AVAILABLE to ARCHIVED,
             // then there is a chance that the next fetch offset can change.
@@ -1190,21 +1203,22 @@ public class SharePartition {
     private boolean archiveAvailableRecordsOnLsoMovement(long logStartOffset) {
         lock.writeLock().lock();
         try {
-            return archiveAvailableRecords(startOffset, logStartOffset, cachedState);
+            return archiveRecords(startOffset, logStartOffset, cachedState, RecordState.AVAILABLE);
         } finally {
             lock.writeLock().unlock();
         }
     }
 
     /**
-     * The method archive the available records in the given map that are before the end offset.
+     * The method archive the records in a given state in the map that are before the end offset.
      *
-     * @param startOffset The offset from which the available records should be archived.
-     * @param endOffset The offset before which the available records should be archived.
+     * @param startOffset The offset from which the records should be archived.
+     * @param endOffset The offset before which the records should be archived.
      * @param map The map containing the in-flight records.
+     * @param initialState The initial state of the records to be archived.
      * @return A boolean which indicates whether any record is archived or not.
      */
-    private boolean archiveAvailableRecords(long startOffset, long endOffset, NavigableMap<Long, InFlightBatch> map) {
+    private boolean archiveRecords(long startOffset, long endOffset, NavigableMap<Long, InFlightBatch> map, RecordState initialState) {
         lock.writeLock().lock();
         try {
             boolean isAnyOffsetArchived = false, isAnyBatchArchived = false;
@@ -1225,16 +1239,16 @@ public class SharePartition {
                         groupId, topicIdPartition);
 
                     if (inFlightBatch.offsetState() == null) {
-                        if (inFlightBatch.batchState() != RecordState.AVAILABLE) {
+                        if (inFlightBatch.batchState() != initialState) {
                             continue;
                         }
                         inFlightBatch.maybeInitializeOffsetStateUpdate();
                     }
-                    isAnyOffsetArchived = isAnyOffsetArchived || archivePerOffsetBatchRecords(inFlightBatch, startOffset, endOffset - 1);
+                    isAnyOffsetArchived = isAnyOffsetArchived || archivePerOffsetBatchRecords(inFlightBatch, startOffset, endOffset - 1, initialState);
                     continue;
                 }
                 // The in-flight batch is a full match hence change the state of the complete batch.
-                isAnyBatchArchived = isAnyBatchArchived || archiveCompleteBatch(inFlightBatch);
+                isAnyBatchArchived = isAnyBatchArchived || archiveCompleteBatch(inFlightBatch, initialState);
             }
             return isAnyOffsetArchived || isAnyBatchArchived;
         } finally {
@@ -1244,7 +1258,9 @@ public class SharePartition {
 
     private boolean archivePerOffsetBatchRecords(InFlightBatch inFlightBatch,
                                                  long startOffsetToArchive,
-                                                 long endOffsetToArchive) {
+                                                 long endOffsetToArchive,
+                                                 RecordState initialState
+    ) {
         lock.writeLock().lock();
         try {
             boolean isAnyOffsetArchived = false;
@@ -1257,11 +1273,14 @@ public class SharePartition {
                     // No further offsets to process.
                     break;
                 }
-                if (offsetState.getValue().state != RecordState.AVAILABLE) {
+                if (offsetState.getValue().state != initialState) {
                     continue;
                 }
 
                 offsetState.getValue().archive(EMPTY_MEMBER_ID);
+                if (initialState == RecordState.ACQUIRED) {
+                    offsetState.getValue().cancelAndClearAcquisitionLockTimeoutTask();
+                }
                 isAnyOffsetArchived = true;
             }
             return isAnyOffsetArchived;
@@ -1270,13 +1289,16 @@ public class SharePartition {
         }
     }
 
-    private boolean archiveCompleteBatch(InFlightBatch inFlightBatch) {
+    private boolean archiveCompleteBatch(InFlightBatch inFlightBatch, RecordState initialState) {
         lock.writeLock().lock();
         try {
             log.trace("Archiving complete batch: {} for the share partition: {}-{}", inFlightBatch, groupId, topicIdPartition);
-            if (inFlightBatch.batchState() == RecordState.AVAILABLE) {
+            if (inFlightBatch.batchState() == initialState) {
                 // Change the state of complete batch since the same state exists for the entire inFlight batch.
                 inFlightBatch.archiveBatch(EMPTY_MEMBER_ID);
+                if (initialState == RecordState.ACQUIRED) {
+                    inFlightBatch.batchState.cancelAndClearAcquisitionLockTimeoutTask();
+                }
                 return true;
             }
         } finally {
@@ -2473,6 +2495,192 @@ public class SharePartition {
             // offsetResetStrategy type is BY_DURATION
             return offsetForTimestamp(topicIdPartition, replicaManager, offsetResetStrategy.timestamp(), leaderEpoch);
         }
+    }
+
+    private ShareAcquiredRecords maybeFilterAbortedTransactionalAcquiredRecords(
+        FetchPartitionData fetchPartitionData,
+        FetchIsolation isolationLevel,
+        ShareAcquiredRecords shareAcquiredRecords
+    ) {
+        if (isolationLevel != FetchIsolation.TXN_COMMITTED || fetchPartitionData.abortedTransactions.isEmpty() || fetchPartitionData.abortedTransactions.get().isEmpty())
+            return shareAcquiredRecords;
+
+        // When FetchIsolation.TXN_COMMITTED is used as isolation level by the share group, we need to filter any
+        // transactions that were aborted/did not commit due to timeout.
+        List<AcquiredRecords> result = filterAbortedTransactionalAcquiredRecords(fetchPartitionData.records.batches(),
+            shareAcquiredRecords.acquiredRecords(), fetchPartitionData.abortedTransactions.get());
+        int acquiredCount = 0;
+        for (AcquiredRecords records : result) {
+            acquiredCount += (int) (records.lastOffset() - records.firstOffset() + 1);
+        }
+        return new ShareAcquiredRecords(result, acquiredCount);
+    }
+
+    private List<AcquiredRecords> filterAbortedTransactionalAcquiredRecords(
+        Iterable<? extends RecordBatch> batches,
+        List<AcquiredRecords> acquiredRecords,
+        List<FetchResponseData.AbortedTransaction> abortedTransactions
+    ) {
+        // The record batches that need to be archived in cachedState because they were a part of aborted transactions.
+        List<RecordBatch> recordsToArchive = fetchAbortedTransactionRecordBatches(batches, abortedTransactions);
+        for (RecordBatch recordBatch : recordsToArchive) {
+            // Archive the offsets/batches in the cached state.
+            NavigableMap<Long, InFlightBatch> subMap = fetchSubMap(recordBatch);
+            archiveRecords(recordBatch.baseOffset(), recordBatch.lastOffset() + 1, subMap, RecordState.ACQUIRED);
+        }
+        return filterRecordBatchesFromAcquiredRecords(acquiredRecords, recordsToArchive);
+    }
+
+    /**
+     * This function filters out the offsets present in the acquired records list that are also a part of batches that need to be archived.
+     * It follows an iterative refinement of acquired records to eliminate batches to be archived.
+     * @param acquiredRecordsList The list containing acquired records. This list is sorted by the firstOffset of the acquired batch.
+     * @param batchesToArchive The list containing record batches to archive. This list is sorted by the baseOffset of the record batch.
+     * @return The list containing filtered acquired records offsets.
+     */
+    List<AcquiredRecords> filterRecordBatchesFromAcquiredRecords(
+        List<AcquiredRecords> acquiredRecordsList,
+        List<RecordBatch> batchesToArchive
+    ) {
+        Iterator<RecordBatch> batchesToArchiveIterator = batchesToArchive.iterator();
+        if (!batchesToArchiveIterator.hasNext())
+            return acquiredRecordsList;
+        List<AcquiredRecords> result = new ArrayList<>();
+        Iterator<AcquiredRecords> acquiredRecordsListIter = acquiredRecordsList.iterator();
+        RecordBatch batchToArchive = batchesToArchiveIterator.next();
+        AcquiredRecords unresolvedAcquiredRecords = null;
+
+        while (unresolvedAcquiredRecords != null || acquiredRecordsListIter.hasNext()) {
+            if (unresolvedAcquiredRecords == null)
+                unresolvedAcquiredRecords = acquiredRecordsListIter.next();
+
+            long unresolvedFirstOffset = unresolvedAcquiredRecords.firstOffset();
+            long unresolvedLastOffset = unresolvedAcquiredRecords.lastOffset();
+            short unresolvedDeliveryCount = unresolvedAcquiredRecords.deliveryCount();
+
+            if (batchToArchive == null) {
+                result.add(unresolvedAcquiredRecords);
+                unresolvedAcquiredRecords = null;
+                continue;
+            }
+
+            // Non-overlap check - unresolvedFirstOffset offsets lie before the batchToArchive offsets. No need to filter out the offsets in such a scenario.
+            if (unresolvedLastOffset < batchToArchive.baseOffset()) {
+                // Offsets in unresolvedAcquiredRecords do not overlap with batchToArchive, hence it should not get filtered out.
+                result.add(unresolvedAcquiredRecords);
+                unresolvedAcquiredRecords = null;
+            }
+
+            // Overlap check - unresolvedFirstOffset offsets overlap with the batchToArchive offsets. We need to filter out the overlapping
+            // offsets in such a scenario.
+            if (unresolvedFirstOffset <= batchToArchive.lastOffset() &&
+                unresolvedLastOffset >= batchToArchive.baseOffset()) {
+                unresolvedAcquiredRecords = null;
+                // Split the unresolvedFirstOffset into parts - before and after the overlapping record batchToArchive.
+                if (unresolvedFirstOffset < batchToArchive.baseOffset()) {
+                    // The offsets in unresolvedAcquiredRecords that are present before batchToArchive's baseOffset should not get filtered out.
+                    result.add(new AcquiredRecords()
+                        .setFirstOffset(unresolvedFirstOffset)
+                        .setLastOffset(batchToArchive.baseOffset() - 1)
+                        .setDeliveryCount(unresolvedDeliveryCount));
+                }
+                if (unresolvedLastOffset > batchToArchive.lastOffset()) {
+                    // The offsets in unresolvedAcquiredRecords that are present after batchToArchive's lastOffset should not get filtered out
+                    // and should be taken forward for further processing since they could potentially contain offsets that need to be archived.
+                    unresolvedAcquiredRecords = new AcquiredRecords()
+                        .setFirstOffset(batchToArchive.lastOffset() + 1)
+                        .setLastOffset(unresolvedLastOffset)
+                        .setDeliveryCount(unresolvedDeliveryCount);
+                }
+            }
+
+            // There is at least one offset in unresolvedFirstOffset which lies after the batchToArchive. Hence, we move forward
+            // the batchToArchive to the next element in batchesToArchiveIterator.
+            if (unresolvedLastOffset > batchToArchive.lastOffset()) {
+                if (batchesToArchiveIterator.hasNext())
+                    batchToArchive = batchesToArchiveIterator.next();
+                else
+                    batchToArchive = null;
+            }
+        }
+        return result;
+    }
+
+    /**
+     * This function fetches the sub map from cachedState where all the offset details present in the recordBatch can be referred to
+     * OR it gives an exception if those offsets are not present in cachedState.
+     * @param recordBatch The record batch for which we want to find the sub map.
+     * @return the sub map containing all the offset details.
+     */
+    private NavigableMap<Long, InFlightBatch> fetchSubMap(RecordBatch recordBatch) {
+        lock.readLock().lock();
+        try {
+            Map.Entry<Long, InFlightBatch> floorEntry = cachedState.floorEntry(recordBatch.baseOffset());
+            if (floorEntry == null) {
+                log.debug("Fetched batch record {} not found for share partition: {}-{}", recordBatch, groupId,
+                    topicIdPartition);
+                throw new IllegalStateException(
+                    "Batch record not found. The request batch offsets are not found in the cache.");
+            }
+            return cachedState.subMap(floorEntry.getKey(), true, recordBatch.lastOffset(), true);
+        } finally {
+            lock.readLock().unlock();
+        }
+    }
+
+    // Visible for testing.
+    List<RecordBatch> fetchAbortedTransactionRecordBatches(
+        Iterable<? extends RecordBatch> batches,
+        List<FetchResponseData.AbortedTransaction> abortedTransactions
+    ) {
+        PriorityQueue<FetchResponseData.AbortedTransaction> orderedAbortedTransactions = orderedAbortedTransactions(abortedTransactions);
+        Set<Long> abortedProducerIds = new HashSet<>();
+        List<RecordBatch> recordsToArchive = new ArrayList<>();
+
+        for (RecordBatch currentBatch : batches) {
+            if (currentBatch.hasProducerId()) {
+                // remove from the aborted transactions queue, all aborted transactions which have begun before the
+                // current batch's last offset and add the associated producerIds to the aborted producer set.
+                while (!orderedAbortedTransactions.isEmpty() && orderedAbortedTransactions.peek().firstOffset() <= currentBatch.lastOffset()) {
+                    FetchResponseData.AbortedTransaction abortedTransaction = orderedAbortedTransactions.poll();
+                    abortedProducerIds.add(abortedTransaction.producerId());
+                }
+                long producerId = currentBatch.producerId();
+                if (containsAbortMarker(currentBatch)) {
+                    abortedProducerIds.remove(producerId);
+                } else if (isBatchAborted(currentBatch, abortedProducerIds)) {
+                    log.debug("Skipping aborted record batch for share partition: {}-{} with producerId {} and " +
+                        "offsets {} to {}", groupId, topicIdPartition, producerId, currentBatch.baseOffset(), currentBatch.lastOffset());
+                    recordsToArchive.add(currentBatch);
+                }
+            }
+        }
+        return recordsToArchive;
+    }
+
+    private PriorityQueue<FetchResponseData.AbortedTransaction> orderedAbortedTransactions(List<FetchResponseData.AbortedTransaction> abortedTransactions) {
+        PriorityQueue<FetchResponseData.AbortedTransaction> orderedAbortedTransactions = new PriorityQueue<>(
+            abortedTransactions.size(), Comparator.comparingLong(FetchResponseData.AbortedTransaction::firstOffset)
+        );
+        orderedAbortedTransactions.addAll(abortedTransactions);
+        return orderedAbortedTransactions;
+    }
+
+    private boolean isBatchAborted(RecordBatch batch, Set<Long> abortedProducerIds) {
+        return batch.isTransactional() && abortedProducerIds.contains(batch.producerId());
+    }
+
+    // Visible for testing.
+    boolean containsAbortMarker(RecordBatch batch) {
+        if (!batch.isControlBatch())
+            return false;
+
+        Iterator<Record> batchIterator = batch.iterator();
+        if (!batchIterator.hasNext())
+            return false;
+
+        Record firstRecord = batchIterator.next();
+        return ControlRecordType.ABORT == ControlRecordType.parse(firstRecord.key());
     }
 
     // Visible for testing. Should only be used for testing purposes.

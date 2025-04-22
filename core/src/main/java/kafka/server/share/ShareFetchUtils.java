@@ -114,7 +114,8 @@ public class ShareFetchUtils {
                     shareFetch.batchSize(),
                     shareFetch.maxFetchRecords() - acquiredRecordsCount,
                     shareFetchPartitionData.fetchOffset(),
-                    fetchPartitionData
+                    fetchPartitionData,
+                    shareFetch.fetchParams().isolation
                 );
                 log.trace("Acquired records: {} for topicIdPartition: {}", shareAcquiredRecords, topicIdPartition);
                 // Maybe, in the future, check if no records are acquired, and we want to retry

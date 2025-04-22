@@ -44,6 +44,7 @@ public class ShareGroupConfigTest {
         configs.put(ShareGroupConfig.SHARE_GROUP_MIN_RECORD_LOCK_DURATION_MS_CONFIG, 15000);
         configs.put(ShareGroupConfig.SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, 60000);
         configs.put(ShareGroupConfig.SHARE_FETCH_PURGATORY_PURGE_INTERVAL_REQUESTS_CONFIG, 1000);
+        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_SHARE_SESSIONS_CONFIG, 1000);
 
         ShareGroupConfig config = createConfig(configs);
 
@@ -55,6 +56,7 @@ public class ShareGroupConfigTest {
         assertEquals(15000, config.shareGroupMinRecordLockDurationMs());
         assertEquals(60000, config.shareGroupMaxRecordLockDurationMs());
         assertEquals(1000, config.shareFetchPurgatoryPurgeIntervalRequests());
+        assertEquals(1000, config.shareGroupMaxShareSessions());
     }
 
     @Test

@@ -36,7 +36,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SSLUtilsTest {
 
-    private Map<String, Object> sslConfig;
     private String keystorePath;
     private String truststorePath;
     private Password keystorePassword;
@@ -45,7 +44,7 @@ public class SSLUtilsTest {
     @BeforeEach
     public void before() throws Exception {
         CertStores serverCertStores = new CertStores(true, "localhost");
-        sslConfig = serverCertStores.getUntrustingConfig();
+        Map<String, Object> sslConfig = serverCertStores.getUntrustingConfig();
         keystorePath = sslConfig.get("ssl.keystore.location").toString();
         truststorePath = sslConfig.get("ssl.truststore.location").toString();
         keystorePassword = (Password) sslConfig.get("ssl.keystore.password");
@@ -61,12 +60,12 @@ public class SSLUtilsTest {
         Map<String, Object> map = new HashMap<>();
         map.put("exists", "value");
 
-        assertEquals(SSLUtils.getOrDefault(map, existingKey, defaultValue), value);
-        assertEquals(SSLUtils.getOrDefault(map, missingKey, defaultValue), defaultValue);
+        assertEquals(value, SSLUtils.getOrDefault(map, existingKey, defaultValue));
+        assertEquals(defaultValue, SSLUtils.getOrDefault(map, missingKey, defaultValue));
     }
 
     @Test
-    public void testCreateServerSideSslContextFactory() throws Exception {
+    public void testCreateServerSideSslContextFactory() {
         Map<String, String> configMap = new HashMap<>();
         configMap.put("ssl.keystore.location", keystorePath);
         configMap.put("ssl.keystore.password", keystorePassword.value());

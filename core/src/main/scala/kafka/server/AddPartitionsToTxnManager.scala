@@ -51,7 +51,7 @@ object AddPartitionsToTxnManager {
     }
   }
 
-  def txnOffsetCommitRequestVersionToTransactionSupportedOperation(version: Short): TransactionSupportedOperation = {
+  def txnOffsetCommitRequestVersionToTransactionSupportedOperation(version: Int): TransactionSupportedOperation = {
     if (version > 4) {
       addPartition
     } else if (version > 3) {

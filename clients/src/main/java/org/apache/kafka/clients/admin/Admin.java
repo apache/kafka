@@ -879,10 +879,12 @@ public interface Admin extends AutoCloseable {
 
     /**
      * List the consumer groups available in the cluster.
+     * @deprecated Since 4.1. Use {@link Admin#listGroups(ListGroupsOptions)} instead.
      *
      * @param options The options to use when listing the consumer groups.
      * @return The ListConsumerGroupsResult.
      */
+    @Deprecated(since = "4.1", forRemoval = true)
     ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options);
 
     /**
@@ -890,9 +892,11 @@ public interface Admin extends AutoCloseable {
      * <p>
      * This is a convenience method for {@link #listConsumerGroups(ListConsumerGroupsOptions)} with default options.
      * See the overload for more details.
+     * @deprecated Since 4.1. Use {@link Admin#listGroups(ListGroupsOptions)} instead.
      *
      * @return The ListConsumerGroupsResult.
      */
+    @Deprecated(since = "4.1", forRemoval = true)
     default ListConsumerGroupsResult listConsumerGroups() {
         return listConsumerGroups(new ListConsumerGroupsOptions());
     }
@@ -1947,13 +1951,28 @@ public interface Admin extends AutoCloseable {
     }
 
     /**
-     * Delete share groups from the cluster with the default options.
+     * Delete offsets for a set of partitions in a share group.
      *
-     * @param groupIds Collection of share group ids which are to be deleted.
-     * @return The DeleteShareGroupsResult.
+     * @param groupId The group for which to delete offsets.
+     * @param partitions The topic-partitions.
+     * @param options The options to use when deleting offsets in a share group.
+     * @return The DeleteShareGroupOffsetsResult.
      */
-    default DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds) {
-        return deleteShareGroups(groupIds, new DeleteShareGroupsOptions());
+    DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteShareGroupOffsetsOptions options);
+
+    /**
+     * Delete offsets for a set of partitions in a share group with the default options.
+     *
+     * <p>
+     * This is a convenience method for {@link #deleteShareGroupOffsets(String, Set, DeleteShareGroupOffsetsOptions)} with default options.
+     * See the overload for more details.
+     *
+     * @param groupId The group for which to delete offsets.
+     * @param partitions The topic-partitions.
+     * @return The DeleteShareGroupOffsetsResult.
+     */
+    default DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<TopicPartition> partitions) {
+        return deleteShareGroupOffsets(groupId, partitions, new DeleteShareGroupOffsetsOptions());
     }
 
     /**
@@ -1964,6 +1983,16 @@ public interface Admin extends AutoCloseable {
      * @return The DeleteShareGroupsResult.
      */
     DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds, DeleteShareGroupsOptions options);
+
+    /**
+     * Delete share groups from the cluster with the default options.
+     *
+     * @param groupIds Collection of share group ids which are to be deleted.
+     * @return The DeleteShareGroupsResult.
+     */
+    default DeleteShareGroupsResult deleteShareGroups(Collection<String> groupIds) {
+        return deleteShareGroups(groupIds, new DeleteShareGroupsOptions());
+    }
 
     /**
      * Describe streams groups in the cluster.
