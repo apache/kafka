@@ -61,7 +61,7 @@ public class ClientsTestUtils {
         long startingTimestamp,
         long timestampIncrement
     ) throws InterruptedException {
-        var records = ClientsTestUtils.consumeRecords(consumer, numRecords);
+        var records = consumeRecords(consumer, numRecords);
         for (var i = 0; i < numRecords; i++) {
             var record = records.get(i);
             var offset = startingOffset + i;
