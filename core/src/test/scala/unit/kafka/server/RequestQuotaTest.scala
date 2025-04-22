@@ -644,16 +644,16 @@ class RequestQuotaTest extends BaseRequestTest {
           new DescribeTopicPartitionsRequest.Builder(new DescribeTopicPartitionsRequestData())
 
         case ApiKeys.SHARE_GROUP_HEARTBEAT =>
-          new ShareGroupHeartbeatRequest.Builder(new ShareGroupHeartbeatRequestData(), true)
+          new ShareGroupHeartbeatRequest.Builder(new ShareGroupHeartbeatRequestData())
 
         case ApiKeys.SHARE_GROUP_DESCRIBE =>
-          new ShareGroupDescribeRequest.Builder(new ShareGroupDescribeRequestData(), true)
+          new ShareGroupDescribeRequest.Builder(new ShareGroupDescribeRequestData())
 
         case ApiKeys.SHARE_FETCH =>
-          new ShareFetchRequest.Builder(new ShareFetchRequestData(), true)
+          new ShareFetchRequest.Builder(new ShareFetchRequestData())
 
         case ApiKeys.SHARE_ACKNOWLEDGE =>
-          new ShareAcknowledgeRequest.Builder(new ShareAcknowledgeRequestData(), true)
+          new ShareAcknowledgeRequest.Builder(new ShareAcknowledgeRequestData())
 
         case ApiKeys.ADD_RAFT_VOTER =>
           new AddRaftVoterRequest.Builder(new AddRaftVoterRequestData())
@@ -665,19 +665,19 @@ class RequestQuotaTest extends BaseRequestTest {
           new UpdateRaftVoterRequest.Builder(new UpdateRaftVoterRequestData())
 
         case ApiKeys.INITIALIZE_SHARE_GROUP_STATE =>
-          new InitializeShareGroupStateRequest.Builder(new InitializeShareGroupStateRequestData(), true)
+          new InitializeShareGroupStateRequest.Builder(new InitializeShareGroupStateRequestData())
 
         case ApiKeys.READ_SHARE_GROUP_STATE =>
-          new ReadShareGroupStateRequest.Builder(new ReadShareGroupStateRequestData(), true)
+          new ReadShareGroupStateRequest.Builder(new ReadShareGroupStateRequestData())
 
         case ApiKeys.WRITE_SHARE_GROUP_STATE =>
-          new WriteShareGroupStateRequest.Builder(new WriteShareGroupStateRequestData(), true)
+          new WriteShareGroupStateRequest.Builder(new WriteShareGroupStateRequestData())
 
         case ApiKeys.DELETE_SHARE_GROUP_STATE =>
-          new DeleteShareGroupStateRequest.Builder(new DeleteShareGroupStateRequestData(), true)
+          new DeleteShareGroupStateRequest.Builder(new DeleteShareGroupStateRequestData())
 
         case ApiKeys.READ_SHARE_GROUP_STATE_SUMMARY =>
-          new ReadShareGroupStateSummaryRequest.Builder(new ReadShareGroupStateSummaryRequestData(), true)
+          new ReadShareGroupStateSummaryRequest.Builder(new ReadShareGroupStateSummaryRequestData())
           
         case ApiKeys.STREAMS_GROUP_HEARTBEAT =>
           new StreamsGroupHeartbeatRequest.Builder(new StreamsGroupHeartbeatRequestData(), true)
@@ -686,13 +686,13 @@ class RequestQuotaTest extends BaseRequestTest {
           new StreamsGroupDescribeRequest.Builder(new StreamsGroupDescribeRequestData(), true)
 
         case ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS =>
-          new DescribeShareGroupOffsetsRequest.Builder(new DescribeShareGroupOffsetsRequestData(), true)
+          new DescribeShareGroupOffsetsRequest.Builder(new DescribeShareGroupOffsetsRequestData())
 
         case ApiKeys.ALTER_SHARE_GROUP_OFFSETS =>
-          new AlterShareGroupOffsetsRequest.Builder(new AlterShareGroupOffsetsRequestData(), true)
+          new AlterShareGroupOffsetsRequest.Builder(new AlterShareGroupOffsetsRequestData())
 
         case ApiKeys.DELETE_SHARE_GROUP_OFFSETS =>
-          new DeleteShareGroupOffsetsRequest.Builder(new DeleteShareGroupOffsetsRequestData(), true)
+          new DeleteShareGroupOffsetsRequest.Builder(new DeleteShareGroupOffsetsRequestData())
 
         case _ =>
           throw new IllegalArgumentException("Unsupported API key " + apiKey)

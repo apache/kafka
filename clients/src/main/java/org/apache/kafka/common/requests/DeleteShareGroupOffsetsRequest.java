@@ -29,11 +29,7 @@ public class DeleteShareGroupOffsetsRequest extends AbstractRequest {
         private final DeleteShareGroupOffsetsRequestData data;
 
         public Builder(DeleteShareGroupOffsetsRequestData data) {
-            this(data, false);
-        }
-
-        public Builder(DeleteShareGroupOffsetsRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.DELETE_SHARE_GROUP_OFFSETS, enableUnstableLastVersion);
+            super(ApiKeys.DELETE_SHARE_GROUP_OFFSETS);
             this.data = data;
         }
 

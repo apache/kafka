@@ -670,8 +670,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     val shareGroupDescribeRequest = new ShareGroupDescribeRequest.Builder(
       new ShareGroupDescribeRequestData()
         .setGroupIds(groupIds.asJava)
-        .setIncludeAuthorizedOperations(includeAuthorizedOperations),
-      true
+        .setIncludeAuthorizedOperations(includeAuthorizedOperations)
     ).build(version)
 
     val shareGroupDescribeResponse = connectAndReceive[ShareGroupDescribeResponse](shareGroupDescribeRequest)
@@ -751,8 +750,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
         .setMemberId(memberId)
         .setMemberEpoch(memberEpoch)
         .setRackId(rackId)
-        .setSubscribedTopicNames(subscribedTopicNames.asJava),
-      true
+        .setSubscribedTopicNames(subscribedTopicNames.asJava)
     ).build()
 
     // Send the request until receiving a successful response. There is a delay
