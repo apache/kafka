@@ -1615,4 +1615,105 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             return topicPartition;
         }
     }
+
+    /**
+     * A class that represents the state of a prepared transaction that can be
+     * serialized to and deserialized from a string.
+     * Objects of this class can be written to and read from a database
+     * to support recovery of prepared transactions.
+     */
+    public static class PreparedTxnState {
+        private final long producerId;
+        private final short epoch;
+        
+        /**
+         * Creates a new empty PreparedTxnState
+         */
+        public PreparedTxnState() {
+            this.producerId = -1L;
+            this.epoch = -1;
+        }
+        
+        /**
+         * Creates a new PreparedTxnState from a serialized string representation
+         * 
+         * @param serializedState               The serialized string to deserialize.
+         * @throws IllegalArgumentException if the serialized string is not in the expected format
+         */
+        public PreparedTxnState(String serializedState) {
+            if (serializedState == null || serializedState.isEmpty()) {
+                this.producerId = -1L;
+                this.epoch = -1;
+                return;
+            }
+            
+            try {
+                String[] parts = serializedState.split(":");
+                if (parts.length != 2) {
+                    throw new IllegalArgumentException("Invalid serialized transaction state format: " + serializedState);
+                }
+                
+                this.producerId = Long.parseLong(parts[0]);
+                this.epoch = Short.parseShort(parts[1]);
+            } catch (NumberFormatException e) {
+                throw new IllegalArgumentException("Invalid serialized transaction state format: " + serializedState, e);
+            }
+        }
+        
+        /**
+         * Creates a new PreparedTxnState with the given producer ID and epoch
+         * 
+         * @param producerId        The producer ID
+         * @param epoch             The producer epoch
+         */
+        public PreparedTxnState(long producerId, short epoch) {
+            this.producerId = producerId;
+            this.epoch = epoch;
+        }
+
+        public long producerId() {
+            return producerId;
+        }
+
+        public short epoch() {
+            return epoch;
+        }
+        
+        /**
+         * Checks if this state contains valid producer ID and epoch values.
+         * A state is considered valid if the producer ID is not -1.
+         * 
+         * @return true if the state is valid, false otherwise
+         */
+        public boolean isValid() {
+            return producerId != -1L;
+        }
+        
+        /**
+         * Returns a serialized string representation of this transaction state
+         * The format is "producerId:epoch"
+         * 
+         * @return a serialized string representation
+         */
+        @Override
+        public String toString() {
+            return producerId + ":" + epoch;
+        }
+        
+        @Override
+        public boolean equals(Object o) {
+            if (this == o) return true;
+            if (o == null || getClass() != o.getClass()) return false;
+            PreparedTxnState that = (PreparedTxnState) o;
+            return producerId == that.producerId && epoch == that.epoch;
+        }
+        
+        @Override
+        public int hashCode() {
+            int result = 31;
+            result = 31 * result + Long.hashCode(producerId);
+            result = 31 * result + (int) epoch;
+            return result;
+        }
+    }
 }
