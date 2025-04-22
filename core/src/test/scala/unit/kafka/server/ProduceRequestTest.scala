@@ -138,7 +138,6 @@ class ProduceRequestTest extends BaseRequestTest {
     val produceResponse = sendProduceRequest(leader, ProduceRequest.builder(new ProduceRequestData()
       .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
         new ProduceRequestData.TopicProduceData()
-          .setName(topicPartition.topic())
           .setTopicId(topicPartition.topicId())
           .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
             .setIndex(topicPartition.partition())

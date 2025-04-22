@@ -33,7 +33,7 @@ import scala.jdk.CollectionConverters._
 
 class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
   val producerCount: Int = 1
-  val brokerCount: Int = 3
+  val brokerCount: Int = 2
   val defaultLingerMs: Int = 5
 
   serverConfig.put(ServerLogConfigs.NUM_PARTITIONS_CONFIG, 2.toString)
@@ -146,12 +146,12 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
     }
 
     val reassignment = Map(
-      partition0 -> Optional.of(new NewPartitionReassignment(util.Arrays.asList(2))),
+      partition0 -> Optional.of(new NewPartitionReassignment(util.Arrays.asList(1))),
     )
 
-    // Change assignment of one of the replicas from 0 to 2. Leadership moves be .
+    // Change assignment of one of the replicas from 0 to 1. Leadership moves be 1.
     admin.alterPartitionReassignments(reassignment.asJava).all().get()
-    TestUtils.assertLeader(admin, partition0, 2)
+    TestUtils.assertLeader(admin, partition0, 1)
     assertEquals(topicDetails.topicId(), topicMetadata(admin, topic).topicId())
 
     // Producer should be able to send messages even after topic gets reassigned
