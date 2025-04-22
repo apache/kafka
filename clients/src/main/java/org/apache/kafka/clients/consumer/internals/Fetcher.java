@@ -195,6 +195,7 @@ public class Fetcher<K, V> extends AbstractFetch {
             responseFuture.addListener(new RequestFutureListener<>() {
                 @Override
                 public void onSuccess(ClientResponse resp) {
+                    log.info("The client got FETCH response with correlation  id {}.", resp.requestHeader().correlationId());
                     successHandler.handle(fetchTarget, data, resp);
                 }
 

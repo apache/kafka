@@ -131,6 +131,7 @@ public class ConsumerNetworkClient implements Closeable {
         ClientRequest clientRequest = client.newClientRequest(node.idString(), requestBuilder, now, true,
             requestTimeoutMs, completionHandler);
         unsent.put(node, clientRequest);
+        log.info("Generated FETCH with correlation id {}.", clientRequest.correlationId());
 
         // wakeup the client in case it is blocking in poll so that we can send the queued request
         client.wakeup();
