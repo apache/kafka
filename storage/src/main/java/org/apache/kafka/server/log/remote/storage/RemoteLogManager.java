@@ -293,6 +293,7 @@ public class RemoteLogManager implements Closeable, AsyncOffsetReader {
     public void resizeReaderThreadPool(int newSize) {
         int currentSize = remoteStorageReaderThreadPool.getCorePoolSize();
         LOGGER.info("Updating remote reader thread pool size from {} to {}", currentSize, newSize);
+        remoteStorageReaderThreadPool.setMaximumPoolSize(newSize);
         remoteStorageReaderThreadPool.setCorePoolSize(newSize);
     }
 

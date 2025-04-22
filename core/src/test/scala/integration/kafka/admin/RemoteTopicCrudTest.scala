@@ -475,6 +475,40 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
 
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
+  def testUpdateThreadPoolSize(quorum: String): Unit = {
+    val admin = createAdminClient()
+    val configs: util.Map[ConfigResource,util.Collection[AlterConfigOp]] = util.Map.of(
+      new ConfigResource(ConfigResource.Type.BROKER, ""),
+      util.List.of(
+        new AlterConfigOp(
+          new ConfigEntry(RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP, "15"),
+          AlterConfigOp.OpType.SET
+        ),
+        new AlterConfigOp(
+          new ConfigEntry(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP, "20"),
+          AlterConfigOp.OpType.SET
+        ),
+        new AlterConfigOp(
+          new ConfigEntry(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP, "20"),
+          AlterConfigOp.OpType.SET
+        )
+      )
+    )
+    admin.incrementalAlterConfigs(configs).all().get()
+
+    TestUtils.waitUntilTrue(() =>
+      brokers.forall(b => b.config.getInt(RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP) == 15)
+    , "should update " + RemoteLogManagerConfig.REMOTE_LOG_READER_THREADS_PROP + " to 15")
+    TestUtils.waitUntilTrue(() =>
+      brokers.forall(b => b.config.getInt(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP) == 20)
+      , "should update " + RemoteLogManagerConfig.REMOTE_LOG_MANAGER_COPIER_THREAD_POOL_SIZE_PROP + " to 20")
+    TestUtils.waitUntilTrue(() =>
+      brokers.forall(b => b.config.getInt(RemoteLogManagerConfig.REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP) == 20)
+      , "should update " + RemoteLogManagerConfig.REMOTE_LOG_MANAGER_EXPIRATION_THREAD_POOL_SIZE_PROP + " to 20")
+  }
+
+  @ParameterizedTest
+  @ValueSource(strings = Array("kraft"))
   def testTopicDeletion(quorum: String): Unit = {
     MyRemoteStorageManager.deleteSegmentEventCounter.set(0)
     val numPartitions = 2
