@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitRequestData.OffsetCommitRequestTopic;
@@ -50,7 +51,7 @@ public class OffsetCommitRequest extends AbstractRequest {
             this.data = data;
         }
 
-        public static Builder forTopicIdsAndNames(OffsetCommitRequestData data, boolean enableUnstableLastVersion) {
+        public static Builder forTopicIdsOrNames(OffsetCommitRequestData data, boolean enableUnstableLastVersion) {
             return new Builder(data, ApiKeys.OFFSET_COMMIT.oldestVersion(), ApiKeys.OFFSET_COMMIT.latestVersion(enableUnstableLastVersion));
         }
 
@@ -63,6 +64,21 @@ public class OffsetCommitRequest extends AbstractRequest {
             if (data.groupInstanceId() != null && version < 7) {
                 throw new UnsupportedVersionException("The broker offset commit api version " +
                     version + " does not support usage of config group.instance.id.");
+            }
+            if (version >= 10) {
+                data.topics().forEach(topic -> {
+                    if (topic.topicId() == null || topic.topicId().equals(Uuid.ZERO_UUID)) {
+                        throw new UnsupportedVersionException("The broker offset commit api version " +
+                            version + " does require usage of topic ids.");
+                    }
+                });
+            } else {
+                data.topics().forEach(topic -> {
+                    if (topic.name() == null || topic.name().isEmpty()) {
+                        throw new UnsupportedVersionException("The broker offset commit api version " +
+                            version + " does require usage of topic names.");
+                    }
+                });
             }
             return new OffsetCommitRequest(data, version);
         }

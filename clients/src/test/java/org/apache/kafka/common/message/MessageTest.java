@@ -416,7 +416,7 @@ public final class MessageTest {
     public void testOffsetCommitRequestVersions(short version) throws Exception {
         OffsetCommitRequestData request = new OffsetCommitRequestData()
             .setGroupId("groupId")
-            .setMemberId(version >= 1 ? "memberId" : "")
+            .setMemberId("memberId")
             .setGenerationIdOrMemberEpoch(version >= 1 ? 10 : -1)
             .setGroupInstanceId(version >= 7 ? "instanceId" : null)
             .setRetentionTimeMs((version >= 2 && version <= 4) ? 20 : -1)

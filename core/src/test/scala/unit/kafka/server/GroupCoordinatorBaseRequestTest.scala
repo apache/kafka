@@ -182,7 +182,7 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
       throw new IllegalArgumentException(s"Cannot call OffsetCommit API version $version without a topic id")
     }
 
-    val request = OffsetCommitRequest.Builder.forTopicIdsAndNames(
+    val request = OffsetCommitRequest.Builder.forTopicIdsOrNames(
       new OffsetCommitRequestData()
         .setGroupId(groupId)
         .setMemberId(memberId)
