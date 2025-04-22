@@ -427,8 +427,8 @@ class BrokerServer(
       val fetchManager = new FetchManager(Time.SYSTEM, new FetchSessionCache(fetchSessionCacheShards))
 
       val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(
-        config.shareGroupConfig.shareGroupMaxGroups * config.groupCoordinatorConfig.shareGroupMaxSize,
-        KafkaBroker.MIN_INCREMENTAL_FETCH_SESSION_EVICTION_MS)
+        config.shareGroupConfig.shareGroupMaxGroups * config.groupCoordinatorConfig.shareGroupMaxSize
+      )
 
       sharePartitionManager = new SharePartitionManager(
         replicaManager,

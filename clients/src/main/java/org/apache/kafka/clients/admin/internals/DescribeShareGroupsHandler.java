@@ -92,7 +92,7 @@ public class DescribeShareGroupsHandler extends AdminApiHandler.Batched<Coordina
         ShareGroupDescribeRequestData data = new ShareGroupDescribeRequestData()
             .setGroupIds(groupIds)
             .setIncludeAuthorizedOperations(includeAuthorizedOperations);
-        return new ShareGroupDescribeRequest.Builder(data, true);
+        return new ShareGroupDescribeRequest.Builder(data);
     }
 
     @Override
