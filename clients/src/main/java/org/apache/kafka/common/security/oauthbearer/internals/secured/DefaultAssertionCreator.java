@@ -36,6 +36,7 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAu
 
 public class DefaultAssertionCreator implements AssertionCreator {
 
+    private static final Base64.Encoder BASE64_ENCODER = Base64.getUrlEncoder().withoutPadding();
     private final String algorithm;
     private final CachedFile<PrivateKey> privateKeyFile;
 
@@ -57,9 +58,8 @@ public class DefaultAssertionCreator implements AssertionCreator {
     @Override
     public String create(AssertionJwtTemplate template) throws GeneralSecurityException, IOException {
         ObjectMapper mapper = new ObjectMapper();
-        Base64.Encoder encoder = Base64.getUrlEncoder().withoutPadding();
-        String header = encoder.encodeToString(Utils.utf8(mapper.writeValueAsString(template.header())));
-        String payload = encoder.encodeToString(Utils.utf8(mapper.writeValueAsString(template.payload())));
+        String header = BASE64_ENCODER.encodeToString(Utils.utf8(mapper.writeValueAsString(template.header())));
+        String payload = BASE64_ENCODER.encodeToString(Utils.utf8(mapper.writeValueAsString(template.payload())));
         String content = header + "." + payload;
         PrivateKey privateKey = privateKeyFile.transformed();
         String signedContent = sign(algorithm, privateKey, content);
