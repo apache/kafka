@@ -372,7 +372,7 @@ public class ConnectorConfig extends AbstractConfig {
             try {
                 final String typeConfig = prefix + "type";
                 final String versionConfig = prefix + WorkerConfig.PLUGIN_VERSION_SUFFIX;
-                @SuppressWarnings("unchecked") final Transformation<R> transformation = getTransformationOrPredicate(plugins, typeConfig, versionConfig);
+                final Transformation<R> transformation = getTransformationOrPredicate(plugins, typeConfig, versionConfig);
                 Map<String, Object> configs = originalsWithPrefix(prefix);
                 Object predicateAlias = configs.remove(TransformationStage.PREDICATE_CONFIG);
                 Object negate = configs.remove(TransformationStage.NEGATE_CONFIG);
@@ -382,7 +382,6 @@ public class ConnectorConfig extends AbstractConfig {
                     String predicatePrefix = PREDICATES_PREFIX + predicateAlias + ".";
                     final String predicateTypeConfig = predicatePrefix + "type";
                     final String predicateVersionConfig = predicatePrefix + WorkerConfig.PLUGIN_VERSION_SUFFIX;
-                    @SuppressWarnings("unchecked")
                     Predicate<R> predicate = getTransformationOrPredicate(plugins, predicateTypeConfig, predicateVersionConfig);
                     predicate.configure(originalsWithPrefix(predicatePrefix));
                     Plugin<Predicate<R>> predicatePlugin = metrics.wrap(predicate, connectorTaskId, (String) predicateAlias);
@@ -781,22 +780,7 @@ public class ConnectorConfig extends AbstractConfig {
         }
     }
 
-    private static class ConverterDefaults {
-        private final String type;
-        private final String version;
-
-        public ConverterDefaults(String type, String version) {
-            this.type = type;
-            this.version = version;
-        }
-
-        public String type() {
-            return type;
-        }
-
-        public String version() {
-            return version;
-        }
+    private record ConverterDefaults(String type, String version) {
     }
 
     public static class PluginVersionValidator implements ConfigDef.Validator {

@@ -235,7 +235,7 @@ public class PushHttpMetricsReporter implements MetricsReporter {
 
     // Static package-private so unit tests can mock reading response
     static String readResponse(InputStream is) {
-        try (Scanner s = new Scanner(is, StandardCharsets.UTF_8.name()).useDelimiter("\\A")) {
+        try (Scanner s = new Scanner(is, StandardCharsets.UTF_8).useDelimiter("\\A")) {
             return s.hasNext() ? s.next() : "";
         }
     }

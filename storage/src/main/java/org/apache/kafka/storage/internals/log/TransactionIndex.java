@@ -28,7 +28,6 @@ import java.nio.channels.FileChannel;
 import java.nio.file.Files;
 import java.nio.file.StandardOpenOption;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Optional;
@@ -229,7 +228,7 @@ public class TransactionIndex implements Closeable {
     private Iterable<AbortedTxnWithPosition> iterable(Supplier<ByteBuffer> allocate) {
         FileChannel channel = channelOrNull();
         if (channel == null)
-            return Collections.emptyList();
+            return List.of();
 
         PrimitiveRef.IntRef position = PrimitiveRef.ofInt(0);
 

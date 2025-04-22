@@ -137,9 +137,9 @@ class ControllerMutationQuotaManagerTest extends BaseClientQuotaManagerTest {
     sensor.add(metricName, new TokenBucket)
     val metric = metrics.metric(metricName)
 
-    assertEquals(0, throttleTimeMs(new QuotaViolationException(metric, 0, 10), time.milliseconds()))
-    assertEquals(500, throttleTimeMs(new QuotaViolationException(metric, -5, 10), time.milliseconds()))
-    assertEquals(1000, throttleTimeMs(new QuotaViolationException(metric, -10, 10), time.milliseconds()))
+    assertEquals(0, throttleTimeMs(new QuotaViolationException(metric, 0, 10)))
+    assertEquals(500, throttleTimeMs(new QuotaViolationException(metric, -5, 10)))
+    assertEquals(1000, throttleTimeMs(new QuotaViolationException(metric, -10, 10)))
   }
 
   @Test

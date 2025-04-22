@@ -20,7 +20,6 @@ import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
 import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -60,7 +59,7 @@ public abstract class BaseDeleteSegmentsTest extends TieredStorageTestHarness {
                         // segment to be rolled and deleted. We use a future timestamp to prevent that from happening.
                         new KeyValueSpec("k2", "v2"), new KeyValueSpec("k3", "v3", System.currentTimeMillis() + TimeUnit.HOURS.toMillis(1)))
                 // update the topic config such that it triggers the deletion of segments
-                .updateTopicConfig(topicA, configsToBeAdded(), Collections.emptyList())
+                .updateTopicConfig(topicA, configsToBeAdded(), List.of())
                 // expect that the three offloaded remote log segments are deleted
                 .expectDeletionInRemoteStorage(broker0, topicA, p0, DELETE_SEGMENT, 3)
                 .waitForRemoteLogSegmentDeletion(topicA)
