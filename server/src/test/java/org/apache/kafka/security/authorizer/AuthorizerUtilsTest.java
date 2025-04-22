@@ -77,7 +77,7 @@ public class AuthorizerUtilsTest {
         assertEquals(ServerConfigs.AUTHORIZER_CLASS_NAME_CONFIG,  metricName.tags().get("config"));
         assertEquals(MonitorableAuthorizer.class.getSimpleName(),  metricName.tags().get("class"));
         assertEquals(role.toString(),  metricName.tags().get("role"));
-        assertTrue(metricName.tags().entrySet().containsAll(monitorableAuthorizer.extraTags.entrySet()));
+        assertTrue(metricName.tags().entrySet().containsAll(MonitorableAuthorizer.EXTRA_TAGS.entrySet()));
         assertEquals(0, metrics.metric(metricName).metricValue());
         monitorableAuthorizer.authorize(null, null);
         assertEquals(1, metrics.metric(metricName).metricValue());
@@ -85,17 +85,19 @@ public class AuthorizerUtilsTest {
 
     public static class MonitorableAuthorizer implements Authorizer, Monitorable {
 
-        private final LinkedHashMap<String, String> extraTags = new LinkedHashMap<>() {{
-                put("k1", "v1");
-            }};
+        private static final LinkedHashMap<String, String> EXTRA_TAGS = new LinkedHashMap<>();
         private final AtomicInteger counter = new AtomicInteger();
         private boolean configured = false;
         private MetricName metricName = null;
 
+        static {
+            EXTRA_TAGS.put("t1", "v1");
+        }
+
         @Override
         public void withPluginMetrics(PluginMetrics metrics) {
             assertTrue(configured);
-            metricName = metrics.metricName("authorize calls", "Number of times authorize was called", extraTags);
+            metricName = metrics.metricName("authorize calls", "Number of times authorize was called", EXTRA_TAGS);
             metrics.addMetric(metricName, (Gauge<Integer>) (config, now) -> counter.get());
         }
 
