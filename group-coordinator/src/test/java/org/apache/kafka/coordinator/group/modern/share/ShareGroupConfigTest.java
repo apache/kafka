@@ -98,13 +98,19 @@ public class ShareGroupConfigTest {
         configs.put(ShareGroupConfig.SHARE_GROUP_PARTITION_MAX_RECORD_LOCKS_CONFIG, 20000);
         assertEquals("Invalid value 20000 for configuration group.share.partition.max.record.locks: Value must be no more than 10000",
             assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
+
+        configs.clear();
+        // test for when SHARE_GROUP_MAX_SHARE_SESSIONS_CONFIG is less than SHARE_GROUP_MAX_SIZE_CONFIG
+        configs.put(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG, 2000);
+        configs.put(ShareGroupConfig.SHARE_GROUP_MAX_SHARE_SESSIONS_CONFIG, 1000);
+        assertEquals("Invalid value 2000 for configuration group.share.max.size: Value must be no more than 1000",
+            assertThrows(ConfigException.class, () -> createConfig(configs)).getMessage());
     }
 
     public static ShareGroupConfig createShareGroupConfig(
         boolean shareGroupEnable,
         int shareGroupPartitionMaxRecordLocks,
         int shareGroupDeliveryCountLimit,
-        short shareGroupsMaxGroups,
         int shareGroupRecordLockDurationsMs,
         int shareGroupMinRecordLockDurationMs,
         int shareGroupMaxRecordLockDurationMs

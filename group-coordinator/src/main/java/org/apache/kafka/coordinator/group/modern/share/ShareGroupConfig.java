@@ -95,8 +95,10 @@ public class ShareGroupConfig {
     private final int shareFetchPurgatoryPurgeIntervalRequests;
     private final int shareGroupMaxShareSessions;
     private final String shareGroupPersisterClassName;
+    private final AbstractConfig config;
 
     public ShareGroupConfig(AbstractConfig config) {
+        this.config = config;
         // Share groups are enabled in either of the two following cases:
         // 1. The internal configuration to enable it is explicitly set; or
         // 2. the share rebalance protocol is enabled.
@@ -159,6 +161,9 @@ public class ShareGroupConfig {
         Utils.require(shareGroupMaxRecordLockDurationMs >= shareGroupRecordLockDurationMs,
                 String.format("%s must be greater than or equal to %s",
                         SHARE_GROUP_MAX_RECORD_LOCK_DURATION_MS_CONFIG, SHARE_GROUP_RECORD_LOCK_DURATION_MS_CONFIG));
+        Utils.require(shareGroupMaxShareSessions >= config.getInt(GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG),
+                String.format("%s must be greater than or equal to %s",
+                        SHARE_GROUP_MAX_SHARE_SESSIONS_CONFIG, GroupCoordinatorConfig.SHARE_GROUP_MAX_SIZE_CONFIG));
     }
 
     /**
