@@ -45,6 +45,7 @@ import java.util.concurrent.TimeUnit
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.locks.ReentrantLock
 import scala.collection.{Map, Set, mutable}
+import java.util.concurrent.ConcurrentHashMap
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.{RichOption, RichOptional}
 import scala.math._
@@ -903,11 +904,12 @@ class FetcherLagMetrics(metricId: ClientIdTopicPartition) {
 }
 
 class FetcherLagStats(metricId: ClientIdAndBroker) {
-  private val valueFactory = (k: TopicPartition) => new FetcherLagMetrics(ClientIdTopicPartition(metricId.clientId, k))
-  val stats = new Pool[TopicPartition, FetcherLagMetrics](Some(valueFactory))
+  private val valueFactory: TopicPartition => FetcherLagMetrics = (k: TopicPartition) => new FetcherLagMetrics(ClientIdTopicPartition(metricId.clientId, k))
+
+  val stats: ConcurrentHashMap[TopicPartition, FetcherLagMetrics] = new ConcurrentHashMap[TopicPartition, FetcherLagMetrics]()
 
   def getAndMaybePut(topicPartition: TopicPartition): FetcherLagMetrics = {
-    stats.getAndMaybePut(topicPartition)
+    stats.computeIfAbsent(topicPartition, valueFactory)
   }
 
   def unregister(topicPartition: TopicPartition): Unit = {
@@ -916,7 +918,7 @@ class FetcherLagStats(metricId: ClientIdAndBroker) {
   }
 
   def unregister(): Unit = {
-    stats.keys.toBuffer.foreach { key: TopicPartition =>
+    stats.keySet().asScala.toBuffer.foreach { key: TopicPartition =>
       unregister(key)
     }
   }

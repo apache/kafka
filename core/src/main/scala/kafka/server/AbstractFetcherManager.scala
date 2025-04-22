@@ -43,7 +43,7 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
   metricsGroup.newGauge("MaxLag", () => {
     // current max lag across all fetchers/topics/partitions
     fetcherThreadMap.values.foldLeft(0L) { (curMaxLagAll, fetcherThread) =>
-      val maxLagThread = fetcherThread.fetcherLagStats.stats.values.foldLeft(0L)((curMaxLagThread, lagMetrics) =>
+      val maxLagThread = fetcherThread.fetcherLagStats.stats.values().asScala.foldLeft(0L)((curMaxLagThread, lagMetrics) =>
         math.max(curMaxLagThread, lagMetrics.lag))
       math.max(curMaxLagAll, maxLagThread)
     }

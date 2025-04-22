@@ -22,7 +22,7 @@ import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
-import kafka.utils.{Logging, Pool}
+import kafka.utils.{Logging}
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.ListTransactionsResponseData
@@ -43,7 +43,9 @@ import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.AppendOrigin
 
+import java.util.concurrent.ConcurrentHashMap
 import scala.jdk.CollectionConverters._
+import java.util
 import scala.collection.mutable
 
 
@@ -431,7 +433,7 @@ class TransactionStateManager(brokerId: Int,
   private def loadTransactionMetadata(topicPartition: TopicPartition, coordinatorEpoch: Int): Pool[String, TransactionMetadata] =  {
     def logEndOffset = replicaManager.getLogEndOffset(topicPartition).getOrElse(-1L)
 
-    val loadedTransactions = new Pool[String, TransactionMetadata]
+    val loadedTransactions: ConcurrentHashMap[String, TransactionMetadata] = new ConcurrentHashMap[String, TransactionMetadata]()
 
     replicaManager.getLog(topicPartition) match {
       case None =>
@@ -509,7 +511,7 @@ class TransactionStateManager(brokerId: Int,
    */
   private[transaction] def addLoadedTransactionsToCache(txnTopicPartition: Int,
                                                         coordinatorEpoch: Int,
-                                                        loadedTransactions: Pool[String, TransactionMetadata]): Unit = {
+                                                        loadedTransactions: ConcurrentHashMap[String, TransactionMetadata]): Unit = {
     val txnMetadataCacheEntry = TxnMetadataCacheEntry(coordinatorEpoch, loadedTransactions)
     val previousTxnMetadataCacheEntryOpt = transactionMetadataCache.put(txnTopicPartition, txnMetadataCacheEntry)
 
@@ -541,7 +543,7 @@ class TransactionStateManager(brokerId: Int,
       val endTimeMs = time.milliseconds()
       val totalLoadingTimeMs = endTimeMs - startTimeMs
       partitionLoadSensor.record(totalLoadingTimeMs.toDouble, endTimeMs, false)
-      info(s"Finished loading ${loadedTransactions.size} transaction metadata from $topicPartition in " +
+      info(s"Finished loading ${loadedTransactions.size()} transaction metadata from $topicPartition in " +
         s"$totalLoadingTimeMs milliseconds, of which $schedulerTimeMs milliseconds was spent in the scheduler.")
 
       inWriteLock(stateLock) {
@@ -549,7 +551,7 @@ class TransactionStateManager(brokerId: Int,
           addLoadedTransactionsToCache(topicPartition.partition, coordinatorEpoch, loadedTransactions)
 
           val transactionsPendingForCompletion = new mutable.ListBuffer[TransactionalIdCoordinatorEpochAndTransitMetadata]
-          loadedTransactions.foreach {
+          loadedTransactions.asScala.foreach {
             case (transactionalId, txnMetadata) =>
               txnMetadata.inLock {
                 // if state is PrepareCommit or PrepareAbort we need to complete the transaction

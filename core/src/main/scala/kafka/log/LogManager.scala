@@ -24,12 +24,13 @@ import java.util.concurrent._
 import java.util.concurrent.atomic.AtomicInteger
 import kafka.server.{KafkaConfig, KafkaRaftServer}
 import kafka.utils.threadsafe
-import kafka.utils.{CoreUtils, Logging, Pool}
+import kafka.utils.{CoreUtils, Logging}
 import org.apache.kafka.common.{DirectoryId, KafkaException, TopicPartition, Uuid}
 import org.apache.kafka.common.utils.{Exit, KafkaThread, Time, Utils}
 import org.apache.kafka.common.errors.{InconsistentTopicIdException, KafkaStorageException, LogDirNotFoundException}
 import org.apache.kafka.coordinator.transaction.{TransactionLogConfig, TransactionStateManagerConfig}
 
+import java.util.concurrent.ConcurrentHashMap
 import scala.jdk.CollectionConverters._
 import scala.collection._
 import scala.collection.mutable.ArrayBuffer
@@ -92,7 +93,7 @@ class LogManager(logDirs: Seq[File],
 
   // Map of stray partition to stray log. This holds all stray logs detected on the broker.
   // Visible for testing
-  private val strayLogs = new Pool[TopicPartition, UnifiedLog]()
+  private val strayLogs: ConcurrentHashMap[TopicPartition, UnifiedLog] = new ConcurrentHashMap[TopicPartition, UnifiedLog]()
 
   private val _liveLogDirs: ConcurrentLinkedQueue[File] = createAndValidateLogDirs(logDirs, initialOfflineDirs)
   @volatile private var _currentDefaultConfig = initialDefaultConfig

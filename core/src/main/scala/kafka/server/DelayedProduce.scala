@@ -147,10 +147,11 @@ object DelayedProduceMetrics {
              "requests",
              TimeUnit.SECONDS,
              Map("topic" -> key.topic, "partition" -> key.partition.toString).asJava)
-  private val partitionExpirationMeters = new Pool[TopicPartition, Meter](valueFactory = Some(partitionExpirationMeterFactory))
+  private val partitionExpirationMeters: ConcurrentHashMap[TopicPartition, Meter] = new ConcurrentHashMap[TopicPartition, Meter]()
+
 
   def recordExpiration(partition: TopicPartition): Unit = {
     aggregateExpirationMeter.mark()
-    partitionExpirationMeters.getAndMaybePut(partition).mark()
-  }
+    partitionExpirationMeters.computeIfAbsent(partition, k => partitionExpirationMeterFactory(k)).mark()
+ }
 }
