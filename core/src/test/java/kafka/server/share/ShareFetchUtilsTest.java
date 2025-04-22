@@ -329,7 +329,7 @@ public class ShareFetchUtilsTest {
         assertEquals(1, resultData.size());
         assertTrue(resultData.containsKey(tp0));
         assertEquals(0, resultData.get(tp0).partitionIndex());
-        assertNull(resultData.get(tp0).records());
+        assertEquals(MemoryRecords.EMPTY, resultData.get(tp0).records());
         assertTrue(resultData.get(tp0).acquiredRecords().isEmpty());
         assertEquals(Errors.NONE.code(), resultData.get(tp0).errorCode());
 
@@ -344,7 +344,7 @@ public class ShareFetchUtilsTest {
         assertEquals(1, resultData.size());
         assertTrue(resultData.containsKey(tp0));
         assertEquals(0, resultData.get(tp0).partitionIndex());
-        assertNull(resultData.get(tp0).records());
+        assertEquals(MemoryRecords.EMPTY, resultData.get(tp0).records());
         assertTrue(resultData.get(tp0).acquiredRecords().isEmpty());
         assertEquals(Errors.NONE.code(), resultData.get(tp0).errorCode());
 

@@ -209,7 +209,7 @@ public class ShareFetchResponse extends AbstractResponse {
         return partitionResponse(topicIdPartition.topicPartition().partition(), error);
     }
 
-    public static ShareFetchResponseData.PartitionData partitionResponse(int partition, Errors error) {
+    private static ShareFetchResponseData.PartitionData partitionResponse(int partition, Errors error) {
         return new ShareFetchResponseData.PartitionData()
                 .setPartitionIndex(partition)
                 .setErrorCode(error.code())

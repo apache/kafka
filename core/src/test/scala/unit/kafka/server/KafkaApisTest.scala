@@ -6199,7 +6199,7 @@ class KafkaApisTest extends Logging {
     assertEquals(partitionIndex, topicResponses.get(0).partitions.get(0).partitionIndex)
     assertEquals(Errors.NONE.code, topicResponses.get(0).partitions.get(0).errorCode)
     assertEquals(Errors.NONE.code, topicResponses.get(0).partitions.get(0).acknowledgeErrorCode)
-    assertNull(topicResponses.get(0).partitions.get(0).records)
+    assertEquals(MemoryRecords.EMPTY, topicResponses.get(0).partitions.get(0).records)
     assertEquals(0, topicResponses.get(0).partitions.get(0).acquiredRecords.toArray().length)
   }
 
