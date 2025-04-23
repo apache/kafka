@@ -125,7 +125,7 @@ public class ProduceRequestTest {
                 new ProduceRequestData()
                         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
                                         new ProduceRequestData.TopicProduceData()
-                                                .setName("test")
+                                                .setName("test") // TopicId will be set to Uuid.ZERO and client will get UNKNOWN_TOPIC_ID error if topicId not set.
                                                 .setPartitionData(Collections.singletonList(
                                                         new ProduceRequestData.PartitionProduceData().setIndex(9).setRecords(builder.build()))))
                                 .iterator()))
@@ -188,7 +188,7 @@ public class ProduceRequestTest {
         ProduceRequest.Builder requestBuilder = ProduceRequest.builder(new ProduceRequestData()
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
                 new ProduceRequestData.TopicProduceData()
-                    .setName("test")
+                    .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
                     .setPartitionData(Collections.singletonList(
                         new ProduceRequestData.PartitionProduceData()
                             .setIndex(0)
@@ -228,7 +228,7 @@ public class ProduceRequestTest {
         ProduceRequestData produceData = new ProduceRequestData()
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
                 new ProduceRequestData.TopicProduceData()
-                    .setName("test")
+                    .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt"))
                     .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
                         .setIndex(0)
                         .setRecords(builder.build()))))

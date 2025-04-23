@@ -149,7 +149,7 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
       partition0 -> Optional.of(new NewPartitionReassignment(util.Arrays.asList(1))),
     )
 
-    // Change assignment of one of the replicas from 0 to 1. Leadership moves be 1.
+    // Change replica assignment from 0 to 1. Leadership moves to 1.
     admin.alterPartitionReassignments(reassignment.asJava).all().get()
     TestUtils.assertLeader(admin, partition0, 1)
     assertEquals(topicDetails.topicId(), topicMetadata(admin, topic).topicId())
