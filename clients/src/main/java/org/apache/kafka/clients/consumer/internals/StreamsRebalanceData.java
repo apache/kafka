@@ -354,7 +354,7 @@ public class StreamsRebalanceData {
         shutdownRequested.set(true);
     }
 
-    /** True of the current stream thread requested a shutdown of all applications. */
+    /** True if the current stream thread requested a shutdown of all Streams clients belonging to the same application. */
     public boolean shutdownRequested() {
         return shutdownRequested.get();
     }
