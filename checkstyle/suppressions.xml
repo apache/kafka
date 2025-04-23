@@ -37,15 +37,11 @@
 
     <!-- core -->
     <suppress checks="NPathComplexity" files="(ClusterTestExtensions|KafkaApisBuilder|SharePartition|SharePartitionManager).java"/>
-    <suppress checks="NPathComplexity|ClassFanOutComplexity|ClassDataAbstractionCoupling|JavaNCSS" files="(RemoteLogManager|RemoteLogManagerTest).java"/>
-    <suppress checks="MethodLength" files="RemoteLogManager.java"/>
-    <suppress checks="MethodLength" files="RemoteLogManagerConfig.java"/>
-    <suppress checks="ClassFanOutComplexity" files="RemoteLogManagerTest.java"/>
     <suppress checks="MethodLength"
               files="(KafkaClusterTestKit).java"/>
     <suppress checks="NPathComplexity" files="TestKitNodes.java"/>
     <suppress checks="JavaNCSS"
-              files="(RemoteLogManagerTest|SharePartitionManagerTest|SharePartitionTest).java"/>
+              files="(SharePartitionManagerTest|SharePartitionTest).java"/>
     <suppress checks="ClassDataAbstractionCoupling|ClassFanOutComplexity" files="SharePartitionManagerTest"/>
     <suppress checks="CyclomaticComplexity" files="SharePartition.java"/>
 
@@ -364,7 +360,9 @@
     <suppress checks="ParameterNumber"
               files="(LogAppendInfo|LogLoader|RemoteLogManagerConfig|UnifiedLog).java"/>
     <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"
-              files="(UnifiedLog).java"/>
+              files="(UnifiedLog|RemoteLogManager|RemoteLogManagerTest).java"/>
+    <suppress checks="MethodLength" files="(RemoteLogManager|RemoteLogManagerConfig).java"/>
+    <suppress checks="JavaNCSS" files="RemoteLogManagerTest.java"/>
 
     <!-- benchmarks -->
     <suppress checks="(ClassDataAbstractionCoupling|ClassFanOutComplexity)"

@@ -20,7 +20,6 @@ import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.metrics.Metrics;
-import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
@@ -198,8 +197,7 @@ public class FetchBufferTest {
                 tp,
                 partitionData,
                 metricsAggregator,
-                0L,
-                ApiKeys.FETCH.latestVersion());
+                0L);
     }
 
     /**

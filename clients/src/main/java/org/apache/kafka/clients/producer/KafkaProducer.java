@@ -75,7 +75,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -256,7 +255,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerMetadata metadata;
     private final RecordAccumulator accumulator;
     private final Sender sender;
-    private final Thread ioThread;
+    private final Sender.SenderThread ioThread;
     private final Compression compression;
     private final Sensor errors;
     private final Time time;
@@ -454,7 +453,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.errors = this.metrics.sensor("errors");
             this.sender = newSender(logContext, kafkaClient, this.metadata);
             String ioThreadName = NETWORK_THREAD_PREFIX + " | " + clientId;
-            this.ioThread = new KafkaThread(ioThreadName, this.sender, true);
+            this.ioThread = new Sender.SenderThread(ioThreadName, this.sender, true);
             this.ioThread.start();
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
@@ -480,7 +479,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                   ProducerInterceptors<K, V> interceptors,
                   Partitioner partitioner,
                   Time time,
-                  KafkaThread ioThread,
+                  Sender.SenderThread ioThread,
                   Optional<ClientTelemetryReporter> clientTelemetryReporter) {
         this.producerConfig = config;
         this.time = time;
@@ -1566,6 +1565,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         private final String recordLogString;
         private volatile int partition = RecordMetadata.UNKNOWN_PARTITION;
         private volatile TopicPartition topicPartition;
+        private final Headers headers;
 
         private AppendCallbacks(Callback userCallback, ProducerInterceptors<K, V> interceptors, ProducerRecord<K, V> record) {
             this.userCallback = userCallback;
@@ -1574,6 +1574,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             // whole lifetime of the batch.
             // We don't want to have an NPE here, because the interceptors would not be notified (see .doSend).
             topic = record != null ? record.topic() : null;
+            if (record != null) {
+                headers = record.headers();
+            } else {
+                headers = new RecordHeaders();
+                ((RecordHeaders) headers).setReadOnly();
+            }
             recordPartition = record != null ? record.partition() : null;
             recordLogString = log.isTraceEnabled() && record != null ? record.toString() : "";
         }
@@ -1583,7 +1589,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             if (metadata == null) {
                 metadata = new RecordMetadata(topicPartition(), -1, -1, RecordBatch.NO_TIMESTAMP, -1, -1);
             }
-            this.interceptors.onAcknowledgement(metadata, exception);
+            this.interceptors.onAcknowledgement(metadata, exception, headers);
             if (this.userCallback != null)
                 this.userCallback.onCompletion(metadata, exception);
         }
