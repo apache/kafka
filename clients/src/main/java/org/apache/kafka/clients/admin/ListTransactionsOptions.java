@@ -73,7 +73,7 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
 
     /**
      * Filter only the transactions that match with the given transactional ID pattern.
-     * If no filter is specified or if the passed string is empty,
+     * If the filter is null or if the passed string is empty,
      * then all the transactions will be returned.
      *
      * @param pattern the transactional ID regular expression pattern to filter by

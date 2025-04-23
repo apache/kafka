@@ -315,10 +315,10 @@ public class TransactionsCommandTest {
         };
 
         Map<Integer, Collection<TransactionListing>> transactions = new HashMap<>();
-        transactions.put(0, asList(
+        transactions.put(0, List.of(
             new TransactionListing("bar", 98765L, TransactionState.PREPARE_ABORT)
         ));
-        transactions.put(1, singletonList(
+        transactions.put(1, List.of(
             new TransactionListing("baz", 13579L, TransactionState.COMPLETE_COMMIT)
         ));
 
