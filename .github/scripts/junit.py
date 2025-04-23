@@ -361,7 +361,7 @@ if __name__ == "__main__":
         failure_messages.append(f"Gradle task had a failure exit code. Failing this script.")
 
     if thread_dump_url:
-        failure_messages.append(f"Thread dump available at {thread_dump_url}. Failing this script.")
+        failure_messages.append(f"Thread dump available at {thread_dump_url} and the script will now fail.")
 
     if junit_report_url:
         report_md = f"Download [JUnit HTML report]({junit_report_url})"
