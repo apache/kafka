@@ -17,6 +17,7 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 
 import java.util.Collection;
 import java.util.Collections;
@@ -300,6 +301,8 @@ public class StreamsRebalanceData {
 
     private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
 
+    private final AtomicReference<List<StreamsGroupHeartbeatResponseData.Status>> statuses = new AtomicReference<>(Collections.emptyList());
+
     public StreamsRebalanceData(final UUID processId,
                                 final Optional<HostInfo> endpoint,
                                 final Map<String, Subtopology> subtopologies,
@@ -346,11 +349,24 @@ public class StreamsRebalanceData {
         return partitionsByHost.get();
     }
 
+    /** For the current stream thread to request a shutdown of all applications. */
     public void requestShutdown() {
         shutdownRequested.set(true);
     }
 
+    /** True of the current stream thread requested a shutdown of all applications. */
     public boolean shutdownRequested() {
         return shutdownRequested.get();
     }
+
+    /** Updated whenever the status of the streams group is updated. */
+    public void setStatuses(final List<StreamsGroupHeartbeatResponseData.Status> s) {
+        statuses.set(s);
+    }
+
+    /** For communicating the current status of the group to the stream thread */
+    public List<StreamsGroupHeartbeatResponseData.Status> statuses() {
+        return statuses.get();
+    }
+
 }
