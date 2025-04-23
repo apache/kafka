@@ -304,7 +304,7 @@ public class TransactionsCommandTest {
         assertEquals(expectedRow, table.get(1));
     }
 
-        @Test
+    @Test
     public void testListTransactionsWithTransactionalIdPattern() throws Exception {
         String[] args = new String[] {
             "--bootstrap-server",
