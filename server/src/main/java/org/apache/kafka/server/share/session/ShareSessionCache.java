@@ -27,7 +27,6 @@ import com.yammer.metrics.core.Meter;
 
 import java.util.HashMap;
 import java.util.Map;
-import java.util.TreeMap;
 import java.util.concurrent.TimeUnit;
 
 /**
@@ -53,19 +52,14 @@ public class ShareSessionCache {
     private final Meter evictionsMeter;
 
     private final int maxEntries;
-    private final long evictionMs;
     private long numPartitions = 0;
 
     // A map of session key to ShareSession.
     private final Map<ShareSessionKey, ShareSession> sessions = new HashMap<>();
 
-    // Maps last used times to sessions.
-    private final TreeMap<LastUsedKey, ShareSession> lastUsed = new TreeMap<>();
-
     @SuppressWarnings("this-escape")
-    public ShareSessionCache(int maxEntries, long evictionMs) {
+    public ShareSessionCache(int maxEntries) {
         this.maxEntries = maxEntries;
-        this.evictionMs = evictionMs;
         // Register metrics for ShareSessionCache.
         KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.server", "ShareSessionCache");
         metricsGroup.newGauge(SHARE_SESSIONS_COUNT, this::size);
@@ -108,9 +102,6 @@ public class ShareSessionCache {
      * @return The removed session, or None if there was no such session.
      */
     public synchronized ShareSession remove(ShareSession session) {
-        synchronized (session) {
-            lastUsed.remove(session.lastUsedKey());
-        }
         ShareSession removeResult = sessions.remove(session.key());
         if (removeResult != null) {
             numPartitions = numPartitions - session.cachedSize();
@@ -119,64 +110,27 @@ public class ShareSessionCache {
     }
 
     /**
-     * Update a session's position in the lastUsed tree.
+     * Update the size of the cache by updating the total number of share partitions.
      *
      * @param session  The session.
-     * @param now      The current time in milliseconds.
      */
-    public synchronized void touch(ShareSession session, long now) {
-        synchronized (session) {
-            // Update the lastUsed map.
-            lastUsed.remove(session.lastUsedKey());
-            session.lastUsedMs(now);
-            lastUsed.put(session.lastUsedKey(), session);
-
-            int oldSize = session.cachedSize();
-            if (oldSize != -1) {
-                numPartitions = numPartitions - oldSize;
-            }
-            session.cachedSize(session.size());
-            numPartitions = numPartitions + session.cachedSize();
-        }
-    }
-
-    /**
-     * Try to evict an entry from the session cache.
-     * <p>
-     * A proposed new element A may evict an existing element B if:
-     * B is considered "stale" because it has been inactive for a long time.
-     *
-     * @param now        The current time in milliseconds.
-     * @return           True if an entry was evicted; false otherwise.
-     */
-    public synchronized boolean tryEvict(long now) {
-        // Try to evict an entry which is stale.
-        Map.Entry<LastUsedKey, ShareSession> lastUsedEntry = lastUsed.firstEntry();
-        if (lastUsedEntry == null) {
-            return false;
-        } else if (now - lastUsedEntry.getKey().lastUsedMs() > evictionMs) {
-            ShareSession session = lastUsedEntry.getValue();
-            remove(session);
-            evictionsMeter.mark();
-            return true;
-        }
-        return false;
+    public synchronized void updateNumPartitions(ShareSession session) {
+        numPartitions += session.updateCachedSize();
     }
 
     /**
      * Maybe create a new session and add it to the cache.
      * @param groupId - The group id in the share fetch request.
      * @param memberId - The member id in the share fetch request.
-     * @param now - The current time in milliseconds.
      * @param partitionMap - The topic partitions to be added to the session.
      * @return - The session key if the session was created, or null if the session was not created.
      */
-    public synchronized ShareSessionKey maybeCreateSession(String groupId, Uuid memberId, long now, ImplicitLinkedHashCollection<CachedSharePartition> partitionMap) {
-        if (sessions.size() < maxEntries || tryEvict(now)) {
+    public synchronized ShareSessionKey maybeCreateSession(String groupId, Uuid memberId, ImplicitLinkedHashCollection<CachedSharePartition> partitionMap) {
+        if (sessions.size() < maxEntries) {
             ShareSession session = new ShareSession(new ShareSessionKey(groupId, memberId), partitionMap,
-                    now, now, ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH));
+                ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH));
             sessions.put(session.key(), session);
-            touch(session, now);
+            updateNumPartitions(session);
             return session.key();
         }
         return null;
