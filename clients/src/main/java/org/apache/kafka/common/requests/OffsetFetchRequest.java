@@ -162,21 +162,25 @@ public class OffsetFetchRequest extends AbstractRequest {
             }
             if (version >= 10) {
                 data.groups().forEach(group -> {
-                    group.topics().forEach(topic -> {
-                        if (topic.topicId() == null || topic.topicId().equals(Uuid.ZERO_UUID)) {
-                            throw new UnsupportedVersionException("The broker offset fetch api version " +
-                                version + " does require usage of topic ids.");
-                        }
-                    });
+                    if (group.topics() != null) {
+                        group.topics().forEach(topic -> {
+                            if (topic.topicId() == null || topic.topicId().equals(Uuid.ZERO_UUID)) {
+                                throw new UnsupportedVersionException("The broker offset fetch api version " +
+                                    version + " does require usage of topic ids.");
+                            }
+                        });
+                    }
                 });
             } else {
                 data.groups().forEach(group -> {
-                    group.topics().forEach(topic -> {
-                        if (topic.name() == null || topic.name().isEmpty()) {
-                            throw new UnsupportedVersionException("The broker offset fetch api version " +
-                                version + " does require usage of topic names.");
-                        }
-                    });
+                    if (group.topics() != null) {
+                        group.topics().forEach(topic -> {
+                            if (topic.name() == null || topic.name().isEmpty()) {
+                                throw new UnsupportedVersionException("The broker offset fetch api version " +
+                                    version + " does require usage of topic names.");
+                            }
+                        });
+                    }
                 });
             }
             // convert data to use the appropriate version since version 8 uses different format

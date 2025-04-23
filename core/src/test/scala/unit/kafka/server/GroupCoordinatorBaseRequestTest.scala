@@ -24,7 +24,7 @@ import org.apache.kafka.common.message.DeleteGroupsResponseData.{DeletableGroupR
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.LeaveGroupResponseData.MemberResponse
 import org.apache.kafka.common.message.SyncGroupRequestData.SyncGroupRequestAssignment
-import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AddOffsetsToTxnResponseData, ConsumerGroupDescribeRequestData, ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsRequestData, DeleteGroupsResponseData, DescribeGroupsRequestData, DescribeGroupsResponseData, EndTxnRequestData, HeartbeatRequestData, HeartbeatResponseData, InitProducerIdRequestData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchResponseData, ShareGroupDescribeRequestData, ShareGroupDescribeResponseData, ShareGroupHeartbeatRequestData, ShareGroupHeartbeatResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
+import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AddOffsetsToTxnResponseData, ConsumerGroupDescribeRequestData, ConsumerGroupDescribeResponseData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, DeleteGroupsRequestData, DeleteGroupsResponseData, DescribeGroupsRequestData, DescribeGroupsResponseData, EndTxnRequestData, HeartbeatRequestData, HeartbeatResponseData, InitProducerIdRequestData, JoinGroupRequestData, JoinGroupResponseData, LeaveGroupResponseData, ListGroupsRequestData, ListGroupsResponseData, OffsetCommitRequestData, OffsetCommitResponseData, OffsetDeleteRequestData, OffsetDeleteResponseData, OffsetFetchRequestData, OffsetFetchResponseData, ShareGroupDescribeRequestData, ShareGroupDescribeResponseData, ShareGroupHeartbeatRequestData, ShareGroupHeartbeatResponseData, SyncGroupRequestData, SyncGroupResponseData, TxnOffsetCommitRequestData, TxnOffsetCommitResponseData}
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, AddOffsetsToTxnRequest, AddOffsetsToTxnResponse, ConsumerGroupDescribeRequest, ConsumerGroupDescribeResponse, ConsumerGroupHeartbeatRequest, ConsumerGroupHeartbeatResponse, DeleteGroupsRequest, DeleteGroupsResponse, DescribeGroupsRequest, DescribeGroupsResponse, EndTxnRequest, EndTxnResponse, HeartbeatRequest, HeartbeatResponse, InitProducerIdRequest, InitProducerIdResponse, JoinGroupRequest, JoinGroupResponse, LeaveGroupRequest, LeaveGroupResponse, ListGroupsRequest, ListGroupsResponse, OffsetCommitRequest, OffsetCommitResponse, OffsetDeleteRequest, OffsetDeleteResponse, OffsetFetchRequest, OffsetFetchResponse, ShareGroupDescribeRequest, ShareGroupDescribeResponse, ShareGroupHeartbeatRequest, ShareGroupHeartbeatResponse, SyncGroupRequest, SyncGroupResponse, TxnOffsetCommitRequest, TxnOffsetCommitResponse}
 import org.apache.kafka.common.serialization.StringSerializer
@@ -325,19 +325,38 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   }
 
   protected def fetchOffsets(
-    groupId: String,
-    memberId: String,
-    memberEpoch: Int,
-    partitions: List[TopicPartition],
+    groups: List[OffsetFetchRequestData.OffsetFetchRequestGroup],
+    requireStable: Boolean,
+    version: Short
+  ): List[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
+    if (version < 8) {
+      fail(s"OffsetFetch API version $version cannot fetch multiple groups.")
+    }
+
+    val request = new OffsetFetchRequest.Builder(
+      new OffsetFetchRequestData()
+        .setRequireStable(requireStable)
+        .setGroups(groups.asJava),
+      false
+    ).build(version)
+
+    val response = connectAndReceive[OffsetFetchResponse](request)
+
+    // Sort topics and partitions within the response as their order is not guaranteed.
+    response.data.groups.asScala.foreach(sortTopicPartitions)
+
+    response.data.groups.asScala.toList
+  }
+
+  protected def fetchOffsets(
+    group: OffsetFetchRequestData.OffsetFetchRequestGroup,
     requireStable: Boolean,
     version: Short
   ): OffsetFetchResponseData.OffsetFetchResponseGroup = {
     val request = new OffsetFetchRequest.Builder(
-      groupId,
-      memberId,
-      memberEpoch,
-      requireStable,
-      if (partitions == null) null else partitions.asJava,
+      new OffsetFetchRequestData()
+        .setRequireStable(requireStable)
+        .setGroups(List(group).asJava),
       false
     ).build(version)
 
@@ -347,11 +366,11 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     // same format to the caller.
     val groupResponse = if (version >= 8) {
       assertEquals(1, response.data.groups.size)
-      assertEquals(groupId, response.data.groups.get(0).groupId)
+      assertEquals(group.groupId, response.data.groups.get(0).groupId)
       response.data.groups.asScala.head
     } else {
       new OffsetFetchResponseData.OffsetFetchResponseGroup()
-        .setGroupId(groupId)
+        .setGroupId(group.groupId)
         .setErrorCode(response.data.errorCode)
         .setTopics(response.data.topics.asScala.map { topic =>
           new OffsetFetchResponseData.OffsetFetchResponseTopics()
@@ -371,29 +390,6 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
     sortTopicPartitions(groupResponse)
 
     groupResponse
-  }
-
-  protected def fetchOffsets(
-    groups: Map[String, List[TopicPartition]],
-    requireStable: Boolean,
-    version: Short
-  ): List[OffsetFetchResponseData.OffsetFetchResponseGroup] = {
-    if (version < 8) {
-      fail(s"OffsetFetch API version $version cannot fetch multiple groups.")
-    }
-
-    val request = new OffsetFetchRequest.Builder(
-      groups.map { case (k, v) => (k, v.asJava) }.asJava,
-      requireStable,
-      false
-    ).build(version)
-
-    val response = connectAndReceive[OffsetFetchResponse](request)
-
-    // Sort topics and partitions within the response as their order is not guaranteed.
-    response.data.groups.asScala.foreach(sortTopicPartitions)
-
-    response.data.groups.asScala.toList
   }
 
   protected def deleteOffset(
