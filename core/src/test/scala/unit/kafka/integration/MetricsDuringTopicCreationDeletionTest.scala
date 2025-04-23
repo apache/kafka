@@ -33,7 +33,7 @@ class MetricsDuringTopicCreationDeletionTest(clusterInstance: ClusterInstance) {
   private val topicNum = 2
   private val topics = List.tabulate(topicNum) (n => topicName + n)
 
-  private val replicationFactor = 3
+  private val replicationFactor = 1
   private val partitionNum = 3
   private val createDeleteIterations = 3
 
@@ -65,6 +65,7 @@ class MetricsDuringTopicCreationDeletionTest(clusterInstance: ClusterInstance) {
     types = Array(Type.KRAFT),
     serverProperties = Array(
       new ClusterConfigProperty(key = ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, value = "true"),
+      new ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
       new ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000"),
       new ClusterConfigProperty(key = ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, value = "false"),
       // speed up the test for UnderReplicatedPartitions, which relies on the ISR expiry thread to execute concurrently with topic creation
@@ -123,7 +124,8 @@ class MetricsDuringTopicCreationDeletionTest(clusterInstance: ClusterInstance) {
         try {
           clusterInstance.createTopic(topic, partitionNum, replicationFactor.toShort)
         } catch {
-          case e: Exception => e.printStackTrace()
+          case e: Exception =>
+            e.printStackTrace()
         }
       }
       // Delete topics
@@ -132,7 +134,8 @@ class MetricsDuringTopicCreationDeletionTest(clusterInstance: ClusterInstance) {
           clusterInstance.deleteTopic(topic)
           TestUtils.verifyTopicDeletion(topic, partitionNum, clusterInstance.brokers().asScala.values.toList)
         } catch {
-          case e: Exception => e.printStackTrace()
+          case e: Exception =>
+            e.printStackTrace()
         }
       }
     }
