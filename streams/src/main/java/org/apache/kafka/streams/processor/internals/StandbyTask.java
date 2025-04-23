@@ -180,10 +180,6 @@ public class StandbyTask extends AbstractTask implements Task {
      */
     @Override
     public Map<TopicPartition, OffsetAndMetadata> prepareCommit(final boolean clean) {
-        if (!clean) {
-            log.debug("Skipped preparing {} standby task with id {} for commit since the task is getting closed dirty.", state(), id);
-            return null;
-        }
         switch (state()) {
             case CREATED:
                 log.debug("Skipped preparing created task for commit");
@@ -193,7 +189,11 @@ public class StandbyTask extends AbstractTask implements Task {
             case RUNNING:
             case SUSPENDED:
                 // do not need to flush state store caches in pre-commit since nothing would be sent for standby tasks
-                log.debug("Prepared {} task for committing", state());
+                if (!clean) {
+                    log.debug("Skipped preparing {} standby task with id {} for commit since the task is getting closed dirty.", state(), id);
+                } else {
+                    log.debug("Prepared {} task for committing", state());
+                }
 
                 break;
 
@@ -201,7 +201,7 @@ public class StandbyTask extends AbstractTask implements Task {
                 throw new IllegalStateException("Illegal state " + state() + " while preparing standby task " + id + " for committing ");
         }
 
-        return Collections.emptyMap();
+        return clean ? Collections.emptyMap() : null;
     }
 
     @Override
