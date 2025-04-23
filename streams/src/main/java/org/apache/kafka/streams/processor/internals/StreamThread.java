@@ -1082,8 +1082,8 @@ public class StreamThread extends Thread implements ProcessingThread {
     }
 
     public void sendShutdownRequest() {
-      assignmentErrorCode.set(AssignorError.SHUTDOWN_REQUESTED.code());
-      streamsRebalanceData.ifPresent(StreamsRebalanceData::requestShutdown);
+        assignmentErrorCode.set(AssignorError.SHUTDOWN_REQUESTED.code());
+        streamsRebalanceData.ifPresent(StreamsRebalanceData::requestShutdown);
     }
 
     private void handleTaskMigrated(final TaskMigratedException e) {
@@ -1489,7 +1489,7 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     public void handleStreamsRebalanceData() {
         if (streamsRebalanceData.isPresent()) {
-            for (StreamsGroupHeartbeatResponseData.Status status : streamsRebalanceData.get().statuses()) {
+            for (final StreamsGroupHeartbeatResponseData.Status status : streamsRebalanceData.get().statuses()) {
                 if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.SHUTDOWN_APPLICATION.code()) {
                     shutdownErrorHook.run();
                 }

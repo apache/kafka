@@ -115,7 +115,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
     private Properties properties;
 
     private Properties basicProps(final boolean streamsRebalanceProtocolEnabled) {
-        String protocol;
+        final String protocol;
         if (streamsRebalanceProtocolEnabled) {
             protocol = GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault());
         } else {
@@ -155,7 +155,7 @@ public class StreamsUncaughtExceptionHandlerIntegrationTest {
 
     @ParameterizedTest
     @ValueSource(booleans = {false, true})
-    public void shouldShutdownClient(boolean streamsRebalanceProtocolEnabled) throws Exception {
+    public void shouldShutdownClient(final boolean streamsRebalanceProtocolEnabled) throws Exception {
         properties = basicProps(streamsRebalanceProtocolEnabled);
         try (final KafkaStreams kafkaStreams = new KafkaStreams(builder.build(), properties)) {
 
