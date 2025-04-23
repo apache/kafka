@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestGroup;
@@ -158,6 +159,25 @@ public class OffsetFetchRequest extends AbstractRequest {
                         "v7 or newer to enable this feature", version);
                     data.setRequireStable(false);
                 }
+            }
+            if (version >= 10) {
+                data.groups().forEach(group -> {
+                    group.topics().forEach(topic -> {
+                        if (topic.topicId() == null || topic.topicId().equals(Uuid.ZERO_UUID)) {
+                            throw new UnsupportedVersionException("The broker offset fetch api version " +
+                                version + " does require usage of topic ids.");
+                        }
+                    });
+                });
+            } else {
+                data.groups().forEach(group -> {
+                    group.topics().forEach(topic -> {
+                        if (topic.name() == null || topic.name().isEmpty()) {
+                            throw new UnsupportedVersionException("The broker offset fetch api version " +
+                                version + " does require usage of topic names.");
+                        }
+                    });
+                });
             }
             // convert data to use the appropriate version since version 8 uses different format
             if (version < 8) {
