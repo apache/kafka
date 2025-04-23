@@ -39,7 +39,7 @@
   // the same as version 8 but can return STALE_MEMBER_EPOCH and UNKNOWN_MEMBER_ID errors when the new consumer group
   // protocol is used.
   //
-  // Version 10 adds support for topic ids (KIP-848).
+  // Version 10 adds support for topic ids and removes support for topic names (KIP-848).
   "validVersions": "1-10",
   "flexibleVersions": "6+",
   // Supported errors:

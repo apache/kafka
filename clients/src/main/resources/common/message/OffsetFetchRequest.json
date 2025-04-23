@@ -39,7 +39,7 @@
   // Version 9 is the first version that can be used with the new consumer group protocol (KIP-848). It adds
   // the MemberId and MemberEpoch fields. Those are filled in and validated when the new consumer protocol is used.
   //
-  // Version 10 adds support for topic ids (KIP-848).
+  // Version 10 adds support for topic ids and removes support for topic names (KIP-848).
   "validVersions": "1-10",
   "flexibleVersions": "6+",
   "latestVersionUnstable": true,
