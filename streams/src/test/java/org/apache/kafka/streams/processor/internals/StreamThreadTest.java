@@ -3630,7 +3630,7 @@ public class StreamThreadTest {
                 HANDLER
             )
         );
-        assertEquals("Named topologies and the CONSUMER protocol cannot be used at the same time.", exception.getMessage());
+        assertEquals("Named topologies and the STREAMS protocol cannot be used at the same time.", exception.getMessage());
     }
 
     @Test
