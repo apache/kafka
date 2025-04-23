@@ -88,7 +88,7 @@ import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.{ClientMetricsManager, SimpleApiVersionManager}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
-import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion, RequestLocal, TransactionVersion}
+import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion, RequestLocal, ShareVersion, TransactionVersion}
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
 import org.apache.kafka.server.share.{CachedSharePartition, ErroneousAndValidPartitionData, SharePartitionKey}
@@ -192,7 +192,7 @@ class KafkaApisTest extends Logging {
       replicaManager = replicaManager,
       groupCoordinator = groupCoordinator,
       txnCoordinator = txnCoordinator,
-      shareCoordinator = Some(shareCoordinator),
+      shareCoordinator = shareCoordinator,
       autoTopicCreationManager = autoTopicCreationManager,
       brokerId = brokerId,
       config = config,
@@ -3948,7 +3948,20 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -3992,10 +4005,7 @@ class KafkaApisTest extends Logging {
 
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     val request = buildRequest(shareFetchRequest)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
     val response = verifyNoThrottling[ShareFetchResponse](request)
     val responseData = response.data()
@@ -4015,7 +4025,20 @@ class KafkaApisTest extends Logging {
   def testHandleShareFetchRequestInvalidRequestOnInitialEpoch(): Unit = {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4072,10 +4095,7 @@ class KafkaApisTest extends Logging {
 
     var shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     var request = buildRequest(shareFetchRequest)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
     var response = verifyNoThrottling[ShareFetchResponse](request)
     var responseData = response.data()
@@ -4117,7 +4137,20 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4171,10 +4204,7 @@ class KafkaApisTest extends Logging {
 
     var shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     var request = buildRequest(shareFetchRequest)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
     var response = verifyNoThrottling[ShareFetchResponse](request)
     var responseData = response.data()
@@ -4221,7 +4251,20 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4250,10 +4293,7 @@ class KafkaApisTest extends Logging {
 
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     val request = buildRequest(shareFetchRequest)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
     val response = verifyNoThrottling[ShareFetchResponse](request)
     val responseData = response.data()
@@ -4266,7 +4306,20 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4324,10 +4377,7 @@ class KafkaApisTest extends Logging {
 
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     val request = buildRequest(shareFetchRequest)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
     val response = verifyNoThrottling[ShareFetchResponse](request)
     val responseData = response.data()
@@ -4340,7 +4390,20 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4385,10 +4448,7 @@ class KafkaApisTest extends Logging {
 
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     val request = buildRequest(shareFetchRequest)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
     val response = verifyNoThrottling[ShareFetchResponse](request)
     val responseData = response.data()
@@ -4401,7 +4461,20 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4438,10 +4511,7 @@ class KafkaApisTest extends Logging {
 
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     val request = buildRequest(shareFetchRequest)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
     val response = verifyNoThrottling[ShareFetchResponse](request)
     val responseData = response.data()
@@ -4462,7 +4532,20 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4506,10 +4589,7 @@ class KafkaApisTest extends Logging {
     var shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     var request = buildRequest(shareFetchRequest)
     // First share fetch request is to establish the share session with the broker.
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
     var response = verifyNoThrottling[ShareFetchResponse](request)
     var responseData = response.data()
@@ -4551,7 +4631,20 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4595,10 +4688,7 @@ class KafkaApisTest extends Logging {
     var shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     var request = buildRequest(shareFetchRequest)
     // First share fetch request is to establish the share session with the broker.
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
     var response = verifyNoThrottling[ShareFetchResponse](request)
     var responseData = response.data()
@@ -4637,7 +4727,20 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.randomUuid()
 
@@ -4738,10 +4841,7 @@ class KafkaApisTest extends Logging {
     var request = buildRequest(shareFetchRequest)
 
     // First share fetch request is to establish the share session with the broker.
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
     var response = verifyNoThrottling[ShareFetchResponse](request)
     var responseData = response.data()
@@ -4850,7 +4950,20 @@ class KafkaApisTest extends Logging {
     val topicName4 = "foo4"
     val topicId4 = Uuid.randomUuid()
 
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName1, 2, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
     addTopicToMetadataCache(topicName3, 1, topicId = topicId3)
@@ -5060,10 +5173,7 @@ class KafkaApisTest extends Logging {
     var shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     var request = buildRequest(shareFetchRequest)
     // First share fetch request is to establish the share session with the broker.
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
     var response = verifyNoThrottling[ShareFetchResponse](request)
     var responseData = response.data()
@@ -5313,7 +5423,20 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
 
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -5401,10 +5524,7 @@ class KafkaApisTest extends Logging {
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     val request = buildRequest(shareFetchRequest)
     // First share fetch request is to establish the share session with the broker.
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     val fetchResult: Map[TopicIdPartition, ShareFetchResponseData.PartitionData] =
       kafkaApis.handleFetchFromShareFetchRequest(
         request,
@@ -5464,7 +5584,20 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
 
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -5540,10 +5673,7 @@ class KafkaApisTest extends Logging {
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     val request = buildRequest(shareFetchRequest)
     // First share fetch request is to establish the share session with the broker.
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     val fetchResult: Map[TopicIdPartition, ShareFetchResponseData.PartitionData] =
       kafkaApis.handleFetchFromShareFetchRequest(
         request,
@@ -5597,7 +5727,20 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
 
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -5668,10 +5811,7 @@ class KafkaApisTest extends Logging {
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     val request = buildRequest(shareFetchRequest)
     // First share fetch request is to establish the share session with the broker.
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     val fetchResult: Map[TopicIdPartition, ShareFetchResponseData.PartitionData] =
       kafkaApis.handleFetchFromShareFetchRequest(
         request,
@@ -5733,7 +5873,20 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid()
     val topicId3 = Uuid.randomUuid()
 
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
     // topicName3 is not in the metadataCache.
@@ -5817,10 +5970,7 @@ class KafkaApisTest extends Logging {
 
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     val request = buildRequest(shareFetchRequest)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     val fetchResult: Map[TopicIdPartition, ShareFetchResponseData.PartitionData] =
       kafkaApis.handleFetchFromShareFetchRequest(
         request,
@@ -5912,7 +6062,20 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.randomUuid()
 
@@ -5987,10 +6150,7 @@ class KafkaApisTest extends Logging {
 
     var shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     var request = buildRequest(shareFetchRequest)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
     var response = verifyNoThrottling[ShareFetchResponse](request)
     var responseData = response.data()
@@ -6047,7 +6207,20 @@ class KafkaApisTest extends Logging {
     val memberId: Uuid = Uuid.randomUuid()
     val groupId = "group"
 
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_0.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
 
     val shareFetchRequestData = new ShareFetchRequestData().
       setGroupId(groupId).
@@ -6070,10 +6243,7 @@ class KafkaApisTest extends Logging {
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     val request = buildRequest(shareFetchRequest)
 
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "false"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
 
     val response = verifyNoThrottling[ShareFetchResponse](request)
@@ -6087,7 +6257,20 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -6121,8 +6304,6 @@ class KafkaApisTest extends Logging {
       .build(ApiKeys.SHARE_ACKNOWLEDGE.latestVersion)
     val request = buildRequest(shareFetchRequest)
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       authorizer = Option(authorizer),
       )
     kafkaApis.handleShareFetchRequest(request)
@@ -6138,7 +6319,20 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -6183,10 +6377,7 @@ class KafkaApisTest extends Logging {
 
     val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
     val request = buildRequest(shareFetchRequest)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareFetchRequest(request)
     val response = verifyNoThrottling[ShareFetchResponse](request)
     val responseData = response.data()
@@ -6208,7 +6399,20 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.randomUuid()
 
@@ -6249,10 +6453,7 @@ class KafkaApisTest extends Logging {
     val shareAcknowledgeRequest = new ShareAcknowledgeRequest.Builder(shareAcknowledgeRequestData)
       .build(ApiKeys.SHARE_ACKNOWLEDGE.latestVersion)
     val request = buildRequest(shareAcknowledgeRequest)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareAcknowledgeRequest(request)
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
     val responseData = response.data()
@@ -6272,7 +6473,20 @@ class KafkaApisTest extends Logging {
     val memberId: Uuid = Uuid.randomUuid()
     val groupId = "group"
 
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_0.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
 
     val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData()
       .setGroupId(groupId)
@@ -6295,10 +6509,7 @@ class KafkaApisTest extends Logging {
     val shareAcknowledgeRequest = new ShareAcknowledgeRequest.Builder(shareAcknowledgeRequestData).build(ApiKeys.SHARE_ACKNOWLEDGE.latestVersion)
     val request = buildRequest(shareAcknowledgeRequest)
 
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "false"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareAcknowledgeRequest(request)
 
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
@@ -6312,7 +6523,20 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -6346,8 +6570,6 @@ class KafkaApisTest extends Logging {
       .build(ApiKeys.SHARE_ACKNOWLEDGE.latestVersion)
     val request = buildRequest(shareAcknowledgeRequest)
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       authorizer = Option(authorizer),
       )
     kafkaApis.handleShareAcknowledgeRequest(request)
@@ -6363,7 +6585,20 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -6396,10 +6631,7 @@ class KafkaApisTest extends Logging {
       .build(ApiKeys.SHARE_ACKNOWLEDGE.latestVersion)
     val request = buildRequest(shareAcknowledgeRequest)
 
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareAcknowledgeRequest(request)
 
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
@@ -6413,7 +6645,20 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -6446,10 +6691,7 @@ class KafkaApisTest extends Logging {
       .build(ApiKeys.SHARE_ACKNOWLEDGE.latestVersion)
     val request = buildRequest(shareAcknowledgeRequest)
 
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareAcknowledgeRequest(request)
 
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
@@ -6463,7 +6705,20 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val groupId: String = "group"
     val memberId: Uuid = Uuid.ZERO_UUID
@@ -6494,10 +6749,7 @@ class KafkaApisTest extends Logging {
     val shareAcknowledgeRequest = new ShareAcknowledgeRequest.Builder(shareAcknowledgeRequestData)
       .build(ApiKeys.SHARE_ACKNOWLEDGE.latestVersion)
     val request = buildRequest(shareAcknowledgeRequest)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareAcknowledgeRequest(request)
 
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
@@ -6519,7 +6771,20 @@ class KafkaApisTest extends Logging {
     val partitionIndex = 0
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex))
     val topicPartition = topicIdPartition.topicPartition
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicPartition.topic, numPartitions = 1, numBrokers = 3, topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -6568,10 +6833,7 @@ class KafkaApisTest extends Logging {
     val shareAcknowledgeRequest = new ShareAcknowledgeRequest.Builder(shareAcknowledgeRequestData)
       .build(ApiKeys.SHARE_ACKNOWLEDGE.latestVersion)
     val request = buildRequest(shareAcknowledgeRequest)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareAcknowledgeRequest(request)
 
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
@@ -6594,7 +6856,20 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.randomUuid()
 
@@ -6630,10 +6905,7 @@ class KafkaApisTest extends Logging {
     val shareAcknowledgeRequest = new ShareAcknowledgeRequest.Builder(shareAcknowledgeRequestData)
       .build(ApiKeys.SHARE_ACKNOWLEDGE.latestVersion)
     val request = buildRequest(shareAcknowledgeRequest)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareAcknowledgeRequest(request)
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
     val responseData = response.data()
@@ -6646,7 +6918,20 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.randomUuid()
 
@@ -6696,10 +6981,7 @@ class KafkaApisTest extends Logging {
     val shareAcknowledgeRequest = new ShareAcknowledgeRequest.Builder(shareAcknowledgeRequestData)
       .build(ApiKeys.SHARE_ACKNOWLEDGE.latestVersion)
     val request = buildRequest(shareAcknowledgeRequest)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareAcknowledgeRequest(request)
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
     val responseData = response.data()
@@ -6718,7 +7000,20 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.randomUuid()
 
@@ -6763,10 +7058,7 @@ class KafkaApisTest extends Logging {
     val shareAcknowledgeRequest = new ShareAcknowledgeRequest.Builder(shareAcknowledgeRequestData)
       .build(ApiKeys.SHARE_ACKNOWLEDGE.latestVersion)
     val request = buildRequest(shareAcknowledgeRequest)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     kafkaApis.handleShareAcknowledgeRequest(request)
     val response = verifyNoThrottling[ShareAcknowledgeResponse](request)
     val responseData = response.data()
@@ -6793,7 +7085,20 @@ class KafkaApisTest extends Logging {
   def testGetAcknowledgeBatchesFromShareFetchRequest(): Unit = {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     val shareFetchRequestData = new ShareFetchRequestData().
       setGroupId("group").
       setMemberId(Uuid.randomUuid().toString).
@@ -6844,10 +7149,7 @@ class KafkaApisTest extends Logging {
     topicNames.put(topicId2, "foo2")
     val erroneous = mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]()
 
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     val acknowledgeBatches = kafkaApis.getAcknowledgeBatchesFromShareFetchRequest(shareFetchRequest, topicNames, erroneous)
 
     assertEquals(4, acknowledgeBatches.size)
@@ -6865,7 +7167,20 @@ class KafkaApisTest extends Logging {
   def testGetAcknowledgeBatchesFromShareFetchRequestError(): Unit = {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     val shareFetchRequestData = new ShareFetchRequestData().
       setGroupId("group").
       setMemberId(Uuid.randomUuid().toString).
@@ -6909,10 +7224,7 @@ class KafkaApisTest extends Logging {
     topicIdNames.put(topicId1, "foo1") // topicId2 is not present in topicIdNames
     val erroneous = mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]()
 
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     val acknowledgeBatches = kafkaApis.getAcknowledgeBatchesFromShareFetchRequest(shareFetchRequest, topicIdNames, erroneous)
     val erroneousTopicIdPartitions = kafkaApis.validateAcknowledgementBatches(acknowledgeBatches, erroneous)
 
@@ -6931,7 +7243,20 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
 
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData().
       setGroupId("group").
       setMemberId(Uuid.randomUuid().toString).
@@ -6981,10 +7306,7 @@ class KafkaApisTest extends Logging {
     topicNames.put(topicId2, "foo2")
     val erroneous = mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]()
 
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     val acknowledgeBatches = kafkaApis.getAcknowledgeBatchesFromShareAcknowledgeRequest(shareAcknowledgeRequest, topicNames, erroneous)
 
     assertEquals(3, acknowledgeBatches.size)
@@ -7002,7 +7324,20 @@ class KafkaApisTest extends Logging {
   def testGetAcknowledgeBatchesFromShareAcknowledgeRequestError(): Unit = {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData().
       setGroupId("group").
       setMemberId(Uuid.randomUuid().toString).
@@ -7047,10 +7382,7 @@ class KafkaApisTest extends Logging {
     topicIdNames.put(topicId1, "foo1") // topicId2 not present in topicIdNames
     val erroneous = mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]()
 
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     val acknowledgeBatches = kafkaApis.getAcknowledgeBatchesFromShareAcknowledgeRequest(shareAcknowledgeRequest, topicIdNames, erroneous)
     val erroneousTopicIdPartitions = kafkaApis.validateAcknowledgementBatches(acknowledgeBatches, erroneous)
 
@@ -7077,7 +7409,20 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid()
     val memberId = Uuid.randomUuid()
 
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -7118,10 +7463,7 @@ class KafkaApisTest extends Logging {
 
     val erroneous = mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]()
 
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     val ackResult = kafkaApis.handleAcknowledgements(
       acknowledgementData,
       erroneous,
@@ -7155,7 +7497,20 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid()
     val memberId = Uuid.randomUuid()
 
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -7196,10 +7551,7 @@ class KafkaApisTest extends Logging {
 
     val erroneous = mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]()
 
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     val ackResult = kafkaApis.handleAcknowledgements(
       acknowledgementData,
       erroneous,
@@ -7233,7 +7585,20 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid()
     val memberId = Uuid.randomUuid()
 
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     // Topic with id topicId1 is not present in Metadata Cache
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -7275,10 +7640,7 @@ class KafkaApisTest extends Logging {
 
     val erroneous = mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData]()
 
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     val ackResult = kafkaApis.handleAcknowledgements(
       acknowledgementData,
       erroneous,
@@ -7312,7 +7674,20 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid()
     val memberId = Uuid.randomUuid()
 
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -7348,10 +7723,7 @@ class KafkaApisTest extends Logging {
 
     erroneous += (tp3 -> ShareAcknowledgeResponse.partitionResponse(tp3, Errors.UNKNOWN_TOPIC_ID))
 
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    kafkaApis = createKafkaApis()
     val ackResult = kafkaApis.handleAcknowledgements(
       acknowledgementData,
       erroneous,
@@ -7383,7 +7755,20 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
 
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     val responseAcknowledgeData: mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData] = mutable.Map()
     responseAcknowledgeData += (new TopicIdPartition(topicId1, new TopicPartition("foo", 0)) ->
       new ShareAcknowledgeResponseData.PartitionData().setPartitionIndex(0).setErrorCode(Errors.NONE.code))
@@ -7445,9 +7830,7 @@ class KafkaApisTest extends Logging {
       .build(ApiKeys.SHARE_ACKNOWLEDGE.latestVersion)
     val request = buildRequest(shareAcknowledgeRequest)
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(
-        ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-      )
+    )
     val response = kafkaApis.processShareAcknowledgeResponse(responseAcknowledgeData, request)
     val responseData = response.data()
     val topicResponses = responseData.responses()
@@ -10731,8 +11114,10 @@ class KafkaApisTest extends Logging {
     val shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequestData().setGroupId("group")
 
     val requestChannelRequest = buildRequest(new ShareGroupHeartbeatRequest.Builder(shareGroupHeartbeatRequest).build())
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis()
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    kafkaApis = createKafkaApis(
+      featureVersions = Seq(ShareVersion.SV_0)
+    )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val expectedHeartbeatResponse = new ShareGroupHeartbeatResponseData()
@@ -10752,10 +11137,21 @@ class KafkaApisTest extends Logging {
       requestChannelRequest.context,
       shareGroupHeartbeatRequest
     )).thenReturn(future)
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-    )
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
+    kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val shareGroupHeartbeatResponse = new ShareGroupHeartbeatResponseData()
@@ -10775,9 +11171,21 @@ class KafkaApisTest extends Logging {
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       authorizer = Some(authorizer),
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
@@ -10788,7 +11196,20 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testShareGroupHeartbeatRequestTopicAuthorizationFailed(): Unit = {
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     val groupId = "group"
     val fooTopicName = "foo"
     val barTopicName = "bar"
@@ -10817,7 +11238,6 @@ class KafkaApisTest extends Logging {
     }
 
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       authorizer = Some(authorizer),
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
@@ -10837,10 +11257,21 @@ class KafkaApisTest extends Logging {
       requestChannelRequest.context,
       shareGroupHeartbeatRequest
     )).thenReturn(future)
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-    )
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
+    kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     future.completeExceptionally(Errors.FENCED_MEMBER_EPOCH.exception)
@@ -10879,8 +11310,7 @@ class KafkaApisTest extends Logging {
       new ShareGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(1)).setMembers(List(member1).asJava),
       new ShareGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(2)).setMembers(List(member2).asJava)
     ).asJava
-    getShareGroupDescribeResponse(groupIds, Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true")
-      , true, null, describedGroups)
+    getShareGroupDescribeResponse(groupIds, enableShareGroups = true, verifyNoErr = true, null, describedGroups)
   }
 
   @Test
@@ -10890,7 +11320,7 @@ class KafkaApisTest extends Logging {
       new ShareGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(0)),
       new ShareGroupDescribeResponseData.DescribedGroup().setGroupId(groupIds.get(1))
     ).asJava
-    val response = getShareGroupDescribeResponse(groupIds, Map.empty, false, null, describedGroups)
+    val response = getShareGroupDescribeResponse(groupIds, enableShareGroups = false, verifyNoErr = false, null, describedGroups)
     assertNotNull(response.data)
     assertEquals(2, response.data.groups.size)
     response.data.groups.forEach(group => assertEquals(Errors.UNSUPPORTED_VERSION.code(), group.errorCode()))
@@ -10903,8 +11333,7 @@ class KafkaApisTest extends Logging {
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
-    val response = getShareGroupDescribeResponse(groupIds, Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true")
-      , false, authorizer, describedGroups)
+    val response = getShareGroupDescribeResponse(groupIds, enableShareGroups = true, verifyNoErr = false, authorizer, describedGroups)
     assertNotNull(response.data)
     assertEquals(2, response.data.groups.size)
     response.data.groups.forEach(group => assertEquals(Errors.GROUP_AUTHORIZATION_FAILED.code(), group.errorCode()))
@@ -10921,8 +11350,7 @@ class KafkaApisTest extends Logging {
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava, Seq(AuthorizationResult.ALLOWED).asJava)
 
-    val response = getShareGroupDescribeResponse(groupIds, Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true")
-      , false, authorizer, describedGroups)
+    val response = getShareGroupDescribeResponse(groupIds, enableShareGroups = true, verifyNoErr = false, authorizer, describedGroups)
 
     assertNotNull(response.data)
     assertEquals(2, response.data.groups.size)
@@ -10985,8 +11413,7 @@ class KafkaApisTest extends Logging {
         .setGroupId(groupIds.get(2))
         .setMembers(List(member2).asJava)).asJava
 
-    val response = getShareGroupDescribeResponse(groupIds, Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true")
-      , false, authorizer, describedGroups)
+    val response = getShareGroupDescribeResponse(groupIds, enableShareGroups = true, verifyNoErr = false, authorizer, describedGroups)
 
     assertNotNull(response.data)
     assertEquals(3, response.data.groups.size)
@@ -11032,13 +11459,9 @@ class KafkaApisTest extends Logging {
         ).asJava)
     ).asJava
 
-    val config = Map(
-      ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
-    )
-
     val response = getReadShareGroupStateResponse(
       readRequestData,
-      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
+      ShareCoordinatorTestConfig.testConfigMap().asScala,
       verifyNoErr = true,
       null,
       readStateResultData
@@ -11087,13 +11510,9 @@ class KafkaApisTest extends Logging {
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava, Seq(AuthorizationResult.ALLOWED).asJava)
 
-    val config = Map(
-      ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
-    )
-
     val response = getReadShareGroupStateResponse(
       readRequestData,
-      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
+      ShareCoordinatorTestConfig.testConfigMap().asScala,
       verifyNoErr = false,
       authorizer,
       readStateResultData
@@ -11135,13 +11554,9 @@ class KafkaApisTest extends Logging {
         ).asJava)
     ).asJava
 
-    val config = Map(
-      ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
-    )
-
     val response = getReadShareGroupStateSummaryResponse(
       readSummaryRequestData,
-      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
+      ShareCoordinatorTestConfig.testConfigMap().asScala,
       verifyNoErr = true,
       null,
       readStateSummaryResultData
@@ -11183,13 +11598,9 @@ class KafkaApisTest extends Logging {
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava, Seq(AuthorizationResult.ALLOWED).asJava)
 
-    val config = Map(
-      ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
-    )
-
     val response = getReadShareGroupStateSummaryResponse(
       readSummaryRequestData,
-      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
+      ShareCoordinatorTestConfig.testConfigMap().asScala,
       verifyNoErr = false,
       authorizer,
       readStateSummaryResultData
@@ -11233,9 +11644,21 @@ class KafkaApisTest extends Logging {
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(util.List.of(AuthorizationResult.DENIED))
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       authorizer = Some(authorizer),
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
@@ -11261,9 +11684,21 @@ class KafkaApisTest extends Logging {
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(util.List.of(AuthorizationResult.DENIED))
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       authorizer = Some(authorizer),
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
@@ -11286,7 +11721,20 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid
     val topicName3 = "topic-3"
     val topicId3 = Uuid.randomUuid
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 1, topicId = topicId2)
     addTopicToMetadataCache(topicName3, 1, topicId = topicId3)
@@ -11319,9 +11767,7 @@ class KafkaApisTest extends Logging {
       requestChannelRequest.context,
       describeShareGroupOffsetsRequestGroup2
     )).thenReturn(futureGroup2)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-    )
+    kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val describeShareGroupOffsetsResponseGroup1 = new DescribeShareGroupOffsetsResponseGroup()
@@ -11402,7 +11848,20 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid
     val topicName3 = "topic-3"
     val topicId3 = Uuid.randomUuid
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 1, topicId = topicId2)
     addTopicToMetadataCache(topicName3, 1, topicId = topicId3)
@@ -11463,7 +11922,6 @@ class KafkaApisTest extends Logging {
       }.asJava
     }
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       authorizer = Some(authorizer)
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
@@ -11580,7 +12038,20 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid
     val topicName3 = "topic-3"
     val topicId3 = Uuid.randomUuid
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 1, topicId = topicId2)
     addTopicToMetadataCache(topicName3, 1, topicId = topicId3)
@@ -11625,7 +12096,6 @@ class KafkaApisTest extends Logging {
       }.asJava
     }
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       authorizer = Some(authorizer)
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
@@ -11742,7 +12212,20 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid
     val topicName3 = "topic-3"
     val topicId3 = Uuid.randomUuid
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 1, topicId = topicId2)
     addTopicToMetadataCache(topicName3, 1, topicId = topicId3)
@@ -11766,9 +12249,7 @@ class KafkaApisTest extends Logging {
       requestChannelRequest.context,
       describeShareGroupOffsetsRequestGroup2
     )).thenReturn(futureGroup2)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-    )
+    kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val describeShareGroupOffsetsResponseGroup1 = new DescribeShareGroupOffsetsResponseGroup()
@@ -11843,16 +12324,27 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testDescribeShareGroupOffsetsRequestEmptyGroupsSuccess(): Unit = {
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
 
     val describeShareGroupOffsetsRequest = new DescribeShareGroupOffsetsRequestData
 
     val requestChannelRequest = buildRequest(new DescribeShareGroupOffsetsRequest.Builder(describeShareGroupOffsetsRequest).build)
 
     val future = new CompletableFuture[DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup]
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-    )
+    kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val describeShareGroupOffsetsResponseGroup = new DescribeShareGroupOffsetsResponseGroup()
@@ -11866,7 +12358,20 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testDescribeShareGroupOffsetsRequestEmptyTopicsSuccess(): Unit = {
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
 
     val describeShareGroupOffsetsRequestGroup = new DescribeShareGroupOffsetsRequestGroup().setGroupId("group")
 
@@ -11879,9 +12384,7 @@ class KafkaApisTest extends Logging {
       requestChannelRequest.context,
       describeShareGroupOffsetsRequestGroup
     )).thenReturn(future)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-    )
+    kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val describeShareGroupOffsetsResponseGroup = new DescribeShareGroupOffsetsResponseGroup()
@@ -11921,9 +12424,21 @@ class KafkaApisTest extends Logging {
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(util.List.of(AuthorizationResult.DENIED))
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       authorizer = Some(authorizer),
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
@@ -11953,7 +12468,20 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid
     val topicName2 = "topic-2"
     val topicId2 = Uuid.randomUuid
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName1, 2, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -11990,7 +12518,6 @@ class KafkaApisTest extends Logging {
       .thenReturn(util.List.of(AuthorizationResult.ALLOWED))
 
     kafkaApis = createKafkaApis(
-      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
       authorizer = Some(authorizer)
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
@@ -12053,7 +12580,20 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid
     val topicName3 = "topic-3"
     val topicId3 = Uuid.randomUuid
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
     addTopicToMetadataCache(topicName3, 3, topicId = topicId3)
@@ -12082,9 +12622,7 @@ class KafkaApisTest extends Logging {
       deleteShareGroupOffsetsRequestData
     )).thenReturn(resultFuture)
 
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-    )
+    kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val deleteShareGroupOffsetsResponseData = new DeleteShareGroupOffsetsResponseData()
@@ -12143,7 +12681,20 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid
     val topicName2 = "topic-2"
     val topicId2 = Uuid.randomUuid
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -12166,9 +12717,7 @@ class KafkaApisTest extends Logging {
       deleteShareGroupOffsetsRequestData
     )).thenReturn(CompletableFuture.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception))
 
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-    )
+    kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val deleteShareGroupOffsetsResponseData = new DeleteShareGroupOffsetsResponseData()
@@ -12185,7 +12734,20 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid
     val topicName2 = "topic-2"
     val topicId2 = Uuid.randomUuid
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -12212,9 +12774,7 @@ class KafkaApisTest extends Logging {
       deleteShareGroupOffsetsRequestData
     )).thenReturn(CompletableFuture.completedFuture(groupCoordinatorResponse))
 
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-    )
+    kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val deleteShareGroupOffsetsResponseData = new DeleteShareGroupOffsetsResponseData()
@@ -12227,7 +12787,20 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testDeleteShareGroupOffsetsRequestEmptyTopicsSuccess(): Unit = {
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
 
     val deleteShareGroupOffsetsRequest = new DeleteShareGroupOffsetsRequestData()
       .setGroupId("group")
@@ -12235,9 +12808,7 @@ class KafkaApisTest extends Logging {
     val requestChannelRequest = buildRequest(new DeleteShareGroupOffsetsRequest.Builder(deleteShareGroupOffsetsRequest).build)
 
     val resultFuture = new CompletableFuture[DeleteShareGroupOffsetsResponseData]
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true"),
-    )
+    kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val deleteShareGroupOffsetsResponse = new DeleteShareGroupOffsetsResponseData()
@@ -12282,13 +12853,9 @@ class KafkaApisTest extends Logging {
         ).asJava)
     ).asJava
 
-    val config = Map(
-      ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
-    )
-
     val response = getWriteShareGroupStateResponse(
       writeRequestData,
-      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
+      ShareCoordinatorTestConfig.testConfigMap().asScala,
       verifyNoErr = true,
       null,
       writeStateResultData
@@ -12333,17 +12900,13 @@ class KafkaApisTest extends Logging {
         ).asJava)
     ).asJava
 
-    val config = Map(
-      ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
-    )
-
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava, Seq(AuthorizationResult.ALLOWED).asJava)
 
     val response = getWriteShareGroupStateResponse(
       writeRequestData,
-      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
+      ShareCoordinatorTestConfig.testConfigMap().asScala,
       verifyNoErr = false,
       authorizer,
       writeStateResultData
@@ -12382,13 +12945,9 @@ class KafkaApisTest extends Logging {
         ).asJava)
     ).asJava
 
-    val config = Map(
-      ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
-    )
-
     val response = getDeleteShareGroupStateResponse(
       deleteRequestData,
-      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
+      ShareCoordinatorTestConfig.testConfigMap().asScala,
       verifyNoErr = true,
       null,
       deleteStateResultData
@@ -12427,13 +12986,9 @@ class KafkaApisTest extends Logging {
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava, Seq(AuthorizationResult.ALLOWED).asJava)
 
-    val config = Map(
-      ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
-    )
-
     val response = getDeleteShareGroupStateResponse(
       deleteRequestData,
-      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
+      ShareCoordinatorTestConfig.testConfigMap().asScala,
       verifyNoErr = false,
       authorizer,
       deleteStateResultData
@@ -12473,13 +13028,9 @@ class KafkaApisTest extends Logging {
         ).asJava)
     ).asJava
 
-    val config = Map(
-      ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
-    )
-
     val response = getInitializeShareGroupStateResponse(
       initRequestData,
-      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
+      ShareCoordinatorTestConfig.testConfigMap().asScala,
       verifyNoErr = true,
       null,
       initStateResultData
@@ -12519,13 +13070,9 @@ class KafkaApisTest extends Logging {
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava, Seq(AuthorizationResult.ALLOWED).asJava)
 
-    val config = Map(
-      ShareGroupConfig.SHARE_GROUP_ENABLE_CONFIG -> "true",
-    )
-
     val response = getInitializeShareGroupStateResponse(
       initRequestData,
-      config ++ ShareCoordinatorTestConfig.testConfigMap().asScala,
+      ShareCoordinatorTestConfig.testConfigMap().asScala,
       verifyNoErr = false,
       authorizer,
       initStateResultData
@@ -12539,7 +13086,7 @@ class KafkaApisTest extends Logging {
     })
   }
 
-  def getShareGroupDescribeResponse(groupIds: util.List[String], configOverrides: Map[String, String] = Map.empty,
+  def getShareGroupDescribeResponse(groupIds: util.List[String], enableShareGroups: Boolean = true,
                                     verifyNoErr: Boolean = true, authorizer: Authorizer = null,
                                     describedGroups: util.List[ShareGroupDescribeResponseData.DescribedGroup]): ShareGroupDescribeResponse = {
     val shareGroupDescribeRequestData = new ShareGroupDescribeRequestData()
@@ -12551,9 +13098,28 @@ class KafkaApisTest extends Logging {
       any[RequestContext],
       any[util.List[String]]
     )).thenReturn(future)
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      if (enableShareGroups) {
+        delta.replay(new FeatureLevelRecord()
+          .setName(ShareVersion.FEATURE_NAME)
+          .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+        )
+      } else {
+        delta.replay(new FeatureLevelRecord()
+          .setName(ShareVersion.FEATURE_NAME)
+          .setFeatureLevel(ShareVersion.SV_0.featureLevel())
+        )
+      }
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     kafkaApis = createKafkaApis(
-      overrideProperties = configOverrides,
       authorizer = Option(authorizer),
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
@@ -12579,7 +13145,20 @@ class KafkaApisTest extends Logging {
       any[RequestContext],
       any[ReadShareGroupStateRequestData]
     )).thenReturn(future)
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     kafkaApis = createKafkaApis(
       overrideProperties = configOverrides,
       authorizer = Option(authorizer),
@@ -12608,7 +13187,20 @@ class KafkaApisTest extends Logging {
       any[RequestContext],
       any[ReadShareGroupStateSummaryRequestData]
     )).thenReturn(future)
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     kafkaApis = createKafkaApis(
       overrideProperties = configOverrides,
       authorizer = Option(authorizer),
@@ -12637,7 +13229,20 @@ class KafkaApisTest extends Logging {
       any[RequestContext],
       any[WriteShareGroupStateRequestData]
     )).thenReturn(future)
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     kafkaApis = createKafkaApis(
       overrideProperties = configOverrides,
       authorizer = Option(authorizer),
@@ -12666,7 +13271,20 @@ class KafkaApisTest extends Logging {
       any[RequestContext],
       any[DeleteShareGroupStateRequestData]
     )).thenReturn(future)
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     kafkaApis = createKafkaApis(
       overrideProperties = configOverrides,
       authorizer = Option(authorizer),
@@ -12695,7 +13313,20 @@ class KafkaApisTest extends Logging {
       any[RequestContext],
       any[InitializeShareGroupStateRequestData]
     )).thenReturn(future)
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = {
+      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+      val delta = new MetadataDelta(MetadataImage.EMPTY);
+      delta.replay(new FeatureLevelRecord()
+        .setName(MetadataVersion.FEATURE_NAME)
+        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+      )
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+      cache
+    }
     kafkaApis = createKafkaApis(
       overrideProperties = configOverrides,
       authorizer = Option(authorizer),
