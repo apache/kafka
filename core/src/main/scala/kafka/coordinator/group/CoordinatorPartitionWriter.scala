@@ -107,7 +107,7 @@ class CoordinatorPartitionWriter(
     transactionalId: String,
     producerId: Long,
     producerEpoch: Short,
-    apiVersion: Short
+    apiVersion: Int
   ): CompletableFuture[VerificationGuard] = {
     val transactionSupportedOperation = AddPartitionsToTxnManager.txnOffsetCommitRequestVersionToTransactionSupportedOperation(apiVersion)
     val future = new CompletableFuture[VerificationGuard]()
