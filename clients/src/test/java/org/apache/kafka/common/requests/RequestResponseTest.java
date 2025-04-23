@@ -329,6 +329,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 // This class performs tests requests and responses for all API keys
 public class RequestResponseTest {
 
+    private static final Uuid TOPIC_ID = Uuid.randomUuid();
+
     // Exception includes a message that we verify is not included in error responses
     private final UnknownServerException unknownServerException = new UnknownServerException("secret");
 
@@ -2401,7 +2403,7 @@ public class RequestResponseTest {
     }
 
     private OffsetCommitRequest createOffsetCommitRequest(short version) {
-        return new OffsetCommitRequest.Builder(new OffsetCommitRequestData()
+        return OffsetCommitRequest.Builder.forTopicNames(new OffsetCommitRequestData()
                 .setGroupId("group1")
                 .setMemberId("consumer1")
                 .setGroupInstanceId(null)
@@ -2409,6 +2411,7 @@ public class RequestResponseTest {
                 .setTopics(singletonList(
                         new OffsetCommitRequestData.OffsetCommitRequestTopic()
                                 .setName("test")
+                                .setTopicId(TOPIC_ID)
                                 .setPartitions(asList(
                                         new OffsetCommitRequestData.OffsetCommitRequestPartition()
                                                 .setPartitionIndex(0)
@@ -2430,6 +2433,7 @@ public class RequestResponseTest {
                 .setTopics(singletonList(
                         new OffsetCommitResponseData.OffsetCommitResponseTopic()
                                 .setName("test")
+                                .setTopicId(TOPIC_ID)
                                 .setPartitions(singletonList(
                                         new OffsetCommitResponseData.OffsetCommitResponsePartition()
                                                 .setPartitionIndex(0)

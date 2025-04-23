@@ -727,7 +727,7 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
                 lastEpochSentOnCommit = Optional.empty();
             }
 
-            OffsetCommitRequest.Builder builder = new OffsetCommitRequest.Builder(data);
+            OffsetCommitRequest.Builder builder = OffsetCommitRequest.Builder.forTopicNames(data);
 
             return buildRequestWithResponseHandling(builder);
         }

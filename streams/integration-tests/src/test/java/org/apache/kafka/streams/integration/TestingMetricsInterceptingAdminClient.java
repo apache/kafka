@@ -296,6 +296,7 @@ public class TestingMetricsInterceptingAdminClient extends AdminClient {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public ListConsumerGroupsResult listConsumerGroups(final ListConsumerGroupsOptions options) {
         return adminDelegate.listConsumerGroups(options);
     }

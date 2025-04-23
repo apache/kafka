@@ -3268,6 +3268,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testListConsumerGroups() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(4, 0),
                 AdminClientConfig.RETRIES_CONFIG, "2")) {
@@ -3377,6 +3378,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testListConsumerGroupsMetadataFailure() throws Exception {
         final Cluster cluster = mockCluster(3, 0);
         final Time time = new MockTime();
@@ -3400,6 +3402,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testListConsumerGroupsWithStates() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -3433,6 +3436,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testListConsumerGroupsWithTypes() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -3495,6 +3499,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testListConsumerGroupsWithStatesOlderBrokerVersion() throws Exception {
         ApiVersion listGroupV3 = new ApiVersion()
                 .setApiKey(ApiKeys.LIST_GROUPS.id)
@@ -3533,6 +3538,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testListConsumerGroupsWithTypesOlderBrokerVersion() throws Exception {
         ApiVersion listGroupV4 = new ApiVersion()
             .setApiKey(ApiKeys.LIST_GROUPS.id)

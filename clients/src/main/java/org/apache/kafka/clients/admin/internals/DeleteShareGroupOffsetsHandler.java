@@ -93,8 +93,7 @@ public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coor
         return new DeleteShareGroupOffsetsRequest.Builder(
             new DeleteShareGroupOffsetsRequestData()
                 .setGroupId(groupId.idValue)
-                .setTopics(requestTopics),
-            true
+                .setTopics(requestTopics)
         );
     }
 

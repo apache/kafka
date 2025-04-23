@@ -22,6 +22,8 @@ import org.apache.kafka.clients.producer.ProducerInterceptor;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.clients.producer.RecordMetadata;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Headers;
+import org.apache.kafka.common.header.internals.RecordHeaders;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.record.RecordBatch;
@@ -77,7 +79,7 @@ public class ProducerInterceptors<K, V> implements Closeable {
 
     /**
      * This method is called when the record sent to the server has been acknowledged, or when sending the record fails before
-     * it gets sent to the server. This method calls {@link ProducerInterceptor#onAcknowledgement(RecordMetadata, Exception)}
+     * it gets sent to the server. This method calls {@link ProducerInterceptor#onAcknowledgement(RecordMetadata, Exception, Headers)}
      * method for each interceptor.
      *
      * This method does not throw exceptions. Exceptions thrown by any of interceptor methods are caught and ignored.
@@ -85,11 +87,12 @@ public class ProducerInterceptors<K, V> implements Closeable {
      * @param metadata The metadata for the record that was sent (i.e. the partition and offset).
      *                 If an error occurred, metadata will only contain valid topic and maybe partition.
      * @param exception The exception thrown during processing of this record. Null if no error occurred.
+     * @param headers The headers for the record that was sent
      */
-    public void onAcknowledgement(RecordMetadata metadata, Exception exception) {
+    public void onAcknowledgement(RecordMetadata metadata, Exception exception, Headers headers) {
         for (Plugin<ProducerInterceptor<K, V>> interceptorPlugin : this.interceptorPlugins) {
             try {
-                interceptorPlugin.get().onAcknowledgement(metadata, exception);
+                interceptorPlugin.get().onAcknowledgement(metadata, exception, headers);
             } catch (Exception e) {
                 // do not propagate interceptor exceptions, just log
                 log.warn("Error executing interceptor onAcknowledgement callback", e);
@@ -99,7 +102,7 @@ public class ProducerInterceptors<K, V> implements Closeable {
 
     /**
      * This method is called when sending the record fails in {@link ProducerInterceptor#onSend
-     * (ProducerRecord)} method. This method calls {@link ProducerInterceptor#onAcknowledgement(RecordMetadata, Exception)}
+     * (ProducerRecord)} method. This method calls {@link ProducerInterceptor#onAcknowledgement(RecordMetadata, Exception, Headers)}
      * method for each interceptor
      *
      * @param record The record from client
@@ -110,14 +113,22 @@ public class ProducerInterceptors<K, V> implements Closeable {
     public void onSendError(ProducerRecord<K, V> record, TopicPartition interceptTopicPartition, Exception exception) {
         for (Plugin<ProducerInterceptor<K, V>> interceptorPlugin : this.interceptorPlugins) {
             try {
+                Headers headers = record != null ? record.headers() : new RecordHeaders();
+                if (headers instanceof RecordHeaders && !((RecordHeaders) headers).isReadOnly()) {
+                    // make a copy of the headers to make sure we don't change the state of origin record's headers.
+                    // original headers are still writable because client might want to mutate them before retrying.
+                    RecordHeaders recordHeaders = (RecordHeaders) headers;
+                    headers = new RecordHeaders(recordHeaders);
+                    ((RecordHeaders) headers).setReadOnly();
+                }
                 if (record == null && interceptTopicPartition == null) {
-                    interceptorPlugin.get().onAcknowledgement(null, exception);
+                    interceptorPlugin.get().onAcknowledgement(null, exception, headers);
                 } else {
                     if (interceptTopicPartition == null) {
                         interceptTopicPartition = extractTopicPartition(record);
                     }
                     interceptorPlugin.get().onAcknowledgement(new RecordMetadata(interceptTopicPartition, -1, -1,
-                                    RecordBatch.NO_TIMESTAMP, -1, -1), exception);
+                                    RecordBatch.NO_TIMESTAMP, -1, -1), exception, headers);
                 }
             } catch (Exception e) {
                 // do not propagate interceptor exceptions, just log
