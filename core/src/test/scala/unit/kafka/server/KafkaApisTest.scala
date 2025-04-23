@@ -9389,7 +9389,7 @@ class KafkaApisTest extends Logging {
   @Test
   def testListTransactionsAuthorization(): Unit = {
     val authorizer: Authorizer = mock(classOf[Authorizer])
-    val data = new ListTransactionsRequestData().setTransactionalIdPatternFilter("my.*")
+    val data = new ListTransactionsRequestData().setTransactionalIdPattern("my.*")
     val listTransactionsRequest = new ListTransactionsRequest.Builder(data).build()
     val request = buildRequest(listTransactionsRequest)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),

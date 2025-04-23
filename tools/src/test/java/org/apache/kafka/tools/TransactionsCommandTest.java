@@ -207,11 +207,11 @@ public class TransactionsCommandTest {
         }
 
         Map<Integer, Collection<TransactionListing>> transactions = new HashMap<>();
-        transactions.put(0, asList(
+        transactions.put(0, List.of(
             new TransactionListing("foo", 12345L, TransactionState.ONGOING),
             new TransactionListing("bar", 98765L, TransactionState.PREPARE_ABORT)
         ));
-        transactions.put(1, singletonList(
+        transactions.put(1, List.of(
             new TransactionListing("baz", 13579L, TransactionState.COMPLETE_COMMIT)
         ));
 
@@ -310,7 +310,7 @@ public class TransactionsCommandTest {
             "--bootstrap-server",
             "localhost:9092",
             "list",
-            "--transactional-id-pattern-filter",
+            "--transactional-id-pattern",
             "ba.*"
         };
 
@@ -334,8 +334,8 @@ public class TransactionsCommandTest {
         List<String> expectedHeaders = TransactionsCommand.ListTransactionsCommand.HEADERS;
         assertEquals(expectedHeaders, table.get(0));
         Set<List<String>> expectedRows = Set.of(
-            asList("bar", "0", "98765", "PrepareAbort"),
-            asList("baz", "1", "13579", "CompleteCommit")
+            List.of("bar", "0", "98765", "PrepareAbort"),
+            List.of("baz", "1", "13579", "CompleteCommit")
         );
         assertEquals(expectedRows, new HashSet<>(table.subList(1, table.size())));
     }

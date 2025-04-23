@@ -36,6 +36,7 @@ import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
+import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -96,9 +97,9 @@ public class ListTransactionsHandlerTest {
         ListTransactionsOptions options = new ListTransactionsOptions()
             .filterOnTransactionalIdPattern(filteredTransactionalIdPattern);
         ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
-        ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, singleton(brokerKey)).build();
-        assertEquals(filteredTransactionalIdPattern, request.data().transactionalIdPatternFilter());
-        assertEquals(Collections.emptyList(), request.data().stateFilters());
+        ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, Set.of(brokerKey)).build();
+        assertEquals(filteredTransactionalIdPattern, request.data().transactionalIdPattern());
+        assertEquals(List.of(), request.data().stateFilters());
     }
 
     @Test
@@ -109,8 +110,8 @@ public class ListTransactionsHandlerTest {
         ListTransactionsOptions options = new ListTransactionsOptions()
             .filterOnTransactionalIdPattern(filteredTransactionalIdPattern);
         ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
-        ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, singleton(brokerKey)).build();
-        assertNull(request.data().transactionalIdPatternFilter());
+        ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, Set.of(brokerKey)).build();
+        assertNull(request.data().transactionalIdPattern());
     }
 
     @Test
