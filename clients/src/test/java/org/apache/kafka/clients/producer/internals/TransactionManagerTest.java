@@ -200,7 +200,7 @@ public class TransactionManagerTest {
             finalizedFeaturesEpoch));
         finalizedFeaturesEpoch += 1;
         this.transactionManager = new TestableTransactionManager(logContext, transactionalId.orElse(null),
-                transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions);
+                transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions, enable2pc);
 
 
         int batchSize = 16 * 1024;
@@ -1051,7 +1051,7 @@ public class TransactionManagerTest {
                 .setMinVersionLevel((short) 1)),
             0));
         this.transactionManager = new TestableTransactionManager(logContext, transactionalId,
-            transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions);
+            transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions, false);
 
         int batchSize = 16 * 1024;
         int deliveryTimeoutMs = 3000;
@@ -4453,8 +4453,9 @@ public class TransactionManagerTest {
                                           String transactionalId,
                                           int transactionTimeoutMs,
                                           long retryBackoffMs,
-                                          ApiVersions apiVersions) {
-            super(logContext, transactionalId, transactionTimeoutMs, retryBackoffMs, apiVersions);
+                                          ApiVersions apiVersions,
+                                          boolean enable2Pc) {
+            super(logContext, transactionalId, transactionTimeoutMs, retryBackoffMs, apiVersions, enable2Pc);
             this.shouldPoisonStateOnInvalidTransitionOverride = Optional.empty();
         }
 
