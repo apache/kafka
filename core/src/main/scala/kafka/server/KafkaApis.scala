@@ -275,11 +275,21 @@ class KafkaApis(val requestChannel: RequestChannel,
   ): CompletableFuture[Unit] = {
     val offsetCommitRequest = request.body[OffsetCommitRequest]
 
-    // Reject the request if not authorized to the group
+    // Reject the request if not authorized to the group.
     if (!authHelper.authorize(request.context, READ, GROUP, offsetCommitRequest.data.groupId)) {
       requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(Errors.GROUP_AUTHORIZATION_FAILED.exception))
       CompletableFuture.completedFuture[Unit](())
     } else {
+      val useTopicIds = OffsetCommitResponse.useTopicIds(request.header.apiVersion)
+
+      if (useTopicIds) {
+        offsetCommitRequest.data.topics.forEach { topic =>
+          if (topic.topicId != Uuid.ZERO_UUID) {
+            metadataCache.getTopicName(topic.topicId).ifPresent(name => topic.setName(name))
+          }
+        }
+      }
+
       val authorizedTopics = authHelper.filterByAuthorized(
         request.context,
         READ,
@@ -287,28 +297,40 @@ class KafkaApis(val requestChannel: RequestChannel,
         offsetCommitRequest.data.topics.asScala
       )(_.name)
 
-      val responseBuilder = new OffsetCommitResponse.Builder()
+      val responseBuilder = OffsetCommitResponse.newBuilder(useTopicIds)
       val authorizedTopicsRequest = new mutable.ArrayBuffer[OffsetCommitRequestData.OffsetCommitRequestTopic]()
       offsetCommitRequest.data.topics.forEach { topic =>
-        if (!authorizedTopics.contains(topic.name)) {
+        if (useTopicIds && topic.name.isEmpty) {
+          // If the topic name is undefined, it means that the topic id is unknown so we add
+          // the topic and all its partitions to the response with UNKNOWN_TOPIC_ID.
+          responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
+            topic.topicId, topic.name, topic.partitions, _.partitionIndex, Errors.UNKNOWN_TOPIC_ID)
+        } else if (!authorizedTopics.contains(topic.name)) {
           // If the topic is not authorized, we add the topic and all its partitions
           // to the response with TOPIC_AUTHORIZATION_FAILED.
           responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
-            topic.name, topic.partitions, _.partitionIndex, Errors.TOPIC_AUTHORIZATION_FAILED)
+            topic.topicId, topic.name, topic.partitions, _.partitionIndex, Errors.TOPIC_AUTHORIZATION_FAILED)
         } else if (!metadataCache.contains(topic.name)) {
           // If the topic is unknown, we add the topic and all its partitions
           // to the response with UNKNOWN_TOPIC_OR_PARTITION.
           responseBuilder.addPartitions[OffsetCommitRequestData.OffsetCommitRequestPartition](
-            topic.name, topic.partitions, _.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+            topic.topicId, topic.name, topic.partitions, _.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
         } else {
           // Otherwise, we check all partitions to ensure that they all exist.
-          val topicWithValidPartitions = new OffsetCommitRequestData.OffsetCommitRequestTopic().setName(topic.name)
+          val topicWithValidPartitions = new OffsetCommitRequestData.OffsetCommitRequestTopic()
+            .setTopicId(topic.topicId)
+            .setName(topic.name)
 
           topic.partitions.forEach { partition =>
-            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).isPresent()) {
+            if (metadataCache.getLeaderAndIsr(topic.name, partition.partitionIndex).isPresent) {
               topicWithValidPartitions.partitions.add(partition)
             } else {
-              responseBuilder.addPartition(topic.name, partition.partitionIndex, Errors.UNKNOWN_TOPIC_OR_PARTITION)
+              responseBuilder.addPartition(
+                topic.topicId,
+                topic.name,
+                partition.partitionIndex,
+                Errors.UNKNOWN_TOPIC_OR_PARTITION
+              )
             }
           }
 
@@ -322,42 +344,23 @@ class KafkaApis(val requestChannel: RequestChannel,
         requestHelper.sendMaybeThrottle(request, responseBuilder.build())
         CompletableFuture.completedFuture(())
       } else {
-        // For version > 0, store offsets in Coordinator.
-        commitOffsetsToCoordinator(
-          request,
-          offsetCommitRequest,
-          authorizedTopicsRequest,
-          responseBuilder,
-          requestLocal
-        )
-      }
-    }
-  }
-
-  private def commitOffsetsToCoordinator(
-    request: RequestChannel.Request,
-    offsetCommitRequest: OffsetCommitRequest,
-    authorizedTopicsRequest: mutable.ArrayBuffer[OffsetCommitRequestData.OffsetCommitRequestTopic],
-    responseBuilder: OffsetCommitResponse.Builder,
-    requestLocal: RequestLocal
-  ): CompletableFuture[Unit] = {
-    val offsetCommitRequestData = new OffsetCommitRequestData()
-      .setGroupId(offsetCommitRequest.data.groupId)
-      .setMemberId(offsetCommitRequest.data.memberId)
-      .setGenerationIdOrMemberEpoch(offsetCommitRequest.data.generationIdOrMemberEpoch)
-      .setRetentionTimeMs(offsetCommitRequest.data.retentionTimeMs)
-      .setGroupInstanceId(offsetCommitRequest.data.groupInstanceId)
-      .setTopics(authorizedTopicsRequest.asJava)
-
-    groupCoordinator.commitOffsets(
-      request.context,
-      offsetCommitRequestData,
-      requestLocal.bufferSupplier
-    ).handle[Unit] { (results, exception) =>
-      if (exception != null) {
-        requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(exception))
-      } else {
-        requestHelper.sendMaybeThrottle(request, responseBuilder.merge(results).build())
+        groupCoordinator.commitOffsets(
+          request.context,
+          new OffsetCommitRequestData()
+            .setGroupId(offsetCommitRequest.data.groupId)
+            .setMemberId(offsetCommitRequest.data.memberId)
+            .setGenerationIdOrMemberEpoch(offsetCommitRequest.data.generationIdOrMemberEpoch)
+            .setRetentionTimeMs(offsetCommitRequest.data.retentionTimeMs)
+            .setGroupInstanceId(offsetCommitRequest.data.groupInstanceId)
+            .setTopics(authorizedTopicsRequest.asJava),
+          requestLocal.bufferSupplier
+        ).handle[Unit] { (results, exception) =>
+          if (exception != null) {
+            requestHelper.sendMaybeThrottle(request, offsetCommitRequest.getErrorResponse(exception))
+          } else {
+            requestHelper.sendMaybeThrottle(request, responseBuilder.merge(results).build())
+          }
+        }
       }
     }
   }
