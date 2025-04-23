@@ -1309,6 +1309,75 @@ public class OffsetMetadataManagerTest {
     }
 
     @Test
+    public void testConsumerGroupOffsetCommitWithTopicIds() {
+        Uuid topicId = Uuid.randomUuid();
+        OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder().build();
+
+        // Create an empty group.
+        ConsumerGroup group = context.groupMetadataManager.getOrMaybeCreatePersistedConsumerGroup(
+            "foo",
+            true
+        );
+
+        // Add member.
+        group.updateMember(new ConsumerGroupMember.Builder("member")
+            .setMemberEpoch(10)
+            .setPreviousMemberEpoch(10)
+            .build()
+        );
+
+        CoordinatorResult<OffsetCommitResponseData, CoordinatorRecord> result = context.commitOffset(
+            new OffsetCommitRequestData()
+                .setGroupId("foo")
+                .setMemberId("member")
+                .setGenerationIdOrMemberEpoch(10)
+                .setTopics(List.of(
+                    new OffsetCommitRequestData.OffsetCommitRequestTopic()
+                        .setTopicId(topicId)
+                        .setName("bar")
+                        .setPartitions(List.of(
+                            new OffsetCommitRequestData.OffsetCommitRequestPartition()
+                                .setPartitionIndex(0)
+                                .setCommittedOffset(100L)
+                                .setCommittedLeaderEpoch(10)
+                                .setCommittedMetadata("metadata")
+                        ))
+                ))
+        );
+
+        assertEquals(
+            new OffsetCommitResponseData()
+                .setTopics(List.of(
+                    new OffsetCommitResponseData.OffsetCommitResponseTopic()
+                        .setTopicId(topicId)
+                        .setName("bar")
+                        .setPartitions(List.of(
+                            new OffsetCommitResponseData.OffsetCommitResponsePartition()
+                                .setPartitionIndex(0)
+                                .setErrorCode(Errors.NONE.code())
+                        ))
+                )),
+            result.response()
+        );
+
+        assertEquals(
+            List.of(GroupCoordinatorRecordHelpers.newOffsetCommitRecord(
+                "foo",
+                "bar",
+                0,
+                new OffsetAndMetadata(
+                    100L,
+                    OptionalInt.of(10),
+                    "metadata",
+                    context.time.milliseconds(),
+                    OptionalLong.empty()
+                )
+            )),
+            result.records()
+        );
+    }
+
+    @Test
     public void testConsumerGroupOffsetCommitWithOffsetMetadataTooLarge() {
         OffsetMetadataManagerTestContext context = new OffsetMetadataManagerTestContext.Builder()
             .withOffsetMetadataMaxSize(5)

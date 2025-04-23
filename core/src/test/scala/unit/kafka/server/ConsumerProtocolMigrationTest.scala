@@ -690,7 +690,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
 
     val topicName = "foo"
     // Create the topic.
-    createTopic(
+    val topicId = createTopic(
       topic = topicName,
       numPartitions = 3
     )
@@ -702,6 +702,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
       memberId = "member-id",
       memberEpoch = -1,
       topic = topicName,
+      topicId = topicId,
       partition = 0,
       offset = 1000L,
       expectedError = Errors.NONE,
@@ -765,7 +766,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     createOffsetsTopic()
 
     // Create the topic.
-    createTopic(
+    val topicId = createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -865,6 +866,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
           memberId = memberId1,
           memberEpoch = 1,
           topic = "foo",
+          topicId = topicId,
           partition = partitionId,
           offset = 100L + 10 * version + partitionId,
           expectedError = Errors.NONE,
@@ -1096,7 +1098,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
     createOffsetsTopic()
 
     // Create the topic.
-    createTopic(
+    val topicId = createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -1164,6 +1166,7 @@ class ConsumerProtocolMigrationTest(cluster: ClusterInstance) extends GroupCoord
           memberId = memberId1,
           memberEpoch = 1,
           topic = "foo",
+          topicId = topicId,
           partition = partitionId,
           offset = 100L + 10 * version + partitionId,
           expectedError = Errors.NONE,
