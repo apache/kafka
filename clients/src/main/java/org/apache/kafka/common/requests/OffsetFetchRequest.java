@@ -143,6 +143,7 @@ public class OffsetFetchRequest extends AbstractRequest {
             this.throwOnFetchStableOffsetsUnsupported = throwOnFetchStableOffsetsUnsupported;
         }
 
+        @SuppressWarnings("CyclomaticComplexity")
         @Override
         public OffsetFetchRequest build(short version) {
             if (data.groups().size() > 1 && version < 8) {
