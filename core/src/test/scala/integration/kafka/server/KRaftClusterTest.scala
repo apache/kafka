@@ -1619,6 +1619,55 @@ class KRaftClusterTest {
     }
   }
 
+  /**
+   * Test that once a cluster is formatted, a bootstrap.metadata file that contains an unsupported
+   * MetadataVersion is not a problem. This is a regression test for KAFKA-19192.
+   */
+  @Test
+  def testOldBootstrapMetadataFile(): Unit = {
+    val baseDirectory = TestUtils.tempDir().toPath()
+    val cluster = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).
+        setBaseDirectory(baseDirectory).
+          build()).
+      setDeleteOnClose(false).
+        build()
+    try {
+      cluster.format()
+      cluster.startup()
+      cluster.waitForReadyBrokers()
+    } finally {
+      cluster.close()
+    }
+    val oldBootstrapMetadata = BootstrapMetadata.fromRecords(
+      util.Arrays.asList(
+        new ApiMessageAndVersion(
+          new FeatureLevelRecord().
+            setName(MetadataVersion.FEATURE_NAME).
+            setFeatureLevel(1),
+          0.toShort)
+      ),
+      "oldBootstrapMetadata")
+    // Re-create the cluster using the same directory structure as above.
+    // Since we do not need to use the bootstrap metadata, the fact that
+    // it specifies an obsolete metadata.version should not be a problem.
+    val cluster2 = new KafkaClusterTestKit.Builder(
+      new TestKitNodes.Builder().
+        setNumBrokerNodes(1).
+        setNumControllerNodes(1).
+        setBaseDirectory(baseDirectory).
+        setBootstrapMetadata(oldBootstrapMetadata).
+          build()).build()
+    try {
+      cluster2.startup()
+      cluster2.waitForReadyBrokers()
+    } finally {
+      cluster2.close()
+    }
+  }
+
   @Test
   def testIncreaseNumIoThreads(): Unit = {
     val cluster = new KafkaClusterTestKit.Builder(
