@@ -70,6 +70,7 @@ import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
+import org.apache.kafka.clients.producer.PreparedTxnState;
 
 import org.slf4j.Logger;
 
@@ -1952,10 +1953,9 @@ public class TransactionManager {
      *
      * @return a PreparedTxnState with the current producer ID and epoch
      */
-    public KafkaProducer.PreparedTxnState getPreparedTransactionState() {
-        return new KafkaProducer.PreparedTxnState(
-            this.producerIdAndEpoch.producerId,
-            this.producerIdAndEpoch.epoch
+    public PreparedTxnState getPreparedTransactionState() {
+        return new PreparedTxnState(
+            this.producerIdAndEpoch.producerId + ":" + this.producerIdAndEpoch.epoch
         );
     }
 }

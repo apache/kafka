@@ -201,6 +201,18 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     @Override
+    public PreparedTxnState prepareTransaction() throws ProducerFencedException {
+        verifyNotClosed();
+        verifyNotFenced();
+        verifyTransactionsInitialized();
+        verifyTransactionInFlight();
+        
+        // Return a new PreparedTxnState with mock values for producerId and epoch
+        // Using 1000L and (short)1 as arbitrary values for a valid PreparedTxnState
+        return new PreparedTxnState(1000L, (short) 1);
+    }
+
+    @Override
     public void commitTransaction() throws ProducerFencedException {
         verifyNotClosed();
         verifyNotFenced();
