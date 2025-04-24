@@ -64,6 +64,7 @@ import java.util.{Collections, Optional, OptionalLong, Properties}
 import scala.collection.{Seq, mutable}
 import scala.concurrent.duration.{FiniteDuration, MILLISECONDS, SECONDS}
 import scala.jdk.CollectionConverters._
+import scala.util.Using
 
 @Timeout(120)
 @Tag("integration")
@@ -1626,7 +1627,7 @@ class KRaftClusterTest {
   @Test
   def testOldBootstrapMetadataFile(): Unit = {
     val baseDirectory = TestUtils.tempDir().toPath()
-    val cluster = new KafkaClusterTestKit.Builder(
+    Using.resource(new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumBrokerNodes(1).
         setNumControllerNodes(1).
@@ -1634,12 +1635,10 @@ class KRaftClusterTest {
           build()).
       setDeleteOnClose(false).
         build()
-    try {
+    ) { cluster =>
       cluster.format()
       cluster.startup()
       cluster.waitForReadyBrokers()
-    } finally {
-      cluster.close()
     }
     val oldBootstrapMetadata = BootstrapMetadata.fromRecords(
       util.Arrays.asList(
@@ -1653,18 +1652,16 @@ class KRaftClusterTest {
     // Re-create the cluster using the same directory structure as above.
     // Since we do not need to use the bootstrap metadata, the fact that
     // it specifies an obsolete metadata.version should not be a problem.
-    val cluster2 = new KafkaClusterTestKit.Builder(
+    Using.resource(new KafkaClusterTestKit.Builder(
       new TestKitNodes.Builder().
         setNumBrokerNodes(1).
         setNumControllerNodes(1).
         setBaseDirectory(baseDirectory).
         setBootstrapMetadata(oldBootstrapMetadata).
           build()).build()
-    try {
-      cluster2.startup()
-      cluster2.waitForReadyBrokers()
-    } finally {
-      cluster2.close()
+    ) { cluster =>
+      cluster.startup()
+      cluster.waitForReadyBrokers()
     }
   }
 
