@@ -94,8 +94,6 @@ public class ConfigurationControlManagerTest {
     static {
         SYNONYMS.put("abc", List.of(new ConfigSynonym("foo.bar")));
         SYNONYMS.put("def", List.of(new ConfigSynonym("baz")));
-        SYNONYMS.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG,
-            List.of(new ConfigSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)));
         SYNONYMS.put("quuux", List.of(new ConfigSynonym("quux", HOURS_TO_MILLISECONDS)));
         SYNONYMS.put(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG, List.of(new ConfigSynonym(TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG)));
     }
@@ -130,7 +128,7 @@ public class ConfigurationControlManagerTest {
     }
 
     @Test
-    public void testReplay() throws Exception {
+    public void testReplay() {
         ConfigurationControlManager manager = new ConfigurationControlManager.Builder().
             setKafkaConfigSchema(SCHEMA).
             build();
@@ -314,7 +312,7 @@ public class ConfigurationControlManagerTest {
         }
 
         @Override
-        public void close() throws Exception {
+        public void close() {
             // nothing to do
         }
 
@@ -379,7 +377,7 @@ public class ConfigurationControlManagerTest {
         }
 
         @Override
-        public void close() throws Exception {
+        public void close() {
             // empty
         }
 
@@ -491,7 +489,8 @@ public class ConfigurationControlManagerTest {
                 EligibleLeaderReplicasVersion.ELRV_1.featureLevel()),
             Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
                 FeatureUpdate.UpgradeType.UPGRADE),
-            false);
+            false,
+            0);
         assertNotNull(result.response());
         assertEquals(Errors.NONE, result.response().error());
         RecordTestUtils.replayAll(manager, result.records());
@@ -542,7 +541,8 @@ public class ConfigurationControlManagerTest {
                 EligibleLeaderReplicasVersion.ELRV_1.featureLevel()),
             Map.of(EligibleLeaderReplicasVersion.FEATURE_NAME,
                 FeatureUpdate.UpgradeType.UPGRADE),
-            false);
+            false,
+            0);
         assertNotNull(result.response());
         if (isMetadataVersionElrEnabled) {
             assertEquals(Errors.NONE, result.response().error());

@@ -21,7 +21,6 @@ import kafka.server.{AddPartitionsToTxnManager, ReplicaManager}
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch}
-import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter
 import org.apache.kafka.server.ActionQueue
 import org.apache.kafka.server.common.RequestLocal
@@ -108,7 +107,7 @@ class CoordinatorPartitionWriter(
     transactionalId: String,
     producerId: Long,
     producerEpoch: Short,
-    apiVersion: Short
+    apiVersion: Int
   ): CompletableFuture[VerificationGuard] = {
     val transactionSupportedOperation = AddPartitionsToTxnManager.txnOffsetCommitRequestVersionToTransactionSupportedOperation(apiVersion)
     val future = new CompletableFuture[VerificationGuard]()
@@ -139,17 +138,14 @@ class CoordinatorPartitionWriter(
     verificationGuard: VerificationGuard,
     records: MemoryRecords
   ): Long = {
-    var appendResults: Map[TopicPartition, PartitionResponse] = Map.empty
-    replicaManager.appendRecords(
-      timeout = 0L,
+    // We write synchronously to the leader replica without waiting on replication.
+    val appendResults = replicaManager.appendRecordsToLeader(
       requiredAcks = 1,
       internalTopicsAllowed = true,
       origin = AppendOrigin.COORDINATOR,
       entriesPerPartition = Map(tp -> records),
-      responseCallback = results => appendResults = results,
       requestLocal = RequestLocal.noCaching,
       verificationGuards = Map(tp -> verificationGuard),
-      delayedProduceLock = None,
       // We can directly complete the purgatories here because we don't hold
       // any conflicting locks.
       actionQueue = directActionQueue
@@ -163,7 +159,7 @@ class CoordinatorPartitionWriter(
     }
 
     // Required offset.
-    partitionResult.lastOffset + 1
+    partitionResult.info.lastOffset + 1
   }
 
   override def deleteRecords(tp: TopicPartition, deleteBeforeOffset: Long): CompletableFuture[Void] = {

@@ -29,9 +29,8 @@ import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig
 import org.apache.kafka.security.authorizer.AclEntry
-import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.{Tag, Timeout}
+import org.junit.jupiter.api.Timeout
 
 import java.lang.{Byte => JByte}
 import scala.jdk.CollectionConverters._
@@ -40,18 +39,12 @@ import scala.jdk.CollectionConverters._
 @ClusterTestDefaults(types = Array(Type.KRAFT), brokers = 1, serverProperties = Array(
   new ClusterConfigProperty(key = ShareGroupConfig.SHARE_GROUP_PERSISTER_CLASS_NAME_CONFIG, value = "")
 ))
-@Tag("integration")
 class ShareGroupDescribeRequestTest(cluster: ClusterInstance) extends GroupCoordinatorBaseRequestTest(cluster) {
 
-  @ClusterTest(
-    serverProperties = Array(
-      new ClusterConfigProperty(key = ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, value = "true")
-    )
-  )
+  @ClusterTest
   def testShareGroupDescribeIsInAccessibleWhenConfigsDisabled(): Unit = {
     val shareGroupDescribeRequest = new ShareGroupDescribeRequest.Builder(
-      new ShareGroupDescribeRequestData().setGroupIds(List("grp-1", "grp-2").asJava),
-      true
+      new ShareGroupDescribeRequestData().setGroupIds(List("grp-1", "grp-2").asJava)
     ).build(ApiKeys.SHARE_GROUP_DESCRIBE.latestVersion(isUnstableApiEnabled))
 
     val shareGroupDescribeResponse = connectAndReceive[ShareGroupDescribeResponse](shareGroupDescribeRequest)
