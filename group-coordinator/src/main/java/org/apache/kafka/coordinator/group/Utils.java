@@ -16,8 +16,6 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import com.google.re2j.Pattern;
-import com.google.re2j.PatternSyntaxException;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.InvalidRegularExpression;
 import org.apache.kafka.common.errors.InvalidRequestException;
@@ -30,6 +28,9 @@ import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssig
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+
+import com.google.re2j.Pattern;
+import com.google.re2j.PatternSyntaxException;
 
 import java.util.ArrayList;
 import java.util.Collection;
