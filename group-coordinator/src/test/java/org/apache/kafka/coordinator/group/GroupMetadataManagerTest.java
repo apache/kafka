@@ -21154,8 +21154,7 @@ public class GroupMetadataManagerTest {
                 new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
                     .setTopicName(topicName2)
                     .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                    .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message()
-                    )
+                    .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
             ),
             errorTopicResponseList
         );
@@ -21234,7 +21233,15 @@ public class GroupMetadataManagerTest {
         List<DeleteShareGroupStateRequestData.DeleteStateData> result =
             context.groupMetadataManager.sharePartitionsEligibleForOffsetDeletion(groupId, requestData, errorTopicResponseList, records);
 
-        assertTrue(errorTopicResponseList.isEmpty());
+        assertEquals(
+            List.of(
+                new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                    .setTopicName(topicName2)
+                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                    .setErrorMessage("There is no offset information to delete.")
+            ),
+            errorTopicResponseList
+        );
         assertEquals(expectedResult, result);
         assertRecordsEquals(expectedRecords, records);
     }
@@ -21316,10 +21323,13 @@ public class GroupMetadataManagerTest {
         assertEquals(
             List.of(
                 new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                    .setTopicName(topicName2)
+                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                    .setErrorMessage("There is no offset information to delete."),
+                new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
                     .setTopicName(topicName3)
                     .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                    .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message()
-                    )
+                    .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
             ),
             errorTopicResponseList
         );

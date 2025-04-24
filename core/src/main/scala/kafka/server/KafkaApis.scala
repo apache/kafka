@@ -3663,7 +3663,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     if (authorizedTopics.isEmpty) {
-      requestHelper.sendMaybeThrottle(request, new DeleteShareGroupOffsetsResponse(new DeleteShareGroupOffsetsResponseData()))
+      requestHelper.sendMaybeThrottle(
+        request,
+        new DeleteShareGroupOffsetsResponse(
+          new DeleteShareGroupOffsetsResponseData()
+            .setResponses(deleteShareGroupOffsetsResponseTopics)))
       return
     }
 
