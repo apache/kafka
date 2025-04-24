@@ -556,15 +556,14 @@ public class LogCleaner implements BrokerReconfigurable {
             } else {
                 // there's a log, clean it
                 this.lastPreCleanStats = preCleanStats;
-                LogToClean cleanable = null;
+                LogToClean cleanable = ltc.get();
                 try {
-                    cleanable = ltc.get();
                     cleanLog(cleanable);
                     cleaned = true;
                 } catch (ThreadShutdownException e) {
                     throw e;
                 } catch (Exception e) {
-                    throw new LogCleaningException(cleanable != null ? cleanable.log() : null, e.getMessage(), e);
+                    throw new LogCleaningException(cleanable.log(), e.getMessage(), e);
                 }
             }
 
