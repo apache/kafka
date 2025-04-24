@@ -24,9 +24,9 @@ import org.apache.kafka.common.acl.AclBinding;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
-import java.util.Vector;
 import java.util.concurrent.ConcurrentHashMap;
 
 /** FakeLocalMetadataStore is used for MM2's integration test.
@@ -36,7 +36,7 @@ public class FakeLocalMetadataStore {
     private static final Logger log = LoggerFactory.getLogger(FakeLocalMetadataStore.class);
 
     private static final ConcurrentHashMap<String, ConcurrentHashMap<String, String>> ALL_TOPICS = new ConcurrentHashMap<>();
-    private static final ConcurrentHashMap<String, Vector<AclBinding>> ALL_ACLS = new ConcurrentHashMap<>();
+    private static final ConcurrentHashMap<String, List<AclBinding>> ALL_ACLS = new ConcurrentHashMap<>();
 
     /**
      * Add topic to allTopics.
@@ -103,7 +103,7 @@ public class FakeLocalMetadataStore {
      * @return {@link List<AclBinding>}
      */
     public static List<AclBinding> aclBindings(String aclPrinciple) {
-        return FakeLocalMetadataStore.ALL_ACLS.getOrDefault("User:" + aclPrinciple, new Vector<>());
+        return FakeLocalMetadataStore.ALL_ACLS.getOrDefault("User:" + aclPrinciple, new ArrayList<>());
     }
 
     /**
@@ -112,7 +112,7 @@ public class FakeLocalMetadataStore {
      * @param aclBinding {@link AclBinding}
      */
     public static void addACLs(String principal, AclBinding aclBinding) {
-        Vector<AclBinding> aclBindings = FakeLocalMetadataStore.ALL_ACLS.getOrDefault(principal, new Vector<>());
+        List<AclBinding> aclBindings = FakeLocalMetadataStore.ALL_ACLS.getOrDefault(principal, new ArrayList<>());
         aclBindings.add(aclBinding);
         FakeLocalMetadataStore.ALL_ACLS.putIfAbsent(principal, aclBindings);
     }
