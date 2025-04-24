@@ -289,6 +289,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private final Persister persister;
 
     /**
+     * The timer to schedule tasks.
+     */
+    private final Timer timer;
+
+    /**
      * Boolean indicating whether the coordinator is active or not.
      */
     private final AtomicBoolean isActive = new AtomicBoolean(false);
@@ -305,8 +310,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
      */
     private MetadataImage metadataImage = null;
 
-    private Timer timer;
-
     /**
      *
      * @param logContext                The log context.
@@ -314,7 +317,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * @param runtime                   The runtime.
      * @param groupCoordinatorMetrics   The group coordinator metrics.
      * @param groupConfigManager        The group config manager.
-     * @param persister                 The persister
+     * @param persister                 The persister.
+     * @param timer                     The timer.
      */
     GroupCoordinatorService(
         LogContext logContext,
