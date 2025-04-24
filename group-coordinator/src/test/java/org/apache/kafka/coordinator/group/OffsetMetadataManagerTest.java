@@ -1845,7 +1845,7 @@ public class OffsetMetadataManagerTest {
         context.commitOffset("group", "foo", 0, 100L, 1);
         context.commitOffset("group", "bar", 0, 200L, 1);
 
-        List<OffsetFetchRequestData.OffsetFetchRequestTopics> request = Arrays.asList(
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> request = List.of(
             new OffsetFetchRequestData.OffsetFetchRequestTopics()
                 .setName("foo")
                 .setTopicId(fooId)

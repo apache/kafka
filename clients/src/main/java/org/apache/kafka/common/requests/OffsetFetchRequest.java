@@ -42,9 +42,10 @@ import java.util.stream.Collectors;
 public class OffsetFetchRequest extends AbstractRequest {
 
     private static final Logger log = LoggerFactory.getLogger(OffsetFetchRequest.class);
-
     private static final List<OffsetFetchRequestTopic> ALL_TOPIC_PARTITIONS = null;
     private static final List<OffsetFetchRequestTopics> ALL_TOPIC_PARTITIONS_BATCH = null;
+    private static final short LAST_TOPIC_NAME_SUPPORT_VERSION = 9;
+
     private final OffsetFetchRequestData data;
 
     public static class Builder extends AbstractRequest.Builder<OffsetFetchRequest> {
@@ -73,7 +74,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                        List<TopicPartition> partitions,
                        boolean throwOnFetchStableOffsetsUnsupported) {
             // It can only be used with topic names.
-            super(ApiKeys.OFFSET_FETCH, ApiKeys.OFFSET_FETCH.oldestVersion(), (short) 9);
+            super(ApiKeys.OFFSET_FETCH, ApiKeys.OFFSET_FETCH.oldestVersion(), LAST_TOPIC_NAME_SUPPORT_VERSION);
 
             OffsetFetchRequestData.OffsetFetchRequestGroup group =
                 new OffsetFetchRequestData.OffsetFetchRequestGroup()
@@ -106,7 +107,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                        boolean requireStable,
                        boolean throwOnFetchStableOffsetsUnsupported) {
             // It can only be used with topic names.
-            super(ApiKeys.OFFSET_FETCH, ApiKeys.OFFSET_FETCH.oldestVersion(), (short) 9);
+            super(ApiKeys.OFFSET_FETCH, ApiKeys.OFFSET_FETCH.oldestVersion(), LAST_TOPIC_NAME_SUPPORT_VERSION);
 
             List<OffsetFetchRequestGroup> groups = new ArrayList<>();
             for (Entry<String, List<TopicPartition>> entry : groupIdToTopicPartitionMap.entrySet()) {
@@ -161,7 +162,7 @@ public class OffsetFetchRequest extends AbstractRequest {
                     data.setRequireStable(false);
                 }
             }
-            if (version >= 10) {
+            if (version > LAST_TOPIC_NAME_SUPPORT_VERSION) {
                 data.groups().forEach(group -> {
                     if (group.topics() != null) {
                         group.topics().forEach(topic -> {
@@ -385,6 +386,6 @@ public class OffsetFetchRequest extends AbstractRequest {
     }
 
     public static boolean useTopicIds(short version) {
-        return version >= 10;
+        return version > LAST_TOPIC_NAME_SUPPORT_VERSION;
     }
 }
