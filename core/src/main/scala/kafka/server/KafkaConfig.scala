@@ -379,10 +379,6 @@ class KafkaConfig private(doLog: Boolean, val props: util.Map[_, _])
     if (!protocols.contains(GroupType.CLASSIC)) {
       throw new ConfigException(s"Disabling the '${GroupType.CLASSIC}' protocol is not supported.")
     }
-    if (protocols.contains(GroupType.SHARE)) {
-      warn(s"Share groups and the new '${GroupType.SHARE}' rebalance protocol are enabled. " +
-        "This is part of the early access of KIP-932 and MUST NOT be used in production.")
-    }
     if (protocols.contains(GroupType.STREAMS)) {
       warn(s"Streams groups and the new '${GroupType.STREAMS}' rebalance protocol are enabled. " +
         "This is part of the early access of KIP-1071 and MUST NOT be used in production.")
