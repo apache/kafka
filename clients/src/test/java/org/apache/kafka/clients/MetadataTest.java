@@ -32,6 +32,7 @@ import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopi
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.requests.MetadataRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
 import org.apache.kafka.common.requests.RequestTestUtils;
@@ -43,7 +44,6 @@ import org.apache.kafka.test.MockClusterResourceListener;
 import org.junit.jupiter.api.Test;
 
 import java.net.InetSocketAddress;
-import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
@@ -209,8 +209,8 @@ public class MetadataTest {
                 .setBrokers(new MetadataResponseBrokerCollection());
 
         for (short version = ApiKeys.METADATA.oldestVersion(); version < 9; version++) {
-            ByteBuffer buffer = MessageUtil.toByteBufferAccessor(data, version).buffer();
-            MetadataResponse response = MetadataResponse.parse(buffer, version);
+            Readable readable = MessageUtil.toByteBufferAccessor(data, version);
+            MetadataResponse response = MetadataResponse.parse(readable, version);
             assertFalse(response.hasReliableLeaderEpochs());
             metadata.updateWithCurrentRequestVersion(response, false, 100);
             assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());
@@ -219,8 +219,8 @@ public class MetadataTest {
         }
 
         for (short version = 9; version <= ApiKeys.METADATA.latestVersion(); version++) {
-            ByteBuffer buffer = MessageUtil.toByteBufferAccessor(data, version).buffer();
-            MetadataResponse response = MetadataResponse.parse(buffer, version);
+            Readable readable = MessageUtil.toByteBufferAccessor(data, version);
+            MetadataResponse response = MetadataResponse.parse(readable, version);
             assertTrue(response.hasReliableLeaderEpochs());
             metadata.updateWithCurrentRequestVersion(response, false, 100);
             assertTrue(metadata.partitionMetadataIfCurrent(tp).isPresent());

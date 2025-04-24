@@ -1754,12 +1754,12 @@ public class GroupMetadataManager {
                 + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
                 + member.memberEpoch() + "). The member must abandon all its partitions and rejoin.");
         } else if (receivedMemberEpoch < member.memberEpoch()) {
-            // If the member comes with the previous epoch and has a subset of the current assignment partitions,
-            // we accept it because the response with the bumped epoch may have been lost.
+            // If the member comes with the previous epoch, we accept it because the response with the bumped epoch may have been lost.
             if (receivedMemberEpoch != member.previousMemberEpoch()) {
                 throw new FencedMemberEpochException("The share group member has a smaller member "
-                        + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
-                        + member.memberEpoch() + "). The member must abandon all its partitions and rejoin.");
+                    + "epoch (" + receivedMemberEpoch + ") than the one known by the group coordinator ("
+                    + member.memberEpoch() + "), and it does not match the previous member epoch ("
+                    + member.previousMemberEpoch() + "). The member must abandon all its partitions and rejoin.");
             }
         }
     }
