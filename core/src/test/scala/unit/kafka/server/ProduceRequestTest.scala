@@ -188,7 +188,6 @@ class ProduceRequestTest extends BaseRequestTest {
     val produceRequest = ProduceRequest.builder(new ProduceRequestData()
       .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
         new ProduceRequestData.TopicProduceData()
-          .setName("topic")
           .setTopicId(getTopicIds().get("topic").get)
           .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
             .setIndex(partition)
@@ -227,7 +226,6 @@ class ProduceRequestTest extends BaseRequestTest {
     val produceResponse = sendProduceRequest(leader, ProduceRequest.builder(new ProduceRequestData()
       .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
         new ProduceRequestData.TopicProduceData()
-          .setName("topic")
           .setTopicId(topicId)
           .setPartitionData(Collections.singletonList(new ProduceRequestData.PartitionProduceData()
             .setIndex(partition)
@@ -266,7 +264,8 @@ class ProduceRequestTest extends BaseRequestTest {
     val partitionRecords = new ProduceRequestData()
       .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
         new ProduceRequestData.TopicProduceData()
-          .setName("topic").setPartitionData(Collections.singletonList(
+          .setName("topic") // This test case is testing producer v.7, no need to use topic id
+          .setPartitionData(Collections.singletonList(
             new ProduceRequestData.PartitionProduceData()
               .setIndex(partition)
               .setRecords(memoryRecords))))

@@ -243,7 +243,7 @@ class RequestQuotaTest extends BaseRequestTest {
           requests.ProduceRequest.builder(new ProduceRequestData()
             .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
               Collections.singletonList(new ProduceRequestData.TopicProduceData()
-                .setName(tp.topic()).setPartitionData(Collections.singletonList(
+                .setTopicId(getTopicIds().get(tp.topic()).get).setPartitionData(Collections.singletonList(
                 new ProduceRequestData.PartitionProduceData()
                   .setIndex(tp.partition())
                   .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test".getBytes))))))
