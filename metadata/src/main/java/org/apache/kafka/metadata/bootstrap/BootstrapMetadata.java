@@ -85,7 +85,7 @@ public class BootstrapMetadata {
                 metadataVersionLevel = level;
             }
         }
-        if (!metadataVersionLevel.isPresent()) {
+        if (metadataVersionLevel.isEmpty()) {
             throw new RuntimeException("No FeatureLevelRecord for " + MetadataVersion.FEATURE_NAME +
                     " was found in the bootstrap metadata from " + source);
         }
