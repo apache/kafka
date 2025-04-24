@@ -77,7 +77,6 @@ SASL_ENABLED_MECHANISMS="sasl.enabled.mechanisms"
 GROUP_COORDINATOR_REBALANCE_PROTOCOLS="group.coordinator.rebalance.protocols"
 CONSUMER_GROUP_MIGRATION_POLICY = "group.consumer.migration.policy"
 
-UNSTABLE_API_VERSIONS_ENABLE = "unstable.api.versions.enable"
 SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR ="share.coordinator.state.topic.replication.factor"
 SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR = "share.coordinator.state.topic.min.isr"
 SHARE_GROUP_ENABLE = "group.share.enable"

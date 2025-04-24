@@ -369,7 +369,6 @@ subprojects {
 
             // Fix for avoiding inclusion of runtime dependencies marked as 'shadow' in MANIFEST Class-Path.
             // https://github.com/GradleUp/shadow/issues/324
-            afterEvaluate {
               pom.withXml { xml ->
                 def dependenciesNode = xml.asNode().get('dependencies') ?: xml.asNode().appendNode('dependencies')
                 project.configurations.shadowed.allDependencies.each {
@@ -380,7 +379,6 @@ subprojects {
                   dependencyNode.appendNode('scope', 'runtime')
                 }
               }
-            }
           }
 
           afterEvaluate {
