@@ -301,7 +301,7 @@ public class StreamsRebalanceData {
 
     private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
 
-    private final AtomicReference<List<StreamsGroupHeartbeatResponseData.Status>> statuses = new AtomicReference<>(Collections.emptyList());
+    private final AtomicReference<List<StreamsGroupHeartbeatResponseData.Status>> statuses = new AtomicReference<>(List.of());
 
     public StreamsRebalanceData(final UUID processId,
                                 final Optional<HostInfo> endpoint,
