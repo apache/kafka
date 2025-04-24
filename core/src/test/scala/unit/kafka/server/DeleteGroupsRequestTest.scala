@@ -48,7 +48,7 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
     createOffsetsTopic()
 
     // Create the topic.
-    createTopic(
+    val topicId = createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -89,6 +89,7 @@ class DeleteGroupsRequestTest(cluster: ClusterInstance) extends GroupCoordinator
           memberId = memberId,
           memberEpoch = memberEpoch,
           topic = "foo",
+          topicId = topicId,
           partition = 0,
           offset = 100L,
           expectedError = Errors.GROUP_ID_NOT_FOUND,

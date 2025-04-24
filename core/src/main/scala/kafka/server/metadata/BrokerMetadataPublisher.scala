@@ -34,6 +34,7 @@ import org.apache.kafka.image.{MetadataDelta, MetadataImage, TopicDelta}
 import org.apache.kafka.metadata.publisher.AclPublisher
 import org.apache.kafka.server.common.RequestLocal
 import org.apache.kafka.server.fault.FaultHandler
+import org.apache.kafka.storage.internals.log.{LogManager => JLogManager}
 
 import java.util.concurrent.CompletableFuture
 import scala.collection.mutable
@@ -300,7 +301,7 @@ class BrokerMetadataPublisher(
       // recovery-from-unclean-shutdown if required.
       logManager.startup(
         metadataCache.getAllTopics().asScala,
-        isStray = log => LogManager.isStrayKraftReplica(brokerId, newImage.topics(), log)
+        isStray = log => JLogManager.isStrayKraftReplica(brokerId, newImage.topics(), log)
       )
 
       // Rename all future replicas which are in the same directory as the
