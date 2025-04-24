@@ -1433,29 +1433,6 @@ public class GroupMetadataManager {
     }
 
     /**
-     * Validates the ShareGroupHeartbeat request.
-     *
-     * @param request The request to validate.
-     * @throws InvalidRequestException if the request is not valid.
-     * @throws UnsupportedAssignorException if the assignor is not supported.
-     */
-    private void throwIfShareGroupHeartbeatRequestIsInvalid(
-        ShareGroupHeartbeatRequestData request
-    ) throws InvalidRequestException, UnsupportedAssignorException {
-        throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
-        throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
-        throwIfEmptyString(request.rackId(), "RackId can't be empty.");
-
-        if (request.memberEpoch() == 0) {
-            if (request.subscribedTopicNames() == null || request.subscribedTopicNames().isEmpty()) {
-                throw new InvalidRequestException("SubscribedTopicNames must be set in first request.");
-            }
-        } else if (request.memberEpoch() < ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH) {
-            throw new InvalidRequestException("MemberEpoch is invalid.");
-        }
-    }
-
-    /**
      * Validates the request.
      *
      * @param request The request to validate.
@@ -4761,8 +4738,6 @@ public class GroupMetadataManager {
         AuthorizableRequestContext context,
         ShareGroupHeartbeatRequestData request
     ) throws ApiException {
-        throwIfShareGroupHeartbeatRequestIsInvalid(request);
-
         if (request.memberEpoch() == ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH) {
             // -1 means that the member wants to leave the group.
             CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = shareGroupLeave(

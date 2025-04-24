@@ -2826,7 +2826,10 @@ public class GroupCoordinatorServiceTest {
             .build(true);
 
         ShareGroupHeartbeatRequestData request = new ShareGroupHeartbeatRequestData()
-            .setGroupId("foo");
+            .setGroupId("foo")
+            .setMemberId(Uuid.randomUuid().toString())
+            .setMemberEpoch(0)
+            .setSubscribedTopicNames(List.of("foo", "bar"));
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("share-group-heartbeat"),
@@ -2862,7 +2865,10 @@ public class GroupCoordinatorServiceTest {
             .build(true);
 
         ShareGroupHeartbeatRequestData request = new ShareGroupHeartbeatRequestData()
-            .setGroupId("foo");
+            .setGroupId("foo")
+            .setMemberId(Uuid.randomUuid().toString())
+            .setMemberEpoch(0)
+            .setSubscribedTopicNames(List.of("foo", "bar"));
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("share-group-heartbeat"),
@@ -2883,6 +2889,113 @@ public class GroupCoordinatorServiceTest {
             future.get(5, TimeUnit.SECONDS)
         );
     }
+
+    @Test
+    public void testShareGroupHeartbeatRequestValidation() throws ExecutionException, InterruptedException, TimeoutException {
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(mockRuntime())
+            .build(true);
+
+        AuthorizableRequestContext context = mock(AuthorizableRequestContext.class);
+        when(context.requestVersion()).thenReturn((int) ApiKeys.SHARE_GROUP_HEARTBEAT.latestVersion());
+
+        String memberId = Uuid.randomUuid().toString();
+
+        // MemberId must be present in all requests.
+        assertEquals(
+            new ShareGroupHeartbeatResponseData()
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("MemberId can't be empty."),
+            service.shareGroupHeartbeat(
+                context,
+                new ShareGroupHeartbeatRequestData()
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // GroupId must be present in all requests.
+        assertEquals(
+            new ShareGroupHeartbeatResponseData()
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("GroupId can't be empty."),
+            service.shareGroupHeartbeat(
+                context,
+                new ShareGroupHeartbeatRequestData()
+                    .setMemberId(memberId)
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // GroupId can't be all whitespaces.
+        assertEquals(
+            new ShareGroupHeartbeatResponseData()
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("GroupId can't be empty."),
+            service.shareGroupHeartbeat(
+                context,
+                new ShareGroupHeartbeatRequestData()
+                    .setMemberId(memberId)
+                    .setGroupId("   ")
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // SubscribedTopicNames must be present and empty in the first request (epoch == 0).
+        assertEquals(
+            new ShareGroupHeartbeatResponseData()
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("SubscribedTopicNames must be set in first request."),
+            service.shareGroupHeartbeat(
+                context,
+                new ShareGroupHeartbeatRequestData()
+                    .setMemberId(memberId)
+                    .setGroupId("foo")
+                    .setMemberEpoch(0)
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // MemberId must be non-empty in all requests except for the first one where it
+        // could be empty (epoch != 0).
+        assertEquals(
+            new ShareGroupHeartbeatResponseData()
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("MemberId can't be empty."),
+            service.shareGroupHeartbeat(
+                context,
+                new ShareGroupHeartbeatRequestData()
+                    .setGroupId("foo")
+                    .setMemberEpoch(1)
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // RackId must be non-empty if provided in all requests.
+        assertEquals(
+            new ShareGroupHeartbeatResponseData()
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("RackId can't be empty."),
+            service.shareGroupHeartbeat(
+                context,
+                new ShareGroupHeartbeatRequestData()
+                    .setMemberId(memberId)
+                    .setGroupId("foo")
+                    .setMemberEpoch(1)
+                    .setRackId("")
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // Invalid member epoch.
+        assertEquals(
+            new ShareGroupHeartbeatResponseData()
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("MemberEpoch is invalid."),
+            service.shareGroupHeartbeat(
+                context,
+                new ShareGroupHeartbeatRequestData()
+                    .setMemberId(memberId)
+                    .setGroupId("foo")
+                    .setMemberEpoch(-10)
+            ).get(5, TimeUnit.SECONDS)
+        );
+    }
+
 
     @Test
     public void testShareGroupDescribe() throws InterruptedException, ExecutionException {

@@ -69,6 +69,7 @@ import org.apache.kafka.common.requests.DescribeGroupsRequest;
 import org.apache.kafka.common.requests.DescribeShareGroupOffsetsRequest;
 import org.apache.kafka.common.requests.OffsetCommitRequest;
 import org.apache.kafka.common.requests.ShareGroupDescribeRequest;
+import org.apache.kafka.common.requests.ShareGroupHeartbeatRequest;
 import org.apache.kafka.common.requests.StreamsGroupDescribeRequest;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.requests.TxnOffsetCommitRequest;
@@ -513,6 +514,28 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
+     * Validates the ShareGroupHeartbeat request.
+     *
+     * @param request The request to validate.
+     * @throws InvalidRequestException if the request is not valid.
+     */
+    private static void throwIfShareGroupHeartbeatRequestIsInvalid(
+        ShareGroupHeartbeatRequestData request
+    ) throws InvalidRequestException {
+        throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
+        throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
+        throwIfEmptyString(request.rackId(), "RackId can't be empty.");
+
+        if (request.memberEpoch() == 0) {
+            if (request.subscribedTopicNames() == null || request.subscribedTopicNames().isEmpty()) {
+                throw new InvalidRequestException("SubscribedTopicNames must be set in first request.");
+            }
+        } else if (request.memberEpoch() < ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH) {
+            throw new InvalidRequestException("MemberEpoch is invalid.");
+        }
+    }
+
+    /**
      * See {@link GroupCoordinator#shareGroupHeartbeat(AuthorizableRequestContext, ShareGroupHeartbeatRequestData)}.
      */
     @Override
@@ -523,6 +546,16 @@ public class GroupCoordinatorService implements GroupCoordinator {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(new ShareGroupHeartbeatResponseData()
                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
+        }
+
+        try {
+            throwIfShareGroupHeartbeatRequestIsInvalid(request);
+        } catch (Throwable ex) {
+            ApiError apiError = ApiError.fromThrowable(ex);
+            return CompletableFuture.completedFuture(new ShareGroupHeartbeatResponseData()
+                .setErrorCode(apiError.error().code())
+                .setErrorMessage(apiError.message())
             );
         }
 

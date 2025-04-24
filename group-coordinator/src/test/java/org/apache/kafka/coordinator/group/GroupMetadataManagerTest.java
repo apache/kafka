@@ -14744,59 +14744,6 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testShareGroupHeartbeatRequestValidation() {
-        MockPartitionAssignor assignor = new MockPartitionAssignor("share");
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withShareGroupAssignor(assignor)
-            .build();
-        Exception ex;
-
-        // MemberId must be present in all requests.
-        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
-                new ShareGroupHeartbeatRequestData()));
-        assertEquals("MemberId can't be empty.", ex.getMessage());
-
-        // GroupId must be present in all requests.
-        String memberId = Uuid.randomUuid().toString();
-        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
-            new ShareGroupHeartbeatRequestData()
-                .setMemberId(memberId)));
-        assertEquals("GroupId can't be empty.", ex.getMessage());
-
-        // GroupId can't be all whitespaces.
-        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
-            new ShareGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("   ")));
-        assertEquals("GroupId can't be empty.", ex.getMessage());
-
-        // SubscribedTopicNames must be present and empty in the first request (epoch == 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
-            new ShareGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("foo")
-                .setMemberEpoch(0)));
-        assertEquals("SubscribedTopicNames must be set in first request.", ex.getMessage());
-
-        // MemberId must be non-empty in all requests except for the first one where it
-        // could be empty (epoch != 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
-            new ShareGroupHeartbeatRequestData()
-                .setGroupId("foo")
-                .setMemberEpoch(1)));
-        assertEquals("MemberId can't be empty.", ex.getMessage());
-
-        // RackId must be non-empty if provided in all requests.
-        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
-            new ShareGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("foo")
-                .setMemberEpoch(1)
-                .setRackId("")));
-        assertEquals("RackId can't be empty.", ex.getMessage());
-    }
-
-    @Test
     public void testShareGroupDescribeRequest() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
 
