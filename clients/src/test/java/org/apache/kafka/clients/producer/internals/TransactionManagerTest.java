@@ -149,7 +149,7 @@ public class TransactionManagerTest {
 
     private RecordAccumulator accumulator = null;
     private Sender sender = null;
-    private TransactionManager transactionManager = null;
+    private TestableTransactionManager transactionManager = null;
     private Node brokerNode = null;
     private long finalizedFeaturesEpoch = 0;
 
@@ -199,8 +199,9 @@ public class TransactionManagerTest {
                 .setMinVersionLevel(transactionV2Enabled ? (short) 2 : (short) 1)),
             finalizedFeaturesEpoch));
         finalizedFeaturesEpoch += 1;
-        this.transactionManager = new TransactionManager(logContext, transactionalId.orElse(null),
+        this.transactionManager = new TestableTransactionManager(logContext, transactionalId.orElse(null),
                 transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions, enable2pc);
+
 
         int batchSize = 16 * 1024;
         int deliveryTimeoutMs = 3000;
@@ -1049,7 +1050,7 @@ public class TransactionManagerTest {
                 .setMaxVersionLevel((short) 1)
                 .setMinVersionLevel((short) 1)),
             0));
-        this.transactionManager = new TransactionManager(logContext, transactionalId,
+        this.transactionManager = new TestableTransactionManager(logContext, transactionalId,
             transactionTimeoutMs, DEFAULT_RETRY_BACKOFF_MS, apiVersions, false);
 
         int batchSize = 16 * 1024;
@@ -3813,7 +3814,7 @@ public class TransactionManagerTest {
         doInitTransactions();
         assertTrue(transactionManager.isTransactional());
 
-        transactionManager.setPoisonStateOnInvalidTransition(true);
+        transactionManager.setShouldPoisonStateOnInvalidTransitionOverride(true);
 
         // Intentionally perform an operation that will cause an invalid state transition. The detection of this
         // will result in a poisoning of the transaction manager for all subsequent transactional operations since
@@ -4433,10 +4434,39 @@ public class TransactionManagerTest {
 
         transactionManager.initializeTransactions(true);
         runUntil(transactionManager::hasProducerId);
-        
+
         assertTrue(transactionManager.hasProducerId());
         assertFalse(transactionManager.hasOngoingTransaction());
         assertEquals(ongoingProducerId, transactionManager.producerIdAndEpoch().producerId);
         assertEquals(bumpedEpoch, transactionManager.producerIdAndEpoch().epoch);
+    }
+
+    /**
+     * This subclass exists only to optionally change the default behavior related to poisoning the state
+     * on invalid state transition attempts.
+     */
+    private static class TestableTransactionManager extends TransactionManager {
+
+        private Optional<Boolean> shouldPoisonStateOnInvalidTransitionOverride;
+
+        public TestableTransactionManager(LogContext logContext,
+                                          String transactionalId,
+                                          int transactionTimeoutMs,
+                                          long retryBackoffMs,
+                                          ApiVersions apiVersions,
+                                          boolean enable2Pc) {
+            super(logContext, transactionalId, transactionTimeoutMs, retryBackoffMs, apiVersions, enable2Pc);
+            this.shouldPoisonStateOnInvalidTransitionOverride = Optional.empty();
+        }
+
+        private void setShouldPoisonStateOnInvalidTransitionOverride(boolean override) {
+            shouldPoisonStateOnInvalidTransitionOverride = Optional.of(override);
+        }
+
+        @Override
+        protected boolean shouldPoisonStateOnInvalidTransition() {
+            // If there's an override, use it, otherwise invoke the default (i.e. super class) logic.
+            return shouldPoisonStateOnInvalidTransitionOverride.orElseGet(super::shouldPoisonStateOnInvalidTransition);
+        }
     }
 }
