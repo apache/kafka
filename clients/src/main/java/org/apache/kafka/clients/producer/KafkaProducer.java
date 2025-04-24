@@ -1610,8 +1610,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
          * Creates a new empty PreparedTxnState
          */
         public PreparedTxnState() {
-            this.producerId = -1L;
-            this.epoch = -1;
+            this.producerId = RecordBatch.NO_PRODUCER_ID;
+            this.epoch = RecordBatch.NO_PRODUCER_EPOCH;
         }
         
         /**
@@ -1622,8 +1622,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
          */
         public PreparedTxnState(String serializedState) {
             if (serializedState == null || serializedState.isEmpty()) {
-                this.producerId = -1L;
-                this.epoch = -1;
+                this.producerId = RecordBatch.NO_PRODUCER_ID;
+                this.epoch = RecordBatch.NO_PRODUCER_EPOCH;
                 return;
             }
             
@@ -1635,6 +1635,12 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                 
                 this.producerId = Long.parseLong(parts[0]);
                 this.epoch = Short.parseShort(parts[1]);
+                
+                // Validate the producerId and epoch values.
+                if (!((this.producerId >= 0 && this.epoch >= 0) || (this.producerId == -1 && this.epoch == -1))) {
+                    throw new IllegalArgumentException("Invalid producer ID and epoch values: " +
+                        producerId + ":" + epoch + ". Both must be either >= 0 or both -1");
+                }
             } catch (NumberFormatException e) {
                 throw new IllegalArgumentException("Invalid serialized transaction state format: " + serializedState, e);
             }
@@ -1645,8 +1651,10 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
          * 
          * @param producerId        The producer ID
          * @param epoch             The producer epoch
+         *
+         * package-private for testing
          */
-        public PreparedTxnState(long producerId, short epoch) {
+        PreparedTxnState(long producerId, short epoch) {
             this.producerId = producerId;
             this.epoch = epoch;
         }
@@ -1660,23 +1668,27 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         }
         
         /**
-         * Checks if this state contains valid producer ID and epoch values.
-         * A state is considered valid if the producer ID is not -1.
+         * Checks if this preparedTxnState represents an initialized transaction with a valid producer ID
+         * that is not -1 (the uninitialized value).
          * 
-         * @return true if the state is valid, false otherwise
+         * @return true if the state has an initialized transaction, false otherwise.
          */
-        public boolean isValid() {
+        public boolean hasTransaction() {
             return producerId != -1L;
         }
         
         /**
-         * Returns a serialized string representation of this transaction state
-         * The format is "producerId:epoch"
+         * Returns a serialized string representation of this transaction state.
+         * The format is "producerId:epoch" for an initialized state, or an empty string
+         * for an uninitialized state (where producerId and epoch are both -1).
          * 
          * @return a serialized string representation
          */
         @Override
         public String toString() {
+            if (producerId == -1L && epoch == -1) {
+                return "";
+            }
             return producerId + ":" + epoch;
         }
         

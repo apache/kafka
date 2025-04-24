@@ -32,10 +32,10 @@ public class PreparedTxnStateTest {
     @Test
     public void testDefaultConstructor() {
         KafkaProducer.PreparedTxnState state = new KafkaProducer.PreparedTxnState();
-        assertEquals("-1:-1", state.toString(), "Empty state should serialize to -1:-1");
+        assertEquals("", state.toString(), "Empty state should serialize to an empty string");
         assertEquals(-1L, state.producerId(), "Default producerId should be -1");
         assertEquals((short) -1, state.epoch(), "Default epoch should be -1");
-        assertFalse(state.isValid(), "Default state should not be valid");
+        assertFalse(state.hasTransaction(), "Default state should not have a transaction");
     }
     
     @Test
@@ -45,7 +45,7 @@ public class PreparedTxnStateTest {
         KafkaProducer.PreparedTxnState state = new KafkaProducer.PreparedTxnState(producerId, epoch);
         assertEquals(producerId, state.producerId(), "ProducerId should match");
         assertEquals(epoch, state.epoch(), "Epoch should match");
-        assertTrue(state.isValid(), "State should be valid");
+        assertTrue(state.hasTransaction(), "State should have a transaction");
         assertEquals("123:45", state.toString(), "Serialized form should match expected format");
     }
 
@@ -56,12 +56,12 @@ public class PreparedTxnStateTest {
         assertEquals(serialized, state.toString(), "Deserialized state should match the original serialized string");
         assertEquals(123L, state.producerId(), "Deserialized producerId should match");
         assertEquals((short) 45, state.epoch(), "Deserialized epoch should match");
-        assertTrue(state.isValid(), "Deserialized state should be valid");
+        assertTrue(state.hasTransaction(), "Deserialized state should have a transaction");
     }
 
     @Test
     public void testRoundTripSerialization() {
-        // Create from string, then convert back to string
+        // Create initialized state from string, then convert back to string
         String original = "9876:54";
         KafkaProducer.PreparedTxnState state = new KafkaProducer.PreparedTxnState(original);
         String serialized = state.toString();
@@ -72,17 +72,31 @@ public class PreparedTxnStateTest {
         assertEquals(original, stateAgain.toString(), "Re-deserialized state should match original");
         assertEquals(state.producerId(), stateAgain.producerId(), "Producer IDs should match");
         assertEquals(state.epoch(), stateAgain.epoch(), "Epochs should match");
+        
+        // Test round trip for uninitialized state (empty string)
+        String emptyString = "";
+        KafkaProducer.PreparedTxnState emptyState = new KafkaProducer.PreparedTxnState(emptyString);
+        String emptyStateSerialized = emptyState.toString();
+        assertEquals(emptyString, emptyStateSerialized, "Round-trip of empty string should remain empty");
+        assertEquals(-1L, emptyState.producerId(), "Empty string should result in producerId -1");
+        assertEquals((short) -1, emptyState.epoch(), "Empty string should result in epoch -1");
+        
+        // Deserialize empty state again to verify
+        KafkaProducer.PreparedTxnState emptyStateAgain = new KafkaProducer.PreparedTxnState(emptyStateSerialized);
+        assertEquals(emptyString, emptyStateAgain.toString(), "Re-deserialized empty state should still be empty");
+        assertEquals(-1L, emptyStateAgain.producerId(), "Empty string should result in producerId -1");
+        assertEquals((short) -1, emptyStateAgain.epoch(), "Empty string should result in epoch -1");
     }
 
     @Test
     public void testHandlingOfNullOrEmptyString() {
         KafkaProducer.PreparedTxnState stateWithNull = new KafkaProducer.PreparedTxnState(null);
-        assertEquals("-1:-1", stateWithNull.toString(), "Null string should result in empty state");
-        assertFalse(stateWithNull.isValid(), "State from null string should not be valid");
+        assertEquals("", stateWithNull.toString(), "Null string should result in empty state");
+        assertFalse(stateWithNull.hasTransaction(), "State from null string should not have a transaction");
         
         KafkaProducer.PreparedTxnState stateWithEmpty = new KafkaProducer.PreparedTxnState("");
-        assertEquals("-1:-1", stateWithEmpty.toString(), "Empty string should result in empty state");
-        assertFalse(stateWithEmpty.isValid(), "State from empty string should not be valid");
+        assertEquals("", stateWithEmpty.toString(), "Empty string should result in empty state");
+        assertFalse(stateWithEmpty.hasTransaction(), "State from empty string should not have a transaction");
     }
 
     @Test
@@ -93,7 +107,7 @@ public class PreparedTxnStateTest {
         assertEquals(maxValues, state.toString(), "Max values should be handled correctly");
         assertEquals(Long.MAX_VALUE, state.producerId(), "Max producer ID should be handled correctly");
         assertEquals(Short.MAX_VALUE, state.epoch(), "Max epoch should be handled correctly");
-        assertTrue(state.isValid(), "State with max values should be valid");
+        assertTrue(state.hasTransaction(), "State with max values should have a transaction");
     }
 
     @Test
@@ -115,14 +129,14 @@ public class PreparedTxnStateTest {
     }
     
     @Test
-    public void testIsValid() {
-        // Valid state (producer ID >= 0)
-        KafkaProducer.PreparedTxnState validState = new KafkaProducer.PreparedTxnState(0L, (short) 0);
-        assertTrue(validState.isValid(), "State with producerId 0 should be valid");
+    public void testHasTransaction() {
+        // State with transaction (producer ID >= 0)
+        KafkaProducer.PreparedTxnState stateWithTransaction = new KafkaProducer.PreparedTxnState(0L, (short) 0);
+        assertTrue(stateWithTransaction.hasTransaction(), "State with producerId 0 should have a transaction");
         
-        // Invalid state (producer ID = -1)
-        KafkaProducer.PreparedTxnState invalidState = new KafkaProducer.PreparedTxnState(-1L, (short) 0);
-        assertFalse(invalidState.isValid(), "State with producerId -1 should not be valid");
+        // State without transaction (producer ID = -1)
+        KafkaProducer.PreparedTxnState stateWithoutTransaction = new KafkaProducer.PreparedTxnState(-1L, (short) -1);
+        assertFalse(stateWithoutTransaction.hasTransaction(), "State with producerId -1 should not have a transaction");
     }
 
     @Test
@@ -147,4 +161,37 @@ public class PreparedTxnStateTest {
                 () -> new KafkaProducer.PreparedTxnState("123:xyz"),
                 "Non-numeric epoch should throw IllegalArgumentException");
     }
-} 
+    
+    @Test
+    public void testInvalidProducerIdEpochCombinations() {
+        // Valid combinations: both >= 0 or both -1
+        new KafkaProducer.PreparedTxnState("0:0");
+        new KafkaProducer.PreparedTxnState("123:45");
+        new KafkaProducer.PreparedTxnState("-1:-1");
+        
+        // Invalid: producerId >= 0, epoch < 0
+        assertThrows(IllegalArgumentException.class,
+                () -> new KafkaProducer.PreparedTxnState("123:-2"),
+                "Positive producerId with negative epoch (not -1) should throw IllegalArgumentException");
+                
+        // Invalid: producerId < 0 (not -1), epoch >= 0
+        assertThrows(IllegalArgumentException.class,
+                () -> new KafkaProducer.PreparedTxnState("-2:45"),
+                "Negative producerId (not -1) with positive epoch should throw IllegalArgumentException");
+                
+        // Invalid: producerId < 0 (not -1), epoch < 0 (not -1)
+        assertThrows(IllegalArgumentException.class,
+                () -> new KafkaProducer.PreparedTxnState("-2:-2"),
+                "Negative producerId and epoch (not -1) should throw IllegalArgumentException");
+                
+        // Invalid: producerId = -1, epoch >= 0
+        assertThrows(IllegalArgumentException.class,
+                () -> new KafkaProducer.PreparedTxnState("-1:45"),
+                "ProducerId -1 with positive epoch should throw IllegalArgumentException");
+                
+        // Invalid: producerId >= 0, epoch = -1
+        assertThrows(IllegalArgumentException.class,
+                () -> new KafkaProducer.PreparedTxnState("123:-1"),
+                "Positive producerId with epoch -1 should throw IllegalArgumentException");
+    }
+}
