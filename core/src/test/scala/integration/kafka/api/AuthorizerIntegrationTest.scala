@@ -372,7 +372,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   private def createOffsetCommitRequest = {
-    new requests.OffsetCommitRequest.Builder(
+    requests.OffsetCommitRequest.Builder.forTopicNames(
         new OffsetCommitRequestData()
           .setGroupId(group)
           .setMemberId(JoinGroupRequest.UNKNOWN_MEMBER_ID)

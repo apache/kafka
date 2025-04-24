@@ -33,11 +33,7 @@ public class WriteShareGroupStateRequest extends AbstractRequest {
         private final WriteShareGroupStateRequestData data;
 
         public Builder(WriteShareGroupStateRequestData data) {
-            this(data, true);
-        }
-
-        public Builder(WriteShareGroupStateRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.WRITE_SHARE_GROUP_STATE, enableUnstableLastVersion);
+            super(ApiKeys.WRITE_SHARE_GROUP_STATE);
             this.data = data;
         }
 

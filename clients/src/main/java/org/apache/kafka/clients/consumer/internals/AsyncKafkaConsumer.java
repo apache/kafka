@@ -186,7 +186,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
      */
     private class BackgroundEventProcessor implements EventProcessor<BackgroundEvent> {
 
-        private Optional<StreamsRebalanceListener> streamsGroupRebalanceCallbacks = Optional.empty();
+        private Optional<StreamsRebalanceListener> streamsRebalanceListener = Optional.empty();
         private final Optional<StreamsRebalanceData> streamsRebalanceData;
 
         public BackgroundEventProcessor() {
@@ -202,7 +202,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                 throw new IllegalStateException("Background event processor was not created to be used with Streams " +
                     "rebalance protocol events");
             }
-            this.streamsGroupRebalanceCallbacks = Optional.of(streamsRebalanceListener);
+            this.streamsRebalanceListener = Optional.of(streamsRebalanceListener);
         }
 
         @Override
@@ -277,20 +277,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         private StreamsOnTasksRevokedCallbackCompletedEvent invokeOnTasksRevokedCallback(final Set<StreamsRebalanceData.TaskId> activeTasksToRevoke,
                                                                                          final CompletableFuture<Void> future) {
-            final Optional<KafkaException> error;
-            final Optional<Exception> exceptionFromCallback = streamsGroupRebalanceCallbacks().onTasksRevoked(activeTasksToRevoke);
-            if (exceptionFromCallback.isPresent()) {
-                error = Optional.of(ConsumerUtils.maybeWrapAsKafkaException(exceptionFromCallback.get(), "Task revocation callback throws an error"));
-            } else {
-                error = Optional.empty();
-            }
+            final Optional<Exception> exceptionFromCallback = streamsRebalanceListener().onTasksRevoked(activeTasksToRevoke);
+            final Optional<KafkaException> error = exceptionFromCallback.map(e -> ConsumerUtils.maybeWrapAsKafkaException(e, "Task revocation callback throws an error"));
             return new StreamsOnTasksRevokedCallbackCompletedEvent(future, error);
         }
 
         private StreamsOnTasksAssignedCallbackCompletedEvent invokeOnTasksAssignedCallback(final StreamsRebalanceData.Assignment assignment,
                                                                                            final CompletableFuture<Void> future) {
             final Optional<KafkaException> error;
-            final Optional<Exception> exceptionFromCallback = streamsGroupRebalanceCallbacks().onTasksAssigned(assignment);
+            final Optional<Exception> exceptionFromCallback = streamsRebalanceListener().onTasksAssigned(assignment);
             if (exceptionFromCallback.isPresent()) {
                 error = Optional.of(ConsumerUtils.maybeWrapAsKafkaException(exceptionFromCallback.get(), "Task assignment callback throws an error"));
             } else {
@@ -302,7 +297,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
 
         private StreamsOnAllTasksLostCallbackCompletedEvent invokeOnAllTasksLostCallback(final CompletableFuture<Void> future) {
             final Optional<KafkaException> error;
-            final Optional<Exception> exceptionFromCallback = streamsGroupRebalanceCallbacks().onAllTasksLost();
+            final Optional<Exception> exceptionFromCallback = streamsRebalanceListener().onAllTasksLost();
             if (exceptionFromCallback.isPresent()) {
                 error = Optional.of(ConsumerUtils.maybeWrapAsKafkaException(exceptionFromCallback.get(), "All tasks lost callback throws an error"));
             } else {
@@ -318,8 +313,8 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     "rebalance protocol events"));
         }
 
-        private StreamsRebalanceListener streamsGroupRebalanceCallbacks() {
-            return streamsGroupRebalanceCallbacks.orElseThrow(
+        private StreamsRebalanceListener streamsRebalanceListener() {
+            return streamsRebalanceListener.orElseThrow(
                 () -> new IllegalStateException("Background event processor was not created to be used with Streams " +
                     "rebalance protocol events"));
         }

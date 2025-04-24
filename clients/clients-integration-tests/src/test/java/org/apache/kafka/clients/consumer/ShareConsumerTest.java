@@ -122,8 +122,7 @@ import static org.junit.jupiter.api.Assertions.fail;
         @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
         @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
         @ClusterConfigProperty(key = "transaction.state.log.min.isr", value = "1"),
-        @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "1"),
-        @ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")
+        @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "1")
     },
     types = {Type.KRAFT}
 )
@@ -1859,8 +1858,7 @@ public class ShareConsumerTest {
             @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "3"),
             @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3"),
             @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
-            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3"),
-            @ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3")
         }
     )
     @Timeout(90)
@@ -2011,8 +2009,7 @@ public class ShareConsumerTest {
             @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "3"),
             @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "3"),
             @ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "3"),
-            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3"),
-            @ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true")
+            @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "3")
         }
     )
     @Timeout(150)
