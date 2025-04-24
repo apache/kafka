@@ -716,7 +716,7 @@ public class QuorumState {
 
         LeaderState<T> state = new LeaderState<>(
             time,
-            ReplicaKey.of(localIdOrThrow(), localDirectoryId),
+            localVoterNodeOrThrow(),
             epoch(),
             epochStartOffset,
             partitionState.lastVoterSet(),
@@ -724,7 +724,6 @@ public class QuorumState {
             partitionState.lastKraftVersion(),
             candidateState.epochElection().grantingVoters(),
             accumulator,
-            localListeners,
             fetchTimeoutMs,
             logContext,
             kafkaRaftMetrics
