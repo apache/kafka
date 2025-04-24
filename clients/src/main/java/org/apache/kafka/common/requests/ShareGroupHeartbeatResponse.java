@@ -19,10 +19,9 @@ package org.apache.kafka.common.requests;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -70,9 +69,9 @@ public class ShareGroupHeartbeatResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    public static ShareGroupHeartbeatResponse parse(ByteBuffer buffer, short version) {
+    public static ShareGroupHeartbeatResponse parse(Readable readable, short version) {
         return new ShareGroupHeartbeatResponse(new ShareGroupHeartbeatResponseData(
-                new ByteBufferAccessor(buffer), version));
+                readable, version));
     }
 
     public static ShareGroupHeartbeatResponseData.Assignment createAssignment(
