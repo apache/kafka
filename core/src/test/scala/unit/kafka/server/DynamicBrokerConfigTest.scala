@@ -22,21 +22,21 @@ import java.util.{Optional, Properties, Map => JMap}
 import java.util.concurrent.{CompletionStage, TimeUnit}
 import java.util.concurrent.atomic.AtomicReference
 import kafka.log.LogManager
-import kafka.log.remote.RemoteLogManager
 import kafka.network.{DataPlaneAcceptor, SocketServer}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.{Endpoint, Reconfigurable}
 import org.apache.kafka.common.acl.{AclBinding, AclBindingFilter}
 import org.apache.kafka.common.config.{ConfigException, SslConfigs}
+import org.apache.kafka.common.internals.Plugin
 import org.apache.kafka.common.metrics.{JmxReporter, Metrics}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth.SecurityProtocol
-import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.DynamicThreadPool
 import org.apache.kafka.server.authorizer._
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
-import org.apache.kafka.server.log.remote.storage.RemoteLogManagerConfig
+import org.apache.kafka.server.log.remote.storage.{RemoteLogManager, RemoteLogManagerConfig}
 import org.apache.kafka.server.metrics.{KafkaYammerMetrics, MetricConfigs}
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogConfig, ProducerStateManagerConfig}
@@ -469,7 +469,7 @@ class DynamicBrokerConfigTest {
     val metrics: Metrics = mock(classOf[Metrics])
     when(kafkaServer.metrics).thenReturn(metrics)
     val quotaManagers: QuotaFactory.QuotaManagers = mock(classOf[QuotaFactory.QuotaManagers])
-    when(quotaManagers.clientQuotaCallback).thenReturn(Optional.empty())
+    when(quotaManagers.clientQuotaCallbackPlugin).thenReturn(Optional.empty())
     when(kafkaServer.quotaManagers).thenReturn(quotaManagers)
     val socketServer: SocketServer = mock(classOf[SocketServer])
     when(socketServer.reconfigurableConfigs).thenReturn(SocketServer.ReconfigurableConfigs)
@@ -480,7 +480,8 @@ class DynamicBrokerConfigTest {
     when(kafkaServer.logManager).thenReturn(logManager)
 
     val authorizer = new TestAuthorizer
-    when(kafkaServer.authorizer).thenReturn(Some(authorizer))
+    val authorizerPlugin: Plugin[Authorizer] = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
+    when(kafkaServer.authorizerPlugin).thenReturn(Some(authorizerPlugin))
 
     kafkaServer.config.dynamicConfig.addReconfigurables(kafkaServer)
     props.put("super.users", "User:admin")
@@ -515,14 +516,15 @@ class DynamicBrokerConfigTest {
     val metrics: Metrics = mock(classOf[Metrics])
     when(controllerServer.metrics).thenReturn(metrics)
     val quotaManagers: QuotaFactory.QuotaManagers = mock(classOf[QuotaFactory.QuotaManagers])
-    when(quotaManagers.clientQuotaCallback).thenReturn(Optional.empty())
+    when(quotaManagers.clientQuotaCallbackPlugin).thenReturn(Optional.empty())
     when(controllerServer.quotaManagers).thenReturn(quotaManagers)
     val socketServer: SocketServer = mock(classOf[SocketServer])
     when(socketServer.reconfigurableConfigs).thenReturn(SocketServer.ReconfigurableConfigs)
     when(controllerServer.socketServer).thenReturn(socketServer)
 
     val authorizer = new TestAuthorizer
-    when(controllerServer.authorizer).thenReturn(Some(authorizer))
+    val authorizerPlugin: Plugin[Authorizer] = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
+    when(controllerServer.authorizerPlugin).thenReturn(Some(authorizerPlugin))
 
     controllerServer.config.dynamicConfig.addReconfigurables(controllerServer)
     props.put("super.users", "User:admin")
@@ -560,14 +562,15 @@ class DynamicBrokerConfigTest {
     val metrics: Metrics = mock(classOf[Metrics])
     when(controllerServer.metrics).thenReturn(metrics)
     val quotaManagers: QuotaFactory.QuotaManagers = mock(classOf[QuotaFactory.QuotaManagers])
-    when(quotaManagers.clientQuotaCallback).thenReturn(Optional.empty())
+    when(quotaManagers.clientQuotaCallbackPlugin).thenReturn(Optional.empty())
     when(controllerServer.quotaManagers).thenReturn(quotaManagers)
     val socketServer: SocketServer = mock(classOf[SocketServer])
     when(socketServer.reconfigurableConfigs).thenReturn(SocketServer.ReconfigurableConfigs)
     when(controllerServer.socketServer).thenReturn(socketServer)
 
     val authorizer = new TestAuthorizer
-    when(controllerServer.authorizer).thenReturn(Some(authorizer))
+    val authorizerPlugin: Plugin[Authorizer] = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
+    when(controllerServer.authorizerPlugin).thenReturn(Some(authorizerPlugin))
 
     controllerServer.config.dynamicConfig.addReconfigurables(controllerServer)
     props.put("super.users", "User:admin")
@@ -594,7 +597,7 @@ class DynamicBrokerConfigTest {
     config.dynamicConfig.initialize(None)
 
     assertEquals(SocketServerConfigs.MAX_CONNECTIONS_DEFAULT, config.maxConnections)
-    assertEquals(LogConfig.DEFAULT_MAX_MESSAGE_BYTES, config.messageMaxBytes)
+    assertEquals(ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT, config.messageMaxBytes)
 
     var newProps = new Properties()
     newProps.put(SocketServerConfigs.MAX_CONNECTIONS_CONFIG, "9999")
@@ -670,11 +673,11 @@ class DynamicBrokerConfigTest {
   @Test
   def testNonInternalValuesDoesNotExposeInternalConfigs(): Unit = {
     val props = TestUtils.createBrokerConfig(0, port = 8181)
-    props.put(KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, "1024")
+    props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, "1024")
     val config = new KafkaConfig(props)
-    assertFalse(config.nonInternalValues.containsKey(KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG))
+    assertFalse(config.nonInternalValues.containsKey(MetadataLogConfig.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG))
     config.updateCurrentConfig(new KafkaConfig(props))
-    assertFalse(config.nonInternalValues.containsKey(KRaftConfigs.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG))
+    assertFalse(config.nonInternalValues.containsKey(MetadataLogConfig.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG))
   }
 
   @Test

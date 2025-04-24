@@ -25,6 +25,8 @@ import org.junit.jupiter.api.Assertions.{assertEquals, assertFalse, assertThrows
 import org.junit.jupiter.api.{BeforeEach, Test}
 import org.mockito.Mockito.{mock, when}
 
+import java.util.Optional
+
 object ReplicaTest {
   val BrokerId: Int = 0
   val Partition: TopicPartition = new TopicPartition("foo", 0)
@@ -40,7 +42,7 @@ class ReplicaTest {
   @BeforeEach
   def setup(): Unit = {
     val metadataCache = mock(classOf[KRaftMetadataCache])
-    when(metadataCache.getAliveBrokerEpoch(BrokerId)).thenReturn(Option(1L))
+    when(metadataCache.getAliveBrokerEpoch(BrokerId)).thenReturn(Optional.of(1L))
     replica = new Replica(BrokerId, Partition, metadataCache)
   }
 
@@ -320,7 +322,7 @@ class ReplicaTest {
   @Test
   def testFenceStaleUpdates(): Unit = {
     val metadataCache = mock(classOf[KRaftMetadataCache])
-    when(metadataCache.getAliveBrokerEpoch(BrokerId)).thenReturn(Option(2L))
+    when(metadataCache.getAliveBrokerEpoch(BrokerId)).thenReturn(Optional.of(2L))
 
     val replica = new Replica(BrokerId, Partition, metadataCache)
     replica.updateFetchStateOrThrow(

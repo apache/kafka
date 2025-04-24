@@ -26,9 +26,9 @@ import org.apache.kafka.common.metadata.PartitionRecord;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
 import java.util.Set;
@@ -104,8 +104,8 @@ public final class TopicDelta {
                 new PartitionChangeRecord().
                     setPartitionId(partitionId).
                     setTopicId(image.id()).
-                    setEligibleLeaderReplicas(Collections.emptyList()).
-                    setLastKnownElr(Collections.emptyList())
+                    setEligibleLeaderReplicas(List.of()).
+                    setLastKnownElr(List.of())
             ));
         }
     }
@@ -127,20 +127,6 @@ public final class TopicDelta {
             }
         }
         return new TopicImage(image.name(), image.id(), newPartitions);
-    }
-
-    public boolean hasPartitionsWithAssignmentChanges() {
-        for (Entry<Integer, PartitionRegistration> entry : partitionChanges.entrySet()) {
-            int partitionId = entry.getKey();
-            // New Partition.
-            if (!image.partitions().containsKey(partitionId))
-                return true;
-            PartitionRegistration previousPartition = image.partitions().get(partitionId);
-            PartitionRegistration currentPartition = entry.getValue();
-            if (!previousPartition.hasSameAssignment(currentPartition))
-                return true;
-        }
-        return false;
     }
 
     /**

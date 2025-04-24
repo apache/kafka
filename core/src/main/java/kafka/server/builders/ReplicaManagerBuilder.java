@@ -20,24 +20,22 @@ package kafka.server.builders;
 import kafka.log.LogManager;
 import kafka.server.AlterPartitionManager;
 import kafka.server.KafkaConfig;
-import kafka.server.MetadataCache;
 import kafka.server.QuotaFactory.QuotaManagers;
 import kafka.server.ReplicaManager;
 
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.DelayedActionQueue;
 import org.apache.kafka.server.common.DirectoryEventHandler;
 import org.apache.kafka.server.util.Scheduler;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
-import java.util.Collections;
+import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import scala.Option;
-
-
 
 public class ReplicaManagerBuilder {
     private KafkaConfig config = null;
@@ -102,7 +100,7 @@ public class ReplicaManagerBuilder {
     }
 
     public ReplicaManager build() {
-        if (config == null) config = new KafkaConfig(Collections.emptyMap());
+        if (config == null) config = new KafkaConfig(Map.of());
         if (logManager == null) throw new RuntimeException("You must set logManager");
         if (metadataCache == null) throw new RuntimeException("You must set metadataCache");
         if (logDirFailureChannel == null) throw new RuntimeException("You must set logDirFailureChannel");
