@@ -25,7 +25,7 @@ import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.requests.{ApiVersionsRequest, ApiVersionsResponse, RequestUtils}
 import org.apache.kafka.common.test.ClusterInstance
 import org.apache.kafka.common.utils.Utils
-import org.apache.kafka.server.common.{EligibleLeaderReplicasVersion, GroupVersion, MetadataVersion, ShareVersion, StreamsGroupVersion, TransactionVersion}
+import org.apache.kafka.server.common.{EligibleLeaderReplicasVersion, GroupVersion, MetadataVersion, ShareVersion, StreamsVersion, TransactionVersion}
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Tag
@@ -89,8 +89,8 @@ abstract class AbstractApiVersionsRequestTest(cluster: ClusterInstance) {
       assertEquals(0, apiVersionsResponse.data().supportedFeatures().find(ShareVersion.FEATURE_NAME).minVersion())
       assertEquals(ShareVersion.SV_1.featureLevel(), apiVersionsResponse.data().supportedFeatures().find(ShareVersion.FEATURE_NAME).maxVersion())
 
-      assertEquals(0, apiVersionsResponse.data().supportedFeatures().find(StreamsGroupVersion.FEATURE_NAME).minVersion())
-      assertEquals(StreamsGroupVersion.SGV_1.featureLevel(), apiVersionsResponse.data().supportedFeatures().find(StreamsGroupVersion.FEATURE_NAME).maxVersion())
+      assertEquals(0, apiVersionsResponse.data().supportedFeatures().find(StreamsVersion.FEATURE_NAME).minVersion())
+      assertEquals(StreamsVersion.SV_1.featureLevel(), apiVersionsResponse.data().supportedFeatures().find(StreamsVersion.FEATURE_NAME).maxVersion())
     }
     val expectedApis = if (cluster.controllerListenerName().toScala.contains(listenerName)) {
       ApiVersionsResponse.collectApis(

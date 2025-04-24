@@ -18,24 +18,28 @@ package org.apache.kafka.server.common;
 
 import java.util.Map;
 
-public enum StreamsGroupVersion implements FeatureVersion {
+public enum StreamsVersion implements FeatureVersion {
 
-    // Version 0 does disable "streams" groups (KIP-1071).
-    SGV_0(0, MetadataVersion.MINIMUM_VERSION, Map.of()),
+    // Version 0 keeps "streams" groups disabled (KIP-1071).
+    SV_0(0, MetadataVersion.MINIMUM_VERSION, Map.of()),
 
     // Version 1 enables "streams" groups (KIP-1071).
-    SGV_1(1, MetadataVersion.IBP_4_1_IV2, Map.of());
+    // Using metadata version IBP_4_2_IV1 disables it in AK 4.1 release, and enables it in AK 4.2 release.
+    //  - in AK 4.1, this can be enabled as "early access [unstable]"
+    //  - in AK 4.2, it is planned to go GA (cf `LATEST_PRODUCTION`)
+    SV_1(1, MetadataVersion.IBP_4_2_IV1, Map.of());
 
-    public static final String FEATURE_NAME = "streams.group.version";
+    public static final String FEATURE_NAME = "streams.version";
 
-    // Disabled by default in 4.1 (early access only).
-    public static final StreamsGroupVersion LATEST_PRODUCTION = SGV_0;
+    // Mark "streams" group as unstable in AK 4.1 release
+    // Needs to be updated to SV_1 in AK 4.2, to mark as stable
+    public static final StreamsVersion LATEST_PRODUCTION = SV_0;
 
     private final short featureLevel;
     private final MetadataVersion bootstrapMetadataVersion;
     private final Map<String, Short> dependencies;
 
-    StreamsGroupVersion(
+    StreamsVersion(
         int featureLevel,
         MetadataVersion bootstrapMetadataVersion,
         Map<String, Short> dependencies
@@ -66,13 +70,13 @@ public enum StreamsGroupVersion implements FeatureVersion {
     }
 
     public boolean streamsGroupSupported() {
-        return featureLevel >= SGV_1.featureLevel;
+        return featureLevel >= SV_1.featureLevel;
     }
 
-    public static StreamsGroupVersion fromFeatureLevel(short version) {
+    public static StreamsVersion fromFeatureLevel(short version) {
         return switch (version) {
-            case 0 -> SGV_0;
-            case 1 -> SGV_1;
+            case 0 -> SV_0;
+            case 1 -> SV_1;
             default -> throw new RuntimeException("Unknown streams group feature level: " + (int) version);
         };
     }

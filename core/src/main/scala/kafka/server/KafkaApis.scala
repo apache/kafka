@@ -62,7 +62,7 @@ import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
 import org.apache.kafka.server.{ApiVersionManager, ClientMetricsManager, DelegationTokenManager, ProcessRole}
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.common.{GroupVersion, RequestLocal, TransactionVersion}
+import org.apache.kafka.server.common.{GroupVersion, RequestLocal, StreamsVersion, TransactionVersion}
 import org.apache.kafka.server.config.DelegationTokenManagerConfigs
 import org.apache.kafka.server.share.context.ShareFetchContext
 import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, SharePartitionKey}
@@ -2633,11 +2633,15 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       }
     }
+  }
 
+  private def streamsGroupVersion(): StreamsVersion = {
+    StreamsVersion.fromFeatureLevel(metadataCache.features.finalizedFeatures.getOrDefault(StreamsVersion.FEATURE_NAME, 0.toShort))
   }
 
   private def isStreamsGroupProtocolEnabled: Boolean = {
-      config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.STREAMS)
+      config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.STREAMS) &&
+      streamsGroupVersion().streamsGroupSupported
   }
 
   def handleStreamsGroupHeartbeat(request: RequestChannel.Request): CompletableFuture[Unit] = {
