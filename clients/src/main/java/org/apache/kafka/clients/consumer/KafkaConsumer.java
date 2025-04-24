@@ -1779,10 +1779,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     /**
      * This method has been deprecated since Kafka 4.0 and should use {@link KafkaConsumer#close(CloseOptions)} instead.
      * <p>
-     * Close the consumer cleanly within the specified timeout. This method waits up to
-     * {@code timeout} for the consumer to complete pending commits and leave the group.
+     * Close the consumer with {@link CloseOptions.GroupMembershipOperation#DEFAULT default membership operation}
+     * cleanly within the specified timeout. This method waits up to
+     * {@code timeout} for the consumer to complete pending commits and may leave the group (if applicable).
      * If auto-commit is enabled, this will commit the current offsets if possible within the
-     * timeout. If the consumer is unable to complete offset commits and gracefully leave the group
+     * timeout. If the consumer is unable to complete offset commits and gracefully leave the group (if applicable)
      * before the timeout expires, the consumer is force closed. Note that {@link #wakeup()} cannot be
      * used to interrupt close.
      * <p>
