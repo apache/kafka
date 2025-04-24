@@ -1458,7 +1458,7 @@ class ShareCoordinatorServiceTest {
                 any(),
                 any());
 
-        timer.advanceClock(30005L); // prune should be called
+        timer.advanceClock(30005L); // Prune should be called.
         verify(runtime, times(1))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
@@ -1466,7 +1466,7 @@ class ShareCoordinatorServiceTest {
                 any(),
                 any());
 
-        timer.advanceClock(30005L); // prune should be called
+        timer.advanceClock(30005L); // Prune should be called.
         verify(runtime, times(2))
             .scheduleWriteOperation(
                 eq("write-state-record-prune"),
@@ -1867,6 +1867,113 @@ class ShareCoordinatorServiceTest {
 
         checkMetrics(metrics);
         checkPruneMetric(metrics, Topic.SHARE_GROUP_STATE_TOPIC_NAME, 0, true);
+
+        service.shutdown();
+    }
+
+    @Test
+    public void testColdPartitionSnapshotTaskPeriodicityWithAllSuccess() throws Exception {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        MockTime time = new MockTime();
+        MockTimer timer = new MockTimer(time);
+        PartitionWriter writer = mock(PartitionWriter.class);
+
+        Metrics metrics = new Metrics();
+
+        ShareCoordinatorService service = spy(new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
+            runtime,
+            new ShareCoordinatorMetrics(metrics),
+            time,
+            timer,
+            writer
+        ));
+
+        when(runtime.scheduleWriteAllOperation(
+            eq("snapshot-cold-partitions"),
+            any(),
+            any()
+        )).thenReturn(List.of(CompletableFuture.completedFuture(null)));
+
+        service.startup(() -> 1);
+        verify(runtime, times(0))
+            .scheduleWriteOperation(
+                eq("snapshot-cold-partitions"),
+                any(),
+                any(),
+                any());
+
+        timer.advanceClock(10005L); // Snapshotting should be called.
+        verify(runtime, times(1))
+            .scheduleWriteAllOperation(
+                eq("snapshot-cold-partitions"),
+                any(),
+                any());
+
+        timer.advanceClock(10005L); // Snapshotting should be called.
+        verify(runtime, times(2))
+            .scheduleWriteAllOperation(
+                eq("snapshot-cold-partitions"),
+                any(),
+                any());
+
+        checkMetrics(metrics);
+
+        service.shutdown();
+    }
+
+    @Test
+    public void testColdPartitionSnapshotTaskPeriodicityWithSomeFailures() throws Exception {
+        CoordinatorRuntime<ShareCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        MockTime time = new MockTime();
+        MockTimer timer = new MockTimer(time);
+        PartitionWriter writer = mock(PartitionWriter.class);
+
+        when(runtime.scheduleWriteAllOperation(
+            eq("snapshot-cold-partitions"),
+            any(),
+            any()
+        )).thenReturn(
+            List.of(CompletableFuture.completedFuture(null), CompletableFuture.failedFuture(new Exception("bad stuff")))
+        ).thenReturn(
+            List.of(CompletableFuture.completedFuture(null), CompletableFuture.completedFuture(null))
+        );
+
+        Metrics metrics = new Metrics();
+
+        ShareCoordinatorService service = spy(new ShareCoordinatorService(
+            new LogContext(),
+            ShareCoordinatorTestConfig.testConfig(),
+            runtime,
+            new ShareCoordinatorMetrics(metrics),
+            time,
+            timer,
+            writer
+        ));
+
+        service.startup(() -> 2);
+        verify(runtime, times(0))
+            .scheduleWriteAllOperation(
+                eq("snapshot-cold-partitions"),
+                any(),
+                any());
+
+        timer.advanceClock(10005L); // Snapshotting should be called.
+        verify(runtime, times(1))   // For 2 topic partitions.
+            .scheduleWriteAllOperation(
+                eq("snapshot-cold-partitions"),
+                any(),
+                any());
+
+        timer.advanceClock(10005L); // Snapshotting should be called (despite previous partial failure).
+        verify(runtime, times(2))   // For 2 topic partitions.
+            .scheduleWriteAllOperation(
+                eq("snapshot-cold-partitions"),
+                any(),
+                any());
+
+        checkMetrics(metrics);
 
         service.shutdown();
     }

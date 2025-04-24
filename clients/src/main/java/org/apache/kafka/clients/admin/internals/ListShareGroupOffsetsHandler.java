@@ -104,7 +104,7 @@ public class ListShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coordi
         });
         DescribeShareGroupOffsetsRequestData data = new DescribeShareGroupOffsetsRequestData()
             .setGroups(groups);
-        return new DescribeShareGroupOffsetsRequest.Builder(data, true);
+        return new DescribeShareGroupOffsetsRequest.Builder(data);
     }
 
     @Override
