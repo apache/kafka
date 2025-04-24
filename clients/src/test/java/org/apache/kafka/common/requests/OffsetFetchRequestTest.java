@@ -25,7 +25,9 @@ import org.apache.kafka.common.requests.OffsetFetchRequest.Builder;
 import org.apache.kafka.common.requests.OffsetFetchRequest.NoBatchedOffsetFetchRequestException;
 import org.apache.kafka.common.requests.OffsetFetchResponse.PartitionData;
 
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
 
 import java.util.Arrays;
 import java.util.Collections;
@@ -60,8 +62,9 @@ public class OffsetFetchRequestTest {
 
     private OffsetFetchRequest.Builder builder;
 
-    @Test
-    public void testConstructor() {
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH, toVersion = 9)
+    public void testConstructor(short version) {
         List<TopicPartition> partitions = Arrays.asList(
             new TopicPartition(topicOne, partitionOne),
             new TopicPartition(topicTwo, partitionTwo));
@@ -77,56 +80,55 @@ public class OffsetFetchRequestTest {
             ));
         }
 
-        for (short version : ApiKeys.OFFSET_FETCH.allVersions()) {
-            if (version < 8) {
-                builder = new OffsetFetchRequest.Builder(
-                    group1,
-                    false,
-                    partitions,
-                    false);
-                OffsetFetchRequest request = builder.build(version);
-                assertFalse(request.isAllPartitions());
-                assertEquals(group1, request.groupId());
-                assertEquals(partitions, request.partitions());
+        if (version < 8) {
+            builder = new OffsetFetchRequest.Builder(
+                group1,
+                false,
+                partitions,
+                false);
+            OffsetFetchRequest request = builder.build(version);
+            assertFalse(request.isAllPartitions());
+            assertEquals(group1, request.groupId());
+            assertEquals(partitions, request.partitions());
 
-                OffsetFetchResponse response = request.getErrorResponse(throttleTimeMs, Errors.NONE);
-                assertEquals(Errors.NONE, response.error());
-                assertFalse(response.hasError());
-                assertEquals(Collections.singletonMap(Errors.NONE, version <= (short) 1 ? 3 : 1), response.errorCounts(),
-                    "Incorrect error count for version " + version);
+            OffsetFetchResponse response = request.getErrorResponse(throttleTimeMs, Errors.NONE);
+            assertEquals(Errors.NONE, response.error());
+            assertFalse(response.hasError());
+            assertEquals(Collections.singletonMap(Errors.NONE, version <= (short) 1 ? 3 : 1), response.errorCounts(),
+                "Incorrect error count for version " + version);
 
-                if (version <= 1) {
-                    assertEquals(expectedData, response.responseDataV0ToV7());
-                }
-
-                if (version >= 3) {
-                    assertEquals(throttleTimeMs, response.throttleTimeMs());
-                } else {
-                    assertEquals(DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
-                }
-            } else {
-                builder = new Builder(Collections.singletonMap(group1, partitions), false, false);
-                OffsetFetchRequest request = builder.build(version);
-                Map<String, List<TopicPartition>> groupToPartitionMap =
-                    request.groupIdsToPartitions();
-                Map<String, List<OffsetFetchRequestTopics>> groupToTopicMap =
-                    request.groupIdsToTopics();
-                assertFalse(request.isAllPartitionsForGroup(group1));
-                assertTrue(groupToPartitionMap.containsKey(group1) && groupToTopicMap.containsKey(
-                    group1));
-                assertEquals(partitions, groupToPartitionMap.get(group1));
-                OffsetFetchResponse response = request.getErrorResponse(throttleTimeMs, Errors.NONE);
-                assertEquals(Errors.NONE, response.groupLevelError(group1));
-                assertFalse(response.groupHasError(group1));
-                assertEquals(Collections.singletonMap(Errors.NONE, 1), response.errorCounts(),
-                    "Incorrect error count for version " + version);
-                assertEquals(throttleTimeMs, response.throttleTimeMs());
+            if (version <= 1) {
+                assertEquals(expectedData, response.responseDataV0ToV7());
             }
+
+            if (version >= 3) {
+                assertEquals(throttleTimeMs, response.throttleTimeMs());
+            } else {
+                assertEquals(DEFAULT_THROTTLE_TIME, response.throttleTimeMs());
+            }
+        } else {
+            builder = new Builder(Collections.singletonMap(group1, partitions), false, false);
+            OffsetFetchRequest request = builder.build(version);
+            Map<String, List<TopicPartition>> groupToPartitionMap =
+                request.groupIdsToPartitions();
+            Map<String, List<OffsetFetchRequestTopics>> groupToTopicMap =
+                request.groupIdsToTopics();
+            assertFalse(request.isAllPartitionsForGroup(group1));
+            assertTrue(groupToPartitionMap.containsKey(group1) && groupToTopicMap.containsKey(
+                group1));
+            assertEquals(partitions, groupToPartitionMap.get(group1));
+            OffsetFetchResponse response = request.getErrorResponse(throttleTimeMs, Errors.NONE);
+            assertEquals(Errors.NONE, response.groupLevelError(group1));
+            assertFalse(response.groupHasError(group1));
+            assertEquals(Collections.singletonMap(Errors.NONE, 1), response.errorCounts(),
+                "Incorrect error count for version " + version);
+            assertEquals(throttleTimeMs, response.throttleTimeMs());
         }
     }
 
-    @Test
-    public void testConstructorWithMultipleGroups() {
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH, fromVersion = 8, toVersion = 9)
+    public void testConstructorWithMultipleGroups(short version) {
         List<TopicPartition> topic1Partitions = Arrays.asList(
             new TopicPartition(topicOne, partitionOne),
             new TopicPartition(topicOne, partitionTwo));
@@ -144,31 +146,27 @@ public class OffsetFetchRequestTest {
         groupToTp.put(group5, null);
         int throttleTimeMs = 10;
 
-        for (short version : ApiKeys.OFFSET_FETCH.allVersions()) {
-            if (version >= 8) {
-                builder = new Builder(groupToTp, false, false);
-                OffsetFetchRequest request = builder.build(version);
-                Map<String, List<TopicPartition>> groupToPartitionMap =
-                    request.groupIdsToPartitions();
-                Map<String, List<OffsetFetchRequestTopics>> groupToTopicMap =
-                    request.groupIdsToTopics();
-                assertEquals(groupToTp.keySet(), groupToTopicMap.keySet());
-                assertEquals(groupToTp.keySet(), groupToPartitionMap.keySet());
-                assertFalse(request.isAllPartitionsForGroup(group1));
-                assertFalse(request.isAllPartitionsForGroup(group2));
-                assertFalse(request.isAllPartitionsForGroup(group3));
-                assertTrue(request.isAllPartitionsForGroup(group4));
-                assertTrue(request.isAllPartitionsForGroup(group5));
-                OffsetFetchResponse response = request.getErrorResponse(throttleTimeMs, Errors.NONE);
-                for (String group : groups) {
-                    assertEquals(Errors.NONE, response.groupLevelError(group));
-                    assertFalse(response.groupHasError(group));
-                }
-                assertEquals(Collections.singletonMap(Errors.NONE, 5), response.errorCounts(),
-                    "Incorrect error count for version " + version);
-                assertEquals(throttleTimeMs, response.throttleTimeMs());
-            }
+        builder = new Builder(groupToTp, false, false);
+        OffsetFetchRequest request = builder.build(version);
+        Map<String, List<TopicPartition>> groupToPartitionMap =
+            request.groupIdsToPartitions();
+        Map<String, List<OffsetFetchRequestTopics>> groupToTopicMap =
+            request.groupIdsToTopics();
+        assertEquals(groupToTp.keySet(), groupToTopicMap.keySet());
+        assertEquals(groupToTp.keySet(), groupToPartitionMap.keySet());
+        assertFalse(request.isAllPartitionsForGroup(group1));
+        assertFalse(request.isAllPartitionsForGroup(group2));
+        assertFalse(request.isAllPartitionsForGroup(group3));
+        assertTrue(request.isAllPartitionsForGroup(group4));
+        assertTrue(request.isAllPartitionsForGroup(group5));
+        OffsetFetchResponse response = request.getErrorResponse(throttleTimeMs, Errors.NONE);
+        for (String group : groups) {
+            assertEquals(Errors.NONE, response.groupLevelError(group));
+            assertFalse(response.groupHasError(group));
         }
+        assertEquals(Collections.singletonMap(Errors.NONE, 5), response.errorCounts(),
+            "Incorrect error count for version " + version);
+        assertEquals(throttleTimeMs, response.throttleTimeMs());
     }
 
     @Test

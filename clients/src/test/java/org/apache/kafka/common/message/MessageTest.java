@@ -629,8 +629,9 @@ public final class MessageTest {
         }
     }
 
-    @Test
-    public void testOffsetFetchV8AndAboveSingleGroup() throws Exception {
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH, fromVersion = 8, toVersion = 9)
+    public void testOffsetFetchV8ToV9SingleGroup(short version) throws Exception {
         String groupId = "groupId";
         String topicName = "topic";
 
@@ -652,15 +653,11 @@ public final class MessageTest {
                     .setTopics(topic)))
             .setRequireStable(true);
 
-        testAllMessageRoundTripsOffsetFetchV8AndAbove(allPartitionData);
-        testAllMessageRoundTripsOffsetFetchV8AndAbove(specifiedPartitionData);
+        testDuplication(allPartitionData);
+        testEquivalentMessageRoundTrip(version, allPartitionData);
 
-        for (short version : ApiKeys.OFFSET_FETCH.allVersions()) {
-            if (version >= 8) {
-                testAllMessageRoundTripsOffsetFetchFromVersionV8AndAbove(version, specifiedPartitionData);
-                testAllMessageRoundTripsOffsetFetchFromVersionV8AndAbove(version, allPartitionData);
-            }
-        }
+        testDuplication(specifiedPartitionData);
+        testEquivalentMessageRoundTrip(version, specifiedPartitionData);
 
         Supplier<OffsetFetchResponseData> response =
             () -> new OffsetFetchResponseData()
@@ -678,16 +675,13 @@ public final class MessageTest {
                                         .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())))))
                         .setErrorCode(Errors.NOT_COORDINATOR.code())))
                 .setThrottleTimeMs(10);
-        for (short version : ApiKeys.OFFSET_FETCH.allVersions()) {
-            if (version >= 8) {
-                OffsetFetchResponseData responseData = response.get();
-                testAllMessageRoundTripsOffsetFetchFromVersionV8AndAbove(version, responseData);
-            }
-        }
+
+        testEquivalentMessageRoundTrip(version, response.get());
     }
 
-    @Test
-    public void testOffsetFetchV8AndAbove() throws Exception {
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH, fromVersion = 8, toVersion = 9)
+    public void testOffsetFetchV8ToV9(short version) throws Exception {
         String groupOne = "group1";
         String groupTwo = "group2";
         String groupThree = "group3";
@@ -739,16 +733,11 @@ public final class MessageTest {
             .setGroups(Arrays.asList(group1, group2, group3, group4, group5))
             .setRequireStable(true);
 
-        testAllMessageRoundTripsOffsetFetchV8AndAbove(requestData);
+        testDuplication(requestData);
+        testEquivalentMessageRoundTrip(version, requestData);
 
-        testAllMessageRoundTripsOffsetFetchV8AndAbove(requestData.setRequireStable(false));
-
-
-        for (short version : ApiKeys.OFFSET_FETCH.allVersions()) {
-            if (version >= 8) {
-                testAllMessageRoundTripsOffsetFetchFromVersionV8AndAbove(version, requestData);
-            }
-        }
+        testDuplication(requestData.setRequireStable(false));
+        testEquivalentMessageRoundTrip(version, requestData.setRequireStable(false));
 
         OffsetFetchResponseTopics responseTopic1 =
             new OffsetFetchResponseTopics()
@@ -812,23 +801,10 @@ public final class MessageTest {
                 .setGroups(Arrays.asList(responseGroup1, responseGroup2, responseGroup3,
                     responseGroup4, responseGroup5))
                 .setThrottleTimeMs(10);
-        for (short version : ApiKeys.OFFSET_FETCH.allVersions()) {
-            if (version >= 8) {
-                OffsetFetchResponseData responseData = response.get();
-                testAllMessageRoundTripsOffsetFetchFromVersionV8AndAbove(version, responseData);
-            }
-        }
-    }
 
-    private void testAllMessageRoundTripsOffsetFetchV8AndAbove(Message message) throws Exception {
-        testDuplication(message);
-        testAllMessageRoundTripsOffsetFetchFromVersionV8AndAbove((short) 8, message);
-    }
-
-    private void testAllMessageRoundTripsOffsetFetchFromVersionV8AndAbove(short fromVersion, Message message) throws Exception {
-        for (short version = fromVersion; version <= message.highestSupportedVersion(); version++) {
-            testEquivalentMessageRoundTrip(version, message);
-        }
+        OffsetFetchResponseData responseData = response.get();
+        testDuplication(responseData);
+        testEquivalentMessageRoundTrip(version, responseData);
     }
 
     @Test
