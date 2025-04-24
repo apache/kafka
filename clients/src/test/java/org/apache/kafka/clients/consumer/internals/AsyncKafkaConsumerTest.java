@@ -223,10 +223,10 @@ public class AsyncKafkaConsumerTest {
             new StringDeserializer(),
             new StringDeserializer(),
             time,
-            (a, b, c, d, e, f, g, h) -> applicationEventHandler,
-            a -> backgroundEventReaper,
-            (a, b, c, d, e, f, g) -> fetchCollector,
-            (a, b, c, d) -> metadata,
+            (logContext, time, applicationEventBlockingQueue, completableEventReaper, applicationEventProcessorSupplier, networkClientDelegateSupplier, requestManagersSupplier, asyncConsumerMetrics) -> applicationEventHandler,
+            logContext -> backgroundEventReaper,
+            (logContext, consumerMetadata, subscriptionState, fetchConfig, deserializers, fetchMetricsManager, time) -> fetchCollector,
+            (consumerConfig, subscriptionState, logContext, clusterResourceListeners) -> metadata,
             backgroundEventQueue,
             Optional.ofNullable(streamsRebalanceData)
         );
@@ -238,10 +238,10 @@ public class AsyncKafkaConsumerTest {
             new StringDeserializer(),
             new StringDeserializer(),
             time,
-            (a, b, c, d, e, f, g, h) -> applicationEventHandler,
-            a -> backgroundEventReaper,
-            (a, b, c, d, e, f, g) -> fetchCollector,
-            (a, b, c, d) -> metadata,
+            (logContext, time, applicationEventBlockingQueue, completableEventReaper, applicationEventProcessorSupplier, networkClientDelegateSupplier, requestManagersSupplier, asyncConsumerMetrics) -> applicationEventHandler,
+            logContext -> backgroundEventReaper,
+            (logContext, consumerMetadata, subscriptionState, fetchConfig, deserializers, fetchMetricsManager, time) -> fetchCollector,
+            (consumerConfig, subscriptionState, logContext, clusterResourceListeners) -> metadata,
             backgroundEventQueue,
             Optional.empty()
         );
