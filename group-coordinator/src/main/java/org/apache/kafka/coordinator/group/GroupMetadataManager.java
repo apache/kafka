@@ -212,7 +212,6 @@ import static org.apache.kafka.common.protocol.Errors.COORDINATOR_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.ILLEGAL_GENERATION;
 import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
-import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.CONSUMER_GENERATED_MEMBER_ID_REQUIRED_VERSION;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
@@ -1430,55 +1429,6 @@ public class GroupMetadataManager {
                     ));
                 }
             }
-        }
-    }
-
-    /**
-     * Validates the request.
-     *
-     * @param request The request to validate.
-     * @param apiVersion The version of ConsumerGroupHeartbeat RPC
-     * @throws InvalidRequestException if the request is not valid.
-     * @throws UnsupportedAssignorException if the assignor is not supported.
-     */
-    private void throwIfConsumerGroupHeartbeatRequestIsInvalid(
-        ConsumerGroupHeartbeatRequestData request,
-        int apiVersion
-    ) throws InvalidRequestException, UnsupportedAssignorException {
-        if (apiVersion >= CONSUMER_GENERATED_MEMBER_ID_REQUIRED_VERSION ||
-            request.memberEpoch() > 0 ||
-            request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH
-        ) {
-            throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
-        }
-
-        throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
-        throwIfEmptyString(request.instanceId(), "InstanceId can't be empty.");
-        throwIfEmptyString(request.rackId(), "RackId can't be empty.");
-
-        if (request.memberEpoch() == 0) {
-            if (request.rebalanceTimeoutMs() == -1) {
-                throw new InvalidRequestException("RebalanceTimeoutMs must be provided in first request.");
-            }
-            if (request.topicPartitions() == null || !request.topicPartitions().isEmpty()) {
-                throw new InvalidRequestException("TopicPartitions must be empty when (re-)joining.");
-            }
-            // We accept members joining with an empty list of names or an empty regex. It basically
-            // means that they are not subscribed to any topics, but they are part of the group.
-            if (request.subscribedTopicNames() == null && request.subscribedTopicRegex() == null) {
-                throw new InvalidRequestException("Either SubscribedTopicNames or SubscribedTopicRegex must" +
-                    " be non-null when (re-)joining.");
-            }
-        } else if (request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
-            throwIfNull(request.instanceId(), "InstanceId can't be null.");
-        } else if (request.memberEpoch() < LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
-            throw new InvalidRequestException("MemberEpoch is invalid.");
-        }
-
-        if (request.serverAssignor() != null && !consumerGroupAssignors.containsKey(request.serverAssignor())) {
-            throw new UnsupportedAssignorException("ServerAssignor " + request.serverAssignor()
-                + " is not supported. Supported assignors: " + String.join(", ", consumerGroupAssignors.keySet())
-                + ".");
         }
     }
 
@@ -4687,8 +4637,6 @@ public class GroupMetadataManager {
         AuthorizableRequestContext context,
         ConsumerGroupHeartbeatRequestData request
     ) throws ApiException {
-        throwIfConsumerGroupHeartbeatRequestIsInvalid(request, context.requestVersion());
-
         if (request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH || request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             // -1 means that the member wants to leave the group.
             // -2 means that a static member wants to leave the group.

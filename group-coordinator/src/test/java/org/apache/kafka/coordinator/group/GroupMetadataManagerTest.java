@@ -36,7 +36,6 @@ import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
-import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -215,99 +214,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class GroupMetadataManagerTest {
-
-    @Test
-    public void testConsumerHeartbeatRequestValidation() {
-        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
-        String memberId = Uuid.randomUuid().toString();
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .build();
-        Exception ex;
-
-        // MemberId must be present in all requests.
-        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()));
-        assertEquals("MemberId can't be empty.", ex.getMessage());
-
-        // GroupId must be present in all requests.
-        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setMemberId(memberId)));
-        assertEquals("GroupId can't be empty.", ex.getMessage());
-
-        // GroupId can't be all whitespaces.
-        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("   ")));
-        assertEquals("GroupId can't be empty.", ex.getMessage());
-
-        // RebalanceTimeoutMs must be present in the first request (epoch == 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("foo")
-                .setMemberEpoch(0)));
-        assertEquals("RebalanceTimeoutMs must be provided in first request.", ex.getMessage());
-
-        // TopicPartitions must be present and empty in the first request (epoch == 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("foo")
-                .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(5000)));
-        assertEquals("TopicPartitions must be empty when (re-)joining.", ex.getMessage());
-
-        // SubscribedTopicNames or SubscribedTopicRegex must be present in the first request (epoch == 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("foo")
-                .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(5000)
-                .setTopicPartitions(List.of())));
-        assertEquals("Either SubscribedTopicNames or SubscribedTopicRegex must be non-null when (re-)joining.", ex.getMessage());
-
-        // InstanceId must be non-empty if provided in all requests.
-        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setGroupId("foo")
-                .setMemberId(memberId)
-                .setMemberEpoch(1)
-                .setInstanceId("")));
-        assertEquals("InstanceId can't be empty.", ex.getMessage());
-
-        // RackId must be non-empty if provided in all requests.
-        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setGroupId("foo")
-                .setMemberId(memberId)
-                .setMemberEpoch(1)
-                .setRackId("")));
-        assertEquals("RackId can't be empty.", ex.getMessage());
-
-        // ServerAssignor must exist if provided in all requests.
-        ex = assertThrows(UnsupportedAssignorException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setGroupId("foo")
-                .setMemberId(memberId)
-                .setMemberEpoch(1)
-                .setServerAssignor("bar")));
-        assertEquals("ServerAssignor bar is not supported. Supported assignors: range.", ex.getMessage());
-
-        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setGroupId("foo")
-                .setMemberId(memberId)
-                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
-                .setRebalanceTimeoutMs(5000)
-                .setSubscribedTopicNames(List.of("foo", "bar"))
-                .setTopicPartitions(List.of())));
-
-        assertEquals("InstanceId can't be null.", ex.getMessage());
-    }
 
     @Test
     public void testConsumerHeartbeatRegexValidation() {

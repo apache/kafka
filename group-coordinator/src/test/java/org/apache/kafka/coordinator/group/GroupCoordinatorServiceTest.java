@@ -91,6 +91,7 @@ import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.record.BrokerCompressionType;
 import org.apache.kafka.server.share.persister.DefaultStatePersister;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
@@ -135,6 +136,7 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.stream.Stream;
 
+import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
 import static org.apache.kafka.coordinator.common.runtime.TestUtil.requestContext;
 import static org.apache.kafka.coordinator.group.GroupConfigManagerTest.createConfigManager;
@@ -224,7 +226,12 @@ public class GroupCoordinatorServiceTest {
             .build(true);
 
         ConsumerGroupHeartbeatRequestData request = new ConsumerGroupHeartbeatRequestData()
-            .setGroupId("foo");
+            .setGroupId("foo")
+            .setMemberId(Uuid.randomUuid().toString())
+            .setMemberEpoch(0)
+            .setRebalanceTimeoutMs(5000)
+            .setSubscribedTopicNames(List.of("foo", "bar"))
+            .setTopicPartitions(List.of());
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("consumer-group-heartbeat"),
@@ -257,7 +264,12 @@ public class GroupCoordinatorServiceTest {
             .build(true);
 
         ConsumerGroupHeartbeatRequestData request = new ConsumerGroupHeartbeatRequestData()
-            .setGroupId("foo");
+            .setGroupId("foo")
+            .setMemberId(Uuid.randomUuid().toString())
+            .setMemberEpoch(0)
+            .setRebalanceTimeoutMs(5000)
+            .setSubscribedTopicNames(List.of("foo", "bar"))
+            .setTopicPartitions(List.of());
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("consumer-group-heartbeat"),
@@ -276,6 +288,162 @@ public class GroupCoordinatorServiceTest {
                 .setErrorCode(expectedErrorCode)
                 .setErrorMessage(expectedErrorMessage),
             future.get(5, TimeUnit.SECONDS)
+        );
+    }
+
+    @Test
+    public void testConsumerHeartbeatRequestValidation() throws ExecutionException, InterruptedException, TimeoutException {
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(mockRuntime())
+            .build(true);
+
+        AuthorizableRequestContext context = mock(AuthorizableRequestContext.class);
+        when(context.requestVersion()).thenReturn((int) ApiKeys.CONSUMER_GROUP_HEARTBEAT.latestVersion());
+
+        String memberId = Uuid.randomUuid().toString();
+
+        // MemberId must be present in all requests.
+        assertEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("MemberId can't be empty."),
+            service.consumerGroupHeartbeat(
+                context,
+                new ConsumerGroupHeartbeatRequestData()
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // GroupId must be present in all requests.
+        assertEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("GroupId can't be empty."),
+            service.consumerGroupHeartbeat(
+                context,
+                new ConsumerGroupHeartbeatRequestData()
+                    .setMemberId(memberId)
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // GroupId can't be all whitespaces.
+        assertEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("GroupId can't be empty."),
+            service.consumerGroupHeartbeat(
+                context,
+                new ConsumerGroupHeartbeatRequestData()
+                    .setMemberId(memberId)
+                    .setGroupId("   ")
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // RebalanceTimeoutMs must be present in the first request (epoch == 0).
+        assertEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("RebalanceTimeoutMs must be provided in first request."),
+            service.consumerGroupHeartbeat(
+                context,
+                new ConsumerGroupHeartbeatRequestData()
+                    .setMemberId(memberId)
+                    .setGroupId("foo")
+                    .setMemberEpoch(0)
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // TopicPartitions must be present and empty in the first request (epoch == 0).
+        assertEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("TopicPartitions must be empty when (re-)joining."),
+            service.consumerGroupHeartbeat(
+                context,
+                new ConsumerGroupHeartbeatRequestData()
+                    .setMemberId(memberId)
+                    .setGroupId("foo")
+                    .setMemberEpoch(0)
+                    .setRebalanceTimeoutMs(5000)
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // SubscribedTopicNames or SubscribedTopicRegex must be present in the first request (epoch == 0).
+        assertEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("Either SubscribedTopicNames or SubscribedTopicRegex must be non-null when (re-)joining."),
+            service.consumerGroupHeartbeat(
+                context,
+                new ConsumerGroupHeartbeatRequestData()
+                    .setMemberId(memberId)
+                    .setGroupId("foo")
+                    .setMemberEpoch(0)
+                    .setRebalanceTimeoutMs(5000)
+                    .setTopicPartitions(List.of())
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // InstanceId must be non-empty if provided in all requests.
+        assertEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("InstanceId can't be empty."),
+            service.consumerGroupHeartbeat(
+                context,
+                new ConsumerGroupHeartbeatRequestData()
+                    .setGroupId("foo")
+                    .setMemberId(memberId)
+                    .setMemberEpoch(1)
+                    .setInstanceId("")
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // RackId must be non-empty if provided in all requests.
+        assertEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("RackId can't be empty."),
+            service.consumerGroupHeartbeat(
+                context,
+                new ConsumerGroupHeartbeatRequestData()
+                    .setGroupId("foo")
+                    .setMemberId(memberId)
+                    .setMemberEpoch(1)
+                    .setRackId("")
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // ServerAssignor must exist if provided in all requests.
+        assertEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(Errors.UNSUPPORTED_ASSIGNOR.code())
+                .setErrorMessage("ServerAssignor bar is not supported. Supported assignors: range."),
+            service.consumerGroupHeartbeat(
+                context,
+                new ConsumerGroupHeartbeatRequestData()
+                    .setGroupId("foo")
+                    .setMemberId(memberId)
+                    .setMemberEpoch(1)
+                    .setServerAssignor("bar")
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // InstanceId must be non-empty if provided in all requests.
+        assertEquals(
+            new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(Errors.INVALID_REQUEST.code())
+                .setErrorMessage("InstanceId can't be null."),
+            service.consumerGroupHeartbeat(
+                context,
+                new ConsumerGroupHeartbeatRequestData()
+                    .setGroupId("foo")
+                    .setMemberId(memberId)
+                    .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                    .setRebalanceTimeoutMs(5000)
+                    .setSubscribedTopicNames(List.of("foo", "bar"))
+                    .setTopicPartitions(List.of())
+            ).get(5, TimeUnit.SECONDS)
         );
     }
 

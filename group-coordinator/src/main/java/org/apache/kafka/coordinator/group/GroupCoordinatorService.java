@@ -20,7 +20,9 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.config.TopicConfig;
+import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotCoordinatorException;
+import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
@@ -83,6 +85,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntimeMetrics;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorShardBuilderSupplier;
 import org.apache.kafka.coordinator.common.runtime.MultiThreadedEventProcessor;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
+import org.apache.kafka.coordinator.group.api.assignor.ConsumerGroupPartitionAssignor;
 import org.apache.kafka.coordinator.group.metrics.GroupCoordinatorMetrics;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.image.MetadataDelta;
@@ -126,7 +129,12 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
 import java.util.stream.Collectors;
 
+import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.CONSUMER_GENERATED_MEMBER_ID_REQUIRED_VERSION;
+import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
+import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.coordinator.common.runtime.CoordinatorOperationExceptionHelper.handleOperationException;
+import static org.apache.kafka.coordinator.group.Utils.throwIfEmptyString;
+import static org.apache.kafka.coordinator.group.Utils.throwIfNull;
 
 /**
  * The group coordinator service.
@@ -299,6 +307,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private final AtomicBoolean isActive = new AtomicBoolean(false);
 
     /**
+     * The set of supported consumer group assignors.
+     */
+    private final Set<String> consumerGroupAssignors;
+
+    /**
      * The number of partitions of the __consumer_offsets topics. This is provided
      * when the component is started.
      */
@@ -336,6 +349,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
         this.groupConfigManager = groupConfigManager;
         this.persister = persister;
         this.timer = timer;
+        this.consumerGroupAssignors = config
+            .consumerGroupAssignors()
+            .stream()
+            .map(ConsumerGroupPartitionAssignor::name)
+            .collect(Collectors.toSet());
     }
 
     /**
@@ -368,6 +386,55 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     /**
+     * Validates the request.
+     *
+     * @param request The request to validate.
+     * @param apiVersion The version of ConsumerGroupHeartbeat RPC
+     * @throws InvalidRequestException if the request is not valid.
+     * @throws UnsupportedAssignorException if the assignor is not supported.
+     */
+    private void throwIfConsumerGroupHeartbeatRequestIsInvalid(
+        ConsumerGroupHeartbeatRequestData request,
+        int apiVersion
+    ) throws InvalidRequestException, UnsupportedAssignorException {
+        if (apiVersion >= CONSUMER_GENERATED_MEMBER_ID_REQUIRED_VERSION ||
+            request.memberEpoch() > 0 ||
+            request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH
+        ) {
+            throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
+        }
+
+        throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
+        throwIfEmptyString(request.instanceId(), "InstanceId can't be empty.");
+        throwIfEmptyString(request.rackId(), "RackId can't be empty.");
+
+        if (request.memberEpoch() == 0) {
+            if (request.rebalanceTimeoutMs() == -1) {
+                throw new InvalidRequestException("RebalanceTimeoutMs must be provided in first request.");
+            }
+            if (request.topicPartitions() == null || !request.topicPartitions().isEmpty()) {
+                throw new InvalidRequestException("TopicPartitions must be empty when (re-)joining.");
+            }
+            // We accept members joining with an empty list of names or an empty regex. It basically
+            // means that they are not subscribed to any topics, but they are part of the group.
+            if (request.subscribedTopicNames() == null && request.subscribedTopicRegex() == null) {
+                throw new InvalidRequestException("Either SubscribedTopicNames or SubscribedTopicRegex must" +
+                    " be non-null when (re-)joining.");
+            }
+        } else if (request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
+            throwIfNull(request.instanceId(), "InstanceId can't be null.");
+        } else if (request.memberEpoch() < LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
+            throw new InvalidRequestException("MemberEpoch is invalid.");
+        }
+
+        if (request.serverAssignor() != null && !consumerGroupAssignors.contains(request.serverAssignor())) {
+            throw new UnsupportedAssignorException("ServerAssignor " + request.serverAssignor()
+                + " is not supported. Supported assignors: " + String.join(", ", consumerGroupAssignors)
+                + ".");
+        }
+    }
+
+    /**
      * See {@link GroupCoordinator#consumerGroupHeartbeat(AuthorizableRequestContext, ConsumerGroupHeartbeatRequestData)}.
      */
     @Override
@@ -378,6 +445,16 @@ public class GroupCoordinatorService implements GroupCoordinator {
         if (!isActive.get()) {
             return CompletableFuture.completedFuture(new ConsumerGroupHeartbeatResponseData()
                 .setErrorCode(Errors.COORDINATOR_NOT_AVAILABLE.code())
+            );
+        }
+
+        try {
+            throwIfConsumerGroupHeartbeatRequestIsInvalid(request, context.requestVersion());
+        } catch (Throwable ex) {
+            ApiError apiError = ApiError.fromThrowable(ex);
+            return CompletableFuture.completedFuture(new ConsumerGroupHeartbeatResponseData()
+                .setErrorCode(apiError.error().code())
+                .setErrorMessage(apiError.message())
             );
         }
 
