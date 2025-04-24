@@ -349,7 +349,7 @@ public class StreamsRebalanceData {
         return partitionsByHost.get();
     }
 
-    /** For the current stream thread to request a shutdown of all Streams clients belonging to the same applications. */
+    /** For the current stream thread to request a shutdown of all Streams clients belonging to the same application. */
     public void requestShutdown() {
         shutdownRequested.set(true);
     }
