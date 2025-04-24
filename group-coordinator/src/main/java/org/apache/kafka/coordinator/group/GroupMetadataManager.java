@@ -186,7 +186,6 @@ import org.slf4j.Logger;
 
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -239,6 +238,11 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
 import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
+import static org.apache.kafka.coordinator.group.Utils.throwIfEmptyString;
+import static org.apache.kafka.coordinator.group.Utils.throwIfNotEmptyCollection;
+import static org.apache.kafka.coordinator.group.Utils.throwIfNotNull;
+import static org.apache.kafka.coordinator.group.Utils.throwIfNull;
+import static org.apache.kafka.coordinator.group.Utils.throwIfRegularExpressionIsInvalid;
 import static org.apache.kafka.coordinator.group.Utils.toConsumerProtocolAssignment;
 import static org.apache.kafka.coordinator.group.Utils.toTopicPartitions;
 import static org.apache.kafka.coordinator.group.classic.ClassicGroupMember.EMPTY_ASSIGNMENT;
@@ -1412,39 +1416,6 @@ public class GroupMetadataManager {
         groups.remove(groupId);
     }
 
-    /**
-     * Throws an InvalidRequestException if the value is non-null and empty.
-     * A string containing only whitespaces is also considered empty.
-     *
-     * @param value The value.
-     * @param error The error message.
-     * @throws InvalidRequestException
-     */
-    private static void throwIfEmptyString(
-        String value,
-        String error
-    ) throws InvalidRequestException {
-        if (value != null && value.trim().isEmpty()) {
-            throw new InvalidRequestException(error);
-        }
-    }
-
-    /**
-     * Throws an InvalidRequestException if the value is null or non-empty.
-     *
-     * @param value The value.
-     * @param error The error message.
-     * @throws InvalidRequestException
-     */
-    private static void throwIfNotEmptyCollection(
-        Collection<?> value,
-        String error
-    ) throws InvalidRequestException {
-        if (value == null || !value.isEmpty()) {
-            throw new InvalidRequestException(error);
-        }
-    }
-
     private static void throwIfInvalidTopology(
         StreamsGroupHeartbeatRequestData.Topology topology
     ) throws StreamsInvalidTopologyException {
@@ -1457,38 +1428,6 @@ public class GroupMetadataManager {
                     ));
                 }
             }
-        }
-    }
-
-    /**
-     * Throws an InvalidRequestException if the value is non-null.
-     *
-     * @param value The value.
-     * @param error The error message.
-     * @throws InvalidRequestException
-     */
-    private static void throwIfNotNull(
-        Object value,
-        String error
-    ) throws InvalidRequestException {
-        if (value != null) {
-            throw new InvalidRequestException(error);
-        }
-    }
-
-    /**
-     * Throws an InvalidRequestException if the value is null.
-     *
-     * @param value The value.
-     * @param error The error message.
-     * @throws InvalidRequestException
-     */
-    private static void throwIfNull(
-        Object value,
-        String error
-    ) throws InvalidRequestException {
-        if (value == null) {
-            throw new InvalidRequestException(error);
         }
     }
 
@@ -1971,24 +1910,6 @@ public class GroupMetadataManager {
                 String.format("A new rebalance is triggered in group %s and member %s should rejoin to catch up.",
                     group.groupId(), member.memberId())
             );
-        }
-    }
-
-    /**
-     * Validates if the provided regular expression is valid.
-     *
-     * @param regex The regular expression to validate.
-     * @throws InvalidRegularExpression if the regular expression is invalid.
-     */
-    private static void throwIfRegularExpressionIsInvalid(
-        String regex
-    ) throws InvalidRegularExpression {
-        try {
-            Pattern.compile(regex);
-        } catch (PatternSyntaxException ex) {
-            throw new InvalidRegularExpression(
-                String.format("SubscribedTopicRegex `%s` is not a valid regular expression: %s.",
-                    regex, ex.getDescription()));
         }
     }
 
