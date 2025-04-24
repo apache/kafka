@@ -5075,9 +5075,13 @@ public class GroupMetadataManager {
 
     private Map<Uuid, String> attachTopicName(Set<Uuid> topicIds) {
         TopicsImage topicsImage = metadataImage.topics();
-        return topicIds.stream()
-            .map(topicId -> Map.entry(topicId, topicsImage.getTopic(topicId).name()))
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        Map<Uuid, String> finalMap = new HashMap<>();
+        for (Uuid topicId : topicIds) {
+            TopicImage topicImage = topicsImage.getTopic(topicId);
+            String topicName = (topicImage != null) ? topicImage.name() : "<UNKNOWN>";
+            finalMap.put(topicId, topicName);
+        }
+        return Collections.unmodifiableMap(finalMap);
     }
 
     private Map<Uuid, Map.Entry<String, Set<Integer>>> attachTopicName(Map<Uuid, Set<Integer>> initMap) {
@@ -5085,7 +5089,8 @@ public class GroupMetadataManager {
         Map<Uuid, Map.Entry<String, Set<Integer>>> finalMap = new HashMap<>();
         for (Map.Entry<Uuid, Set<Integer>> entry : initMap.entrySet()) {
             Uuid topicId = entry.getKey();
-            String topicName = topicsImage.getTopic(topicId).name();
+            TopicImage topicImage = topicsImage.getTopic(topicId);
+            String topicName = (topicImage != null) ? topicImage.name() : "<UNKNOWN>";
             finalMap.put(topicId, Map.entry(topicName, entry.getValue()));
         }
         return Collections.unmodifiableMap(finalMap);
