@@ -17,6 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponsePartition;
 import org.apache.kafka.common.message.OffsetCommitResponseData.OffsetCommitResponseTopic;
@@ -123,43 +124,56 @@ public class OffsetCommitResponse extends AbstractResponse {
         return version >= 4;
     }
 
-    public static class Builder {
-        OffsetCommitResponseData data = new OffsetCommitResponseData();
-        HashMap<String, OffsetCommitResponseTopic> byTopicName = new HashMap<>();
+    public static boolean useTopicIds(short version) {
+        return version >= 10;
+    }
 
-        private OffsetCommitResponseTopic getOrCreateTopic(
-            String topicName
-        ) {
-            OffsetCommitResponseTopic topic = byTopicName.get(topicName);
-            if (topic == null) {
-                topic = new OffsetCommitResponseTopic().setName(topicName);
-                data.topics().add(topic);
-                byTopicName.put(topicName, topic);
-            }
-            return topic;
+    public static Builder newBuilder(boolean useTopicIds) {
+        if (useTopicIds) {
+            return new TopicIdBuilder();
+        } else {
+            return new TopicNameBuilder();
         }
+    }
+
+    public abstract static class Builder {
+        protected OffsetCommitResponseData data = new OffsetCommitResponseData();
+
+        protected abstract void add(
+            OffsetCommitResponseTopic topic
+        );
+
+        protected abstract OffsetCommitResponseTopic get(
+            Uuid topicId,
+            String topicName
+        );
+
+        protected abstract OffsetCommitResponseTopic getOrCreate(
+            Uuid topicId,
+            String topicName
+        );
 
         public Builder addPartition(
+            Uuid topicId,
             String topicName,
             int partitionIndex,
             Errors error
         ) {
-            final OffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName);
-
+            final OffsetCommitResponseTopic topicResponse = getOrCreate(topicId, topicName);
             topicResponse.partitions().add(new OffsetCommitResponsePartition()
                 .setPartitionIndex(partitionIndex)
                 .setErrorCode(error.code()));
-
             return this;
         }
 
         public <P> Builder addPartitions(
+            Uuid topicId,
             String topicName,
             List<P> partitions,
             Function<P, Integer> partitionIndex,
             Errors error
         ) {
-            final OffsetCommitResponseTopic topicResponse = getOrCreateTopic(topicName);
+            final OffsetCommitResponseTopic topicResponse = getOrCreate(topicId, topicName);
             partitions.forEach(partition ->
                 topicResponse.partitions().add(new OffsetCommitResponsePartition()
                     .setPartitionIndex(partitionIndex.apply(partition))
@@ -177,11 +191,10 @@ public class OffsetCommitResponse extends AbstractResponse {
             } else {
                 // Otherwise, we have to merge them together.
                 newData.topics().forEach(newTopic -> {
-                    OffsetCommitResponseTopic existingTopic = byTopicName.get(newTopic.name());
+                    OffsetCommitResponseTopic existingTopic = get(newTopic.topicId(), newTopic.name());
                     if (existingTopic == null) {
                         // If no topic exists, we can directly copy the new topic data.
-                        data.topics().add(newTopic);
-                        byTopicName.put(newTopic.name(), newTopic);
+                        add(newTopic);
                     } else {
                         // Otherwise, we add the partitions to the existing one. Note we
                         // expect non-overlapping partitions here as we don't verify
@@ -190,12 +203,85 @@ public class OffsetCommitResponse extends AbstractResponse {
                     }
                 });
             }
-
             return this;
         }
 
         public OffsetCommitResponse build() {
             return new OffsetCommitResponse(data);
+        }
+    }
+
+    public static class TopicIdBuilder extends Builder {
+        private final HashMap<Uuid, OffsetCommitResponseTopic> byTopicId = new HashMap<>();
+
+        @Override
+        protected void add(OffsetCommitResponseTopic topic) {
+            throwIfTopicIdIsNull(topic.topicId());
+            data.topics().add(topic);
+            byTopicId.put(topic.topicId(), topic);
+        }
+
+        @Override
+        protected OffsetCommitResponseTopic get(Uuid topicId, String topicName) {
+            throwIfTopicIdIsNull(topicId);
+            return byTopicId.get(topicId);
+        }
+
+        @Override
+        protected OffsetCommitResponseTopic getOrCreate(Uuid topicId, String topicName) {
+            throwIfTopicIdIsNull(topicId);
+            OffsetCommitResponseTopic topic = byTopicId.get(topicId);
+            if (topic == null) {
+                topic = new OffsetCommitResponseTopic()
+                    .setName(topicName)
+                    .setTopicId(topicId);
+                data.topics().add(topic);
+                byTopicId.put(topicId, topic);
+            }
+            return topic;
+        }
+
+        private static void throwIfTopicIdIsNull(Uuid topicId) {
+            if (topicId == null) {
+                throw new IllegalArgumentException("TopicId cannot be null.");
+            }
+        }
+    }
+
+    public static class TopicNameBuilder extends Builder {
+        private final HashMap<String, OffsetCommitResponseTopic> byTopicName = new HashMap<>();
+
+        @Override
+        protected void add(OffsetCommitResponseTopic topic) {
+            throwIfTopicNameIsNull(topic.name());
+            data.topics().add(topic);
+            byTopicName.put(topic.name(), topic);
+        }
+
+        @Override
+        protected OffsetCommitResponseTopic get(Uuid topicId, String topicName) {
+            throwIfTopicNameIsNull(topicName);
+            return byTopicName.get(topicName);
+        }
+
+        @Override
+        protected OffsetCommitResponseTopic getOrCreate(Uuid topicId, String topicName) {
+            throwIfTopicNameIsNull(topicName);
+            OffsetCommitResponseTopic topic = byTopicName.get(topicName);
+            if (topic == null) {
+                topic = new OffsetCommitResponseTopic()
+                    .setName(topicName)
+                    .setTopicId(topicId);
+                data.topics().add(topic);
+                byTopicName.put(topicName, topic);
+            }
+            return topic;
+        }
+
+        private void throwIfTopicNameIsNull(String topicName) {
+            if (topicName == null) {
+                throw new IllegalArgumentException("TopicName cannot be null.");
+            }
         }
     }
 }

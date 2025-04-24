@@ -357,6 +357,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
     private final AtomicBoolean leaveGroupRequested = new AtomicBoolean(false);
+    private final AtomicLong lastShutdownWarningTimestamp = new AtomicLong(0L);
     private final boolean eosEnabled;
     private final boolean stateUpdaterEnabled;
     private final boolean processingThreadsEnabled;
@@ -533,7 +534,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                                                        final Map<String, Object> consumerConfigs) {
         if (config.getString(StreamsConfig.GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name)) {
             if (topologyMetadata.hasNamedTopologies()) {
-                throw new IllegalStateException("Named topologies and the CONSUMER protocol cannot be used at the same time.");
+                throw new IllegalStateException("Named topologies and the STREAMS protocol cannot be used at the same time.");
             }
             log.info("Streams rebalance protocol enabled");
 
@@ -1029,8 +1030,14 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     public void maybeSendShutdown() {
         if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
-            log.warn("Detected that shutdown was requested. " +
-                    "All clients in this app will now begin to shutdown");
+            final long now = time.milliseconds();
+            final long lastLogged = lastShutdownWarningTimestamp.get();
+            if (now - lastLogged >= 10_000L) {
+                if (lastShutdownWarningTimestamp.compareAndSet(lastLogged, now)) {
+                    log.warn("Detected that shutdown was requested. " +
+                            "All clients in this app will now begin to shutdown");
+                }
+            }
             mainConsumer.enforceRebalance("Shutdown requested");
         }
     }
@@ -2014,5 +2021,9 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     Admin adminClient() {
         return adminClient;
+    }
+
+    Optional<StreamsRebalanceData> streamsRebalanceData() {
+        return streamsRebalanceData;
     }
 }
