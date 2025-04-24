@@ -1761,9 +1761,10 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Close the consumer, waiting for up to the default timeout of 30 seconds for any needed cleanup.
+     * Close the consumer with {@link CloseOptions.GroupMembershipOperation#DEFAULT default membership operation},
+     * waiting for up to the default timeout of 30 seconds for any needed cleanup.
      * If auto-commit is enabled, this will commit the current offsets if possible within the default
-     * timeout. See {@link #close(Duration)} for details. Note that {@link #wakeup()}
+     * timeout. See {@link #close(CloseOptions)} for details. Note that {@link #wakeup()}
      * cannot be used to interrupt close.
      *
      * @throws org.apache.kafka.common.errors.InterruptException if the calling thread is interrupted
@@ -1776,7 +1777,9 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Tries to close the consumer cleanly within the specified timeout. This method waits up to
+     * This method has been deprecated since Kafka 4.0 and should use {@link KafkaConsumer#close(CloseOptions)} instead.
+     * <p>
+     * Close the consumer cleanly within the specified timeout. This method waits up to
      * {@code timeout} for the consumer to complete pending commits and leave the group.
      * If auto-commit is enabled, this will commit the current offsets if possible within the
      * timeout. If the consumer is unable to complete offset commits and gracefully leave the group
@@ -1797,10 +1800,38 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws InterruptException If the thread is interrupted before or while this function is called
      * @throws org.apache.kafka.common.KafkaException for any other error during close
      */
+    @Deprecated
     @Override
-    @SuppressWarnings("deprecation")
     public void close(Duration timeout) {
         delegate.close(timeout);
+    }
+
+    /**
+     * Close the consumer cleanly. {@link CloseOptions} allows to specify a timeout and a
+     * {@link CloseOptions.GroupMembershipOperation membership operation}.
+     * If no timeout is specified, the default timeout of 30 seconds is uses.
+     * If no membership operation is specified, the {@link CloseOptions.GroupMembershipOperation#DEFAULT default
+     * membership operation} is used.
+     * <p>
+     * This method waits up to the timeout for the consumer to complete pending commits and may leave the group,
+     * depending on the specified membership operation.
+     * If auto-commit is enabled, this will commit the current offsets if possible within the
+     * timeout. If the consumer is unable to complete offset commits and gracefully leave the group (if applicable)
+     * before the timeout expires, the consumer is force closed. Note that {@link #wakeup()} cannot be
+     * used to interrupt close.
+     * <p>
+     * The actual maximum wait time is bounded by the {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} setting, which
+     * only applies to operations performed with the broker (coordinator-related requests and
+     * fetch sessions). Even if a larger timeout is specified, the consumer will not wait longer than
+     * {@link ConsumerConfig#REQUEST_TIMEOUT_MS_CONFIG} for these requests to complete during the close operation.
+     * Note that the execution time of callbacks (such as {@link OffsetCommitCallback} and
+     * {@link ConsumerRebalanceListener}) does not consume time from the close timeout.
+     *
+     * @param option see {@link CloseOptions}; cannot be {@code null}
+     */
+    @Override
+    public void close(CloseOptions option) {
+        delegate.close(option);
     }
 
     /**
@@ -1811,17 +1842,6 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     @Override
     public void wakeup() {
         delegate.wakeup();
-    }
-
-    /**
-     * This method allows the caller to specify shutdown behavior using the {@link CloseOptions} class.
-     * If {@code null} is provided, the default behavior will be applied, equivalent to providing a new {@link CloseOptions} instance.
-     *
-     * @param option see {@link CloseOptions}
-     */
-    @Override
-    public void close(CloseOptions option) {
-        delegate.close(option);
     }
 
     // Functions below are for testing only
