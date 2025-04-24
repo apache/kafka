@@ -78,10 +78,10 @@ public class ShareGroupHeartbeatResponse extends AbstractResponse {
         Map<Uuid, Set<Integer>> assignment
     ) {
         List<ShareGroupHeartbeatResponseData.TopicPartitions> topicPartitions = assignment.entrySet().stream()
-        .map(keyValue -> new ShareGroupHeartbeatResponseData.TopicPartitions()
-            .setTopicId(keyValue.getKey())
-            .setPartitions(new ArrayList<>(keyValue.getValue())))
-        .collect(Collectors.toList());
+            .map(keyValue -> new ShareGroupHeartbeatResponseData.TopicPartitions()
+                .setTopicId(keyValue.getKey())
+                .setPartitions(new ArrayList<>(keyValue.getValue())))
+            .collect(Collectors.toList());
 
         return new ShareGroupHeartbeatResponseData.Assignment()
             .setTopicPartitions(topicPartitions);
