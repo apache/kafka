@@ -201,16 +201,16 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
 
         public GroupCoordinatorService build() {
-            requireNonNull(config, new IllegalArgumentException("Config must be set."));
-            requireNonNull(writer, new IllegalArgumentException("Writer must be set."));
-            requireNonNull(loader, new IllegalArgumentException("Loader must be set."));
-            requireNonNull(time, new IllegalArgumentException("Time must be set."));
-            requireNonNull(timer, new IllegalArgumentException("Timer must be set."));
-            requireNonNull(coordinatorRuntimeMetrics, new IllegalArgumentException("CoordinatorRuntimeMetrics must be set."));
-            requireNonNull(groupCoordinatorMetrics, new IllegalArgumentException("GroupCoordinatorMetrics must be set."));
-            requireNonNull(groupConfigManager, new IllegalArgumentException("GroupConfigManager must be set."));
-            requireNonNull(persister, new IllegalArgumentException("Persister must be set."));
-            requireNonNull(authorizerPlugin, new IllegalArgumentException("Authorizer must be set."));
+            requireNonNull(config, "Config must be set.");
+            requireNonNull(writer, "Writer must be set.");
+            requireNonNull(loader, "Loader must be set.");
+            requireNonNull(time, "Time must be set.");
+            requireNonNull(timer, "Timer must be set.");
+            requireNonNull(coordinatorRuntimeMetrics, "CoordinatorRuntimeMetrics must be set.");
+            requireNonNull(groupCoordinatorMetrics, "GroupCoordinatorMetrics must be set.");
+            requireNonNull(groupConfigManager, "GroupConfigManager must be set.");
+            requireNonNull(persister, "Persister must be set.");
+            requireNonNull(authorizerPlugin, "Authorizer must be set.");
 
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
@@ -1972,9 +1972,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
     }
 
-    private static void requireNonNull(Object obj, RuntimeException throwable) {
+    private static void requireNonNull(Object obj, String msg) {
         if (obj == null) {
-            throw throwable;
+            throw new IllegalArgumentException(msg);
         }
     }
 }
