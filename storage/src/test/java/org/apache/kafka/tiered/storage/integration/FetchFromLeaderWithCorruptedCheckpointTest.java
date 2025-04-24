@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.tiered.storage.integration;
 
-import kafka.log.LogManager;
 import kafka.server.ReplicaManager;
 
 import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
+import org.apache.kafka.storage.internals.log.LogManager;
 import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
 import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
@@ -50,7 +50,7 @@ public class FetchFromLeaderWithCorruptedCheckpointTest extends TieredStorageTes
         final Map<Integer, List<Integer>> assignment = mkMap(mkEntry(p0, List.of(broker0, broker1)));
         final List<String> checkpointFiles = List.of(
                 ReplicaManager.HighWatermarkFilename(),
-                LogManager.RecoveryPointCheckpointFile(),
+                LogManager.RECOVERY_POINT_CHECKPOINT_FILE,
                 CleanShutdownFileHandler.CLEAN_SHUTDOWN_FILE_NAME);
 
         builder.createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment, assignment,

@@ -21,7 +21,6 @@ import com.yammer.metrics.core.{Gauge, Meter, Timer}
 import kafka.cluster.PartitionTest.MockPartitionListener
 import kafka.cluster.Partition
 import kafka.log.LogManager
-import kafka.log.remote.RemoteLogManager
 import org.apache.kafka.server.log.remote.quota.RLMQuotaManagerConfig.INACTIVE_SENSOR_EXPIRATION_TIME_SECONDS
 import org.apache.kafka.server.log.remote.quota.RLMQuotaMetrics
 import kafka.server.QuotaFactory.{QuotaManagers, UNBOUNDED_QUOTA}
@@ -3793,8 +3792,8 @@ class ReplicaManagerTest {
       _ => Optional.of(mockLog),
       (TopicPartition, Long) => {},
       brokerTopicStats,
-      metrics)
-    remoteLogManager.startup()
+      metrics,
+      Optional.empty)
     val spyRLM = spy(remoteLogManager)
 
     val replicaManager = setupReplicaManagerWithMockedPurgatories(new MockTimer(time), aliveBrokerIds = Seq(0, 1, 2), enableRemoteStorage = true, shouldMockLog = true, remoteLogManager = Some(spyRLM))
@@ -3904,8 +3903,8 @@ class ReplicaManagerTest {
       _ => Optional.of(dummyLog),
       (TopicPartition, Long) => {},
       brokerTopicStats,
-      metrics)
-    remoteLogManager.startup()
+      metrics,
+      Optional.empty)
     val spyRLM = spy(remoteLogManager)
     val timer = new MockTimer(time)
 

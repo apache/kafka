@@ -2236,7 +2236,7 @@ public class CoordinatorRuntime<S extends CoordinatorShard<U>, U> implements Aut
         short producerEpoch,
         Duration timeout,
         CoordinatorWriteOperation<S, T, U> op,
-        Short apiVersion
+        int apiVersion
     ) {
         throwIfNotRunning();
         log.debug("Scheduled execution of transactional write operation {}.", name);

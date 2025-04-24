@@ -58,9 +58,10 @@ public class TopicConfig {
     public static final String FLUSH_MS_CONFIG = "flush.ms";
     public static final String FLUSH_MS_DOC = "This setting allows specifying a time interval at which we will " +
         "force an fsync of data written to the log. For example if this was set to 1000 " +
-        "we would fsync after 1000 ms had passed. In general we recommend you not set " +
-        "this and use replication for durability and allow the operating system's background " +
-        "flush capabilities as it is more efficient.";
+        "we would fsync after 1000 ms had passed. Note that this setting depends on the broker-level " +
+        "configuration <code>log.flush.scheduler.interval.ms</code>, which controls how frequently the flush check occurs. " +
+        "In general we recommend you not set this and use replication for durability and allow the operating system's " +
+        "background flush capabilities as it is more efficient.";
 
     public static final String RETENTION_BYTES_CONFIG = "retention.bytes";
     public static final String RETENTION_BYTES_DOC = "This configuration controls the maximum size a partition " +
@@ -107,10 +108,7 @@ public class TopicConfig {
 
     public static final String MAX_MESSAGE_BYTES_CONFIG = "max.message.bytes";
     public static final String MAX_MESSAGE_BYTES_DOC =
-        "The largest record batch size allowed by Kafka (after compression if compression is enabled). " +
-        "In the latest message format version, records are always grouped into batches for efficiency. " +
-        "In previous message format versions, uncompressed records are not grouped into batches and this " +
-        "limit only applies to a single record in that case.";
+        "The largest record batch size allowed by Kafka (after compression if compression is enabled).";
 
     public static final String INDEX_INTERVAL_BYTES_CONFIG = "index.interval.bytes";
     public static final String INDEX_INTERVAL_BYTES_DOC = "This setting controls how frequently " +

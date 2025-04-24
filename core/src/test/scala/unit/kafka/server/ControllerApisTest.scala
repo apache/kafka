@@ -26,7 +26,7 @@ import org.apache.kafka.common.Uuid.ZERO_UUID
 import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.config.{ConfigResource, TopicConfig}
 import org.apache.kafka.common.errors._
-import org.apache.kafka.common.internals.Topic
+import org.apache.kafka.common.internals.{Plugin, Topic}
 import org.apache.kafka.common.memory.MemoryPool
 import org.apache.kafka.common.message.AlterConfigsRequestData.{AlterConfigsResource => OldAlterConfigsResource, AlterConfigsResourceCollection => OldAlterConfigsResourceCollection, AlterableConfig => OldAlterableConfig, AlterableConfigCollection => OldAlterableConfigCollection}
 import org.apache.kafka.common.message.AlterConfigsResponseData.{AlterConfigsResourceResponse => OldAlterConfigsResourceResponse}
@@ -151,7 +151,7 @@ class ControllerApisTest {
 
   private var controllerApis: ControllerApis = _
 
-  private def createControllerApis(authorizer: Option[Authorizer],
+  private def createControllerApis(authorizer: Option[Plugin[Authorizer]],
                                    controller: Controller,
                                    props: Properties = new Properties(),
                                    throttle: Boolean = false): ControllerApis = {
@@ -200,7 +200,7 @@ class ControllerApisTest {
       requestChannelMetrics)
   }
 
-  def createDenyAllAuthorizer(): Authorizer = {
+  def createDenyAllAuthorizer(): Plugin[Authorizer] = {
     val authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(
       any(classOf[AuthorizableRequestContext]),
@@ -208,7 +208,7 @@ class ControllerApisTest {
     )).thenReturn(
       singletonList(AuthorizationResult.DENIED)
     )
-    authorizer
+    Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
   }
 
   @Test
@@ -1009,7 +1009,8 @@ class ControllerApisTest {
       .newInitialTopic("foo", Uuid.fromString("vZKYST0pSA2HO5x_6hoO2Q"))
       .build()
     val authorizer = mock(classOf[Authorizer])
-    controllerApis = createControllerApis(Some(authorizer), controller)
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
+    controllerApis = createControllerApis(Some(authorizerPlugin), controller)
     val requestData = new CreatePartitionsRequestData()
     requestData.topics().add(new CreatePartitionsTopic().setName("foo").setAssignments(null).setCount(2))
     requestData.topics().add(new CreatePartitionsTopic().setName("bar").setAssignments(null).setCount(10))
@@ -1069,8 +1070,9 @@ class ControllerApisTest {
   @Test
   def testElectLeadersAuthorization(): Unit = {
     val authorizer = mock(classOf[Authorizer])
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
     val controller = mock(classOf[Controller])
-    controllerApis = createControllerApis(Some(authorizer), controller)
+    controllerApis = createControllerApis(Some(authorizerPlugin), controller)
     val request = new ElectLeadersRequest.Builder(
       ElectionType.PREFERRED,
       null,
@@ -1213,7 +1215,8 @@ class ControllerApisTest {
   def testAssignReplicasToDirs(): Unit = {
     val controller = mock(classOf[Controller])
     val authorizer = mock(classOf[Authorizer])
-    controllerApis = createControllerApis(Some(authorizer), controller)
+    val authorizerPlugin = Plugin.wrapInstance(authorizer, null, "authorizer.class.name")
+    controllerApis = createControllerApis(Some(authorizerPlugin), controller)
     val request = new AssignReplicasToDirsRequest.Builder(new AssignReplicasToDirsRequestData()).build()
 
     when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(Collections.singletonList(new Action(

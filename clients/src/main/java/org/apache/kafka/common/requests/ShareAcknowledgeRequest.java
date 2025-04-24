@@ -36,11 +36,7 @@ public class ShareAcknowledgeRequest extends AbstractRequest {
         private final ShareAcknowledgeRequestData data;
 
         public Builder(ShareAcknowledgeRequestData data) {
-            this(data, false);
-        }
-
-        public Builder(ShareAcknowledgeRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.SHARE_ACKNOWLEDGE, enableUnstableLastVersion);
+            super(ApiKeys.SHARE_ACKNOWLEDGE);
             this.data = data;
         }
 
@@ -79,7 +75,7 @@ public class ShareAcknowledgeRequest extends AbstractRequest {
                 partMap.forEach((index, ackPartition) -> ackTopic.partitions().add(ackPartition));
             });
 
-            return new ShareAcknowledgeRequest.Builder(data, true);
+            return new ShareAcknowledgeRequest.Builder(data);
         }
 
         public ShareAcknowledgeRequestData data() {
