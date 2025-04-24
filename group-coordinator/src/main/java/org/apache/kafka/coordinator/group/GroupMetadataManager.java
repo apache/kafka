@@ -30,11 +30,9 @@ import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.InvalidRegularExpression;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
-import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
-import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
@@ -239,10 +237,6 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
 import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
-import static org.apache.kafka.coordinator.group.Utils.throwIfEmptyString;
-import static org.apache.kafka.coordinator.group.Utils.throwIfNotEmptyCollection;
-import static org.apache.kafka.coordinator.group.Utils.throwIfNotNull;
-import static org.apache.kafka.coordinator.group.Utils.throwIfNull;
 import static org.apache.kafka.coordinator.group.Utils.throwIfRegularExpressionIsInvalid;
 import static org.apache.kafka.coordinator.group.Utils.toConsumerProtocolAssignment;
 import static org.apache.kafka.coordinator.group.Utils.toTopicPartitions;
@@ -1415,65 +1409,6 @@ public class GroupMetadataManager {
         String groupId
     ) {
         groups.remove(groupId);
-    }
-
-    private static void throwIfInvalidTopology(
-        StreamsGroupHeartbeatRequestData.Topology topology
-    ) throws StreamsInvalidTopologyException {
-        for (StreamsGroupHeartbeatRequestData.Subtopology subtopology: topology.subtopologies()) {
-            for (StreamsGroupHeartbeatRequestData.TopicInfo topicInfo: subtopology.stateChangelogTopics()) {
-                if (topicInfo.partitions() != 0) {
-                    throw new StreamsInvalidTopologyException(String.format(
-                        "Changelog topic %s must have an undefined partition count, but it is set to %d.",
-                        topicInfo.name(), topicInfo.partitions()
-                    ));
-                }
-            }
-        }
-    }
-
-    /**
-     * Validates the request.
-     *
-     * @param request The request to validate.
-     * @throws InvalidRequestException if the request is not valid.
-     * @throws UnsupportedAssignorException if the assignor is not supported.
-     */
-    private static void throwIfStreamsGroupHeartbeatRequestIsInvalid(
-        StreamsGroupHeartbeatRequestData request
-    ) throws InvalidRequestException {
-        throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
-        throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
-        throwIfEmptyString(request.instanceId(), "InstanceId can't be empty.");
-        throwIfEmptyString(request.rackId(), "RackId can't be empty.");
-
-        if (request.memberEpoch() == 0) {
-            if (request.rebalanceTimeoutMs() == -1) {
-                throw new InvalidRequestException("RebalanceTimeoutMs must be provided in first request.");
-            }
-            throwIfNotEmptyCollection(request.activeTasks(), "ActiveTasks must be empty when (re-)joining.");
-            throwIfNotEmptyCollection(request.standbyTasks(), "StandbyTasks must be empty when (re-)joining.");
-            throwIfNotEmptyCollection(request.warmupTasks(), "WarmupTasks must be empty when (re-)joining.");
-            throwIfNull(request.topology(), "Topology must be non-null when (re-)joining.");
-            if (request.topology() != null) {
-                throwIfInvalidTopology(request.topology());
-            }
-        } else if (request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
-            throwIfNull(request.instanceId(), "InstanceId can't be null.");
-        } else if (request.memberEpoch() < LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
-            throw new InvalidRequestException(String.format("MemberEpoch is %d, but must be greater than or equal to -2.",
-                request.memberEpoch()));
-        }
-
-        if (request.activeTasks() != null || request.standbyTasks() != null || request.warmupTasks() != null) {
-            throwIfNull(request.activeTasks(), "If one task-type is non-null, all must be non-null.");
-            throwIfNull(request.standbyTasks(), "If one task-type is non-null, all must be non-null.");
-            throwIfNull(request.warmupTasks(), "If one task-type is non-null, all must be non-null.");
-        }
-
-        if (request.memberEpoch() != 0) {
-            throwIfNotNull(request.topology(), "Topology can only be provided when (re-)joining.");
-        }
     }
 
     /**
@@ -4654,8 +4589,6 @@ public class GroupMetadataManager {
         AuthorizableRequestContext context,
         StreamsGroupHeartbeatRequestData request
     ) throws ApiException {
-        throwIfStreamsGroupHeartbeatRequestIsInvalid(request);
-
         if (request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH || request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             // -1 means that the member wants to leave the group.
             // -2 means that a static member wants to leave the group.

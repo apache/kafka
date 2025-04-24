@@ -481,7 +481,14 @@ public class GroupCoordinatorServiceTest {
             .build(true);
 
         StreamsGroupHeartbeatRequestData request = new StreamsGroupHeartbeatRequestData()
-            .setGroupId("foo");
+            .setGroupId("foo")
+            .setMemberId(Uuid.randomUuid().toString())
+            .setMemberEpoch(0)
+            .setRebalanceTimeoutMs(1500)
+            .setActiveTasks(List.of())
+            .setStandbyTasks(List.of())
+            .setWarmupTasks(List.of())
+            .setTopology(new StreamsGroupHeartbeatRequestData.Topology());
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("streams-group-heartbeat"),
@@ -534,7 +541,14 @@ public class GroupCoordinatorServiceTest {
             .build(true);
 
         StreamsGroupHeartbeatRequestData request = new StreamsGroupHeartbeatRequestData()
-            .setGroupId("foo");
+            .setGroupId("foo")
+            .setMemberId(Uuid.randomUuid().toString())
+            .setMemberEpoch(0)
+            .setRebalanceTimeoutMs(1500)
+            .setActiveTasks(List.of())
+            .setStandbyTasks(List.of())
+            .setWarmupTasks(List.of())
+            .setTopology(new StreamsGroupHeartbeatRequestData.Topology());
 
         when(runtime.scheduleWriteOperation(
             ArgumentMatchers.eq("streams-group-heartbeat"),
@@ -556,6 +570,306 @@ public class GroupCoordinatorServiceTest {
                 Map.of()
             ),
             future.get(5, TimeUnit.SECONDS)
+        );
+    }
+
+    @SuppressWarnings("MethodLength")
+    @Test
+    public void testStreamsHeartbeatRequestValidation() throws ExecutionException, InterruptedException, TimeoutException {
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(mockRuntime())
+            .build(true);
+
+        AuthorizableRequestContext context = mock(AuthorizableRequestContext.class);
+        when(context.requestVersion()).thenReturn((int) ApiKeys.SHARE_GROUP_HEARTBEAT.latestVersion());
+
+        String memberId = Uuid.randomUuid().toString();
+
+        // MemberId must be present in all requests.
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("MemberId can't be empty."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // MemberId can't be all whitespaces.
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("MemberId can't be empty."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setMemberId("   ")
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // GroupId must be present in all requests.
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("GroupId can't be empty."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setMemberId(memberId)
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // GroupId can't be all whitespaces.
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("GroupId can't be empty."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setMemberId(memberId)
+                    .setGroupId("   ")
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // RebalanceTimeoutMs must be present in the first request (epoch == 0).
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("RebalanceTimeoutMs must be provided in first request."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setMemberId(memberId)
+                    .setGroupId("foo")
+                    .setMemberEpoch(0)
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // ActiveTasks must be present and empty in the first request (epoch == 0).
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("ActiveTasks must be empty when (re-)joining."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setMemberId(memberId)
+                    .setGroupId("foo")
+                    .setMemberEpoch(0)
+                    .setRebalanceTimeoutMs(1500)
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // StandbyTasks must be present and empty in the first request (epoch == 0).
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("StandbyTasks must be empty when (re-)joining."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setMemberId(memberId)
+                    .setGroupId("foo")
+                    .setMemberEpoch(0)
+                    .setRebalanceTimeoutMs(1500)
+                    .setActiveTasks(List.of())
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // WarmupTasks must be present and empty in the first request (epoch == 0).
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("WarmupTasks must be empty when (re-)joining."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setMemberId(memberId)
+                    .setGroupId("foo")
+                    .setMemberEpoch(0)
+                    .setRebalanceTimeoutMs(1500)
+                    .setActiveTasks(List.of())
+                    .setStandbyTasks(List.of())
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // Topology must be present in the first request (epoch == 0).
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("Topology must be non-null when (re-)joining."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setMemberId(memberId)
+                    .setGroupId("foo")
+                    .setMemberEpoch(0)
+                    .setRebalanceTimeoutMs(1500)
+                    .setActiveTasks(List.of())
+                    .setStandbyTasks(List.of())
+                    .setWarmupTasks(List.of())
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // InstanceId must be non-empty if provided in all requests.
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("InstanceId can't be empty."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setGroupId("foo")
+                    .setMemberId(memberId)
+                    .setMemberEpoch(1)
+                    .setInstanceId("")
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // RackId must be non-empty if provided in all requests.
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("RackId can't be empty."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setGroupId("foo")
+                    .setMemberId(memberId)
+                    .setMemberEpoch(1)
+                    .setRackId("")
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // Instance id cannot be null when leaving with -2.
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("InstanceId can't be null."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setGroupId("foo")
+                    .setMemberId(memberId)
+                    .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
+                    .setRebalanceTimeoutMs(1500)
+                    .setTopology(new StreamsGroupHeartbeatRequestData.Topology())
+                    .setActiveTasks(List.of())
+                    .setStandbyTasks(List.of())
+                    .setWarmupTasks(List.of())
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // Member epoch cannot be < -2
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("MemberEpoch is -3, but must be greater than or equal to -2."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setMemberId(memberId)
+                    .setGroupId("foo")
+                    .setMemberEpoch(-3)
+                    .setRebalanceTimeoutMs(1500)
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // Topology must not be present in the later requests (epoch != 0).
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.INVALID_REQUEST.code())
+                    .setErrorMessage("Topology can only be provided when (re-)joining."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setMemberId(memberId)
+                    .setGroupId("foo")
+                    .setMemberEpoch(1)
+                    .setRebalanceTimeoutMs(1500)
+                    .setActiveTasks(List.of())
+                    .setStandbyTasks(List.of())
+                    .setWarmupTasks(List.of())
+                    .setTopology(new StreamsGroupHeartbeatRequestData.Topology())
+            ).get(5, TimeUnit.SECONDS)
+        );
+
+        // Topology must not contain changelog topics with fixed partition numbers
+        assertEquals(
+            new StreamsGroupHeartbeatResult(
+                new StreamsGroupHeartbeatResponseData()
+                    .setErrorCode(Errors.STREAMS_INVALID_TOPOLOGY.code())
+                    .setErrorMessage("Changelog topic changelog_topic_with_fixed_partition must have an undefined partition count, but it is set to 3."),
+                Map.of()
+            ),
+            service.streamsGroupHeartbeat(
+                context,
+                new StreamsGroupHeartbeatRequestData()
+                    .setMemberId(memberId)
+                    .setGroupId("foo")
+                    .setMemberEpoch(0)
+                    .setRebalanceTimeoutMs(1500)
+                    .setActiveTasks(List.of())
+                    .setStandbyTasks(List.of())
+                    .setWarmupTasks(List.of())
+                    .setTopology(new StreamsGroupHeartbeatRequestData.Topology().setSubtopologies(
+                        List.of(
+                            new StreamsGroupHeartbeatRequestData.Subtopology()
+                                .setStateChangelogTopics(
+                                    List.of(
+                                        new StreamsGroupHeartbeatRequestData.TopicInfo()
+                                            .setName("changelog_topic_with_fixed_partition")
+                                            .setPartitions(3)
+                                    )
+                                )
+                        )
+                    ))
+            ).get(5, TimeUnit.SECONDS)
         );
     }
 
