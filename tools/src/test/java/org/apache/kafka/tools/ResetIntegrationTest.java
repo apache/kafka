@@ -49,6 +49,7 @@ import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.is
 import static org.apache.kafka.streams.integration.utils.IntegrationTestUtils.waitForEmptyConsumerGroup;
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
@@ -256,7 +257,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         streams.cleanUp();
 
         final boolean cleanResult = tryCleanGlobal(false, null, null, appID);
-        assertTrue(cleanResult);
+        assertFalse(cleanResult);
 
         // Reset will success with --force, it will force delete active members on broker side
         cleanGlobal(false, "--force", null, appID);
