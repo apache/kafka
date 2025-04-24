@@ -31,15 +31,19 @@ import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
 import org.apache.kafka.clients.consumer.internals.NetworkClientDelegate;
 import org.apache.kafka.clients.consumer.internals.OffsetsRequestManager;
 import org.apache.kafka.clients.consumer.internals.RequestManagers;
+import org.apache.kafka.clients.consumer.internals.StreamsGroupHeartbeatRequestManager;
+import org.apache.kafka.clients.consumer.internals.StreamsMembershipManager;
 import org.apache.kafka.clients.consumer.internals.SubscriptionState;
 import org.apache.kafka.clients.consumer.internals.TopicMetadataRequestManager;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
 
+import org.apache.logging.log4j.Level;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -86,6 +90,8 @@ public class ApplicationEventProcessorTest {
     private final OffsetsRequestManager offsetsRequestManager = mock(OffsetsRequestManager.class);
     private SubscriptionState subscriptionState = mock(SubscriptionState.class);
     private final ConsumerMetadata metadata = mock(ConsumerMetadata.class);
+    private final StreamsGroupHeartbeatRequestManager streamsGroupHeartbeatRequestManager = mock(StreamsGroupHeartbeatRequestManager.class);
+    private final StreamsMembershipManager streamsMembershipManager = mock(StreamsMembershipManager.class);
     private ApplicationEventProcessor processor;
 
     private void setupProcessor(boolean withGroupId) {
@@ -106,6 +112,27 @@ public class ApplicationEventProcessorTest {
                 requestManagers,
                 metadata,
                 subscriptionState
+        );
+    }
+
+    private void setupStreamProcessor(boolean withGroupId) {
+        RequestManagers requestManagers = new RequestManagers(
+            new LogContext(),
+            offsetsRequestManager,
+            mock(TopicMetadataRequestManager.class),
+            mock(FetchRequestManager.class),
+            withGroupId ? Optional.of(mock(CoordinatorRequestManager.class)) : Optional.empty(),
+            withGroupId ? Optional.of(commitRequestManager) : Optional.empty(),
+            withGroupId ? Optional.of(heartbeatRequestManager) : Optional.empty(),
+            Optional.empty(),
+            withGroupId ? Optional.of(streamsGroupHeartbeatRequestManager) : Optional.empty(),
+            withGroupId ? Optional.of(streamsMembershipManager) : Optional.empty()
+        );
+        processor = new ApplicationEventProcessor(
+            new LogContext(),
+            requestManagers,
+            metadata,
+            subscriptionState
         );
     }
 
@@ -554,6 +581,78 @@ public class ApplicationEventProcessorTest {
         verify(commitRequestManager).commitAsync(Collections.emptyMap());
         assertTrue(event.offsetsReady.isDone());
         assertFutureThrows(IllegalStateException.class, event.future());
+    }
+
+    @Test
+    public void testStreamsOnTasksRevokedCallbackCompletedEvent() {
+        setupStreamProcessor(true);
+        StreamsOnTasksRevokedCallbackCompletedEvent event =
+            new StreamsOnTasksRevokedCallbackCompletedEvent(new CompletableFuture<>(), Optional.empty());
+        processor.process(event);
+        verify(streamsMembershipManager).onTasksRevokedCallbackCompleted(event);
+    }
+
+    @Test
+    public void testStreamsOnTasksRevokedCallbackCompletedEventWithoutStreamsMembershipManager() {
+        setupStreamProcessor(false);
+        StreamsOnTasksRevokedCallbackCompletedEvent event =
+            new StreamsOnTasksRevokedCallbackCompletedEvent(new CompletableFuture<>(), Optional.empty());
+        try (final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister()) {
+            logAppender.setClassLogger(ApplicationEventProcessor.class, Level.WARN);
+            processor.process(event);
+            assertTrue(logAppender.getMessages().stream().anyMatch(e ->
+                e.contains("An internal error occurred; the Streams membership manager was not present, so the notification " +
+                    "of the onTasksRevoked callback execution could not be sent")));
+            verify(streamsMembershipManager, never()).onTasksRevokedCallbackCompleted(event);
+        }
+    }
+
+    @Test
+    public void testStreamsOnTasksAssignedCallbackCompletedEvent() {
+        setupStreamProcessor(true);
+        StreamsOnTasksAssignedCallbackCompletedEvent event =
+            new StreamsOnTasksAssignedCallbackCompletedEvent(new CompletableFuture<>(), Optional.empty());
+        processor.process(event);
+        verify(streamsMembershipManager).onTasksAssignedCallbackCompleted(event);
+    }
+
+    @Test
+    public void testStreamsOnTasksAssignedCallbackCompletedEventWithoutStreamsMembershipManager() {
+        setupStreamProcessor(false);
+        StreamsOnTasksAssignedCallbackCompletedEvent event =
+            new StreamsOnTasksAssignedCallbackCompletedEvent(new CompletableFuture<>(), Optional.empty());
+        try (final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister()) {
+            logAppender.setClassLogger(ApplicationEventProcessor.class, Level.WARN);
+            processor.process(event);
+            assertTrue(logAppender.getMessages().stream().anyMatch(e ->
+                e.contains("An internal error occurred; the Streams membership manager was not present, so the notification " +
+                    "of the onTasksAssigned callback execution could not be sent")));
+            verify(streamsMembershipManager, never()).onTasksAssignedCallbackCompleted(event);
+        }
+    }
+
+    @Test
+    public void testStreamsOnAllTasksLostCallbackCompletedEvent() {
+        setupStreamProcessor(true);
+        StreamsOnAllTasksLostCallbackCompletedEvent event =
+            new StreamsOnAllTasksLostCallbackCompletedEvent(new CompletableFuture<>(), Optional.empty());
+        processor.process(event);
+        verify(streamsMembershipManager).onAllTasksLostCallbackCompleted(event);
+    }
+
+    @Test
+    public void testStreamsOnAllTasksLostCallbackCompletedEventWithoutStreamsMembershipManager() {
+        setupStreamProcessor(false);
+        StreamsOnAllTasksLostCallbackCompletedEvent event =
+            new StreamsOnAllTasksLostCallbackCompletedEvent(new CompletableFuture<>(), Optional.empty());
+        try (final LogCaptureAppender logAppender = LogCaptureAppender.createAndRegister()) {
+            logAppender.setClassLogger(ApplicationEventProcessor.class, Level.WARN);
+            processor.process(event);
+            assertTrue(logAppender.getMessages().stream().anyMatch(e ->
+                e.contains("An internal error occurred; the Streams membership manager was not present, so the notification " +
+                    "of the onAllTasksLost callback execution could not be sent")));
+            verify(streamsMembershipManager, never()).onAllTasksLostCallbackCompleted(event);
+        }
     }
 
     private List<NetworkClientDelegate.UnsentRequest> mockCommitResults() {

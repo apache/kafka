@@ -87,7 +87,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
-import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -2592,7 +2591,7 @@ public class KafkaProducerTest {
         private final Map<String, Object> configs;
         private final Serializer<T> serializer;
         private final Partitioner partitioner = mock(Partitioner.class);
-        private final KafkaThread ioThread = mock(KafkaThread.class);
+        private final Sender.SenderThread senderThread = mock(Sender.SenderThread.class);
         private final List<ProducerInterceptor<T, T>> interceptors = new ArrayList<>();
         private ProducerMetadata metadata = mock(ProducerMetadata.class);
         private RecordAccumulator accumulator = mock(RecordAccumulator.class);
@@ -2673,7 +2672,7 @@ public class KafkaProducerTest {
                 interceptors,
                 partitioner,
                 time,
-                ioThread,
+                senderThread,
                 Optional.empty()
             );
         }
