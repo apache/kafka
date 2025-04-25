@@ -201,10 +201,10 @@ public class SharePartition {
      * The DeliveryCountOps is used to specify the behavior on the delivery count: increase, decrease,
      * or do nothing.
      */
-    enum DeliveryCountOps {
+    private enum DeliveryCountOps {
         INCREASE,
         DECREASE,
-        NOOPS
+        NO_OP
     }
 
     /**
@@ -1908,7 +1908,7 @@ public class SharePartition {
                         recordStateDefault;
                 InFlightState updateResult = offsetState.getValue().startStateTransition(
                     recordState,
-                    DeliveryCountOps.NOOPS,
+                    DeliveryCountOps.NO_OP,
                     this.maxDeliveryCount,
                     EMPTY_MEMBER_ID
                 );
@@ -1961,7 +1961,7 @@ public class SharePartition {
             // is only important when the batch is acquired.
             InFlightState updateResult = inFlightBatch.startBatchStateTransition(
                 recordState,
-                DeliveryCountOps.NOOPS,
+                DeliveryCountOps.NO_OP,
                 this.maxDeliveryCount,
                 EMPTY_MEMBER_ID
             );
@@ -2420,7 +2420,7 @@ public class SharePartition {
         if (inFlightBatch.batchState() == RecordState.ACQUIRED) {
             InFlightState updateResult = inFlightBatch.tryUpdateBatchState(
                     inFlightBatch.lastOffset() < startOffset ? RecordState.ARCHIVED : RecordState.AVAILABLE,
-                    DeliveryCountOps.NOOPS,
+                    DeliveryCountOps.NO_OP,
                     maxDeliveryCount,
                     EMPTY_MEMBER_ID);
             if (updateResult == null) {
@@ -2466,7 +2466,7 @@ public class SharePartition {
             }
             InFlightState updateResult = offsetState.getValue().tryUpdateState(
                     offsetState.getKey() < startOffset ? RecordState.ARCHIVED : RecordState.AVAILABLE,
-                    DeliveryCountOps.NOOPS,
+                    DeliveryCountOps.NO_OP,
                     maxDeliveryCount,
                     EMPTY_MEMBER_ID);
             if (updateResult == null) {
@@ -3010,7 +3010,7 @@ public class SharePartition {
 
         /**
          * Try to update the state of the records. The state of the records can only be updated if the
-         * new state is allowed to be transitioned from old state. The delivery count is not incremented
+         * new state is allowed to be transitioned from old state. The delivery count is not changed
          * if the state update is unsuccessful.
          *
          * @param newState The new state of the records.
@@ -3020,26 +3020,27 @@ public class SharePartition {
          *         helps update chaining.
          */
         private InFlightState tryUpdateState(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId) {
-            boolean decreaseFlag = false;
             try {
-                if (ops == DeliveryCountOps.DECREASE && newState != RecordState.ARCHIVED) {
-                    deliveryCount--;
-                    decreaseFlag = true;
-                }
-                if (newState == RecordState.AVAILABLE && deliveryCount >= maxDeliveryCount) {
+                if (newState == RecordState.AVAILABLE && ops != DeliveryCountOps.DECREASE && deliveryCount >= maxDeliveryCount) {
                     newState = RecordState.ARCHIVED;
                 }
                 state = state.validateTransition(newState);
-                if (ops == DeliveryCountOps.INCREASE && newState != RecordState.ARCHIVED) {
-                    deliveryCount++;
+                if (newState != RecordState.ARCHIVED) {
+                    switch (ops) {
+                        case INCREASE -> deliveryCount++;
+                        case DECREASE -> deliveryCount--;
+                        // do nothing
+                        case NO_OP -> { }
+                        default -> {
+                            log.error("Invalid ops for delivery count.");
+                            return null;
+                        }
+                    }
                 }
                 memberId = newMemberId;
                 return this;
             } catch (IllegalStateException e) {
                 log.error("Failed to update state of the records", e);
-                if (decreaseFlag) {
-                    deliveryCount++;
-                }
                 return null;
             }
         }
