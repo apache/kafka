@@ -116,19 +116,12 @@ public class ShareSessionCache {
     }
 
     /**
-     * Update the number of partitions in the share session
+     * Update the size of the cache by updating the total number of share partitions.
      *
      * @param session  The session.
      */
     public synchronized void updateNumPartitions(ShareSession session) {
-        synchronized (session) {
-            int oldSize = session.cachedSize();
-            if (oldSize != -1) {
-                numPartitions = numPartitions - oldSize;
-            }
-            session.cachedSize(session.size());
-            numPartitions = numPartitions + session.cachedSize();
-        }
+        numPartitions += session.updateCachedSize();
     }
 
     /**

@@ -52,7 +52,6 @@ public class ShareSession {
      *
      * @param key                The share session key to identify the share session uniquely.
      * @param partitionMap       The CachedPartitionMap.
-     *                           ShareSessionCache#touch.
      * @param epoch              The share session sequence number.
      */
     public ShareSession(ShareSessionKey key, ImplicitLinkedHashCollection<CachedSharePartition> partitionMap, int epoch) {
@@ -67,10 +66,6 @@ public class ShareSession {
 
     public synchronized int cachedSize() {
         return cachedSize;
-    }
-
-    public synchronized void cachedSize(int size) {
-        cachedSize = size;
     }
 
     public synchronized ImplicitLinkedHashCollection<CachedSharePartition> partitionMap() {
@@ -117,6 +112,17 @@ public class ShareSession {
         result.put(ModifiedTopicIdPartitionType.UPDATED, updated);
         result.put(ModifiedTopicIdPartitionType.REMOVED, removed);
         return result;
+    }
+
+    /**
+     * Updates the cached size of the session to represent the current partitionMap size.
+     * @return The difference between the current cached size and the previously stored cached size. This is required to
+     *         update the total number of share partitions stored in the share session cache.
+     */
+    public synchronized int updateCachedSize() {
+        var previousSize = cachedSize;
+        cachedSize = partitionMap.size();
+        return previousSize != -1 ? cachedSize - previousSize : cachedSize;
     }
 
     public static String partitionsToLogString(Collection<TopicIdPartition> partitions, Boolean traceEnabled) {

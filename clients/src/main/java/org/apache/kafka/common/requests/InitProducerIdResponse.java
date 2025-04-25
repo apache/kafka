@@ -18,10 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.InitProducerIdResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.Map;
 
 /**
@@ -63,8 +62,8 @@ public class InitProducerIdResponse extends AbstractResponse {
         return data;
     }
 
-    public static InitProducerIdResponse parse(ByteBuffer buffer, short version) {
-        return new InitProducerIdResponse(new InitProducerIdResponseData(new ByteBufferAccessor(buffer), version));
+    public static InitProducerIdResponse parse(Readable readable, short version) {
+        return new InitProducerIdResponse(new InitProducerIdResponseData(readable, version));
     }
 
     @Override

@@ -26,10 +26,9 @@ import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseBrok
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponsePartition;
 import org.apache.kafka.common.message.MetadataResponseData.MetadataResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
@@ -281,8 +280,8 @@ public class MetadataResponse extends AbstractResponse {
         return version >= 9;
     }
 
-    public static MetadataResponse parse(ByteBuffer buffer, short version) {
-        return new MetadataResponse(new MetadataResponseData(new ByteBufferAccessor(buffer), version),
+    public static MetadataResponse parse(Readable readable, short version) {
+        return new MetadataResponse(new MetadataResponseData(readable, version),
             hasReliableLeaderEpochs(version));
     }
 
