@@ -20,6 +20,7 @@ package org.apache.kafka.server.share.fetch;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.message.ShareFetchResponseData.PartitionData;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.server.storage.log.FetchParams;
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats;
 
@@ -217,7 +218,8 @@ public class ShareFetch {
                 response.put(topicIdPartition, new PartitionData()
                     .setPartitionIndex(topicIdPartition.partition())
                     .setErrorCode(Errors.forException(throwable).code())
-                    .setErrorMessage(throwable.getMessage()));
+                    .setErrorMessage(throwable.getMessage())
+                    .setRecords(MemoryRecords.EMPTY));
             });
             erroneousTopics.forEach(topic -> {
                 brokerTopicStats.allTopicsStats().failedShareFetchRequestRate().mark();
