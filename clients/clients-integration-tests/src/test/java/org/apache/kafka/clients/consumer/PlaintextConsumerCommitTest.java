@@ -21,7 +21,6 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.internals.Topic;
-import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
@@ -33,7 +32,6 @@ import org.apache.kafka.test.MockConsumerInterceptor;
 import org.junit.jupiter.api.BeforeEach;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -42,6 +40,9 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 
+import static org.apache.kafka.clients.ClientsTestUtils.awaitAssignment;
+import static org.apache.kafka.clients.ClientsTestUtils.consumeAndVerifyRecords;
+import static org.apache.kafka.clients.ClientsTestUtils.sendRecords;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_ID_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
@@ -97,7 +98,7 @@ public class PlaintextConsumerCommitTest {
 
     private void testAutoCommitOnClose(GroupProtocol groupProtocol) throws InterruptedException {
         try (var consumer = createConsumer(groupProtocol, true)) {
-            sendRecords();
+            sendRecords(cluster, tp, 1000);
 
             consumer.subscribe(List.of(topic));
             awaitAssignment(consumer, Set.of(tp, tp1));
@@ -125,7 +126,7 @@ public class PlaintextConsumerCommitTest {
 
     private void testAutoCommitOnCloseAfterWakeup(GroupProtocol groupProtocol) throws InterruptedException {
         try (var consumer = createConsumer(groupProtocol, true)) {
-            sendRecords();
+            sendRecords(cluster, tp, 1000);
 
             consumer.subscribe(List.of(topic));
             awaitAssignment(consumer, Set.of(tp, tp1));
@@ -310,8 +311,8 @@ public class PlaintextConsumerCommitTest {
         try (Producer<byte[], byte[]> producer = cluster.producer();
              var consumer = createConsumer(groupProtocol, false)
         ) {
-            sendRecords(producer, 5, tp);
-            sendRecords(producer, 7, tp1);
+            sendRecords(producer, tp, 5, System.currentTimeMillis());
+            sendRecords(producer, tp1, 7, System.currentTimeMillis());
 
             consumer.assign(List.of(tp, tp1));
 
@@ -352,7 +353,7 @@ public class PlaintextConsumerCommitTest {
         var topic2 = "topic2";
         cluster.createTopic(topic2, 2, (short) BROKER_COUNT);
         try (var consumer = createConsumer(groupProtocol, true)) {
-            sendRecords();
+            sendRecords(cluster, tp, 1000);
 
             var rebalanceListener = new ConsumerRebalanceListener() {
                 @Override
@@ -423,7 +424,7 @@ public class PlaintextConsumerCommitTest {
              var otherConsumer = createConsumer(groupProtocol, false)
         ) {
             var startingTimestamp = System.currentTimeMillis();
-            sendRecords(producer, 5, tp, startingTimestamp);
+            sendRecords(producer, tp, 5, startingTimestamp);
 
             var topicPartition = new TopicPartition(topic, 15);
             assertNull(consumer.committed(Collections.singleton(topicPartition)).get(topicPartition));
@@ -436,17 +437,17 @@ public class PlaintextConsumerCommitTest {
             assertEquals(0L, consumer.position(tp), "position() on a partition that we are subscribed to should reset the offset");
             consumer.commitSync();
             assertEquals(0L, consumer.committed(Set.of(tp)).get(tp).offset());
-            consumeAndVerifyRecords(consumer, 5, 0, startingTimestamp);
+            consumeAndVerifyRecords(consumer, tp, 5, 0, 0, startingTimestamp);
             assertEquals(5L, consumer.position(tp), "After consuming 5 records, position should be 5");
             consumer.commitSync();
             assertEquals(5L, consumer.committed(Set.of(tp)).get(tp).offset(), "Committed offset should be returned");
 
             startingTimestamp = System.currentTimeMillis();
-            sendRecords(producer, 1, tp, startingTimestamp);
+            sendRecords(producer, tp, 1, startingTimestamp);
 
             // another consumer in the same group should get the same position
             otherConsumer.assign(List.of(tp));
-            consumeAndVerifyRecords(otherConsumer, 1, 5, startingTimestamp);
+            consumeAndVerifyRecords(otherConsumer, tp, 1, 5, 0, startingTimestamp);
         }
     }
 
@@ -459,8 +460,8 @@ public class PlaintextConsumerCommitTest {
         try (Producer<byte[], byte[]> producer = cluster.producer(Map.of(ProducerConfig.ACKS_CONFIG, "all"));
              var consumer = createConsumer(GroupProtocol.CONSUMER, false)
         ) {
-            sendRecords(producer, 3, tp);
-            sendRecords(producer, 3, tp1);
+            sendRecords(producer, tp, 3, System.currentTimeMillis());
+            sendRecords(producer, tp1, 3, System.currentTimeMillis());
             consumer.assign(List.of(tp, tp1));
 
             // Try without looking up the coordinator first
@@ -482,8 +483,8 @@ public class PlaintextConsumerCommitTest {
         try (Producer<byte[], byte[]> producer = cluster.producer();
              var consumer = createConsumer(GroupProtocol.CONSUMER, false)
         ) {
-            sendRecords(producer, 3, tp);
-            sendRecords(producer, 3, tp1);
+            sendRecords(producer, tp, 3, System.currentTimeMillis());
+            sendRecords(producer, tp1, 3, System.currentTimeMillis());
 
             consumer.assign(List.of(tp, tp1));
 
@@ -519,52 +520,6 @@ public class PlaintextConsumerCommitTest {
             GROUP_PROTOCOL_CONFIG, protocol.name().toLowerCase(Locale.ROOT),
             ENABLE_AUTO_COMMIT_CONFIG, enableAutoCommit
         ));
-    }
-
-    private void sendRecords() {
-        try (Producer<byte[], byte[]> producer = cluster.producer()) {
-            sendRecords(producer, 10000, tp, System.currentTimeMillis());
-        }
-    }
-
-    private void sendRecords(
-        Producer<byte[], byte[]> producer,
-        int numRecords,
-        TopicPartition topicPartition
-    ) {
-        sendRecords(producer, numRecords, topicPartition, System.currentTimeMillis());
-    }
-
-    private void sendRecords(
-        Producer<byte[], byte[]> producer,
-        int numRecords,
-        TopicPartition topicPartition,
-        long startingTimestamp
-    ) {
-        for (var i = 0; i < numRecords; i++) {
-            var timestamp = startingTimestamp + i;
-            var record = new ProducerRecord<>(
-                topicPartition.topic(),
-                topicPartition.partition(),
-                timestamp,
-                ("key " + i).getBytes(),
-                ("value " + i).getBytes()
-            );
-            producer.send(record);
-        }
-        producer.flush();
-    }
-
-    private void awaitAssignment(
-        Consumer<byte[], byte[]> consumer,
-        Set<TopicPartition> expectedAssignment
-    ) throws InterruptedException {
-        TestUtils.waitForCondition(() -> {
-            consumer.poll(Duration.ofMillis(100));
-            return consumer.assignment().equals(expectedAssignment);
-        }, "Timed out while awaiting expected assignment " + expectedAssignment + ". " +
-            "The current assignment is " + consumer.assignment()
-        );
     }
 
     private void sendAndAwaitAsyncCommit(
@@ -635,45 +590,5 @@ public class PlaintextConsumerCommitTest {
     ) throws InterruptedException {
         consumer.subscribe(topicsToSubscribe, rebalanceListener);
         awaitAssignment(consumer, expectedAssignment);
-    }
-
-    protected void consumeAndVerifyRecords(
-        Consumer<byte[], byte[]> consumer,
-        int numRecords,
-        int startingOffset,
-        long startingTimestamp
-    ) throws InterruptedException {
-        var records = consumeRecords(consumer, numRecords);
-        for (var i = 0; i < numRecords; i++) {
-            var record = records.get(i);
-            var offset = startingOffset + i;
-
-            assertEquals(tp.topic(), record.topic());
-            assertEquals(tp.partition(), record.partition());
-
-            assertEquals(TimestampType.CREATE_TIME, record.timestampType());
-            var timestamp = startingTimestamp + i;
-            assertEquals(timestamp, record.timestamp());
-
-            assertEquals(offset, record.offset());
-            assertEquals("key " + i, new String(record.key()));
-            assertEquals("value " + i, new String(record.value()));
-            // this is true only because K and V are byte arrays
-            assertEquals(("key " + i).length(), record.serializedKeySize());
-            assertEquals(("value " + i).length(), record.serializedValueSize());
-        }
-    }
-
-    protected <K, V> List<ConsumerRecord<K, V>> consumeRecords(
-        Consumer<K, V> consumer,
-        int numRecords
-    ) throws InterruptedException {
-        List<ConsumerRecord<K, V>> records = new ArrayList<>();
-        TestUtils.waitForCondition(() -> {
-            consumer.poll(Duration.ofMillis(100)).forEach(records::add);
-            return records.size() >= numRecords;
-        }, 60000, "Timed out before consuming expected " + numRecords + " records.");
-
-        return records;
     }
 }
