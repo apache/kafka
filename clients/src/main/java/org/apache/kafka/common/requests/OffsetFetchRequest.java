@@ -23,6 +23,7 @@ import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestGroup;
 import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestTopic;
 import org.apache.kafka.common.message.OffsetFetchRequestData.OffsetFetchRequestTopics;
+import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
@@ -36,7 +37,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
-import java.util.Optional;
 import java.util.stream.Collectors;
 
 public class OffsetFetchRequest extends AbstractRequest {
@@ -324,37 +324,49 @@ public class OffsetFetchRequest extends AbstractRequest {
     }
 
     public OffsetFetchResponse getErrorResponse(int throttleTimeMs, Errors error) {
-        Map<TopicPartition, OffsetFetchResponse.PartitionData> responsePartitions = new HashMap<>();
         if (version() < 2) {
-            OffsetFetchResponse.PartitionData partitionError = new OffsetFetchResponse.PartitionData(
-                    OffsetFetchResponse.INVALID_OFFSET,
-                    Optional.empty(),
-                    OffsetFetchResponse.NO_METADATA,
-                    error);
-
-            for (OffsetFetchRequestTopic topic : this.data.topics()) {
-                for (int partitionIndex : topic.partitionIndexes()) {
-                    responsePartitions.put(
-                        new TopicPartition(topic.name(), partitionIndex), partitionError);
-                }
-            }
-            return new OffsetFetchResponse(error, responsePartitions);
+            // The response does not support top level error so we return each
+            // partition with the error.
+            return new OffsetFetchResponse(
+                new OffsetFetchResponseData()
+                    .setThrottleTimeMs(throttleTimeMs)
+                    .setTopics(data.topics().stream().map(topic ->
+                        new OffsetFetchResponseData.OffsetFetchResponseTopic()
+                            .setName(topic.name())
+                            .setPartitions(topic.partitionIndexes().stream().map(partition ->
+                                new OffsetFetchResponseData.OffsetFetchResponsePartition()
+                                    .setPartitionIndex(partition)
+                                    .setErrorCode(error.code())
+                                    .setCommittedOffset(OffsetFetchResponse.INVALID_OFFSET)
+                                    .setMetadata(OffsetFetchResponse.NO_METADATA)
+                                    .setCommittedLeaderEpoch(-1)
+                            ).collect(Collectors.toList()))
+                    ).collect(Collectors.toList())),
+                version()
+            );
+        } else if (version() < 8) {
+            // The response does not support multiple groups but it does support
+            // top level error.
+            return new OffsetFetchResponse(
+                new OffsetFetchResponseData()
+                    .setThrottleTimeMs(throttleTimeMs)
+                    .setErrorCode(error.code()),
+                version()
+            );
+        } else {
+            // The response does support multiple groups so we provide a top level
+            // error per group.
+            return new OffsetFetchResponse(
+                new OffsetFetchResponseData()
+                    .setThrottleTimeMs(throttleTimeMs)
+                    .setGroups(data.groups().stream().map(group ->
+                        new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                            .setGroupId(group.groupId())
+                            .setErrorCode(error.code())
+                    ).collect(Collectors.toList())),
+                version()
+            );
         }
-        if (version() == 2) {
-            return new OffsetFetchResponse(error, responsePartitions);
-        }
-        if (version() >= 3 && version() < 8) {
-            return new OffsetFetchResponse(throttleTimeMs, error, responsePartitions);
-        }
-        List<String> groupIds = groupIds();
-        Map<String, Errors> errorsMap = new HashMap<>(groupIds.size());
-        Map<String, Map<TopicPartition, OffsetFetchResponse.PartitionData>> partitionMap =
-            new HashMap<>(groupIds.size());
-        for (String g : groupIds) {
-            errorsMap.put(g, error);
-            partitionMap.put(g, responsePartitions);
-        }
-        return new OffsetFetchResponse(throttleTimeMs, errorsMap, partitionMap);
     }
 
     @Override
