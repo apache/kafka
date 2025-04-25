@@ -1931,7 +1931,7 @@ public class GroupMetadataManager {
         int groupEpoch = group.groupEpoch();
         if (bumpGroupEpoch) {
             groupEpoch += 1;
-            records.add(newStreamsGroupEpochRecord(groupId, groupEpoch));
+            records.add(newStreamsGroupEpochRecord(groupId, groupEpoch, 0));
             log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {}.", groupId, memberId, groupEpoch);
             metrics.record(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
@@ -2559,7 +2559,7 @@ public class GroupMetadataManager {
 
             if (bumpGroupEpoch) {
                 groupEpoch += 1;
-                records.add(newShareGroupEpochRecord(groupId, groupEpoch));
+                records.add(newShareGroupEpochRecord(groupId, groupEpoch, 0));
                 log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
             }
 
@@ -3266,7 +3266,7 @@ public class GroupMetadataManager {
 
             if (bumpGroupEpoch) {
                 int groupEpoch = group.groupEpoch() + 1;
-                records.add(newConsumerGroupEpochRecord(groupId, groupEpoch));
+                records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, 0));
                 log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
                 metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
                 group.setMetadataRefreshDeadline(
@@ -3582,7 +3582,7 @@ public class GroupMetadataManager {
 
         if (bumpGroupEpoch) {
             groupEpoch += 1;
-            records.add(newConsumerGroupEpochRecord(groupId, groupEpoch));
+            records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, 0));
             log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
             metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
         }
@@ -3985,7 +3985,7 @@ public class GroupMetadataManager {
 
             // We bump the group epoch.
             int groupEpoch = group.groupEpoch() + 1;
-            records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch));
+            records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch, 0));
             log.info("[GroupId {}] Bumped group epoch to {}.", group.groupId(), groupEpoch);
 
             for (ConsumerGroupMember member : members) {
@@ -4029,7 +4029,7 @@ public class GroupMetadataManager {
 
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
-        records.add(newShareGroupEpochRecord(group.groupId(), groupEpoch));
+        records.add(newShareGroupEpochRecord(group.groupId(), groupEpoch, 0));
 
         cancelGroupSessionTimeout(group.groupId(), member.memberId());
 
@@ -4092,7 +4092,7 @@ public class GroupMetadataManager {
 
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
-        records.add(newStreamsGroupEpochRecord(group.groupId(), groupEpoch));
+        records.add(newStreamsGroupEpochRecord(group.groupId(), groupEpoch, 0));
 
         cancelTimers(group.groupId(), member.memberId());
 
