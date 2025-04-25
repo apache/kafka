@@ -429,8 +429,8 @@ public class FileRecordsTest {
             "abcd".getBytes(),
             "efgh".getBytes(),
             "ijkl".getBytes(),
-            "mnop".getBytes(),
-            "qrst".getBytes()
+            "mnopqr".getBytes(),
+            "stuv".getBytes()
         };
         try (FileRecords fileRecords = createFileRecords(values)) {
             List<RecordBatch> items = batches(fileRecords.slice(0, fileRecords.sizeInBytes()));
@@ -445,7 +445,7 @@ public class FileRecordsTest {
             // bytes available in the sliced file records are less than the start position. However, the
             // position to slice is relative hence reset position to second message in the sliced file
             // records i.e. reset with the size of the fourth message from the original file records.
-            position = items.get(4).sizeInBytes();
+            position = items.get(3).sizeInBytes();
             FileRecords finalSliced = sliced.slice(position, sliced.sizeInBytes() - position);
             assertEquals(sliced.sizeInBytes() - position, finalSliced.sizeInBytes());
             assertEquals(items.subList(4, items.size()), batches(finalSliced), "Read starting from the fifth message");
