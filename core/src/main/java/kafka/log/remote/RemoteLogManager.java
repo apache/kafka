@@ -303,14 +303,26 @@ public class RemoteLogManager implements Closeable {
 
     public void resizeReaderThreadPool(int newSize) {
         int currentSize = remoteStorageReaderThreadPool.getCorePoolSize();
+        int currentMaximumSize = remoteStorageReaderThreadPool.getMaximumPoolSize();
         LOGGER.info("Updating remote reader thread pool size from {} to {}", currentSize, newSize);
-        remoteStorageReaderThreadPool.setCorePoolSize(newSize);
+        if (newSize > currentMaximumSize) {
+            remoteStorageReaderThreadPool.setMaximumPoolSize(newSize);
+            remoteStorageReaderThreadPool.setCorePoolSize(newSize);
+        } else {
+            remoteStorageReaderThreadPool.setCorePoolSize(newSize);
+            remoteStorageReaderThreadPool.setMaximumPoolSize(newSize);
+        }
     }
 
     private void removeMetrics() {
         metricsGroup.removeMetric(REMOTE_LOG_MANAGER_TASKS_AVG_IDLE_PERCENT_METRIC);
         metricsGroup.removeMetric(REMOTE_LOG_READER_FETCH_RATE_AND_TIME_METRIC);
         remoteStorageReaderThreadPool.removeMetrics();
+    }
+
+    // Visible for testing
+    int readerThreadPoolSize() {
+        return remoteStorageReaderThreadPool.getCorePoolSize();
     }
 
     /**

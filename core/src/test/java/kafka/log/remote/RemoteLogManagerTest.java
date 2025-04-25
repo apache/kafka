@@ -1156,7 +1156,7 @@ public class RemoteLogManagerTest {
                         safeLongYammerMetricValue("RemoteLogSizeComputationTime,topic=" + leaderTopic),
                         safeLongYammerMetricValue("RemoteLogSizeComputationTime")));
         remoteLogSizeComputationTimeLatch.countDown();
-        
+
         TestUtils.waitForCondition(
                 () -> 0 == safeLongYammerMetricValue("RemoteCopyLagBytes") && 0 == safeLongYammerMetricValue("RemoteCopyLagBytes,topic=" + leaderTopic),
                 String.format("Expected to find 0 for RemoteCopyLagBytes metric value, but found %d for topic 'Leader' and %d for all topics.",
@@ -3711,6 +3711,15 @@ public class RemoteLogManagerTest {
         verifyNoMoreInteractions(remoteLogMetadataManager);
         verify(remoteStorageManager).configure(anyMap());
         verifyNoMoreInteractions(remoteStorageManager);
+    }
+
+    @Test
+    void testUpdateRemoteStorageReaderThreads() {
+        assertEquals(10, remoteLogManager.readerThreadPoolSize());
+        remoteLogManager.resizeReaderThreadPool(6);
+        assertEquals(6, remoteLogManager.readerThreadPoolSize());
+        remoteLogManager.resizeReaderThreadPool(12);
+        assertEquals(12, remoteLogManager.readerThreadPoolSize());
     }
 
     private void appendRecordsToFile(File file, int nRecords, int nRecordsPerBatch) throws IOException {
