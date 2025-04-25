@@ -587,7 +587,7 @@ object KafkaMetadataLog extends Logging {
   ): KafkaMetadataLog = {
     val props = new Properties()
     props.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, config.maxBatchSizeInBytes.toString)
-    if (config.internalLogSegmentBytes == null)
+    if (config.internalLogSegmentBytes != null)
       props.setProperty(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
     else
       props.setProperty(TopicConfig.SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
