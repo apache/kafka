@@ -55,6 +55,7 @@ import javax.security.auth.login.Configuration;
 import javax.security.auth.login.LoginContext;
 import javax.security.auth.login.LoginException;
 
+import static org.apache.kafka.clients.CommonClientConfigs.CLIENT_ID_CONFIG;
 import static org.apache.kafka.clients.CommonClientConfigs.SECURITY_PROTOCOL_CONFIG;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_JAAS_CONFIG;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_LOGIN_CLASS;
@@ -68,6 +69,7 @@ public class LoginTest {
 
     private static final String USERNAME = "userA";
     private static final String PASSWORD = "pwd";
+    private static final String CLIENT_ID = "test-login-client";
     private static final String LISTENER_PREFIX = "listener.name.controller.";
     private static final String EXTERNAL_PREFIX = "listener.name.external.";
     private static final String MECHANISMS = "PLAIN";
@@ -94,14 +96,10 @@ public class LoginTest {
             for (Metric metric : admin.metrics().values()) {
                 found += assertMetricName(
                     metric.metricName(), 
-                    expectedTags(Map.of("client-id", "adminclient-1"))
+                    expectedTags(Map.of("client-id", CLIENT_ID))
                 );
             }
-            StringBuilder sb = new StringBuilder();
-            admin.metrics().values().forEach(metric -> {
-                sb.append(metric.metricName()).append(" = ").append(metric.metricValue()).append("\n");
-            });
-            assertEquals(1, found, "Expected to find 1 metric with the expected tags but all metrics were: " + sb);
+            assertEquals(1, found, "Expected to find 1 metric");
 
             assertMetrics(cluster.controllers().get(0).metrics(), expectedTags(Map.of("mechanism", MECHANISMS)));
             assertMetrics(cluster.brokers().get(0).metrics(), expectedTags(Map.of("mechanism", MECHANISMS)));
@@ -137,7 +135,8 @@ public class LoginTest {
     protected static Map<String, Object> saslConfig() {
         Map<String, Object> config = new HashMap<>();
         config.put(SECURITY_PROTOCOL_CONFIG, SecurityProtocol.SASL_PLAINTEXT.name);
-        config.put(SASL_MECHANISM, "PLAIN");
+        config.put(CLIENT_ID_CONFIG, CLIENT_ID);
+        config.put(SASL_MECHANISM, MECHANISMS);
         config.put(SASL_LOGIN_CLASS, LoginTest.CustomerLogin.class.getName());
         config.put(SASL_JAAS_CONFIG, SASL_JAAS);
         return config;
