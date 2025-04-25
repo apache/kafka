@@ -256,6 +256,7 @@ public class ResetIntegrationTest extends AbstractResetIntegrationTest {
         streams = new KafkaStreams(setupTopologyWithoutIntermediateUserTopic(), streamsConfig);
         streams.cleanUp();
 
+        // Reset would fail since long session timeout has been configured
         final boolean cleanResult = tryCleanGlobal(false, null, null, appID);
         assertFalse(cleanResult);
 
