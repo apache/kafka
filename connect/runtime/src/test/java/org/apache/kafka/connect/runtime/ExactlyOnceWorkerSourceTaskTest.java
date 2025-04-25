@@ -198,6 +198,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
             Thread.sleep(10);
             return result;
         });
+        when(sourceTask.version()).thenReturn(null);
     }
 
     @AfterEach
@@ -222,8 +223,8 @@ public class ExactlyOnceWorkerSourceTaskTest {
         }
 
         verify(statusBackingStore, MockitoUtils.anyTimes()).getTopic(any(), any());
-
         verify(offsetStore, MockitoUtils.anyTimes()).primaryOffsetsTopic();
+        verify(sourceTask).version();
 
         verifyNoMoreInteractions(statusListener, producer, sourceTask, admin, offsetWriter, statusBackingStore, offsetStore, preProducerCheck, postProducerCheck);
         if (metrics != null) metrics.stop();
@@ -284,7 +285,7 @@ public class ExactlyOnceWorkerSourceTaskTest {
         workerTask = new ExactlyOnceWorkerSourceTask(taskId, sourceTask, statusListener, initialState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin,
                 transformationChain, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,
                 config, clusterConfigState, metrics, errorHandlingMetrics, plugins.delegatingLoader(), time, RetryWithToleranceOperatorTest.noneOperator(), statusBackingStore,
-                sourceConfig, Runnable::run, preProducerCheck, postProducerCheck, Collections::emptyList, TestPlugins.noOpLoaderSwap());
+                sourceConfig, Runnable::run, preProducerCheck, postProducerCheck, Collections::emptyList, null, TestPlugins.noOpLoaderSwap());
     }
 
     @ParameterizedTest

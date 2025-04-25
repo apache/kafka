@@ -3119,6 +3119,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                     .setPartitionIndex(partitionIndex)
                     .setErrorCode(Errors.NONE.code)
                     .setAcknowledgeErrorCode(value)
+                    .setRecords(MemoryRecords.EMPTY)
                   topic.partitions.add(fetchPartitionData)
                 }
                 topicPartitionAcknowledgements.remove(topicId)
@@ -3134,6 +3135,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 .setPartitionIndex(partitionIndex)
                 .setErrorCode(Errors.NONE.code)
                 .setAcknowledgeErrorCode(value)
+                .setRecords(MemoryRecords.EMPTY)
               topicData.partitions.add(fetchPartitionData)
             }
             shareFetchResponse.data.responses.add(topicData)

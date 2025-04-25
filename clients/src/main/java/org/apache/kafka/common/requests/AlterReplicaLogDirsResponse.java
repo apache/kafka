@@ -19,10 +19,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.AlterReplicaLogDirsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.EnumMap;
 import java.util.Map;
 
@@ -67,8 +66,8 @@ public class AlterReplicaLogDirsResponse extends AbstractResponse {
         return errorCounts;
     }
 
-    public static AlterReplicaLogDirsResponse parse(ByteBuffer buffer, short version) {
-        return new AlterReplicaLogDirsResponse(new AlterReplicaLogDirsResponseData(new ByteBufferAccessor(buffer), version));
+    public static AlterReplicaLogDirsResponse parse(Readable readable, short version) {
+        return new AlterReplicaLogDirsResponse(new AlterReplicaLogDirsResponseData(readable, version));
     }
 
     @Override
