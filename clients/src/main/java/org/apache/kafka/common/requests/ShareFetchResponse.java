@@ -22,13 +22,12 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareFetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -110,9 +109,9 @@ public class ShareFetchResponse extends AbstractResponse {
      *
      * <p><strong>This method should only be used in client-side.</strong></p>
      */
-    public static ShareFetchResponse parse(ByteBuffer buffer, short version) {
+    public static ShareFetchResponse parse(Readable readable, short version) {
         return new ShareFetchResponse(
-                new ShareFetchResponseData(new ByteBufferAccessor(buffer), version)
+                new ShareFetchResponseData(readable, version)
         );
     }
 
@@ -209,7 +208,7 @@ public class ShareFetchResponse extends AbstractResponse {
         return partitionResponse(topicIdPartition.topicPartition().partition(), error);
     }
 
-    public static ShareFetchResponseData.PartitionData partitionResponse(int partition, Errors error) {
+    private static ShareFetchResponseData.PartitionData partitionResponse(int partition, Errors error) {
         return new ShareFetchResponseData.PartitionData()
                 .setPartitionIndex(partition)
                 .setErrorCode(error.code())
