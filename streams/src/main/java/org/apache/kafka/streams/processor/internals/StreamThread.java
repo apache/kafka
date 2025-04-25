@@ -18,6 +18,7 @@ package org.apache.kafka.streams.processor.internals;
 
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.consumer.CloseOptions;
+import org.apache.kafka.clients.consumer.CloseOptions.GroupMembershipOperation;
 import org.apache.kafka.clients.consumer.Consumer;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.clients.consumer.ConsumerRebalanceListener;
@@ -1790,8 +1791,6 @@ public class StreamThread extends Thread implements ProcessingThread {
         log.info("Shutting down {}", cleanRun ? "clean" : "unclean");
 
         mainConsumerInstanceIdFuture.complete(null);
-        final CloseOptions closeOptions = leaveGroup ? CloseOptions.groupMembershipOperation(LEAVE_GROUP)
-            : CloseOptions.groupMembershipOperation(REMAIN_IN_GROUP);
 
         try {
             taskManager.shutdown(cleanRun);
@@ -1816,12 +1815,13 @@ public class StreamThread extends Thread implements ProcessingThread {
             log.error("Failed to unsubscribe due to the following error: ", e);
         }
         try {
-            mainConsumer.close(closeOptions);
+            final GroupMembershipOperation membershipOperation = leaveGroup ? LEAVE_GROUP : REMAIN_IN_GROUP;
+            mainConsumer.close(CloseOptions.groupMembershipOperation(membershipOperation));
         } catch (final Throwable e) {
             log.error("Failed to close consumer due to the following error:", e);
         }
         try {
-            restoreConsumer.close(closeOptions);
+            restoreConsumer.close(CloseOptions.groupMembershipOperation(REMAIN_IN_GROUP));
         } catch (final Throwable e) {
             log.error("Failed to close restore consumer due to the following error:", e);
         }
@@ -2006,7 +2006,7 @@ public class StreamThread extends Thread implements ProcessingThread {
     }
 
     public void closeConsumer(final boolean leaveGroup) {
-        final CloseOptions.GroupMembershipOperation operation = leaveGroup ? LEAVE_GROUP : REMAIN_IN_GROUP;
+        final GroupMembershipOperation operation = leaveGroup ? LEAVE_GROUP : REMAIN_IN_GROUP;
         final CloseOptions closeOptions = CloseOptions.groupMembershipOperation(operation);
         mainConsumer.close(closeOptions);
     }

@@ -19,6 +19,9 @@ package org.apache.kafka.streams;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
+import org.apache.kafka.clients.admin.MemberToRemove;
+import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupOptions;
+import org.apache.kafka.clients.admin.RemoveMembersFromConsumerGroupResult;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.producer.KafkaProducer;
 import org.apache.kafka.common.KafkaFuture;
@@ -1456,7 +1459,7 @@ public class KafkaStreams implements AutoCloseable {
             });
 
             if (leaveGroup) {
-                processStreamThread(thread -> thread.closeConsumer(true));
+                processStreamThread(streamThreadLeaveConsumerGroup(timeoutMs));
             }
 
             log.info("Shutdown {} stream threads complete", numStreamThreads);
@@ -1596,6 +1599,34 @@ public class KafkaStreams implements AutoCloseable {
         }
 
         return close(Optional.of(timeoutMs), options.leaveGroup);
+    }
+
+    private Consumer<StreamThread> streamThreadLeaveConsumerGroup(final long remainingTimeMs) {
+        return thread -> {
+            final Optional<String> groupInstanceId = thread.groupInstanceID();
+            if (groupInstanceId.isPresent()) {
+                log.debug("Sending leave group trigger to removing instance from consumer group: {}.",
+                    groupInstanceId.get());
+                System.err.println(groupInstanceId.get());
+                final MemberToRemove memberToRemove = new MemberToRemove(groupInstanceId.get());
+                final Collection<MemberToRemove> membersToRemove = Collections.singletonList(memberToRemove);
+
+                final RemoveMembersFromConsumerGroupResult removeMembersFromConsumerGroupResult = adminClient
+                    .removeMembersFromConsumerGroup(
+                        applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG),
+                        new RemoveMembersFromConsumerGroupOptions(membersToRemove)
+                    );
+
+                try {
+                    removeMembersFromConsumerGroupResult.memberResult(memberToRemove)
+                        .get(remainingTimeMs, TimeUnit.MILLISECONDS);
+                } catch (final Exception e) {
+                    final String msg = String.format("Could not remove static member %s from consumer group %s.",
+                                                     groupInstanceId.get(), applicationConfigs.getString(StreamsConfig.APPLICATION_ID_CONFIG));
+                    log.error(msg, e);
+                }
+            }
+        };
     }
 
     /**
