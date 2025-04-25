@@ -2069,7 +2069,7 @@ public class GroupMetadataManager {
         int groupEpoch = group.groupEpoch();
         if (bumpGroupEpoch) {
             groupEpoch += 1;
-            records.add(newStreamsGroupEpochRecord(groupId, groupEpoch));
+            records.add(newStreamsGroupEpochRecord(groupId, groupEpoch, 0));
             log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {}.", groupId, memberId, groupEpoch);
             metrics.record(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
@@ -2697,7 +2697,7 @@ public class GroupMetadataManager {
 
             if (bumpGroupEpoch) {
                 groupEpoch += 1;
-                records.add(newShareGroupEpochRecord(groupId, groupEpoch));
+                records.add(newShareGroupEpochRecord(groupId, groupEpoch, 0));
                 log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
             }
 
@@ -3404,7 +3404,7 @@ public class GroupMetadataManager {
 
             if (bumpGroupEpoch) {
                 int groupEpoch = group.groupEpoch() + 1;
-                records.add(newConsumerGroupEpochRecord(groupId, groupEpoch));
+                records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, 0));
                 log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
                 metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
                 group.setMetadataRefreshDeadline(
@@ -3720,7 +3720,7 @@ public class GroupMetadataManager {
 
         if (bumpGroupEpoch) {
             groupEpoch += 1;
-            records.add(newConsumerGroupEpochRecord(groupId, groupEpoch));
+            records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, 0));
             log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
             metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
         }
@@ -3979,9 +3979,13 @@ public class GroupMetadataManager {
         String groupId,
         String instanceId,
         String memberId,
-        int memberEpoch
+        int memberEpoch,
+        boolean shutdownApplication
     ) throws ApiException {
         StreamsGroup group = streamsGroup(groupId);
+        if (shutdownApplication) {
+            group.setShutdownRequestMemberId(memberId);
+        }
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
             .setMemberId(memberId)
             .setMemberEpoch(memberEpoch);
@@ -4119,7 +4123,7 @@ public class GroupMetadataManager {
 
             // We bump the group epoch.
             int groupEpoch = group.groupEpoch() + 1;
-            records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch));
+            records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch, 0));
             log.info("[GroupId {}] Bumped group epoch to {}.", group.groupId(), groupEpoch);
 
             for (ConsumerGroupMember member : members) {
@@ -4163,7 +4167,7 @@ public class GroupMetadataManager {
 
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
-        records.add(newShareGroupEpochRecord(group.groupId(), groupEpoch));
+        records.add(newShareGroupEpochRecord(group.groupId(), groupEpoch, 0));
 
         cancelGroupSessionTimeout(group.groupId(), member.memberId());
 
@@ -4226,7 +4230,7 @@ public class GroupMetadataManager {
 
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
-        records.add(newStreamsGroupEpochRecord(group.groupId(), groupEpoch));
+        records.add(newStreamsGroupEpochRecord(group.groupId(), groupEpoch, 0));
 
         cancelTimers(group.groupId(), member.memberId());
 
@@ -4734,7 +4738,8 @@ public class GroupMetadataManager {
                 request.groupId(),
                 request.instanceId(),
                 request.memberId(),
-                request.memberEpoch()
+                request.memberEpoch(),
+                request.shutdownApplication()
             );
         } else {
             return streamsGroupHeartbeat(
@@ -4963,9 +4968,13 @@ public class GroupMetadataManager {
 
     private Map<Uuid, String> attachTopicName(Set<Uuid> topicIds) {
         TopicsImage topicsImage = metadataImage.topics();
-        return topicIds.stream()
-            .map(topicId -> Map.entry(topicId, topicsImage.getTopic(topicId).name()))
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        Map<Uuid, String> finalMap = new HashMap<>();
+        for (Uuid topicId : topicIds) {
+            TopicImage topicImage = topicsImage.getTopic(topicId);
+            String topicName = (topicImage != null) ? topicImage.name() : "<UNKNOWN>";
+            finalMap.put(topicId, topicName);
+        }
+        return Collections.unmodifiableMap(finalMap);
     }
 
     private Map<Uuid, Map.Entry<String, Set<Integer>>> attachTopicName(Map<Uuid, Set<Integer>> initMap) {
@@ -4973,7 +4982,8 @@ public class GroupMetadataManager {
         Map<Uuid, Map.Entry<String, Set<Integer>>> finalMap = new HashMap<>();
         for (Map.Entry<Uuid, Set<Integer>> entry : initMap.entrySet()) {
             Uuid topicId = entry.getKey();
-            String topicName = topicsImage.getTopic(topicId).name();
+            TopicImage topicImage = topicsImage.getTopic(topicId);
+            String topicName = (topicImage != null) ? topicImage.name() : "<UNKNOWN>";
             finalMap.put(topicId, Map.entry(topicName, entry.getValue()));
         }
         return Collections.unmodifiableMap(finalMap);
