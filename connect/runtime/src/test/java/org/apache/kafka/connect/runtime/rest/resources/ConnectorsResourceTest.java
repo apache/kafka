@@ -688,9 +688,7 @@ public class ConnectorsResourceTest {
     @Test
     public void testRestartConnectorAndTasksRequestAccepted() throws Throwable {
         ConnectorStateInfo.ConnectorState state = new ConnectorStateInfo.ConnectorState(
-                AbstractStatus.State.RESTARTING.name(),
-                "foo",
-                null
+                AbstractStatus.State.RESTARTING.name(), "foo", null, null
         );
         ConnectorStateInfo connectorStateInfo = new ConnectorStateInfo(CONNECTOR_NAME, state, Collections.emptyList(), ConnectorType.SOURCE);
 

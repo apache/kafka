@@ -6346,7 +6346,7 @@ class KafkaApisTest extends Logging {
     assertEquals(partitionIndex, topicResponses.get(0).partitions.get(0).partitionIndex)
     assertEquals(Errors.NONE.code, topicResponses.get(0).partitions.get(0).errorCode)
     assertEquals(Errors.NONE.code, topicResponses.get(0).partitions.get(0).acknowledgeErrorCode)
-    assertNull(topicResponses.get(0).partitions.get(0).records)
+    assertEquals(MemoryRecords.EMPTY, topicResponses.get(0).partitions.get(0).records)
     assertEquals(0, topicResponses.get(0).partitions.get(0).acquiredRecords.toArray().length)
   }
 
@@ -9209,13 +9209,13 @@ class KafkaApisTest extends Logging {
       any()
     )
     val response = capturedResponse.getValue
-    val buffer = MessageUtil.toByteBufferAccessor(
+    val readable = MessageUtil.toByteBufferAccessor(
       response.data,
       request.context.header.apiVersion
-    ).buffer()
+    )
     AbstractResponse.parseResponse(
       request.context.header.apiKey,
-      buffer,
+      readable,
       request.context.header.apiVersion,
     ).asInstanceOf[T]
   }
@@ -9230,10 +9230,10 @@ class KafkaApisTest extends Logging {
       any()
     )
     val response = capturedResponse.getValue
-    val buffer = MessageUtil.toByteBufferAccessor(
+    val readable = MessageUtil.toByteBufferAccessor(
       response.data,
       request.context.header.apiVersion
-    ).buffer()
+    )
 
     // Create the RequestChannel.Response that is created when sendResponse is called in order to update the metrics.
     val sendResponse = new RequestChannel.SendResponse(
@@ -9246,7 +9246,7 @@ class KafkaApisTest extends Logging {
 
     AbstractResponse.parseResponse(
       request.context.header.apiKey,
-      buffer,
+      readable,
       request.context.header.apiVersion,
     ).asInstanceOf[T]
   }
