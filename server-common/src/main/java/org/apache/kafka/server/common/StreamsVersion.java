@@ -77,7 +77,7 @@ public enum StreamsVersion implements FeatureVersion {
         return switch (version) {
             case 0 -> SV_0;
             case 1 -> SV_1;
-            default -> throw new RuntimeException("Unknown streams group feature level: " + (int) version);
+            default -> throw new RuntimeException("Unknown streams feature level: " + (int) version);
         };
     }
 }

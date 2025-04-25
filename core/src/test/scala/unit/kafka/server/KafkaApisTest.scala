@@ -88,7 +88,7 @@ import org.apache.kafka.raft.QuorumConfig
 import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.{ClientMetricsManager, SimpleApiVersionManager}
 import org.apache.kafka.server.authorizer.{Action, AuthorizationResult, Authorizer}
-import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion, RequestLocal, TransactionVersion}
+import org.apache.kafka.server.common.{FeatureVersion, FinalizedFeatures, GroupVersion, KRaftVersion, MetadataVersion, RequestLocal, StreamsVersion, TransactionVersion}
 import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.ClientMetricsTestUtils
 import org.apache.kafka.server.share.{CachedSharePartition, ErroneousAndValidPartitionData, SharePartitionKey}
@@ -9960,7 +9960,11 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testStreamsGroupHeartbeatRequest(): Unit = {
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(Collections.singletonMap(StreamsVersion.FEATURE_NAME, 1.toShort))
+
     metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
 
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group")
 
@@ -9971,9 +9975,7 @@ class KafkaApisTest extends Logging {
       requestChannelRequest.context,
       streamsGroupHeartbeatRequest
     )).thenReturn(future)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
-    )
+    kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val streamsGroupHeartbeatResponse = new StreamsGroupHeartbeatResponseData()
@@ -9986,7 +9988,12 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testStreamsGroupHeartbeatRequestWithAuthorizedTopology(): Unit = {
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(Collections.singletonMap(StreamsVersion.FEATURE_NAME, 1.toShort))
+
     metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
+
     val groupId = "group"
     val fooTopicName = "foo"
     val barTopicName = "bar"
@@ -10037,8 +10044,7 @@ class KafkaApisTest extends Logging {
       streamsGroupHeartbeatRequest
     )).thenReturn(future)
     kafkaApis = createKafkaApis(
-      authorizer = Some(authorizer),
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
+      authorizer = Some(authorizer)
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
@@ -10052,7 +10058,11 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testStreamsGroupHeartbeatRequestFutureFailed(): Unit = {
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(Collections.singletonMap(StreamsVersion.FEATURE_NAME, 1.toShort))
+
     metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
 
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group")
 
@@ -10063,9 +10073,7 @@ class KafkaApisTest extends Logging {
       requestChannelRequest.context,
       streamsGroupHeartbeatRequest
     )).thenReturn(future)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
-    )
+    kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     future.completeExceptionally(Errors.FENCED_MEMBER_EPOCH.exception)
@@ -10075,7 +10083,11 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testStreamsGroupHeartbeatRequestGroupAuthorizationFailed(): Unit = {
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(Collections.singletonMap(StreamsVersion.FEATURE_NAME, 1.toShort))
+
     metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
 
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group")
 
@@ -10085,8 +10097,7 @@ class KafkaApisTest extends Logging {
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
     kafkaApis = createKafkaApis(
-      authorizer = Some(authorizer),
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
+      authorizer = Some(authorizer)
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
@@ -10096,7 +10107,12 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testStreamsGroupHeartbeatRequestTopicAuthorizationFailed(): Unit = {
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(Collections.singletonMap(StreamsVersion.FEATURE_NAME, 1.toShort))
+
     metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
+
     val groupId = "group"
     val fooTopicName = "foo"
     val barTopicName = "bar"
@@ -10137,8 +10153,7 @@ class KafkaApisTest extends Logging {
     }
 
     kafkaApis = createKafkaApis(
-      authorizer = Some(authorizer),
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
+      authorizer = Some(authorizer)
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
@@ -10147,7 +10162,7 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testStreamsGroupHeartbeatRequestProtocolDisabled(): Unit = {
+  def testStreamsGroupHeartbeatRequestProtocolDisabledViaConfig(): Unit = {
     metadataCache = mock(classOf[KRaftMetadataCache])
 
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group")
@@ -10164,8 +10179,31 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testStreamsGroupHeartbeatRequestInvalidTopicNames(): Unit = {
+  def testStreamsGroupHeartbeatRequestProtocolDisabledViaFeature(): Unit = {
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(Collections.singletonMap(StreamsVersion.FEATURE_NAME, 0.toShort))
+
     metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
+
+    val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group")
+
+    val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
+
+    val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
+    assertEquals(Errors.UNSUPPORTED_VERSION.code, response.data.errorCode)
+  }
+
+  @Test
+  def testStreamsGroupHeartbeatRequestInvalidTopicNames(): Unit = {
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(Collections.singletonMap(StreamsVersion.FEATURE_NAME, 1.toShort))
+
+    metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
 
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group").setTopology(
       new StreamsGroupHeartbeatRequestData.Topology()
@@ -10182,9 +10220,7 @@ class KafkaApisTest extends Logging {
 
     val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
 
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
-    )
+    kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
@@ -10194,7 +10230,11 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testStreamsGroupHeartbeatRequestInternalTopicNames(): Unit = {
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(Collections.singletonMap(StreamsVersion.FEATURE_NAME, 1.toShort))
+
     metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
 
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group").setTopology(
       new StreamsGroupHeartbeatRequestData.Topology()
@@ -10210,9 +10250,7 @@ class KafkaApisTest extends Logging {
 
     val requestChannelRequest = buildRequest(new StreamsGroupHeartbeatRequest.Builder(streamsGroupHeartbeatRequest, true).build())
 
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
-    )
+    kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val response = verifyNoThrottling[StreamsGroupHeartbeatResponse](requestChannelRequest)
@@ -10222,7 +10260,11 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testStreamsGroupHeartbeatRequestWithInternalTopicsToCreate(): Unit = {
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(Collections.singletonMap(StreamsVersion.FEATURE_NAME, 1.toShort))
+
     metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
 
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group");
 
@@ -10234,9 +10276,7 @@ class KafkaApisTest extends Logging {
       streamsGroupHeartbeatRequest
     )).thenReturn(future)
 
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
-    )
+    kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val missingTopics = Map("test" -> new CreatableTopic())
@@ -10251,7 +10291,11 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testStreamsGroupHeartbeatRequestWithInternalTopicsToCreateMissingCreateACL(): Unit = {
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(Collections.singletonMap(StreamsVersion.FEATURE_NAME, 1.toShort))
+
     metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
 
     val streamsGroupHeartbeatRequest = new StreamsGroupHeartbeatRequestData().setGroupId("group");
 
@@ -10277,8 +10321,7 @@ class KafkaApisTest extends Logging {
       }.asJava
     })
     kafkaApis = createKafkaApis(
-      authorizer = Some(authorizer),
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
+      authorizer = Some(authorizer)
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
@@ -10472,7 +10515,12 @@ class KafkaApisTest extends Logging {
   @ParameterizedTest
   @ValueSource(booleans = Array(true, false))
   def testStreamsGroupDescribe(includeAuthorizedOperations: Boolean): Unit = {
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(Collections.singletonMap(StreamsVersion.FEATURE_NAME, 1.toShort))
+
     metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
+
     val fooTopicName = "foo"
     val barTopicName = "bar"
 
@@ -10487,9 +10535,7 @@ class KafkaApisTest extends Logging {
       any[RequestContext],
       any[util.List[String]]
     )).thenReturn(future)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
-    )
+    kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     val subtopology0 = new StreamsGroupDescribeResponseData.Subtopology()
@@ -10580,7 +10626,11 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testStreamsGroupDescribeAuthorizationFailed(): Unit = {
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(Collections.singletonMap(StreamsVersion.FEATURE_NAME, 1.toShort))
+
     metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
 
     val streamsGroupDescribeRequestData = new StreamsGroupDescribeRequestData()
     streamsGroupDescribeRequestData.groupIds.add("group-id")
@@ -10597,8 +10647,7 @@ class KafkaApisTest extends Logging {
     )).thenReturn(future)
     future.complete(List().asJava)
     kafkaApis = createKafkaApis(
-      authorizer = Some(authorizer),
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
+      authorizer = Some(authorizer)
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
@@ -10608,7 +10657,11 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testStreamsGroupDescribeFutureFailed(): Unit = {
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(Collections.singletonMap(StreamsVersion.FEATURE_NAME, 1.toShort))
+
     metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
 
     val streamsGroupDescribeRequestData = new StreamsGroupDescribeRequestData()
     streamsGroupDescribeRequestData.groupIds.add("group-id")
@@ -10619,9 +10672,7 @@ class KafkaApisTest extends Logging {
       any[RequestContext],
       any[util.List[String]]
     )).thenReturn(future)
-    kafkaApis = createKafkaApis(
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
-    )
+    kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
     future.completeExceptionally(Errors.FENCED_MEMBER_EPOCH.exception)
@@ -10636,7 +10687,11 @@ class KafkaApisTest extends Logging {
     val barTopicName = "bar"
     val errorMessage = "The described group uses topics that the client is not authorized to describe."
 
+    val features = mock(classOf[FinalizedFeatures])
+    when(features.finalizedFeatures()).thenReturn(Collections.singletonMap(StreamsVersion.FEATURE_NAME, 1.toShort))
+
     metadataCache = mock(classOf[KRaftMetadataCache])
+    when(metadataCache.features()).thenReturn(features)
 
     val groupIds = List("group-id-0", "group-id-1", "group-id-2").asJava
     val streamsGroupDescribeRequestData = new StreamsGroupDescribeRequestData()
@@ -10668,8 +10723,7 @@ class KafkaApisTest extends Logging {
       any[util.List[String]]
     )).thenReturn(future)
     kafkaApis = createKafkaApis(
-      authorizer = Some(authorizer),
-      overrideProperties = Map(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG -> "classic,streams")
+      authorizer = Some(authorizer)
     )
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 

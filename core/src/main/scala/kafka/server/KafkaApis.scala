@@ -2635,13 +2635,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
   }
 
-  private def streamsGroupVersion(): StreamsVersion = {
+  private def streamsVersion(): StreamsVersion = {
     StreamsVersion.fromFeatureLevel(metadataCache.features.finalizedFeatures.getOrDefault(StreamsVersion.FEATURE_NAME, 0.toShort))
   }
 
   private def isStreamsGroupProtocolEnabled: Boolean = {
       config.groupCoordinatorRebalanceProtocols.contains(Group.GroupType.STREAMS) &&
-      streamsGroupVersion().streamsGroupSupported
+      streamsVersion().streamsGroupSupported
   }
 
   def handleStreamsGroupHeartbeat(request: RequestChannel.Request): CompletableFuture[Unit] = {
