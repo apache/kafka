@@ -17,6 +17,8 @@
 
 package org.apache.kafka.coordinator.share;
 
+import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
 import org.apache.kafka.common.message.InitializeShareGroupStateRequestData;
@@ -28,13 +30,17 @@ import org.apache.kafka.common.message.ReadShareGroupStateSummaryResponseData;
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.requests.RequestContext;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.share.SharePartitionKey;
 
+import java.util.List;
 import java.util.OptionalInt;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.ExecutionException;
 import java.util.function.IntSupplier;
 
 public interface ShareCoordinator {
@@ -119,6 +125,14 @@ public interface ShareCoordinator {
      * @param partitionLeaderEpoch - Leader epoch of the partition (internal topic). Empty optional means deleted.
      */
     void onResignation(int partitionIndex, OptionalInt partitionLeaderEpoch);
+
+    /**
+     * Remove share group state related to deleted topic ids.
+     *
+     * @param topicPartitions   The deleted topic ids.
+     * @param bufferSupplier    The buffer supplier tight to the request thread.
+     */
+    void onPartitionsDeleted(Set<Uuid> topicPartitions, BufferSupplier bufferSupplier);
 
     /**
      * A new metadata image is available.

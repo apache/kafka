@@ -67,8 +67,10 @@ import org.apache.kafka.timeline.TimelineHashMap;
 import org.slf4j.Logger;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord> {
     private final Logger log;
@@ -613,6 +615,22 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             }
         });
         return new CoordinatorResult<>(records, null);
+    }
+
+    public CoordinatorResult<Void, CoordinatorRecord> maybeCleanupShareState(Set<Uuid> deletedTopicIds) {
+        Set<SharePartitionKey> eligibleKeys = new HashSet<>();
+        shareStateMap.forEach((key, __) -> {
+            if (deletedTopicIds.contains(key.topicId())) {
+                eligibleKeys.add(key);
+            }
+        });
+
+        return new CoordinatorResult<>(
+            eligibleKeys.stream()
+                .map(key -> ShareCoordinatorRecordHelpers.newShareStateTombstoneRecord(key.groupId(), key.topicId(), key.partition()))
+                .toList(),
+            null
+        );
     }
 
     /**

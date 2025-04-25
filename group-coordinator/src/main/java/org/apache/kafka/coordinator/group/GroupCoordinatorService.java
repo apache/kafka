@@ -456,7 +456,13 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 timer.add(new TimerTask(0L) {
                     @Override
                     public void run() {
-                        persisterInitialize(result.getValue().get(), result.getKey());
+                        persisterInitialize(result.getValue().get(), result.getKey())
+                            .whenComplete((__, exp) -> {
+                                if (exp != null) {
+                                    log.error("Received error in persister initialize.", exp);
+                                }
+                            })
+                            .join();
                     }
                 });
             }
@@ -1806,6 +1812,29 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 }
             ).toArray(new CompletableFuture<?>[0])
         ).get();
+
+        Set<Uuid> topicIds = topicPartitions.stream()
+            .map(tp -> metadataImage.topics().getTopic(tp.topic()).id())
+            .collect(Collectors.toSet());
+
+        List<CompletableFuture<Void>> futures = runtime.scheduleWriteAllOperation(
+            "maybe-cleanup-share-group-state",
+            Duration.ofMillis(config.offsetCommitTimeoutMs()),
+            coordinator -> coordinator.maybeCleanupShareGroupState(topicIds)
+        );
+
+        timer.add(new TimerTask(0L) {
+            @Override
+            public void run() {
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[]{}))
+                    .whenComplete((__, exp) -> {
+                        if (exp != null) {
+                            log.error("Error while deleting state related to topic ids {}", topicPartitions, exp);
+                        }
+                    })
+                    .join();
+            }
+        });
     }
 
     /**

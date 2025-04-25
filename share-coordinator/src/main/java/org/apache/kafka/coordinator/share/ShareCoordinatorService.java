@@ -39,6 +39,7 @@ import org.apache.kafka.common.requests.ReadShareGroupStateResponse;
 import org.apache.kafka.common.requests.ReadShareGroupStateSummaryResponse;
 import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.WriteShareGroupStateResponse;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
@@ -67,8 +68,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.OptionalInt;
 import java.util.Properties;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ExecutionException;
 import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.IntSupplier;
@@ -1045,6 +1048,24 @@ public class ShareCoordinatorService implements ShareCoordinator {
             tp,
             partitionLeaderEpoch
         );
+    }
+
+    @Override
+    public void onPartitionsDeleted(Set<Uuid> deletedTopicIds, BufferSupplier bufferSupplier) {
+        throwIfNotActive();
+        List<CompletableFuture<Void>> futures = runtime.scheduleWriteAllOperation(
+            "cleanup-deleted-topic-partitions-state",
+            Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
+            coordinator -> coordinator.maybeCleanupShareState(deletedTopicIds)
+        );
+
+        timer.add(new TimerTask(0L) {
+            @Override
+            public void run() {
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[]{}))
+                    .join();
+            }
+        });
     }
 
     @Override

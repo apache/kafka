@@ -169,6 +169,7 @@ import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
+import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
 import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
@@ -2863,7 +2864,6 @@ public class GroupMetadataManager {
             ShareGroupHeartbeatResponseData.Assignment assignment = createShareGroupResponseAssignment(updatedMember);
             response.setAssignment(assignment);
         }
-
         return new CoordinatorResult<>(
             records,
             Map.entry(
@@ -8274,6 +8274,52 @@ public class GroupMetadataManager {
         });
 
         return deleteShareGroupStateRequestTopicsData;
+    }
+
+    /**
+     * Iterates over the share state metadata map and removes any
+     * deleted topic ids from the initialized and initializing maps.
+     * Also, updates the deleted set with valid values.
+     * Meant to be executed on topic delete events.
+     *
+     * @param deletedTopicIds   The set of topics which are deleted
+     * @return A result containing new records or empty if no change, and null response
+     */
+    public CoordinatorResult<Void, CoordinatorRecord> maybeCleanupShareGroupState(
+        Set<Uuid> deletedTopicIds
+    ) {
+        List<CoordinatorRecord> records = new ArrayList<>();
+        shareGroupPartitionMetadata.forEach((groupId, metadata) -> {
+            Set<Uuid> initializingCurrent = new HashSet<>(metadata.initializingTopics().keySet());
+            Set<Uuid> initializedCurrent = new HashSet<>(metadata.initializedTopics().keySet());
+            Set<Uuid> toDelete = new HashSet<>();
+
+            if (initializingCurrent.retainAll(deletedTopicIds)) {
+                toDelete.addAll(initializingCurrent);
+            }
+
+            if (initializedCurrent.retainAll(deletedTopicIds)) {
+                toDelete.addAll(initializedCurrent);
+            }
+
+            if (!toDelete.isEmpty()) {
+                toDelete.addAll(metadata.deletingTopics());
+                Map<Uuid, Set<Integer>> finalInitializing = new HashMap<>(metadata.initializingTopics());
+                initializingCurrent.forEach(finalInitializing::remove);
+
+                Map<Uuid, Set<Integer>> finalInitialized = new HashMap<>(metadata.initializedTopics());
+                initializedCurrent.forEach(finalInitialized::remove);
+
+                records.add(GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+                    groupId,
+                    attachTopicName(finalInitializing),
+                    attachTopicName(finalInitialized),
+                    attachTopicName(toDelete)
+                ));
+            }
+        });
+
+        return new CoordinatorResult<>(records);
     }
 
     /**
