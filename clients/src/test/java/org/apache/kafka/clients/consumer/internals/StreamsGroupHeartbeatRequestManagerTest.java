@@ -1520,6 +1520,36 @@ class StreamsGroupHeartbeatRequestManagerTest {
         }
     }
 
+    @Test
+    public void testResetPollTimer() {
+        try (final MockedConstruction<Timer> pollTimerMockedConstruction = mockConstruction(Timer.class)) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final Timer pollTimer = pollTimerMockedConstruction.constructed().get(1);
+
+            heartbeatRequestManager.resetPollTimer(time.milliseconds());
+            verify(pollTimer).update(time.milliseconds());
+            verify(pollTimer).isExpired();
+            verify(pollTimer).reset(DEFAULT_MAX_POLL_INTERVAL_MS);
+        }
+    }
+
+    @Test
+    public void testResetPollTimerWhenExpired() {
+        try (final MockedConstruction<Timer> pollTimerMockedConstruction = mockConstruction(Timer.class)) {
+            final StreamsGroupHeartbeatRequestManager heartbeatRequestManager = createStreamsGroupHeartbeatRequestManager();
+            final Timer pollTimer = pollTimerMockedConstruction.constructed().get(1);
+
+            when(pollTimer.isExpired()).thenReturn(true);
+            heartbeatRequestManager.resetPollTimer(time.milliseconds());
+            verify(pollTimer).update(time.milliseconds());
+            verify(pollTimer).isExpired();
+            verify(pollTimer).isExpiredBy();
+            verify(membershipManager).memberId();
+            verify(membershipManager).maybeRejoinStaleMember();
+            verify(pollTimer).reset(DEFAULT_MAX_POLL_INTERVAL_MS);
+        }
+    }
+
     private static ConsumerConfig config() {
         Properties prop = new Properties();
         prop.put(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, StringDeserializer.class);
