@@ -117,6 +117,7 @@ public class MetadataLogConfig {
                              int maxFetchSizeInBytes,
                              long deleteDelayMillis) {
         this.logSegmentBytes = logSegmentBytes;
+        this.internalLogSegmentBytes = logSegmentBytes;
         this.logSegmentMillis = logSegmentMillis;
         this.retentionMaxBytes = retentionMaxBytes;
         this.retentionMillis = retentionMillis;
