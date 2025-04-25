@@ -22,6 +22,7 @@ import org.apache.kafka.common.message.DescribeLogDirsResponseData;
 import org.apache.kafka.common.network.ClientInformation;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.Readable;
@@ -35,7 +36,6 @@ import com.fasterxml.jackson.databind.node.TextNode;
 
 import org.junit.jupiter.api.Test;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -87,8 +87,8 @@ public class RequestConvertToJsonTest {
                     message = ApiMessageType.fromApiKey(key.id).newResponse();
                 }
 
-                ByteBuffer bytes = MessageUtil.toByteBufferAccessor(message, version).buffer();
-                AbstractResponse response = AbstractResponse.parseResponse(key, bytes, version);
+                ByteBufferAccessor readable = MessageUtil.toByteBufferAccessor(message, version);
+                AbstractResponse response = AbstractResponse.parseResponse(key, readable, version);
                 try {
                     RequestConvertToJson.response(response, version);
                 } catch (IllegalStateException e) {
@@ -106,8 +106,8 @@ public class RequestConvertToJsonTest {
             if (key.hasValidVersion()) {
                 short version = key.latestVersion();
                 ApiMessage message = ApiMessageType.fromApiKey(key.id).newResponse();
-                ByteBuffer bytes = MessageUtil.toByteBufferAccessor(message, version).buffer();
-                AbstractResponse res = AbstractResponse.parseResponse(key, bytes, version);
+                ByteBufferAccessor readable = MessageUtil.toByteBufferAccessor(message, version);
+                AbstractResponse res = AbstractResponse.parseResponse(key, readable, version);
                 try {
                     RequestConvertToJson.response(res, version);
                 } catch (IllegalStateException e) {

@@ -201,16 +201,16 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
 
         public GroupCoordinatorService build() {
-            requireNonNull(config, new IllegalArgumentException("Config must be set."));
-            requireNonNull(writer, new IllegalArgumentException("Writer must be set."));
-            requireNonNull(loader, new IllegalArgumentException("Loader must be set."));
-            requireNonNull(time, new IllegalArgumentException("Time must be set."));
-            requireNonNull(timer, new IllegalArgumentException("Timer must be set."));
-            requireNonNull(coordinatorRuntimeMetrics, new IllegalArgumentException("CoordinatorRuntimeMetrics must be set."));
-            requireNonNull(groupCoordinatorMetrics, new IllegalArgumentException("GroupCoordinatorMetrics must be set."));
-            requireNonNull(groupConfigManager, new IllegalArgumentException("GroupConfigManager must be set."));
-            requireNonNull(persister, new IllegalArgumentException("Persister must be set."));
-            requireNonNull(authorizerPlugin, new IllegalArgumentException("Authorizer must be set."));
+            requireNonNull(config, "Config must be set.");
+            requireNonNull(writer, "Writer must be set.");
+            requireNonNull(loader, "Loader must be set.");
+            requireNonNull(time, "Time must be set.");
+            requireNonNull(timer, "Timer must be set.");
+            requireNonNull(coordinatorRuntimeMetrics, "CoordinatorRuntimeMetrics must be set.");
+            requireNonNull(groupCoordinatorMetrics, "GroupCoordinatorMetrics must be set.");
+            requireNonNull(groupConfigManager, "GroupConfigManager must be set.");
+            requireNonNull(persister, "Persister must be set.");
+            requireNonNull(authorizerPlugin, "Authorizer must be set.");
 
             String logPrefix = String.format("GroupCoordinator id=%d", nodeId);
             LogContext logContext = new LogContext(String.format("[%s] ", logPrefix));
@@ -289,6 +289,11 @@ public class GroupCoordinatorService implements GroupCoordinator {
     private final Persister persister;
 
     /**
+     * The timer to schedule tasks.
+     */
+    private final Timer timer;
+
+    /**
      * Boolean indicating whether the coordinator is active or not.
      */
     private final AtomicBoolean isActive = new AtomicBoolean(false);
@@ -305,8 +310,6 @@ public class GroupCoordinatorService implements GroupCoordinator {
      */
     private MetadataImage metadataImage = null;
 
-    private Timer timer;
-
     /**
      *
      * @param logContext                The log context.
@@ -314,7 +317,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
      * @param runtime                   The runtime.
      * @param groupCoordinatorMetrics   The group coordinator metrics.
      * @param groupConfigManager        The group config manager.
-     * @param persister                 The persister
+     * @param persister                 The persister.
+     * @param timer                     The timer.
      */
     GroupCoordinatorService(
         LogContext logContext,
@@ -1972,9 +1976,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
         }
     }
 
-    private static void requireNonNull(Object obj, RuntimeException throwable) {
+    private static void requireNonNull(Object obj, String msg) {
         if (obj == null) {
-            throw throwable;
+            throw new IllegalArgumentException(msg);
         }
     }
 }
