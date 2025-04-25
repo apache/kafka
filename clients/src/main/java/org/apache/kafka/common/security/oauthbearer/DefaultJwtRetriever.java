@@ -20,6 +20,8 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBearerR
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfig;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.URL;
 import java.util.List;
@@ -35,6 +37,8 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAu
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.validateUrl;
 
 public class DefaultJwtRetriever implements JwtRetriever {
+
+    private static final Logger LOG = LoggerFactory.getLogger(DefaultJwtRetriever.class);
 
     private final Time time;
 
@@ -65,6 +69,7 @@ public class DefaultJwtRetriever implements JwtRetriever {
             }
         }
 
+        LOG.debug("Created instance of {} as delegate", delegate.getClass().getName());
         delegate.configure(configs, saslMechanism, jaasConfigEntries);
     }
 

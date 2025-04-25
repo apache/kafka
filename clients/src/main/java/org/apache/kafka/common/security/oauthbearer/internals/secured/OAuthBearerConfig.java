@@ -17,6 +17,7 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.config.types.Password;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.utils.Utils;
 
@@ -85,6 +86,18 @@ public class OAuthBearerConfig extends OAuthBearerAbstractConfig {
     @Override
     public String getString(String key) {
         String s = get(key);
+
+        if (Utils.isBlank(s)) {
+            throw new ConfigException("No value was found for the OAuth configuration " + key);
+        } else {
+            return s.trim();
+        }
+    }
+
+    @Override
+    public String getPassword(String key) {
+        Password p = get(key);
+        String s = p.value();
 
         if (Utils.isBlank(s)) {
             throw new ConfigException("No value was found for the OAuth configuration " + key);

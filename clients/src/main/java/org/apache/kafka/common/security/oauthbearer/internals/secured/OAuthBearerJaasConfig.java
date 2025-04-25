@@ -52,6 +52,11 @@ public class OAuthBearerJaasConfig extends OAuthBearerAbstractConfig {
     }
 
     @Override
+    public String getPassword(String key) {
+        return getString(key);
+    }
+
+    @Override
     public boolean containsKey(String key) {
         return options.get(key) != null;
     }

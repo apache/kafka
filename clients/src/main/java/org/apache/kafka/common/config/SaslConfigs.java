@@ -129,12 +129,6 @@ public class SaslConfigs {
             + " authentication provider."
             + LOGIN_EXPONENTIAL_BACKOFF_NOTE;
 
-
-
-
-
-
-
     public static final String SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS = "sasl.oauthbearer.jwt.retriever.class";
     public static final String DEFAULT_SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS = "org.apache.kafka.common.security.oauthbearer.DefaultJwtRetriever";
     public static final String SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS_DOC = "The fully-qualified class name of a JwtRetriever implementation used to request tokens from the"
@@ -142,7 +136,8 @@ public class SaslConfigs {
             + " implementation uses the configuration to determine which concrete implementation to create.";
 
     public static final String SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS = "sasl.oauthbearer.jwt.validator.class";
-    public static final String DEFAULT_SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS = "org.apache.kafka.common.security.oauthbearer.DefaultJwtValidator";
+    public static final String DEFAULT_CLIENT_SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS = "org.apache.kafka.common.security.oauthbearer.ClientJwtValidator";
+    public static final String DEFAULT_BROKER_SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS = "org.apache.kafka.common.security.oauthbearer.BrokerJwtValidator";
     public static final String SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS_DOC = "The fully-qualified class name of a JwtValidator implementation used to validate the token from the"
             + " identity provider. The default value represents a class that maintains backward compatibility with previous versions of Apache Kafka. The default"
             + " implementation uses the configuration to determine which concrete implementation to create.";
@@ -156,30 +151,53 @@ public class SaslConfigs {
             + " type, if desired.";
 
     public static final String SASL_OAUTHBEARER_SCOPE = "sasl.oauthbearer.scope";
-    public static final String DEFAULT_SASL_OAUTHBEARER_SCOPE = "client_credentials";
     public static final String SASL_OAUTHBEARER_SCOPE_DOC = "This is the level of access a client application is granted to a resource or API which is included in"
             + " the token request. If provided, it should match one or more scopes configured in the identity provider. Note: the OAuth scope was previously stored as part"
             + " of the sasl.jaas.config configuration with the key \"scope\". For backward compatibility, the \"scope\" JAAS option can still be used, but if both are present,"
             + " this configuration value takes precedence over the value from sasl.jaas.config.";
 
     public static final String SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID = "sasl.oauthbearer.client.credentials.client.id";
+    public static final String SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID_DOC = "TBD";
+
     public static final String SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET = "sasl.oauthbearer.client.credentials.client.secret";
+    public static final String SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET_DOC = "TBD";
+
     public static final String SASL_OAUTHBEARER_ASSERTION_ALGORITHM = "sasl.oauthbearer.assertion.algorithm";
+    public static final String DEFAULT_SASL_OAUTHBEARER_ASSERTION_ALGORITHM = "RS256";
+    public static final String SASL_OAUTHBEARER_ASSERTION_ALGORITHM_DOC = "TBD";
+
     public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD = "sasl.oauthbearer.assertion.claim.aud";
-    public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_MINUTES = "sasl.oauthbearer.assertion.claim.exp.minutes";
+    public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD_DOC = "TBD";
+
+    public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_SECONDS = "sasl.oauthbearer.assertion.claim.exp.seconds";
+    public static final int DEFAULT_SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_SECONDS = 300;
+    public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_SECONDS_DOC = "TBD";
+
     public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS = "sasl.oauthbearer.assertion.claim.iss";
+    public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS_DOC = "TBD";
+
     public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_JTI_INCLUDE = "sasl.oauthbearer.assertion.claim.jti.include";
-    public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_MINUTES = "sasl.oauthbearer.assertion.claim.nbf.minutes";
+    public static final boolean DEFAULT_SASL_OAUTHBEARER_ASSERTION_CLAIM_JTI_INCLUDE = false;
+    public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_JTI_INCLUDE_DOC = "TBD";
+
+    public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_SECONDS = "sasl.oauthbearer.assertion.claim.nbf.seconds";
+    public static final int DEFAULT_SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_SECONDS = 60;
+    public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_SECONDS_DOC = "TBD";
+
     public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB = "sasl.oauthbearer.assertion.claim.sub";
+    public static final String SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB_DOC = "TBD";
+
     public static final String SASL_OAUTHBEARER_ASSERTION_FILE = "sasl.oauthbearer.assertion.file";
+    public static final String SASL_OAUTHBEARER_ASSERTION_FILE_DOC = "TBD";
+
     public static final String SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE = "sasl.oauthbearer.assertion.private.key.file";
+    public static final String SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE_DOC = "TBD";
+
     public static final String SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE = "sasl.oauthbearer.assertion.private.key.passphrase";
+    public static final String SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE_DOC = "TBD";
+
     public static final String SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE = "sasl.oauthbearer.assertion.template.file";
-
-
-
-
-
+    public static final String SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE_DOC = "TBD";
 
     public static final String SASL_OAUTHBEARER_SCOPE_CLAIM_NAME = "sasl.oauthbearer.scope.claim.name";
     public static final String DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME = "scope";
@@ -270,8 +288,22 @@ public class SaslConfigs {
                 .define(SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, ConfigDef.Type.STRING, DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_SCOPE_CLAIM_NAME_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME, ConfigDef.Type.STRING, DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_SUB_CLAIM_NAME_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS, ConfigDef.Type.CLASS, DEFAULT_SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_JWT_RETRIEVER_CLASS_DOC)
-                .define(SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS, ConfigDef.Type.CLASS, DEFAULT_SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS_DOC)
-                .define(SaslConfigs.SASL_OAUTHBEARER_GRANT_TYPE, ConfigDef.Type.STRING, DEFAULT_SASL_OAUTHBEARER_GRANT_TYPE, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_GRANT_TYPE)
+                .define(SaslConfigs.SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS, ConfigDef.Type.CLASS, DEFAULT_CLIENT_SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_JWT_VALIDATOR_CLASS_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_GRANT_TYPE, ConfigDef.Type.STRING, DEFAULT_SASL_OAUTHBEARER_GRANT_TYPE, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_GRANT_TYPE_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_SCOPE, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_SCOPE_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET, ConfigDef.Type.PASSWORD, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_ALGORITHM, ConfigDef.Type.STRING, DEFAULT_SASL_OAUTHBEARER_ASSERTION_ALGORITHM, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_ASSERTION_ALGORITHM_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_SECONDS, ConfigDef.Type.INT, DEFAULT_SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_SECONDS, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_SECONDS_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_JTI_INCLUDE, ConfigDef.Type.BOOLEAN, DEFAULT_SASL_OAUTHBEARER_ASSERTION_CLAIM_JTI_INCLUDE, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_ASSERTION_CLAIM_JTI_INCLUDE_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_SECONDS, ConfigDef.Type.INT, DEFAULT_SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_SECONDS, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_SECONDS_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_ASSERTION_FILE_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE_DOC)
+                .define(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_URL, ConfigDef.Type.STRING, null, ConfigDef.Importance.MEDIUM, SASL_OAUTHBEARER_JWKS_ENDPOINT_URL_DOC)
                 .define(SaslConfigs.SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, ConfigDef.Type.LONG, DEFAULT_SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS, ConfigDef.Importance.LOW, SASL_OAUTHBEARER_JWKS_ENDPOINT_REFRESH_MS_DOC)

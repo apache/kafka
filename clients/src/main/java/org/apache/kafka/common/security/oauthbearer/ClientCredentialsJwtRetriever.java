@@ -27,6 +27,8 @@ import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBeare
 import org.apache.kafka.common.security.oauthbearer.internals.secured.SslResource;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.net.URL;
 import java.net.http.HttpClient;
@@ -58,6 +60,7 @@ import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAu
  */
 public class ClientCredentialsJwtRetriever implements JwtRetriever {
 
+    private static final Logger LOG = LoggerFactory.getLogger(ClientCredentialsJwtRetriever.class);
     private static final String CLIENT_ID_JAAS = "clientId";
     private static final String CLIENT_SECRET_JAAS = "clientSecret";
     private static final String SCOPE_JAAS = "scope";
@@ -87,6 +90,8 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
         retryBackoffMaxMs = oauthConfig.getLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
 
         URL tokenEndpoint = validateUrl(oauthConfig, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+        LOG.debug("Configuring OAuth token endpoint URL: {}", tokenEndpoint);
+
         sslResource = maybeCreateSslResource(tokenEndpoint, jaasConfig);
 
         HttpClient.Builder clientBuilder = HttpClient.newBuilder();
@@ -94,21 +99,21 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
         sslResource.ifPresent(r -> clientBuilder.sslContext(r.sslContext()));
         client = clientBuilder.build();
 
-        String clientId = configOrJaas(
+        String clientId = getConfigOrJaasString(
             oauthConfig,
             jaasConfig,
             SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID,
             CLIENT_ID_JAAS,
             true
         );
-        String clientSecret = configOrJaas(
+        String clientSecret = getConfigOrJaasPassword(
             oauthConfig,
             jaasConfig,
             SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET,
             CLIENT_SECRET_JAAS,
             true
         );
-        String scope = configOrJaas(
+        String scope = getConfigOrJaasString(
             oauthConfig,
             jaasConfig,
             SASL_OAUTHBEARER_SCOPE,
@@ -147,15 +152,30 @@ public class ClientCredentialsJwtRetriever implements JwtRetriever {
         sslResource.ifPresent(r -> Utils.closeQuietly(r, "sslResource"));
     }
 
-    static String configOrJaas(OAuthBearerConfig oauthConfig,
-                               OAuthBearerJaasConfig jaasConfig,
-                               String configName,
-                               String jaasName,
-                               boolean isRequired) {
+    static String getConfigOrJaasString(OAuthBearerConfig oauthConfig,
+                                        OAuthBearerJaasConfig jaasConfig,
+                                        String configName,
+                                        String jaasName,
+                                        boolean isRequired) {
         if (oauthConfig.containsKey(configName))
             return oauthConfig.getString(configName);
         else if (jaasConfig.containsKey(jaasName))
             return jaasConfig.getString(jaasName);
+        else if (isRequired)
+            throw new ConfigException("Could not find OAuth configuration for " + configName + " or OAuth JAAS configuration for " + jaasName);
+        else
+            return null;
+    }
+
+    static String getConfigOrJaasPassword(OAuthBearerConfig oauthConfig,
+                                          OAuthBearerJaasConfig jaasConfig,
+                                          String configName,
+                                          String jaasName,
+                                          boolean isRequired) {
+        if (oauthConfig.containsKey(configName))
+            return oauthConfig.getPassword(configName);
+        else if (jaasConfig.containsKey(jaasName))
+            return jaasConfig.getPassword(jaasName);
         else if (isRequired)
             throw new ConfigException("Could not find OAuth configuration for " + configName + " or OAuth JAAS configuration for " + jaasName);
         else

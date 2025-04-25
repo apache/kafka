@@ -65,10 +65,10 @@ import javax.security.auth.login.AppConfigurationEntry;
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_ALGORITHM;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_MINUTES;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_SECONDS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_ISS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_JTI_INCLUDE;
-import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_MINUTES;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_SECONDS;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_TEMPLATE_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_HEADER_URLENCODE;
@@ -156,8 +156,8 @@ public class OAuthBearerUtils {
 
     public static AssertionJwtTemplate dynamicAssertionJwtTemplate(OAuthBearerConfig oauthConfig, Time time) {
         String algorithm = oauthConfig.getString(SASL_OAUTHBEARER_ASSERTION_ALGORITHM);
-        int expSeconds = oauthConfig.getInt(SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_MINUTES);
-        int nbfSeconds = oauthConfig.getInt(SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_MINUTES);
+        int expSeconds = oauthConfig.getInt(SASL_OAUTHBEARER_ASSERTION_CLAIM_EXP_SECONDS);
+        int nbfSeconds = oauthConfig.getInt(SASL_OAUTHBEARER_ASSERTION_CLAIM_NBF_SECONDS);
         boolean includeJti = oauthConfig.getBoolean(SASL_OAUTHBEARER_ASSERTION_CLAIM_JTI_INCLUDE);
         return new DynamicAssertionJwtTemplate(time, algorithm, expSeconds, nbfSeconds, includeJti);
     }
@@ -221,8 +221,10 @@ public class OAuthBearerUtils {
             }
         } else if (classOrClassName instanceof Class<?>) {
             o = Utils.newInstance((Class<?>) classOrClassName);
-        } else {
+        } else if (classOrClassName != null) {
             throw new KafkaException("Unexpected element of type " + classOrClassName.getClass().getName() + ", expected String or Class");
+        } else {
+            throw new KafkaException("Unexpectedly found no configuration for " + configName + ", expected String or Class");
         }
 
         if (!clazz.isInstance(o))

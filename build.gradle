@@ -1053,6 +1053,7 @@ project(':core') {
     testImplementation libs.apachedsJdbmPartition
     testImplementation libs.junitJupiter
     testImplementation libs.caffeine
+    testImplementation libs.mockOAuth2Server
     testImplementation testLog4j2Libs
 
     testRuntimeOnly runtimeTestLibs

@@ -67,15 +67,15 @@ public class JwtHttpResponseBodyHandler implements HttpResponse.BodyHandler<Stri
         for (String jsonPath : jsonPaths) {
             JsonNode node = rootNode.at(jsonPath);
 
-            if (node == null) {
-                log.debug("The JSON path {} did not yield a node in the OAuth token retrieval response", jsonPath);
+            if (node == null || node.isMissingNode()) {
+                log.debug("The JSON path {} was not found in the OAuth token retrieval response", jsonPath);
                 continue;
             }
 
             String jwt = node.textValue();
 
             if (Utils.isBlank(jwt)) {
-                log.debug("The JSON path {} yielded a node in the OAuth token retrieval response, but the value was null, blank, or whitespace", jsonPath);
+                log.debug("The JSON path {} was found in the OAuth token retrieval response, but the value was null, blank, or whitespace", jsonPath);
                 continue;
             }
 

@@ -25,6 +25,8 @@ public abstract class OAuthBearerAbstractConfig {
 
     public abstract String getString(String key);
 
+    public abstract String getPassword(String key);
+
     public abstract boolean containsKey(String key);
 
     public abstract <T> T get(String key);
