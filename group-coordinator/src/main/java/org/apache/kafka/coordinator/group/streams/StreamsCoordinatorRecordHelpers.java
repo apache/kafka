@@ -152,7 +152,8 @@ public class StreamsCoordinatorRecordHelpers {
 
     public static CoordinatorRecord newStreamsGroupEpochRecord(
         String groupId,
-        int newGroupEpoch
+        int newGroupEpoch,
+        long metadataHash
     ) {
         Objects.requireNonNull(groupId, "groupId should not be null here");
 
@@ -161,7 +162,8 @@ public class StreamsCoordinatorRecordHelpers {
                 .setGroupId(groupId),
             new ApiMessageAndVersion(
                 new StreamsGroupMetadataValue()
-                    .setEpoch(newGroupEpoch),
+                    .setEpoch(newGroupEpoch)
+                    .setMetadataHash(metadataHash),
                 (short) 0
             )
         );

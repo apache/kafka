@@ -21,10 +21,9 @@ import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData;
 import org.apache.kafka.common.message.IncrementalAlterConfigsResponseData.AlterConfigsResourceResponse;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -96,8 +95,8 @@ public class IncrementalAlterConfigsResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    public static IncrementalAlterConfigsResponse parse(ByteBuffer buffer, short version) {
+    public static IncrementalAlterConfigsResponse parse(Readable readable, short version) {
         return new IncrementalAlterConfigsResponse(new IncrementalAlterConfigsResponseData(
-            new ByteBufferAccessor(buffer), version));
+            readable, version));
     }
 }

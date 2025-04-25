@@ -22,10 +22,9 @@ import org.apache.kafka.common.message.WriteTxnMarkersResponseData.WritableTxnMa
 import org.apache.kafka.common.message.WriteTxnMarkersResponseData.WritableTxnMarkerResult;
 import org.apache.kafka.common.message.WriteTxnMarkersResponseData.WritableTxnMarkerTopicResult;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.HashMap;
@@ -126,7 +125,7 @@ public class WriteTxnMarkersResponse extends AbstractResponse {
         return errorCounts;
     }
 
-    public static WriteTxnMarkersResponse parse(ByteBuffer buffer, short version) {
-        return new WriteTxnMarkersResponse(new WriteTxnMarkersResponseData(new ByteBufferAccessor(buffer), version));
+    public static WriteTxnMarkersResponse parse(Readable readable, short version) {
+        return new WriteTxnMarkersResponse(new WriteTxnMarkersResponseData(readable, version));
     }
 }
