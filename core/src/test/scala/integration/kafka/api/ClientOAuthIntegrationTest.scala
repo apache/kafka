@@ -65,18 +65,9 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
     // create static config including client login context with credentials for JaasTestUtils 'client2'
     startSasl(jaasSections(kafkaServerSaslMechanisms, Option(kafkaClientSaslMechanism)))
 
-    val clientSaslConfig = new Properties()
-    clientSaslConfig.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
-    clientSaslConfig.put(SaslConfigs.SASL_JAAS_CONFIG, jaasClientLoginModule(kafkaClientSaslMechanism))
-    clientSaslConfig.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, classOf[OAuthBearerLoginCallbackHandler].getName)
-    clientSaslConfig.put(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID, "test-client")
-    clientSaslConfig.put(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET, "test-secret")
-    clientSaslConfig.put(SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, tokenEndpointUrl)
-
-    producerConfig.putAll(clientSaslConfig)
-    consumerConfig.putAll(clientSaslConfig)
-    adminClientConfig.putAll(clientSaslConfig)
-    superuserClientConfig.putAll(clientSaslConfig)
+    // The superuser needs the configuration in setUp because it's used to create resources before the individual
+    // test methods are invoked.
+    superuserClientConfig.putAll(clientOAuthConfigs())
 
     super.setUp(testInfo)
   }
@@ -93,8 +84,22 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testSimpleConnect(groupProtocol: String): Unit = {
-    createProducer()
-    createConsumer()
-    createAdminClient()
+    val overrides = clientOAuthConfigs()
+
+    createProducer(configOverrides = overrides)
+    createConsumer(configOverrides = overrides)
+    createAdminClient(configOverrides = overrides)
+  }
+
+  def clientOAuthConfigs(): Properties = {
+    val tokenEndpointUrl = mockOAuthServer.get.tokenEndpointUrl(issuerId).url().toString
+    val clientSaslConfig = new Properties()
+    clientSaslConfig.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
+    clientSaslConfig.put(SaslConfigs.SASL_JAAS_CONFIG, jaasClientLoginModule(kafkaClientSaslMechanism))
+    clientSaslConfig.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, classOf[OAuthBearerLoginCallbackHandler].getName)
+    clientSaslConfig.put(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID, "test-client")
+    clientSaslConfig.put(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET, "test-secret")
+    clientSaslConfig.put(SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, tokenEndpointUrl)
+    clientSaslConfig
   }
 }
