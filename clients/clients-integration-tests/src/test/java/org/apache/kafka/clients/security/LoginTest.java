@@ -97,7 +97,11 @@ public class LoginTest {
                     expectedTags(Map.of("client-id", "adminclient-1"))
                 );
             }
-            assertEquals(1, found, "Expected to find 1 metric with the expected tags");
+            StringBuilder sb = new StringBuilder();
+            admin.metrics().values().forEach(metric -> {
+                sb.append(metric.metricName()).append(" = ").append(metric.metricValue()).append("\n");
+            });
+            assertEquals(1, found, "Expected to find 1 metric with the expected tags but all metrics were: " + sb);
 
             assertMetrics(cluster.controllers().get(0).metrics(), expectedTags(Map.of("mechanism", MECHANISMS)));
             assertMetrics(cluster.brokers().get(0).metrics(), expectedTags(Map.of("mechanism", MECHANISMS)));
