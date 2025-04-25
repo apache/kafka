@@ -20990,7 +20990,7 @@ public class GroupMetadataManagerTest {
 
         context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
 
-        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
         context.replay(
             GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
@@ -21083,7 +21083,7 @@ public class GroupMetadataManagerTest {
 
         context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
 
-        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
         context.replay(
             GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
@@ -21190,7 +21190,7 @@ public class GroupMetadataManagerTest {
 
         context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
 
-        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
         context.replay(
             GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
@@ -21274,7 +21274,7 @@ public class GroupMetadataManagerTest {
 
         context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
 
-        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
         context.replay(
             GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
@@ -21359,7 +21359,7 @@ public class GroupMetadataManagerTest {
 
         context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
 
-        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
         context.replay(
             GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
@@ -21449,7 +21449,7 @@ public class GroupMetadataManagerTest {
 
         context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
 
-        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
         context.replay(
             GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
@@ -21522,7 +21522,7 @@ public class GroupMetadataManagerTest {
 
         context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
 
-        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
         List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> expectedResult = List.of();
 
