@@ -568,10 +568,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     client.createAcls(List(denyAcl).asJava, new CreateAclsOptions()).all().get()
 
     val topics = Seq(topic1, topic2)
-    val configsOverride = util.Map.of(
-      LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, "100000",
-      LogConfig.INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, 8 * 1024 * 1024 + "",
-    )
+    val configsOverride = Map(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG -> "100000").asJava
     val newTopics = Seq(
       new NewTopic(topic1, 2, 3.toShort).configs(configsOverride),
       new NewTopic(topic2, Option.empty[Integer].toJava, Option.empty[java.lang.Short].toJava).configs(configsOverride))

@@ -121,13 +121,9 @@ public class LogConfig extends AbstractConfig {
 
     // Visible for testing
     public static final String SERVER_DEFAULT_HEADER_NAME = "Server Default Property";
-    // only for testing
+    
     public static final String INTERNAL_SEGMENT_BYTES_CONFIG = "internal.segment.bytes";
-    public static final String LOG_SEGMENT_BYTES_DOC = "Setting the maximum size of a single log file. This should be used for testing only.";
-    // only for testing
-    public static final String INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG = "metadata.log.segment.min.bytes";
-    private static final String INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_DOC =
-            "Override the minimum size for a single metadata log file. This should be used for testing only.";
+    public static final String INTERNAL_LOG_SEGMENT_BYTES_DOC = "Setting the maximum size of a single log file. This should be used for testing only.";
 
     public static final int DEFAULT_SEGMENT_BYTES = 1024 * 1024 * 1024;
     public static final long DEFAULT_SEGMENT_MS = 24 * 7 * 60 * 60 * 1000L;
@@ -152,7 +148,6 @@ public class LogConfig extends AbstractConfig {
             TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG,
             TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG,
             INTERNAL_SEGMENT_BYTES_CONFIG,
-            INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG,
             QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG,
             QuotaConfig.FOLLOWER_REPLICATION_THROTTLED_REPLICAS_CONFIG
     );
@@ -194,11 +189,7 @@ public class LogConfig extends AbstractConfig {
             .define(ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_DOC)
             .define(ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_DOC)
             .define(ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_CONFIG, LONG, ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_DEFAULT, atLeast(1), LOW, ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_DOC)
-            .defineInternal(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, LONG, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT, atLeast(0), LOW, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DOC)
-            // only for testing
-            .defineInternal(INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, LOW, LOG_SEGMENT_BYTES_DOC)
-            .defineInternal(INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, INT, null, null, LOW, INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_DOC);
-
+            .defineInternal(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, LONG, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT, atLeast(0), LOW, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DOC);
 
     private static final LogConfigDef CONFIG = new LogConfigDef();
     static {
@@ -266,8 +257,7 @@ public class LogConfig extends AbstractConfig {
                         TopicConfig.LOCAL_LOG_RETENTION_BYTES_DOC)
                 .define(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_COPY_DISABLE_DOC)
                 .define(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, BOOLEAN, false, MEDIUM, TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_DOC)
-                .defineInternal(INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, LOW, LOG_SEGMENT_BYTES_DOC)
-                .defineInternal(INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, INT, null, null, LOW, INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_DOC);
+                .defineInternal(INTERNAL_SEGMENT_BYTES_CONFIG, INT, null, null, LOW, INTERNAL_LOG_SEGMENT_BYTES_DOC);
 
     }
 

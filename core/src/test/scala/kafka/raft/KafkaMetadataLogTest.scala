@@ -76,9 +76,8 @@ final class KafkaMetadataLogTest {
     props.put(QuorumConfig.QUORUM_VOTERS_CONFIG, "1@localhost:9093")
     props.put(KRaftConfigs.NODE_ID_CONFIG, Int.box(2))
     props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
-    props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_BYTES_CONFIG, Int.box(10240))
     props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG, Int.box(10 * 1024))
-    props.put(LogConfig.INTERNAL_METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, Int.box(10240))
+    props.put(MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG, Int.box(10240))
     val kafkaConfig = KafkaConfig.fromProps(props)
     val metadataConfig = new MetadataLogConfig(kafkaConfig)
     buildMetadataLog(tempDir, mockTime, metadataConfig)
@@ -683,7 +682,6 @@ final class KafkaMetadataLogTest {
     val recordSize = 64
     val config = new MetadataLogConfig(
       DefaultMetadataLogConfig.logSegmentBytes,
-      DefaultMetadataLogConfig.logSegmentBytes,
       DefaultMetadataLogConfig.logSegmentMillis,
       DefaultMetadataLogConfig.retentionMaxBytes,
       DefaultMetadataLogConfig.retentionMillis,
@@ -903,7 +901,6 @@ final class KafkaMetadataLogTest {
   def testAdvanceLogStartOffsetAfterCleaning(): Unit = {
     val config = new MetadataLogConfig(
       512,
-      512,
       10 * 1000,
       256,
       60 * 1000,
@@ -940,7 +937,6 @@ final class KafkaMetadataLogTest {
     // Generate some logs and a few snapshots, set retention low and verify that cleaning occurs
     val config = new MetadataLogConfig(
       1024,
-      1024,
       10 * 1000,
       1024,
       60 * 1000,
@@ -973,7 +969,6 @@ final class KafkaMetadataLogTest {
   def testSoftRetentionLimit(): Unit = {
     // Set retention equal to the segment size and generate slightly more than one segment of logs
     val config = new MetadataLogConfig(
-      10240,
       10240,
       10 * 1000,
       10240,
@@ -1017,7 +1012,6 @@ final class KafkaMetadataLogTest {
   @Test
   def testSegmentsLessThanLatestSnapshot(): Unit = {
     val config = new MetadataLogConfig(
-      10240,
       10240,
       10 * 1000,
       10240,
@@ -1077,7 +1071,6 @@ object KafkaMetadataLogTest {
 
   val DefaultMetadataLogConfig = new MetadataLogConfig(
     100 * 1024,
-    100 * 1024,
     10 * 1000,
     100 * 1024,
     60 * 1000,
@@ -1097,7 +1090,7 @@ object KafkaMetadataLogTest {
       UnifiedLog.logDirName(KafkaRaftServer.MetadataPartition)
     )
 
-    val metadataLog = KafkaMetadataLog.internalApply(
+    val metadataLog = KafkaMetadataLog.apply(
       KafkaRaftServer.MetadataPartition,
       KafkaRaftServer.MetadataTopicId,
       logDir,
