@@ -21,10 +21,9 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.WriteShareGroupStateRequestData;
 import org.apache.kafka.common.message.WriteShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -65,9 +64,9 @@ public class WriteShareGroupStateResponse extends AbstractResponse {
         // No op
     }
 
-    public static WriteShareGroupStateResponse parse(ByteBuffer buffer, short version) {
+    public static WriteShareGroupStateResponse parse(Readable readable, short version) {
         return new WriteShareGroupStateResponse(
-                new WriteShareGroupStateResponseData(new ByteBufferAccessor(buffer), version)
+                new WriteShareGroupStateResponseData(readable, version)
         );
     }
 

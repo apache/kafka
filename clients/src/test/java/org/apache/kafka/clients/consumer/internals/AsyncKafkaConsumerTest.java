@@ -117,6 +117,7 @@ import java.util.Properties;
 import java.util.Set;
 import java.util.SortedSet;
 import java.util.TreeSet;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Future;
@@ -205,6 +206,13 @@ public class AsyncKafkaConsumerTest {
     }
 
     private AsyncKafkaConsumer<String, String> newConsumer(Properties props) {
+        return newConsumerWithStreamRebalanceData(props, null);
+    }
+
+    private AsyncKafkaConsumer<String, String> newConsumerWithStreamRebalanceData(
+        Properties props,
+        StreamsRebalanceData streamsRebalanceData
+    ) {
         // disable auto-commit by default, so we don't need to handle SyncCommitEvent for each case
         if (!props.containsKey(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG)) {
             props.put(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG, false);
@@ -215,12 +223,12 @@ public class AsyncKafkaConsumerTest {
             new StringDeserializer(),
             new StringDeserializer(),
             time,
-            (a, b, c, d, e, f, g, h) -> applicationEventHandler,
-            a -> backgroundEventReaper,
-            (a, b, c, d, e, f, g) -> fetchCollector,
-            (a, b, c, d) -> metadata,
+            (logContext, time, applicationEventBlockingQueue, completableEventReaper, applicationEventProcessorSupplier, networkClientDelegateSupplier, requestManagersSupplier, asyncConsumerMetrics) -> applicationEventHandler,
+            logContext -> backgroundEventReaper,
+            (logContext, consumerMetadata, subscriptionState, fetchConfig, deserializers, fetchMetricsManager, time) -> fetchCollector,
+            (consumerConfig, subscriptionState, logContext, clusterResourceListeners) -> metadata,
             backgroundEventQueue,
-            Optional.empty()
+            Optional.ofNullable(streamsRebalanceData)
         );
     }
 
@@ -230,10 +238,10 @@ public class AsyncKafkaConsumerTest {
             new StringDeserializer(),
             new StringDeserializer(),
             time,
-            (a, b, c, d, e, f, g, h) -> applicationEventHandler,
-            a -> backgroundEventReaper,
-            (a, b, c, d, e, f, g) -> fetchCollector,
-            (a, b, c, d) -> metadata,
+            (logContext, time, applicationEventBlockingQueue, completableEventReaper, applicationEventProcessorSupplier, networkClientDelegateSupplier, requestManagersSupplier, asyncConsumerMetrics) -> applicationEventHandler,
+            logContext -> backgroundEventReaper,
+            (logContext, consumerMetadata, subscriptionState, fetchConfig, deserializers, fetchMetricsManager, time) -> fetchCollector,
+            (consumerConfig, subscriptionState, logContext, clusterResourceListeners) -> metadata,
             backgroundEventQueue,
             Optional.empty()
         );
@@ -1369,6 +1377,51 @@ public class AsyncKafkaConsumerTest {
             Optional.empty()
         );
         assertEquals(groupMetadataAfterUnsubscribe, consumer.groupMetadata());
+    }
+
+    private Optional<StreamsRebalanceData> captureStreamRebalanceData(final MockedStatic<RequestManagers> requestManagers) {
+        ArgumentCaptor<Optional<StreamsRebalanceData>> streamRebalanceData = ArgumentCaptor.forClass(Optional.class);
+        requestManagers.verify(() -> RequestManagers.supplier(
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            any(),
+            streamRebalanceData.capture()
+        ));
+        return streamRebalanceData.getValue();
+    }
+
+    @Test
+    public void testEmptyStreamRebalanceData() {
+        final String groupId = "consumerGroupA";
+        try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
+            consumer = newConsumer(requiredConsumerConfigAndGroupId(groupId));
+            final Optional<StreamsRebalanceData> groupMetadataUpdateListener = captureStreamRebalanceData(requestManagers);
+            assertTrue(groupMetadataUpdateListener.isEmpty());
+        }
+    }
+
+    @Test
+    public void testStreamRebalanceData() {
+        final String groupId = "consumerGroupA";
+        try (final MockedStatic<RequestManagers> requestManagers = mockStatic(RequestManagers.class)) {
+            StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(UUID.randomUUID(), Optional.empty(), Map.of(), Map.of());
+            consumer = newConsumerWithStreamRebalanceData(requiredConsumerConfigAndGroupId(groupId), streamsRebalanceData);
+            final Optional<StreamsRebalanceData> groupMetadataUpdateListener = captureStreamRebalanceData(requestManagers);
+            assertTrue(groupMetadataUpdateListener.isPresent());
+            assertEquals(streamsRebalanceData, groupMetadataUpdateListener.get());
+        }
     }
 
     /**

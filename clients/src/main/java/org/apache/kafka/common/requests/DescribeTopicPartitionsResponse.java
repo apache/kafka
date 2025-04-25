@@ -22,10 +22,9 @@ import org.apache.kafka.common.TopicPartitionInfo;
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData;
 import org.apache.kafka.common.message.DescribeTopicPartitionsResponseData.DescribeTopicPartitionsResponseTopic;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
@@ -79,9 +78,9 @@ public class DescribeTopicPartitionsResponse extends AbstractResponse {
         return new DescribeTopicPartitionsResponse(responseData);
     }
 
-    public static DescribeTopicPartitionsResponse parse(ByteBuffer buffer, short version) {
+    public static DescribeTopicPartitionsResponse parse(Readable readable, short version) {
         return new DescribeTopicPartitionsResponse(
-            new DescribeTopicPartitionsResponseData(new ByteBufferAccessor(buffer), version));
+            new DescribeTopicPartitionsResponseData(readable, version));
     }
 
     public static TopicPartitionInfo partitionToTopicPartitionInfo(
