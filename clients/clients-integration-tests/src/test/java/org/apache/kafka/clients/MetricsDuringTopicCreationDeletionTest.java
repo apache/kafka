@@ -29,18 +29,25 @@ import com.yammer.metrics.core.Gauge;
 
 import org.junit.jupiter.api.BeforeEach;
 
+import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class MetricsDuringTopicCreationDeletionTest {
 
+    private static final String TOPIC_NAME_PREFIX = "topic";
+    private static final int TOPIC_NUM = 2;
+    private static final int CREATE_DELETE_ITERATIONS = 3;
+    private static final int REPLICATION_FACTOR = 1;
+    private static final int PARTITION_NUM = 3;
+
     private final ClusterInstance clusterInstance;
-
     private final List<String> topics;
-
     private volatile boolean running = true;
 
     private int initialOfflinePartitionsCount = 0;
@@ -50,10 +57,8 @@ public class MetricsDuringTopicCreationDeletionTest {
     public MetricsDuringTopicCreationDeletionTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;
         this.topics = new ArrayList<>();
-        int topicNum = 2;
-        for (int n = 0; n < topicNum; n++) {
-            String topicName = "topic";
-            topics.add(topicName + n);
+        for (int n = 0; n < TOPIC_NUM; n++) {
+            topics.add(TOPIC_NAME_PREFIX + n);
         }
     }
 
@@ -70,6 +75,42 @@ public class MetricsDuringTopicCreationDeletionTest {
         } catch (Exception e) {
             e.printStackTrace();
         }
+    }
+
+    private Closeable runThread() {
+        var closed = new AtomicBoolean(false);
+        var f = CompletableFuture.runAsync(() -> {
+            while (!closed.get()) {
+                clusterInstance.brokers().values().forEach(broker -> {
+                    if (running) {
+                        // Get UnderReplicatedPartitions through JMX
+                        Optional<Integer> underReplicatedCount = KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
+                                .filter(entry -> entry.getKey().getName().endsWith("UnderReplicatedPartitions"))
+                                .map(entry -> ((Gauge<Integer>) entry.getValue()).value())
+                                .findFirst();
+
+                        int count = underReplicatedCount.orElse(0);
+                        if (count != initialUnderReplicatedPartitionCount) {
+                            running = false;
+                        }
+                    }
+                });
+
+                int offlinePartitionsCount = getGauge("OfflinePartitionsCount").value();
+                if (offlinePartitionsCount != initialOfflinePartitionsCount) {
+                    running = false;
+                }
+
+                int preferredReplicaImbalanceCount = getGauge("PreferredReplicaImbalanceCount").value();
+                if (preferredReplicaImbalanceCount != initialPreferredReplicaImbalanceCount) {
+                    running = false;
+                }
+            }
+        });
+        return () -> {
+            closed.set(true);
+            f.join();
+        };
     }
 
     /*
@@ -107,67 +148,33 @@ public class MetricsDuringTopicCreationDeletionTest {
         assertEquals(initialPreferredReplicaImbalanceCount, preferredReplicaImbalanceCount[0]);
         assertEquals(initialUnderReplicatedPartitionCount, underReplicatedPartitionCount);
 
-        // Thread that continuously checks for any change in metrics
         running = true;
-        Thread thread = new Thread(() -> {
-            while (running) {
-                clusterInstance.brokers().values().forEach(broker -> {
-                    if (running) {
-                        // Get UnderReplicatedPartitions through JMX
-                        Optional<Integer> underReplicatedCount = KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
-                            .filter(entry -> entry.getKey().getName().endsWith("UnderReplicatedPartitions"))
-                            .map(entry -> ((Gauge<Integer>) entry.getValue()).value())
-                            .findFirst();
-
-                        int count = underReplicatedCount.orElse(0);
-                        if (count != initialUnderReplicatedPartitionCount) {
-                            running = false;
-                        }
+        try (var ignored = runThread()) {
+            for (int i = 1; i <= CREATE_DELETE_ITERATIONS && running; i++) {
+                // Create topics
+                for (String topic : topics) {
+                    if (!running) break;
+                    try {
+                        clusterInstance.createTopic(topic, PARTITION_NUM, (short) REPLICATION_FACTOR);
+                    } catch (Exception e) {
+                        e.printStackTrace();
                     }
-                });
-
-                offlinePartitionsCount[0] = offlinePartitionsCountGauge.value();
-                if (offlinePartitionsCount[0] != initialOfflinePartitionsCount) {
-                    running = false;
                 }
 
-                preferredReplicaImbalanceCount[0] = preferredReplicaImbalanceCountGauge.value();
-                if (preferredReplicaImbalanceCount[0] != initialPreferredReplicaImbalanceCount) {
-                    running = false;
-                }
-            }
-        });
-        thread.start();
-
-        // Loop that creates and deletes topics
-        int createDeleteIterations = 3;
-        for (int i = 1; i <= createDeleteIterations && running; i++) {
-            // Create topics
-            for (String topic : topics) {
-                if (!running) break;
-                try {
-                    int replicationFactor = 1;
-                    int partitionNum = 3;
-                    clusterInstance.createTopic(topic, partitionNum, (short) replicationFactor);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }
-
-            // Delete topics
-            for (String topic : topics) {
-                if (!running) break;
-                try {
-                    clusterInstance.deleteTopic(topic);
-                } catch (Exception e) {
-                    e.printStackTrace();
+                // Delete topics
+                for (String topic : topics) {
+                    if (!running) break;
+                    try {
+                        clusterInstance.deleteTopic(topic);
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
                 }
             }
         }
 
-        // if the thread checking the gauge is still running, stop it
-        running = false;
-        thread.join();
+        offlinePartitionsCount[0] = offlinePartitionsCountGauge.value();
+        preferredReplicaImbalanceCount[0] = preferredReplicaImbalanceCountGauge.value();
 
         assertEquals(initialOfflinePartitionsCount, offlinePartitionsCount[0],
                 "Expect offlinePartitionsCount to be " + initialOfflinePartitionsCount + ", but got: " + offlinePartitionsCount[0]);
