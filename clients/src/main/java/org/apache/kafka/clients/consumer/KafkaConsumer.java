@@ -1761,7 +1761,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * Close the consumer with {@link CloseOptions.GroupMembershipOperation#DEFAULT default membership operation},
+     * Close the consumer with {@link CloseOptions.GroupMembershipOperation#DEFAULT default leave group behavior},
      * waiting for up to the default timeout of 30 seconds for any needed cleanup.
      * If auto-commit is enabled, this will commit the current offsets if possible within the default
      * timeout. See {@link #close(CloseOptions)} for details. Note that {@link #wakeup()}
@@ -1777,11 +1777,11 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
     }
 
     /**
-     * This method has been deprecated since Kafka 4.0 and should use {@link KafkaConsumer#close(CloseOptions)} instead.
+     * This method has been deprecated since Kafka 4.1 and should use {@link KafkaConsumer#close(CloseOptions)} instead.
      * <p>
-     * Close the consumer with {@link CloseOptions.GroupMembershipOperation#DEFAULT default membership operation}
+     * Close the consumer with {@link CloseOptions.GroupMembershipOperation#DEFAULT default leave group behavior}
      * cleanly within the specified timeout. This method waits up to
-     * {@code timeout} for the consumer to complete pending commits and may leave the group (if applicable).
+     * {@code timeout} for the consumer to complete pending commits and maybe leaves the group (if the group is dynamic).
      * If auto-commit is enabled, this will commit the current offsets if possible within the
      * timeout. If the consumer is unable to complete offset commits and gracefully leave the group (if applicable)
      * before the timeout expires, the consumer is force closed. Note that {@link #wakeup()} cannot be
@@ -1801,7 +1801,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @throws InterruptException If the thread is interrupted before or while this function is called
      * @throws org.apache.kafka.common.KafkaException for any other error during close
      */
-    @Deprecated
+    @Deprecated(since = "4.1")
     @Override
     public void close(Duration timeout) {
         delegate.close(timeout);
@@ -1809,15 +1809,15 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
 
     /**
      * Close the consumer cleanly. {@link CloseOptions} allows to specify a timeout and a
-     * {@link CloseOptions.GroupMembershipOperation membership operation}.
-     * If no timeout is specified, the default timeout of 30 seconds is uses.
-     * If no membership operation is specified, the {@link CloseOptions.GroupMembershipOperation#DEFAULT default
-     * membership operation} is used.
+     * {@link CloseOptions.GroupMembershipOperation leave group behavior}.
+     * If no timeout is specified, the default timeout of 30 seconds is used.
+     * If no leave group behavior is specified, the {@link CloseOptions.GroupMembershipOperation#DEFAULT default
+     * leave group behavior} is used.
      * <p>
-     * This method waits up to the timeout for the consumer to complete pending commits and may leave the group,
-     * depending on the specified membership operation.
+     * This method waits up to the timeout for the consumer to complete pending commits and maybe leaves the group,
+     * depending on the specified leave group behavior.
      * If auto-commit is enabled, this will commit the current offsets if possible within the
-     * timeout. If the consumer is unable to complete offset commits and gracefully leave the group (if applicable)
+     * timeout. If the consumer is unable to complete offset commits and gracefully leaves the group (if applicable)
      * before the timeout expires, the consumer is force closed. Note that {@link #wakeup()} cannot be
      * used to interrupt close.
      * <p>
