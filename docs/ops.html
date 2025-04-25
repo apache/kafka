@@ -4010,6 +4010,11 @@ foo
     </li>
     <li><a href="#kraft_missing">As noted above</a>, some features are not fully implemented in KRaft mode. If you are
       using one of those features, you will not be able to migrate to KRaft yet.</li>
+    <li>
+      There is a known inconsistency between ZK and KRaft modes in the arguments passed to an <code>AlterConfigPolicy</code>,
+      when an <code>OpType.SUBTRACT</code> is processed.
+      For further details refer to <a href="https://issues.apache.org/jira/browse/KAFKA-19026">KAFKA-19026</a>.
+    </li>
   </ul>
 
   <h3>Preparing for migration</h3>
