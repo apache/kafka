@@ -560,7 +560,8 @@ public class TaskManager {
         }
         for (final Task task : tasksToCloseDirty) {
             closeTaskDirty(task, false);
-        }    }
+        }
+    }
 
     private void handleStartupTaskReuse(final Map<TaskId, Set<TopicPartition>> activeTasksToCreate,
                                         final Map<TaskId, Set<TopicPartition>> standbyTasksToCreate,
