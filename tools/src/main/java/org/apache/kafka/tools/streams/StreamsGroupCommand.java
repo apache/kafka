@@ -368,7 +368,11 @@ public class StreamsGroupCommand {
         private static Set<TopicPartition> getTopicPartitions(List<StreamsGroupMemberAssignment.TaskIds> taskIds, StreamsGroupDescription description) {
             Map<String, List<String>> allSourceTopics = new HashMap<>();
             for (StreamsGroupSubtopologyDescription subtopologyDescription : description.subtopologies()) {
-                allSourceTopics.put(subtopologyDescription.subtopologyId(), subtopologyDescription.sourceTopics());
+                List<String> topics = new ArrayList<>(subtopologyDescription.sourceTopics());
+                if (!subtopologyDescription.repartitionSourceTopics().isEmpty()) {
+                    topics.addAll(subtopologyDescription.repartitionSourceTopics().keySet());
+                }
+                allSourceTopics.put(subtopologyDescription.subtopologyId(), topics);
             }
             Set<TopicPartition> topicPartitions = new HashSet<>();
 
