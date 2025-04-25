@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.clients;
 
-import com.yammer.metrics.core.Gauge;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -25,6 +24,9 @@ import org.apache.kafka.server.config.ReplicationConfigs;
 import org.apache.kafka.server.config.ServerConfigs;
 import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.metrics.KafkaYammerMetrics;
+
+import com.yammer.metrics.core.Gauge;
+
 import org.junit.jupiter.api.BeforeEach;
 
 import java.util.ArrayList;
