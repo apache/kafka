@@ -13,13 +13,15 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+from ducktape.tests.test import Test
 from ducktape.utils.util import wait_until
 from kafkatest.services.verifiable_consumer import VerifiableConsumer
 from kafkatest.services.verifiable_producer import VerifiableProducer
-from kafkatest.tests.kafka_test import KafkaTest
+from kafkatest.services.zookeeper import ZookeeperService
+from kafkatest.services.kafka import KafkaService, quorum
 
 
-class BaseStreamsTest(KafkaTest):
+class BaseStreamsTest(Test):
     """
     Helper class that contains methods for producing and consuming
     messages and verification of results from log files
@@ -27,8 +29,24 @@ class BaseStreamsTest(KafkaTest):
     Extends KafkaTest which manages setting up Kafka Cluster and Zookeeper
     see tests/kafkatest/tests/kafka_test.py for more info
     """
-    def __init__(self, test_context,  topics, num_controllers=1, num_brokers=3):
-        super(BaseStreamsTest, self).__init__(test_context, num_controllers, num_brokers, topics)
+    def __init__(self, test_context, topics, num_controllers=1, num_brokers=3):
+        self.num_zk = num_controllers
+        self.num_brokers = num_brokers
+        self.topics = topics
+
+        self.zk = ZookeeperService(test_context, self.num_zk) if quorum.for_test(test_context) == quorum.zk else None
+
+        self.kafka = KafkaService(
+            test_context, self.num_brokers,
+            self.zk, topics=self.topics,
+            controller_num_nodes_override=self.num_zk,
+            use_streams_groups=True
+        )
+
+    def setUp(self):
+        if self.zk:
+            self.zk.start()
+        self.kafka.start()
 
     def get_consumer(self, client_id, topic, num_messages):
         return VerifiableConsumer(self.test_context,
