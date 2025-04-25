@@ -171,7 +171,6 @@ import org.apache.kafka.server.authorizer.Action;
 import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.AuthorizationResult;
 import org.apache.kafka.server.authorizer.Authorizer;
-import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
 import org.apache.kafka.server.share.persister.GroupTopicPartitionData;
 import org.apache.kafka.server.share.persister.InitializeShareGroupStateParameters;
@@ -8181,7 +8180,7 @@ public class GroupMetadataManager {
      * Meant to be executed on topic delete events.
      *
      * @param deletedTopicIds   The set of topics which are deleted
-     * @return A result containing new records or empty if no change, and null response
+     * @return A result containing new records or empty if no change, and void response.
      */
     public CoordinatorResult<Void, CoordinatorRecord> maybeCleanupShareGroupState(
         Set<Uuid> deletedTopicIds
@@ -8190,15 +8189,12 @@ public class GroupMetadataManager {
         shareGroupPartitionMetadata.forEach((groupId, metadata) -> {
             Set<Uuid> initializingCurrent = new HashSet<>(metadata.initializingTopics().keySet());
             Set<Uuid> initializedCurrent = new HashSet<>(metadata.initializedTopics().keySet());
-            Set<Uuid> toDelete = new HashSet<>();
 
-            if (initializingCurrent.retainAll(deletedTopicIds)) {
-                toDelete.addAll(initializingCurrent);
-            }
+            initializingCurrent.retainAll(deletedTopicIds);
+            Set<Uuid> toDelete = new HashSet<>(initializingCurrent);
 
-            if (initializedCurrent.retainAll(deletedTopicIds)) {
-                toDelete.addAll(initializedCurrent);
-            }
+            initializedCurrent.retainAll(deletedTopicIds);
+            toDelete.addAll(initializedCurrent);
 
             if (!toDelete.isEmpty()) {
                 toDelete.addAll(metadata.deletingTopics());

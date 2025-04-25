@@ -17,7 +17,6 @@
 
 package org.apache.kafka.coordinator.share;
 
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.DeleteShareGroupStateRequestData;
 import org.apache.kafka.common.message.DeleteShareGroupStateResponseData;
@@ -35,12 +34,10 @@ import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
 import org.apache.kafka.server.share.SharePartitionKey;
 
-import java.util.List;
 import java.util.OptionalInt;
 import java.util.Properties;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.ExecutionException;
 import java.util.function.IntSupplier;
 
 public interface ShareCoordinator {

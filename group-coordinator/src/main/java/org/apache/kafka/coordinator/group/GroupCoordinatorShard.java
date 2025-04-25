@@ -978,7 +978,6 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     public CoordinatorResult<Void, CoordinatorRecord> maybeCleanupShareGroupState(
         Set<Uuid> deletedTopicIds
     ) {
-        log.error("SMJN: cleanup called {}", deletedTopicIds);
         return groupMetadataManager.maybeCleanupShareGroupState(deletedTopicIds);
     }
 

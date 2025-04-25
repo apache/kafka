@@ -617,6 +617,11 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
         return new CoordinatorResult<>(records, null);
     }
 
+    /**
+     * Remove share partitions corresponding to the input topic ids, if present.
+     * @param deletedTopicIds   The topic ids which have been deleted
+     * @return A result containing relevant coordinator records and void response
+     */
     public CoordinatorResult<Void, CoordinatorRecord> maybeCleanupShareState(Set<Uuid> deletedTopicIds) {
         Set<SharePartitionKey> eligibleKeys = new HashSet<>();
         shareStateMap.forEach((key, __) -> {
@@ -625,11 +630,9 @@ public class ShareCoordinatorShard implements CoordinatorShard<CoordinatorRecord
             }
         });
 
-        return new CoordinatorResult<>(
-            eligibleKeys.stream()
-                .map(key -> ShareCoordinatorRecordHelpers.newShareStateTombstoneRecord(key.groupId(), key.topicId(), key.partition()))
-                .toList(),
-            null
+        return new CoordinatorResult<>(eligibleKeys.stream()
+            .map(key -> ShareCoordinatorRecordHelpers.newShareStateTombstoneRecord(key.groupId(), key.topicId(), key.partition()))
+            .toList()
         );
     }
 

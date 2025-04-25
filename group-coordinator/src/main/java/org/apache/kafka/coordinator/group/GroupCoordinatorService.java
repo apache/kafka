@@ -463,10 +463,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
                         persisterInitialize(result.getValue().get(), result.getKey())
                             .whenComplete((__, exp) -> {
                                 if (exp != null) {
-                                    log.error("Received error in persister initialize.", exp);
+                                    log.error("Persister initialization failed", exp);
                                 }
-                            })
-                            .join();
+                            });
                     }
                 });
             }
@@ -1833,10 +1832,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
                 CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[]{}))
                     .whenComplete((__, exp) -> {
                         if (exp != null) {
-                            log.error("Error while deleting state related to topic ids {}", topicPartitions, exp);
+                            log.error("Unable to cleanup state for the deleted topics {}", topicIds, exp);
                         }
-                    })
-                    .join();
+                    });
             }
         });
     }
