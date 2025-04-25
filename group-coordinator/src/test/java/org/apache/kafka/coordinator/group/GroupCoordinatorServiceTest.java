@@ -82,6 +82,7 @@ import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.NullSource;
 import org.junit.jupiter.params.provider.ValueSource;
+import org.mockito.ArgumentCaptor;
 import org.mockito.ArgumentMatchers;
 
 import java.net.InetAddress;
@@ -1415,6 +1416,10 @@ public class GroupCoordinatorServiceTest {
         int partitionCount = 2;
         service.startup(() -> partitionCount);
 
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<CoordinatorRuntime.CoordinatorReadOperation<GroupCoordinatorShard, List<ConsumerGroupDescribeResponseData.DescribedGroup>>> readOperationCaptor =
+            ArgumentCaptor.forClass(CoordinatorRuntime.CoordinatorReadOperation.class);
+
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup1 = new ConsumerGroupDescribeResponseData.DescribedGroup()
             .setGroupId("group-id-1");
         ConsumerGroupDescribeResponseData.DescribedGroup describedGroup2 = new ConsumerGroupDescribeResponseData.DescribedGroup()
@@ -1427,14 +1432,14 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleReadOperation(
             ArgumentMatchers.eq("consumer-group-describe"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.any()
+            readOperationCaptor.capture()
         )).thenReturn(CompletableFuture.completedFuture(Collections.singletonList(describedGroup1)));
 
-        CompletableFuture<Object> describedGroupFuture = new CompletableFuture<>();
+        CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> describedGroupFuture = new CompletableFuture<>();
         when(runtime.scheduleReadOperation(
             ArgumentMatchers.eq("consumer-group-describe"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 1)),
-            ArgumentMatchers.any()
+            readOperationCaptor.capture()
         )).thenReturn(describedGroupFuture);
 
         CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> future =
@@ -1443,6 +1448,12 @@ public class GroupCoordinatorServiceTest {
         assertFalse(future.isDone());
         describedGroupFuture.complete(Collections.singletonList(describedGroup2));
         assertEquals(expectedDescribedGroups, future.get());
+
+        // Validate that the captured read operations, on the first and the second partition
+        GroupCoordinatorShard shard = mock(GroupCoordinatorShard.class);
+        readOperationCaptor.getAllValues().forEach(x -> x.generateResponse(shard, 100));
+        verify(shard).consumerGroupDescribe(List.of("group-id-2"), 100);
+        verify(shard).consumerGroupDescribe(List.of("group-id-1"), 100);
     }
 
     @Test
@@ -2282,6 +2293,10 @@ public class GroupCoordinatorServiceTest {
         int partitionCount = 2;
         service.startup(() -> partitionCount);
 
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<CoordinatorRuntime.CoordinatorReadOperation<GroupCoordinatorShard, List<ShareGroupDescribeResponseData.DescribedGroup>>> readOperationCaptor =
+            ArgumentCaptor.forClass(CoordinatorRuntime.CoordinatorReadOperation.class);
+
         ShareGroupDescribeResponseData.DescribedGroup describedGroup1 = new ShareGroupDescribeResponseData.DescribedGroup()
             .setGroupId("share-group-id-1");
         ShareGroupDescribeResponseData.DescribedGroup describedGroup2 = new ShareGroupDescribeResponseData.DescribedGroup()
@@ -2294,14 +2309,14 @@ public class GroupCoordinatorServiceTest {
         when(runtime.scheduleReadOperation(
             ArgumentMatchers.eq("share-group-describe"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
-            ArgumentMatchers.any()
+            readOperationCaptor.capture()
         )).thenReturn(CompletableFuture.completedFuture(Collections.singletonList(describedGroup1)));
 
-        CompletableFuture<Object> describedGroupFuture = new CompletableFuture<>();
+        CompletableFuture<List<ShareGroupDescribeResponseData.DescribedGroup>> describedGroupFuture = new CompletableFuture<>();
         when(runtime.scheduleReadOperation(
             ArgumentMatchers.eq("share-group-describe"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 1)),
-            ArgumentMatchers.any()
+            readOperationCaptor.capture()
         )).thenReturn(describedGroupFuture);
 
         CompletableFuture<List<ShareGroupDescribeResponseData.DescribedGroup>> future =
@@ -2310,6 +2325,12 @@ public class GroupCoordinatorServiceTest {
         assertFalse(future.isDone());
         describedGroupFuture.complete(Collections.singletonList(describedGroup2));
         assertEquals(expectedDescribedGroups, future.get());
+
+        // Validate that the captured read operations, on the first and the second partition
+        GroupCoordinatorShard shard = mock(GroupCoordinatorShard.class);
+        readOperationCaptor.getAllValues().forEach(x -> x.generateResponse(shard, 100));
+        verify(shard).shareGroupDescribe(List.of("share-group-id-2"), 100);
+        verify(shard).shareGroupDescribe(List.of("share-group-id-1"), 100);
     }
 
     @Test
