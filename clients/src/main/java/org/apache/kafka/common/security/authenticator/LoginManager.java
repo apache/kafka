@@ -204,6 +204,10 @@ public class LoginManager {
         try {
             List<Callable<Void>> tasks = asList(
                     () -> {
+                        loginPlugin.get().close();
+                        return null;
+                    },
+                    () -> {
                         Utils.closeQuietly(loginPlugin, "login plugin");
                         return null;
                     },
