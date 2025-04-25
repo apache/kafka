@@ -28,7 +28,6 @@ import org.apache.kafka.common.record.ControlRecordUtils;
 import java.nio.ByteBuffer;
 import java.util.Objects;
 
-import static org.apache.kafka.common.record.ControlRecordType.LEADER_CHANGE;
 
 public final class ControlRecord {
     private final ControlRecordType recordType;
