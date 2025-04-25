@@ -21,11 +21,10 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.ProduceResponseData;
 import org.apache.kafka.common.message.ProduceResponseData.LeaderIdAndEpoch;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.record.RecordBatch;
 
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.EnumMap;
 import java.util.List;
@@ -286,8 +285,8 @@ public class ProduceResponse extends AbstractResponse {
         }
     }
 
-    public static ProduceResponse parse(ByteBuffer buffer, short version) {
-        return new ProduceResponse(new ProduceResponseData(new ByteBufferAccessor(buffer), version));
+    public static ProduceResponse parse(Readable readable, short version) {
+        return new ProduceResponse(new ProduceResponseData(readable, version));
     }
 
     @Override

@@ -18,10 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.ShareGroupDescribeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.EnumMap;
 import java.util.Map;
 
@@ -70,9 +69,9 @@ public class ShareGroupDescribeResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    public static ShareGroupDescribeResponse parse(ByteBuffer buffer, short version) {
+    public static ShareGroupDescribeResponse parse(Readable readable, short version) {
         return new ShareGroupDescribeResponse(
-                new ShareGroupDescribeResponseData(new ByteBufferAccessor(buffer), version)
+                new ShareGroupDescribeResponseData(readable, version)
         );
     }
 }

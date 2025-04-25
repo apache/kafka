@@ -25,8 +25,10 @@ import org.apache.kafka.clients.consumer.ConsumerRecords;
 import org.apache.kafka.clients.consumer.InvalidOffsetException;
 import org.apache.kafka.clients.consumer.MockConsumer;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.MockRebalanceListener;
+import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
 import org.apache.kafka.clients.producer.MockProducer;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.common.Cluster;
@@ -37,6 +39,7 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidPidMappingException;
 import org.apache.kafka.common.errors.ProducerFencedException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -55,9 +58,11 @@ import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
+import org.apache.kafka.streams.GroupProtocol;
 import org.apache.kafka.streams.StreamsConfig;
 import org.apache.kafka.streams.StreamsConfig.InternalConfig;
 import org.apache.kafka.streams.ThreadMetadata;
+import org.apache.kafka.streams.TopologyConfig;
 import org.apache.kafka.streams.errors.LogAndContinueExceptionHandler;
 import org.apache.kafka.streams.errors.StreamsException;
 import org.apache.kafka.streams.errors.TaskCorruptedException;
@@ -77,9 +82,11 @@ import org.apache.kafka.streams.processor.api.ProcessorContext;
 import org.apache.kafka.streams.processor.api.ProcessorSupplier;
 import org.apache.kafka.streams.processor.api.Record;
 import org.apache.kafka.streams.processor.internals.StreamThread.State;
+import org.apache.kafka.streams.processor.internals.assignment.AssignorError;
 import org.apache.kafka.streams.processor.internals.assignment.ReferenceContainer;
 import org.apache.kafka.streams.processor.internals.metrics.StreamsMetricsImpl;
 import org.apache.kafka.streams.processor.internals.tasks.DefaultTaskManager;
+import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.KeyValueStore;
 import org.apache.kafka.streams.state.StoreBuilder;
 import org.apache.kafka.streams.state.Stores;
@@ -96,6 +103,7 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
@@ -154,6 +162,7 @@ import static org.hamcrest.Matchers.isA;
 import static org.hamcrest.core.IsInstanceOf.instanceOf;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertSame;
@@ -3570,6 +3579,329 @@ public class StreamThreadTest {
         assertThat(
             error.getCause().getMessage(),
             equalTo("Could not retrieve thread producer client instance id.")
+        );
+    }
+
+    @Test
+    public void testNamedTopologyWithStreamsProtocol() {
+        final Properties props = configProps(false, false, false);
+        props.setProperty(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.toString());
+        final StreamsConfig config = new StreamsConfig(props);
+        final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
+            new TopologyConfig(
+                "my-topology",
+                config,
+                new Properties())
+        );
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
+            metrics,
+            APPLICATION_ID,
+            PROCESS_ID.toString(),
+            mockTime
+        );
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(topologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+
+        stateDirectory = new StateDirectory(config, mockTime, true, false);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
+            new TopologyMetadata(internalTopologyBuilder, config),
+            StreamsMetadataState.UNKNOWN_HOST,
+            new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
+        final IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+            StreamThread.create(
+                topologyMetadata,
+                config,
+                clientSupplier,
+                clientSupplier.getAdmin(config.getAdminConfigs(CLIENT_ID)),
+                PROCESS_ID,
+                CLIENT_ID,
+                streamsMetrics,
+                mockTime,
+                streamsMetadataState,
+                0,
+                stateDirectory,
+                new MockStateRestoreListener(),
+                new MockStandbyUpdateListener(),
+                threadIdx,
+                null,
+                HANDLER
+            )
+        );
+        assertEquals("Named topologies and the STREAMS protocol cannot be used at the same time.", exception.getMessage());
+    }
+
+    @Test
+    public void testStreamsRebalanceDataWithClassicProtocol() {
+        final Properties props = configProps(false, false, false);
+        props.setProperty(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.toString());
+        thread = createStreamThread(CLIENT_ID, new StreamsConfig(props));
+        assertTrue(thread.streamsRebalanceData().isEmpty());
+    }
+
+    @Test
+    public void testStreamsRebalanceDataWithExtraCopartition() {
+        final Properties props = configProps(false, false, false);
+        props.setProperty(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.toString());
+
+        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
+
+        final StreamsConfig config = new StreamsConfig(props);
+        final InternalTopologyBuilder topologyBuilder = mock(InternalTopologyBuilder.class);
+        when(topologyBuilder.subtopologyToTopicsInfo()).thenReturn(Map.of());
+        when(topologyBuilder.copartitionGroups()).thenReturn(Set.of(Set.of("source1")));
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
+            metrics,
+            APPLICATION_ID,
+            PROCESS_ID.toString(),
+            mockTime
+        );
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(topologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+
+        stateDirectory = new StateDirectory(config, mockTime, true, false);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
+            new TopologyMetadata(internalTopologyBuilder, config),
+            StreamsMetadataState.UNKNOWN_HOST,
+            new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
+        final IllegalStateException exception = assertThrows(IllegalStateException.class, () ->
+            StreamThread.create(
+                topologyMetadata,
+                config,
+                clientSupplier,
+                clientSupplier.getAdmin(config.getAdminConfigs(CLIENT_ID)),
+                PROCESS_ID,
+                CLIENT_ID,
+                streamsMetrics,
+                mockTime,
+                streamsMetadataState,
+                0,
+                stateDirectory,
+                new MockStateRestoreListener(),
+                new MockStandbyUpdateListener(),
+                threadIdx,
+                null,
+                HANDLER
+            )
+        );
+        assertEquals("Not all copartition groups were converted to broker topology", exception.getMessage());
+    }
+
+    @Test
+    public void testStreamsRebalanceDataWithStreamsProtocol() {
+        final Properties props = configProps(false, false, false);
+        props.setProperty(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.toString());
+        props.setProperty(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:1234");
+        props.setProperty(StreamsConfig.REPLICATION_FACTOR_CONFIG, "1");
+
+        internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
+
+        final StreamsConfig config = new StreamsConfig(props);
+        final InternalTopologyBuilder topologyBuilder = mock(InternalTopologyBuilder.class);
+        when(topologyBuilder.subtopologyToTopicsInfo()).thenReturn(Map.of(
+            new TopologyMetadata.Subtopology(1, "subTopology1"),
+            new InternalTopologyBuilder.TopicsInfo(
+                Set.of("repartitionSource1"),
+                Set.of("source1"),
+                Map.of(
+                    "repartitionSource1",
+                    new RepartitionTopicConfig("repartitionSource1", Map.of(), 1, false)
+                ),
+                Map.of(
+                    "stateChangeTopic1",
+                    new RepartitionTopicConfig("stateChangeTopic1", Map.of(), 1, false)
+                )
+            )
+        ));
+        when(topologyBuilder.copartitionGroups()).thenReturn(Set.of(Set.of("source1")));
+
+        final StreamsMetricsImpl streamsMetrics = new StreamsMetricsImpl(
+            metrics,
+            APPLICATION_ID,
+            PROCESS_ID.toString(),
+            mockTime
+        );
+
+        final TopologyMetadata topologyMetadata = new TopologyMetadata(topologyBuilder, config);
+        topologyMetadata.buildAndRewriteTopology();
+
+        stateDirectory = new StateDirectory(config, mockTime, true, false);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
+            new TopologyMetadata(internalTopologyBuilder, config),
+            StreamsMetadataState.UNKNOWN_HOST,
+            new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
+        thread = StreamThread.create(
+            topologyMetadata,
+            config,
+            clientSupplier,
+            clientSupplier.getAdmin(config.getAdminConfigs(CLIENT_ID)),
+            PROCESS_ID,
+            CLIENT_ID,
+            streamsMetrics,
+            mockTime,
+            streamsMetadataState,
+            0,
+            stateDirectory,
+            new MockStateRestoreListener(),
+            new MockStandbyUpdateListener(),
+            threadIdx,
+            null,
+            HANDLER
+        );
+
+        assertInstanceOf(AsyncKafkaConsumer.class, thread.mainConsumer());
+        assertTrue(thread.streamsRebalanceData().isPresent());
+        assertEquals(PROCESS_ID, thread.streamsRebalanceData().get().processId());
+        assertTrue(thread.streamsRebalanceData().get().endpoint().isPresent());
+        assertEquals(new StreamsRebalanceData.HostInfo("localhost", 1234),
+            thread.streamsRebalanceData().get().endpoint().get());
+
+        final Map<String, String> topicConfigs = Map.of(
+            TopicConfig.SEGMENT_BYTES_CONFIG, "52428800",
+            TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, TimestampType.CREATE_TIME.name,
+            TopicConfig.RETENTION_MS_CONFIG, "-1",
+            TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_DELETE
+        );
+        assertEquals(1, thread.streamsRebalanceData().get().subtopologies().size());
+        final StreamsRebalanceData.Subtopology subtopology = thread.streamsRebalanceData().get().subtopologies().get("1");
+
+        assertEquals(Set.of("source1"), subtopology.sourceTopics());
+        assertEquals(Set.of("repartitionSource1"), subtopology.repartitionSinkTopics());
+
+        assertEquals(1, subtopology.repartitionSourceTopics().size());
+        assertEquals(Optional.of(1), subtopology.repartitionSourceTopics().get("repartitionSource1").numPartitions());
+        assertEquals(Optional.of((short) 1), subtopology.repartitionSourceTopics().get("repartitionSource1").replicationFactor());
+        assertEquals(topicConfigs, subtopology.repartitionSourceTopics().get("repartitionSource1").topicConfigs());
+
+        assertEquals(1, subtopology.stateChangelogTopics().size());
+        assertEquals(Optional.of(1), subtopology.stateChangelogTopics().get("stateChangeTopic1").numPartitions());
+        assertEquals(Optional.of((short) 1), subtopology.stateChangelogTopics().get("stateChangeTopic1").replicationFactor());
+        assertEquals(topicConfigs, subtopology.stateChangelogTopics().get("stateChangeTopic1").topicConfigs());
+
+        assertEquals(1, subtopology.copartitionGroups().size());
+        assertEquals(Set.of("source1"), subtopology.copartitionGroups().stream().findFirst().get());
+    }
+
+    @Test
+    public void testStreamsProtocolRunOnceWithoutProcessingThreads() {
+        final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        when(mainConsumer.poll(Mockito.any(Duration.class))).thenReturn(new ConsumerRecords<>(Map.of(), Map.of()));
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+            UUID.randomUUID(),
+            Optional.empty(),
+            Map.of(),
+            Map.of()
+        );
+        final AtomicInteger assignmentErrorCode = new AtomicInteger(0);
+
+        final Properties props = configProps(false, false, false);
+        final StreamsConfig config = new StreamsConfig(props);
+        thread = new StreamThread(
+            new MockTime(1),
+            config,
+            null,
+            mainConsumer,
+            consumer,
+            changelogReader,
+            null,
+            mock(TaskManager.class),
+            null,
+            new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime),
+            new TopologyMetadata(internalTopologyBuilder, config),
+            PROCESS_ID,
+            CLIENT_ID,
+            new LogContext(""),
+            assignmentErrorCode,
+            new AtomicLong(Long.MAX_VALUE),
+            new LinkedList<>(),
+            null,
+            HANDLER,
+            null,
+            Optional.of(streamsRebalanceData),
+            null
+        ).updateThreadMetadata(adminClientId(CLIENT_ID));
+
+        thread.setState(State.STARTING);
+        thread.runOnceWithoutProcessingThreads();
+        assertEquals(0, assignmentErrorCode.get());
+
+        streamsRebalanceData.requestShutdown();
+        thread.runOnceWithoutProcessingThreads();
+        assertEquals(AssignorError.SHUTDOWN_REQUESTED.code(), assignmentErrorCode.get());
+    }
+
+    @Test
+    public void testStreamsProtocolRunOnceWithProcessingThreads() {
+        final ConsumerGroupMetadata consumerGroupMetadata = Mockito.mock(ConsumerGroupMetadata.class);
+        when(consumerGroupMetadata.groupInstanceId()).thenReturn(Optional.empty());
+        when(mainConsumer.poll(Mockito.any(Duration.class))).thenReturn(new ConsumerRecords<>(Map.of(), Map.of()));
+        when(mainConsumer.groupMetadata()).thenReturn(consumerGroupMetadata);
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+            UUID.randomUUID(),
+            Optional.empty(),
+            Map.of(),
+            Map.of()
+        );
+        final AtomicInteger assignmentErrorCode = new AtomicInteger(0);
+
+        final Properties props = configProps(false, false, false);
+        final StreamsConfig config = new StreamsConfig(props);
+        thread = new StreamThread(
+            new MockTime(1),
+            config,
+            null,
+            mainConsumer,
+            consumer,
+            changelogReader,
+            null,
+            mock(TaskManager.class),
+            null,
+            new StreamsMetricsImpl(metrics, CLIENT_ID, PROCESS_ID.toString(), mockTime),
+            new TopologyMetadata(internalTopologyBuilder, config),
+            PROCESS_ID,
+            CLIENT_ID,
+            new LogContext(""),
+            assignmentErrorCode,
+            new AtomicLong(Long.MAX_VALUE),
+            new LinkedList<>(),
+            null,
+            HANDLER,
+            null,
+            Optional.of(streamsRebalanceData),
+            null
+        ).updateThreadMetadata(adminClientId(CLIENT_ID));
+
+        thread.setState(State.STARTING);
+        thread.runOnceWithProcessingThreads();
+        assertEquals(0, assignmentErrorCode.get());
+
+        streamsRebalanceData.requestShutdown();
+        thread.runOnceWithProcessingThreads();
+        assertEquals(AssignorError.SHUTDOWN_REQUESTED.code(), assignmentErrorCode.get());
+    }
+
+    @Test
+    public void testGetTopicPartitionInfo() {
+        assertEquals(
+            Map.of(
+                t1p1, new PartitionInfo(t1p1.topic(), t1p1.partition(), null, new Node[0], new Node[0]),
+                t1p2, new PartitionInfo(t1p2.topic(), t1p2.partition(), null, new Node[0], new Node[0]),
+                t2p1, new PartitionInfo(t2p1.topic(), t2p1.partition(), null, new Node[0], new Node[0])
+            ),
+            StreamThread.getTopicPartitionInfo(
+                Map.of(
+                    new HostInfo("localhost", 9092), Set.of(t1p1, t2p1),
+                    new HostInfo("localhost", 9094), Set.of(t1p2)
+                )
+            )
         );
     }
 

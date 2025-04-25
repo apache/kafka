@@ -28,7 +28,7 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.types.Type
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.{ApiKeys, ByteBufferAccessor, Errors}
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceResponse, ResponseHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -152,7 +152,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
 
     val responseBuffer = ByteBuffer.wrap(response)
     val responseHeader = ResponseHeader.parse(responseBuffer, responseHeaderVersion)
-    val produceResponse = ProduceResponse.parse(responseBuffer, version)
+    val produceResponse = ProduceResponse.parse(new ByteBufferAccessor(responseBuffer), version)
 
     assertEquals(0, responseBuffer.remaining, "The response should parse completely")
     assertEquals(correlationId, responseHeader.correlationId, "The correlationId should match request")

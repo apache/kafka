@@ -18,10 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.EnumMap;
 import java.util.Map;
 
@@ -70,9 +69,9 @@ public class ConsumerGroupDescribeResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    public static ConsumerGroupDescribeResponse parse(ByteBuffer buffer, short version) {
+    public static ConsumerGroupDescribeResponse parse(Readable readable, short version) {
         return new ConsumerGroupDescribeResponse(
-            new ConsumerGroupDescribeResponseData(new ByteBufferAccessor(buffer), version)
+            new ConsumerGroupDescribeResponseData(readable, version)
         );
     }
 }
