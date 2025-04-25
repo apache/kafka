@@ -2066,7 +2066,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
           new ClusterConfigProperty(key = "group.share.enable", value = "true"),
           new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
           new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
-          new ClusterConfigProperty(key = "group.share.max.groups", value="1"),
+          new ClusterConfigProperty(key = "group.share.max.share.sessions", value="2"),
           new ClusterConfigProperty(key = "group.share.max.size", value="2")
         )
       ),
@@ -2080,7 +2080,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
           new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
           new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1"),
           new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
-          new ClusterConfigProperty(key = "group.share.max.groups", value="1"),
+          new ClusterConfigProperty(key = "group.share.max.share.sessions", value="2"),
           new ClusterConfigProperty(key = "group.share.max.size", value="2")
         )
       ),
