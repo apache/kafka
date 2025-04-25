@@ -75,6 +75,7 @@ import org.apache.kafka.common.requests.AddOffsetsToTxnResponse;
 import org.apache.kafka.common.requests.EndTxnResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.FindCoordinatorResponse;
+import org.apache.kafka.common.requests.InitProducerIdRequest;
 import org.apache.kafka.common.requests.InitProducerIdResponse;
 import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.requests.MetadataResponse;
@@ -87,7 +88,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetrySender;
-import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogCaptureAppender;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
@@ -104,6 +104,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.CsvSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.mockito.MockedStatic;
 import org.mockito.Mockito;
@@ -1316,7 +1317,7 @@ public class KafkaProducerTest {
                     ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
                 FindCoordinatorResponse.prepareResponse(Errors.NONE, "bad-transaction", NODE));
 
-            Future<?> future = executor.submit(producer::initTransactions);
+            Future<?> future = executor.submit(() -> producer.initTransactions());
             TestUtils.waitForCondition(client::hasInFlightRequests,
                 "Timed out while waiting for expected `InitProducerId` request to be sent");
 
@@ -1391,6 +1392,59 @@ public class KafkaProducerTest {
         }
     }
 
+    @ParameterizedTest
+    @CsvSource({
+        "true, false",
+        "true, true",
+        "false, true"
+    })
+    public void testInitTransactionsWithKeepPreparedTxnAndTwoPhaseCommit(boolean keepPreparedTxn, boolean enable2PC) {
+        Map<String, Object> configs = new HashMap<>();
+        configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "test-txn-id");
+        configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, 10000);
+        configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
+        if (enable2PC) {
+            configs.put(ProducerConfig.TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG, true);
+        }
+
+        Time time = new MockTime(1);
+        MetadataResponse initialUpdateResponse = RequestTestUtils.metadataUpdateWith(1, singletonMap("topic", 1));
+        ProducerMetadata metadata = newMetadata(0, 0, Long.MAX_VALUE);
+        MockClient client = new MockClient(time, metadata);
+        client.updateMetadata(initialUpdateResponse);
+
+        // Capture flags from the InitProducerIdRequest
+        boolean[] requestFlags = new boolean[2]; // [keepPreparedTxn, enable2Pc]
+        
+        client.prepareResponse(
+            request -> request instanceof FindCoordinatorRequest &&
+                ((FindCoordinatorRequest) request).data().keyType() == FindCoordinatorRequest.CoordinatorType.TRANSACTION.id(),
+            FindCoordinatorResponse.prepareResponse(Errors.NONE, "test-txn-id", NODE));
+            
+        client.prepareResponse(
+            request -> {
+                if (request instanceof InitProducerIdRequest) {
+                    InitProducerIdRequest initRequest = (InitProducerIdRequest) request;
+                    requestFlags[0] = initRequest.data().keepPreparedTxn();
+                    requestFlags[1] = initRequest.data().enable2Pc();
+                    return true;
+                }
+                return false;
+            },
+            initProducerIdResponse(1L, (short) 5, Errors.NONE));
+            
+        try (Producer<String, String> producer = kafkaProducer(configs, new StringSerializer(),
+                new StringSerializer(), metadata, client, null, time)) {
+            producer.initTransactions(keepPreparedTxn);
+            
+            // Verify request flags match expected values
+            assertEquals(keepPreparedTxn, requestFlags[0], 
+                "keepPreparedTxn flag should match input parameter");
+            assertEquals(enable2PC, requestFlags[1], 
+                "enable2Pc flag should match producer configuration");
+        }
+    }
+    
     @Test
     public void testClusterAuthorizationFailure() throws Exception {
         int maxBlockMs = 500;
@@ -2592,7 +2646,7 @@ public class KafkaProducerTest {
         private final Map<String, Object> configs;
         private final Serializer<T> serializer;
         private final Partitioner partitioner = mock(Partitioner.class);
-        private final KafkaThread ioThread = mock(KafkaThread.class);
+        private final Sender.SenderThread senderThread = mock(Sender.SenderThread.class);
         private final List<ProducerInterceptor<T, T>> interceptors = new ArrayList<>();
         private ProducerMetadata metadata = mock(ProducerMetadata.class);
         private RecordAccumulator accumulator = mock(RecordAccumulator.class);
@@ -2673,7 +2727,7 @@ public class KafkaProducerTest {
                 interceptors,
                 partitioner,
                 time,
-                ioThread,
+                senderThread,
                 Optional.empty()
             );
         }

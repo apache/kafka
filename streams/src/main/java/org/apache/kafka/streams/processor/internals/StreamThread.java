@@ -534,7 +534,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                                                        final Map<String, Object> consumerConfigs) {
         if (config.getString(StreamsConfig.GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name)) {
             if (topologyMetadata.hasNamedTopologies()) {
-                throw new IllegalStateException("Named topologies and the CONSUMER protocol cannot be used at the same time.");
+                throw new IllegalStateException("Named topologies and the STREAMS protocol cannot be used at the same time.");
             }
             log.info("Streams rebalance protocol enabled");
 
@@ -2021,5 +2021,9 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     Admin adminClient() {
         return adminClient;
+    }
+
+    Optional<StreamsRebalanceData> streamsRebalanceData() {
+        return streamsRebalanceData;
     }
 }

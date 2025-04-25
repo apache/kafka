@@ -67,7 +67,7 @@
           { "name": "LeaderEpoch", "type": "int32", "versions": "0+",
             "about": "The latest known leader epoch." }
         ]},
-        { "name": "Records", "type": "records", "versions": "0+", "nullableVersions": "0+", "about": "The record data." },
+        { "name": "Records", "type": "records", "versions": "0+", "nullableVersions": "0", "about": "The record data." },
         { "name": "AcquiredRecords", "type": "[]AcquiredRecords", "versions": "0+", "about": "The acquired records.", "fields":  [
           { "name": "FirstOffset", "type":  "int64", "versions": "0+", "about": "The earliest offset in this batch of acquired records." },
           { "name": "LastOffset", "type": "int64", "versions": "0+", "about": "The last offset of this batch of acquired records." },
