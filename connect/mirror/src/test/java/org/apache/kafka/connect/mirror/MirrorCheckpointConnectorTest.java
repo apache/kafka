@@ -16,8 +16,10 @@
  */
 package org.apache.kafka.connect.mirror;
 
-import org.apache.kafka.clients.admin.ConsumerGroupListing;
+import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
+import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.connect.errors.ConnectException;
 import org.apache.kafka.connect.errors.RetriableException;
@@ -31,6 +33,7 @@ import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -144,9 +147,9 @@ public class MirrorCheckpointConnectorTest {
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector(Collections.emptySet(), config);
         connector = spy(connector);
 
-        Collection<ConsumerGroupListing> groups = Arrays.asList(
-                new ConsumerGroupListing("g1", true),
-                new ConsumerGroupListing("g2", false));
+        Collection<GroupListing> groups = Arrays.asList(
+                new GroupListing("g1", Optional.of(GroupType.CLASSIC), "", Optional.empty()),
+                new GroupListing("g2", Optional.of(GroupType.CLASSIC), ConsumerProtocol.PROTOCOL_TYPE, Optional.empty()));
         Map<TopicPartition, OffsetAndMetadata> offsets = new HashMap<>();
         offsets.put(new TopicPartition("t1", 0), new OffsetAndMetadata(0));
         doReturn(groups).when(connector).listConsumerGroups();
@@ -159,7 +162,7 @@ public class MirrorCheckpointConnectorTest {
         doReturn(groupToOffsets).when(connector).listConsumerGroupOffsets(anyList());
         Set<String> groupFound = connector.findConsumerGroups();
 
-        Set<String> expectedGroups = groups.stream().map(ConsumerGroupListing::groupId).collect(Collectors.toSet());
+        Set<String> expectedGroups = groups.stream().map(GroupListing::groupId).collect(Collectors.toSet());
         assertEquals(expectedGroups, groupFound,
                 "Expected groups are not the same as findConsumerGroups");
 
@@ -174,11 +177,11 @@ public class MirrorCheckpointConnectorTest {
         MirrorCheckpointConnector connector = new MirrorCheckpointConnector(Collections.emptySet(), config);
         connector = spy(connector);
 
-        Collection<ConsumerGroupListing> groups = Arrays.asList(
-                new ConsumerGroupListing("g1", true),
-                new ConsumerGroupListing("g2", false),
-                new ConsumerGroupListing("g3", false),
-                new ConsumerGroupListing("g4", false));
+        Collection<GroupListing> groups = Arrays.asList(
+                new GroupListing("g1", Optional.of(GroupType.CLASSIC), "", Optional.empty()),
+                new GroupListing("g2", Optional.of(GroupType.CLASSIC), ConsumerProtocol.PROTOCOL_TYPE, Optional.empty()),
+                new GroupListing("g3", Optional.of(GroupType.CLASSIC), ConsumerProtocol.PROTOCOL_TYPE, Optional.empty()),
+                new GroupListing("g4", Optional.of(GroupType.CLASSIC), ConsumerProtocol.PROTOCOL_TYPE, Optional.empty()));
         Map<TopicPartition, OffsetAndMetadata> offsetsForGroup1 = new HashMap<>();
         Map<TopicPartition, OffsetAndMetadata> offsetsForGroup2 = new HashMap<>();
         Map<TopicPartition, OffsetAndMetadata> offsetsForGroup3 = new HashMap<>();

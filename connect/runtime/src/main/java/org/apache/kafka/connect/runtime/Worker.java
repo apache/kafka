@@ -346,7 +346,7 @@ public final class Worker {
                     }
                     workerConnector = new WorkerConnector(
                         connName, connector, connConfig, ctx, metrics, connectorStatusListener, offsetReader, offsetStore, connectorLoader);
-                    log.info("Instantiated connector {} with version {} of type {}", connName, connector.version(), connector.getClass());
+                    log.info("Instantiated connector {} with version {} of type {}", connName, workerConnector.connectorVersion(), connector.getClass());
                     workerConnector.transitionTo(initialState, onConnectorStateChange);
                 }
             } catch (Throwable t) {
@@ -562,6 +562,22 @@ public final class Worker {
         return workerConnector != null && workerConnector.isRunning();
     }
 
+    public String connectorVersion(String connName) {
+        WorkerConnector conn = connectors.get(connName);
+        if (conn == null) {
+            return null;
+        }
+        return conn.connectorVersion();
+    }
+
+    public String taskVersion(ConnectorTaskId taskId) {
+        WorkerTask<?, ?> task = tasks.get(taskId);
+        if (task == null) {
+            return null;
+        }
+        return task.taskVersion();
+    }
+
     /**
      * Start a sink task managed by this worker.
      *
@@ -714,7 +730,7 @@ public final class Worker {
                         .withKeyConverterPlugin(metrics.wrap(keyConverter, id, true))
                         .withValueConverterPlugin(metrics.wrap(valueConverter, id, false))
                         .withHeaderConverterPlugin(metrics.wrap(headerConverter, id))
-                        .withClassloader(connectorLoader)
+                        .withClassLoader(connectorLoader)
                         .build();
 
                     workerTask.initialize(taskConfig);
@@ -1814,10 +1830,11 @@ public final class Worker {
             return this;
         }
 
-        public TaskBuilder<T, R> withClassloader(ClassLoader classLoader) {
+        public TaskBuilder<T, R> withClassLoader(ClassLoader classLoader) {
             this.classLoader = classLoader;
             return this;
         }
+
 
         public WorkerTask<T, R> build() {
             Objects.requireNonNull(task, "Task cannot be null");
@@ -1836,10 +1853,13 @@ public final class Worker {
             TransformationChain<T, R> transformationChain = new TransformationChain<>(connectorConfig.<R>transformationStages(plugins, id, metrics), retryWithToleranceOperator);
             log.info("Initializing: {}", transformationChain);
 
+            TaskPluginsMetadata taskPluginsMetadata = new TaskPluginsMetadata(
+                    connectorClass, task, keyConverterPlugin.get(), valueConverterPlugin.get(), headerConverterPlugin.get(), transformationChain.transformationChainInfo(), plugins);
+
             return doBuild(task, id, configState, statusListener, initialState,
-                    connectorConfig, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, classLoader,
-                    retryWithToleranceOperator, transformationChain,
-                    errorHandlingMetrics, connectorClass);
+                connectorConfig, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, classLoader,
+                retryWithToleranceOperator, transformationChain,
+                errorHandlingMetrics, connectorClass, taskPluginsMetadata);
         }
 
         abstract WorkerTask<T, R> doBuild(
@@ -1856,7 +1876,8 @@ public final class Worker {
                 RetryWithToleranceOperator<T> retryWithToleranceOperator,
                 TransformationChain<T, R> transformationChain,
                 ErrorHandlingMetrics errorHandlingMetrics,
-                Class<? extends Connector> connectorClass
+                Class<? extends Connector> connectorClass,
+                TaskPluginsMetadata pluginsMetadata
         );
 
     }
@@ -1884,7 +1905,8 @@ public final class Worker {
                 RetryWithToleranceOperator<ConsumerRecord<byte[], byte[]>> retryWithToleranceOperator,
                 TransformationChain<ConsumerRecord<byte[], byte[]>, SinkRecord> transformationChain,
                 ErrorHandlingMetrics errorHandlingMetrics,
-                Class<? extends Connector> connectorClass
+                Class<? extends Connector> connectorClass,
+                TaskPluginsMetadata taskPluginsMetadata
         ) {
             SinkConnectorConfig sinkConfig = new SinkConnectorConfig(plugins, connectorConfig.originalsStrings());
             WorkerErrantRecordReporter workerErrantRecordReporter = createWorkerErrantRecordReporter(sinkConfig, retryWithToleranceOperator,
@@ -1898,7 +1920,7 @@ public final class Worker {
             return new WorkerSinkTask(id, (SinkTask) task, statusListener, initialState, config, configState, metrics, keyConverterPlugin,
                     valueConverterPlugin, errorHandlingMetrics, headerConverterPlugin, transformationChain, consumer, classLoader, time,
                     retryWithToleranceOperator, workerErrantRecordReporter, herder.statusBackingStore(),
-                    () -> sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass), plugins.safeLoaderSwapper());
+                    () -> sinkTaskReporters(id, sinkConfig, errorHandlingMetrics, connectorClass), taskPluginsMetadata, plugins.safeLoaderSwapper());
         }
     }
 
@@ -1925,7 +1947,8 @@ public final class Worker {
                 RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
                 TransformationChain<SourceRecord, SourceRecord> transformationChain,
                 ErrorHandlingMetrics errorHandlingMetrics,
-                Class<? extends Connector> connectorClass
+                Class<? extends Connector> connectorClass,
+                TaskPluginsMetadata pluginsMetadata
         ) {
             SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins,
                     connectorConfig.originalsStrings(), config.topicCreationEnable());
@@ -1958,7 +1981,7 @@ public final class Worker {
             return new WorkerSourceTask(id, (SourceTask) task, statusListener, initialState, keyConverterPlugin, valueConverterPlugin, errorHandlingMetrics,
                     headerConverterPlugin, transformationChain, producer, topicAdmin, topicCreationGroups,
                     offsetReader, offsetWriter, offsetStore, config, configState, metrics, classLoader, time,
-                    retryWithToleranceOperator, herder.statusBackingStore(), executor, () -> sourceTaskReporters(id, sourceConfig, errorHandlingMetrics), plugins.safeLoaderSwapper());
+                    retryWithToleranceOperator, herder.statusBackingStore(), executor, () -> sourceTaskReporters(id, sourceConfig, errorHandlingMetrics), pluginsMetadata, plugins.safeLoaderSwapper());
         }
     }
 
@@ -1992,7 +2015,8 @@ public final class Worker {
                 RetryWithToleranceOperator<SourceRecord> retryWithToleranceOperator,
                 TransformationChain<SourceRecord, SourceRecord> transformationChain,
                 ErrorHandlingMetrics errorHandlingMetrics,
-                Class<? extends Connector> connectorClass
+                Class<? extends Connector> connectorClass,
+                TaskPluginsMetadata pluginsMetadata
         ) {
             SourceConnectorConfig sourceConfig = new SourceConnectorConfig(plugins,
                     connectorConfig.originalsStrings(), config.topicCreationEnable());
@@ -2023,7 +2047,7 @@ public final class Worker {
                     headerConverterPlugin, transformationChain, producer, topicAdmin, topicCreationGroups,
                     offsetReader, offsetWriter, offsetStore, config, configState, metrics, errorHandlingMetrics, classLoader, time, retryWithToleranceOperator,
                     herder.statusBackingStore(), sourceConfig, executor, preProducerCheck, postProducerCheck,
-                    () -> sourceTaskReporters(id, sourceConfig, errorHandlingMetrics), plugins.safeLoaderSwapper());
+                    () -> sourceTaskReporters(id, sourceConfig, errorHandlingMetrics), pluginsMetadata, plugins.safeLoaderSwapper());
         }
     }
 

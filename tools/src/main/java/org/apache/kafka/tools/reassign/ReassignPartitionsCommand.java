@@ -581,7 +581,7 @@ public class ReassignPartitionsCommand {
      * Calculate the new partition assignments to suggest in --generate.
      *
      * @param currentAssignment  The current partition assignments.
-     * @param brokers            The rack information for each broker.
+     * @param usableBrokers      The rack information for each broker.
      *
      * @return                   A map from partitions to the proposed assignments for each.
      */

@@ -665,15 +665,17 @@ public class ConfigurationControlManager {
      * @param updates       The user-requested updates.
      * @param upgradeTypes  The user-requested upgrade types.
      * @param validateOnly  True if we should validate the request but not make changes.
+     * @param currentClaimEpoch the currently claimed epoch
      *
      * @return              The result.
      */
     ControllerResult<ApiError> updateFeatures(
         Map<String, Short> updates,
         Map<String, FeatureUpdate.UpgradeType> upgradeTypes,
-        boolean validateOnly
+        boolean validateOnly,
+        int currentClaimEpoch
     ) {
-        ControllerResult<ApiError> result = featureControl.updateFeatures(updates, upgradeTypes, validateOnly);
+        ControllerResult<ApiError> result = featureControl.updateFeatures(updates, upgradeTypes, validateOnly, currentClaimEpoch);
         if (result.response().isSuccess() &&
             !validateOnly &&
             updates.getOrDefault(EligibleLeaderReplicasVersion.FEATURE_NAME, (short) 0) > 0

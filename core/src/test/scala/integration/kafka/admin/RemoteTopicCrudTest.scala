@@ -457,7 +457,7 @@ class RemoteTopicCrudTest extends IntegrationTestHarness {
 
     val configs = new util.HashMap[ConfigResource, util.Collection[AlterConfigOp]]()
     configs.put(new ConfigResource(ConfigResource.Type.TOPIC, testTopicName),
-      util.Arrays.asList(
+      util.List.of(
         new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "false"),
           AlterConfigOp.OpType.SET),
         new AlterConfigOp(new ConfigEntry(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, "true"),

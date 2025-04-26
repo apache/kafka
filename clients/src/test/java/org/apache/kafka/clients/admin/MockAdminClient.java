@@ -735,6 +735,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public synchronized ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
         KafkaFutureImpl<Collection<Object>> future = new KafkaFutureImpl<>();
         future.complete(groupConfigs.keySet().stream().map(g -> new ConsumerGroupListing(g, false)).collect(Collectors.toList()));
@@ -1430,7 +1431,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public synchronized DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteShareGroupOffsetsOptions options) {
+    public synchronized DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<String> topics, DeleteShareGroupOffsetsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 
