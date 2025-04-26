@@ -16,25 +16,27 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
-
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
 
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-public class MirrorSourceMetricsTest {
-
+public class MirrorCheckpointMetricsTest {
     private static final String SOURCE = "source";
     private static final String TARGET = "target";
+    private static final String GROUP = "group";
     private static final TopicPartition TP = new TopicPartition("topic", 0);
     private static final TopicPartition SOURCE_TP = new TopicPartition(SOURCE + "." + TP.topic(), TP.partition());
     private static final String CONNECTOR_NAME = "name";
@@ -55,15 +57,21 @@ public class MirrorSourceMetricsTest {
 
     @Test
     public void testTags() {
-        MirrorSourceTaskConfig taskConfig = new MirrorSourceTaskConfig(configs);
-        MirrorSourceMetrics metrics = new MirrorSourceMetrics(taskConfig);
+        MirrorCheckpointTaskConfig taskConfig = new MirrorCheckpointTaskConfig(configs);
+        MirrorCheckpointMetrics metrics = new MirrorCheckpointMetrics(taskConfig);
         metrics.addReporter(reporter);
 
-        metrics.countRecord(SOURCE_TP);
-        assertEquals(13, reporter.metrics.size());
-        Map<String, String> tags = reporter.metrics.get(0).metricName().tags();
+        metrics.checkpointLatency(SOURCE_TP, GROUP, 0);
+
+        assertEquals(5, reporter.metrics.size());
+        MetricName metric = reporter.metrics.get(0).metricName();
+        if (Objects.equals(metric.group(), "kafka-metrics-count")) {
+            metric = reporter.metrics.get(1).metricName();
+        }
+        Map<String, String> tags = metric.tags();
         assertEquals(SOURCE, tags.get("source"));
         assertEquals(TARGET, tags.get("target"));
+        assertEquals(GROUP, tags.get("group"));
         assertEquals(SOURCE_TP.topic(), tags.get("topic"));
         assertEquals(String.valueOf(SOURCE_TP.partition()), tags.get("partition"));
         assertEquals(CONNECTOR_NAME, tags.get("connector"));

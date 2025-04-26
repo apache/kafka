@@ -39,6 +39,8 @@ class MirrorSourceMetrics implements AutoCloseable {
 
     private static final String SOURCE_CONNECTOR_GROUP = MirrorSourceConnector.class.getSimpleName();
 
+    private static final Set<String> PARTITION_TAGS = new HashSet<>(Arrays.asList("source", "target", "topic", "partition", "connector", "task_index"));
+
     private final MetricNameTemplate recordCount;
     private final MetricNameTemplate recordRate;
     private final MetricNameTemplate recordAge;
@@ -56,50 +58,52 @@ class MirrorSourceMetrics implements AutoCloseable {
     private final Map<TopicPartition, PartitionMetrics> partitionMetrics;
     private final String source;
     private final String target;
+    private final String connectorName;
+    private final int taskIndex;
 
     MirrorSourceMetrics(MirrorSourceTaskConfig taskConfig) {
         this.target = taskConfig.targetClusterAlias();
         this.source = taskConfig.sourceClusterAlias();
+        this.connectorName = taskConfig.connectorName();
+        this.taskIndex = taskConfig.getInt(MirrorConnectorConfig.TASK_INDEX);
         this.metrics = new Metrics();
-
-        Set<String> partitionTags = new HashSet<>(Arrays.asList("source", "target", "topic", "partition"));
 
         recordCount = new MetricNameTemplate(
                 "record-count", SOURCE_CONNECTOR_GROUP,
-                "Number of source records replicated to the target cluster.", partitionTags);
+                "Number of source records replicated to the target cluster.", PARTITION_TAGS);
         recordRate = new MetricNameTemplate(
                 "record-rate", SOURCE_CONNECTOR_GROUP,
-                "Average number of source records replicated to the target cluster per second.", partitionTags);
+                "Average number of source records replicated to the target cluster per second.", PARTITION_TAGS);
         recordAge = new MetricNameTemplate(
                 "record-age-ms", SOURCE_CONNECTOR_GROUP,
-                "The age of incoming source records when replicated to the target cluster.", partitionTags);
+                "The age of incoming source records when replicated to the target cluster.", PARTITION_TAGS);
         recordAgeMax = new MetricNameTemplate(
                 "record-age-ms-max", SOURCE_CONNECTOR_GROUP,
-                "The max age of incoming source records when replicated to the target cluster.", partitionTags);
+                "The max age of incoming source records when replicated to the target cluster.", PARTITION_TAGS);
         recordAgeMin = new MetricNameTemplate(
                 "record-age-ms-min", SOURCE_CONNECTOR_GROUP,
-                "The min age of incoming source records when replicated to the target cluster.", partitionTags);
+                "The min age of incoming source records when replicated to the target cluster.", PARTITION_TAGS);
         recordAgeAvg = new MetricNameTemplate(
                 "record-age-ms-avg", SOURCE_CONNECTOR_GROUP,
-                "The average age of incoming source records when replicated to the target cluster.", partitionTags);
+                "The average age of incoming source records when replicated to the target cluster.", PARTITION_TAGS);
         byteCount = new MetricNameTemplate(
                 "byte-count", SOURCE_CONNECTOR_GROUP,
-                "Number of bytes replicated to the target cluster.", partitionTags);
+                "Number of bytes replicated to the target cluster.", PARTITION_TAGS);
         byteRate = new MetricNameTemplate(
                 "byte-rate", SOURCE_CONNECTOR_GROUP,
-                "Average number of bytes replicated per second.", partitionTags);
+                "Average number of bytes replicated per second.", PARTITION_TAGS);
         replicationLatency = new MetricNameTemplate(
                 "replication-latency-ms", SOURCE_CONNECTOR_GROUP,
-                "Time it takes records to replicate from source to target cluster.", partitionTags);
+                "Time it takes records to replicate from source to target cluster.", PARTITION_TAGS);
         replicationLatencyMax = new MetricNameTemplate(
                 "replication-latency-ms-max", SOURCE_CONNECTOR_GROUP,
-                "Max time it takes records to replicate from source to target cluster.", partitionTags);
+                "Max time it takes records to replicate from source to target cluster.", PARTITION_TAGS);
         replicationLatencyMin = new MetricNameTemplate(
                 "replication-latency-ms-min", SOURCE_CONNECTOR_GROUP,
-                "Min time it takes records to replicate from source to target cluster.", partitionTags);
+                "Min time it takes records to replicate from source to target cluster.", PARTITION_TAGS);
         replicationLatencyAvg = new MetricNameTemplate(
                 "replication-latency-ms-avg", SOURCE_CONNECTOR_GROUP,
-                "Average time it takes records to replicate from source to target cluster.", partitionTags);
+                "Average time it takes records to replicate from source to target cluster.", PARTITION_TAGS);
 
         // for side-effect
         metrics.sensor("record-count");
@@ -153,6 +157,8 @@ class MirrorSourceMetrics implements AutoCloseable {
             tags.put("target", target); 
             tags.put("topic", topicPartition.topic());
             tags.put("partition", Integer.toString(topicPartition.partition()));
+            tags.put("connector", connectorName);
+            tags.put("task_index", String.valueOf(taskIndex));
 
             recordSensor = metrics.sensor(prefix + "records-sent");
             recordSensor.add(new Meter(metrics.metricInstance(recordRate, tags), metrics.metricInstance(recordCount, tags)));
