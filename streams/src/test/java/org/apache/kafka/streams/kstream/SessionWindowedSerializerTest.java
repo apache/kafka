@@ -57,7 +57,7 @@ public class SessionWindowedSerializerTest {
     @Test
     public void shouldSetSerializerThroughWindowedInnerSerializerClassConfig() {
         props.put(SessionWindowedSerializer.WINDOWED_INNER_SERIALIZER_CLASS, Serdes.ByteArraySerde.class.getName());
-        try (final SessionWindowedSerializer<?> serializer = new SessionWindowedSerializer<>()){
+        try (final SessionWindowedSerializer<?> serializer = new SessionWindowedSerializer<>()) {
             serializer.configure(props, false);
             assertInstanceOf(ByteArraySerializer.class, serializer.innerSerializer());
         }
@@ -68,7 +68,7 @@ public class SessionWindowedSerializerTest {
     public void shouldIgnoreWindowedInnerClassSerdeConfigIfWindowedInnerSerializerClassConfigIsSet() {
         props.put(SessionWindowedSerializer.WINDOWED_INNER_SERIALIZER_CLASS, Serdes.ByteArraySerde.class.getName());
         props.put(StreamsConfig.WINDOWED_INNER_CLASS_SERDE, "some.non.existent.class");
-        try (final SessionWindowedSerializer<?> serializer = new SessionWindowedSerializer<>()){
+        try (final SessionWindowedSerializer<?> serializer = new SessionWindowedSerializer<>()) {
             serializer.configure(props, false);
             assertInstanceOf(ByteArraySerializer.class, serializer.innerSerializer());
         }
