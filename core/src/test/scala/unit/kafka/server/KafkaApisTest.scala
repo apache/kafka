@@ -8453,7 +8453,7 @@ class KafkaApisTest extends Logging {
   }
 
   @ParameterizedTest
-  // Version 1 does not support fetching all offsets request.
+  // Version 1 does not support fetching offsets for all topics.
   @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH, fromVersion = 2)
   def testHandleOffsetFetchAllOffsetsWithSingleGroup(version: Short): Unit = {
     def makeRequest(version: Short): RequestChannel.Request = {

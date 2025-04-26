@@ -21,6 +21,7 @@ import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 
 import org.junit.jupiter.params.ParameterizedTest;
@@ -34,32 +35,29 @@ public class OffsetFetchRequestTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
     public void testWithMultipleGroups(short version) {
-        var builder = new OffsetFetchRequest.Builder(
-            new OffsetFetchRequestData()
-                .setGroups(List.of(
-                    new OffsetFetchRequestData.OffsetFetchRequestGroup()
-                        .setGroupId("grp1")
-                        .setTopics(List.of(
-                            new OffsetFetchRequestData.OffsetFetchRequestTopics()
-                                .setName("foo")
-                                .setPartitionIndexes(List.of(0, 1, 2))
-                        )),
-                    new OffsetFetchRequestData.OffsetFetchRequestGroup()
-                        .setGroupId("grp2")
-                        .setTopics(List.of(
-                            new OffsetFetchRequestData.OffsetFetchRequestTopics()
-                                .setName("bar")
-                                .setPartitionIndexes(List.of(0, 1, 2))
-                        ))
-                )),
-            false
-        );
+        var data = new OffsetFetchRequestData()
+            .setGroups(List.of(
+                new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                    .setGroupId("grp1")
+                    .setTopics(List.of(
+                        new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                            .setName("foo")
+                            .setPartitionIndexes(List.of(0, 1, 2))
+                    )),
+                new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                    .setGroupId("grp2")
+                    .setTopics(List.of(
+                        new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                            .setName("bar")
+                            .setPartitionIndexes(List.of(0, 1, 2))
+                    ))
+            ));
+        var builder = new OffsetFetchRequest.Builder(data, false);
 
         if (version < 8) {
             assertThrows(OffsetFetchRequest.NoBatchedOffsetFetchRequestException.class, () -> builder.build(version));
         } else {
-            var request = builder.build(version);
-            assertEquals(builder.data, request.data());
+            assertEquals(data, builder.build(version).data());
         }
     }
 
@@ -91,19 +89,17 @@ public class OffsetFetchRequestTest {
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
     public void testSingleGroup(short version) {
-        var builder = new OffsetFetchRequest.Builder(
-            new OffsetFetchRequestData()
-                .setGroups(List.of(
-                    new OffsetFetchRequestData.OffsetFetchRequestGroup()
-                        .setGroupId("grp1")
-                        .setTopics(List.of(
-                            new OffsetFetchRequestData.OffsetFetchRequestTopics()
-                                .setName("foo")
-                                .setPartitionIndexes(List.of(0, 1, 2))
-                        ))
-                )),
-            false
-        );
+        var data = new OffsetFetchRequestData()
+            .setGroups(List.of(
+                new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                    .setGroupId("grp1")
+                    .setTopics(List.of(
+                        new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                            .setName("foo")
+                            .setPartitionIndexes(List.of(0, 1, 2))
+                    ))
+            ));
+        var builder = new OffsetFetchRequest.Builder(data, false);
 
         if (version < 8) {
             var expectedRequest = new OffsetFetchRequestData()
@@ -115,22 +111,20 @@ public class OffsetFetchRequestTest {
                 ));
             assertEquals(expectedRequest, builder.build(version).data());
         } else {
-            assertEquals(builder.data, builder.build(version).data());
+            assertEquals(data, builder.build(version).data());
         }
     }
 
     @ParameterizedTest
     @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
     public void testSingleGroupWithAllTopics(short version) {
-        var builder = new OffsetFetchRequest.Builder(
-            new OffsetFetchRequestData()
-                .setGroups(List.of(
-                    new OffsetFetchRequestData.OffsetFetchRequestGroup()
-                        .setGroupId("grp1")
-                        .setTopics(null)
-                )),
-            false
-        );
+        var data = new OffsetFetchRequestData()
+            .setGroups(List.of(
+                new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                    .setGroupId("grp1")
+                    .setTopics(null)
+            ));
+        var builder = new OffsetFetchRequest.Builder(data, false);
 
         if (version < 2) {
             assertThrows(UnsupportedVersionException.class, () -> builder.build(version));
@@ -140,7 +134,7 @@ public class OffsetFetchRequestTest {
                 .setTopics(null);
             assertEquals(expectedRequest, builder.build(version).data());
         } else {
-            assertEquals(builder.data, builder.build(version).data());
+            assertEquals(data, builder.build(version).data());
         }
     }
 
@@ -173,21 +167,21 @@ public class OffsetFetchRequestTest {
                                 .setErrorCode(Errors.INVALID_GROUP_ID.code())
                                 .setCommittedOffset(OffsetFetchResponse.INVALID_OFFSET)
                                 .setMetadata(OffsetFetchResponse.NO_METADATA)
-                                .setCommittedLeaderEpoch(-1),
+                                .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH),
                             new OffsetFetchResponseData.OffsetFetchResponsePartition()
                                 .setPartitionIndex(1)
                                 .setErrorCode(Errors.INVALID_GROUP_ID.code())
                                 .setCommittedOffset(OffsetFetchResponse.INVALID_OFFSET)
                                 .setMetadata(OffsetFetchResponse.NO_METADATA)
-                                .setCommittedLeaderEpoch(-1)
+                                .setCommittedLeaderEpoch(RecordBatch.NO_PARTITION_LEADER_EPOCH)
                         ))
                 ));
-            assertEquals(expectedResponse, request.getErrorResponse(1000, Errors.INVALID_GROUP_ID).data());
+            assertEquals(expectedResponse, request.getErrorResponse(1000, Errors.INVALID_GROUP_ID.exception()).data());
         } else if (version < 8) {
             var expectedResponse = new OffsetFetchResponseData()
                 .setThrottleTimeMs(1000)
                 .setErrorCode(Errors.INVALID_GROUP_ID.code());
-            assertEquals(expectedResponse, request.getErrorResponse(1000, Errors.INVALID_GROUP_ID).data());
+            assertEquals(expectedResponse, request.getErrorResponse(1000, Errors.INVALID_GROUP_ID.exception()).data());
         } else {
             var expectedResponse = new OffsetFetchResponseData()
                 .setThrottleTimeMs(1000)
@@ -196,7 +190,7 @@ public class OffsetFetchRequestTest {
                         .setGroupId("grp1")
                         .setErrorCode(Errors.INVALID_GROUP_ID.code())
                 ));
-            assertEquals(expectedResponse, request.getErrorResponse(1000, Errors.INVALID_GROUP_ID).data());
+            assertEquals(expectedResponse, request.getErrorResponse(1000, Errors.INVALID_GROUP_ID.exception()).data());
         }
     }
 

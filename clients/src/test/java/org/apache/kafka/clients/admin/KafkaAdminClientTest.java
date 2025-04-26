@@ -4396,7 +4396,7 @@ public class KafkaAdminClientTest {
             ClientRequest clientRequest = mockClient.requests().peek();
             assertNotNull(clientRequest);
             assertEquals(300, clientRequest.requestTimeoutMs());
-            OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).data;
+            OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).build().data();
             assertTrue(data.requireStable());
             assertEquals(Collections.singletonList(GROUP_ID),
                     data.groups().stream().map(OffsetFetchRequestGroup::groupId).collect(Collectors.toList()));
@@ -4791,7 +4791,7 @@ public class KafkaAdminClientTest {
         waitForRequest(mockClient, ApiKeys.OFFSET_FETCH);
 
         ClientRequest clientRequest = mockClient.requests().peek();
-        OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).data;
+        OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).build().data();
         Map<String, Map<TopicPartition, PartitionData>> results = new HashMap<>();
         Map<String, Errors> errors = new HashMap<>();
         data.groups().forEach(group -> {
@@ -4813,7 +4813,7 @@ public class KafkaAdminClientTest {
         waitForRequest(mockClient, ApiKeys.OFFSET_FETCH);
 
         ClientRequest clientRequest = mockClient.requests().peek();
-        OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).data;
+        OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).build().data();
         Map<String, Map<TopicPartition, PartitionData>> results = new HashMap<>();
         Map<String, Errors> errors = new HashMap<>();
         data.groups().forEach(group -> {
