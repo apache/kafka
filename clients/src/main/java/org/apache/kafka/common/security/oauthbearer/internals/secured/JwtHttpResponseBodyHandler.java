@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import java.net.http.HttpResponse;
 import java.util.Collections;
 import java.util.List;
+import java.util.Optional;
 
 public class JwtHttpResponseBodyHandler implements HttpResponse.BodyHandler<String> {
 
@@ -65,22 +66,16 @@ public class JwtHttpResponseBodyHandler implements HttpResponse.BodyHandler<Stri
         }
 
         for (String jsonPath : jsonPaths) {
-            JsonNode node = rootNode.at(jsonPath);
+            Optional<String> jwt = maybeGetNodeValue(rootNode, jsonPath);
 
-            if (node == null || node.isMissingNode()) {
-                log.debug("The JSON path {} was not found in the OAuth token retrieval response", jsonPath);
-                continue;
-            }
-
-            String jwt = node.textValue();
-
-            if (Utils.isBlank(jwt)) {
-                log.debug("The JSON path {} was found in the OAuth token retrieval response, but the value was null, blank, or whitespace", jsonPath);
-                continue;
-            }
-
-            return jwt.trim();
+            if (jwt.isPresent())
+                return jwt.get();
         }
+
+        Optional<String> errorDescription = maybeGetNodeValue(rootNode, "/error_description");
+
+        if (errorDescription.isPresent())
+            throw new JwtRetrieverException(String.format("The token endpoint response contained an error: %s", errorDescription.get()));
 
         // Only grab the first N characters so that if the response body is huge, we don't
         // blow up.
@@ -93,5 +88,23 @@ public class JwtHttpResponseBodyHandler implements HttpResponse.BodyHandler<Stri
         }
 
         throw new JwtRetrieverException(String.format("The token endpoint response did not contain a JWT value. Response: (%s)", snippet));
+    }
+
+    private Optional<String> maybeGetNodeValue(JsonNode rootNode, String jsonPath) {
+        JsonNode node = rootNode.at(jsonPath);
+
+        if (node == null || node.isMissingNode()) {
+            log.debug("The JSON path {} was not found in the OAuth token retrieval response", jsonPath);
+            return Optional.empty();
+        }
+
+        String value = node.textValue();
+
+        if (Utils.isBlank(value)) {
+            log.debug("The JSON path {} was found in the OAuth token retrieval response, but the value was null, blank, or whitespace", jsonPath);
+            return Optional.empty();
+        }
+
+        return Optional.of(value.trim());
     }
 }
