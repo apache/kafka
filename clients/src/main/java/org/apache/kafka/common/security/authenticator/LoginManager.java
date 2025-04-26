@@ -180,6 +180,7 @@ public class LoginManager {
                 } else {
                     STATIC_INSTANCES.remove(loginMetadata);
                 }
+                loginPlugin.get().close();
                 Utils.closeQuietly(loginPlugin, "login plugin");
                 loginCallbackHandler.close();
             }
