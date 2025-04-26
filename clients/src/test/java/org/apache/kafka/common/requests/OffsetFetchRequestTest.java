@@ -198,4 +198,62 @@ public class OffsetFetchRequestTest {
             assertEquals(expectedResponse, request.getErrorResponse(1000, Errors.INVALID_GROUP_ID).data());
         }
     }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
+    public void testGroups(short version) {
+        var request = new OffsetFetchRequest.Builder(
+            new OffsetFetchRequestData()
+                .setGroups(List.of(
+                    new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                        .setGroupId("grp1")
+                        .setTopics(List.of(
+                            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                                .setName("foo")
+                                .setPartitionIndexes(List.of(0, 1, 2))
+                        ))
+                )),
+            false
+        ).build(version);
+
+        if (version < 8) {
+            var expectedGroups = List.of(
+                new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                    .setGroupId("grp1")
+                    .setTopics(List.of(
+                        new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                            .setName("foo")
+                            .setPartitionIndexes(List.of(0, 1, 2))
+                    ))
+            );
+            assertEquals(expectedGroups, request.groups());
+        } else {
+            assertEquals(request.data().groups(), request.groups());
+        }
+    }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH, fromVersion = 2)
+    public void testGroupsWithAllTopics(short version) {
+        var request = new OffsetFetchRequest.Builder(
+            new OffsetFetchRequestData()
+                .setGroups(List.of(
+                    new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                        .setGroupId("grp1")
+                        .setTopics(null)
+                )),
+            false
+        ).build(version);
+
+        if (version < 8) {
+            var expectedGroups = List.of(
+                new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                    .setGroupId("grp1")
+                    .setTopics(null)
+            );
+            assertEquals(expectedGroups, request.groups());
+        } else {
+            assertEquals(request.data().groups(), request.groups());
+        }
+    }
 }
