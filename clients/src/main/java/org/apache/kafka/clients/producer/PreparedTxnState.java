@@ -71,8 +71,6 @@ public class PreparedTxnState {
      *
      * @param producerId        The producer ID
      * @param epoch             The producer epoch
-     *
-     * package-private for testing
      */
     PreparedTxnState(long producerId, short epoch) {
         this.producerId = producerId;
