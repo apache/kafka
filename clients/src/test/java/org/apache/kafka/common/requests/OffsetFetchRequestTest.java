@@ -18,7 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.message.OffsetFetchRequestData;
+import org.apache.kafka.common.message.OffsetFetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 import org.junit.jupiter.params.ParameterizedTest;
 
@@ -138,6 +140,62 @@ public class OffsetFetchRequestTest {
             assertEquals(expectedRequest, builder.build(version).data());
         } else {
             assertEquals(builder.data, builder.build(version).data());
+        }
+    }
+
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
+    public void testGetErrorResponse(short version) {
+        var request = new OffsetFetchRequest.Builder(
+            new OffsetFetchRequestData()
+                .setGroups(List.of(
+                    new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                        .setGroupId("grp1")
+                        .setTopics(List.of(
+                            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                                .setName("foo")
+                                .setPartitionIndexes(List.of(0, 1))
+                        ))
+                )),
+            false
+        ).build(version);
+
+        if (version < 2) {
+            var expectedResponse = new OffsetFetchResponseData()
+                .setThrottleTimeMs(1000)
+                .setTopics(List.of(
+                    new OffsetFetchResponseData.OffsetFetchResponseTopic()
+                        .setName("foo")
+                        .setPartitions(List.of(
+                            new OffsetFetchResponseData.OffsetFetchResponsePartition()
+                                .setPartitionIndex(0)
+                                .setErrorCode(Errors.INVALID_GROUP_ID.code())
+                                .setCommittedOffset(OffsetFetchResponse.INVALID_OFFSET)
+                                .setMetadata(OffsetFetchResponse.NO_METADATA)
+                                .setCommittedLeaderEpoch(-1),
+                            new OffsetFetchResponseData.OffsetFetchResponsePartition()
+                                .setPartitionIndex(1)
+                                .setErrorCode(Errors.INVALID_GROUP_ID.code())
+                                .setCommittedOffset(OffsetFetchResponse.INVALID_OFFSET)
+                                .setMetadata(OffsetFetchResponse.NO_METADATA)
+                                .setCommittedLeaderEpoch(-1)
+                        ))
+                ));
+            assertEquals(expectedResponse, request.getErrorResponse(1000, Errors.INVALID_GROUP_ID).data());
+        } else if (version < 8) {
+            var expectedResponse = new OffsetFetchResponseData()
+                .setThrottleTimeMs(1000)
+                .setErrorCode(Errors.INVALID_GROUP_ID.code());
+            assertEquals(expectedResponse, request.getErrorResponse(1000, Errors.INVALID_GROUP_ID).data());
+        } else {
+            var expectedResponse = new OffsetFetchResponseData()
+                .setThrottleTimeMs(1000)
+                .setGroups(List.of(
+                    new OffsetFetchResponseData.OffsetFetchResponseGroup()
+                        .setGroupId("grp1")
+                        .setErrorCode(Errors.INVALID_GROUP_ID.code())
+                ));
+            assertEquals(expectedResponse, request.getErrorResponse(1000, Errors.INVALID_GROUP_ID).data());
         }
     }
 }
