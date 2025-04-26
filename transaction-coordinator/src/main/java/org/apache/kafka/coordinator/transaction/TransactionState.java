@@ -98,14 +98,14 @@ public enum TransactionState {
 
     // Static block to initialize validPreviousStates after all constants are defined
     static {
-        EMPTY.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(TransactionState.EMPTY, TransactionState.COMPLETE_COMMIT, TransactionState.COMPLETE_ABORT));
-        ONGOING.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(TransactionState.ONGOING, TransactionState.EMPTY, TransactionState.COMPLETE_COMMIT, TransactionState.COMPLETE_ABORT));
-        PREPARE_COMMIT.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(TransactionState.ONGOING));
-        PREPARE_ABORT.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(TransactionState.ONGOING, TransactionState.PREPARE_EPOCH_FENCE, TransactionState.EMPTY, TransactionState.COMPLETE_COMMIT, TransactionState.COMPLETE_ABORT));
-        COMPLETE_COMMIT.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(TransactionState.PREPARE_COMMIT));
-        COMPLETE_ABORT.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(TransactionState.PREPARE_ABORT));
-        DEAD.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(TransactionState.EMPTY, TransactionState.COMPLETE_ABORT, TransactionState.COMPLETE_COMMIT));
-        PREPARE_EPOCH_FENCE.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(TransactionState.ONGOING));
+        EMPTY.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(EMPTY, COMPLETE_COMMIT, COMPLETE_ABORT));
+        ONGOING.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(ONGOING, EMPTY, COMPLETE_COMMIT, COMPLETE_ABORT));
+        PREPARE_COMMIT.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(ONGOING));
+        PREPARE_ABORT.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(ONGOING, PREPARE_EPOCH_FENCE, EMPTY, COMPLETE_COMMIT, COMPLETE_ABORT));
+        COMPLETE_COMMIT.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(PREPARE_COMMIT));
+        COMPLETE_ABORT.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(PREPARE_ABORT));
+        DEAD.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(EMPTY, COMPLETE_ABORT, COMPLETE_COMMIT));
+        PREPARE_EPOCH_FENCE.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(ONGOING));
     }
 
 
@@ -158,12 +158,12 @@ public enum TransactionState {
      * Finds a TransactionState by its ID.
      * @param id The byte ID of the state.
      * @return The TransactionState corresponding to the ID.
-     * @throws IllegalArgumentException if the ID is unknown.
+     * @throws IllegalStateException if the ID is unknown.
      */
     public static TransactionState fromId(byte id) {
         TransactionState state = ID_TO_ENUM.get(id);
         if (state == null) {
-            throw new IllegalArgumentException("Unknown transaction state id " + id + " from the transaction status message");
+            throw new IllegalStateException("Unknown transaction state id " + id + " from the transaction status message");
         }
         return state;
     }
