@@ -3791,8 +3791,7 @@ public class RequestResponseTest {
         DeleteShareGroupOffsetsRequestData data = new DeleteShareGroupOffsetsRequestData()
             .setGroupId("group")
             .setTopics(List.of(new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
-                .setTopicName("topic-1")
-                .setPartitions(List.of(0))));
+                .setTopicName("topic-1")));
         return new DeleteShareGroupOffsetsRequest.Builder(data).build(version);
     }
 
@@ -3827,9 +3826,7 @@ public class RequestResponseTest {
             .setResponses(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
                 .setTopicName("topic-1")
                 .setTopicId(Uuid.randomUuid())
-                .setPartitions(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
-                    .setPartitionIndex(0)
-                    .setErrorCode(Errors.NONE.code())))));
+                .setErrorCode(Errors.NONE.code())));
         return new DeleteShareGroupOffsetsResponse(data);
     }
 
