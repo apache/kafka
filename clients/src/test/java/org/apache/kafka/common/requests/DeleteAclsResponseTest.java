@@ -22,12 +22,11 @@ import org.apache.kafka.common.acl.AclPermissionType;
 import org.apache.kafka.common.message.DeleteAclsResponseData;
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsFilterResult;
 import org.apache.kafka.common.message.DeleteAclsResponseData.DeleteAclsMatchingAcl;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.resource.PatternType;
 import org.apache.kafka.common.resource.ResourceType;
 
 import org.junit.jupiter.api.Test;
-
-import java.nio.ByteBuffer;
 
 import static java.util.Arrays.asList;
 import static java.util.Collections.singletonList;
@@ -98,9 +97,9 @@ public class DeleteAclsResponseTest {
                 .setThrottleTimeMs(10)
                 .setFilterResults(asList(LITERAL_RESPONSE, PREFIXED_RESPONSE)),
             V1);
-        final ByteBuffer buffer = original.serialize(V1);
+        final Readable readable = original.serialize(V1);
 
-        final DeleteAclsResponse result = DeleteAclsResponse.parse(buffer, V1);
+        final DeleteAclsResponse result = DeleteAclsResponse.parse(readable, V1);
         assertEquals(original.filterResults(), result.filterResults());
     }
 

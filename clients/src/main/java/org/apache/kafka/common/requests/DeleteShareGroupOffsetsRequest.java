@@ -23,21 +23,13 @@ import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.Readable;
 
-import java.util.ArrayList;
-import java.util.List;
-import java.util.stream.Collectors;
-
 public class DeleteShareGroupOffsetsRequest extends AbstractRequest {
     public static class Builder extends AbstractRequest.Builder<DeleteShareGroupOffsetsRequest> {
 
         private final DeleteShareGroupOffsetsRequestData data;
 
         public Builder(DeleteShareGroupOffsetsRequestData data) {
-            this(data, false);
-        }
-
-        public Builder(DeleteShareGroupOffsetsRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.DELETE_SHARE_GROUP_OFFSETS, enableUnstableLastVersion);
+            super(ApiKeys.DELETE_SHARE_GROUP_OFFSETS);
             this.data = data;
         }
 
@@ -59,19 +51,20 @@ public class DeleteShareGroupOffsetsRequest extends AbstractRequest {
         this.data = data;
     }
 
+    DeleteShareGroupOffsetsResponse getErrorResponse(int throttleTimeMs, Errors error) {
+        return getErrorResponse(throttleTimeMs, error.code(), error.message());
+    }
+
+    public DeleteShareGroupOffsetsResponse getErrorResponse(int throttleTimeMs, short errorCode, String errorMessage) {
+        return new DeleteShareGroupOffsetsResponse(new DeleteShareGroupOffsetsResponseData()
+            .setThrottleTimeMs(throttleTimeMs)
+            .setErrorMessage(errorMessage)
+            .setErrorCode(errorCode));
+    }
+
     @Override
     public DeleteShareGroupOffsetsResponse getErrorResponse(int throttleTimeMs, Throwable e) {
-        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> results = new ArrayList<>();
-        data.topics().forEach(
-            topicResult -> results.add(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
-                .setTopicName(topicResult.topicName())
-                .setPartitions(topicResult.partitions().stream()
-                    .map(partitionData -> new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
-                        .setPartitionIndex(partitionData)
-                        .setErrorCode(Errors.forException(e).code()))
-                    .collect(Collectors.toList()))));
-        return new DeleteShareGroupOffsetsResponse(new DeleteShareGroupOffsetsResponseData()
-            .setResponses(results));
+        return getErrorResponse(throttleTimeMs, Errors.forException(e));
     }
 
     @Override
@@ -84,5 +77,15 @@ public class DeleteShareGroupOffsetsRequest extends AbstractRequest {
             new DeleteShareGroupOffsetsRequestData(readable, version),
             version
         );
+    }
+
+    public static DeleteShareGroupOffsetsResponseData getErrorDeleteResponseData(Errors error) {
+        return getErrorDeleteResponseData(error.code(), error.message());
+    }
+
+    public static DeleteShareGroupOffsetsResponseData getErrorDeleteResponseData(short errorCode, String errorMessage) {
+        return new DeleteShareGroupOffsetsResponseData()
+            .setErrorCode(errorCode)
+            .setErrorMessage(errorMessage);
     }
 }

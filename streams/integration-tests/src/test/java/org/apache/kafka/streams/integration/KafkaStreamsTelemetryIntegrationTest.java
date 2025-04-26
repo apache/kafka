@@ -83,7 +83,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
@@ -233,7 +232,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
                         final String group = mn.group().replace("-metrics", "").replace('-', '.');
                         return "org.apache.kafka." + group + "." + name;
                     }).filter(name -> !name.equals("org.apache.kafka.stream.thread.state"))// telemetry reporter filters out string metrics
-                    .sorted().collect(Collectors.toList());
+                    .sorted().toList();
             final List<String> actualMetrics = new ArrayList<>(TelemetryPlugin.SUBSCRIBED_METRICS.get(mainConsumerInstanceId));
             assertEquals(expectedMetrics, actualMetrics);
 
@@ -424,7 +423,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
         return streams.metadataForLocalThreads().stream()
                 .flatMap(threadMeta -> threadMeta.activeTasks().stream()
                         .map(taskMeta -> taskMeta.taskId().toString()))
-                .collect(Collectors.toList());
+                .toList();
     }
 
     private static Stream<Arguments> singleAndMultiTaskParameters() {
@@ -615,7 +614,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
                         .flatMap(sm -> sm.getMetricsList().stream())
                         .map(org.apache.kafka.shaded.io.opentelemetry.proto.metrics.v1.Metric::getName)
                         .sorted()
-                        .collect(Collectors.toList());
+                        .toList();
                 LOG.info("Found metrics {} for clientId={}", metricNames, clientId);
                 SUBSCRIBED_METRICS.put(clientId, metricNames);
             } catch (final Exception e) {

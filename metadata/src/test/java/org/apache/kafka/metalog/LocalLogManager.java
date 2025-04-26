@@ -415,7 +415,7 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     /**
      * The latest kraft version used by this local log manager.
      */
-    private final KRaftVersion lastKRaftVersion;
+    private KRaftVersion lastKRaftVersion;
 
     /**
      * Whether this LocalLogManager has been shut down.
@@ -788,5 +788,12 @@ public final class LocalLogManager implements RaftClient<ApiMessageAndVersion>, 
     @Override
     public KRaftVersion kraftVersion() {
         return lastKRaftVersion;
+    }
+
+    @Override
+    public void upgradeKRaftVersion(int epoch, KRaftVersion version, boolean validateOnly) {
+        if (!validateOnly) {
+            lastKRaftVersion = version;
+        }
     }
 }
