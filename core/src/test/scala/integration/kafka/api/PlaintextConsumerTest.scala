@@ -15,7 +15,7 @@ package kafka.api
 import kafka.api.BaseConsumerTest.{DeserializerImpl, SerializerImpl}
 
 import java.time.Duration
-import java.{lang, util}
+import java.util
 import java.util.Arrays.asList
 import java.util.{Collections, Locale, Optional, Properties}
 import kafka.server.KafkaBroker
@@ -720,18 +720,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testEndOffsetsWillReturnNullOffsetsEntries(groupProtocol: String): Unit = {
-    testEndOffsets(true)
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testEndOffsetsWontReturnNullOffsetsEntries(groupProtocol: String): Unit = {
-    testEndOffsets(false)
-  }
-
-  private def testEndOffsets(allowNullOffsetsEntries: Boolean): Unit = {
-    this.consumerConfig.put(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG, allowNullOffsetsEntries)
+  def testEndOffsets(groupProtocol: String): Unit = {
     val producer = createProducer()
     val startingTimestamp = System.currentTimeMillis()
     val numRecords = 10000
@@ -762,21 +751,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testFetchOffsetsForTimeWillReturnNullOffsetsEntries(groupProtocol: String): Unit = {
-    testFetchOffsetsForTime(true)
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testFetchOffsetsForTimeWontReturnNullOffsetsEntries(groupProtocol: String): Unit = {
-    testFetchOffsetsForTime(false)
-  }
-
-  private def testFetchOffsetsForTime(allowNullOffsetsEntries: Boolean): Unit = {
-    this.consumerConfig.put(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG, allowNullOffsetsEntries)
+  def testFetchOffsetsForTime(groupProtocol: String): Unit = {
     val numPartitions = 2
     val producer = createProducer()
-    val timestampsToSearch = new util.HashMap[TopicPartition, lang.Long]()
+    val timestampsToSearch = new util.HashMap[TopicPartition, java.lang.Long]()
     var i = 0
     for (part <- 0 until numPartitions) {
       val tp = new TopicPartition(topic, part)

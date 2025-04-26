@@ -17,7 +17,6 @@
 package kafka.api
 
 import kafka.utils.TestInfoUtils
-import org.apache.kafka.clients.consumer.ConsumerConfig
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.record.{AbstractRecords, CompressionType, MemoryRecords, RecordBatch, RecordVersion, SimpleRecord, TimestampType}
@@ -26,7 +25,7 @@ import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
 import java.nio.ByteBuffer
-import java.{lang, util}
+import java.util
 import java.util.{Collections, Optional}
 import scala.jdk.CollectionConverters._
 
@@ -85,26 +84,15 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testOffsetsForTimesWillReturnNullOffsetsEntries(groupProtocol: String): Unit = {
-    testOffsetsForTimes(true)
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testOffsetsForTimesWontReturnNullOffsetsEntries(groupProtocol: String): Unit = {
-    testOffsetsForTimes(false)
-  }
-
-  private def testOffsetsForTimes(allowNullOffsetsEntries: Boolean): Unit = {
+  def testOffsetsForTimes(groupProtocol: String): Unit = {
     setupTopics()
-    this.consumerConfig.put(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG, allowNullOffsetsEntries)
     val consumer = createConsumer()
 
     // Test negative target time
     assertThrows(classOf[IllegalArgumentException],
       () => consumer.offsetsForTimes(Collections.singletonMap(t1p0, -1)))
 
-    val timestampsToSearch = util.Map.of[TopicPartition, lang.Long](
+    val timestampsToSearch = util.Map.of[TopicPartition, java.lang.Long](
       t1p0, 0L,
       t1p1, 20L,
       t2p0, 40L,
@@ -143,19 +131,9 @@ class ConsumerWithLegacyMessageFormatIntegrationTest extends AbstractConsumerTes
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testEarliestOrLatestOffsetsWillReturnNullOffsetsEntries(groupProtocol: String): Unit = {
-    testEarliestOrLatestOffsets(true)
-  }
-
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testEarliestOrLatestOffsetsWontReturnNullOffsetsEntries(groupProtocol: String): Unit = {
-    testEarliestOrLatestOffsets(false)
-  }
-
-  private def testEarliestOrLatestOffsets(allowNullOffsetsEntries: Boolean): Unit = {
-    this.consumerConfig.put(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG, allowNullOffsetsEntries)
+  def testEarliestOrLatestOffsets(groupProtocol: String): Unit = {
     setupTopics()
+
     val partitions = Set(t1p0, t1p1, t2p0, t2p1, t3p0, t3p1).asJava
     val consumer = createConsumer()
 

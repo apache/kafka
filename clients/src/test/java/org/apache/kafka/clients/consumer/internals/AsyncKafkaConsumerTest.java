@@ -1671,7 +1671,7 @@ public class AsyncKafkaConsumerTest {
                 "group-id",
                 "client-id",
                 false, 
-            false);
+                false);
         final TopicPartition tp = new TopicPartition("topic", 0);
         final List<ConsumerRecord<String, String>> records = singletonList(
                 new ConsumerRecord<>("topic", 0, 2, "key1", "value1"));
