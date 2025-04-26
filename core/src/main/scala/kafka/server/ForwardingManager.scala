@@ -26,6 +26,7 @@ import org.apache.kafka.common.metrics.Metrics
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AbstractRequest, AbstractResponse, EnvelopeRequest, EnvelopeResponse, RequestContext, RequestHeader}
 import org.apache.kafka.server.common.{ControllerRequestCompletionHandler, NodeToControllerChannelManager}
+import org.apache.kafka.server.metrics.ForwardingManagerMetrics
 
 import java.util.Optional
 import java.util.concurrent.TimeUnit
@@ -117,7 +118,7 @@ class ForwardingManagerImpl(
   metrics: Metrics
 ) extends ForwardingManager with AutoCloseable with Logging {
 
-  val forwardingManagerMetrics: ForwardingManagerMetrics = ForwardingManagerMetrics(metrics, channelManager.getTimeoutMs)
+  val forwardingManagerMetrics: ForwardingManagerMetrics = new ForwardingManagerMetrics(metrics, channelManager.getTimeoutMs)
 
   override def forwardRequest(
     requestContext: RequestContext,
