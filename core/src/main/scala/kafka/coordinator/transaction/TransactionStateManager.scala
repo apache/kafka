@@ -356,7 +356,7 @@ class TransactionStateManager(brokerId: Int,
                 states.add(new ListTransactionsResponseData.TransactionState()
                   .setTransactionalId(txnMetadata.transactionalId)
                   .setProducerId(txnMetadata.producerId)
-                  .setTransactionState(txnMetadata.state.name)
+                  .setTransactionState(txnMetadata.state.getName)
                 )
               }
             }
