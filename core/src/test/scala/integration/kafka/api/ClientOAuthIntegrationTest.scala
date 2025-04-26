@@ -19,7 +19,7 @@ package integration.kafka.api
 import kafka.api.{IntegrationTestHarness, SaslSetup}
 import kafka.utils.TestInfoUtils
 import org.apache.kafka.clients.CommonClientConfigs
-import org.apache.kafka.common.config.SaslConfigs
+import org.apache.kafka.common.config.{ConfigException, SaslConfigs}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import java.util.Properties
@@ -28,7 +28,8 @@ import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBearerRequestGenerator
 import org.apache.kafka.common.security.oauthbearer.{OAuthBearerLoginCallbackHandler, OAuthBearerLoginModule, OAuthBearerValidatorCallbackHandler}
-import org.junit.jupiter.api.Assertions.{assertThrows, fail}
+import org.apache.kafka.test.TestUtils
+import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertThrows}
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
@@ -72,14 +73,7 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
 
     // The superuser needs the configuration in setUp because it's used to create resources before the individual
     // test methods are invoked.
-    val overrides = new Properties()
-    overrides.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
-    overrides.put(SaslConfigs.SASL_JAAS_CONFIG, jaasClientLoginModule(kafkaClientSaslMechanism))
-    overrides.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, classOf[OAuthBearerLoginCallbackHandler].getName)
-    overrides.put(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID, "test-client")
-    overrides.put(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET, "test-secret")
-    overrides.put(SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, tokenEndpointUrl)
-    superuserClientConfig.putAll(overrides)
+    superuserClientConfig.putAll(defaultOAuthClientConfigs())
 
     super.setUp(testInfo)
   }
@@ -93,58 +87,94 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
     super.tearDown()
   }
 
+  def defaultOAuthClientConfigs(): Properties = {
+    val tokenEndpointUrl = mockOAuthServer.get.tokenEndpointUrl(issuerId).url().toString
+
+    val configs = new Properties()
+    configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
+    configs.put(SaslConfigs.SASL_JAAS_CONFIG, jaasClientLoginModule(kafkaClientSaslMechanism))
+    configs.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, classOf[OAuthBearerLoginCallbackHandler].getName)
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID, "test-client")
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET, "test-secret")
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, tokenEndpointUrl)
+    configs
+  }
+
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testBasicClientCredentials(groupProtocol: String): Unit = {
-    val tokenEndpointUrl = mockOAuthServer.get.tokenEndpointUrl(issuerId).url().toString
-    val overrides = new Properties()
-    overrides.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
-    overrides.put(SaslConfigs.SASL_JAAS_CONFIG, jaasClientLoginModule(kafkaClientSaslMechanism))
-    overrides.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, classOf[OAuthBearerLoginCallbackHandler].getName)
-    overrides.put(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID, "test-client")
-    overrides.put(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET, "test-secret")
-    overrides.put(SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, tokenEndpointUrl)
-
-    createProducer(configOverrides = overrides)
-    createConsumer(configOverrides = overrides)
-    createAdminClient(configOverrides = overrides)
+    val configs = defaultOAuthClientConfigs()
+    assertClientsSucceed(configs)
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testJwtBearer(groupProtocol: String): Unit = {
-    val tokenEndpointUrl = mockOAuthServer.get.tokenEndpointUrl(issuerId).url().toString
-    val overrides = new Properties()
-    overrides.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
-    overrides.put(SaslConfigs.SASL_JAAS_CONFIG, jaasClientLoginModule(kafkaClientSaslMechanism))
-    overrides.put(SaslConfigs.SASL_LOGIN_CALLBACK_HANDLER_CLASS, classOf[OAuthBearerLoginCallbackHandler].getName)
-    overrides.put(SaslConfigs.SASL_OAUTHBEARER_GRANT_TYPE, JwtBearerRequestGenerator.GRANT_TYPE)
-    overrides.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE, "/Users/kirk/Desktop/oauth-test.diff")
-    overrides.put(SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, tokenEndpointUrl)
+  def testJwtBearerWithMalformedAssertionFile(groupProtocol: String): Unit = {
+    // Create the assertion file, but fill it with non-JWT garbage.
+    val assertionFile = TestUtils.tempFile("CQEN*)Q#F)&)^#QNC")
 
-    val expectedMessageSubstring = "invalid request: the assertion is not a jwt"
+    val configs = defaultOAuthClientConfigs()
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_GRANT_TYPE, JwtBearerRequestGenerator.GRANT_TYPE)
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE, assertionFile.getAbsolutePath)
 
-    assertThrowsLoginException(() => createProducer(configOverrides = overrides), expectedMessageSubstring)
-    assertThrowsLoginException(() => createConsumer(configOverrides = overrides), expectedMessageSubstring)
-    assertThrowsLoginException(() => createAdminClient(configOverrides = overrides), expectedMessageSubstring)
+    assertClientsThrowException(configs, classOf[LoginException], "invalid request: the assertion is not a jwt")
   }
 
-  def assertThrowsLoginException(executable: Executable, messageSubstring: String): Unit = {
-    var cause = assertThrows(classOf[Throwable], executable)
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testJwtBearerWithEmptyAssertionFile(groupProtocol: String): Unit = {
+    // Create the assertion file, but leave it empty.
+    val assertionFile = TestUtils.tempFile()
 
-    if (cause.isInstanceOf[LoginException] && cause.getMessage.contains(messageSubstring)) {
-      error(s"cause: ${cause.getMessage}")
+    val configs = defaultOAuthClientConfigs()
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_GRANT_TYPE, JwtBearerRequestGenerator.GRANT_TYPE)
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE, assertionFile.getAbsolutePath)
+
+    assertClientsThrowException(configs, classOf[LoginException], "invalid request: missing or empty assertion parameter")
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testJwtBearerWithMissingAssertionFile(groupProtocol: String): Unit = {
+    val missingFileName = "/this/does/not/exist.txt"
+
+    val configs = defaultOAuthClientConfigs()
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_GRANT_TYPE, JwtBearerRequestGenerator.GRANT_TYPE)
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE, missingFileName)
+
+    assertClientsThrowException(configs, classOf[ConfigException], s"contains a file ($missingFileName) that doesn't exist")
+  }
+
+  def assertClientsSucceed(configs: Properties): Unit = {
+    assertDoesNotThrow(() => createProducer(configOverrides = configs))
+    assertDoesNotThrow(() => createConsumer(configOverrides = configs))
+    assertDoesNotThrow(() => createAdminClient(configOverrides = configs))
+  }
+
+  def assertClientsThrowException[T <: Throwable](configs: Properties,
+                                                  expectedExceptionClass: Class[T],
+                                                  messageSubstring: String): Unit = {
+    assertThrowsException(() => createProducer(configOverrides = configs), expectedExceptionClass, messageSubstring)
+    assertThrowsException(() => createConsumer(configOverrides = configs), expectedExceptionClass, messageSubstring)
+    assertThrowsException(() => createAdminClient(configOverrides = configs), expectedExceptionClass, messageSubstring)
+  }
+
+  def assertThrowsException[T <: Throwable](executable: Executable,
+                                            expectedExceptionClass: Class[T],
+                                            expectedMessageSubstring: String): Unit = {
+    val original = assertThrows(classOf[Throwable], executable)
+    var cause = original
+
+    if (expectedExceptionClass.isInstance(cause) && cause.getMessage.contains(expectedMessageSubstring))
       return
-    }
 
     while (cause.getCause != null) {
       cause = cause.getCause
-      error(s"cause: ${cause.getMessage}")
 
-      if (cause.isInstanceOf[LoginException] && cause.getMessage.contains(messageSubstring))
+      if (expectedExceptionClass.isInstance(cause) && cause.getMessage.contains(expectedMessageSubstring))
         return
     }
 
-    fail("The exception did not contain a LoginException")
+    throw original
   }
 }
