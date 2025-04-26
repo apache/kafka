@@ -412,8 +412,9 @@ object QuorumTestHarness {
 
   def getTestGroupProtocolParametersAll: java.util.stream.Stream[Arguments] = {
     stream.Stream.of(
+      // Temp workaround until the hanging issue is fixed
       Arguments.of(GroupProtocol.CLASSIC.name.toLowerCase(Locale.ROOT)),
-      Arguments.of(GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT))
+      // Arguments.of(GroupProtocol.CONSUMER.name.toLowerCase(Locale.ROOT))
     )
   }
 

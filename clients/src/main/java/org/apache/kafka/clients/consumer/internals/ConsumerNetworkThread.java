@@ -339,11 +339,16 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         log.trace("Closing the consumer network thread");
         Timer timer = time.timer(closeTimeout);
         try {
-            runAtClose(requestManagers.entries(), networkClientDelegate, time.milliseconds());
+            // Temp workaround until KAFKA-19206 is merged
+            if (requestManagers != null)
+                runAtClose(requestManagers.entries(), networkClientDelegate, time.milliseconds());
         } catch (Exception e) {
             log.error("Unexpected error during shutdown. Proceed with closing.", e);
         } finally {
-            sendUnsentRequests(timer);
+            // Temp workaround until KAFKA-19206 is merged
+            if (networkClientDelegate != null)
+                sendUnsentRequests(timer);
+
             asyncConsumerMetrics.recordApplicationEventExpiredSize(applicationEventReaper.reap(applicationEventQueue));
 
             closeQuietly(requestManagers, "request managers");
