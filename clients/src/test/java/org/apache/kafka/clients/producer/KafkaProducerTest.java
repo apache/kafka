@@ -32,6 +32,7 @@ import org.apache.kafka.clients.producer.internals.ProducerMetadata;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
 import org.apache.kafka.clients.producer.internals.TransactionManager;
+import org.apache.kafka.clients.producer.internals.TransactionalRequestResult;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -151,6 +152,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -161,6 +163,7 @@ import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.notNull;
 import static org.mockito.Mockito.atMostOnce;
+import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.mockStatic;
 import static org.mockito.Mockito.never;
@@ -1442,6 +1445,51 @@ public class KafkaProducerTest {
                 "keepPreparedTxn flag should match input parameter");
             assertEquals(enable2PC, requestFlags[1], 
                 "enable2Pc flag should match producer configuration");
+        }
+    }
+
+    @Test
+    public void testPrepareTransactionSuccess() throws Exception {
+        StringSerializer serializer = new StringSerializer();
+        KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
+
+        when(ctx.transactionManager.isTransactionV2Enabled()).thenReturn(true);
+        when(ctx.transactionManager.is2PCEnabled()).thenReturn(true);
+        when(ctx.sender.isRunning()).thenReturn(true);
+
+        TransactionalRequestResult prepareResult = mock(TransactionalRequestResult.class);
+        when(ctx.transactionManager.beginPrepare()).thenReturn(prepareResult);
+        doNothing().when(prepareResult).await(anyLong(), any(TimeUnit.class));
+
+        PreparedTxnState expectedState = mock(PreparedTxnState.class);
+        when(ctx.transactionManager.getPreparedTransactionState()).thenReturn(expectedState);
+
+        try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
+            PreparedTxnState returned = producer.prepareTransaction();
+            assertSame(expectedState, returned);
+
+            verify(ctx.transactionManager).beginPrepare();
+            verify(ctx.accumulator).beginFlush();
+            verify(ctx.accumulator).awaitFlushCompletion();
+        }
+    }
+
+    @Test
+    public void testPrepareTransactionFailsWhen2PCDisabled() {
+        StringSerializer serializer = new StringSerializer();
+        KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
+
+        // Disable 2PC
+        when(ctx.transactionManager.isTransactionV2Enabled()).thenReturn(true);
+        when(ctx.transactionManager.is2PCEnabled()).thenReturn(false);
+        when(ctx.sender.isRunning()).thenReturn(true);
+
+        try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
+            assertThrows(
+                IllegalStateException.class,
+                producer::prepareTransaction,
+                "prepareTransaction() should fail if 2PC is disabled"
+            );
         }
     }
     
