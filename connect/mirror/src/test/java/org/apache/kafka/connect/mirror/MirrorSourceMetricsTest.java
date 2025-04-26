@@ -16,6 +16,7 @@
  */
 package org.apache.kafka.connect.mirror;
 
+import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.metrics.KafkaMetric;
 import org.apache.kafka.common.metrics.MetricsReporter;
@@ -30,6 +31,7 @@ import java.util.List;
 import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class MirrorSourceMetricsTest {
 
@@ -67,7 +69,27 @@ public class MirrorSourceMetricsTest {
         assertEquals(SOURCE_TP.topic(), tags.get("topic"));
         assertEquals(String.valueOf(SOURCE_TP.partition()), tags.get("partition"));
         assertEquals(CONNECTOR_NAME, tags.get("connector"));
-        assertEquals(String.valueOf(TASK_INDEX), tags.get("task_index"));
+        assertEquals(String.valueOf(TASK_INDEX), tags.get("task"));
+    }
+
+    @Test
+    public void testTagsForKafkaMetricsCount() {
+        MirrorSourceTaskConfig taskConfig = new MirrorSourceTaskConfig(configs);
+        MirrorSourceMetrics metrics = new MirrorSourceMetrics(taskConfig);
+        metrics.addReporter(reporter);
+
+        MetricName targetMetric = null;
+        for (KafkaMetric m : reporter.metrics) {
+            MetricName metricName = m.metricName();
+            if (metricName.group().equals("kafka-metrics-count")) {
+                targetMetric = metricName;
+                break;
+            }
+        }
+        assertNotNull(targetMetric);
+        Map<String, String> tags = targetMetric.tags();
+        assertEquals(CONNECTOR_NAME, tags.get("connector"));
+        assertEquals(String.valueOf(TASK_INDEX), tags.get("task"));
     }
 
     static class TestReporter implements MetricsReporter {

@@ -32,6 +32,7 @@ import java.util.Map;
 import java.util.Objects;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 public class MirrorCheckpointMetricsTest {
     private static final String SOURCE = "source";
@@ -75,7 +76,27 @@ public class MirrorCheckpointMetricsTest {
         assertEquals(SOURCE_TP.topic(), tags.get("topic"));
         assertEquals(String.valueOf(SOURCE_TP.partition()), tags.get("partition"));
         assertEquals(CONNECTOR_NAME, tags.get("connector"));
-        assertEquals(String.valueOf(TASK_INDEX), tags.get("task_index"));
+        assertEquals(String.valueOf(TASK_INDEX), tags.get("task"));
+    }
+
+    @Test
+    public void testTagsForKafkaMetricsCount() {
+        MirrorCheckpointTaskConfig taskConfig = new MirrorCheckpointTaskConfig(configs);
+        MirrorCheckpointMetrics metrics = new MirrorCheckpointMetrics(taskConfig);
+        metrics.addReporter(reporter);
+
+        MetricName targetMetric = null;
+        for (KafkaMetric m : reporter.metrics) {
+            MetricName metricName = m.metricName();
+            if (metricName.group().equals("kafka-metrics-count")) {
+                targetMetric = metricName;
+                break;
+            }
+        }
+        assertNotNull(targetMetric);
+        Map<String, String> tags = targetMetric.tags();
+        assertEquals(CONNECTOR_NAME, tags.get("connector"));
+        assertEquals(String.valueOf(TASK_INDEX), tags.get("task"));
     }
 
     static class TestReporter implements MetricsReporter {

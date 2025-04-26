@@ -18,6 +18,7 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
@@ -39,7 +40,7 @@ class MirrorSourceMetrics implements AutoCloseable {
 
     private static final String SOURCE_CONNECTOR_GROUP = MirrorSourceConnector.class.getSimpleName();
 
-    private static final Set<String> PARTITION_TAGS = new HashSet<>(Arrays.asList("source", "target", "topic", "partition", "connector", "task_index"));
+    private static final Set<String> PARTITION_TAGS = new HashSet<>(Arrays.asList("source", "target", "topic", "partition", "connector", "task"));
 
     private final MetricNameTemplate recordCount;
     private final MetricNameTemplate recordRate;
@@ -66,7 +67,11 @@ class MirrorSourceMetrics implements AutoCloseable {
         this.source = taskConfig.sourceClusterAlias();
         this.connectorName = taskConfig.connectorName();
         this.taskIndex = taskConfig.getInt(MirrorConnectorConfig.TASK_INDEX);
-        this.metrics = new Metrics();
+        Map<String, String> metricsTags = new LinkedHashMap<>();
+        metricsTags.put("connector", connectorName);
+        metricsTags.put("task", String.valueOf(taskIndex));
+        MetricConfig metricConfig = new MetricConfig().tags(metricsTags);
+        this.metrics = new Metrics(metricConfig);
 
         recordCount = new MetricNameTemplate(
                 "record-count", SOURCE_CONNECTOR_GROUP,
@@ -158,7 +163,7 @@ class MirrorSourceMetrics implements AutoCloseable {
             tags.put("topic", topicPartition.topic());
             tags.put("partition", Integer.toString(topicPartition.partition()));
             tags.put("connector", connectorName);
-            tags.put("task_index", String.valueOf(taskIndex));
+            tags.put("task", String.valueOf(taskIndex));
 
             recordSensor = metrics.sensor(prefix + "records-sent");
             recordSensor.add(new Meter(metrics.metricInstance(recordRate, tags), metrics.metricInstance(recordCount, tags)));

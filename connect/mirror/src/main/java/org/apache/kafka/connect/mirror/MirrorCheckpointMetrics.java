@@ -18,6 +18,7 @@ package org.apache.kafka.connect.mirror;
 
 import org.apache.kafka.common.MetricNameTemplate;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.MetricsReporter;
 import org.apache.kafka.common.metrics.Sensor;
@@ -38,7 +39,7 @@ class MirrorCheckpointMetrics implements AutoCloseable {
 
     private static final String CHECKPOINT_CONNECTOR_GROUP = MirrorCheckpointConnector.class.getSimpleName();
 
-    private static final Set<String> GROUP_TAGS = new HashSet<>(Arrays.asList("source", "target", "group", "topic", "partition", "connector", "task_index"));
+    private static final Set<String> GROUP_TAGS = new HashSet<>(Arrays.asList("source", "target", "group", "topic", "partition", "connector", "task"));
 
     private static final MetricNameTemplate CHECKPOINT_LATENCY = new MetricNameTemplate(
             "checkpoint-latency-ms", CHECKPOINT_CONNECTOR_GROUP,
@@ -64,9 +65,13 @@ class MirrorCheckpointMetrics implements AutoCloseable {
     MirrorCheckpointMetrics(MirrorCheckpointTaskConfig taskConfig) {
         this.target = taskConfig.targetClusterAlias();
         this.source = taskConfig.sourceClusterAlias();
-        this.metrics = new Metrics();
         this.connectorName = taskConfig.connectorName();
         this.taskIndex = taskConfig.getInt(MirrorConnectorConfig.TASK_INDEX);
+        Map<String, String> metricsTags = new LinkedHashMap<>();
+        metricsTags.put("connector", connectorName);
+        metricsTags.put("task", String.valueOf(taskIndex));
+        MetricConfig metricConfig = new MetricConfig().tags(metricsTags);
+        this.metrics = new Metrics(metricConfig);
 
         // for side-effect
         metrics.sensor("record-count");
@@ -104,7 +109,7 @@ class MirrorCheckpointMetrics implements AutoCloseable {
             tags.put("topic", topicPartition.topic());
             tags.put("partition", Integer.toString(topicPartition.partition()));
             tags.put("connector", connectorName);
-            tags.put("task_index", String.valueOf(taskIndex));
+            tags.put("task", String.valueOf(taskIndex));
 
             checkpointLatencySensor = metrics.sensor("checkpoint-latency");
             checkpointLatencySensor.add(metrics.metricInstance(CHECKPOINT_LATENCY, tags), new Value());
