@@ -194,6 +194,13 @@ public class AsyncKafkaConsumerTest {
         MockConsumerInterceptor.resetCounters();
     }
 
+    private AsyncKafkaConsumer<String, String> newConsumer(Map<String, Object> config) {
+        final Properties props = requiredConsumerConfig();
+        props.putAll(config);
+        props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-id");
+        return newConsumer(props);
+    }
+
     private AsyncKafkaConsumer<String, String> newConsumer() {
         final Properties props = requiredConsumerConfig();
         props.put(ConsumerConfig.GROUP_ID_CONFIG, "group-id");
@@ -254,7 +261,8 @@ public class AsyncKafkaConsumerTest {
         SubscriptionState subscriptions,
         String groupId,
         String clientId,
-        boolean autoCommitEnabled) {
+        boolean autoCommitEnabled,
+        boolean allowNullOffsetsEntries) {
         long retryBackoffMs = 100L;
         int requestTimeoutMs = 30000;
         int defaultApiTimeoutMs = 1000;
@@ -277,7 +285,8 @@ public class AsyncKafkaConsumerTest {
             requestTimeoutMs,
             defaultApiTimeoutMs,
             groupId,
-            autoCommitEnabled);
+            autoCommitEnabled,
+            allowNullOffsetsEntries);
     }
 
     @Test
@@ -339,7 +348,7 @@ public class AsyncKafkaConsumerTest {
         assertDoesNotThrow(() -> consumer.commitAsync(offsets, callback));
         forceCommitCallbackInvocation();
 
-        assertEquals(callback.invoked, 1);
+        assertEquals(1, callback.invoked);
         assertNull(callback.exception);
     }
 
@@ -675,6 +684,7 @@ public class AsyncKafkaConsumerTest {
             subscriptions,
             "group-id",
             "client-id",
+            false,
             false));
         consumer.close(Duration.ofMillis(timeoutMs));
         verify(applicationEventHandler).addAndGet(any(LeaveGroupOnCloseEvent.class));
@@ -698,6 +708,7 @@ public class AsyncKafkaConsumerTest {
             subscriptions,
             "group-id",
             "client-id",
+            false,
             false));
         consumer.setGroupAssignmentSnapshot(partitions);
 
@@ -722,6 +733,7 @@ public class AsyncKafkaConsumerTest {
             subscriptions,
             "group-id",
             "client-id",
+            false,
             false));
 
         Duration timeout = Duration.ofMillis(timeoutMs);
@@ -746,6 +758,7 @@ public class AsyncKafkaConsumerTest {
             subscriptions,
             "group-id",
             "client-id",
+            false, 
             false);
         completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
@@ -771,6 +784,7 @@ public class AsyncKafkaConsumerTest {
             subscriptions,
             "group-id",
             "client-id",
+            false, 
             false);
         completeTopicSubscriptionChangeEventSuccessfully();
         consumer.subscribe(singleton("topic"), mock(ConsumerRebalanceListener.class));
@@ -845,16 +859,20 @@ public class AsyncKafkaConsumerTest {
         assertThrows(IllegalArgumentException.class, () -> consumer.assign(singleton(new TopicPartition("  ", 0))));
     }
 
-    @Test
-    public void testBeginningOffsetsFailsIfNullPartitions() {
-        consumer = newConsumer();
+    @SuppressWarnings("deprecation")
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testBeginningOffsetsFailsIfNullPartitions(boolean allowNullOffsetsEntries) {
+        consumer = newConsumer(Map.of(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG, allowNullOffsetsEntries));
         assertThrows(NullPointerException.class, () -> consumer.beginningOffsets(null,
             Duration.ofMillis(1)));
     }
 
-    @Test
-    public void testBeginningOffsets() {
-        consumer = newConsumer();
+    @SuppressWarnings("deprecation")
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testBeginningOffsets(boolean allowNullOffsetsEntries) {
+        consumer = newConsumer(Map.of(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG, allowNullOffsetsEntries));
         Map<TopicPartition, OffsetAndTimestampInternal> expectedOffsets = mockOffsetAndTimestamp();
 
         when(applicationEventHandler.addAndGet(any(ListOffsetsEvent.class))).thenAnswer(invocation -> {
@@ -875,9 +893,11 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler).addAndGet(any(ListOffsetsEvent.class));
     }
 
-    @Test
-    public void testBeginningOffsetsThrowsKafkaExceptionForUnderlyingExecutionFailure() {
-        consumer = newConsumer();
+    @SuppressWarnings("deprecation")
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testBeginningOffsetsThrowsKafkaExceptionForUnderlyingExecutionFailure(boolean allowNullOffsetsEntries) {
+        consumer = newConsumer(Map.of(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG, allowNullOffsetsEntries));
         Set<TopicPartition> partitions = mockTopicPartitionOffset().keySet();
         Throwable eventProcessingFailure = new KafkaException("Unexpected failure " +
             "processing List Offsets event");
@@ -890,9 +910,11 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsEvent.class));
     }
 
-    @Test
-    public void testBeginningOffsetsTimeoutOnEventProcessingTimeout() {
-        consumer = newConsumer();
+    @SuppressWarnings("deprecation")
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testBeginningOffsetsTimeoutOnEventProcessingTimeout(boolean allowNullOffsetsEntries) {
+        consumer = newConsumer(Map.of(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG, allowNullOffsetsEntries));
         doThrow(new TimeoutException()).when(applicationEventHandler).addAndGet(any());
         assertThrows(TimeoutException.class,
             () -> consumer.beginningOffsets(
@@ -901,16 +923,20 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsEvent.class));
     }
 
-    @Test
-    public void testOffsetsForTimesOnNullPartitions() {
-        consumer = newConsumer();
+    @SuppressWarnings("deprecation")
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOffsetsForTimesOnNullPartitions(boolean allowNullOffsetsEntries) {
+        consumer = newConsumer(Map.of(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG, allowNullOffsetsEntries));
         assertThrows(NullPointerException.class, () -> consumer.offsetsForTimes(null,
             Duration.ofMillis(1)));
     }
 
-    @Test
-    public void testOffsetsForTimesFailsOnNegativeTargetTimes() {
-        consumer = newConsumer();
+    @SuppressWarnings("deprecation")
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOffsetsForTimesFailsOnNegativeTargetTimes(boolean allowNullOffsetsEntries) {
+        consumer = newConsumer(Map.of(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG, allowNullOffsetsEntries));
         assertThrows(IllegalArgumentException.class,
                 () -> consumer.offsetsForTimes(Collections.singletonMap(new TopicPartition(
                                 "topic1", 1), ListOffsetsRequest.EARLIEST_TIMESTAMP),
@@ -927,9 +953,11 @@ public class AsyncKafkaConsumerTest {
                         Duration.ofMillis(1)));
     }
 
-    @Test
-    public void testOffsetsForTimes() {
-        consumer = newConsumer();
+    @SuppressWarnings("deprecation")
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOffsetsForTimes(boolean allowNullOffsetsEntries) {
+        consumer = newConsumer(Map.of(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG, allowNullOffsetsEntries));
         Map<TopicPartition, OffsetAndTimestampInternal> expectedResult = mockOffsetAndTimestamp();
         Map<TopicPartition, Long> timestampToSearch = mockTimestampToSearch();
 
@@ -943,9 +971,11 @@ public class AsyncKafkaConsumerTest {
         verify(applicationEventHandler).addAndGet(ArgumentMatchers.isA(ListOffsetsEvent.class));
     }
 
-    @Test
-    public void testOffsetsForTimesTimeoutException() {
-        consumer = newConsumer();
+    @SuppressWarnings("deprecation")
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOffsetsForTimesTimeoutException(boolean allowNullOffsetsEntries) {
+        consumer = newConsumer(Map.of(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG, allowNullOffsetsEntries));
         long timeout = 100;
         doThrow(new TimeoutException("Event did not complete in time and was expired by the reaper"))
             .when(applicationEventHandler).addAndGet(any());
@@ -956,9 +986,11 @@ public class AsyncKafkaConsumerTest {
         assertEquals("Failed to get offsets by times in " + timeout + "ms", t.getMessage());
     }
 
-    @Test
-    public void testBeginningOffsetsTimeoutException() {
-        consumer = newConsumer();
+    @SuppressWarnings("deprecation")
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testBeginningOffsetsTimeoutException(boolean allowNullOffsetsEntries) {
+        consumer = newConsumer(Map.of(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG, allowNullOffsetsEntries));
         long timeout = 100;
         doThrow(new TimeoutException("Event did not complete in time and was expired by the reaper"))
             .when(applicationEventHandler).addAndGet(any());
@@ -970,9 +1002,11 @@ public class AsyncKafkaConsumerTest {
         assertEquals("Failed to get offsets by times in " + timeout + "ms", t.getMessage());
     }
 
-    @Test
-    public void testEndOffsetsTimeoutException() {
-        consumer = newConsumer();
+    @SuppressWarnings("deprecation")
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testEndOffsetsTimeoutException(boolean allowNullOffsetsEntries) {
+        consumer = newConsumer(Map.of(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG, allowNullOffsetsEntries));
         long timeout = 100;
         doThrow(new TimeoutException("Event did not complete in time and was expired by the reaper"))
             .when(applicationEventHandler).addAndGet(any());
@@ -987,27 +1021,38 @@ public class AsyncKafkaConsumerTest {
     // This test ensures same behaviour as the current consumer when offsetsForTimes is called
     // with 0 timeout. It should return map with all requested partitions as keys, with null
     // OffsetAndTimestamp as value.
-    @Test
-    public void testBeginningOffsetsWithZeroTimeout() {
-        consumer = newConsumer();
+    @SuppressWarnings("deprecation")
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testBeginningOffsetsWithZeroTimeout(boolean allowNullOffsetsEntries) {
+        consumer = newConsumer(Map.of(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG, allowNullOffsetsEntries));
         TopicPartition tp = new TopicPartition("topic1", 0);
         Map<TopicPartition, Long> result =
                 assertDoesNotThrow(() -> consumer.beginningOffsets(Collections.singletonList(tp), Duration.ZERO));
         // The result should be {tp=null}
-        assertTrue(result.containsKey(tp));
-        assertNull(result.get(tp));
+        if (allowNullOffsetsEntries) {
+            assertTrue(result.containsKey(tp));
+            assertNull(result.get(tp));
+        } else {
+            assertFalse(result.containsKey(tp));
+        }
         verify(applicationEventHandler).add(ArgumentMatchers.isA(ListOffsetsEvent.class));
     }
 
-    @Test
-    public void testOffsetsForTimesWithZeroTimeout() {
-        consumer = newConsumer();
+    @SuppressWarnings("deprecation")
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testOffsetsForTimesWithZeroTimeout(boolean allowNullOffsetsEntries) {
+        consumer = newConsumer(Map.of(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG, allowNullOffsetsEntries));
         TopicPartition tp = new TopicPartition("topic1", 0);
         Map<TopicPartition, OffsetAndTimestamp> expectedResult = Collections.singletonMap(tp, null);
         Map<TopicPartition, Long> timestampToSearch = Collections.singletonMap(tp, 5L);
         Map<TopicPartition, OffsetAndTimestamp> result =
             assertDoesNotThrow(() -> consumer.offsetsForTimes(timestampToSearch, Duration.ZERO));
-        assertEquals(expectedResult, result);
+        if (allowNullOffsetsEntries)
+            assertEquals(expectedResult, result);
+        else
+            assertTrue(result.isEmpty());
         verify(applicationEventHandler, never()).addAndGet(ArgumentMatchers.isA(ListOffsetsEvent.class));
     }
 
@@ -1625,7 +1670,8 @@ public class AsyncKafkaConsumerTest {
                 subscriptions,
                 "group-id",
                 "client-id",
-                false);
+                false, 
+            false);
         final TopicPartition tp = new TopicPartition("topic", 0);
         final List<ConsumerRecord<String, String>> records = singletonList(
                 new ConsumerRecord<>("topic", 0, 2, "key1", "value1"));
@@ -2008,6 +2054,7 @@ public class AsyncKafkaConsumerTest {
                 mock(SubscriptionState.class),
                 "group-id",
                 "client-id",
+                false, 
                 false);
         Metrics metrics = consumer.metricsRegistry();
         AsyncConsumerMetrics kafkaConsumerMetrics = consumer.kafkaConsumerMetrics();

@@ -63,6 +63,8 @@ import org.apache.kafka.common.utils.Utils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -246,7 +248,7 @@ public class OffsetFetcherTest {
         assertTrue(subscriptions.hasValidPosition(tp0));
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(subscriptions.isFetchable(tp0));
-        assertEquals(subscriptions.position(tp0).offset, 5L);
+        assertEquals(5L, subscriptions.position(tp0).offset);
     }
 
     @Test
@@ -395,7 +397,7 @@ public class OffsetFetcherTest {
 
         assertFalse(subscriptions.isOffsetResetNeeded(tp0));
         assertTrue(metadata.updateRequested());
-        assertOptional(metadata.lastSeenLeaderEpoch(tp0), epoch -> assertEquals((long) epoch, 2));
+        assertOptional(metadata.lastSeenLeaderEpoch(tp0), epoch -> assertEquals(2, (long) epoch));
     }
 
     @Test
@@ -703,34 +705,86 @@ public class OffsetFetcherTest {
         assertEquals(10, subscriptions.position(tp0).offset);
     }
 
-    @Test
-    public void testGetOffsetsForTimesTimeout() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testGetOffsetsForTimesTimeout(boolean allowNullOffsetsEntries) {
         buildFetcher();
         assertThrows(TimeoutException.class, () -> offsetFetcher.offsetsForTimes(
-            Collections.singletonMap(new TopicPartition(topicName, 2), 1000L), time.timer(100L)));
+            Map.of(new TopicPartition(topicName, 2), 1000L), time.timer(100L),
+                allowNullOffsetsEntries)
+        );
     }
 
-    @Test
-    public void testGetOffsetsForTimes() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testGetOffsetsForTimes(boolean allowNullOffsetsEntries) {
         buildFetcher();
 
         // Empty map
-        assertTrue(offsetFetcher.offsetsForTimes(new HashMap<>(), time.timer(100L)).isEmpty());
+        assertTrue(offsetFetcher.offsetsForTimes(new HashMap<>(), time.timer(100L), allowNullOffsetsEntries).isEmpty());
         // Unknown Offset
-        testGetOffsetsForTimesWithUnknownOffset();
+        testGetOffsetsForTimesWithUnknownOffset(allowNullOffsetsEntries);
         // Error code none with unknown offset
-        testGetOffsetsForTimesWithError(Errors.NONE, Errors.NONE, -1L, null);
+        testGetOffsetsForTimesWithError(
+            Errors.NONE, 
+            Errors.NONE, 
+            -1L, 
+            null, 
+            allowNullOffsetsEntries
+        );
         // Error code none with known offset
-        testGetOffsetsForTimesWithError(Errors.NONE, Errors.NONE, 10L, 10L);
+        testGetOffsetsForTimesWithError(
+            Errors.NONE,
+            Errors.NONE,
+            10L,
+            10L,
+            allowNullOffsetsEntries
+        );
         // Test both of partition has error.
-        testGetOffsetsForTimesWithError(Errors.NOT_LEADER_OR_FOLLOWER, Errors.INVALID_REQUEST, 10L, 10L);
+        testGetOffsetsForTimesWithError(
+            Errors.NOT_LEADER_OR_FOLLOWER, 
+            Errors.INVALID_REQUEST, 
+            10L, 
+            10L, 
+            allowNullOffsetsEntries
+        );
         // Test the second partition has error.
-        testGetOffsetsForTimesWithError(Errors.NONE, Errors.NOT_LEADER_OR_FOLLOWER, 10L, 10L);
+        testGetOffsetsForTimesWithError(
+            Errors.NONE, 
+            Errors.NOT_LEADER_OR_FOLLOWER, 
+            10L, 
+            10L,
+            allowNullOffsetsEntries
+        );
         // Test different errors.
-        testGetOffsetsForTimesWithError(Errors.NOT_LEADER_OR_FOLLOWER, Errors.NONE, 10L, 10L);
-        testGetOffsetsForTimesWithError(Errors.UNKNOWN_TOPIC_OR_PARTITION, Errors.NONE, 10L, 10L);
-        testGetOffsetsForTimesWithError(Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT, Errors.NONE, 10L, null);
-        testGetOffsetsForTimesWithError(Errors.BROKER_NOT_AVAILABLE, Errors.NONE, 10L, 10L);
+        testGetOffsetsForTimesWithError(
+            Errors.NOT_LEADER_OR_FOLLOWER,
+            Errors.NONE,
+            10L,
+            10L,
+            allowNullOffsetsEntries
+        );
+        testGetOffsetsForTimesWithError(
+            Errors.UNKNOWN_TOPIC_OR_PARTITION,
+            Errors.NONE,
+            10L,
+            10L,
+            allowNullOffsetsEntries
+        );
+        testGetOffsetsForTimesWithError(
+            Errors.UNSUPPORTED_FOR_MESSAGE_FORMAT,
+            Errors.NONE,
+            10L,
+            null,
+            allowNullOffsetsEntries
+        );
+        testGetOffsetsForTimesWithError(
+            Errors.BROKER_NOT_AVAILABLE,
+            Errors.NONE,
+            10L,
+            10L,
+            allowNullOffsetsEntries
+        );
     }
 
     @Test
@@ -751,8 +805,9 @@ public class OffsetFetcherTest {
         assertEquals(0L, metadata.timeToNextUpdate(time.milliseconds()));
     }
 
-    @Test
-    public void testGetOffsetByTimeWithPartitionsRetryCouldTriggerMetadataUpdate() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testGetOffsetByTimeWithPartitionsRetryCouldTriggerMetadataUpdate(boolean allowNullOffsetsEntries) {
         List<Errors> retriableErrors = Arrays.asList(Errors.NOT_LEADER_OR_FOLLOWER,
             Errors.REPLICA_NOT_AVAILABLE, Errors.KAFKA_STORAGE_ERROR, Errors.OFFSET_NOT_AVAILABLE,
             Errors.LEADER_NOT_AVAILABLE, Errors.FENCED_LEADER_EPOCH, Errors.UNKNOWN_LEADER_EPOCH);
@@ -852,7 +907,7 @@ public class OffsetFetcherTest {
             Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap =
                 offsetFetcher.offsetsForTimes(
                     Utils.mkMap(Utils.mkEntry(tp0, fetchTimestamp),
-                    Utils.mkEntry(tp1, fetchTimestamp)), time.timer(Integer.MAX_VALUE));
+                    Utils.mkEntry(tp1, fetchTimestamp)), time.timer(Integer.MAX_VALUE), allowNullOffsetsEntries);
 
             assertEquals(Utils.mkMap(
                 Utils.mkEntry(tp0, new OffsetAndTimestamp(4L, fetchTimestamp)),
@@ -902,7 +957,7 @@ public class OffsetFetcherTest {
                 ListOffsetsRequest offsetRequest = (ListOffsetsRequest) body;
                 int epoch = offsetRequest.topics().get(0).partitions().get(0).currentLeaderEpoch();
                 assertTrue(epoch != ListOffsetsResponse.UNKNOWN_EPOCH, "Expected Fetcher to set leader epoch in request");
-                assertEquals(epoch, 99, "Expected leader epoch to match epoch from metadata update");
+                assertEquals(99, epoch, "Expected leader epoch to match epoch from metadata update");
                 return true;
             } else {
                 fail("Should have seen ListOffsetRequest");
@@ -914,8 +969,9 @@ public class OffsetFetcherTest {
         consumerClient.pollNoWakeup();
     }
 
-    @Test
-    public void testGetOffsetsForTimesWhenSomeTopicPartitionLeadersNotKnownInitially() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testGetOffsetsForTimesWhenSomeTopicPartitionLeadersNotKnownInitially(boolean allowNullOffsetsEntries) {
         buildFetcher();
 
         subscriptions.assignFromUser(Set.of(tp0, tp1));
@@ -950,7 +1006,7 @@ public class OffsetFetcherTest {
         timestampToSearch.put(tp1, ListOffsetsRequest.LATEST_TIMESTAMP);
         timestampToSearch.put(t2p0, ListOffsetsRequest.LATEST_TIMESTAMP);
         Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap =
-            offsetFetcher.offsetsForTimes(timestampToSearch, time.timer(Long.MAX_VALUE));
+            offsetFetcher.offsetsForTimes(timestampToSearch, time.timer(Long.MAX_VALUE), allowNullOffsetsEntries);
 
         assertNotNull(offsetAndTimestampMap.get(tp0), "Expect MetadataFetcher.offsetsForTimes() to return non-null result for " + tp0);
         assertNotNull(offsetAndTimestampMap.get(tp1), "Expect MetadataFetcher.offsetsForTimes() to return non-null result for " + tp1);
@@ -960,8 +1016,9 @@ public class OffsetFetcherTest {
         assertEquals(54L, offsetAndTimestampMap.get(t2p0).offset());
     }
 
-    @Test
-    public void testGetOffsetsForTimesWhenSomeTopicPartitionLeadersDisconnectException() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testGetOffsetsForTimesWhenSomeTopicPartitionLeadersDisconnectException(boolean allowNullOffsetsEntries) {
         buildFetcher();
         final String anotherTopic = "another-topic";
         final TopicPartition t2p0 = new TopicPartition(anotherTopic, 0);
@@ -985,30 +1042,46 @@ public class OffsetFetcherTest {
 
         Map<TopicPartition, Long> timestampToSearch = new HashMap<>();
         timestampToSearch.put(tp0, ListOffsetsRequest.LATEST_TIMESTAMP);
-        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = offsetFetcher.offsetsForTimes(timestampToSearch, time.timer(Long.MAX_VALUE));
+        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = offsetFetcher.offsetsForTimes(
+            timestampToSearch, 
+            time.timer(Long.MAX_VALUE), 
+            allowNullOffsetsEntries
+        );
 
         assertNotNull(offsetAndTimestampMap.get(tp0), "Expect MetadataFetcher.offsetsForTimes() to return non-null result for " + tp0);
         assertEquals(11L, offsetAndTimestampMap.get(tp0).offset());
         assertNotNull(metadata.fetch().partitionCountForTopic(anotherTopic));
     }
 
-    @Test
-    public void testListOffsetsWithZeroTimeout() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testListOffsetsWithZeroTimeout(boolean allowNullOffsetsEntries) {
         buildFetcher();
 
         Map<TopicPartition, Long> offsetsToSearch = new HashMap<>();
         offsetsToSearch.put(tp0, ListOffsetsRequest.EARLIEST_TIMESTAMP);
         offsetsToSearch.put(tp1, ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
-        Map<TopicPartition, OffsetAndTimestamp> offsetsToExpect = new HashMap<>();
-        offsetsToExpect.put(tp0, null);
-        offsetsToExpect.put(tp1, null);
+        Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap = offsetFetcher.offsetsForTimes(
+            offsetsToSearch, 
+            time.timer(0), 
+            allowNullOffsetsEntries
+        );
 
-        assertEquals(offsetsToExpect, offsetFetcher.offsetsForTimes(offsetsToSearch, time.timer(0)));
+        if (allowNullOffsetsEntries) {
+            Map<TopicPartition, OffsetAndTimestamp> offsetsToExpect = new HashMap<>();
+            offsetsToExpect.put(tp0, null);
+            offsetsToExpect.put(tp1, null);
+            assertEquals(offsetsToExpect, offsetAndTimestampMap);
+        } else {
+            assertTrue(offsetAndTimestampMap.isEmpty());
+        }
+
     }
 
-    @Test
-    public void testBatchedListOffsetsMetadataErrors() {
+    @ParameterizedTest
+    @ValueSource(booleans = {true, false})
+    public void testBatchedListOffsetsMetadataErrors(boolean allowNullOffsetsEntries) {
         buildFetcher();
 
         ListOffsetsResponseData data = new ListOffsetsResponseData()
@@ -1032,13 +1105,17 @@ public class OffsetFetcherTest {
         offsetsToSearch.put(tp0, ListOffsetsRequest.EARLIEST_TIMESTAMP);
         offsetsToSearch.put(tp1, ListOffsetsRequest.EARLIEST_TIMESTAMP);
 
-        assertThrows(TimeoutException.class, () -> offsetFetcher.offsetsForTimes(offsetsToSearch, time.timer(1)));
+        assertThrows(
+            TimeoutException.class, 
+            () -> offsetFetcher.offsetsForTimes(offsetsToSearch, time.timer(1), allowNullOffsetsEntries)
+        );
     }
 
     private void testGetOffsetsForTimesWithError(Errors errorForP0,
                                                  Errors errorForP1,
                                                  long offsetForP0,
-                                                 Long expectedOffsetForP0) {
+                                                 Long expectedOffsetForP0,
+                                                 boolean allowNullOffsetsEntries) {
         long offsetForP1 = 100L;
         long expectedOffsetForP1 = 100L;
         client.reset();
@@ -1072,10 +1149,14 @@ public class OffsetFetcherTest {
         timestampToSearch.put(t2p0, 0L);
         timestampToSearch.put(tp1, 0L);
         Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap =
-                offsetFetcher.offsetsForTimes(timestampToSearch, time.timer(Long.MAX_VALUE));
+                offsetFetcher.offsetsForTimes(timestampToSearch, time.timer(Long.MAX_VALUE), allowNullOffsetsEntries);
 
         if (expectedOffsetForP0 == null)
-            assertNull(offsetAndTimestampMap.get(t2p0));
+            if (allowNullOffsetsEntries) {
+                assertNull(offsetAndTimestampMap.get(t2p0));
+            } else {
+                assertFalse(offsetAndTimestampMap.containsKey(t2p0));
+            }
         else {
             assertEquals(expectedOffsetForP0.longValue(), offsetAndTimestampMap.get(t2p0).timestamp());
             assertEquals(expectedOffsetForP0.longValue(), offsetAndTimestampMap.get(t2p0).offset());
@@ -1085,7 +1166,7 @@ public class OffsetFetcherTest {
         assertEquals(expectedOffsetForP1, offsetAndTimestampMap.get(tp1).offset());
     }
 
-    private void testGetOffsetsForTimesWithUnknownOffset() {
+    private void testGetOffsetsForTimesWithUnknownOffset(boolean allowNullOffsetsEntries) {
         client.reset();
         // Ensure metadata has both partitions.
         MetadataResponse initialMetadataUpdate = RequestTestUtils.metadataUpdateWithIds(1, singletonMap(topicName, 1), topicIds);
@@ -1107,10 +1188,13 @@ public class OffsetFetcherTest {
         Map<TopicPartition, Long> timestampToSearch = new HashMap<>();
         timestampToSearch.put(tp0, 0L);
         Map<TopicPartition, OffsetAndTimestamp> offsetAndTimestampMap =
-                offsetFetcher.offsetsForTimes(timestampToSearch, time.timer(Long.MAX_VALUE));
-
-        assertTrue(offsetAndTimestampMap.containsKey(tp0));
-        assertNull(offsetAndTimestampMap.get(tp0));
+                offsetFetcher.offsetsForTimes(timestampToSearch, time.timer(Long.MAX_VALUE), allowNullOffsetsEntries);
+        if (allowNullOffsetsEntries) {
+            assertTrue(offsetAndTimestampMap.containsKey(tp0));
+            assertNull(offsetAndTimestampMap.get(tp0));
+        } else {
+            assertFalse(offsetAndTimestampMap.containsKey(tp0));
+        }
     }
 
     @Test

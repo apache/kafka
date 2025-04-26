@@ -130,6 +130,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final TopicMetadataFetcher topicMetadataFetcher;
     private final ConsumerInterceptors<K, V> interceptors;
     private final IsolationLevel isolationLevel;
+    private final boolean allowNullOffsetsEntries;
 
     private final Time time;
     private final ConsumerNetworkClient client;
@@ -153,6 +154,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     // to keep from repeatedly scanning subscriptions in poll(), cache the result during metadata updates
     private boolean cachedSubscriptionHasAllFetchPositions;
 
+    @SuppressWarnings("deprecation")
     ClassicKafkaConsumer(ConsumerConfig config, Deserializer<K> keyDeserializer, Deserializer<V> valueDeserializer) {
         try {
             GroupRebalanceConfig groupRebalanceConfig = new GroupRebalanceConfig(config,
@@ -194,6 +196,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             FetchMetricsManager fetchMetricsManager = createFetchMetricsManager(metrics);
             FetchConfig fetchConfig = new FetchConfig(config);
             this.isolationLevel = fetchConfig.isolationLevel;
+            this.allowNullOffsetsEntries = config.getBoolean(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG);
 
             ApiVersions apiVersions = new ApiVersions();
             this.client = createConsumerNetworkClient(config,
@@ -277,6 +280,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     // visible for testing
+    @SuppressWarnings("deprecation")
     ClassicKafkaConsumer(LogContext logContext,
                          Time time,
                          ConsumerConfig config,
@@ -295,6 +299,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.groupId = Optional.ofNullable(config.getString(ConsumerConfig.GROUP_ID_CONFIG));
         this.deserializers = new Deserializers<>(keyDeserializer, valueDeserializer, metrics);
         this.isolationLevel = ConsumerUtils.configuredIsolationLevel(config);
+        this.allowNullOffsetsEntries = config.getBoolean(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG);
         this.defaultApiTimeoutMs = config.getInt(ConsumerConfig.DEFAULT_API_TIMEOUT_MS_CONFIG);
         this.assignors = assignors;
         this.kafkaConsumerMetrics = new KafkaConsumerMetrics(metrics, CONSUMER_METRIC_GROUP_PREFIX);
@@ -1011,7 +1016,7 @@ public class ClassicKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                     throw new IllegalArgumentException("The target time for partition " + entry.getKey() + " is " +
                             entry.getValue() + ". The target time cannot be negative.");
             }
-            return offsetFetcher.offsetsForTimes(timestampsToSearch, time.timer(timeout));
+            return offsetFetcher.offsetsForTimes(timestampsToSearch, time.timer(timeout), allowNullOffsetsEntries);
         } finally {
             release();
         }

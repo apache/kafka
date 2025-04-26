@@ -1536,7 +1536,18 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testOffsetsForTimesAfterDeleteRecords(groupProtocol: String): Unit = {
+  def testOffsetsForTimesAfterDeleteRecordsWillReturnNullOffsetsEntries(groupProtocol: String): Unit = {
+    testOffsetsForTimesAfterDeleteRecords(true)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testOffsetsForTimesAfterDeleteRecordsWontReturnNullOffsetsEntries(groupProtocol: String): Unit = {
+    testOffsetsForTimesAfterDeleteRecords(false)
+  }
+
+  private def testOffsetsForTimesAfterDeleteRecords(allowNullOffsetsEntries: Boolean): Unit = {
+    this.consumerConfig.put(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG, allowNullOffsetsEntries)
     createTopic(topic, numPartitions = 2, replicationFactor = brokerCount)
 
     client = createAdminClient
@@ -1560,8 +1571,12 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     result = client.deleteRecords(Map(topicPartition -> RecordsToDelete.beforeOffset(DeleteRecordsRequest.HIGH_WATERMARK)).asJava)
     result.all.get
     returnedOffsets = consumer.offsetsForTimes(Map(topicPartition -> JLong.valueOf(0L)).asJava)
-    assertTrue(returnedOffsets.containsKey(topicPartition))
-    assertNull(returnedOffsets.get(topicPartition))
+    if (allowNullOffsetsEntries) {
+      assertTrue(returnedOffsets.containsKey(topicPartition))
+      assertNull(returnedOffsets.get(topicPartition))
+    } else {
+      assertFalse(returnedOffsets.containsKey(topicPartition))
+    }
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)

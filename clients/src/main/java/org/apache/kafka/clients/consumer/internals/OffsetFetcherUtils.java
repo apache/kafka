@@ -226,11 +226,16 @@ class OffsetFetcherUtils {
     static Map<TopicPartition, OffsetAndTimestamp> buildListOffsetsResult(
         final Map<TopicPartition, Long> timestampsToSearch,
         final Map<TopicPartition, ListOffsetData> fetchedOffsets,
-        BiFunction<TopicPartition, ListOffsetData, OffsetAndTimestamp> resultMapper) {
+        BiFunction<TopicPartition, ListOffsetData, OffsetAndTimestamp> resultMapper,
+        boolean allowNullOffsetsEntries
+    ) {
 
         HashMap<TopicPartition, OffsetAndTimestamp> offsetsResults = new HashMap<>(timestampsToSearch.size());
-        for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet())
-            offsetsResults.put(entry.getKey(), null);
+        if (allowNullOffsetsEntries) {
+            for (Map.Entry<TopicPartition, Long> entry : timestampsToSearch.entrySet()) {
+                offsetsResults.put(entry.getKey(), null);
+            }
+        }
 
         for (Map.Entry<TopicPartition, ListOffsetData> entry : fetchedOffsets.entrySet()) {
             ListOffsetData offsetData = entry.getValue();
@@ -242,12 +247,15 @@ class OffsetFetcherUtils {
 
     static Map<TopicPartition, OffsetAndTimestamp> buildOffsetsForTimesResult(
         final Map<TopicPartition, Long> timestampsToSearch,
-        final Map<TopicPartition, ListOffsetData> fetchedOffsets) {
+        final Map<TopicPartition, ListOffsetData> fetchedOffsets,
+        final boolean allowNullOffsetsEntries
+    ) {
         return buildListOffsetsResult(timestampsToSearch, fetchedOffsets,
             (topicPartition, offsetData) -> new OffsetAndTimestamp(
                 offsetData.offset,
                 offsetData.timestamp,
-                offsetData.leaderEpoch));
+                offsetData.leaderEpoch),
+            allowNullOffsetsEntries);
     }
 
     static Map<TopicPartition, OffsetAndTimestampInternal> buildOffsetsForTimeInternalResult(

@@ -15,7 +15,7 @@ package kafka.api
 import kafka.api.BaseConsumerTest.{DeserializerImpl, SerializerImpl}
 
 import java.time.Duration
-import java.util
+import java.{lang, util}
 import java.util.Arrays.asList
 import java.util.{Collections, Locale, Optional, Properties}
 import kafka.server.KafkaBroker
@@ -720,7 +720,18 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testEndOffsets(groupProtocol: String): Unit = {
+  def testEndOffsetsWillReturnNullOffsetsEntries(groupProtocol: String): Unit = {
+    testEndOffsets(true)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testEndOffsetsWontReturnNullOffsetsEntries(groupProtocol: String): Unit = {
+    testEndOffsets(false)
+  }
+
+  private def testEndOffsets(allowNullOffsetsEntries: Boolean): Unit = {
+    this.consumerConfig.put(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG, allowNullOffsetsEntries)
     val producer = createProducer()
     val startingTimestamp = System.currentTimeMillis()
     val numRecords = 10000
@@ -751,10 +762,21 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testFetchOffsetsForTime(groupProtocol: String): Unit = {
+  def testFetchOffsetsForTimeWillReturnNullOffsetsEntries(groupProtocol: String): Unit = {
+    testFetchOffsetsForTime(true)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testFetchOffsetsForTimeWontReturnNullOffsetsEntries(groupProtocol: String): Unit = {
+    testFetchOffsetsForTime(false)
+  }
+
+  private def testFetchOffsetsForTime(allowNullOffsetsEntries: Boolean): Unit = {
+    this.consumerConfig.put(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG, allowNullOffsetsEntries)
     val numPartitions = 2
     val producer = createProducer()
-    val timestampsToSearch = new util.HashMap[TopicPartition, java.lang.Long]()
+    val timestampsToSearch = new util.HashMap[TopicPartition, lang.Long]()
     var i = 0
     for (part <- 0 until numPartitions) {
       val tp = new TopicPartition(topic, part)

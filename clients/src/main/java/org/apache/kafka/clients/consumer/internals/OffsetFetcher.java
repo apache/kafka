@@ -121,14 +121,15 @@ public class OffsetFetcher {
     }
 
     public Map<TopicPartition, OffsetAndTimestamp> offsetsForTimes(Map<TopicPartition, Long> timestampsToSearch,
-                                                                   Timer timer) {
+                                                                   Timer timer,
+                                                                   boolean allowNullOffsetsEntries) {
         metadata.addTransientTopics(topicsForPartitions(timestampsToSearch.keySet()));
 
         try {
             Map<TopicPartition, ListOffsetData> fetchedOffsets = fetchOffsetsByTimes(timestampsToSearch,
                     timer, true).fetchedOffsets;
 
-            return buildOffsetsForTimesResult(timestampsToSearch, fetchedOffsets);
+            return buildOffsetsForTimesResult(timestampsToSearch, fetchedOffsets, allowNullOffsetsEntries);
         } finally {
             metadata.clearTransientTopics();
         }

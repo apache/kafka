@@ -342,6 +342,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     private final FetchCollector<K, V> fetchCollector;
     private final ConsumerInterceptors<K, V> interceptors;
     private final IsolationLevel isolationLevel;
+    private final boolean allowNullOffsetsEntries;
 
     private final SubscriptionState subscriptions;
 
@@ -405,7 +406,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
     }
 
     // Visible for testing
-    @SuppressWarnings({"this-escape"})
+    @SuppressWarnings({"this-escape", "deprecation"})
     AsyncKafkaConsumer(final ConsumerConfig config,
                        final Deserializer<K> keyDeserializer,
                        final Deserializer<V> valueDeserializer,
@@ -452,6 +453,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             FetchMetricsManager fetchMetricsManager = createFetchMetricsManager(metrics);
             FetchConfig fetchConfig = new FetchConfig(config);
             this.isolationLevel = fetchConfig.isolationLevel;
+            this.allowNullOffsetsEntries = config.getBoolean(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG);
 
             ApiVersions apiVersions = new ApiVersions();
             final BlockingQueue<ApplicationEvent> applicationEventQueue = new LinkedBlockingQueue<>();
@@ -563,13 +565,15 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
                        int requestTimeoutMs,
                        int defaultApiTimeoutMs,
                        String groupId,
-                       boolean autoCommitEnabled) {
+                       boolean autoCommitEnabled,
+                       boolean allowNullOffsetsEntries) {
         this.log = logContext.logger(getClass());
         this.subscriptions = subscriptions;
         this.clientId = clientId;
         this.fetchBuffer = fetchBuffer;
         this.fetchCollector = fetchCollector;
         this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
+        this.allowNullOffsetsEntries = allowNullOffsetsEntries;
         this.interceptors = Objects.requireNonNull(interceptors);
         this.time = time;
         this.backgroundEventQueue = backgroundEventQueue;
@@ -595,6 +599,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         );
     }
 
+    @SuppressWarnings("deprecation")
     AsyncKafkaConsumer(LogContext logContext,
                        Time time,
                        ConsumerConfig config,
@@ -609,6 +614,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
         this.autoCommitEnabled = config.getBoolean(ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG);
         this.fetchBuffer = new FetchBuffer(logContext);
         this.isolationLevel = IsolationLevel.READ_UNCOMMITTED;
+        this.allowNullOffsetsEntries = config.getBoolean(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG);
         this.time = time;
         this.metrics = new Metrics(time);
         this.interceptors = new ConsumerInterceptors<>(Collections.emptyList(), metrics);
@@ -1245,13 +1251,19 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // and throw timeout exception if it cannot complete in time.
             if (timeout.toMillis() == 0L) {
                 applicationEventHandler.add(listOffsetsEvent);
-                return listOffsetsEvent.emptyResults();
+                return allowNullOffsetsEntries ? listOffsetsEvent.emptyResults() : Map.of();
             }
 
             try {
                 Map<TopicPartition, OffsetAndTimestampInternal> offsets = applicationEventHandler.addAndGet(listOffsetsEvent);
                 Map<TopicPartition, OffsetAndTimestamp> results = new HashMap<>(offsets.size());
-                offsets.forEach((k, v) -> results.put(k, v != null ? v.buildOffsetAndTimestamp() : null));
+                offsets.forEach((k, v) -> {
+                    if (allowNullOffsetsEntries) {
+                        results.put(k, v != null ? v.buildOffsetAndTimestamp() : null);
+                    } else if (v != null) {
+                        results.put(k, v.buildOffsetAndTimestamp());
+                    }
+                });
                 return results;
             } catch (TimeoutException e) {
                 throw new TimeoutException("Failed to get offsets by times in " + timeout.toMillis() + "ms");
@@ -1306,7 +1318,7 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // and throw timeout exception if it cannot complete in time.
             if (timeout.isZero()) {
                 applicationEventHandler.add(listOffsetsEvent);
-                return listOffsetsEvent.emptyResults();
+                return allowNullOffsetsEntries ? listOffsetsEvent.emptyResults() : Map.of();
             }
 
             Map<TopicPartition, OffsetAndTimestampInternal> offsetAndTimestampMap;

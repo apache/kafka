@@ -35,6 +35,8 @@ import org.apache.kafka.common.requests.JoinGroupRequest;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.utils.Utils;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -58,6 +60,9 @@ import static org.apache.kafka.common.config.ConfigDef.ValidString.in;
  * The consumer configuration keys
  */
 public class ConsumerConfig extends AbstractConfig {
+
+    private static final Logger log = LoggerFactory.getLogger(ConsumerConfig.class);
+    
     private static final ConfigDef CONFIG;
 
     // a list contains all the assignor names that only assign subscribed topics to consumer. Should be updated when new assignor added.
@@ -392,7 +397,23 @@ public class ConsumerConfig extends AbstractConfig {
             " <code>org.apache.kafka.clients.consumer.ShareConsumer.acknowledge()</code> to acknowledge delivery of records.";
 
     private static final AtomicInteger CONSUMER_CLIENT_ID_SEQUENCE = new AtomicInteger(1);
-
+    
+    /**
+     * <code>allow.null.offsets.entries</code>
+     */
+    @Deprecated(since = "4.1")
+    public static final String ALLOW_NULL_OFFSETS_ENTRIES_CONFIG = "allow.null.offsets.entries";
+    @Deprecated(since = "4.1")
+    private static final String ALLOW_NULL_OFFSETS_ENTRIES_DOC = "Specifies whether to allow null entries in certain public consumer APIs. " +
+            "The following methods are affected: " +
+            "<code>Consumer.offsetsForTimes(Map)</code>, <code>Consumer.offsetsForTimes(Map, Duration)</code>, " +
+            "<code>Consumer.beginningOffsets(Collection)</code>, <code>Consumer.beginningOffsets(Collection, Duration)</code>, " +
+            "<code>Consumer.endOffsets(Collection)</code>, and <code>Consumer.endOffsets(Collection, Duration)</code>. " +
+            "If set to <code>true</code>, null entries are permitted, and the behavior of these methods remains unchanged. " +
+            "If set to <code>false</code>, null entries are not allowed, and these methods will not return null values. " +
+            "This configuration acts as a transitional bridge. Starting from Kafka 5.0, these methods will no longer return null " +
+            "entries by default, and this configuration will be removed.";
+    
     /**
      * A list of configuration keys not supported for CLASSIC protocol.
      */
@@ -697,7 +718,12 @@ public class ConsumerConfig extends AbstractConfig {
                                         ShareAcknowledgementMode.IMPLICIT.name(),
                                         new ShareAcknowledgementMode.Validator(),
                                         Importance.MEDIUM,
-                                        ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_DOC);
+                                        ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_DOC)
+                                .define(ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_CONFIG,
+                                        Type.BOOLEAN,
+                                        true,
+                                        Importance.MEDIUM,
+                                        ConsumerConfig.ALLOW_NULL_OFFSETS_ENTRIES_DOC);
     }
 
     @Override
@@ -708,6 +734,7 @@ public class ConsumerConfig extends AbstractConfig {
         maybeOverrideClientId(refinedConfigs);
         maybeOverrideEnableAutoCommit(refinedConfigs);
         checkUnsupportedConfigsPostProcess();
+        printAllowNullOffsetsEntriesWarningMessage();
         return refinedConfigs;
     }
 
@@ -776,6 +803,13 @@ public class ConsumerConfig extends AbstractConfig {
                 throw new ConfigException(String.join(", ", invalidConfigs) +
                         " cannot be set when " + GROUP_PROTOCOL_CONFIG + "=" + groupProtocol.name());
             }
+        }
+    }
+
+    private void printAllowNullOffsetsEntriesWarningMessage() {
+        if (getBoolean(ALLOW_NULL_OFFSETS_ENTRIES_CONFIG)) {
+            log.warn("Kafka consumer APIs will stop returning null entries in version 5.0. To prepare for this change, " +
+                    "refer to KIP-1140 and the {} configuration documentation.", ALLOW_NULL_OFFSETS_ENTRIES_CONFIG);
         }
     }
 
