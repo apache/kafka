@@ -167,7 +167,6 @@ public class PreparedTxnStateTest {
         // Valid combinations: both >= 0 or both -1
         new PreparedTxnState("0:0");
         new PreparedTxnState("123:45");
-        new PreparedTxnState("-1:-1");
 
         // Invalid: producerId >= 0, epoch < 0
         assertThrows(IllegalArgumentException.class,

@@ -106,7 +106,7 @@ public class PreparedTxnState {
      */
     @Override
     public String toString() {
-        if (hasTransaction()) {
+        if (!hasTransaction()) {
             return "";
         }
         return producerId + ":" + epoch;
