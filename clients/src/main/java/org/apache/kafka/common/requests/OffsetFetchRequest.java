@@ -41,7 +41,6 @@ public class OffsetFetchRequest extends AbstractRequest {
 
     private static final Logger log = LoggerFactory.getLogger(OffsetFetchRequest.class);
 
-    private static final List<OffsetFetchRequestTopic> ALL_TOPIC_PARTITIONS = null;
     private static final List<OffsetFetchRequestTopics> ALL_TOPIC_PARTITIONS_BATCH = null;
     private final OffsetFetchRequestData data;
 
