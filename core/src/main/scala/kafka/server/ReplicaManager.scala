@@ -2510,7 +2510,7 @@ class ReplicaManager(val config: KafkaConfig,
     trace("Evaluating ISR list of partitions to see which replicas can be removed from the ISR")
 
     // Shrink ISRs for non offline partitions
-    allPartitions.keys.asScala.foreach { topicPartition =>
+    allPartitions.forEach { (topicPartition, _) =>
       onlinePartition(topicPartition).foreach(_.maybeShrinkIsr())
     }
   }
@@ -2641,7 +2641,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   private def removeAllTopicMetrics(): Unit = {
     val allTopics = new util.HashSet[String]
-    allPartitions.keys.asScala.foreach(partition =>
+    allPartitions.forEach((partition, _) =>
       if (allTopics.add(partition.topic())) {
         brokerTopicStats.removeMetrics(partition.topic())
       })

@@ -915,9 +915,7 @@ class FetcherLagStats(metricId: ClientIdAndBroker) {
   }
 
   def unregister(): Unit = {
-    stats.keys.asScala.toBuffer.foreach { key: TopicPartition =>
-      unregister(key)
-    }
+    stats.forEach((key, _) => unregister(key))
   }
 }
 

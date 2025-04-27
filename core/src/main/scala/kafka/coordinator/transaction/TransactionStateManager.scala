@@ -351,7 +351,7 @@ class TransactionStateManager(brokerId: Int,
 
         val states = new java.util.ArrayList[ListTransactionsResponseData.TransactionState]
         transactionMetadataCache.foreachEntry { (_, cache) =>
-          cache.metadataPerTransactionalId.values.asScala.foreach { txnMetadata =>
+          cache.metadataPerTransactionalId.forEach { (_, txnMetadata) =>
             txnMetadata.inLock {
               if (shouldInclude(txnMetadata)) {
                 states.add(new ListTransactionsResponseData.TransactionState()

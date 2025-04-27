@@ -983,12 +983,11 @@ class Partition(val topicPartition: TopicPartition,
   ): Unit = {
     if (isLeader) {
       val followers = replicas.filter(_ != localBrokerId)
-      val removedReplicas = remoteReplicasMap.keySet.asScala.filterNot(followers.contains(_))
 
       // Due to code paths accessing remoteReplicasMap without a lock,
       // first add the new replicas and then remove the old ones.
-      followers.foreach(id => remoteReplicasMap.computeIfAbsent(id, k => new Replica(id, topicPartition, metadataCache)))
-      remoteReplicasMap.keySet.removeAll(removedReplicas.asJavaCollection)
+      followers.foreach(id => remoteReplicasMap.computeIfAbsent(id, _ => new Replica(id, topicPartition, metadataCache)))
+      remoteReplicasMap.keySet.removeIf(replica => !followers.contains(replica))
     } else {
       remoteReplicasMap.clear()
     }
@@ -1158,7 +1157,7 @@ class Partition(val topicPartition: TopicPartition,
     // avoid unnecessary collection generation
     val leaderLogEndOffset = leaderLog.logEndOffsetMetadata
     var newHighWatermark = leaderLogEndOffset
-    remoteReplicasMap.values.asScala.foreach { replica =>
+    remoteReplicasMap.forEach { (_, replica) =>
       val replicaState = replica.stateSnapshot
 
       def shouldWaitForReplicaToJoinIsr: Boolean = {
