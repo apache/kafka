@@ -18,10 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.EnumMap;
 import java.util.Map;
 
@@ -73,8 +72,8 @@ public class OffsetsForLeaderEpochResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    public static OffsetsForLeaderEpochResponse parse(ByteBuffer buffer, short version) {
-        return new OffsetsForLeaderEpochResponse(new OffsetForLeaderEpochResponseData(new ByteBufferAccessor(buffer), version));
+    public static OffsetsForLeaderEpochResponse parse(Readable readable, short version) {
+        return new OffsetsForLeaderEpochResponse(new OffsetForLeaderEpochResponseData(readable, version));
     }
 
     @Override
