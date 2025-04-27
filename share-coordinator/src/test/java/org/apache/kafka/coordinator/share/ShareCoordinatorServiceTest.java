@@ -44,6 +44,7 @@ import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRuntime;
 import org.apache.kafka.coordinator.common.runtime.PartitionWriter;
 import org.apache.kafka.coordinator.share.metrics.ShareCoordinatorMetrics;
+import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.util.FutureUtils;
 import org.apache.kafka.server.util.MockTime;
@@ -1999,7 +2000,7 @@ class ShareCoordinatorServiceTest {
         List<String> propNames = List.of(
             TopicConfig.CLEANUP_POLICY_CONFIG,
             TopicConfig.COMPRESSION_TYPE_CONFIG,
-            "internal.segment.bytes",
+            ServerLogConfigs.INTERNAL_SEGMENT_BYTES_CONFIG,
             TopicConfig.MIN_IN_SYNC_REPLICAS_CONFIG
         );
         Properties actual = service.shareGroupStateTopicConfigs();

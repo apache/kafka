@@ -27,6 +27,7 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.LogCleaningState.{LOG_CLEANING_ABORTED, LOG_CLEANING_IN_PROGRESS}
 import org.apache.kafka.storage.internals.log.{AppendOrigin, LocalLog, LogCleanerManager, LogCleaningException, LogCleaningState, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetsListener, LogSegment, LogSegments, LogStartOffsetIncrementReason, LogToClean, PreCleanStats, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog}
@@ -53,7 +54,7 @@ class LogCleanerManagerTest extends Logging {
   val topicPartition = new TopicPartition("log", 0)
   val topicPartition2 = new TopicPartition("log2", 0)
   val logProps = new Properties()
-  logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
+  logProps.put(ServerLogConfigs.INTERNAL_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
   logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1024: java.lang.Integer)
   logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
   val logConfig: LogConfig = new LogConfig(logProps)
@@ -370,7 +371,7 @@ class LogCleanerManagerTest extends Logging {
 
     // change cleanup policy from delete to compact
     val logProps = new Properties()
-    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, log.config.segmentSize(): Integer)
+    logProps.put(ServerLogConfigs.INTERNAL_SEGMENT_BYTES_CONFIG, log.config.segmentSize(): Integer)
     logProps.put(TopicConfig.RETENTION_MS_CONFIG, log.config.retentionMs: java.lang.Long)
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
     logProps.put(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, 0: Integer)
@@ -548,7 +549,7 @@ class LogCleanerManagerTest extends Logging {
   @Test
   def testCleanableOffsetsForNone(): Unit = {
     val logProps = new Properties()
-    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
+    logProps.put(ServerLogConfigs.INTERNAL_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -570,7 +571,7 @@ class LogCleanerManagerTest extends Logging {
   @Test
   def testCleanableOffsetsActiveSegment(): Unit = {
     val logProps = new Properties()
-    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
+    logProps.put(ServerLogConfigs.INTERNAL_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
 
@@ -592,7 +593,7 @@ class LogCleanerManagerTest extends Logging {
   def testCleanableOffsetsForTime(): Unit = {
     val compactionLag = 60 * 60 * 1000
     val logProps = new Properties()
-    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
+    logProps.put(ServerLogConfigs.INTERNAL_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
     logProps.put(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, compactionLag: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
@@ -625,7 +626,7 @@ class LogCleanerManagerTest extends Logging {
   def testCleanableOffsetsForShortTime(): Unit = {
     val compactionLag = 60 * 60 * 1000
     val logProps = new Properties()
-    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
+    logProps.put(ServerLogConfigs.INTERNAL_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
     logProps.put(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, compactionLag: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
@@ -667,7 +668,7 @@ class LogCleanerManagerTest extends Logging {
   def testUndecidedTransactionalDataNotCleanable(): Unit = {
     val compactionLag = 60 * 60 * 1000
     val logProps = new Properties()
-    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
+    logProps.put(ServerLogConfigs.INTERNAL_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
     logProps.put(TopicConfig.MIN_COMPACTION_LAG_MS_CONFIG, compactionLag: java.lang.Integer)
 
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
@@ -711,7 +712,7 @@ class LogCleanerManagerTest extends Logging {
   @Test
   def testDoneCleaning(): Unit = {
     val logProps = new Properties()
-    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
+    logProps.put(ServerLogConfigs.INTERNAL_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
     val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
     while (log.numberOfSegments < 8)
       log.appendAsLeader(records(log.logEndOffset.toInt, log.logEndOffset.toInt, time.milliseconds()), 0)
@@ -830,7 +831,7 @@ class LogCleanerManagerTest extends Logging {
 
   private def createLowRetentionLogConfig(segmentSize: Int, cleanupPolicy: String): LogConfig = {
     val logProps = new Properties()
-    logProps.put(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, segmentSize: Integer)
+    logProps.put(ServerLogConfigs.INTERNAL_SEGMENT_BYTES_CONFIG, segmentSize: Integer)
     logProps.put(TopicConfig.RETENTION_MS_CONFIG, 1: Integer)
     logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, cleanupPolicy)
     logProps.put(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG, 0.05: java.lang.Double) // small for easier and clearer tests

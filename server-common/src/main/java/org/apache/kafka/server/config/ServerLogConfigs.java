@@ -153,6 +153,9 @@ public class ServerLogConfigs {
     public static final String LOG_INITIAL_TASK_DELAY_MS_DOC = "The initial task delay in millisecond when initializing " +
             "tasks in LogManager. This should be used for testing only.";
 
+    public static final String INTERNAL_SEGMENT_BYTES_CONFIG = "internal.segment.bytes";
+    public static final String INTERNAL_SEGMENT_BYTES_DOC = "Setting the maximum size of a single log file. This should be used for testing only.";
+
     public static final String LOG_DIR_FAILURE_TIMEOUT_MS_CONFIG = LOG_PREFIX + "dir.failure.timeout.ms";
     public static final Long LOG_DIR_FAILURE_TIMEOUT_MS_DEFAULT = 30000L;
     public static final String LOG_DIR_FAILURE_TIMEOUT_MS_DOC = "If the broker is unable to successfully communicate to the controller that some log " +
