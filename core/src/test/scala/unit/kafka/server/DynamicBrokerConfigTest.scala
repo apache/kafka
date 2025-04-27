@@ -671,16 +671,6 @@ class DynamicBrokerConfigTest {
   }
 
   @Test
-  def testNonInternalValuesDoesNotExposeInternalConfigs(): Unit = {
-    val props = TestUtils.createBrokerConfig(0, port = 8181)
-    props.put(MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG, "1024")
-    val config = new KafkaConfig(props)
-    assertFalse(config.nonInternalValues.containsKey(MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG))
-    config.updateCurrentConfig(new KafkaConfig(props))
-    assertFalse(config.nonInternalValues.containsKey(MetadataLogConfig.INTERNAL_METADATA_LOG_SEGMENT_BYTES_CONFIG))
-  }
-
-  @Test
   def testDynamicLogLocalRetentionMsConfig(): Unit = {
     val props = TestUtils.createBrokerConfig(0, port = 8181)
     props.put(ServerLogConfigs.LOG_RETENTION_TIME_MILLIS_CONFIG, "2592000000")
