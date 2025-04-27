@@ -19,12 +19,13 @@ package kafka.coordinator.transaction
 import java.nio.ByteBuffer
 import java.util.Collections
 import java.util.Optional
+import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.atomic.AtomicBoolean
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest
 import kafka.coordinator.AbstractCoordinatorConcurrencyTest._
 import kafka.coordinator.transaction.TransactionCoordinatorConcurrencyTest._
 import kafka.server.KafkaConfig
-import kafka.utils.{Pool, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.clients.{ClientResponse, NetworkClient}
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
@@ -96,7 +97,7 @@ class TransactionCoordinatorConcurrencyTest extends AbstractCoordinatorConcurren
       new Metrics())
     txnStateManager.startup(() => numPartitions, enableTransactionalIdExpiration = true)
     for (i <- 0 until numPartitions)
-      txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+      txnStateManager.addLoadedTransactionsToCache(i, coordinatorEpoch, new ConcurrentHashMap[String, TransactionMetadata]())
 
     val pidGenerator: ProducerIdManager = mock(classOf[ProducerIdManager])
     when(pidGenerator.generateProducerId())
