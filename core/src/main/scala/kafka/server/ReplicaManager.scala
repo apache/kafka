@@ -1237,7 +1237,7 @@ class ReplicaManager(val config: KafkaConfig,
   def describeLogDirs(partitions: Set[TopicPartition]): List[DescribeLogDirsResponseData.DescribeLogDirsResult] = {
     val logsByDir = logManager.allLogs.groupBy(log => log.parentDir)
 
-    config.logDirs.toSet.map { logDir: String =>
+    config.logDirs.asScala.toSet.map { logDir: String =>
       val file = Paths.get(logDir)
       val absolutePath = file.toAbsolutePath.toString
       try {

@@ -28,6 +28,7 @@ import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
+import scala.jdk.CollectionConverters._
 
 object KafkaMetricsReporterTest {
   val setupError = new AtomicReference[String]("")
@@ -92,7 +93,7 @@ class KafkaMetricsReporterTest extends QuorumTestHarness {
   @AfterEach
   override def tearDown(): Unit = {
     broker.shutdown()
-    CoreUtils.delete(config.logDirs)
+    CoreUtils.delete(config.logDirs.asScala)
     super.tearDown()
   }
 }

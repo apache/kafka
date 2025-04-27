@@ -27,12 +27,7 @@ import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 
-import java.util.HashMap;
-import java.util.List;
-import java.util.Locale;
-import java.util.Map;
-import java.util.Optional;
-import java.util.Properties;
+import java.util.*;
 
 import scala.jdk.javaapi.CollectionConverters;
 
@@ -75,7 +70,7 @@ public class TransactionsWithTieredStoreTest extends TransactionsTest {
     public void maybeWaitForAtLeastOneSegmentUpload(scala.collection.Seq<TopicPartition> topicPartitions) {
         CollectionConverters.asJava(topicPartitions).forEach(topicPartition -> {
             List<BrokerLocalStorage> localStorages = CollectionConverters.asJava(brokers()).stream()
-                    .map(b -> new BrokerLocalStorage(b.config().brokerId(), CollectionConverters.asJava(b.config().logDirs().toSet()), STORAGE_WAIT_TIMEOUT_SEC))
+                    .map(b -> new BrokerLocalStorage(b.config().brokerId(), new HashSet<>(b.config().logDirs()), STORAGE_WAIT_TIMEOUT_SEC))
                     .toList();
             localStorages
                     .stream()

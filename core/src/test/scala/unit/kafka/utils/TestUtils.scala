@@ -195,7 +195,7 @@ object TestUtils extends Logging {
     val future = Future.traverse(brokers) { s =>
       Future {
         s.shutdown()
-        if (deleteLogDirs) CoreUtils.delete(s.config.logDirs)
+        if (deleteLogDirs) CoreUtils.delete(s.config.logDirs.asScala)
       }
     }
     Await.result(future, FiniteDuration(5, TimeUnit.MINUTES))
@@ -1089,14 +1089,14 @@ object TestUtils extends Logging {
       checkpoints.forall(checkpointsPerLogDir => !checkpointsPerLogDir.containsKey(tp))
     }), "Cleaner offset for deleted partition should have been removed")
     waitUntilTrue(() => brokers.forall(broker =>
-      broker.config.logDirs.forall { logDir =>
+      broker.config.logDirs.asScala.forall { logDir =>
         topicPartitions.forall { tp =>
           !new File(logDir, tp.topic + "-" + tp.partition).exists()
         }
       }
     ), "Failed to soft-delete the data to a delete directory")
     waitUntilTrue(() => brokers.forall(broker =>
-      broker.config.logDirs.forall { logDir =>
+      broker.config.logDirs.asScala.forall { logDir =>
         topicPartitions.forall { tp =>
           !util.Arrays.asList(new File(logDir).list()).asScala.exists { partitionDirectoryNames =>
             partitionDirectoryNames.exists { directoryName =>

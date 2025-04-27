@@ -129,7 +129,7 @@ public class ReplicaFetcherThreadBenchmark {
 
         BrokerTopicStats brokerTopicStats = new BrokerTopicStats(false);
         LogDirFailureChannel logDirFailureChannel = new LogDirFailureChannel(config.logDirs().size());
-        List<File> logDirs = CollectionConverters.asJava(config.logDirs()).stream().map(File::new).collect(Collectors.toList());
+        List<File> logDirs = config.logDirs().stream().map(File::new).collect(Collectors.toList());
         logManager = new LogManagerBuilder().
             setLogDirs(logDirs).
             setInitialOfflineDirs(Collections.emptyList()).

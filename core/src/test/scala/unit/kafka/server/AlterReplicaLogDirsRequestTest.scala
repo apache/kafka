@@ -58,7 +58,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     val partitionNum = 5
 
     // Alter replica dir before topic creation
-    val logDir1 = new File(brokers.head.config.logDirs(Random.nextInt(logDirCount))).getAbsolutePath
+    val logDir1 = new File(brokers.head.config.logDirs.get(Random.nextInt(logDirCount))).getAbsolutePath
     val partitionDirs1 = (0 until partitionNum).map(partition => new TopicPartition(topic, partition) -> logDir1).toMap
     val alterReplicaLogDirsResponse1 = sendAlterReplicaLogDirsRequest(partitionDirs1)
 
@@ -75,7 +75,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     }
 
     // Alter replica dir again after topic creation
-    val logDir2 = new File(brokers.head.config.logDirs(Random.nextInt(logDirCount))).getAbsolutePath
+    val logDir2 = new File(brokers.head.config.logDirs.get(Random.nextInt(logDirCount))).getAbsolutePath
     val partitionDirs2 = (0 until partitionNum).map(partition => new TopicPartition(topic, partition) -> logDir2).toMap
     val alterReplicaLogDirsResponse2 = sendAlterReplicaLogDirsRequest(partitionDirs2)
     // The response should succeed for all partitions
@@ -91,10 +91,10 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
   @ParameterizedTest
   @ValueSource(strings = Array("kraft"))
   def testAlterReplicaLogDirsRequestErrorCode(quorum: String): Unit = {
-    val offlineDir = new File(brokers.head.config.logDirs.tail.head).getAbsolutePath
-    val validDir1 = new File(brokers.head.config.logDirs(1)).getAbsolutePath
-    val validDir2 = new File(brokers.head.config.logDirs(2)).getAbsolutePath
-    val validDir3 = new File(brokers.head.config.logDirs(3)).getAbsolutePath
+    val offlineDir = new File(brokers.head.config.logDirs.asScala.tail.head).getAbsolutePath
+    val validDir1 = new File(brokers.head.config.logDirs.get(1)).getAbsolutePath
+    val validDir2 = new File(brokers.head.config.logDirs.get(2)).getAbsolutePath
+    val validDir3 = new File(brokers.head.config.logDirs.get(3)).getAbsolutePath
 
     // Test AlterReplicaDirRequest before topic creation
     val partitionDirs1 = mutable.Map.empty[TopicPartition, String]
@@ -133,7 +133,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     val partitionNum = 1
 
     // Alter replica dir before topic creation
-    val logDir1 = new File(brokers.head.config.logDirs(1)).getAbsolutePath
+    val logDir1 = new File(brokers.head.config.logDirs.get(1)).getAbsolutePath
     val partitionDirs1 = (0 until partitionNum).map(partition => new TopicPartition(topic, partition) -> logDir1).toMap
     val alterReplicaLogDirsResponse1 = sendAlterReplicaLogDirsRequest(partitionDirs1)
 
@@ -166,7 +166,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     }, "timed out waiting for log segment to retention")
 
     // Alter replica dir again after topic creation
-    val logDir2 = new File(brokers.head.config.logDirs(2)).getAbsolutePath
+    val logDir2 = new File(brokers.head.config.logDirs.get(2)).getAbsolutePath
     val alterReplicaLogDirsResponse2 = sendAlterReplicaLogDirsRequest(Map(tp -> logDir2))
     // The response should succeed for all partitions
     assertEquals(Errors.NONE, findErrorForPartition(alterReplicaLogDirsResponse2, tp))

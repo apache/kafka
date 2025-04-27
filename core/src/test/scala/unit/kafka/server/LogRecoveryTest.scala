@@ -35,6 +35,8 @@ import java.io.File
 import java.util.Properties
 import scala.collection.Seq
 
+import scala.jdk.CollectionConverters._
+
 class LogRecoveryTest extends QuorumTestHarness {
 
   val replicaLagTimeMaxMs = 5000L
@@ -62,8 +64,8 @@ class LogRecoveryTest extends QuorumTestHarness {
 
   var admin: Admin = _
   var producer: KafkaProducer[Integer, String] = _
-  def hwFile1 = new OffsetCheckpointFile(new File(configProps1.logDirs.head, ReplicaManager.HighWatermarkFilename), null)
-  def hwFile2 = new OffsetCheckpointFile(new File(configProps2.logDirs.head, ReplicaManager.HighWatermarkFilename), null)
+  def hwFile1 = new OffsetCheckpointFile(new File(configProps1.logDirs.asScala.head, ReplicaManager.HighWatermarkFilename), null)
+  def hwFile2 = new OffsetCheckpointFile(new File(configProps2.logDirs.asScala.head, ReplicaManager.HighWatermarkFilename), null)
   var servers = Seq.empty[KafkaBroker]
 
   // Some tests restart the brokers then produce more data. But since test brokers use random ports, we need
