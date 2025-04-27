@@ -27,7 +27,13 @@ import org.apache.kafka.tiered.storage.utils.BrokerLocalStorage;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.TestInfo;
 
-import java.util.*;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Properties;
 
 import scala.jdk.javaapi.CollectionConverters;
 
