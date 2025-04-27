@@ -568,7 +568,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     client.createAcls(List(denyAcl).asJava, new CreateAclsOptions()).all().get()
 
     val topics = Seq(topic1, topic2)
-    val configsOverride = Map(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG -> "100000").asJava
+    val configsOverride = Map(TopicConfig.SEGMENT_BYTES_CONFIG -> "100000").asJava
     val newTopics = Seq(
       new NewTopic(topic1, 2, 3.toShort).configs(configsOverride),
       new NewTopic(topic2, Option.empty[Integer].toJava, Option.empty[java.lang.Short].toJava).configs(configsOverride))
@@ -602,7 +602,7 @@ class SaslSslAdminIntegrationTest extends BaseAdminIntegrationTest with SaslSetu
     assertNotEquals(Uuid.ZERO_UUID, createResult.topicId(topic1).get())
     assertEquals(topicIds(topic1), createResult.topicId(topic1).get())
     assertFutureThrows(classOf[TopicAuthorizationException], createResult.topicId(topic2))
-
+    
     val createResponseConfig = createResult.config(topic1).get().entries.asScala
 
     val describeResponseConfig = describeConfigs(topic1)
