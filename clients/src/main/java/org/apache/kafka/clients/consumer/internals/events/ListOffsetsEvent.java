@@ -47,13 +47,10 @@ public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicParti
     /**
      * Build result representing that no offsets were found as part of the current event.
      *
-     * @return Map containing all the partitions the event was trying to get offsets for, and
-     * null {@link OffsetAndTimestamp} as value
+     * @return empty map
      */
     public <T> Map<TopicPartition, T> emptyResults() {
-        Map<TopicPartition, T> result = new HashMap<>();
-        timestampsToSearch.keySet().forEach(tp -> result.put(tp, null));
-        return result;
+        return new HashMap<>();
     }
 
     public Map<TopicPartition, Long> timestampsToSearch() {
