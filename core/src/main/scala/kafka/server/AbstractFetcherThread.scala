@@ -32,6 +32,8 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.{UNDEFINED
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.common.{ClientIdAndBroker, InvalidRecordException, TopicPartition, Uuid}
+
+import org.apache.kafka.server.LeaderEndPoint
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.util.ShutdownableThread
@@ -116,10 +118,43 @@ abstract class AbstractFetcherThread(name: String,
 
   private def maybeFetch(): Unit = {
     val fetchRequestOpt = inLock(partitionMapLock) {
-      val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = leader.buildFetch(partitionStates.partitionStateMap.asScala)
+      // Get result from Java interface - need to convert Scala map to Java map first
+      val partitionMap = new java.util.HashMap[TopicPartition, java.util.Map[String, Object]]()
+
+      // Populate the map with correctly typed entries
+      partitionStates.partitionStateMap.forEach { (tp, state) =>
+        val stateMap = new java.util.HashMap[String, Object]()
+        stateMap.put("topicId", state.topicId.orNull.asInstanceOf[Object])
+        stateMap.put("fetchOffset", Long.box(state.fetchOffset))
+        stateMap.put("currentLeaderEpoch", Int.box(state.currentLeaderEpoch))
+        stateMap.put("state", state.state.toString)
+        // Add other properties as needed
+
+        partitionMap.put(tp, stateMap)
+      }
+
+      // Call the Java interface with the correctly typed map
+      val resultMap = leader.buildFetch(partitionMap)
+
+      // Extract partitions with error from the result map
+      val partitionsWithError = Option(resultMap.get("errors"))
+        .map(_.asInstanceOf[java.util.Set[TopicPartition]].asScala)
+        .getOrElse(Set.empty[TopicPartition])
 
       handlePartitionsWithErrors(partitionsWithError, "maybeFetch")
 
+      // Extract the fetch request option from the result map
+      val fetchRequestOpt = Option(resultMap.get("result")).map { resultObj =>
+        val resultData = resultObj.asInstanceOf[java.util.Map[String, Object]]
+        val sessionPartitions = resultData.get("partitionData")
+          .asInstanceOf[java.util.Map[TopicPartition, FetchRequest.PartitionData]]
+        val fetchRequest = resultData.get("fetchRequest")
+          .asInstanceOf[FetchRequest.Builder]
+
+        AbstractFetcherThread.ReplicaFetch(sessionPartitions, fetchRequest)
+      }
+
+      // Handle null/empty result
       if (fetchRequestOpt.isEmpty) {
         trace(s"There are no active partitions. Back off for $fetchBackOffMs ms before sending a fetch request")
         partitionMapCond.await(fetchBackOffMs, TimeUnit.MILLISECONDS)
@@ -128,7 +163,8 @@ abstract class AbstractFetcherThread(name: String,
       fetchRequestOpt
     }
 
-    fetchRequestOpt.foreach { case ReplicaFetch(sessionPartitions, fetchRequest) =>
+    // Process the fetch request if we got one
+    fetchRequestOpt.foreach { case AbstractFetcherThread.ReplicaFetch(sessionPartitions, fetchRequest) =>
       processFetchRequest(sessionPartitions, fetchRequest)
     }
   }
@@ -203,11 +239,14 @@ abstract class AbstractFetcherThread(name: String,
    * truncation complete. Do this within a lock to ensure no leadership changes can
    * occur during truncation.
    */
+
   private def truncateToEpochEndOffsets(latestEpochsForPartitions: Map[TopicPartition, EpochData]): Unit = {
-    val endOffsets = leader.fetchEpochEndOffsets(latestEpochsForPartitions)
+    val endOffsets = leader.fetchEpochEndOffsets(latestEpochsForPartitions.asJava).asScala.toMap
     //Ensure we hold a lock during truncation.
     inLock(partitionMapLock) {
       //Check no leadership and no leader epoch changes happened whilst we were unlocked, fetching epochs
+
+      //LeaderPoint BuildFetch
       val epochEndOffsets = endOffsets.filter { case (tp, _) =>
         val curPartitionState = partitionStates.stateValue(tp)
         val partitionEpochRequest = latestEpochsForPartitions.getOrElse(tp, {
@@ -316,7 +355,7 @@ abstract class AbstractFetcherThread(name: String,
 
     try {
       trace(s"Sending fetch request $fetchRequest")
-      responseData = leader.fetch(fetchRequest)
+      responseData = leader.fetch(fetchRequest).asScala.toMap
     } catch {
       case t: Throwable =>
         if (isRunning) {
