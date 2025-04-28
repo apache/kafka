@@ -420,7 +420,8 @@ public class SharePartitionManager implements AutoCloseable {
      * @param shareFetchData The topic-partitions in the share fetch request.
      * @param toForget The topic-partitions to forget present in the share fetch request.
      * @param reqMetadata The metadata in the share fetch request.
-     * @param isAcknowledgeDataPresent This tells whether the fetch request received includes piggybacked acknowledgements or not
+     * @param isAcknowledgeDataPresent This tells whether the fetch request received includes piggybacked acknowledgements or not.
+     * @param clientConnectionId The client connection id.
      * @return The new share fetch context object
      */
     public ShareFetchContext newContext(

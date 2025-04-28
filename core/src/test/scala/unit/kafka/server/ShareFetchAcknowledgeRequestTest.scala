@@ -2079,7 +2079,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
           new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
           new ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
           new ClusterConfigProperty(key = "share.coordinator.state.topic.num.partitions", value = "1"),
-          new ClusterConfigProperty(key = "unstable.api.versions.enable", value = "true"),
           new ClusterConfigProperty(key = "group.share.max.share.sessions", value="2"),
           new ClusterConfigProperty(key = "group.share.max.size", value="2")
         )
@@ -2122,7 +2121,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     // member3 sends share fetch request to register it's share session. Since the maximum number of share sessions that could
     // exist in the share session cache is 2 (group.share.max.share.sessions), the attempt to register a third
-    // share session with the ShareSessionCache would throw SHARE_SESSION_NOT_FOUND
+    // share session with the ShareSessionCache would throw SHARE_SESSION_LIMIT_REACHED
     TestUtils.waitUntilTrue(() => {
       val metadata = new ShareRequestMetadata(memberId3, ShareRequestMetadata.INITIAL_EPOCH)
       val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)

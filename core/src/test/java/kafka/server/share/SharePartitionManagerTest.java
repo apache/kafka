@@ -218,7 +218,6 @@ public class SharePartitionManagerTest {
             .build();
 
         Uuid tpId0 = Uuid.randomUuid();
-        Uuid tpId1 = Uuid.randomUuid();
         TopicIdPartition tp0 = new TopicIdPartition(tpId0, new TopicPartition("foo", 0));
         TopicIdPartition tp1 = new TopicIdPartition(tpId0, new TopicPartition("foo", 1));
 
@@ -235,10 +234,9 @@ public class SharePartitionManagerTest {
 
         ShareRequestMetadata reqMetadata2 = new ShareRequestMetadata(memberId, ShareRequestMetadata.FINAL_EPOCH);
 
-        // shareFetch is not empty, but the maxBytes of topic partition is 0, which means this is added only for acknowledgements.
-        // New context should be created successfully
-        List<TopicIdPartition> reqData3 = List.of(new TopicIdPartition(tpId1, new TopicPartition("foo", 0)));
-        ShareFetchContext context2 = sharePartitionManager.newContext(groupId, reqData3, List.of(), reqMetadata2, true, CONNECTION_ID);
+        // Sending a Request with FINAL_EPOCH. This should return a FinalContext.
+        List<TopicIdPartition> reqData2 = List.of(tp0, tp1);
+        ShareFetchContext context2 = sharePartitionManager.newContext(groupId, reqData2, EMPTY_PART_LIST, reqMetadata2, true, CONNECTION_ID);
         assertEquals(FinalContext.class, context2.getClass());
     }
 
@@ -268,9 +266,9 @@ public class SharePartitionManagerTest {
         ShareRequestMetadata reqMetadata2 = new ShareRequestMetadata(memberId, ShareRequestMetadata.FINAL_EPOCH);
 
         // shareFetch is not empty, and it contains tpId1, which should return FinalContext instance since it is FINAL_EPOCH
-        List<TopicIdPartition> reqData3 = List.of(new TopicIdPartition(tpId1, new TopicPartition("foo", 0)));
+        List<TopicIdPartition> reqData2 = List.of(new TopicIdPartition(tpId1, new TopicPartition("foo", 0)));
         assertInstanceOf(FinalContext.class,
-            sharePartitionManager.newContext(groupId, reqData3, List.of(), reqMetadata2, true, CONNECTION_ID));
+            sharePartitionManager.newContext(groupId, reqData2, List.of(), reqMetadata2, true, CONNECTION_ID));
     }
 
     @Test
@@ -315,12 +313,12 @@ public class SharePartitionManagerTest {
 
         // Test trying to create a new session with an invalid epoch
         assertThrows(InvalidShareSessionEpochException.class, () -> sharePartitionManager.newContext(groupId, reqData2, EMPTY_PART_LIST,
-            new ShareRequestMetadata(shareSessionKey2.memberId(), 5), true, CONNECTION_ID));
+            new ShareRequestMetadata(shareSessionKey2.memberId(), 5), true, "id-2"));
 
         // Test trying to create a new session with a non-existent session key
         Uuid memberId4 = Uuid.randomUuid();
         assertThrows(ShareSessionNotFoundException.class, () -> sharePartitionManager.newContext(groupId, reqData2, EMPTY_PART_LIST,
-            new ShareRequestMetadata(memberId4, 1), true, CONNECTION_ID));
+            new ShareRequestMetadata(memberId4, 1), true, "id-3"));
 
         // Continue the first share session we created.
         ShareFetchContext context5 = sharePartitionManager.newContext(groupId, List.of(), EMPTY_PART_LIST,
