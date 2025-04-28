@@ -280,6 +280,7 @@ public class StandaloneHerderTest {
         expectConfigValidation(SourceSink.SOURCE, config);
 
         when(statusBackingStore.getAll(CONNECTOR_NAME)).thenReturn(Collections.emptyList());
+        when(worker.connectorVersion(CONNECTOR_NAME)).thenReturn(null);
 
         herder.putConnectorConfig(CONNECTOR_NAME, config, false, createCallback);
         Herder.Created<ConnectorInfo> connectorInfo = createCallback.get(WAIT_TIME_MS, TimeUnit.MILLISECONDS);
@@ -533,6 +534,7 @@ public class StandaloneHerderTest {
         expectConfigValidation(SourceSink.SINK, connectorConfig);
 
         doNothing().when(worker).stopAndAwaitConnector(CONNECTOR_NAME);
+        when(worker.connectorVersion(CONNECTOR_NAME)).thenReturn(null);
 
         mockStartConnector(connectorConfig, null, TargetState.STARTED, null);
 
@@ -563,6 +565,7 @@ public class StandaloneHerderTest {
         doReturn(Optional.of(restartPlan)).when(herder).buildRestartPlan(restartRequest);
 
         expectAdd(SourceSink.SINK);
+        when(worker.taskVersion(any())).thenReturn(null);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SINK);
         expectConfigValidation(SourceSink.SINK, connectorConfig);
@@ -616,6 +619,8 @@ public class StandaloneHerderTest {
         ArgumentCaptor<TaskStatus> taskStatus = ArgumentCaptor.forClass(TaskStatus.class);
 
         expectAdd(SourceSink.SINK, false);
+        when(worker.connectorVersion(any())).thenReturn(null);
+        when(worker.taskVersion(any())).thenReturn(null);
 
         Map<String, String> connectorConfig = connectorConfig(SourceSink.SINK);
         expectConfigValidation(SourceSink.SINK, connectorConfig);
@@ -788,7 +793,7 @@ public class StandaloneHerderTest {
 
         ArgumentCaptor<NotFoundException> exceptionCaptor = ArgumentCaptor.forClass(NotFoundException.class);
         verify(patchCallback).onCompletion(exceptionCaptor.capture(), isNull());
-        assertEquals(exceptionCaptor.getValue().getMessage(), "Connector " + CONNECTOR_NAME + " not found");
+        assertEquals("Connector " + CONNECTOR_NAME + " not found", exceptionCaptor.getValue().getMessage());
     }
 
     @Test
@@ -899,10 +904,10 @@ public class StandaloneHerderTest {
         Throwable cause = e.getCause();
         assertInstanceOf(BadRequestException.class, cause);
         assertEquals(
-            cause.getMessage(),
-            "Connector configuration is invalid and contains the following 1 error(s):\n" +
-                error + "\n" +
-                "You can also find the above list of errors at the endpoint `/connector-plugins/{connectorType}/config/validate`"
+                "Connector configuration is invalid and contains the following 1 error(s):\n" +
+                    error + "\n" +
+                    "You can also find the above list of errors at the endpoint `/connector-plugins/{connectorType}/config/validate`",
+                cause.getMessage()
         );
         verify(loaderSwap).close();
     }
@@ -1124,6 +1129,7 @@ public class StandaloneHerderTest {
         }
 
         when(worker.isRunning(CONNECTOR_NAME)).thenReturn(true);
+
         if (sourceSink == SourceSink.SOURCE) {
             when(worker.isTopicCreationEnabled()).thenReturn(true);
         }
@@ -1152,6 +1158,7 @@ public class StandaloneHerderTest {
             transformer);
 
         if (sourceSink.equals(SourceSink.SOURCE) && mockStartSourceTask) {
+            when(worker.taskVersion(any())).thenReturn(null);
             when(worker.startSourceTask(new ConnectorTaskId(CONNECTOR_NAME, 0), configState, connectorConfig(sourceSink), generatedTaskProps, herder, TargetState.STARTED)).thenReturn(true);
         }
 

@@ -19,18 +19,21 @@ package org.apache.kafka.tools.consumer.group;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
-import org.apache.kafka.clients.admin.ConsumerGroupListing;
+import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.NewTopic;
 import org.apache.kafka.clients.consumer.GroupProtocol;
 import org.apache.kafka.clients.consumer.KafkaConsumer;
 import org.apache.kafka.clients.consumer.RangeAssignor;
+import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.GroupState;
 import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.test.ClusterInstance;
-import org.apache.kafka.common.test.api.ClusterConfig;
-import org.apache.kafka.common.test.api.ClusterTemplate;
+import org.apache.kafka.common.test.api.ClusterConfigProperty;
+import org.apache.kafka.common.test.api.ClusterTest;
+import org.apache.kafka.common.test.api.ClusterTestDefaults;
+import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.test.TestUtils;
 import org.apache.kafka.tools.ToolsTestUtils;
 
@@ -61,8 +64,22 @@ import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CO
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.PARTITION_ASSIGNMENT_STRATEGY_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 
-
+@ClusterTestDefaults(
+    types = {Type.CO_KRAFT},
+    serverProperties = {
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "1"),
+        @ClusterConfigProperty(key = GROUP_INITIAL_REBALANCE_DELAY_MS_CONFIG, value = "1000"),
+        @ClusterConfigProperty(key = CONSUMER_GROUP_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
+        @ClusterConfigProperty(key = CONSUMER_GROUP_MIN_HEARTBEAT_INTERVAL_MS_CONFIG, value = "500"),
+    }
+)
 public class ListConsumerGroupTest {
     private static final String TOPIC_PREFIX = "test.topic.";
     private static final String TOPIC_PARTITIONS_GROUP_PREFIX = "test.topic.partitions.group.";
@@ -74,15 +91,11 @@ public class ListConsumerGroupTest {
         this.clusterInstance = clusterInstance;
     }
 
-    private static List<ClusterConfig> defaultGenerator() {
-        return ConsumerGroupCommandTestUtils.generator();
-    }
-
     private List<GroupProtocol> supportedGroupProtocols() {
         return new ArrayList<>(clusterInstance.supportedGroupProtocols());
     }
 
-    @ClusterTemplate("defaultGenerator")
+    @ClusterTest
     public void testListConsumerGroupsWithoutFilters() throws Exception {
         for (int i = 0; i < supportedGroupProtocols().size(); i++) {
             GroupProtocol groupProtocol = supportedGroupProtocols().get(i);
@@ -111,13 +124,13 @@ public class ListConsumerGroupTest {
         }
     }
 
-    @ClusterTemplate("defaultGenerator")
+    @ClusterTest
     public void testListWithUnrecognizedNewConsumerOption() {
         String[] cgcArgs = new String[]{"--new-consumer", "--bootstrap-server", clusterInstance.bootstrapServers(), "--list"};
         Assertions.assertThrows(OptionException.class, () -> getConsumerGroupService(cgcArgs));
     }
 
-    @ClusterTemplate("defaultGenerator")
+    @ClusterTest
     public void testListConsumerGroupsWithStates() throws Exception {
         for (int i = 0; i < supportedGroupProtocols().size(); i++) {
             GroupProtocol groupProtocol = supportedGroupProtocols().get(i);
@@ -130,18 +143,18 @@ public class ListConsumerGroupTest {
                  AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic);
                  ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"})
             ) {
-                Set<ConsumerGroupListing> expectedListing = Set.of(
-                        new ConsumerGroupListing(
+                Set<GroupListing> expectedListing = Set.of(
+                        new GroupListing(
                                 topicPartitionsGroup,
-                                Optional.of(GroupState.EMPTY),
                                 Optional.of(GroupType.CLASSIC),
-                                true
+                                "",
+                                Optional.of(GroupState.EMPTY)
                         ),
-                        new ConsumerGroupListing(
+                        new GroupListing(
                                 protocolGroup,
-                                Optional.of(GroupState.STABLE),
                                 Optional.of(GroupType.parse(groupProtocol.name())),
-                                false
+                                ConsumerProtocol.PROTOCOL_TYPE,
+                                Optional.of(GroupState.STABLE)
                         )
                 );
 
@@ -153,11 +166,11 @@ public class ListConsumerGroupTest {
                 );
 
                 expectedListing = Set.of(
-                        new ConsumerGroupListing(
+                        new GroupListing(
                                 protocolGroup,
-                                Optional.of(GroupState.STABLE),
                                 Optional.of(GroupType.parse(groupProtocol.name())),
-                                false
+                                ConsumerProtocol.PROTOCOL_TYPE,
+                                Optional.of(GroupState.STABLE)
                         )
                 );
 
@@ -181,7 +194,7 @@ public class ListConsumerGroupTest {
         }
     }
 
-    @ClusterTemplate("defaultGenerator")
+    @ClusterTest
     public void testListConsumerGroupsWithTypesClassicProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CLASSIC;
         String topic = TOPIC_PREFIX + groupProtocol.name;
@@ -193,18 +206,18 @@ public class ListConsumerGroupTest {
              AutoCloseable protocolConsumerGroupExecutor = consumerGroupClosable(groupProtocol, protocolGroup, topic);
              ConsumerGroupCommand.ConsumerGroupService service = getConsumerGroupService(new String[]{"--bootstrap-server", clusterInstance.bootstrapServers(), "--list", "--state"})
         ) {
-            Set<ConsumerGroupListing> expectedListing = Set.of(
-                    new ConsumerGroupListing(
+            Set<GroupListing> expectedListing = Set.of(
+                    new GroupListing(
                             topicPartitionsGroup,
-                            Optional.of(GroupState.EMPTY),
                             Optional.of(GroupType.CLASSIC),
-                            true
+                            "",
+                            Optional.of(GroupState.EMPTY)
                     ),
-                    new ConsumerGroupListing(
+                    new GroupListing(
                             protocolGroup,
-                            Optional.of(GroupState.STABLE),
                             Optional.of(GroupType.CLASSIC),
-                            false
+                            ConsumerProtocol.PROTOCOL_TYPE,
+                            Optional.of(GroupState.STABLE)
                     )
             );
 
@@ -235,7 +248,7 @@ public class ListConsumerGroupTest {
         }
     }
 
-    @ClusterTemplate("defaultGenerator")
+    @ClusterTest
     public void testListConsumerGroupsWithTypesConsumerProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
         String topic = TOPIC_PREFIX + groupProtocol.name;
@@ -252,24 +265,24 @@ public class ListConsumerGroupTest {
 
 
             // No filters explicitly mentioned. Expectation is that all groups are returned.
-            Set<ConsumerGroupListing> expectedListing = Set.of(
-                    new ConsumerGroupListing(
+            Set<GroupListing> expectedListing = Set.of(
+                    new GroupListing(
                             topicPartitionsGroup,
-                            Optional.of(GroupState.EMPTY),
                             Optional.of(GroupType.CLASSIC),
-                            true
+                            "",
+                            Optional.of(GroupState.EMPTY)
                     ),
-                    new ConsumerGroupListing(
+                    new GroupListing(
                             topicGroup,
-                            Optional.of(GroupState.STABLE),
                             Optional.of(GroupType.CLASSIC),
-                            false
+                            ConsumerProtocol.PROTOCOL_TYPE,
+                            Optional.of(GroupState.STABLE)
                     ),
-                    new ConsumerGroupListing(
+                    new GroupListing(
                             protocolGroup,
-                            Optional.of(GroupState.STABLE),
                             Optional.of(GroupType.CONSUMER),
-                            false
+                            ConsumerProtocol.PROTOCOL_TYPE,
+                            Optional.of(GroupState.STABLE)
                     )
             );
 
@@ -283,11 +296,11 @@ public class ListConsumerGroupTest {
             // When group type is mentioned:
             // New Group Coordinator returns groups according to the filter.
             expectedListing = Set.of(
-                    new ConsumerGroupListing(
+                    new GroupListing(
                             protocolGroup,
-                            Optional.of(GroupState.STABLE),
                             Optional.of(GroupType.CONSUMER),
-                            false
+                            ConsumerProtocol.PROTOCOL_TYPE,
+                            Optional.of(GroupState.STABLE)
                     )
             );
 
@@ -299,17 +312,17 @@ public class ListConsumerGroupTest {
             );
 
             expectedListing = Set.of(
-                    new ConsumerGroupListing(
+                    new GroupListing(
                             topicPartitionsGroup,
-                            Optional.of(GroupState.EMPTY),
                             Optional.of(GroupType.CLASSIC),
-                            true
+                            "",
+                            Optional.of(GroupState.EMPTY)
                     ),
-                    new ConsumerGroupListing(
+                    new GroupListing(
                             topicGroup,
-                            Optional.of(GroupState.STABLE),
                             Optional.of(GroupType.CLASSIC),
-                            false
+                            ConsumerProtocol.PROTOCOL_TYPE,
+                            Optional.of(GroupState.STABLE)
                     )
             );
 
@@ -322,7 +335,7 @@ public class ListConsumerGroupTest {
         }
     }
 
-    @ClusterTemplate("defaultGenerator")
+    @ClusterTest
     public void testListGroupCommandClassicProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CLASSIC;
         String topic = TOPIC_PREFIX + groupProtocol.name;
@@ -407,7 +420,7 @@ public class ListConsumerGroupTest {
         }
     }
 
-    @ClusterTemplate("defaultGenerator")
+    @ClusterTest
     public void testListGroupCommandConsumerProtocol() throws Exception {
         GroupProtocol groupProtocol = GroupProtocol.CONSUMER;
         String topic = TOPIC_PREFIX + groupProtocol.name;
@@ -556,9 +569,9 @@ public class ListConsumerGroupTest {
         ConsumerGroupCommand.ConsumerGroupService service,
         Set<GroupType> typeFilterSet,
         Set<GroupState> groupStateFilterSet,
-        Set<ConsumerGroupListing> expectedListing
+        Set<GroupListing> expectedListing
     ) throws Exception {
-        final AtomicReference<Set<ConsumerGroupListing>> foundListing = new AtomicReference<>();
+        final AtomicReference<Set<GroupListing>> foundListing = new AtomicReference<>();
         TestUtils.waitForCondition(() -> {
             foundListing.set(set(service.listConsumerGroupsWithFilters(set(typeFilterSet), set(groupStateFilterSet))));
             return Objects.equals(set(expectedListing), foundListing.get());

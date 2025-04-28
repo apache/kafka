@@ -21,13 +21,12 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ReadShareGroupStateRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.List;
 import java.util.Map;
 
@@ -46,7 +45,7 @@ public class ReadShareGroupStateResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        Map<Errors, Integer> counts = new HashMap<>();
+        Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
         data.results().forEach(
                 result -> result.partitions().forEach(
                         partitionResult -> updateErrorCounts(counts, Errors.forCode(partitionResult.errorCode()))
@@ -65,9 +64,9 @@ public class ReadShareGroupStateResponse extends AbstractResponse {
         // No op
     }
 
-    public static ReadShareGroupStateResponse parse(ByteBuffer buffer, short version) {
+    public static ReadShareGroupStateResponse parse(Readable readable, short version) {
         return new ReadShareGroupStateResponse(
-                new ReadShareGroupStateResponseData(new ByteBufferAccessor(buffer), version)
+                new ReadShareGroupStateResponseData(readable, version)
         );
     }
 

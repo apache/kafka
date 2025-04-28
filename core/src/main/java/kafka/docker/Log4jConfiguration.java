@@ -22,7 +22,6 @@ import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonPropertyOrder;
 
-import java.util.Collections;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -121,7 +120,7 @@ class Appenders {
 @JsonIgnoreProperties(ignoreUnknown = true)
 class Loggers {
     private Root root;
-    private List<Logger> logger = Collections.emptyList();
+    private List<Logger> logger = List.of();
 
     @JsonProperty("Root")
     public Root getRoot() {

@@ -20,7 +20,6 @@ import com.yammer.metrics.core.Meter
 import kafka.cluster.{Partition, PartitionListener}
 import kafka.controller.StateChangeLogger
 import kafka.log.LogManager
-import kafka.log.remote.RemoteLogManager
 import kafka.server.HostedPartition.Online
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.server.ReplicaManager.{AtMinIsrPartitionCountMetricName, FailedIsrUpdatesPerSecMetricName, IsrExpandsPerSecMetricName, IsrShrinksPerSecMetricName, LeaderCountMetricName, OfflineReplicaCountMetricName, PartitionCountMetricName, PartitionsWithLateTransactionsCountMetricName, ProducerIdCountMetricName, ReassigningPartitionsMetricName, UnderMinIsrPartitionCountMetricName, UnderReplicatedPartitionsMetricName, createLogReadResult, isListOffsetsTimestampUnsupported}
@@ -47,10 +46,14 @@ import org.apache.kafka.common.requests.FetchRequest.PartitionData
 import org.apache.kafka.common.requests.ProduceResponse.PartitionResponse
 import org.apache.kafka.common.requests._
 import org.apache.kafka.common.utils.{Exit, Time, Utils}
+import org.apache.kafka.coordinator.transaction.{AddPartitionsToTxnConfig, TransactionLogConfig}
 import org.apache.kafka.image.{LocalReplicaChanges, MetadataImage, TopicsDelta}
 import org.apache.kafka.metadata.LeaderConstants.NO_LEADER
 import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{DirectoryEventHandler, RequestLocal, StopPartition, TopicOptionalIdPartition}
+import org.apache.kafka.server.log.remote.TopicPartitionLog
+import org.apache.kafka.server.config.ReplicationConfigs
+import org.apache.kafka.server.log.remote.storage.RemoteLogManager
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.purgatory.{DelayedDeleteRecords, DelayedOperationPurgatory, DelayedRemoteListOffsets, DeleteRecordsPartitionStatus, ListOffsetsPartitionStatus, TopicPartitionOperationKey}
@@ -68,7 +71,7 @@ import java.nio.file.{Files, Paths}
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.Lock
-import java.util.concurrent.{CompletableFuture, Future, RejectedExecutionException, TimeUnit}
+import java.util.concurrent.{CompletableFuture, ConcurrentHashMap, Future, RejectedExecutionException, TimeUnit}
 import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import java.util.function.Consumer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
@@ -286,6 +289,7 @@ class ReplicaManager(val config: KafkaConfig,
                      val defaultActionQueue: ActionQueue = new DelayedActionQueue
                      ) extends Logging {
   private val metricsGroup = new KafkaMetricsGroup(this.getClass)
+  private val addPartitionsToTxnConfig = new AddPartitionsToTxnConfig(config)
 
   val delayedProducePurgatory = delayedProducePurgatoryParam.getOrElse(
     new DelayedOperationPurgatory[DelayedProduce](
@@ -313,9 +317,7 @@ class ReplicaManager(val config: KafkaConfig,
   /* epoch of the controller that last changed the leader */
   @volatile private[server] var controllerEpoch: Int = 0
   protected val localBrokerId = config.brokerId
-  protected val allPartitions = new Pool[TopicPartition, HostedPartition](
-    valueFactory = Some(tp => HostedPartition.Online(Partition(tp, time, this)))
-  )
+  protected val allPartitions = new ConcurrentHashMap[TopicPartition, HostedPartition]
   private val replicaStateChangeLock = new Object
   val replicaFetcherManager = createReplicaFetcherManager(metrics, time, threadNamePrefix, quotaManagers.follower)
   private[server] val replicaAlterLogDirsManager = createReplicaAlterLogDirsManager(quotaManagers.alterLogDirs, brokerTopicStats)
@@ -398,7 +400,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   private def maybeRemoveTopicMetrics(topic: String): Unit = {
-    val topicHasNonOfflinePartition = allPartitions.values.exists {
+    val topicHasNonOfflinePartition = allPartitions.values.asScala.exists {
       case online: HostedPartition.Online => topic == online.partition.topic
       case HostedPartition.None | HostedPartition.Offline(_) => false
     }
@@ -557,14 +559,14 @@ class ReplicaManager(val config: KafkaConfig,
   // An iterator over all non offline partitions. This is a weakly consistent iterator; a partition made offline after
   // the iterator has been constructed could still be returned by this iterator.
   private def onlinePartitionsIterator: Iterator[Partition] = {
-    allPartitions.values.iterator.flatMap {
+    allPartitions.values.asScala.iterator.flatMap {
       case HostedPartition.Online(partition) => Some(partition)
       case _ => None
     }
   }
 
   private def offlinePartitionCount: Int = {
-    allPartitions.values.iterator.count(_.getClass == HostedPartition.Offline.getClass)
+    allPartitions.values.asScala.iterator.count(_.getClass == HostedPartition.Offline.getClass)
   }
 
   def getPartitionOrException(topicPartition: TopicPartition): Partition = {
@@ -841,8 +843,8 @@ class ReplicaManager(val config: KafkaConfig,
       requestLocal
     )
 
-    val retryTimeoutMs = Math.min(config.addPartitionsToTxnConfig.addPartitionsToTxnRetryBackoffMaxMs(), config.requestTimeoutMs)
-    val addPartitionsRetryBackoffMs = config.addPartitionsToTxnConfig.addPartitionsToTxnRetryBackoffMs()
+    val retryTimeoutMs = Math.min(addPartitionsToTxnConfig.addPartitionsToTxnRetryBackoffMaxMs(), config.requestTimeoutMs)
+    val addPartitionsRetryBackoffMs = addPartitionsToTxnConfig.addPartitionsToTxnRetryBackoffMs()
     val startVerificationTimeMs = time.milliseconds
     def maybeRetryOnConcurrentTransactions(results: (Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])): Unit = {
       if (time.milliseconds() - startVerificationTimeMs >= retryTimeoutMs) {
@@ -889,7 +891,6 @@ class ReplicaManager(val config: KafkaConfig,
         new PartitionResponse(
           result.error,
           result.info.firstOffset,
-          result.info.lastOffset,
           result.info.logAppendTime,
           result.info.logStartOffset,
           result.info.recordErrors,
@@ -1038,10 +1039,13 @@ class ReplicaManager(val config: KafkaConfig,
     callback: ((Map[TopicPartition, Errors], Map[TopicPartition, VerificationGuard])) => Unit,
     transactionSupportedOperation: TransactionSupportedOperation
   ): Unit = {
+    def transactionPartitionVerificationEnable = {
+      new TransactionLogConfig(config).transactionPartitionVerificationEnable
+    }
     // Skip verification if the request is not transactional or transaction verification is disabled.
-    if (transactionalId == null ||
-      (!config.transactionLogConfig.transactionPartitionVerificationEnable && !transactionSupportedOperation.supportsEpochBump)
+    if (transactionalId == null
       || addPartitionsToTxnManager.isEmpty
+      || (!transactionSupportedOperation.supportsEpochBump && !transactionPartitionVerificationEnable)
     ) {
       callback((Map.empty[TopicPartition, Errors], Map.empty[TopicPartition, VerificationGuard]))
       return
@@ -2065,7 +2069,7 @@ class ReplicaManager(val config: KafkaConfig,
 
               case HostedPartition.None =>
                 val partition = Partition(topicPartition, time, this)
-                allPartitions.putIfNotExists(topicPartition, HostedPartition.Online(partition))
+                allPartitions.putIfAbsent(topicPartition, HostedPartition.Online(partition))
                 Some(partition)
             }
 
@@ -2164,7 +2168,7 @@ class ReplicaManager(val config: KafkaConfig,
           replicaFetcherManager.shutdownIdleFetcherThreads()
           replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
 
-          remoteLogManager.foreach(rlm => rlm.onLeadershipChange(partitionsBecomeLeader.asJava, partitionsBecomeFollower.asJava, topicIds))
+          remoteLogManager.foreach(rlm => rlm.onLeadershipChange((partitionsBecomeLeader.toSet: Set[TopicPartitionLog]).asJava, (partitionsBecomeFollower.toSet: Set[TopicPartitionLog]).asJava, topicIds))
 
           onLeadershipChange(partitionsBecomeLeader, partitionsBecomeFollower)
 
@@ -2506,7 +2510,7 @@ class ReplicaManager(val config: KafkaConfig,
     trace("Evaluating ISR list of partitions to see which replicas can be removed from the ISR")
 
     // Shrink ISRs for non offline partitions
-    allPartitions.keys.foreach { topicPartition =>
+    allPartitions.forEach { (topicPartition, _) =>
       onlinePartition(topicPartition).foreach(_.maybeShrinkIsr())
     }
   }
@@ -2637,7 +2641,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   private def removeAllTopicMetrics(): Unit = {
     val allTopics = new util.HashSet[String]
-    allPartitions.keys.foreach(partition =>
+    allPartitions.forEach((partition, _) =>
       if (allTopics.add(partition.topic())) {
         brokerTopicStats.removeMetrics(partition.topic())
       })
@@ -2655,7 +2659,7 @@ class ReplicaManager(val config: KafkaConfig,
     config.replicaSelectorClassName.map { className =>
       val tmpReplicaSelector: ReplicaSelector = Utils.newInstance(className, classOf[ReplicaSelector])
       tmpReplicaSelector.configure(config.originals())
-      Plugin.wrapInstance(tmpReplicaSelector, metrics, className)
+      Plugin.wrapInstance(tmpReplicaSelector, metrics, ReplicationConfigs.REPLICA_SELECTOR_CLASS_CONFIG)
     }
   }
 
@@ -2807,7 +2811,7 @@ class ReplicaManager(val config: KafkaConfig,
         replicaFetcherManager.shutdownIdleFetcherThreads()
         replicaAlterLogDirsManager.shutdownIdleFetcherThreads()
 
-        remoteLogManager.foreach(rlm => rlm.onLeadershipChange(leaderChangedPartitions.asJava, followerChangedPartitions.asJava, localChanges.topicIds()))
+        remoteLogManager.foreach(rlm => rlm.onLeadershipChange((leaderChangedPartitions.toSet: Set[TopicPartitionLog]).asJava, (followerChangedPartitions.toSet: Set[TopicPartitionLog]).asJava, localChanges.topicIds()))
       }
 
       if (metadataVersion.isDirectoryAssignmentSupported) {

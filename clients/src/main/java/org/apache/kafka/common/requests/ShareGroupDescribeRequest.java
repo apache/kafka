@@ -32,11 +32,7 @@ public class ShareGroupDescribeRequest extends AbstractRequest {
         private final ShareGroupDescribeRequestData data;
 
         public Builder(ShareGroupDescribeRequestData data) {
-            this(data, false);
-        }
-
-        public Builder(ShareGroupDescribeRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.SHARE_GROUP_DESCRIBE, enableUnstableLastVersion);
+            super(ApiKeys.SHARE_GROUP_DESCRIBE);
             this.data = data;
         }
 
@@ -94,6 +90,7 @@ public class ShareGroupDescribeRequest extends AbstractRequest {
                 .map(groupId -> new ShareGroupDescribeResponseData.DescribedGroup()
                         .setGroupId(groupId)
                         .setErrorCode(error.code())
+                        .setErrorMessage(error.message())
                 ).collect(Collectors.toList());
     }
 }
