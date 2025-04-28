@@ -31,7 +31,7 @@ import argparse
 #   DependencyName-x.y, DependencyName-x.y.z, or DependencyName-x.y.z.w
 # Optionally, a trailing suffix (e.g., "-alpha") is captured.
 LICENSE_DEP_PATTERN = re.compile(
-    r'^\s*-\s*([A-Za-z0-9_.+-]+-[0-9]+\.[0-9]+(?:\.[0-9]+){0,2}(?:[-.][A-Za-z0-9]+)*)',
+    r'^\s*-\s*([A-Za-z0-9_.+-]+-[0-9]+\.[0-9]+(?:\.[0-9]+){0,2}(?:[-.][A-Za-z0-9]+)?)',
     re.MULTILINE
 )
 
