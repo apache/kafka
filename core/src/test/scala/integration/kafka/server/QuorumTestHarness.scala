@@ -38,7 +38,7 @@ import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsem
 import org.apache.kafka.metadata.storage.Formatter
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.queue.KafkaEventQueue
-import org.apache.kafka.raft.QuorumConfig
+import org.apache.kafka.raft.{MetadataLogConfig, QuorumConfig}
 import org.apache.kafka.server.{ClientMetricsManager, ServerSocketFactory}
 import org.apache.kafka.server.common.{EligibleLeaderReplicasVersion, MetadataVersion, TransactionVersion}
 import org.apache.kafka.server.config.{KRaftConfigs, ServerConfigs, ServerLogConfigs}
@@ -261,7 +261,7 @@ abstract class QuorumTestHarness extends Logging {
     }
     val nodeId = Integer.parseInt(props.getProperty(KRaftConfigs.NODE_ID_CONFIG))
     val metadataDir = TestUtils.tempDir()
-    props.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, metadataDir.getAbsolutePath)
+    props.setProperty(MetadataLogConfig.METADATA_LOG_DIR_CONFIG, metadataDir.getAbsolutePath)
     val proto = controllerListenerSecurityProtocol.toString
     val securityProtocolMaps = extraControllerSecurityProtocols().map(sc => sc + ":" + sc).mkString(",")
     val listeners = extraControllerSecurityProtocols().map(sc => sc + "://localhost:0").mkString(",")

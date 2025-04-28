@@ -162,7 +162,10 @@ if __name__ == "__main__":
                 new_lines.append(textwrap.fill(line, width=72, break_long_words=False, break_on_hyphens=False, replace_whitespace=False))
             rewrapped_p = "\n".join(new_lines)
         else:
-            rewrapped_p = textwrap.fill("".join(p), width=72, break_long_words=False, break_on_hyphens=False, replace_whitespace=True)
+            indent = ""
+            if len(p) > 0 and p[0].startswith("Reviewers:"):
+                indent = " "
+            rewrapped_p = textwrap.fill("".join(p), subsequent_indent=indent, width=72, break_long_words=False, break_on_hyphens=False, replace_whitespace=True)
         new_paragraphs.append(rewrapped_p + "\n")
     body = "\n".join(new_paragraphs)
 

@@ -50,6 +50,7 @@ import org.apache.kafka.clients.admin.internals.CoordinatorKey;
 import org.apache.kafka.clients.admin.internals.DeleteConsumerGroupOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.DeleteConsumerGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DeleteRecordsHandler;
+import org.apache.kafka.clients.admin.internals.DeleteShareGroupOffsetsHandler;
 import org.apache.kafka.clients.admin.internals.DeleteShareGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeClassicGroupsHandler;
 import org.apache.kafka.clients.admin.internals.DescribeConsumerGroupsHandler;
@@ -3613,6 +3614,7 @@ public class KafkaAdminClient extends AdminClient {
                 .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
     }
 
+    @Deprecated
     private static final class ListConsumerGroupsResults {
         private final List<Throwable> errors;
         private final HashMap<String, ConsumerGroupListing> listings;
@@ -3656,6 +3658,8 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
+    @SuppressWarnings("removal")
+    @Deprecated(since = "4.1", forRemoval = true)
     public ListConsumerGroupsResult listConsumerGroups(ListConsumerGroupsOptions options) {
         final KafkaFutureImpl<Collection<Object>> all = new KafkaFutureImpl<>();
         final long nowMetadata = time.milliseconds();
@@ -3842,6 +3846,14 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
+    public DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<String> topics, DeleteShareGroupOffsetsOptions options) {
+        SimpleAdminApiFuture<CoordinatorKey, Map<String, ApiException>> future = DeleteShareGroupOffsetsHandler.newFuture(groupId);
+        DeleteShareGroupOffsetsHandler handler = new DeleteShareGroupOffsetsHandler(groupId, topics, logContext);
+        invokeDriver(handler, future, options.timeoutMs);
+        return new DeleteShareGroupOffsetsResult(future.get(CoordinatorKey.byGroupId(groupId)), topics);
+    }
+
+    @Override
     public DescribeStreamsGroupsResult describeStreamsGroups(final Collection<String> groupIds,
                                                              final DescribeStreamsGroupsOptions options) {
         SimpleAdminApiFuture<CoordinatorKey, StreamsGroupDescription> future =
@@ -3851,7 +3863,7 @@ public class KafkaAdminClient extends AdminClient {
         return new DescribeStreamsGroupsResult(future.all().entrySet().stream()
             .collect(Collectors.toMap(entry -> entry.getKey().idValue, Map.Entry::getValue)));
     }
-    
+
     @Override
     public DescribeClassicGroupsResult describeClassicGroups(final Collection<String> groupIds,
                                                              final DescribeClassicGroupsOptions options) {

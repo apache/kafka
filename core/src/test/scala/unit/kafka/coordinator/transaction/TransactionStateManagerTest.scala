@@ -18,11 +18,11 @@ package kafka.coordinator.transaction
 
 import java.lang.management.ManagementFactory
 import java.nio.ByteBuffer
-import java.util.concurrent.CountDownLatch
+import java.util.concurrent.{ConcurrentHashMap, CountDownLatch}
 import java.util.concurrent.locks.ReentrantLock
 import javax.management.ObjectName
 import kafka.server.ReplicaManager
-import kafka.utils.{Pool, TestUtils}
+import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
@@ -36,6 +36,7 @@ import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.common.{FinalizedFeatures, MetadataVersion, RequestLocal, TransactionVersion}
 import org.apache.kafka.server.common.TransactionVersion.{TV_0, TV_2}
 import org.apache.kafka.coordinator.transaction.generated.TransactionLogKey
+import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.MockScheduler
 import org.apache.kafka.storage.internals.log.{AppendOrigin, FetchDataInfo, LogConfig, LogOffsetMetadata, UnifiedLog}
@@ -118,7 +119,7 @@ class TransactionStateManagerTest {
 
   @Test
   def testAddGetPids(): Unit = {
-    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new ConcurrentHashMap[String, TransactionMetadata]())
 
     assertEquals(Right(None), transactionManager.getTransactionState(transactionalId1))
     assertEquals(Right(CoordinatorEpochAndTxnMetadata(coordinatorEpoch, txnMetadata1)),
@@ -137,10 +138,10 @@ class TransactionStateManagerTest {
     assertEquals(0, transactionManager.partitionFor(metadata1.transactionalId))
     assertEquals(1, transactionManager.partitionFor(metadata2.transactionalId))
 
-    transactionManager.addLoadedTransactionsToCache(0, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(0, coordinatorEpoch, new ConcurrentHashMap[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(metadata1)
 
-    transactionManager.addLoadedTransactionsToCache(1, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(1, coordinatorEpoch, new ConcurrentHashMap[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(metadata2)
 
     def cachedProducerEpoch(transactionalId: String): Option[Short] = {
@@ -377,7 +378,7 @@ class TransactionStateManagerTest {
 
   @Test
   def testCompleteTransitionWhenAppendSucceeded(): Unit = {
-    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new ConcurrentHashMap[String, TransactionMetadata]())
 
     // first insert the initial transaction metadata
     transactionManager.putTransactionStateIfNotExists(txnMetadata1)
@@ -398,7 +399,7 @@ class TransactionStateManagerTest {
 
   @Test
   def testAppendFailToCoordinatorNotAvailableError(): Unit = {
-    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new ConcurrentHashMap[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(txnMetadata1)
 
     expectedError = Errors.COORDINATOR_NOT_AVAILABLE
@@ -431,7 +432,7 @@ class TransactionStateManagerTest {
 
   @Test
   def testAppendFailToNotCoordinatorError(): Unit = {
-    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new ConcurrentHashMap[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(txnMetadata1)
 
     expectedError = Errors.NOT_COORDINATOR
@@ -450,19 +451,19 @@ class TransactionStateManagerTest {
 
     prepareForTxnMessageAppend(Errors.NONE)
     transactionManager.removeTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch)
-    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch + 1, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch + 1, new ConcurrentHashMap[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(txnMetadata1)
     transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, requestLocal = requestLocal)
 
     prepareForTxnMessageAppend(Errors.NONE)
     transactionManager.removeTransactionsForTxnTopicPartition(partitionId, coordinatorEpoch)
-    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new ConcurrentHashMap[String, TransactionMetadata]())
     transactionManager.appendTransactionToLog(transactionalId1, coordinatorEpoch = 10, failedMetadata, assertCallback, requestLocal = requestLocal)
   }
 
   @Test
   def testAppendFailToCoordinatorLoadingError(): Unit = {
-    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new ConcurrentHashMap[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(txnMetadata1)
 
     expectedError = Errors.COORDINATOR_LOAD_IN_PROGRESS
@@ -476,7 +477,7 @@ class TransactionStateManagerTest {
 
   @Test
   def testAppendFailToUnknownError(): Unit = {
-    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new ConcurrentHashMap[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(txnMetadata1)
 
     expectedError = Errors.UNKNOWN_SERVER_ERROR
@@ -497,7 +498,7 @@ class TransactionStateManagerTest {
 
   @Test
   def testPendingStateNotResetOnRetryAppend(): Unit = {
-    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new ConcurrentHashMap[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(txnMetadata1)
 
     expectedError = Errors.COORDINATOR_NOT_AVAILABLE
@@ -511,7 +512,7 @@ class TransactionStateManagerTest {
 
   @Test
   def testAppendTransactionToLogWhileProducerFenced(): Unit = {
-    transactionManager.addLoadedTransactionsToCache(partitionId, 0, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(partitionId, 0, new ConcurrentHashMap[String, TransactionMetadata]())
 
     // first insert the initial transaction metadata
     transactionManager.putTransactionStateIfNotExists(txnMetadata1)
@@ -532,7 +533,7 @@ class TransactionStateManagerTest {
   @Test
   def testAppendTransactionToLogWhilePendingStateChanged(): Unit = {
     // first insert the initial transaction metadata
-    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new Pool[String, TransactionMetadata]())
+    transactionManager.addLoadedTransactionsToCache(partitionId, coordinatorEpoch, new ConcurrentHashMap[String, TransactionMetadata]())
     transactionManager.putTransactionStateIfNotExists(txnMetadata1)
 
     prepareForTxnMessageAppend(Errors.NONE)
@@ -571,7 +572,7 @@ class TransactionStateManagerTest {
   @Test
   def testListTransactionsFiltering(): Unit = {
     for (partitionId <- 0 until numPartitions) {
-      transactionManager.addLoadedTransactionsToCache(partitionId, 0, new Pool[String, TransactionMetadata]())
+      transactionManager.addLoadedTransactionsToCache(partitionId, 0, new ConcurrentHashMap[String, TransactionMetadata]())
     }
 
     def putTransaction(
@@ -635,7 +636,7 @@ class TransactionStateManagerTest {
   @Test
   def shouldOnlyConsiderTransactionsInTheOngoingStateToAbort(): Unit = {
     for (partitionId <- 0 until numPartitions) {
-      transactionManager.addLoadedTransactionsToCache(partitionId, 0, new Pool[String, TransactionMetadata]())
+      transactionManager.addLoadedTransactionsToCache(partitionId, 0, new ConcurrentHashMap[String, TransactionMetadata]())
     }
 
     transactionManager.putTransactionStateIfNotExists(transactionMetadata("ongoing", producerId = 0, state = Ongoing))
@@ -1055,8 +1056,8 @@ class TransactionStateManagerTest {
     // all transactions should have been loaded
     val txnMetadataPool = transactionManager.transactionMetadataCache(partitionId).metadataPerTransactionalId
     assertEquals(2, txnMetadataPool.size)
-    assertTrue(txnMetadataPool.contains(transactionalId1))
-    assertTrue(txnMetadataPool.contains(transactionalId2))
+    assertTrue(txnMetadataPool.containsKey(transactionalId1))
+    assertTrue(txnMetadataPool.containsKey(transactionalId2))
   }
 
   private def verifyMetadataDoesExistAndIsUsable(transactionalId: String): Unit = {
@@ -1113,7 +1114,7 @@ class TransactionStateManagerTest {
     partitionIds: Seq[Int],
   ): Unit = {
     for (partitionId <- partitionIds) {
-      transactionManager.addLoadedTransactionsToCache(partitionId, 0, new Pool[String, TransactionMetadata]())
+      transactionManager.addLoadedTransactionsToCache(partitionId, 0, new ConcurrentHashMap[String, TransactionMetadata]())
     }
   }
 
@@ -1134,7 +1135,7 @@ class TransactionStateManagerTest {
     val partitionIds = 0 until numPartitions
 
     loadTransactionsForPartitions(partitionIds)
-    expectLogConfig(partitionIds, LogConfig.DEFAULT_MAX_MESSAGE_BYTES)
+    expectLogConfig(partitionIds, ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT)
 
     txnMetadata1.txnLastUpdateTimestamp = time.milliseconds() - txnConfig.transactionalIdExpirationMs
     txnMetadata1.state = txnState
@@ -1311,7 +1312,7 @@ class TransactionStateManagerTest {
     assertTrue(transactionManager.transactionMetadataCache.contains(partitionId))
     val txnMetadataPool = transactionManager.transactionMetadataCache(partitionId).metadataPerTransactionalId
     assertFalse(txnMetadataPool.isEmpty)
-    assertTrue(txnMetadataPool.contains(transactionalId1))
+    assertTrue(txnMetadataPool.containsKey(transactionalId1))
     val txnMetadata = txnMetadataPool.get(transactionalId1)
     assertEquals(txnMetadata1.transactionalId, txnMetadata.transactionalId)
     assertEquals(txnMetadata1.producerId, txnMetadata.producerId)

@@ -66,7 +66,7 @@ class IsrExpirationTest {
     when(logManager.liveLogDirs).thenReturn(Array.empty[File])
 
     alterIsrManager = TestUtils.createAlterIsrManager()
-    quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "")
+    quotaManager = QuotaFactory.instantiate(configs.head, metrics, time, "", "")
     replicaManager = new ReplicaManager(
       metrics = metrics,
       config = configs.head,

@@ -66,7 +66,7 @@ public class DefaultTaskExecutorTest {
         when(task.isProcessable(anyLong())).thenReturn(true);
         when(task.id()).thenReturn(new TaskId(0, 0, "A"));
         when(task.process(anyLong())).thenReturn(true);
-        when(task.prepareCommit()).thenReturn(Collections.emptyMap());
+        when(task.prepareCommit(true)).thenReturn(Collections.emptyMap());
     }
 
     @AfterEach
