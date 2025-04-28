@@ -125,7 +125,7 @@ public class ProduceRequestTest {
                 new ProduceRequestData()
                         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(Collections.singletonList(
                                         new ProduceRequestData.TopicProduceData()
-                                                .setTopicId(Uuid.fromString("H3Emm3vW7AKKO4NTRPaCWt")) // TopicId will be set to Uuid.ZERO and client will get UNKNOWN_TOPIC_ID error if topicId not set.
+                                                .setName("topic")
                                                 .setPartitionData(Collections.singletonList(
                                                         new ProduceRequestData.PartitionProduceData().setIndex(9).setRecords(builder.build()))))
                                 .iterator()))
