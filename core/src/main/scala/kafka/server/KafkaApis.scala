@@ -78,7 +78,6 @@ import java.util.concurrent.{CompletableFuture, ConcurrentHashMap}
 import java.util.stream.Collectors
 import java.util.{Collections, Optional}
 import scala.annotation.nowarn
-import scala.collection.convert.ImplicitConversions.`collection AsScalaIterable`
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
@@ -3657,12 +3656,8 @@ class KafkaApis(val requestChannel: RequestChannel,
         deleteShareGroupOffsetsResponseTopics.add(
           new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
             .setTopicName(topic.topicName)
-            .setPartitions(topic.partitions.map(partition => {
-              new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
-                .setPartitionIndex(partition)
-                .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
-                .setErrorMessage(Errors.TOPIC_AUTHORIZATION_FAILED.message())
-            }).toList.asJava)
+            .setErrorCode(Errors.TOPIC_AUTHORIZATION_FAILED.code)
+            .setErrorMessage(Errors.TOPIC_AUTHORIZATION_FAILED.message())
         )
       } else {
         authorizedTopics.add(topic)
@@ -3670,7 +3665,11 @@ class KafkaApis(val requestChannel: RequestChannel,
     }
 
     if (authorizedTopics.isEmpty) {
-      requestHelper.sendMaybeThrottle(request, new DeleteShareGroupOffsetsResponse(new DeleteShareGroupOffsetsResponseData()))
+      requestHelper.sendMaybeThrottle(
+        request,
+        new DeleteShareGroupOffsetsResponse(
+          new DeleteShareGroupOffsetsResponseData()
+            .setResponses(deleteShareGroupOffsetsResponseTopics)))
       return
     }
 
@@ -3679,7 +3678,10 @@ class KafkaApis(val requestChannel: RequestChannel,
       new DeleteShareGroupOffsetsRequestData().setGroupId(groupId).setTopics(authorizedTopics)
     ).handle[Unit] {(responseData, exception) => {
       if (exception != null) {
-        requestHelper.sendMaybeThrottle(request, deleteShareGroupOffsetsRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, exception))
+        requestHelper.sendMaybeThrottle(request, deleteShareGroupOffsetsRequest.getErrorResponse(
+          AbstractResponse.DEFAULT_THROTTLE_TIME,
+          Errors.forException(exception).code(),
+          exception.getMessage()))
       } else if (responseData.errorCode() != Errors.NONE.code) {
         requestHelper.sendMaybeThrottle(
           request,
