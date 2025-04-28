@@ -441,7 +441,7 @@ public class KStreamKTableJoinTest {
                     "stream-task-metrics",
                     "",
                     mkMap(
-                        mkEntry("thread-id", "main"),
+                        mkEntry("thread-id", Thread.currentThread().getName()),
                         mkEntry("task-id", "0_0")
                     )
                 ))
@@ -471,7 +471,7 @@ public class KStreamKTableJoinTest {
                         "stream-task-metrics",
                         "",
                         mkMap(
-                            mkEntry("thread-id", "main"),
+                            mkEntry("thread-id", Thread.currentThread().getName()),
                             mkEntry("task-id", "0_0")
                         )
                     ))
