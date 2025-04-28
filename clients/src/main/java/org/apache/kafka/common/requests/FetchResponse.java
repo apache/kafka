@@ -22,13 +22,12 @@ import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -145,8 +144,8 @@ public class FetchResponse extends AbstractResponse {
      *
      * <p><strong>This method should only be used in client-side.</strong></p>
      */
-    public static FetchResponse parse(ByteBuffer buffer, short version) {
-        return new FetchResponse(new FetchResponseData(new ByteBufferAccessor(buffer), version));
+    public static FetchResponse parse(Readable readable, short version) {
+        return new FetchResponse(new FetchResponseData(readable, version));
     }
 
     // Fetch versions 13 and above should have topic IDs for all topics.
