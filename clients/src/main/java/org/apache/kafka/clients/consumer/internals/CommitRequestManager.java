@@ -34,6 +34,7 @@ import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnstableOffsetCommitException;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.RecordBatch;
@@ -970,21 +971,37 @@ public class CommitRequestManager implements RequestManager, MemberStateListener
         }
 
         public NetworkClientDelegate.UnsentRequest toUnsentRequest() {
+            List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = requestedPartitions.stream()
+                .collect(Collectors.groupingBy(TopicPartition::topic))
+                .entrySet()
+                .stream()
+                .map(entry -> new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName(entry.getKey())
+                    .setPartitionIndexes(entry.getValue().stream()
+                        .map(TopicPartition::partition)
+                        .collect(Collectors.toList())))
+                .collect(Collectors.toList());
 
-            OffsetFetchRequest.Builder builder = memberInfo.memberEpoch.
-                map(epoch -> new OffsetFetchRequest.Builder(
-                    groupId,
-                    memberInfo.memberId,
-                    epoch,
-                    true,
-                    new ArrayList<>(this.requestedPartitions),
-                    throwOnFetchStableOffsetUnsupported))
+            OffsetFetchRequest.Builder builder = memberInfo.memberEpoch
+                .map(epoch -> new OffsetFetchRequest.Builder(
+                    new OffsetFetchRequestData()
+                        .setRequireStable(true)
+                        .setGroups(List.of(
+                            new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                                .setGroupId(groupId)
+                                .setMemberId(memberInfo.memberId)
+                                .setMemberEpoch(epoch)
+                                .setTopics(topics))),
+                            throwOnFetchStableOffsetUnsupported))
                 // Building request without passing member ID/epoch to leave the logic to choose
                 // default values when not present on the request builder.
                 .orElseGet(() -> new OffsetFetchRequest.Builder(
-                    groupId,
-                    true,
-                    new ArrayList<>(this.requestedPartitions),
+                    new OffsetFetchRequestData()
+                        .setRequireStable(true)
+                        .setGroups(List.of(
+                            new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                                .setGroupId(groupId)
+                                .setTopics(topics))),
                     throwOnFetchStableOffsetUnsupported));
             return buildRequestWithResponseHandling(builder);
         }

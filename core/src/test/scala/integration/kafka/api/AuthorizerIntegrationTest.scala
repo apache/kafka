@@ -37,7 +37,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderPartition, OffsetForLeaderTopic, OffsetForLeaderTopicCollection}
-import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, ConsumerGroupDescribeRequestData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteTopicsRequestData, DescribeClusterRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, DescribeProducersRequestData, DescribeTransactionsRequestData, FetchResponseData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, ListTransactionsRequestData, MetadataRequestData, OffsetCommitRequestData, ProduceRequestData, SyncGroupRequestData, WriteTxnMarkersRequestData}
+import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, ConsumerGroupDescribeRequestData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteTopicsRequestData, DescribeClusterRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, DescribeProducersRequestData, DescribeTransactionsRequestData, FetchResponseData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, ListTransactionsRequestData, MetadataRequestData, OffsetCommitRequestData, OffsetFetchRequestData, ProduceRequestData, SyncGroupRequestData, WriteTxnMarkersRequestData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, SimpleRecord}
@@ -318,15 +318,53 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   private def createOffsetFetchRequest: OffsetFetchRequest = {
-    new requests.OffsetFetchRequest.Builder(group, false, List(tp).asJava, false).build()
+    new OffsetFetchRequest.Builder(
+      new OffsetFetchRequestData()
+        .setRequireStable(false)
+        .setGroups(List(
+          new OffsetFetchRequestData.OffsetFetchRequestGroup()
+            .setGroupId(group)
+            .setTopics(List(
+              new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName(tp.topic)
+                .setPartitionIndexes(List[Integer](tp.partition).asJava)
+            ).asJava)
+        ).asJava),
+      false
+    ).build()
   }
 
   private def createOffsetFetchRequestAllPartitions: OffsetFetchRequest = {
-    new requests.OffsetFetchRequest.Builder(group, false, null, false).build()
+    new OffsetFetchRequest.Builder(
+      new OffsetFetchRequestData()
+        .setRequireStable(false)
+        .setGroups(List(
+          new OffsetFetchRequestData.OffsetFetchRequestGroup()
+            .setGroupId(group)
+            .setTopics(null)
+        ).asJava),
+      false
+    ).build()
   }
 
   private def createOffsetFetchRequest(groupToPartitionMap: util.Map[String, util.List[TopicPartition]]): OffsetFetchRequest = {
-    new requests.OffsetFetchRequest.Builder(groupToPartitionMap, false, false).build()
+    new OffsetFetchRequest.Builder(
+      new OffsetFetchRequestData()
+        .setGroups(groupToPartitionMap.asScala.map { case (groupId, partitions) =>
+          new OffsetFetchRequestData.OffsetFetchRequestGroup()
+            .setGroupId(groupId)
+            .setTopics(
+              if (partitions == null)
+                null
+              else
+                partitions.asScala.groupBy(_.topic).map { case (topic, partitions) =>
+                  new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName(topic)
+                    .setPartitionIndexes(partitions.map(_.partition).map(Int.box).asJava)
+                }.toList.asJava)
+        }.toList.asJava),
+      false
+    ).build()
   }
 
   private def createFindCoordinatorRequest = {
