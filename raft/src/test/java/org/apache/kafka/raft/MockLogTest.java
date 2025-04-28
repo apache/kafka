@@ -30,6 +30,7 @@ import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.RecordBatch;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.record.SimpleRecord;
+import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.snapshot.RawSnapshotReader;
@@ -109,6 +110,62 @@ public class MockLogTest {
     }
 
     @Test
+    public void testTruncationToWithVoterSetRecord() {
+        int epoch = 2;
+        VoterSet initialVoters = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(0, 1, 2), true));
+        log.setInitialVoterSet(initialVoters);
+
+        appendBatch(2, epoch);
+        VoterSet newVoters = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(0, 1, 2, 3), true));
+        appendVoterSetRecord(newVoters, epoch);
+        appendBatch(2, epoch);
+
+        assertEquals(0L, log.startOffset());
+        assertEquals(5L, log.endOffset().offset());
+        assertEquals(newVoters, log.lastVoterSet());
+        assertEquals(initialVoters, log.lastCommittedVoterSet());
+
+        log.truncateTo(3);
+        assertEquals(0L, log.startOffset());
+        assertEquals(3L, log.endOffset().offset());
+        assertEquals(newVoters, log.lastVoterSet());
+        assertEquals(initialVoters, log.lastCommittedVoterSet());
+
+        log.truncateTo(2);
+        assertEquals(0L, log.startOffset());
+        assertEquals(2L, log.endOffset().offset());
+        assertEquals(initialVoters, log.lastVoterSet());
+        assertEquals(initialVoters, log.lastCommittedVoterSet());
+    }
+
+    @Test
+    public void testTruncationToLatestSnapshotWithVoterSetRecord() {
+        int numberOfRecords = 10;
+        int epoch = 1;
+        OffsetAndEpoch snapshotId = new OffsetAndEpoch(2 * numberOfRecords, epoch);
+        VoterSet initialVoters = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(0, 1, 2), true));
+        log.setInitialVoterSet(initialVoters);
+
+        appendBatch(numberOfRecords - 1, epoch);
+        VoterSet snapshotVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(0, 1, 2, 3), true));
+        appendVoterSetRecord(snapshotVoterSet, epoch);
+        assertEquals(snapshotVoterSet, log.lastVoterSet());
+        assertEquals(initialVoters, log.lastCommittedVoterSet());
+
+        try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(snapshotId).get()) {
+            snapshot.freeze();
+        }
+
+        assertTrue(log.truncateToLatestSnapshot());
+        assertEquals(snapshotId.offset(), log.startOffset());
+        assertEquals(snapshotId.epoch(), log.lastFetchedEpoch());
+        assertEquals(snapshotId.offset(), log.endOffset().offset());
+        assertEquals(snapshotId.offset(), log.highWatermark().offset());
+        assertEquals(snapshotVoterSet, log.lastVoterSet());
+        assertEquals(snapshotVoterSet, log.lastCommittedVoterSet());
+    }
+
+    @Test
     public void testTruncateBelowHighWatermark() {
         appendBatch(5, 1);
         LogOffsetMetadata highWatermark = new LogOffsetMetadata(5L);
@@ -124,6 +181,33 @@ public class MockLogTest {
         LogOffsetMetadata newOffset = new LogOffsetMetadata(5L);
         log.updateHighWatermark(newOffset);
         assertEquals(newOffset.offset(), log.highWatermark().offset());
+    }
+
+    @Test
+    public void testUpdateHighWatermarkWithVoterSetRecord() {
+        int epoch = 1;
+        VoterSet initialVoters = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(0, 1, 2), true));
+        log.setInitialVoterSet(initialVoters);
+
+        appendBatch(5, epoch);
+        VoterSet newVoters = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(0, 1, 2, 3), true));
+        appendVoterSetRecord(newVoters, epoch);
+
+        assertEquals(0, log.highWatermark().offset());
+        assertEquals(newVoters, log.lastVoterSet());
+        assertEquals(initialVoters, log.lastCommittedVoterSet());
+
+        LogOffsetMetadata newOffset = new LogOffsetMetadata(5L);
+        log.updateHighWatermark(newOffset);
+        assertEquals(newOffset.offset(), log.highWatermark().offset());
+        assertEquals(newVoters, log.lastVoterSet());
+        assertEquals(initialVoters, log.lastCommittedVoterSet());
+
+        LogOffsetMetadata endOffset = log.endOffset();
+        log.updateHighWatermark(endOffset);
+        assertEquals(endOffset.offset(), log.highWatermark().offset());
+        assertEquals(newVoters, log.lastVoterSet());
+        assertEquals(newVoters, log.lastCommittedVoterSet());
     }
 
     @Test
@@ -1061,6 +1145,20 @@ public class MockLogTest {
                 Compression.NONE,
                 epoch,
                 records.toArray(new SimpleRecord[records.size()])
+            ),
+            epoch
+        );
+    }
+
+    private void appendVoterSetRecord(VoterSet voterSet, int epoch) {
+        BufferSupplier bufferSupplier = BufferSupplier.NO_CACHING;
+        log.appendAsLeader(
+            MemoryRecords.withVotersRecord(
+                log.endOffset().offset(),
+                0,
+                epoch,
+                bufferSupplier.get(300),
+                voterSet.toVotersRecord((short) 0)
             ),
             epoch
         );
