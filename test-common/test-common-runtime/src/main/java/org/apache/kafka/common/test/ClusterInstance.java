@@ -298,7 +298,7 @@ public interface ClusterInstance {
      */
     default void deleteTopic(String topicName) throws InterruptedException {
         try (Admin admin = admin()) {
-            admin.deleteTopics(Collections.singletonList(topicName));
+            admin.deleteTopics(List.of(topicName));
             waitTopicDeletion(topicName);
         }
     }
