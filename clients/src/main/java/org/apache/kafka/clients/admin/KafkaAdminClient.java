@@ -3779,10 +3779,10 @@ public class KafkaAdminClient extends AdminClient {
                 Map.Entry::getKey,
                 entry -> new ListConsumerGroupOffsetsSpec().topicPartitions(entry.getValue().topicPartitions())
             ));
-        ListConsumerGroupOffsetsOptions consumerOptions = new ListConsumerGroupOffsetsOptions();
-        consumerOptions.timeoutMs(options.timeoutMs());
-        consumerOptions.requireStable(options.requireStable());
-        return new ListStreamsGroupOffsetsResult(listConsumerGroupOffsets(consumerGroupSpecs, consumerOptions));
+        ListConsumerGroupOffsetsOptions consumerGroupOptions = new ListConsumerGroupOffsetsOptions()
+            .requireStable(options.requireStable())
+            .timeoutMs(options.timeoutMs());
+        return new ListStreamsGroupOffsetsResult(listConsumerGroupOffsets(consumerGroupSpecs, consumerGroupOptions));
     }
 
     @Override
@@ -3819,9 +3819,9 @@ public class KafkaAdminClient extends AdminClient {
         String groupId,
         Set<TopicPartition> partitions,
         DeleteStreamsGroupOffsetsOptions options) {
-        DeleteConsumerGroupOffsetsOptions consumerOptions = new DeleteConsumerGroupOffsetsOptions();
-        consumerOptions.timeoutMs = options.timeoutMs();
-        return new DeleteStreamsGroupOffsetsResult(deleteConsumerGroupOffsets(groupId, partitions, consumerOptions));
+        DeleteConsumerGroupOffsetsOptions consumerGroupOptions = new DeleteConsumerGroupOffsetsOptions()
+            .timeoutMs(options.timeoutMs());
+        return new DeleteStreamsGroupOffsetsResult(deleteConsumerGroupOffsets(groupId, partitions, consumerGroupOptions));
     }
 
     @Override
@@ -4280,9 +4280,9 @@ public class KafkaAdminClient extends AdminClient {
         Map<TopicPartition, OffsetAndMetadata> offsets,
         AlterStreamsGroupOffsetsOptions options
     ) {
-        AlterConsumerGroupOffsetsOptions consumerOptions = new AlterConsumerGroupOffsetsOptions();
-        consumerOptions.timeoutMs = options.timeoutMs;
-        return new AlterStreamsGroupOffsetsResult(alterConsumerGroupOffsets(groupId, offsets, consumerOptions));
+        AlterConsumerGroupOffsetsOptions consumerGroupOptions = new AlterConsumerGroupOffsetsOptions()
+            .timeoutMs(options.timeoutMs());
+        return new AlterStreamsGroupOffsetsResult(alterConsumerGroupOffsets(groupId, offsets, consumerGroupOptions));
     }
 
     @Override
