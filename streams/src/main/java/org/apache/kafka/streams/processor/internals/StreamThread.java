@@ -41,7 +41,9 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -1083,8 +1085,9 @@ public class StreamThread extends Thread implements ProcessingThread {
         shutdownErrorHook.run();
     }
 
-    public void sendShutdownRequest(final AssignorError assignorError) {
-        assignmentErrorCode.set(assignorError.code());
+    public void sendShutdownRequest() {
+        assignmentErrorCode.set(AssignorError.SHUTDOWN_REQUESTED.code());
+        streamsRebalanceData.ifPresent(StreamsRebalanceData::requestShutdown);
     }
 
     private void handleTaskMigrated(final TaskMigratedException e) {
@@ -1490,9 +1493,10 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     public void handleStreamsRebalanceData() {
         if (streamsRebalanceData.isPresent()) {
-
-            if (streamsRebalanceData.get().shutdownRequested()) {
-                assignmentErrorCode.set(AssignorError.SHUTDOWN_REQUESTED.code());
+            for (final StreamsGroupHeartbeatResponseData.Status status : streamsRebalanceData.get().statuses()) {
+                if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.SHUTDOWN_APPLICATION.code()) {
+                    shutdownErrorHook.run();
+                }
             }
         }
     }
