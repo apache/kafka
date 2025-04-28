@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.coordinator.group;
 
-import org.apache.kafka.clients.admin.StreamsGroupMemberDescription;
 import org.apache.kafka.clients.consumer.internals.ConsumerProtocol;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Uuid;

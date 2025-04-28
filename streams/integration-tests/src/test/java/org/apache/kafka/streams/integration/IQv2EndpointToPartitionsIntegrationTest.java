@@ -34,6 +34,7 @@ import org.apache.kafka.streams.kstream.Grouped;
 import org.apache.kafka.streams.kstream.Materialized;
 import org.apache.kafka.streams.kstream.Produced;
 import org.apache.kafka.test.TestUtils;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Timeout;
@@ -128,7 +129,7 @@ public class IQv2EndpointToPartitionsIntegrationTest {
             final Topology topology = complexTopology();
             try (final KafkaStreams streamsOne = new KafkaStreams(topology, streamsApplicationProperties)) {
                 IntegrationTestUtils.startApplicationAndWaitUntilRunning(streamsOne);
-                waitForCondition(()-> !streamsOne.metadataForAllStreamsClients().isEmpty(),
+                waitForCondition(() -> !streamsOne.metadataForAllStreamsClients().isEmpty(),
                         IntegrationTestUtils.DEFAULT_TIMEOUT,
                         () -> "Kafka Streams didn't get metadata about the client.");
                 waitForCondition(() -> streamsOne.metadataForAllStreamsClients().iterator().next().topicPartitions().size() == 4,
@@ -223,10 +224,10 @@ public class IQv2EndpointToPartitionsIntegrationTest {
                     assertEquals(1, streamsTwoSourceTopicCount);
 
                     if (usingStandbyReplicas) {
-                        TopicPartition streamsOneStandbyTopicPartition = streamsOneStandbyTopicPartitions.iterator().next();
-                        TopicPartition streamsTwoStandbyTopicPartition = streamsTwoStandbyTopicPartitions.iterator().next();
-                        String streamsOneStandbyTopicName = streamsOneStandbyTopicPartition.topic();
-                        String streamsTwoStandbyTopicName = streamsTwoStandbyTopicPartition.topic();
+                        final TopicPartition streamsOneStandbyTopicPartition = streamsOneStandbyTopicPartitions.iterator().next();
+                        final TopicPartition streamsTwoStandbyTopicPartition = streamsTwoStandbyTopicPartitions.iterator().next();
+                        final String streamsOneStandbyTopicName = streamsOneStandbyTopicPartition.topic();
+                        final String streamsTwoStandbyTopicName = streamsTwoStandbyTopicPartition.topic();
                         assertEquals(streamsOneStandbyTopicName, streamsTwoStandbyTopicName);
                         assertNotEquals(streamsOneStandbyTopicPartition.partition(), streamsTwoStandbyTopicPartition.partition());
                     }
