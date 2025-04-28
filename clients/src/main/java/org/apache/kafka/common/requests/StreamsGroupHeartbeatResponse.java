@@ -18,10 +18,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.Collections;
 import java.util.Map;
 
@@ -72,9 +71,9 @@ public class StreamsGroupHeartbeatResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    public static StreamsGroupHeartbeatResponse parse(ByteBuffer buffer, short version) {
+    public static StreamsGroupHeartbeatResponse parse(Readable readable, short version) {
         return new StreamsGroupHeartbeatResponse(new StreamsGroupHeartbeatResponseData(
-            new ByteBufferAccessor(buffer), version));
+            readable, version));
     }
 
     public enum Status {

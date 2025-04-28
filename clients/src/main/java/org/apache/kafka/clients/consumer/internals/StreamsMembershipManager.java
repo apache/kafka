@@ -52,6 +52,8 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+import static java.util.Collections.unmodifiableList;
+
 /**
  * Tracks the state of a single member in relationship to a group:
  * <p/>
@@ -1304,5 +1306,10 @@ public class StreamsMembershipManager implements RequestManager {
             log.debug("The onAllTasksLost callback completed successfully; signaling to continue to the next phase of rebalance");
             future.complete(null);
         }
+    }
+
+    // visible for testing
+    List<MemberStateListener> stateListeners() {
+        return unmodifiableList(stateUpdatesListeners);
     }
 }
