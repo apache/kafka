@@ -3797,9 +3797,9 @@ public class KafkaAdminClient extends AdminClient {
 
     @Override
     public DeleteStreamsGroupsResult deleteStreamsGroups(Collection<String> groupIds, DeleteStreamsGroupsOptions options) {
-        DeleteConsumerGroupsOptions consumerOptions = new DeleteConsumerGroupsOptions();
-        consumerOptions.timeoutMs = options.timeoutMs;
-        return new DeleteStreamsGroupsResult(deleteConsumerGroups(groupIds, consumerOptions));
+        DeleteConsumerGroupsOptions consumerGroupOptions = new DeleteConsumerGroupsOptions()
+            .timeoutMs(options.timeoutMs());
+        return new DeleteStreamsGroupsResult(deleteConsumerGroups(groupIds, consumerGroupOptions));
     }
 
     @Override
