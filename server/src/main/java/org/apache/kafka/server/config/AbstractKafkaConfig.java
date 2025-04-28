@@ -68,16 +68,12 @@ public abstract class AbstractKafkaConfig extends AbstractConfig {
         AddPartitionsToTxnConfig.CONFIG_DEF
     ));
 
-    public final List<String> logDirs;
-
-    @SuppressWarnings("this-escape")
     public AbstractKafkaConfig(ConfigDef definition, Map<?, ?> originals, Map<String, ?> configProviderProps, boolean doLog) {
         super(definition, originals, configProviderProps, doLog);
-        this.logDirs = Csv.parseCsvList(Optional.ofNullable(getString(ServerLogConfigs.LOG_DIRS_CONFIG)).orElse(getString(ServerLogConfigs.LOG_DIR_CONFIG)));
     }
 
     public List<String> logDirs() {
-        return logDirs;
+        return Csv.parseCsvList(Optional.ofNullable(getString(ServerLogConfigs.LOG_DIRS_CONFIG)).orElse(getString(ServerLogConfigs.LOG_DIR_CONFIG)));
     }
 
     public int numIoThreads() {
