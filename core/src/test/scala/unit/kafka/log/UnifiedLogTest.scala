@@ -52,10 +52,11 @@ import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyLong}
 import org.mockito.Mockito.{doAnswer, doThrow, spy}
+
 import net.jqwik.api.AfterFailureMode
 import net.jqwik.api.ForAll
 import net.jqwik.api.Property
-import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.KRaftConfigs
 
 import java.io._
 import java.nio.ByteBuffer
@@ -2733,7 +2734,7 @@ class UnifiedLogTest {
   @Test
   def testLeaderEpochCacheCreatedAfterMessageFormatUpgrade(): Unit = {
     val logProps = new Properties()
-    logProps.put(ServerLogConfigs.INTERNAL_SEGMENT_BYTES_CONFIG, "1000")
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1000")
     logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1")
     logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "65536")
     val logConfig = new LogConfig(logProps)

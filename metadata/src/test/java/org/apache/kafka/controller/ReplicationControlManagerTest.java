@@ -126,6 +126,7 @@ import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.Collectors;
 import java.util.stream.IntStream;
 
+import static org.apache.kafka.common.config.TopicConfig.SEGMENT_BYTES_CONFIG;
 import static org.apache.kafka.common.metadata.MetadataRecordType.CLEAR_ELR_RECORD;
 import static org.apache.kafka.common.protocol.Errors.ELECTION_NOT_NEEDED;
 import static org.apache.kafka.common.protocol.Errors.ELIGIBLE_LEADERS_NOT_AVAILABLE;
@@ -904,7 +905,7 @@ public class ReplicationControlManagerTest {
                 null, Map.of()),
             new CreateTopicPolicy.RequestMetadata("baz", null, null,
                 Map.of(0, List.of(2, 1, 0)),
-                Map.of("segment.bytes", "12300000")),
+                Map.of(SEGMENT_BYTES_CONFIG, "12300000")),
             new CreateTopicPolicy.RequestMetadata("quux", null, null,
                 Map.of(0, List.of(2, 1, 0)), Map.of())));
         ReplicationControlTestContext ctx = new ReplicationControlTestContext.Builder().
@@ -915,7 +916,7 @@ public class ReplicationControlManagerTest {
         ctx.createTestTopic("foo", 2, (short) 2, NONE.code());
         ctx.createTestTopic("bar", 3, (short) 3, POLICY_VIOLATION.code());
         ctx.createTestTopic("baz", new int[][] {new int[] {2, 1, 0}},
-            Map.of("segment.bytes", "12300000"), NONE.code());
+            Map.of(SEGMENT_BYTES_CONFIG, "12300000"), NONE.code());
         ctx.createTestTopic("quux", new int[][] {new int[] {1, 2, 0}}, POLICY_VIOLATION.code());
     }
 

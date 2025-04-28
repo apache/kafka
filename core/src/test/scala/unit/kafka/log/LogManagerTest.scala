@@ -27,7 +27,6 @@ import org.apache.kafka.common.{DirectoryId, KafkaException, TopicPartition, Uui
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.{ConfigRepository, MockConfigRepository}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
-import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
@@ -44,7 +43,7 @@ import java.util.{Collections, Optional, OptionalLong, Properties}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.{FileLock, KafkaScheduler, MockTime, Scheduler}
-import org.apache.kafka.storage.internals.log.{CleanerConfig, FetchDataInfo, LogConfig, LogDirFailureChannel, LogMetricNames, LogOffsetsListener, LogStartOffsetIncrementReason, ProducerStateManagerConfig, RemoteIndexCache, UnifiedLog, LogManager => JLogManager}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, FetchDataInfo, LogConfig, LogDirFailureChannel, LogMetricNames, LogManager => JLogManager, LogOffsetsListener, LogStartOffsetIncrementReason, ProducerStateManagerConfig, RemoteIndexCache, UnifiedLog}
 import org.apache.kafka.storage.internals.checkpoint.{CleanShutdownFileHandler, OffsetCheckpointFile}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.function.Executable
@@ -61,7 +60,7 @@ class LogManagerTest {
   val maxRollInterval = 100
   val maxLogAgeMs: Int = 10 * 60 * 1000
   val logProps = new Properties()
-  logProps.put(ServerLogConfigs.INTERNAL_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
+  logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
   logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 4096: java.lang.Integer)
   logProps.put(TopicConfig.RETENTION_MS_CONFIG, maxLogAgeMs: java.lang.Integer)
   val logConfig = new LogConfig(logProps)
@@ -392,7 +391,7 @@ class LogManagerTest {
     logManager.shutdown()
     val segmentBytes = 10 * setSize
     val properties = new Properties()
-    properties.put(ServerLogConfigs.INTERNAL_SEGMENT_BYTES_CONFIG, segmentBytes.toString)
+    properties.put(TopicConfig.SEGMENT_BYTES_CONFIG, segmentBytes.toString)
     properties.put(TopicConfig.RETENTION_BYTES_CONFIG, (5L * 10L * setSize + 10L).toString)
     val configRepository = MockConfigRepository.forTopic(name, properties)
 
