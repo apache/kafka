@@ -20,6 +20,7 @@ import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.AbstractResponse;
 import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType;
@@ -86,15 +87,32 @@ public class ListConsumerGroupOffsetsHandler implements AdminApiHandler<Coordina
     }
 
     public OffsetFetchRequest.Builder buildBatchedRequest(Set<CoordinatorKey> groupIds) {
-        // Create a map that only contains the consumer groups owned by the coordinator.
-        Map<String, List<TopicPartition>> coordinatorGroupIdToTopicPartitions = new HashMap<>(groupIds.size());
-        groupIds.forEach(g -> {
-            ListConsumerGroupOffsetsSpec spec = groupSpecs.get(g.idValue);
-            List<TopicPartition> partitions = spec.topicPartitions() != null ? new ArrayList<>(spec.topicPartitions()) : null;
-            coordinatorGroupIdToTopicPartitions.put(g.idValue, partitions);
-        });
+        // Create a request that only contains the consumer groups owned by the coordinator.
+        return new OffsetFetchRequest.Builder(
+            new OffsetFetchRequestData()
+                .setRequireStable(requireStable)
+                .setGroups(groupIds.stream().map(groupId -> {
+                    ListConsumerGroupOffsetsSpec spec = groupSpecs.get(groupId.idValue);
 
-        return new OffsetFetchRequest.Builder(coordinatorGroupIdToTopicPartitions, requireStable, false);
+                    List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = null;
+                    if (spec.topicPartitions() != null) {
+                        topics = spec.topicPartitions().stream()
+                            .collect(Collectors.groupingBy(TopicPartition::topic))
+                            .entrySet()
+                            .stream()
+                            .map(entry -> new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                                .setName(entry.getKey())
+                                .setPartitionIndexes(entry.getValue().stream()
+                                    .map(TopicPartition::partition)
+                                    .collect(Collectors.toList())))
+                            .collect(Collectors.toList());
+                    }
+                    return new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                        .setGroupId(groupId.idValue)
+                        .setTopics(topics);
+                }).collect(Collectors.toList())),
+            false
+        );
     }
 
     @Override

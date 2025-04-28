@@ -105,6 +105,7 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
     private boolean committing;
     private boolean taskStopped;
     private final WorkerErrantRecordReporter workerErrantRecordReporter;
+    private final String version;
 
     public WorkerSinkTask(ConnectorTaskId id,
                           SinkTask task,
@@ -125,9 +126,10 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
                           WorkerErrantRecordReporter workerErrantRecordReporter,
                           StatusBackingStore statusBackingStore,
                           Supplier<List<ErrorReporter<ConsumerRecord<byte[], byte[]>>>> errorReportersSupplier,
+                          TaskPluginsMetadata pluginsMetadata,
                           Function<ClassLoader, LoaderSwap> pluginLoaderSwapper) {
         super(id, statusListener, initialState, loader, connectMetrics, errorMetrics,
-                retryWithToleranceOperator, transformationChain, errorReportersSupplier, time, statusBackingStore, pluginLoaderSwapper);
+                retryWithToleranceOperator, transformationChain, errorReportersSupplier, time, statusBackingStore, pluginsMetadata, pluginLoaderSwapper);
 
         this.workerConfig = workerConfig;
         this.task = task;
@@ -153,6 +155,7 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
         this.isTopicTrackingEnabled = workerConfig.getBoolean(TOPIC_TRACKING_ENABLE_CONFIG);
         this.taskStopped = false;
         this.workerErrantRecordReporter = workerErrantRecordReporter;
+        this.version = task.version();
     }
 
     @Override
@@ -225,6 +228,11 @@ class WorkerSinkTask extends WorkerTask<ConsumerRecord<byte[], byte[]>, SinkReco
             log.trace("Consumer woken up during initial offset commit attempt, " 
                 + "but succeeded during a later attempt");
         }
+    }
+
+    @Override
+    public String taskVersion() {
+        return version;
     }
 
     protected void iteration() {
