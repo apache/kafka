@@ -28,6 +28,7 @@ import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.common.CheckpointFile;
 import org.apache.kafka.server.common.OffsetAndEpoch;
+import org.apache.kafka.server.LeaderEndPoint;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
 import org.apache.kafka.server.log.remote.storage.RemoteLogSegmentMetadata;
 import org.apache.kafka.server.log.remote.storage.RemoteStorageException;
@@ -136,12 +137,11 @@ public class TierStateMachine {
         // Find the end-offset for the epoch earlier to the given epoch from the leader
         Map<TopicPartition, OffsetForLeaderEpochRequestData.OffsetForLeaderPartition> partitionsWithEpochs = new HashMap<>();
         partitionsWithEpochs.put(partition, new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition().setPartition(partition.partition()).setCurrentLeaderEpoch(currentLeaderEpoch).setLeaderEpoch(previousEpoch));
-        Option<OffsetForLeaderEpochResponseData.EpochEndOffset> maybeEpochEndOffset = leader.fetchEpochEndOffsets(CollectionConverters.asScala(partitionsWithEpochs)).get(partition);
-        if (maybeEpochEndOffset.isEmpty()) {
+        OffsetForLeaderEpochResponseData.EpochEndOffset epochEndOffset = leader.fetchEpochEndOffsets(partitionsWithEpochs).get(partition);
+        if (epochEndOffset == null) {
             throw new KafkaException("No response received for partition: " + partition);
         }
 
-        OffsetForLeaderEpochResponseData.EpochEndOffset epochEndOffset = maybeEpochEndOffset.get();
         if (epochEndOffset.errorCode() != Errors.NONE.code()) {
             throw Errors.forCode(epochEndOffset.errorCode()).exception();
         }
