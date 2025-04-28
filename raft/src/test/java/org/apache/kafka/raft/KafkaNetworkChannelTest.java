@@ -56,12 +56,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.ExecutionException;
 import java.util.stream.Collectors;
 
-import static java.util.Arrays.asList;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
@@ -71,7 +69,7 @@ public class KafkaNetworkChannelTest {
 
         @Override
         public List<Node> fetchNodes() {
-            return Collections.emptyList();
+            return List.of();
         }
 
         @Override
@@ -83,7 +81,7 @@ public class KafkaNetworkChannelTest {
         public void update(Time time, MockClient.MetadataUpdate update) { }
     }
 
-    private static final List<ApiKeys> RAFT_APIS = asList(
+    private static final List<ApiKeys> RAFT_APIS = List.of(
         ApiKeys.VOTE,
         ApiKeys.BEGIN_QUORUM_EPOCH,
         ApiKeys.END_QUORUM_EPOCH,
@@ -280,7 +278,7 @@ public class KafkaNetworkChannelTest {
                     clusterId,
                     leaderId,
                     leaderEpoch,
-                    Collections.singletonList(2)
+                    List.of(2)
                 );
 
             case VOTE:
@@ -323,38 +321,31 @@ public class KafkaNetworkChannelTest {
     }
 
     private ApiMessage buildTestErrorResponse(ApiKeys key, Errors error) {
-        switch (key) {
-            case BEGIN_QUORUM_EPOCH:
-                return new BeginQuorumEpochResponseData().setErrorCode(error.code());
-            case END_QUORUM_EPOCH:
-                return new EndQuorumEpochResponseData().setErrorCode(error.code());
-            case VOTE:
-                return new VoteResponseData()
-                    .setErrorCode(error.code())
-                    .setTopics(
-                        Collections.singletonList(
-                            new VoteResponseData.TopicData()
-                                .setTopicName(topicPartition.topic())
-                                .setPartitions(
-                                    Collections.singletonList(
-                                        new VoteResponseData.PartitionData()
-                                            .setErrorCode(Errors.NONE.code())
-                                            .setLeaderId(1)
-                                            .setLeaderEpoch(5)
-                                            .setVoteGranted(false)
-                                    )
+        return switch (key) {
+            case BEGIN_QUORUM_EPOCH -> new BeginQuorumEpochResponseData().setErrorCode(error.code());
+            case END_QUORUM_EPOCH -> new EndQuorumEpochResponseData().setErrorCode(error.code());
+            case VOTE -> new VoteResponseData()
+                .setErrorCode(error.code())
+                .setTopics(
+                    List.of(
+                        new VoteResponseData.TopicData()
+                            .setTopicName(topicPartition.topic())
+                            .setPartitions(
+                                List.of(
+                                    new VoteResponseData.PartitionData()
+                                        .setErrorCode(Errors.NONE.code())
+                                        .setLeaderId(1)
+                                        .setLeaderEpoch(5)
+                                        .setVoteGranted(false)
                                 )
-                        )
-                    );
-            case FETCH:
-                return new FetchResponseData().setErrorCode(error.code());
-            case FETCH_SNAPSHOT:
-                return new FetchSnapshotResponseData().setErrorCode(error.code());
-            case UPDATE_RAFT_VOTER:
-                return new UpdateRaftVoterResponseData().setErrorCode(error.code());
-            default:
-                throw new AssertionError("Unexpected api " + key);
-        }
+                            )
+                    )
+                );
+            case FETCH -> new FetchResponseData().setErrorCode(error.code());
+            case FETCH_SNAPSHOT -> new FetchSnapshotResponseData().setErrorCode(error.code());
+            case UPDATE_RAFT_VOTER -> new UpdateRaftVoterResponseData().setErrorCode(error.code());
+            default -> throw new AssertionError("Unexpected api " + key);
+        };
     }
 
     private Errors extractError(ApiMessage response) {
@@ -386,7 +377,7 @@ public class KafkaNetworkChannelTest {
         } else if (responseData instanceof EndQuorumEpochResponseData) {
             return new EndQuorumEpochResponse((EndQuorumEpochResponseData) responseData);
         } else if (responseData instanceof FetchResponseData) {
-            return new FetchResponse((FetchResponseData) responseData);
+            return FetchResponse.of((FetchResponseData) responseData);
         } else if (responseData instanceof FetchSnapshotResponseData) {
             return new FetchSnapshotResponse((FetchSnapshotResponseData) responseData);
         } else if (responseData instanceof UpdateRaftVoterResponseData) {

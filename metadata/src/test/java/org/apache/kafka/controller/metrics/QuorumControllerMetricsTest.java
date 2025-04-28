@@ -44,7 +44,6 @@ public class QuorumControllerMetricsTest {
                     time,
                     9000)) {
                 metrics.addTimeSinceLastHeartbeatMetric(1);
-                metrics.updateBrokerContactTime(1, time.milliseconds());
                 HashSet<String> expected = new HashSet<>(List.of(
                     "kafka.controller:type=ControllerEventManager,name=EventQueueProcessingTimeMs",
                     "kafka.controller:type=ControllerEventManager,name=EventQueueTimeMs",
@@ -177,7 +176,7 @@ public class QuorumControllerMetricsTest {
             metrics.addTimeSinceLastHeartbeatMetric(1);
             int numMetrics = registry.allMetrics().size();
             Gauge<Integer> timeSinceLastHeartbeatReceivedMs = (Gauge<Integer>) registry.allMetrics().get(metricName("KafkaController", "TimeSinceLastHeartbeatReceivedMs", "broker=1"));
-            metrics.updateBrokerContactTime(brokerId, time.milliseconds());
+            metrics.updateBrokerContactTime(brokerId);
             time.sleep(1000);
             assertEquals(1000, timeSinceLastHeartbeatReceivedMs.value());
             time.sleep(100000);

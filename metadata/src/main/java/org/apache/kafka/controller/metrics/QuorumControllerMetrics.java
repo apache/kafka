@@ -160,6 +160,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
     }
 
     public void addTimeSinceLastHeartbeatMetric(int brokerId) {
+        brokerContactTimesMs.put(brokerId, new AtomicLong(time.milliseconds()));
         registry.ifPresent(r -> r.newGauge(
             getBrokerIdTagMetricName("KafkaController", TIME_SINCE_LAST_HEARTBEAT_RECEIVED_METRIC_NAME, brokerId),
             new Gauge<Integer>() {
@@ -256,8 +257,8 @@ public class QuorumControllerMetrics implements AutoCloseable {
         return newActiveControllers.get();
     }
 
-    public void updateBrokerContactTime(int brokerId, long contactTimeMs) {
-        brokerContactTimesMs.putIfAbsent(brokerId, new AtomicLong(contactTimeMs));
+    public void updateBrokerContactTime(int brokerId) {
+        brokerContactTimesMs.putIfAbsent(brokerId, new AtomicLong(time.milliseconds()));
     }
     public int timeSinceLastHeartbeatMs(int brokerId) {
         if (!brokerContactTimesMs.containsKey(brokerId)) {

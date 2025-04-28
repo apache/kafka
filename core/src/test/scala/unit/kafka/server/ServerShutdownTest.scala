@@ -21,7 +21,6 @@ import kafka.utils.{CoreUtils, TestInfoUtils, TestUtils}
 import java.io.File
 import java.util.concurrent.CancellationException
 import kafka.integration.KafkaServerTestHarness
-import kafka.log.LogManager
 import org.apache.kafka.clients.consumer.Consumer
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerRecord}
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -29,6 +28,7 @@ import org.apache.kafka.common.serialization.{IntegerDeserializer, IntegerSerial
 import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
+import org.apache.kafka.storage.internals.log.LogManager
 import org.junit.jupiter.api.{BeforeEach, TestInfo, Timeout}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
@@ -74,9 +74,9 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     super.setUp(testInfo)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testCleanShutdown(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testCleanShutdown(groupProtocol: String): Unit = {
 
     def createProducer(): KafkaProducer[Integer, String] =
       TestUtils.createProducer(
@@ -105,7 +105,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     // do a clean shutdown and check that offset checkpoint file exists
     shutdownBroker()
     for (logDir <- config.logDirs) {
-      val OffsetCheckpointFile = new File(logDir, LogManager.RecoveryPointCheckpointFile)
+      val OffsetCheckpointFile = new File(logDir, LogManager.RECOVERY_POINT_CHECKPOINT_FILE)
       assertTrue(OffsetCheckpointFile.exists)
       assertTrue(OffsetCheckpointFile.length() > 0)
     }

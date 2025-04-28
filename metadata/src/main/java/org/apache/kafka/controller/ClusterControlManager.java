@@ -72,7 +72,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
-import static java.util.concurrent.TimeUnit.MILLISECONDS;
 import static java.util.concurrent.TimeUnit.NANOSECONDS;
 
 
@@ -329,10 +328,11 @@ public class ClusterControlManager {
         for (BrokerRegistration registration : brokerRegistrations.values()) {
             int brokerId = registration.id();
             heartbeatManager.register(brokerId, registration.fenced());
-            heartbeatManager.tracker().updateContactTime(
-                new BrokerIdAndEpoch(brokerId, registration.epoch()), nowNs);
             metrics.addTimeSinceLastHeartbeatMetric(brokerId);
-            metrics.updateBrokerContactTime(brokerId, MILLISECONDS.convert(nowNs, NANOSECONDS));
+            if (!registration.fenced()) {
+                heartbeatManager.tracker().updateContactTime(
+                    new BrokerIdAndEpoch(brokerId, registration.epoch()), nowNs);
+            }
         }
     }
 
@@ -378,8 +378,8 @@ public class ClusterControlManager {
             storedBrokerEpoch = existing.epoch();
             if (heartbeatManager.hasValidSession(brokerId, existing.epoch())) {
                 if (!request.incarnationId().equals(prevIncarnationId)) {
-                    throw new DuplicateBrokerRegistrationException("Another broker is " +
-                        "registered with that broker id.");
+                    throw new DuplicateBrokerRegistrationException("Another broker is registered with that broker id. If the broker " +
+                            "was recently restarted this should self-resolve once the heartbeat manager expires the broker's session.");
                 }
             }
         }
@@ -453,7 +453,6 @@ public class ClusterControlManager {
                         "{}.  Generated {} record(s) to clean up previous incarnations. New broker " +
                         "epoch is {}.", brokerId, request.incarnationId(), numRecordsAdded, newBrokerEpoch);
                 metrics.addTimeSinceLastHeartbeatMetric(brokerId);
-                metrics.updateBrokerContactTime(brokerId, time.milliseconds());
             } else {
                 log.info("Registering a new incarnation of broker {}. Previous incarnation ID " +
                         "was {}; new incarnation ID is {}. Generated {} record(s) to clean up " +
@@ -546,7 +545,7 @@ public class ClusterControlManager {
      * @param brokerId      The broker id to track.
      * @param brokerEpoch   The broker epoch to track.
      *
-     * @returns             True only if the ClusterControlManager is active.
+     * @return              True only if the ClusterControlManager is active.
      */
     boolean trackBrokerHeartbeat(int brokerId, long brokerEpoch) {
         BrokerHeartbeatManager manager = heartbeatManager;

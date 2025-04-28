@@ -56,11 +56,13 @@ import org.apache.kafka.common.protocol.Message;
 import org.apache.kafka.common.protocol.MessageUtil;
 import org.apache.kafka.common.protocol.ObjectSerializationCache;
 import org.apache.kafka.common.protocol.types.RawTaggedField;
+import org.apache.kafka.common.utils.annotation.ApiKeyVersionsSource;
 
 import com.fasterxml.jackson.databind.JsonNode;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
 
 import java.lang.reflect.Method;
 import java.nio.ByteBuffer;
@@ -409,90 +411,49 @@ public final class MessageTest {
                 new OffsetForLeaderEpochRequestData().setReplicaId(-2));
     }
 
-    @Test
-    public void testOffsetCommitRequestVersions() throws Exception {
-        String groupId = "groupId";
-        String topicName = "topic";
-        String metadata = "metadata";
-        int partition = 2;
-        int offset = 100;
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+    public void testOffsetCommitRequestVersions(short version) throws Exception {
+        OffsetCommitRequestData request = new OffsetCommitRequestData()
+            .setGroupId("groupId")
+            .setMemberId("memberId")
+            .setGenerationIdOrMemberEpoch(version >= 1 ? 10 : -1)
+            .setGroupInstanceId(version >= 7 ? "instanceId" : null)
+            .setRetentionTimeMs((version >= 2 && version <= 4) ? 20 : -1)
+            .setTopics(singletonList(
+                new OffsetCommitRequestTopic()
+                    .setTopicId(version >= 10 ? Uuid.randomUuid() : Uuid.ZERO_UUID)
+                    .setName(version < 10 ? "topic" : "")
+                    .setPartitions(singletonList(
+                        new OffsetCommitRequestPartition()
+                            .setPartitionIndex(1)
+                            .setCommittedMetadata("metadata")
+                            .setCommittedOffset(100)
+                            .setCommittedLeaderEpoch(version >= 6 ? 10 : -1)
 
-        testAllMessageRoundTrips(new OffsetCommitRequestData()
-                                     .setGroupId(groupId)
-                                     .setTopics(Collections.singletonList(
-                                         new OffsetCommitRequestTopic()
-                                             .setName(topicName)
-                                             .setPartitions(Collections.singletonList(
-                                                 new OffsetCommitRequestPartition()
-                                                     .setPartitionIndex(partition)
-                                                     .setCommittedMetadata(metadata)
-                                                     .setCommittedOffset(offset)
-                                             )))));
+                    ))
+            ));
 
-        Supplier<OffsetCommitRequestData> request =
-            () -> new OffsetCommitRequestData()
-                      .setGroupId(groupId)
-                      .setMemberId("memberId")
-                      .setGroupInstanceId("instanceId")
-                      .setTopics(Collections.singletonList(
-                          new OffsetCommitRequestTopic()
-                              .setName(topicName)
-                              .setPartitions(Collections.singletonList(
-                                  new OffsetCommitRequestPartition()
-                                      .setPartitionIndex(partition)
-                                      .setCommittedLeaderEpoch(10)
-                                      .setCommittedMetadata(metadata)
-                                      .setCommittedOffset(offset)
-                            ))))
-                    .setRetentionTimeMs(20);
-
-        for (short version : ApiKeys.OFFSET_COMMIT.allVersions()) {
-            OffsetCommitRequestData requestData = request.get();
-
-            if (version > 4) {
-                requestData.setRetentionTimeMs(-1);
-            }
-
-            if (version < 6) {
-                requestData.topics().get(0).partitions().get(0).setCommittedLeaderEpoch(-1);
-            }
-
-            if (version < 7) {
-                requestData.setGroupInstanceId(null);
-            }
-
-            if (version >= 2 && version <= 4) {
-                testAllMessageRoundTripsBetweenVersions(version, (short) 5, requestData, requestData);
-            } else {
-                testAllMessageRoundTripsFromVersion(version, requestData);
-            }
-        }
+        testMessageRoundTrip(version, request, request);
     }
 
-    @Test
-    public void testOffsetCommitResponseVersions() throws Exception {
-        Supplier<OffsetCommitResponseData> response =
-            () -> new OffsetCommitResponseData()
-                      .setTopics(
-                          singletonList(
-                              new OffsetCommitResponseTopic()
-                                  .setName("topic")
-                                  .setPartitions(singletonList(
-                                      new OffsetCommitResponsePartition()
-                                          .setPartitionIndex(1)
-                                          .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
-                                  ))
-                          )
-                      )
-                      .setThrottleTimeMs(20);
+    @ParameterizedTest
+    @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_COMMIT)
+    public void testOffsetCommitResponseVersions(short version) throws Exception {
+        OffsetCommitResponseData response = new OffsetCommitResponseData()
+            .setThrottleTimeMs(version >= 3 ? 20 : 0)
+            .setTopics(singletonList(
+                new OffsetCommitResponseTopic()
+                    .setTopicId(version >= 10 ? Uuid.randomUuid() : Uuid.ZERO_UUID)
+                    .setName(version < 10 ? "topic" : "")
+                    .setPartitions(singletonList(
+                        new OffsetCommitResponsePartition()
+                            .setPartitionIndex(1)
+                            .setErrorCode(Errors.UNKNOWN_MEMBER_ID.code())
+                    ))
+            ));
 
-        for (short version : ApiKeys.OFFSET_COMMIT.allVersions()) {
-            OffsetCommitResponseData responseData = response.get();
-            if (version < 3) {
-                responseData.setThrottleTimeMs(0);
-            }
-            testAllMessageRoundTripsFromVersion(version, responseData);
-        }
+        testMessageRoundTrip(version, response, response);
     }
 
     @Test
@@ -944,7 +905,7 @@ public final class MessageTest {
     @Test
     public void defaultValueShouldBeWritable() {
         for (short version = SimpleExampleMessageData.LOWEST_SUPPORTED_VERSION; version <= SimpleExampleMessageData.HIGHEST_SUPPORTED_VERSION; ++version) {
-            MessageUtil.toByteBuffer(new SimpleExampleMessageData(), version);
+            MessageUtil.toByteBufferAccessor(new SimpleExampleMessageData(), version).buffer();
         }
     }
 

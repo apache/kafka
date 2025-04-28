@@ -25,24 +25,64 @@ import org.apache.kafka.metadata.Replicas;
 import org.apache.kafka.server.common.TopicIdPartition;
 
 /**
- * @param topicIdPartition The topic ID and partition index of the replica.
- * @param directoryId      The ID of the directory we are placing the replica into.
- * @param submissionTimeNs The time in monotonic nanosecond when this assignment was created.
- * @param successCallback  The callback to invoke on success.
- */
-record Assignment(
-    TopicIdPartition topicIdPartition,
-    Uuid directoryId,
-    long submissionTimeNs,
-    Runnable successCallback
-) {
+ * The class is not converted to a Java record since record classes are meant for pure data, but this one contains a Runnable
+ **/
+final class Assignment {
+    /**
+     * The topic ID and partition index of the replica.
+     */
+    private final TopicIdPartition topicIdPartition;
+
+    /**
+     * The ID of the directory we are placing the replica into.
+     */
+    private final Uuid directoryId;
+
+    /**
+     * The time in monotonic nanosecond when this assignment was created.
+     */
+    private final long submissionTimeNs;
+
+    /**
+     * The callback to invoke on success.
+     */
+    private final Runnable successCallback;
+
+    Assignment(
+        TopicIdPartition topicIdPartition,
+        Uuid directoryId,
+        long submissionTimeNs,
+        Runnable successCallback
+    ) {
+        this.topicIdPartition = topicIdPartition;
+        this.directoryId = directoryId;
+        this.submissionTimeNs = submissionTimeNs;
+        this.successCallback = successCallback;
+    }
+
+    TopicIdPartition topicIdPartition() {
+        return topicIdPartition;
+    }
+
+    Uuid directoryId() {
+        return directoryId;
+    }
+
+    long submissionTimeNs() {
+        return submissionTimeNs;
+    }
+
+    Runnable successCallback() {
+        return successCallback;
+    }
 
     /**
      * Check if this Assignment is still valid to be sent.
      *
-     * @param nodeId The broker ID.
-     * @param image  The metadata image.
-     * @return True only if the Assignment is still valid.
+     * @param nodeId    The broker ID.
+     * @param image     The metadata image.
+     *
+     * @return          True only if the Assignment is still valid.
      */
     boolean valid(int nodeId, MetadataImage image) {
         TopicImage topicImage = image.topics().getTopic(topicIdPartition.topicId());

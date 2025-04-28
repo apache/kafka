@@ -329,6 +329,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 // This class performs tests requests and responses for all API keys
 public class RequestResponseTest {
 
+    private static final Uuid TOPIC_ID = Uuid.randomUuid();
+
     // Exception includes a message that we verify is not included in error responses
     private final UnknownServerException unknownServerException = new UnknownServerException("secret");
 
@@ -584,6 +586,57 @@ public class RequestResponseTest {
     }
 
     @Test
+    public void testFetchResponseShouldNotHaveNullRecords() {
+        Uuid id = Uuid.randomUuid();
+        FetchResponseData.PartitionData partitionData = new FetchResponseData.PartitionData()
+            .setPartitionIndex(0)
+            .setHighWatermark(1000000)
+            .setLogStartOffset(100)
+            .setLastStableOffset(200)
+            .setRecords(null);
+        FetchResponseData.FetchableTopicResponse response = new FetchResponseData.FetchableTopicResponse()
+            .setTopic("topic")
+            .setPartitions(List.of(partitionData))
+            .setTopicId(id);
+        FetchResponseData data = new FetchResponseData().setResponses(List.of(response));
+
+        response.setPartitions(List.of(FetchResponse.partitionResponse(0, Errors.NONE)));
+        FetchResponse fetchResponse = FetchResponse.of(data);
+        validateNoNullRecords(fetchResponse);
+
+        TopicIdPartition topicIdPartition = new TopicIdPartition(id, new TopicPartition("test", 0));
+        LinkedHashMap<TopicIdPartition, FetchResponseData.PartitionData> tpToData = new LinkedHashMap<>(Map.of(topicIdPartition, partitionData));
+        fetchResponse = FetchResponse.of(Errors.NONE, 0, INVALID_SESSION_ID, tpToData);
+        validateNoNullRecords(fetchResponse);
+    }
+
+    private void validateNoNullRecords(FetchResponse fetchResponse) {
+        fetchResponse.data().responses().stream()
+            .flatMap(response -> response.partitions().stream())
+            .forEach(partition -> assertEquals(MemoryRecords.EMPTY, partition.records()));
+    }
+
+    @Test
+    public void testShareFetchResponseShouldNotHaveNullRecords() {
+        Uuid id = Uuid.randomUuid();
+        ShareFetchResponseData.PartitionData partitionData = new ShareFetchResponseData.PartitionData()
+            .setPartitionIndex(0)
+            .setAcquiredRecords(List.of())
+            .setRecords(null);
+
+        TopicIdPartition topicIdPartition = new TopicIdPartition(id, new TopicPartition("test", 0));
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> tpToData = new LinkedHashMap<>(Map.of(topicIdPartition, partitionData));
+        ShareFetchResponse shareFetchResponse = ShareFetchResponse.of(Errors.NONE, 0, tpToData, List.of(), 0);
+        validateNoNullRecords(shareFetchResponse);
+    }
+
+    private void validateNoNullRecords(ShareFetchResponse fetchResponse) {
+        fetchResponse.data().responses().stream()
+            .flatMap(response -> response.partitions().stream())
+            .forEach(partition -> assertEquals(MemoryRecords.EMPTY, partition.records()));
+    }
+
+    @Test
     public void verifyFetchResponseFullWrites() throws Exception {
         verifyFetchResponseFullWrite(FETCH.latestVersion(), createFetchResponse(123));
         verifyFetchResponseFullWrite(FETCH.latestVersion(),
@@ -612,7 +665,7 @@ public class RequestResponseTest {
         ResponseHeader responseHeader = ResponseHeader.parse(channel.buffer(), responseHeaderVersion);
         assertEquals(correlationId, responseHeader.correlationId());
 
-        assertEquals(fetchResponse.serialize(version), buf);
+        assertEquals(fetchResponse.serialize(version).buffer(), buf);
         FetchResponseData deserialized = new FetchResponseData(new ByteBufferAccessor(buf), version);
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
         assertEquals(size, responseHeader.size() + deserialized.size(serializationCache, version));
@@ -695,7 +748,7 @@ public class RequestResponseTest {
         assertEquals(requestHeader, parsedHeader);
 
         RequestAndSize parsedRequest = AbstractRequest.parseRequest(
-            CREATE_TOPICS, requestVersion, serializedRequest);
+            CREATE_TOPICS, requestVersion, new ByteBufferAccessor(serializedRequest));
 
         assertEquals(createTopicsRequest.data(), parsedRequest.request.data());
     }
@@ -864,8 +917,8 @@ public class RequestResponseTest {
     @Test
     public void testApiVersionResponseParsingFallback() {
         for (short version : API_VERSIONS.allVersions()) {
-            ByteBuffer buffer = defaultApiVersionsResponse().serialize((short) 0);
-            ApiVersionsResponse response = ApiVersionsResponse.parse(buffer, version);
+            ByteBufferAccessor readable = defaultApiVersionsResponse().serialize((short) 0);
+            ApiVersionsResponse response = ApiVersionsResponse.parse(readable, version);
             assertEquals(Errors.NONE.code(), response.data().errorCode());
         }
     }
@@ -873,15 +926,16 @@ public class RequestResponseTest {
     @Test
     public void testApiVersionResponseParsingFallbackException() {
         for (final short version : API_VERSIONS.allVersions()) {
-            assertThrows(BufferUnderflowException.class, () -> ApiVersionsResponse.parse(ByteBuffer.allocate(0), version));
+            assertThrows(BufferUnderflowException.class,
+                () -> ApiVersionsResponse.parse(new ByteBufferAccessor(ByteBuffer.allocate(0)), version));
         }
     }
 
     @Test
     public void testApiVersionResponseParsing() {
         for (short version : API_VERSIONS.allVersions()) {
-            ByteBuffer buffer = defaultApiVersionsResponse().serialize(version);
-            ApiVersionsResponse response = ApiVersionsResponse.parse(buffer, version);
+            ByteBufferAccessor readable = defaultApiVersionsResponse().serialize(version);
+            ApiVersionsResponse response = ApiVersionsResponse.parse(readable, version);
             assertEquals(Errors.NONE.code(), response.data().errorCode());
         }
     }
@@ -1443,7 +1497,6 @@ public class RequestResponseTest {
     }
 
     private ShareFetchResponse createShareFetchResponse() {
-        ShareFetchResponseData data = new ShareFetchResponseData();
         MemoryRecords records = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("blah".getBytes()));
         ShareFetchResponseData.PartitionData partition = new ShareFetchResponseData.PartitionData()
                 .setPartitionIndex(0)
@@ -1453,14 +1506,10 @@ public class RequestResponseTest {
                         .setFirstOffset(0)
                         .setLastOffset(0)
                         .setDeliveryCount((short) 1)));
-        ShareFetchResponseData.ShareFetchableTopicResponse response = new ShareFetchResponseData.ShareFetchableTopicResponse()
-                .setTopicId(Uuid.randomUuid())
-                .setPartitions(singletonList(partition));
-
-        data.setResponses(singletonList(response));
-        data.setThrottleTimeMs(345);
-        data.setErrorCode(Errors.NONE.code());
-        return new ShareFetchResponse(data);
+        TopicIdPartition topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), new TopicPartition("", partition.partitionIndex()));
+        LinkedHashMap<TopicIdPartition, ShareFetchResponseData.PartitionData> topicIdPartitionToPartition = new LinkedHashMap<>();
+        topicIdPartitionToPartition.put(topicIdPartition, partition);
+        return ShareFetchResponse.of(Errors.NONE, 345, topicIdPartitionToPartition, List.of(), 0);
     }
 
     private ShareAcknowledgeRequest createShareAcknowledgeRequest(short version) {
@@ -1937,11 +1986,11 @@ public class RequestResponseTest {
         // Check for equality of the ByteBuffer only if indicated (it is likely to fail if any of the fields
         // in the request is a HashMap with multiple elements since ordering of the elements may vary)
         try {
-            ByteBuffer serializedBytes = req.serialize();
+            ByteBufferAccessor serializedBytes = req.serialize();
             AbstractRequest deserialized = AbstractRequest.parseRequest(req.apiKey(), req.version(), serializedBytes).request;
-            ByteBuffer serializedBytes2 = deserialized.serialize();
-            serializedBytes.rewind();
-            assertEquals(serializedBytes, serializedBytes2, "Request " + req + "failed equality test");
+            ByteBufferAccessor serializedBytes2 = deserialized.serialize();
+            serializedBytes.buffer().rewind();
+            assertEquals(serializedBytes.buffer(), serializedBytes2.buffer(), "Request " + req + "failed equality test");
         } catch (Exception e) {
             throw new RuntimeException("Failed to deserialize request " + req + " with type " + req.getClass(), e);
         }
@@ -1952,9 +2001,10 @@ public class RequestResponseTest {
         // Check for equality and hashCode of the Struct only if indicated (it is likely to fail if any of the fields
         // in the response is a HashMap with multiple elements since ordering of the elements may vary)
         try {
-            ByteBuffer serializedBytes = response.serialize(version);
-            AbstractResponse deserialized = AbstractResponse.parseResponse(response.apiKey(), serializedBytes, version);
-            ByteBuffer serializedBytes2 = deserialized.serialize(version);
+            ByteBufferAccessor readable = response.serialize(version);
+            ByteBuffer serializedBytes = readable.buffer();
+            AbstractResponse deserialized = AbstractResponse.parseResponse(response.apiKey(), readable, version);
+            ByteBuffer serializedBytes2 = deserialized.serialize(version).buffer();
             serializedBytes.rewind();
             assertEquals(serializedBytes, serializedBytes2, "Response " + response + "failed equality test");
         } catch (Exception e) {
@@ -2103,7 +2153,7 @@ public class RequestResponseTest {
             response.setTopicId(Uuid.randomUuid());
         }
         data.setResponses(singletonList(response));
-        return new FetchResponse(data);
+        return FetchResponse.of(data);
     }
 
     private HeartbeatRequest createHeartBeatRequest(short version) {
@@ -2355,7 +2405,7 @@ public class RequestResponseTest {
     }
 
     private OffsetCommitRequest createOffsetCommitRequest(short version) {
-        return new OffsetCommitRequest.Builder(new OffsetCommitRequestData()
+        return OffsetCommitRequest.Builder.forTopicNames(new OffsetCommitRequestData()
                 .setGroupId("group1")
                 .setMemberId("consumer1")
                 .setGroupInstanceId(null)
@@ -2363,6 +2413,7 @@ public class RequestResponseTest {
                 .setTopics(singletonList(
                         new OffsetCommitRequestData.OffsetCommitRequestTopic()
                                 .setName("test")
+                                .setTopicId(TOPIC_ID)
                                 .setPartitions(asList(
                                         new OffsetCommitRequestData.OffsetCommitRequestPartition()
                                                 .setPartitionIndex(0)
@@ -2384,6 +2435,7 @@ public class RequestResponseTest {
                 .setTopics(singletonList(
                         new OffsetCommitResponseData.OffsetCommitResponseTopic()
                                 .setName("test")
+                                .setTopicId(TOPIC_ID)
                                 .setPartitions(singletonList(
                                         new OffsetCommitResponseData.OffsetCommitResponsePartition()
                                                 .setPartitionIndex(0)
@@ -3816,9 +3868,9 @@ public class RequestResponseTest {
     public void testInvalidSaslHandShakeRequest() {
         AbstractRequest request = new SaslHandshakeRequest.Builder(
                 new SaslHandshakeRequestData().setMechanism("PLAIN")).build();
-        ByteBuffer serializedBytes = request.serialize();
+        ByteBufferAccessor serializedBytes = request.serialize();
         // corrupt the length of the sasl mechanism string
-        serializedBytes.putShort(0, Short.MAX_VALUE);
+        serializedBytes.buffer().putShort(0, Short.MAX_VALUE);
 
         String msg = assertThrows(RuntimeException.class, () -> AbstractRequest.
             parseRequest(request.apiKey(), request.version(), serializedBytes)).getMessage();
@@ -3837,10 +3889,10 @@ public class RequestResponseTest {
         };
         SaslAuthenticateRequestData data = new SaslAuthenticateRequestData().setAuthBytes(b);
         AbstractRequest request = new SaslAuthenticateRequest(data, version);
-        ByteBuffer serializedBytes = request.serialize();
+        ByteBufferAccessor serializedBytes = request.serialize();
 
         // corrupt the length of the bytes array
-        serializedBytes.putInt(0, Integer.MAX_VALUE);
+        serializedBytes.buffer().putInt(0, Integer.MAX_VALUE);
 
         String msg = assertThrows(RuntimeException.class, () -> AbstractRequest.
                 parseRequest(request.apiKey(), request.version(), serializedBytes)).getMessage();
@@ -3869,7 +3921,7 @@ public class RequestResponseTest {
         accessor.flip();
 
         SaslAuthenticateRequest saslAuthenticateRequest = (SaslAuthenticateRequest) AbstractRequest.
-                parseRequest(SASL_AUTHENTICATE, SASL_AUTHENTICATE.latestVersion(), accessor.buffer()).request;
+                parseRequest(SASL_AUTHENTICATE, SASL_AUTHENTICATE.latestVersion(), accessor).request;
         Assertions.assertArrayEquals(authBytes, saslAuthenticateRequest.data().authBytes());
         assertEquals(1, saslAuthenticateRequest.data().unknownTaggedFields().size());
         assertEquals(taggedField, saslAuthenticateRequest.data().unknownTaggedFields().get(0));
@@ -3897,7 +3949,7 @@ public class RequestResponseTest {
         accessor.flip();
 
         String msg = assertThrows(RuntimeException.class, () -> AbstractRequest.
-                parseRequest(SASL_AUTHENTICATE, SASL_AUTHENTICATE.latestVersion(), accessor.buffer())).getMessage();
+                parseRequest(SASL_AUTHENTICATE, SASL_AUTHENTICATE.latestVersion(), accessor)).getMessage();
         assertEquals("Error reading byte array of 32767 byte(s): only 3 byte(s) available", msg);
     }
 }

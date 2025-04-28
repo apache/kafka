@@ -21,6 +21,8 @@ import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatResponseData;
 import org.apache.kafka.common.message.DeleteGroupsResponseData;
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsRequestData;
+import org.apache.kafka.common.message.DeleteShareGroupOffsetsResponseData;
 import org.apache.kafka.common.message.DescribeGroupsResponseData;
 import org.apache.kafka.common.message.DescribeShareGroupOffsetsRequestData;
 import org.apache.kafka.common.message.DescribeShareGroupOffsetsResponseData;
@@ -47,12 +49,12 @@ import org.apache.kafka.common.message.SyncGroupRequestData;
 import org.apache.kafka.common.message.SyncGroupResponseData;
 import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
-import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 
 import java.time.Duration;
 import java.util.List;
@@ -78,7 +80,7 @@ public interface GroupCoordinator {
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<ConsumerGroupHeartbeatResponseData> consumerGroupHeartbeat(
-        RequestContext context,
+        AuthorizableRequestContext context,
         ConsumerGroupHeartbeatRequestData request
     );
 
@@ -92,7 +94,7 @@ public interface GroupCoordinator {
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<StreamsGroupHeartbeatResult> streamsGroupHeartbeat(
-        RequestContext context,
+        AuthorizableRequestContext context,
         StreamsGroupHeartbeatRequestData request
     );
 
@@ -106,7 +108,7 @@ public interface GroupCoordinator {
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<ShareGroupHeartbeatResponseData> shareGroupHeartbeat(
-        RequestContext context,
+        AuthorizableRequestContext context,
         ShareGroupHeartbeatRequestData request
     );
 
@@ -121,7 +123,7 @@ public interface GroupCoordinator {
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<JoinGroupResponseData> joinGroup(
-        RequestContext context,
+        AuthorizableRequestContext context,
         JoinGroupRequestData request,
         BufferSupplier bufferSupplier
     );
@@ -137,7 +139,7 @@ public interface GroupCoordinator {
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<SyncGroupResponseData> syncGroup(
-        RequestContext context,
+        AuthorizableRequestContext context,
         SyncGroupRequestData request,
         BufferSupplier bufferSupplier
     );
@@ -152,7 +154,7 @@ public interface GroupCoordinator {
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<HeartbeatResponseData> heartbeat(
-        RequestContext context,
+        AuthorizableRequestContext context,
         HeartbeatRequestData request
     );
 
@@ -166,7 +168,7 @@ public interface GroupCoordinator {
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<LeaveGroupResponseData> leaveGroup(
-        RequestContext context,
+        AuthorizableRequestContext context,
         LeaveGroupRequestData request
     );
 
@@ -180,7 +182,7 @@ public interface GroupCoordinator {
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<ListGroupsResponseData> listGroups(
-        RequestContext context,
+        AuthorizableRequestContext context,
         ListGroupsRequestData request
     );
 
@@ -194,7 +196,7 @@ public interface GroupCoordinator {
      *          The error codes of the results are set to indicate the errors occurred during the execution.
      */
     CompletableFuture<List<DescribeGroupsResponseData.DescribedGroup>> describeGroups(
-        RequestContext context,
+        AuthorizableRequestContext context,
         List<String> groupIds
     );
 
@@ -207,7 +209,7 @@ public interface GroupCoordinator {
      * @return A future yielding the results or an exception.
      */
     CompletableFuture<List<ConsumerGroupDescribeResponseData.DescribedGroup>> consumerGroupDescribe(
-        RequestContext context,
+        AuthorizableRequestContext context,
         List<String> groupIds
     );
 
@@ -220,7 +222,7 @@ public interface GroupCoordinator {
      * @return A future yielding the results or an exception.
      */
     CompletableFuture<List<StreamsGroupDescribeResponseData.DescribedGroup>> streamsGroupDescribe(
-        RequestContext context,
+        AuthorizableRequestContext context,
         List<String> groupIds
     );
 
@@ -233,7 +235,7 @@ public interface GroupCoordinator {
      * @return A future yielding the results or an exception.
      */
     CompletableFuture<List<ShareGroupDescribeResponseData.DescribedGroup>> shareGroupDescribe(
-        RequestContext context,
+        AuthorizableRequestContext context,
         List<String> groupIds
     );
 
@@ -248,7 +250,7 @@ public interface GroupCoordinator {
      *          The error codes of the results are set to indicate the errors occurred during the execution.
      */
     CompletableFuture<DeleteGroupsResponseData.DeletableGroupResultCollection> deleteGroups(
-        RequestContext context,
+        AuthorizableRequestContext context,
         List<String> groupIds,
         BufferSupplier bufferSupplier
     );
@@ -263,7 +265,7 @@ public interface GroupCoordinator {
      *          The error codes of the results are set to indicate the errors occurred during the execution.
      */
     CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> fetchOffsets(
-        RequestContext context,
+        AuthorizableRequestContext context,
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
         boolean requireStable
     );
@@ -278,7 +280,7 @@ public interface GroupCoordinator {
      *          The error codes of the results are set to indicate the errors occurred during the execution.
      */
     CompletableFuture<OffsetFetchResponseData.OffsetFetchResponseGroup> fetchAllOffsets(
-        RequestContext context,
+        AuthorizableRequestContext context,
         OffsetFetchRequestData.OffsetFetchRequestGroup request,
         boolean requireStable
     );
@@ -293,8 +295,36 @@ public interface GroupCoordinator {
      *          The error codes of the response are set to indicate the errors occurred during the execution.
      */
     CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> describeShareGroupOffsets(
-        RequestContext context,
+        AuthorizableRequestContext context,
         DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup request
+    );
+
+    /**
+     * Describe all Share Group Offsets for a given group.
+     *
+     * @param context           The request context
+     * @param request           The DescribeShareGroupOffsetsRequestGroup request.
+     *
+     * @return  A future yielding the results.
+     *          The error codes of the response are set to indicate the errors occurred during the execution.
+     */
+    CompletableFuture<DescribeShareGroupOffsetsResponseData.DescribeShareGroupOffsetsResponseGroup> describeShareGroupAllOffsets(
+        AuthorizableRequestContext context,
+        DescribeShareGroupOffsetsRequestData.DescribeShareGroupOffsetsRequestGroup request
+    );
+
+    /**
+     * Delete the Share Group Offsets for a given group.
+     *
+     * @param context           The request context
+     * @param request           The DeleteShareGroupOffsetsRequestGroup request.
+     *
+     * @return  A future yielding the results.
+     *          The error codes of the response are set to indicate the errors occurred during the execution.
+     */
+    CompletableFuture<DeleteShareGroupOffsetsResponseData> deleteShareGroupOffsets(
+        AuthorizableRequestContext context,
+        DeleteShareGroupOffsetsRequestData request
     );
 
     /**
@@ -308,7 +338,7 @@ public interface GroupCoordinator {
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<OffsetCommitResponseData> commitOffsets(
-        RequestContext context,
+        AuthorizableRequestContext context,
         OffsetCommitRequestData request,
         BufferSupplier bufferSupplier
     );
@@ -324,7 +354,7 @@ public interface GroupCoordinator {
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<TxnOffsetCommitResponseData> commitTransactionalOffsets(
-        RequestContext context,
+        AuthorizableRequestContext context,
         TxnOffsetCommitRequestData request,
         BufferSupplier bufferSupplier
     );
@@ -340,7 +370,7 @@ public interface GroupCoordinator {
      *          The error code(s) of the response are set to indicate the error(s) occurred during the execution.
      */
     CompletableFuture<OffsetDeleteResponseData> deleteOffsets(
-        RequestContext context,
+        AuthorizableRequestContext context,
         OffsetDeleteRequestData request,
         BufferSupplier bufferSupplier
     );

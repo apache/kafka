@@ -20,9 +20,8 @@ import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
 import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
+import java.util.Map;
 
 import static org.apache.kafka.common.utils.Utils.mkEntry;
 import static org.apache.kafka.common.utils.Utils.mkMap;
@@ -46,13 +45,13 @@ public final class PartitionsExpandTest extends TieredStorageTestHarness {
         final Integer replicationFactor = 2;
         final Integer maxBatchCountPerSegment = 1;
         final boolean enableRemoteLogStorage = true;
-        final List<Integer> p0Assignment = Arrays.asList(broker0, broker1);
-        final List<Integer> p1Assignment = Arrays.asList(broker0, broker1);
-        final List<Integer> p2Assignment = Arrays.asList(broker1, broker0);
+        final List<Integer> p0Assignment = List.of(broker0, broker1);
+        final List<Integer> p1Assignment = List.of(broker0, broker1);
+        final List<Integer> p2Assignment = List.of(broker1, broker0);
 
         builder
                 .createTopic(topicA, partitionCount, replicationFactor, maxBatchCountPerSegment,
-                        Collections.singletonMap(p0, p0Assignment), enableRemoteLogStorage)
+                        Map.of(p0, p0Assignment), enableRemoteLogStorage)
                 // produce events to partition 0
                 .expectSegmentToBeOffloaded(broker0, topicA, p0, 0, new KeyValueSpec("k0", "v0"))
                 .expectSegmentToBeOffloaded(broker0, topicA, p0, 1, new KeyValueSpec("k1", "v1"))
