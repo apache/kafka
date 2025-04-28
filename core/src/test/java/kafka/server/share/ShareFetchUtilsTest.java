@@ -61,7 +61,6 @@ import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.createFile
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.createShareAcquiredRecords;
 import static org.apache.kafka.server.share.fetch.ShareFetchTestUtils.memoryRecordsBuilder;
 import static org.junit.jupiter.api.Assertions.assertEquals;
-import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
@@ -329,7 +328,7 @@ public class ShareFetchUtilsTest {
         assertEquals(1, resultData.size());
         assertTrue(resultData.containsKey(tp0));
         assertEquals(0, resultData.get(tp0).partitionIndex());
-        assertNull(resultData.get(tp0).records());
+        assertEquals(MemoryRecords.EMPTY, resultData.get(tp0).records());
         assertTrue(resultData.get(tp0).acquiredRecords().isEmpty());
         assertEquals(Errors.NONE.code(), resultData.get(tp0).errorCode());
 
@@ -344,7 +343,7 @@ public class ShareFetchUtilsTest {
         assertEquals(1, resultData.size());
         assertTrue(resultData.containsKey(tp0));
         assertEquals(0, resultData.get(tp0).partitionIndex());
-        assertNull(resultData.get(tp0).records());
+        assertEquals(MemoryRecords.EMPTY, resultData.get(tp0).records());
         assertTrue(resultData.get(tp0).acquiredRecords().isEmpty());
         assertEquals(Errors.NONE.code(), resultData.get(tp0).errorCode());
 

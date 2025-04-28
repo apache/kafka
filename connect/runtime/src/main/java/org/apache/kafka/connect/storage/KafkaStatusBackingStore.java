@@ -101,6 +101,7 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
     public static final String TRACE_KEY_NAME = "trace";
     public static final String WORKER_ID_KEY_NAME = "worker_id";
     public static final String GENERATION_KEY_NAME = "generation";
+    public static final String VERSION_KEY_NAME = "version";
 
     public static final String TOPIC_STATE_KEY = "topic";
     public static final String TOPIC_NAME_KEY = "name";
@@ -113,6 +114,7 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
             .field(TRACE_KEY_NAME, SchemaBuilder.string().optional().build())
             .field(WORKER_ID_KEY_NAME, Schema.STRING_SCHEMA)
             .field(GENERATION_KEY_NAME, Schema.INT32_SCHEMA)
+            .field(VERSION_KEY_NAME, Schema.OPTIONAL_STRING_SCHEMA)
             .build();
 
     private static final Schema TOPIC_STATUS_VALUE_SCHEMA_V0 = SchemaBuilder.struct()
@@ -428,7 +430,8 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
             String trace = (String) statusMap.get(TRACE_KEY_NAME);
             String workerUrl = (String) statusMap.get(WORKER_ID_KEY_NAME);
             int generation = ((Long) statusMap.get(GENERATION_KEY_NAME)).intValue();
-            return new ConnectorStatus(connector, state, trace, workerUrl, generation);
+            String version = (String) statusMap.get(VERSION_KEY_NAME);
+            return new ConnectorStatus(connector, state, trace, workerUrl, generation, version);
         } catch (Exception e) {
             log.error("Failed to deserialize connector status", e);
             return null;
@@ -448,7 +451,8 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
             String trace = (String) statusMap.get(TRACE_KEY_NAME);
             String workerUrl = (String) statusMap.get(WORKER_ID_KEY_NAME);
             int generation = ((Long) statusMap.get(GENERATION_KEY_NAME)).intValue();
-            return new TaskStatus(taskId, state, workerUrl, generation, trace);
+            String version = (String) statusMap.get(VERSION_KEY_NAME);
+            return new TaskStatus(taskId, state, workerUrl, generation, trace, version);
         } catch (Exception e) {
             log.error("Failed to deserialize task status", e);
             return null;
@@ -487,6 +491,7 @@ public class KafkaStatusBackingStore extends KafkaTopicBasedBackingStore impleme
             struct.put(TRACE_KEY_NAME, status.trace());
         struct.put(WORKER_ID_KEY_NAME, status.workerId());
         struct.put(GENERATION_KEY_NAME, status.generation());
+        struct.put(VERSION_KEY_NAME, status.version());
         return converter.fromConnectData(statusTopic, STATUS_SCHEMA_V0, struct);
     }
 

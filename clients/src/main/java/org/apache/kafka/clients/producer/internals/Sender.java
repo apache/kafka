@@ -52,6 +52,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest;
 import org.apache.kafka.common.requests.ProduceRequest;
 import org.apache.kafka.common.requests.ProduceResponse;
 import org.apache.kafka.common.requests.RequestHeader;
+import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
@@ -196,9 +197,6 @@ public class Sender implements Runnable {
     @Override
     public void run() {
         log.debug("Starting Kafka producer I/O thread.");
-
-        if (transactionManager != null)
-            transactionManager.setPoisonStateOnInvalidTransition(true);
 
         // main loop, runs until close is called
         while (running) {
@@ -1034,4 +1032,10 @@ public class Sender implements Runnable {
         }
     }
 
+    public static class SenderThread extends KafkaThread {
+
+        public SenderThread(final String name, Runnable runnable, boolean daemon) {
+            super(name, runnable, daemon);
+        }
+    }
 }
