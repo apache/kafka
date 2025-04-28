@@ -18,11 +18,12 @@ package kafka.coordinator.transaction
 
 import java.nio.ByteBuffer
 import java.util.Properties
+import java.util.concurrent.{ConcurrentHashMap, ConcurrentMap}
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import kafka.server.ReplicaManager
 import kafka.utils.CoreUtils.{inReadLock, inWriteLock}
-import kafka.utils.{Logging, Pool}
+import kafka.utils.Logging
 import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.internals.Topic
 import org.apache.kafka.common.message.ListTransactionsResponseData
@@ -126,7 +127,7 @@ class TransactionStateManager(brokerId: Int,
     val now = time.milliseconds()
     inReadLock(stateLock) {
       transactionMetadataCache.flatMap { case (_, entry) =>
-        entry.metadataPerTransactionalId.filter { case (_, txnMetadata) =>
+        entry.metadataPerTransactionalId.asScala.filter { case (_, txnMetadata) =>
           if (txnMetadata.pendingTransitionInProgress) {
             false
           } else {
@@ -156,7 +157,7 @@ class TransactionStateManager(brokerId: Int,
           val maxBatchSize = logConfig.maxMessageSize
           val expired = mutable.ListBuffer.empty[TransactionalIdCoordinatorEpochAndMetadata]
           var recordsBuilder: MemoryRecordsBuilder = null
-          val stateEntries = txnMetadataCacheEntry.metadataPerTransactionalId.values.iterator.buffered
+          val stateEntries = txnMetadataCacheEntry.metadataPerTransactionalId.values.asScala.iterator.buffered
 
           def flushRecordsBuilder(): Unit = {
             writeTombstonesForExpiredTransactionalIds(
@@ -350,7 +351,7 @@ class TransactionStateManager(brokerId: Int,
 
         val states = new java.util.ArrayList[ListTransactionsResponseData.TransactionState]
         transactionMetadataCache.foreachEntry { (_, cache) =>
-          cache.metadataPerTransactionalId.values.foreach { txnMetadata =>
+          cache.metadataPerTransactionalId.forEach { (_, txnMetadata) =>
             txnMetadata.inLock {
               if (shouldInclude(txnMetadata)) {
                 states.add(new ListTransactionsResponseData.TransactionState()
@@ -386,7 +387,7 @@ class TransactionStateManager(brokerId: Int,
           case Some(cacheEntry) =>
             val txnMetadata = Option(cacheEntry.metadataPerTransactionalId.get(transactionalId)).orElse {
               createdTxnMetadataOpt.map { createdTxnMetadata =>
-                Option(cacheEntry.metadataPerTransactionalId.putIfNotExists(transactionalId, createdTxnMetadata))
+                Option(cacheEntry.metadataPerTransactionalId.putIfAbsent(transactionalId, createdTxnMetadata))
                   .getOrElse(createdTxnMetadata)
               }
             }
@@ -428,10 +429,10 @@ class TransactionStateManager(brokerId: Int,
 
   def partitionFor(transactionalId: String): Int = Utils.abs(transactionalId.hashCode) % transactionTopicPartitionCount
 
-  private def loadTransactionMetadata(topicPartition: TopicPartition, coordinatorEpoch: Int): Pool[String, TransactionMetadata] =  {
+  private def loadTransactionMetadata(topicPartition: TopicPartition, coordinatorEpoch: Int): ConcurrentMap[String, TransactionMetadata] =  {
     def logEndOffset = replicaManager.getLogEndOffset(topicPartition).getOrElse(-1L)
 
-    val loadedTransactions = new Pool[String, TransactionMetadata]
+    val loadedTransactions = new ConcurrentHashMap[String, TransactionMetadata]
 
     replicaManager.getLog(topicPartition) match {
       case None =>
@@ -509,7 +510,7 @@ class TransactionStateManager(brokerId: Int,
    */
   private[transaction] def addLoadedTransactionsToCache(txnTopicPartition: Int,
                                                         coordinatorEpoch: Int,
-                                                        loadedTransactions: Pool[String, TransactionMetadata]): Unit = {
+                                                        loadedTransactions: ConcurrentMap[String, TransactionMetadata]): Unit = {
     val txnMetadataCacheEntry = TxnMetadataCacheEntry(coordinatorEpoch, loadedTransactions)
     val previousTxnMetadataCacheEntryOpt = transactionMetadataCache.put(txnTopicPartition, txnMetadataCacheEntry)
 
@@ -549,22 +550,21 @@ class TransactionStateManager(brokerId: Int,
           addLoadedTransactionsToCache(topicPartition.partition, coordinatorEpoch, loadedTransactions)
 
           val transactionsPendingForCompletion = new mutable.ListBuffer[TransactionalIdCoordinatorEpochAndTransitMetadata]
-          loadedTransactions.foreach {
-            case (transactionalId, txnMetadata) =>
-              txnMetadata.inLock {
-                // if state is PrepareCommit or PrepareAbort we need to complete the transaction
-                txnMetadata.state match {
-                  case PrepareAbort =>
-                    transactionsPendingForCompletion +=
-                      TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId, coordinatorEpoch, TransactionResult.ABORT, txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
-                  case PrepareCommit =>
-                    transactionsPendingForCompletion +=
-                      TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId, coordinatorEpoch, TransactionResult.COMMIT, txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
-                  case _ =>
-                    // nothing needs to be done
-                }
+          loadedTransactions.forEach((transactionalId, txnMetadata) => {
+            txnMetadata.inLock {
+              // if state is PrepareCommit or PrepareAbort we need to complete the transaction
+              txnMetadata.state match {
+                case PrepareAbort =>
+                  transactionsPendingForCompletion +=
+                    TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId, coordinatorEpoch, TransactionResult.ABORT, txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
+                case PrepareCommit =>
+                  transactionsPendingForCompletion +=
+                    TransactionalIdCoordinatorEpochAndTransitMetadata(transactionalId, coordinatorEpoch, TransactionResult.COMMIT, txnMetadata, txnMetadata.prepareComplete(time.milliseconds()))
+                case _ =>
+                // nothing needs to be done
               }
-          }
+            }
+          })
 
           // we first remove the partition from loading partition then send out the markers for those pending to be
           // completed transactions, so that when the markers get sent the attempt of appending the complete transaction
@@ -820,7 +820,7 @@ class TransactionStateManager(brokerId: Int,
 
 
 private[transaction] case class TxnMetadataCacheEntry(coordinatorEpoch: Int,
-                                                      metadataPerTransactionalId: Pool[String, TransactionMetadata]) {
+                                                      metadataPerTransactionalId: ConcurrentMap[String, TransactionMetadata]) {
   override def toString: String = {
     s"TxnMetadataCacheEntry(coordinatorEpoch=$coordinatorEpoch, numTransactionalEntries=${metadataPerTransactionalId.size})"
   }

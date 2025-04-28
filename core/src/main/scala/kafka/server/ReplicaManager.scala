@@ -71,7 +71,7 @@ import java.nio.file.{Files, Paths}
 import java.util
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.Lock
-import java.util.concurrent.{CompletableFuture, Future, RejectedExecutionException, TimeUnit}
+import java.util.concurrent.{CompletableFuture, ConcurrentHashMap, Future, RejectedExecutionException, TimeUnit}
 import java.util.{Collections, Optional, OptionalInt, OptionalLong}
 import java.util.function.Consumer
 import scala.collection.{Map, Seq, Set, immutable, mutable}
@@ -317,9 +317,7 @@ class ReplicaManager(val config: KafkaConfig,
   /* epoch of the controller that last changed the leader */
   @volatile private[server] var controllerEpoch: Int = 0
   protected val localBrokerId = config.brokerId
-  protected val allPartitions = new Pool[TopicPartition, HostedPartition](
-    valueFactory = Some(tp => HostedPartition.Online(Partition(tp, time, this)))
-  )
+  protected val allPartitions = new ConcurrentHashMap[TopicPartition, HostedPartition]
   private val replicaStateChangeLock = new Object
   val replicaFetcherManager = createReplicaFetcherManager(metrics, time, threadNamePrefix, quotaManagers.follower)
   private[server] val replicaAlterLogDirsManager = createReplicaAlterLogDirsManager(quotaManagers.alterLogDirs, brokerTopicStats)
@@ -402,7 +400,7 @@ class ReplicaManager(val config: KafkaConfig,
   }
 
   private def maybeRemoveTopicMetrics(topic: String): Unit = {
-    val topicHasNonOfflinePartition = allPartitions.values.exists {
+    val topicHasNonOfflinePartition = allPartitions.values.asScala.exists {
       case online: HostedPartition.Online => topic == online.partition.topic
       case HostedPartition.None | HostedPartition.Offline(_) => false
     }
@@ -561,14 +559,14 @@ class ReplicaManager(val config: KafkaConfig,
   // An iterator over all non offline partitions. This is a weakly consistent iterator; a partition made offline after
   // the iterator has been constructed could still be returned by this iterator.
   private def onlinePartitionsIterator: Iterator[Partition] = {
-    allPartitions.values.iterator.flatMap {
+    allPartitions.values.asScala.iterator.flatMap {
       case HostedPartition.Online(partition) => Some(partition)
       case _ => None
     }
   }
 
   private def offlinePartitionCount: Int = {
-    allPartitions.values.iterator.count(_.getClass == HostedPartition.Offline.getClass)
+    allPartitions.values.asScala.iterator.count(_.getClass == HostedPartition.Offline.getClass)
   }
 
   def getPartitionOrException(topicPartition: TopicPartition): Partition = {
@@ -2071,7 +2069,7 @@ class ReplicaManager(val config: KafkaConfig,
 
               case HostedPartition.None =>
                 val partition = Partition(topicPartition, time, this)
-                allPartitions.putIfNotExists(topicPartition, HostedPartition.Online(partition))
+                allPartitions.putIfAbsent(topicPartition, HostedPartition.Online(partition))
                 Some(partition)
             }
 
@@ -2512,7 +2510,7 @@ class ReplicaManager(val config: KafkaConfig,
     trace("Evaluating ISR list of partitions to see which replicas can be removed from the ISR")
 
     // Shrink ISRs for non offline partitions
-    allPartitions.keys.foreach { topicPartition =>
+    allPartitions.forEach { (topicPartition, _) =>
       onlinePartition(topicPartition).foreach(_.maybeShrinkIsr())
     }
   }
@@ -2643,7 +2641,7 @@ class ReplicaManager(val config: KafkaConfig,
 
   private def removeAllTopicMetrics(): Unit = {
     val allTopics = new util.HashSet[String]
-    allPartitions.keys.foreach(partition =>
+    allPartitions.forEach((partition, _) =>
       if (allTopics.add(partition.topic())) {
         brokerTopicStats.removeMetrics(partition.topic())
       })
