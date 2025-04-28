@@ -314,7 +314,10 @@ public class LogConfig extends AbstractConfig {
         this.props = Collections.unmodifiableMap(props);
         this.overriddenConfigs = Collections.unmodifiableSet(overriddenConfigs);
 
-        this.segmentSize = getInt(TopicConfig.SEGMENT_BYTES_CONFIG);
+        if (internalSegmentSize == null) 
+            this.segmentSize = getInt(TopicConfig.SEGMENT_BYTES_CONFIG);
+        else
+            this.segmentSize = internalSegmentSize;
         this.internalSegmentSize = internalSegmentSize;
         this.segmentMs = getLong(TopicConfig.SEGMENT_MS_CONFIG);
         this.segmentJitterMs = getLong(TopicConfig.SEGMENT_JITTER_MS_CONFIG);

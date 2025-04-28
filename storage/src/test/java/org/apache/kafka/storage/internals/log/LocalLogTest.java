@@ -25,6 +25,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
 import org.apache.kafka.common.record.SimpleRecord;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.server.util.MockTime;
 import org.apache.kafka.test.TestUtils;
 
@@ -198,7 +199,7 @@ class LocalLogTest {
         assertEquals(oldConfig, log.config());
 
         Properties props = new Properties();
-        props.put(TopicConfig.SEGMENT_BYTES_CONFIG, oldConfig.segmentSize() + 1);
+        props.put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, oldConfig.segmentSize() + 1);
         LogConfig newConfig = new LogConfig(props);
         log.updateConfig(newConfig);
         assertEquals(newConfig, log.config());

@@ -148,7 +148,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     // We don't want files with `.deleted` suffix are removed too fast,
     // so we can validate there will be orphan files and orphan files will be removed eventually.
     topicProperties.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, "10000")
-    topicProperties.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1024")
+    topicProperties.put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, "1024")
 
     createTopic(topic, partitionNum, 1, topicProperties)
     assertEquals(logDir1, brokers.head.logManager.getLog(tp).get.dir.getParent)
