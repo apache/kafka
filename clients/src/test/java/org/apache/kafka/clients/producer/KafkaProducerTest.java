@@ -32,7 +32,6 @@ import org.apache.kafka.clients.producer.internals.ProducerMetadata;
 import org.apache.kafka.clients.producer.internals.RecordAccumulator;
 import org.apache.kafka.clients.producer.internals.Sender;
 import org.apache.kafka.clients.producer.internals.TransactionManager;
-import org.apache.kafka.clients.producer.internals.TransactionalRequestResult;
 import org.apache.kafka.common.Cluster;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.Metric;
@@ -1457,9 +1456,7 @@ public class KafkaProducerTest {
         when(ctx.transactionManager.is2PCEnabled()).thenReturn(true);
         when(ctx.sender.isRunning()).thenReturn(true);
 
-        TransactionalRequestResult prepareResult = mock(TransactionalRequestResult.class);
-        when(ctx.transactionManager.beginPrepare()).thenReturn(prepareResult);
-        doNothing().when(prepareResult).await(anyLong(), any(TimeUnit.class));
+        doNothing().when(ctx.transactionManager).beginPrepare();
 
         PreparedTxnState expectedState = mock(PreparedTxnState.class);
         when(ctx.transactionManager.getPreparedTransactionState()).thenReturn(expectedState);

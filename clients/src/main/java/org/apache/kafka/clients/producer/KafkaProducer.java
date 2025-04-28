@@ -805,9 +805,8 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
         flush();
 
         // Mark the transaction as prepared internally
-        TransactionalRequestResult result = transactionManager.beginPrepare();
+        transactionManager.beginPrepare();
         sender.wakeup();
-        result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
 
         producerMetrics.recordPrepareTxn(time.nanoseconds() - prepareStart);
 

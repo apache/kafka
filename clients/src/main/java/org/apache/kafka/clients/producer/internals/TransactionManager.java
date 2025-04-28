@@ -338,18 +338,12 @@ public class TransactionManager {
     /**
      * Begin preparing a transaction for a two-phase commit.
      * This transitions the transaction to the PREPARING_TRANSACTION state.
-     *
-     * @return a TransactionalRequestResult that can be waited on for to prepare to complete
      */
-    public synchronized TransactionalRequestResult beginPrepare() {
+    public synchronized void beginPrepare() {
         ensureTransactional();
         throwIfPendingState("prepareTransaction");
         maybeFailWithError();
         transitionTo(State.PREPARING_TRANSACTION);
-        // Return an empty result that completes immediately
-        TransactionalRequestResult result = new TransactionalRequestResult("prepareTransaction");
-        result.done();
-        return result;
     }
 
     public synchronized TransactionalRequestResult beginCommit() {
