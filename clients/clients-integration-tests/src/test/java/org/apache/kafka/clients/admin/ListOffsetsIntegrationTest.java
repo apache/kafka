@@ -240,8 +240,8 @@ public class ListOffsetsIntegrationTest {
 
         // case 2: test the offsets from recovery path.
         // server will rebuild offset index according to log files if the index files are nonexistent
-        Set<String> indexFiles = clusterInstance.brokers().values().stream().flatMap(broker ->
-            broker.config().logDirs().stream()).collect(Collectors.toUnmodifiableSet());
+        List<String> indexFiles = clusterInstance.brokers().values().stream().flatMap(broker ->
+            broker.config().logDirs().stream()).toList();
         clusterInstance.brokers().values().forEach(KafkaBroker::shutdown);
         indexFiles.forEach(root -> {
             File[] files = new File(String.format("%s/%s-0", root, topic)).listFiles();

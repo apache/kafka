@@ -38,11 +38,11 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.ArrayList;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 import scala.collection.Seq;
@@ -155,7 +155,7 @@ public abstract class TieredStorageTestHarness extends IntegrationTestHarness {
 
     public static List<BrokerLocalStorage> localStorages(Seq<KafkaBroker> brokers) {
         return CollectionConverters.asJava(brokers).stream()
-                .map(b -> new BrokerLocalStorage(b.config().brokerId(), new HashSet<>(b.config().logDirs()),
+                .map(b -> new BrokerLocalStorage(b.config().brokerId(), Set.copyOf(b.config().logDirs()),
                         STORAGE_WAIT_TIMEOUT_SEC))
                 .collect(Collectors.toList());
     }
