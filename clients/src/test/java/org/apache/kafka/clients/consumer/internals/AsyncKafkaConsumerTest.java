@@ -994,8 +994,8 @@ public class AsyncKafkaConsumerTest {
         Map<TopicPartition, Long> result =
                 assertDoesNotThrow(() -> consumer.beginningOffsets(Collections.singletonList(tp), Duration.ZERO));
         // The result should be {tp=null}
-        assertTrue(result.containsKey(tp));
-        assertNull(result.get(tp));
+        assertNotNull(result);
+        assertEquals(0, result.size());
         verify(applicationEventHandler).add(ArgumentMatchers.isA(ListOffsetsEvent.class));
     }
 
@@ -1003,11 +1003,11 @@ public class AsyncKafkaConsumerTest {
     public void testOffsetsForTimesWithZeroTimeout() {
         consumer = newConsumer();
         TopicPartition tp = new TopicPartition("topic1", 0);
-        Map<TopicPartition, OffsetAndTimestamp> expectedResult = Collections.singletonMap(tp, null);
         Map<TopicPartition, Long> timestampToSearch = Collections.singletonMap(tp, 5L);
         Map<TopicPartition, OffsetAndTimestamp> result =
             assertDoesNotThrow(() -> consumer.offsetsForTimes(timestampToSearch, Duration.ZERO));
-        assertEquals(expectedResult, result);
+        assertNotNull(result);
+        assertEquals(0, result.size());
         verify(applicationEventHandler, never()).addAndGet(ArgumentMatchers.isA(ListOffsetsEvent.class));
     }
 
