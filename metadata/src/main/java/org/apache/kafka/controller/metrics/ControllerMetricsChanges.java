@@ -88,6 +88,8 @@ class ControllerMetricsChanges {
             wasFenced = prev.fenced();
             wasActive = !prev.fenced();
             wasInControlledShutdown = prev.inControlledShutdown();
+        } else {
+            metrics.addBrokerRegistrationStateMetric(next.id());
         }
         boolean isFenced = false;
         boolean isActive = false;
@@ -103,17 +105,13 @@ class ControllerMetricsChanges {
             } else {
                 metrics.setBrokerRegistrationState(next.id(), ControllerMetadataMetrics.BROKER_ACTIVE_STATE);
             }
+        } else {
+            metrics.removeBrokerRegistrationStateMetric(prev.id());
+            metrics.setBrokerRegistrationState(prev.id(), ControllerMetadataMetrics.BROKER_UNREGISTERED_STATE);
         }
         fencedBrokersChange += delta(wasFenced, isFenced);
         activeBrokersChange += delta(wasActive, isActive);
         controlledShutdownBrokersChange += delta(wasInControlledShutdown, isInControlledShutdown);
-
-        if (prev == null) {
-            metrics.addBrokerRegistrationStateMetric(next.id());
-        } else if (next == null) {
-            metrics.removeBrokerRegistrationStateMetric(prev.id());
-            metrics.setBrokerRegistrationState(prev.id(), ControllerMetadataMetrics.BROKER_UNREGISTERED_STATE);
-        }
     }
 
     void handleDeletedTopic(TopicImage deletedTopic) {

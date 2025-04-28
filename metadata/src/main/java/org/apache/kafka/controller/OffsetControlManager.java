@@ -32,7 +32,6 @@ import org.apache.kafka.timeline.SnapshotRegistry;
 import org.slf4j.Logger;
 
 import java.util.Optional;
-import java.util.concurrent.TimeUnit;
 
 
 /**

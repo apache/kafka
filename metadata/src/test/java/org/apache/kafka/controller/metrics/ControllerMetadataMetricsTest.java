@@ -39,11 +39,14 @@ public class ControllerMetadataMetricsTest {
         MetricsRegistry registry = new MetricsRegistry();
         try {
             try (ControllerMetadataMetrics metrics = new ControllerMetadataMetrics(Optional.of(registry))) {
+                metrics.addBrokerRegistrationStateMetric(1);
+                metrics.setBrokerRegistrationState(1, ControllerMetadataMetrics.BROKER_ACTIVE_STATE);
                 ControllerMetricsTestUtils.assertMetricsForTypeEqual(registry, "kafka.controller:",
                     new HashSet<>(List.of(
                         "kafka.controller:type=KafkaController,name=ActiveBrokerCount",
                         "kafka.controller:type=KafkaController,name=FencedBrokerCount",
                         "kafka.controller:type=KafkaController,name=ControlledShutdownBrokerCount",
+                        "kafka.controller:type=KafkaController,name=BrokerRegistrationState,broker=1",
                         "kafka.controller:type=KafkaController,name=GlobalPartitionCount",
                         "kafka.controller:type=KafkaController,name=GlobalTopicCount",
                         "kafka.controller:type=KafkaController,name=MetadataErrorCount",

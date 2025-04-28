@@ -177,6 +177,13 @@ public class QuorumControllerMetrics implements AutoCloseable {
         ));
     }
 
+    public void removeTimeSinceLastHeartbeatMetrics() {
+        for (int brokerId : brokerContactTimesMs.keySet()) {
+            removeTimeSinceLastHeartbeatMetric(brokerId);
+        }
+        brokerContactTimesMs.clear();
+    }
+
     public void setActive(boolean active) {
         this.active = active;
     }
@@ -256,7 +263,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
         if (!brokerContactTimesMs.containsKey(brokerId)) {
             return sessionTimeoutMs;
         } else {
-            return Math.min((int)(time.milliseconds() - brokerContactTimesMs.get(brokerId).get()), sessionTimeoutMs);
+            return Math.min((int) (time.milliseconds() - brokerContactTimesMs.get(brokerId).get()), sessionTimeoutMs);
         }
     }
 
@@ -275,9 +282,7 @@ public class QuorumControllerMetrics implements AutoCloseable {
             EVENT_QUEUE_OPERATIONS_TIMED_OUT_COUNT,
             NEW_ACTIVE_CONTROLLERS_COUNT
         ).forEach(r::removeMetric));
-        for (int brokerId : brokerContactTimesMs.keySet()) {
-            removeTimeSinceLastHeartbeatMetric(brokerId);
-        }
+        removeTimeSinceLastHeartbeatMetrics();
     }
 
     private static MetricName getMetricName(String type, String name) {

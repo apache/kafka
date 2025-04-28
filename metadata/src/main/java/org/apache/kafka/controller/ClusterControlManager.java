@@ -345,6 +345,7 @@ public class ClusterControlManager {
      */
     public void deactivate() {
         heartbeatManager = null;
+        metrics.removeTimeSinceLastHeartbeatMetrics();
     }
 
     Map<Integer, BrokerRegistration> brokerRegistrations() {
@@ -452,6 +453,7 @@ public class ClusterControlManager {
                         "{}.  Generated {} record(s) to clean up previous incarnations. New broker " +
                         "epoch is {}.", brokerId, request.incarnationId(), numRecordsAdded, newBrokerEpoch);
                 metrics.addTimeSinceLastHeartbeatMetric(brokerId);
+                metrics.updateBrokerContactTime(brokerId, time.milliseconds());
             } else {
                 log.info("Registering a new incarnation of broker {}. Previous incarnation ID " +
                         "was {}; new incarnation ID is {}. Generated {} record(s) to clean up " +
