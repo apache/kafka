@@ -20,7 +20,7 @@ package kafka.server
 import com.yammer.metrics.core.Meter
 import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
 import kafka.utils.CoreUtils.inLock
-import kafka.utils.{Logging, Pool}
+import kafka.utils.Logging
 import org.apache.kafka.common.errors._
 import org.apache.kafka.common.internals.PartitionStates
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
@@ -41,7 +41,7 @@ import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import java.nio.ByteBuffer
 import java.util
 import java.util.Optional
-import java.util.concurrent.TimeUnit
+import java.util.concurrent.{ConcurrentHashMap, TimeUnit}
 import java.util.concurrent.atomic.AtomicLong
 import java.util.concurrent.locks.ReentrantLock
 import scala.collection.{Map, Set, mutable}
@@ -903,11 +903,10 @@ class FetcherLagMetrics(metricId: ClientIdTopicPartition) {
 }
 
 class FetcherLagStats(metricId: ClientIdAndBroker) {
-  private val valueFactory = (k: TopicPartition) => new FetcherLagMetrics(ClientIdTopicPartition(metricId.clientId, k))
-  val stats = new Pool[TopicPartition, FetcherLagMetrics](Some(valueFactory))
+  val stats = new ConcurrentHashMap[TopicPartition, FetcherLagMetrics]
 
   def getAndMaybePut(topicPartition: TopicPartition): FetcherLagMetrics = {
-    stats.getAndMaybePut(topicPartition)
+    stats.computeIfAbsent(topicPartition, k => new FetcherLagMetrics(ClientIdTopicPartition(metricId.clientId, k)))
   }
 
   def unregister(topicPartition: TopicPartition): Unit = {
@@ -916,9 +915,7 @@ class FetcherLagStats(metricId: ClientIdAndBroker) {
   }
 
   def unregister(): Unit = {
-    stats.keys.toBuffer.foreach { key: TopicPartition =>
-      unregister(key)
-    }
+    stats.forEach((key, _) => unregister(key))
   }
 }
 

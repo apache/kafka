@@ -172,7 +172,6 @@ object AbstractCoordinatorConcurrencyTest {
                            val producePurgatory: DelayedOperationPurgatory[DelayedProduce],
                            val delayedFetchPurgatoryParam: DelayedOperationPurgatory[DelayedFetch],
                            val delayedDeleteRecordsPurgatoryParam: DelayedOperationPurgatory[DelayedDeleteRecords],
-                           val delayedElectLeaderPurgatoryParam: DelayedOperationPurgatory[DelayedElectLeader],
                            val delayedRemoteFetchPurgatoryParam: DelayedOperationPurgatory[DelayedRemoteFetch],
                            val delayedRemoteListOffsetsPurgatoryParam: DelayedOperationPurgatory[DelayedRemoteListOffsets])
     extends ReplicaManager(
@@ -290,10 +289,8 @@ object AbstractCoordinatorConcurrencyTest {
         "Fetch", timer, 0, 1000, false, true)
       val mockDeleteRecordsPurgatory = new DelayedOperationPurgatory[DelayedDeleteRecords](
         "DeleteRecords", timer, 0, 1000, false, true)
-      val mockElectLeaderPurgatory = new DelayedOperationPurgatory[DelayedElectLeader](
-        "ElectLeader", timer, 0, 1000, false, true)
       new TestReplicaManager(config, time, scheduler, logManager, quotaManagers, watchKeys, producePurgatory,
-        mockFetchPurgatory, mockDeleteRecordsPurgatory, mockElectLeaderPurgatory, mockRemoteFetchPurgatory,
+        mockFetchPurgatory, mockDeleteRecordsPurgatory, mockRemoteFetchPurgatory,
         mockRemoteListOffsetsPurgatory)
     }
   }

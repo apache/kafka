@@ -71,7 +71,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
     createOffsetsTopic()
 
     // Create the topic.
-    createTopic(
+    val topicId = createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -87,6 +87,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
         memberId = memberId,
         memberEpoch = memberEpoch,
         topic = "foo",
+        topicId = topicId,
         partition = partitionId,
         offset = 100L + partitionId,
         expectedError = Errors.NONE,
@@ -239,7 +240,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
     createOffsetsTopic()
 
     // Create the topic.
-    createTopic(
+    val topicId = createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -255,6 +256,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
         memberId = memberId,
         memberEpoch = memberEpoch,
         topic = "foo",
+        topicId = topicId,
         partition = partitionId,
         offset = 100L + partitionId,
         expectedError = Errors.NONE,
@@ -348,7 +350,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
     createOffsetsTopic()
 
     // Create the topic.
-    createTopic(
+    val topicId = createTopic(
       topic = "foo",
       numPartitions = 3
     )
@@ -365,6 +367,7 @@ class OffsetFetchRequestTest(cluster: ClusterInstance) extends GroupCoordinatorB
           memberId = memberId,
           memberEpoch = memberEpoch,
           topic = "foo",
+          topicId = topicId,
           partition = partitionId,
           offset = 100L + partitionId,
           expectedError = Errors.NONE,
