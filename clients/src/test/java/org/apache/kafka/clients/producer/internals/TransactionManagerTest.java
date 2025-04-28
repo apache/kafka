@@ -81,6 +81,7 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
 import org.apache.kafka.test.TestUtils;
+import org.apache.kafka.clients.producer.PreparedTxnState;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -4034,6 +4035,21 @@ public class TransactionManagerTest {
     }
 
     @Test
+    public void testGetPreparedTransactionState() {
+        doInitTransactionsWith2PCEnabled(false);
+        runUntil(transactionManager::hasProducerId);
+
+        // Get the prepared transaction state
+        PreparedTxnState preparedState = transactionManager.getPreparedTransactionState();
+
+        // Validate the state contains the correct serialized producer ID and epoch
+        assertEquals(producerId + ":" + epoch, preparedState.toString());
+        assertEquals(producerId, preparedState.producerId());
+        assertEquals(epoch, preparedState.epoch());
+        assertTrue(preparedState.hasTransaction());
+    }
+
+    @Test
     public void testBeginPrepare() {
         doInitTransactionsWith2PCEnabled(false);
         runUntil(transactionManager::hasProducerId);
@@ -4412,19 +4428,31 @@ public class TransactionManagerTest {
         runUntil(() -> transactionManager.coordinator(CoordinatorType.TRANSACTION) != null);
         assertEquals(brokerNode, transactionManager.coordinator(CoordinatorType.TRANSACTION));
 
-        // Simulate an ongoing prepared transaction (ongoingProducerId != -1).
-        short ongoingEpoch = bumpedOngoingEpoch - 1;
-
-        prepareInitPidResponse(
-            Errors.NONE,
-            false,
-            ongoingProducerId,
-            bumpedOngoingEpoch,
-            keepPrepared,
-            true,
-            ongoingProducerId,
-            ongoingEpoch
-        );
+        if (keepPrepared) {
+            // Simulate an ongoing prepared transaction (ongoingProducerId != -1).
+            short ongoingEpoch = bumpedOngoingEpoch - 1;
+            prepareInitPidResponse(
+                Errors.NONE,
+                false,
+                ongoingProducerId,
+                bumpedOngoingEpoch,
+                true,
+                true,
+                ongoingProducerId,
+                ongoingEpoch
+            );
+        } else {
+            prepareInitPidResponse(
+                Errors.NONE,
+                false,
+                producerId,
+                epoch,
+                false,
+                true,
+                RecordBatch.NO_PRODUCER_ID,
+                RecordBatch.NO_PRODUCER_EPOCH
+            );
+        }
 
         runUntil(transactionManager::hasProducerId);
         transactionManager.maybeUpdateTransactionV2Enabled(true);

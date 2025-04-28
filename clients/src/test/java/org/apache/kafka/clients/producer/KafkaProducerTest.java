@@ -45,6 +45,7 @@ import org.apache.kafka.common.config.SslConfigs;
 import org.apache.kafka.common.errors.ClusterAuthorizationException;
 import org.apache.kafka.common.errors.InterruptException;
 import org.apache.kafka.common.errors.InvalidTopicException;
+import org.apache.kafka.common.errors.InvalidTxnStateException;
 import org.apache.kafka.common.errors.RecordTooLargeException;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -1531,7 +1532,7 @@ public class KafkaProducerTest {
 
         try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
             assertThrows(
-                IllegalStateException.class,
+                InvalidTxnStateException.class,
                 producer::prepareTransaction,
                 "prepareTransaction() should fail if 2PC is disabled"
             );
