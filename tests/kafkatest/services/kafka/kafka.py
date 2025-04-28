@@ -779,16 +779,17 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         for prop in self.per_node_server_prop_overrides.get(self.idx(node), []):
             override_configs[prop[0]] = prop[1]
 
+        enabledProtocols = 'classic,consumer'
+
         if self.use_share_groups is not None and self.use_share_groups is True:
             override_configs[config_property.SHARE_GROUP_ENABLE] = str(self.use_share_groups)
-            if self.use_streams_groups is True:
-                override_configs[config_property.UNSTABLE_API_VERSIONS_ENABLE] = str(True)
-                override_configs[config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS] = 'classic,consumer,share,streams'
-            else:
-                override_configs[config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS] = 'classic,consumer,share'
-        elif self.use_streams_groups is True:
+            enabledProtocols += ',share'
+
+        if self.use_streams_groups is True:
             override_configs[config_property.UNSTABLE_API_VERSIONS_ENABLE] = str(True)
-            override_configs[config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS] = 'classic,consumer,streams'
+            enabledProtocols += ',streams'
+
+        override_configs[config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS] = enabledProtocols
 
         #update template configs with test override configs
         configs.update(override_configs)
