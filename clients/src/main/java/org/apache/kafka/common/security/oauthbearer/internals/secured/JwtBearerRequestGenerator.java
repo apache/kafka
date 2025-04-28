@@ -30,19 +30,23 @@ import java.net.http.HttpRequest;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.Optional;
 
 public class JwtBearerRequestGenerator implements HttpRequestGenerator {
 
     public static final String GRANT_TYPE = "urn:ietf:params:oauth:grant-type:jwt-bearer";
 
     private final URL tokenEndpoint;
+    private final Optional<String> scope;
     private final AssertionCreator assertionCreator;
     private final AssertionJwtTemplate assertionJwtTemplate;
 
     public JwtBearerRequestGenerator(URL tokenEndpoint,
+                                     Optional<String> scope,
                                      AssertionCreator assertionCreator,
                                      AssertionJwtTemplate assertionJwtTemplate) {
         this.tokenEndpoint = tokenEndpoint;
+        this.scope = scope;
         this.assertionCreator = assertionCreator;
         this.assertionJwtTemplate = assertionJwtTemplate;
     }
@@ -57,9 +61,11 @@ public class JwtBearerRequestGenerator implements HttpRequestGenerator {
             throw new JwtRetrieverException("Error signing OAuth assertion with private key", e);
         }
 
-        String encodedGrantType = URLEncoder.encode(GRANT_TYPE, StandardCharsets.UTF_8);
-        String encodedAssertion = URLEncoder.encode(assertion, StandardCharsets.UTF_8);
-        return String.format("grant_type=%s&assertion=%s", encodedGrantType, encodedAssertion);
+        StringBuilder requestParameters = new StringBuilder();
+        requestParameters.append("grant_type=").append(URLEncoder.encode(GRANT_TYPE, StandardCharsets.UTF_8));
+        requestParameters.append("&assertion=").append(URLEncoder.encode(assertion, StandardCharsets.UTF_8));
+        scope.ifPresent(s -> requestParameters.append("&scope=").append(URLEncoder.encode(s, StandardCharsets.UTF_8)));
+        return requestParameters.toString();
     }
 
     @Override

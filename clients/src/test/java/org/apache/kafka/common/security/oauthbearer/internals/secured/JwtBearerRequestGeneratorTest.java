@@ -25,6 +25,7 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBearerRequestGenerator.GRANT_TYPE;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -63,6 +64,7 @@ public class JwtBearerRequestGeneratorTest extends HttpRequestGeneratorTest {
 
             return new JwtBearerRequestGenerator(
                 new URL("http://www.example.com"),
+                Optional.of("test"),
                 assertionCreator,
                 assertionJwtTemplate
             );

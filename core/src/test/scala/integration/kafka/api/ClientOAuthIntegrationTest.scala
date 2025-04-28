@@ -16,24 +16,34 @@
  */
 package integration.kafka.api
 
+import com.nimbusds.jose.jwk.RSAKey
 import kafka.api.{IntegrationTestHarness, SaslSetup}
 import kafka.utils.TestInfoUtils
 import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.config.{ConfigException, SaslConfigs}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
-import java.util.{Collections, Properties}
-import no.nav.security.mock.oauth2.MockOAuth2Server
+import java.util.{Base64, Collections, Properties}
+import no.nav.security.mock.oauth2.{MockOAuth2Server, OAuth2Config}
+import no.nav.security.mock.oauth2.token.{KeyProvider, OAuth2TokenProvider}
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBearerRequestGenerator
 import org.apache.kafka.common.security.oauthbearer.{OAuthBearerLoginCallbackHandler, OAuthBearerLoginModule, OAuthBearerValidatorCallbackHandler}
+import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.test.TestUtils
 import org.junit.jupiter.api.Assertions.{assertDoesNotThrow, assertThrows}
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
+import java.io.File
+import java.nio.ByteBuffer
+import java.nio.channels.FileChannel
+import java.nio.file.StandardOpenOption
+import java.security.{KeyPairGenerator, PrivateKey}
+import java.security.interfaces.RSAPublicKey
+import java.util
 import javax.security.auth.login.LoginException
 
 /**
@@ -52,10 +62,29 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
 
   val issuerId = "default"
   var mockOAuthServer: MockOAuth2Server = _
+  var privateKey: PrivateKey = _
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    mockOAuthServer = new MockOAuth2Server()
+    // Step 1: Generate the key pair dynamically.
+    val keyGen = KeyPairGenerator.getInstance("RSA")
+    keyGen.initialize(2048)
+    val keyPair = keyGen.generateKeyPair()
+
+    privateKey = keyPair.getPrivate
+
+    // Step 2: Create the RSA JWK from key pair.
+    val rsaJWK = new RSAKey.Builder(keyPair.getPublic.asInstanceOf[RSAPublicKey])
+      .privateKey(privateKey)
+      .keyID("foo")
+      .build()
+
+    // Step 3: Create the OAuth server using the keys just created
+    val keyProvider = new KeyProvider(Collections.singletonList(rsaJWK))
+    val tokenProvider = new OAuth2TokenProvider(keyProvider)
+    val oauthConfig = new OAuth2Config(false, null, null, false, tokenProvider)
+    mockOAuthServer = new MockOAuth2Server(oauthConfig)
+
     mockOAuthServer.start()
     val tokenEndpointUrl = mockOAuthServer.tokenEndpointUrl(issuerId).url().toString
     val jwksUrl = mockOAuthServer.jwksUrl(issuerId).url().toString
@@ -116,6 +145,22 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
     val configs = defaultOAuthClientConfigs()
     configs.put(SaslConfigs.SASL_OAUTHBEARER_GRANT_TYPE, JwtBearerRequestGenerator.GRANT_TYPE)
     configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE, assertionFile.getAbsolutePath)
+
+    assertClientsSucceed(configs)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testBasicJwtBearer2(groupProtocol: String): Unit = {
+    val privateKeyFile = generatePrivateKeyFile()
+
+    val configs = defaultOAuthClientConfigs()
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_GRANT_TYPE, JwtBearerRequestGenerator.GRANT_TYPE)
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE, privateKeyFile.getPath)
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_AUD, "default")
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_CLAIM_SUB, "kafka-client-test-sub")
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_SCOPE, "default")
+//    configs.put(SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME, "aud")
 
     assertClientsSucceed(configs)
   }
@@ -202,5 +247,20 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
     }
 
     throw original
+  }
+
+  def generatePrivateKeyFile(): File = {
+    val file = File.createTempFile("private-", ".key")
+    val bytes = Base64.getEncoder.encode(privateKey.getEncoded)
+    var channel: FileChannel = null
+
+    try {
+      channel = FileChannel.open(file.toPath, util.EnumSet.of(StandardOpenOption.WRITE))
+      Utils.writeFully(channel, ByteBuffer.wrap(bytes))
+    } finally {
+      channel.close()
+    }
+
+    file
   }
 }

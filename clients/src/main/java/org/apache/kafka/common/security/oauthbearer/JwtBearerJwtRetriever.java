@@ -50,6 +50,7 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERT
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_FILE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_ASSERTION_PRIVATE_KEY_PASSPHRASE;
+import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.dynamicAssertionJwtTemplate;
 import static org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerUtils.fileAssertionJwtTemplate;
@@ -83,6 +84,8 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
         OAuthBearerJaasConfig jaasConfig = new OAuthBearerJaasConfig(jaasOptions(saslMechanism, jaasConfigEntries));
 
         URL tokenEndpoint = validateUrl(oauthConfig, SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
+        Optional<String> scope = oauthConfig.maybeGetString(SASL_OAUTHBEARER_SCOPE);
+
         retryBackoffMs =  oauthConfig.getLong(SASL_LOGIN_RETRY_BACKOFF_MS);
         retryBackoffMaxMs = oauthConfig.getLong(SASL_LOGIN_RETRY_BACKOFF_MAX_MS);
         sslResource = maybeCreateSslResource(tokenEndpoint, jaasConfig);
@@ -113,6 +116,7 @@ public class JwtBearerJwtRetriever implements JwtRetriever {
 
         requestGenerator = new JwtBearerRequestGenerator(
             tokenEndpoint,
+            scope,
             assertionCreator,
             assertionJwtTemplate
         );
