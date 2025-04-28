@@ -59,7 +59,7 @@ public class ShareSessionCache {
     // A map of session key to ShareSession.
     private final Map<ShareSessionKey, ShareSession> sessions = new HashMap<>();
 
-    private final Map<String, ShareSessionKey> connectionIdToSessionMapping;
+    private final Map<String, ShareSessionKey> connectionIdToSessionMap;
 
     @SuppressWarnings("this-escape")
     public ShareSessionCache(int maxEntries) {
@@ -68,7 +68,7 @@ public class ShareSessionCache {
         KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.server", "ShareSessionCache");
         metricsGroup.newGauge(SHARE_SESSIONS_COUNT, this::size);
         metricsGroup.newGauge(SHARE_PARTITIONS_COUNT, this::totalPartitions);
-        this.connectionIdToSessionMapping = new HashMap<>();
+        this.connectionIdToSessionMap = new HashMap<>();
         this.connectionDisconnectListener = new ClientConnectionDisconnectListener();
         this.evictionsMeter = metricsGroup.newMeter(SHARE_SESSION_EVICTIONS_PER_SEC, "evictions", TimeUnit.SECONDS);
     }
@@ -143,7 +143,7 @@ public class ShareSessionCache {
                 ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH));
             sessions.put(session.key(), session);
             updateNumPartitions(session);
-            connectionIdToSessionMapping.put(clientConnectionId, session.key());
+            connectionIdToSessionMap.put(clientConnectionId, session.key());
             return session.key();
         }
         return null;
@@ -163,7 +163,7 @@ public class ShareSessionCache {
         // When the client disconnects, the corresponding session should be removed from the cache.
         @Override
         public void onDisconnect(String connectionId) {
-            ShareSessionKey shareSessionKey = connectionIdToSessionMapping.remove(connectionId);
+            ShareSessionKey shareSessionKey = connectionIdToSessionMap.remove(connectionId);
             if (shareSessionKey != null) {
                 // Remove the session from the cache.
                 ShareSession removedSession = remove(shareSessionKey);

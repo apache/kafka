@@ -2102,7 +2102,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
 
     val send: Seq[TopicIdPartition] = Seq(topicIdPartition)
 
-    // member1 sends share fetch request to register its share session. Note it does not close the socket connection after.
+    // member1 sends share fetch request to register it's share session. Note it does not close the socket connection after.
     TestUtils.waitUntilTrue(() => {
       val metadata = new ShareRequestMetadata(memberId1, ShareRequestMetadata.INITIAL_EPOCH)
       val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
@@ -2111,7 +2111,7 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       shareFetchResponseData.errorCode == Errors.NONE.code
     }, "Share fetch request failed", 5000)
 
-    // member2 sends share fetch request to register its share session. Note it does not close the socket connection after.
+    // member2 sends share fetch request to register it's share session. Note it does not close the socket connection after.
     TestUtils.waitUntilTrue(() => {
       val metadata = new ShareRequestMetadata(memberId2, ShareRequestMetadata.INITIAL_EPOCH)
       val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty)
@@ -2120,8 +2120,8 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       shareFetchResponseData.errorCode == Errors.NONE.code
     }, "Share fetch request failed", 5000)
 
-    // member3 sends share fetch request to register its share session. Since the maximum number of share sessions that could
-    // exist in the share session cache is 2 (group.share.max.groups * group.share.max.size), the attempt to register a third
+    // member3 sends share fetch request to register it's share session. Since the maximum number of share sessions that could
+    // exist in the share session cache is 2 (group.share.max.share.sessions), the attempt to register a third
     // share session with the ShareSessionCache would throw SHARE_SESSION_NOT_FOUND
     TestUtils.waitUntilTrue(() => {
       val metadata = new ShareRequestMetadata(memberId3, ShareRequestMetadata.INITIAL_EPOCH)
