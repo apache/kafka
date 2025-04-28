@@ -23,7 +23,7 @@ import org.apache.kafka.clients.RequestCompletionHandler;
 import org.apache.kafka.clients.consumer.CommitFailedException;
 import org.apache.kafka.clients.consumer.ConsumerGroupMetadata;
 import org.apache.kafka.clients.consumer.OffsetAndMetadata;
-import org.apache.kafka.clients.producer.KafkaProducer;
+import org.apache.kafka.clients.producer.PreparedTxnState;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.KafkaException;
@@ -70,7 +70,6 @@ import org.apache.kafka.common.requests.TxnOffsetCommitRequest.CommittedOffset;
 import org.apache.kafka.common.requests.TxnOffsetCommitResponse;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.ProducerIdAndEpoch;
-import org.apache.kafka.clients.producer.PreparedTxnState;
 
 import org.slf4j.Logger;
 
@@ -503,7 +502,7 @@ public class TransactionManager {
         return isTransactionV2Enabled;
     }
 
-    public boolean is2PCEnabled(){
+    public boolean is2PCEnabled() {
         return enable2PC;
     }
 
