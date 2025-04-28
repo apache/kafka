@@ -300,12 +300,13 @@ class StreamsCoordinatorRecordHelpersTest {
                 .setGroupId(GROUP_ID),
             new ApiMessageAndVersion(
                 new StreamsGroupMetadataValue()
-                    .setEpoch(42),
+                    .setEpoch(42)
+                    .setMetadataHash(42),
                 (short) 0
             )
         );
 
-        assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(GROUP_ID, 42));
+        assertEquals(expectedRecord, StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(GROUP_ID, 42, 42));
     }
 
     @Test
@@ -740,7 +741,7 @@ class StreamsCoordinatorRecordHelpersTest {
     @Test
     public void testNewStreamsGroupEpochRecordNullGroupId() {
         NullPointerException exception = assertThrows(NullPointerException.class, () ->
-            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(null, 1));
+            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(null, 1, 1));
         assertEquals("groupId should not be null here", exception.getMessage());
     }
 

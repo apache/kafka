@@ -1,10 +1,10 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one or more
- * contributor license agreements.  See the NOTICE file distributed with
+ * contributor license agreements. See the NOTICE file distributed with
  * this work for additional information regarding copyright ownership.
  * The ASF licenses this file to You under the Apache License, Version 2.0
  * (the "License"); you may not use this file except in compliance with
- * the License.  You may obtain a copy of the License at
+ * the License. You may obtain a copy of the License at
  *
  *    http://www.apache.org/licenses/LICENSE-2.0
  *
@@ -14,27 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.raft.internals;
 
-package kafka.utils
-
-import org.junit.jupiter.api.Assertions.assertEquals
-import org.junit.jupiter.api.Test
-
-
-class PoolTest {
-  @Test
-  def testRemoveAll(): Unit = {
-    val pool = new Pool[Int, String]
-    pool.put(1, "1")
-    pool.put(2, "2")
-    pool.put(3, "3")
-
-    assertEquals(3, pool.size)
-
-    pool.removeAll(Seq(1, 2))
-    assertEquals(1, pool.size)
-    assertEquals("3", pool.get(3))
-    pool.removeAll(Seq(3))
-    assertEquals(0, pool.size)
-  }
+/**
+ * Type to capture the atempt to send a request.
+ *
+ * @param requestSent true if the request was sent
+ * @param timeToWaitMs the amount of time to wait in milliseconds before attempting to resend the
+ *                     request.
+ */
+public record RequestSendResult(boolean requestSent, long timeToWaitMs) {
+    public static RequestSendResult of(boolean requestSent, long timeToWaitMs) {
+        return new RequestSendResult(requestSent, timeToWaitMs);
+    }
 }
