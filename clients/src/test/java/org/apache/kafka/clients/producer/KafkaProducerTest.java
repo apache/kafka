@@ -1472,6 +1472,54 @@ public class KafkaProducerTest {
     }
 
     @Test
+    public void testSendNotAllowedInPreparedTransactionState() throws Exception {
+        StringSerializer serializer = new StringSerializer();
+        KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
+
+        String topic = "foo";
+        Cluster cluster = TestUtils.singletonCluster(topic, 1);
+
+        when(ctx.sender.isRunning()).thenReturn(true);
+        when(ctx.metadata.fetch()).thenReturn(cluster);
+        
+        // Mock transaction manager to simulate being in a prepared state
+        when(ctx.transactionManager.isTransactional()).thenReturn(true);
+        when(ctx.transactionManager.isInPreparingState()).thenReturn(true);
+        
+        // Create record to send
+        long timestamp = ctx.time.milliseconds();
+        ProducerRecord<String, String> record = new ProducerRecord<>(topic, 0, timestamp, "key", "value");
+
+        try (KafkaProducer<String, String> producer = ctx.newKafkaProducer()) {
+            // Verify that sending a record throws IllegalStateException with the correct message
+            IllegalStateException exception = assertThrows(
+                IllegalStateException.class,
+                () -> producer.send(record)
+            );
+            
+            assertTrue(exception.getMessage().contains("Cannot send messages when the transaction is in a prepared state"));
+            
+            // Verify transactionManager methods were called
+            verify(ctx.transactionManager).isTransactional();
+            verify(ctx.transactionManager).isInPreparingState();
+            
+            // Verify that no message was actually sent (accumulator was not called)
+            verify(ctx.accumulator, never()).append(
+                eq(topic),
+                anyInt(),
+                anyLong(),
+                any(),
+                any(),
+                any(),
+                any(),
+                anyLong(),
+                anyLong(),
+                any()
+            );
+        }
+    }
+
+    @Test
     public void testPrepareTransactionFailsWhen2PCDisabled() {
         StringSerializer serializer = new StringSerializer();
         KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
