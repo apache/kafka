@@ -117,9 +117,6 @@ public enum MetadataVersion {
     // Enables share groups. Note, share groups are for preview only in 4.1. (KIP-932).
     IBP_4_1_IV1(27, "4.1", "IV1", false),
 
-    // Enables "streams" groups. Note, streams groups are for early access only in 4.1. (KIP-1071).
-    IBP_4_1_IV2(28, "4.1", "IV2", false),
-
     // Insert any additional IBP_4_1_IVx versions above this comment, and bump the feature level of
     // IBP_4_2_IV0 accordingly. When 4.2 development begins, IBP_4_2_IV0 will cease to be
     // a placeholder.
