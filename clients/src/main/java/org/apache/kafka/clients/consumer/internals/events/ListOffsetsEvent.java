@@ -49,6 +49,8 @@ public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicParti
      * @return empty map
      */
     public <T> Map<TopicPartition, T> emptyResults() {
+        // It is used to align with classic consumer. When the timeout == 0, the classic consumer will return an empty map.
+        // Therefore, the AsyncKafkaConsumer needs to be consistent with it.
         return Map.of();
     }
 
