@@ -20,10 +20,9 @@ import org.apache.kafka.common.Node;
 import org.apache.kafka.common.message.FindCoordinatorResponseData;
 import org.apache.kafka.common.message.FindCoordinatorResponseData.Coordinator;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.EnumMap;
@@ -108,8 +107,8 @@ public class FindCoordinatorResponse extends AbstractResponse {
         }
     }
 
-    public static FindCoordinatorResponse parse(ByteBuffer buffer, short version) {
-        return new FindCoordinatorResponse(new FindCoordinatorResponseData(new ByteBufferAccessor(buffer), version));
+    public static FindCoordinatorResponse parse(Readable readable, short version) {
+        return new FindCoordinatorResponse(new FindCoordinatorResponseData(readable, version));
     }
 
     @Override
