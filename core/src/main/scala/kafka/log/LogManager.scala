@@ -1528,7 +1528,7 @@ object LogManager {
     val defaultProps = config.extractLogConfigMap
 
     LogConfig.validateBrokerLogConfigValues(defaultProps, config.remoteLogManagerConfig.isRemoteStorageSystemEnabled)
-    val defaultLogConfig = new LogConfig(defaultProps)
+    val defaultLogConfig = new LogConfig(defaultProps, config.internalSegmentSize())
 
     val cleanerConfig = new CleanerConfig(config)
     val transactionLogConfig = new TransactionLogConfig(config)

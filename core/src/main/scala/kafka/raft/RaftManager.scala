@@ -230,7 +230,8 @@ class KafkaRaftManager[T](
       time,
       scheduler,
       config = new MetadataLogConfig(config),
-      config.nodeId
+      config.nodeId,
+      config.internalSegmentSize()
     )
   }
 

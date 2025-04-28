@@ -20,7 +20,7 @@ import kafka.server.{KafkaConfig, KafkaRaftServer}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.errors.CorruptRecordException
-import org.apache.kafka.common.errors.{InvalidConfigurationException, RecordTooLargeException}
+import org.apache.kafka.common.errors.RecordTooLargeException
 import org.apache.kafka.common.protocol
 import org.apache.kafka.common.protocol.{ObjectSerializationCache, Writable}
 import org.apache.kafka.common.record.ArbitraryMemoryRecords
@@ -40,10 +40,10 @@ import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ArgumentsSource
-
 import net.jqwik.api.AfterFailureMode
 import net.jqwik.api.ForAll
 import net.jqwik.api.Property
+import org.apache.kafka.common.config.ConfigException
 
 import java.io.File
 import java.nio.ByteBuffer
@@ -78,13 +78,13 @@ final class KafkaMetadataLogTest {
     props.put(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG, "SSL")
     props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_BYTES_CONFIG, Int.box(10240))
     props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_MILLIS_CONFIG, Int.box(10 * 1024))
-    assertThrows(classOf[InvalidConfigurationException], () => {
+    assertThrows(classOf[ConfigException], () => {
       val kafkaConfig = KafkaConfig.fromProps(props)
       val metadataConfig = new MetadataLogConfig(kafkaConfig)
       buildMetadataLog(tempDir, mockTime, metadataConfig)
     })
 
-    props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG, Int.box(10240))
+    props.put(MetadataLogConfig.METADATA_LOG_SEGMENT_BYTES_CONFIG, Int.box(10 * 1024 * 1024))
     val kafkaConfig = KafkaConfig.fromProps(props)
     val metadataConfig = new MetadataLogConfig(kafkaConfig)
     buildMetadataLog(tempDir, mockTime, metadataConfig)
@@ -689,7 +689,6 @@ final class KafkaMetadataLogTest {
     val recordSize = 64
     val config = new MetadataLogConfig(
       DefaultMetadataLogConfig.logSegmentBytes,
-      DefaultMetadataLogConfig.logSegmentMinBytes,
       DefaultMetadataLogConfig.logSegmentMillis,
       DefaultMetadataLogConfig.retentionMaxBytes,
       DefaultMetadataLogConfig.retentionMillis,
@@ -908,8 +907,7 @@ final class KafkaMetadataLogTest {
   @Test
   def testAdvanceLogStartOffsetAfterCleaning(): Unit = {
     val config = new MetadataLogConfig(
-      512,
-      512,
+      1024 * 1024,
       10 * 1000,
       256,
       60 * 1000,
@@ -945,8 +943,7 @@ final class KafkaMetadataLogTest {
   def testDeleteSnapshots(): Unit = {
     // Generate some logs and a few snapshots, set retention low and verify that cleaning occurs
     val config = new MetadataLogConfig(
-      1024,
-      1024,
+      1024 * 1024,
       10 * 1000,
       1024,
       60 * 1000,
@@ -979,8 +976,7 @@ final class KafkaMetadataLogTest {
   def testSoftRetentionLimit(): Unit = {
     // Set retention equal to the segment size and generate slightly more than one segment of logs
     val config = new MetadataLogConfig(
-      10240,
-      10240,
+      1024 * 1024,
       10 * 1000,
       10240,
       60 * 1000,
@@ -1023,8 +1019,7 @@ final class KafkaMetadataLogTest {
   @Test
   def testSegmentsLessThanLatestSnapshot(): Unit = {
     val config = new MetadataLogConfig(
-      10240,
-      10240,
+      1024 * 1024,
       10 * 1000,
       10240,
       60 * 1000,
@@ -1032,7 +1027,7 @@ final class KafkaMetadataLogTest {
       DefaultMetadataLogConfig.maxFetchSizeInBytes,
       DefaultMetadataLogConfig.deleteDelayMillis
     )
-    val log = buildMetadataLog(tempDir, mockTime, config)
+    val log = buildMetadataLog(tempDir, mockTime, config, 10240)
 
     // Generate enough data to cause a segment roll
     for (_ <- 0 to 2000) {
@@ -1082,8 +1077,7 @@ object KafkaMetadataLogTest {
   }
 
   val DefaultMetadataLogConfig = new MetadataLogConfig(
-    100 * 1024,
-    100 * 1024,
+    1024 * 1024,
     10 * 1000,
     100 * 1024,
     60 * 1000,
@@ -1095,7 +1089,8 @@ object KafkaMetadataLogTest {
   def buildMetadataLogAndDir(
     tempDir: File,
     time: MockTime,
-    metadataLogConfig: MetadataLogConfig = DefaultMetadataLogConfig
+    metadataLogConfig: MetadataLogConfig = DefaultMetadataLogConfig,
+    internalSegmentSize: Integer = null,
   ): (Path, KafkaMetadataLog, MetadataLogConfig) = {
 
     val logDir = createLogDirectory(
@@ -1110,7 +1105,8 @@ object KafkaMetadataLogTest {
       time,
       time.scheduler,
       metadataLogConfig,
-      1
+      1,
+      internalSegmentSize
     )
 
     (logDir.toPath, metadataLog, metadataLogConfig)
@@ -1120,8 +1116,9 @@ object KafkaMetadataLogTest {
     tempDir: File,
     time: MockTime,
     metadataLogConfig: MetadataLogConfig = DefaultMetadataLogConfig,
+    internalSegmentSize: Integer = null,
   ): KafkaMetadataLog = {
-    val (_, log, _) = buildMetadataLogAndDir(tempDir, time, metadataLogConfig)
+    val (_, log, _) = buildMetadataLogAndDir(tempDir, time, metadataLogConfig, internalSegmentSize)
     log
   }
 

@@ -26,7 +26,6 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.record.CompressionType;
-import org.apache.kafka.common.record.LegacyRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.ConfigUtils;
 import org.apache.kafka.common.utils.Utils;
@@ -186,12 +185,13 @@ public class LogConfig extends AbstractConfig {
             .define(ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_DOC)
             .define(ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_DOC)
             .define(ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_CONFIG, LONG, ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_DEFAULT, atLeast(1), LOW, ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_DOC)
-            .defineInternal(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, LONG, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT, atLeast(0), LOW, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DOC);
+            .defineInternal(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, LONG, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT, atLeast(0), LOW, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DOC)
+            .defineInternal(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, INT, null, null, MEDIUM, ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_DOC);
 
     private static final LogConfigDef CONFIG = new LogConfigDef();
     static {
         CONFIG.
-                define(TopicConfig.SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), MEDIUM,
+                define(TopicConfig.SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(1024 * 1024), MEDIUM,
                         TopicConfig.SEGMENT_BYTES_DOC)
                 .define(TopicConfig.SEGMENT_MS_CONFIG, LONG, DEFAULT_SEGMENT_MS, atLeast(1), MEDIUM, TopicConfig.SEGMENT_MS_DOC)
                 .define(TopicConfig.SEGMENT_JITTER_MS_CONFIG, LONG, DEFAULT_SEGMENT_JITTER_MS, atLeast(0), MEDIUM,
@@ -262,7 +262,8 @@ public class LogConfig extends AbstractConfig {
      * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
      * should also be in `KafkaConfig#extractLogConfigMap`.
      */
-    public final int segmentSize;
+    private final int segmentSize;
+    private final Integer internalSegmentSize;
     public final long segmentMs;
     public final long segmentJitterMs;
     public final int maxIndexSize;
@@ -296,16 +297,25 @@ public class LogConfig extends AbstractConfig {
     private final Map<?, ?> props;
 
     public LogConfig(Map<?, ?> props) {
-        this(props, Set.of());
+        this(props, Set.of(), null);
+    }
+
+    public LogConfig(Map<?, ?> props, Set<String> overriddenConfigs) {
+        this(props, overriddenConfigs, null);
+    }
+
+    public LogConfig(Map<?, ?> props, Integer internalSegmentSize) {
+        this(props, Set.of(), internalSegmentSize);
     }
 
     @SuppressWarnings({"this-escape"})
-    public LogConfig(Map<?, ?> props, Set<String> overriddenConfigs) {
+    public LogConfig(Map<?, ?> props, Set<String> overriddenConfigs, Integer internalSegmentSize) {
         super(CONFIG, props, false);
         this.props = Collections.unmodifiableMap(props);
         this.overriddenConfigs = Collections.unmodifiableSet(overriddenConfigs);
 
         this.segmentSize = getInt(TopicConfig.SEGMENT_BYTES_CONFIG);
+        this.internalSegmentSize = internalSegmentSize;
         this.segmentMs = getLong(TopicConfig.SEGMENT_MS_CONFIG);
         this.segmentJitterMs = getLong(TopicConfig.SEGMENT_JITTER_MS_CONFIG);
         this.maxIndexSize = getInt(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG);
@@ -365,6 +375,11 @@ public class LogConfig extends AbstractConfig {
             default:
                 throw new IllegalArgumentException("Invalid value for " + TopicConfig.COMPRESSION_TYPE_CONFIG);
         }
+    }
+
+    public int segmentSize() {
+        if (internalSegmentSize != null) return internalSegmentSize;
+        return segmentSize;
     }
 
     // Exposed as a method so it can be mocked
