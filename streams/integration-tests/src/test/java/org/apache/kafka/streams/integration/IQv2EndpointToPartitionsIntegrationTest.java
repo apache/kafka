@@ -20,7 +20,6 @@ package org.apache.kafka.streams.integration;
 import org.apache.kafka.clients.consumer.ConsumerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.serialization.Serdes;
-import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -129,11 +128,17 @@ public class IQv2EndpointToPartitionsIntegrationTest {
             final Topology topology = complexTopology();
             try (final KafkaStreams streamsOne = new KafkaStreams(topology, streamsApplicationProperties)) {
                 IntegrationTestUtils.startApplicationAndWaitUntilRunning(streamsOne);
+                waitForCondition(()-> !streamsOne.metadataForAllStreamsClients().isEmpty(),
+                        IntegrationTestUtils.DEFAULT_TIMEOUT,
+                        () -> "Kafka Streams didn't get metadata about the client.");
+                waitForCondition(() -> streamsOne.metadataForAllStreamsClients().iterator().next().topicPartitions().size() == 4,
+                        IntegrationTestUtils.DEFAULT_TIMEOUT,
+                        () -> "Kafka Streams one didn't get 4 tasks");
                 final List<StreamsMetadata> streamsMetadataAllClients = new ArrayList<>(streamsOne.metadataForAllStreamsClients());
                 assertEquals(1, streamsMetadataAllClients.size());
                 final StreamsMetadata streamsOneInitialMetadata = streamsMetadataAllClients.get(0);
-                final Set<TopicPartition> topicPartitions = streamsOneInitialMetadata.topicPartitions();
                 assertEquals(2020, streamsOneInitialMetadata.hostInfo().port());
+                final Set<TopicPartition> topicPartitions = streamsOneInitialMetadata.topicPartitions();
                 assertEquals(4, topicPartitions.size());
                 assertEquals(0, streamsOneInitialMetadata.standbyTopicPartitions().size());
 
@@ -168,6 +173,10 @@ public class IQv2EndpointToPartitionsIntegrationTest {
                                metadata.get(1).standbyTopicPartitions().size() == expectedStandbyCount;
                     }, TestUtils.DEFAULT_MAX_WAIT_MS,
                             "Kafka Streams clients 1 and 2 never got metadata about standby tasks");
+
+                    waitForCondition(() -> streamsOne.metadataForAllStreamsClients().iterator().next().topicPartitions().size() == 2,
+                            IntegrationTestUtils.DEFAULT_TIMEOUT,
+                            () -> "Kafka Streams one didn't give up active tasks");
 
                     final List<StreamsMetadata> allClientMetadataUpdated = new ArrayList<>(streamsTwo.metadataForAllStreamsClients());
 
@@ -257,5 +266,4 @@ public class IQv2EndpointToPartitionsIntegrationTest {
                 .toStream().to(outputTopicTwoPartitions, Produced.with(Serdes.String(), Serdes.Long()));
         return builder.build();
     }
-
 }

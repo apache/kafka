@@ -24,61 +24,63 @@ import org.apache.kafka.coordinator.group.streams.TopicMetadata;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
 public class EndpointToPartitionsManager {
 
-    private EndpointToPartitionsManager() {}
+    private EndpointToPartitionsManager() {
+    }
 
     public static StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions(final StreamsGroupMember streamsGroupMember,
-                                                                                       final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint,
-                                                                                       final StreamsGroup streamsGroup) {
+                                                                                              final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint,
+                                                                                              final StreamsGroup streamsGroup) {
         StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = new StreamsGroupHeartbeatResponseData.EndpointToPartitions();
-        List<StreamsGroupHeartbeatResponseData.TopicPartition> activeTopicPartitions = new ArrayList<>();
-        List<StreamsGroupHeartbeatResponseData.TopicPartition> standbyTopicPartitions = new ArrayList<>();
-        for (Map.Entry<String, ConfiguredSubtopology> entry : streamsGroup.configuredTopology().get().subtopologies().get().entrySet()) {
-            ConfiguredSubtopology configuredSubtopology = entry.getValue();
-            endpointToPartitions.setUserEndpoint(responseEndpoint);
-            Set<String> sourceTopics = configuredSubtopology.sourceTopics();
-            Set<String> repartitionSourceTopics = configuredSubtopology.repartitionSourceTopics().keySet();
-
-            final Map<String, TopicMetadata> groupTopicMetadata = streamsGroup.partitionMetadata();
-            Set<Map.Entry<String, Set<Integer>>> taskEntrySet = streamsGroupMember.assignedTasks().activeTasks().entrySet();
-            List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitionList = getTopicPartitions(taskEntrySet, sourceTopics, groupTopicMetadata);
-            activeTopicPartitions.addAll(topicPartitionList);
-
-            Set<Map.Entry<String, Set<Integer>>> standbyTaskEntrySet = streamsGroupMember.assignedTasks().standbyTasks().entrySet();
-            List<StreamsGroupHeartbeatResponseData.TopicPartition> standbyList = getTopicPartitions(standbyTaskEntrySet, repartitionSourceTopics, groupTopicMetadata);
-            standbyTopicPartitions.addAll(standbyList);
-        }
+        Map<String, Set<Integer>> activeTasks = streamsGroupMember.assignedTasks().activeTasks();
+        Map<String, Set<Integer>> standbyTasks = streamsGroupMember.assignedTasks().standbyTasks();
+        endpointToPartitions.setUserEndpoint(responseEndpoint);
+        Map<String, ConfiguredSubtopology> configuredSubtopologies = streamsGroup.configuredTopology().flatMap(ConfiguredTopology::subtopologies).get();
+        List<StreamsGroupHeartbeatResponseData.TopicPartition> activeTopicPartitions = topicPartitions(activeTasks, configuredSubtopologies, streamsGroup.partitionMetadata());
+        List<StreamsGroupHeartbeatResponseData.TopicPartition> standbyTopicPartitions = topicPartitions(standbyTasks, configuredSubtopologies, streamsGroup.partitionMetadata());
         endpointToPartitions.setActivePartitions(activeTopicPartitions);
         endpointToPartitions.setStandbyPartitions(standbyTopicPartitions);
         return endpointToPartitions;
     }
 
-    private static List<StreamsGroupHeartbeatResponseData.TopicPartition> getTopicPartitions(final Set<Map.Entry<String, Set<Integer>>> taskEntrySet,
-                                                                                      final Set<String> topicNames,
-                                                                                      final Map<String, TopicMetadata> groupTopicMetadata) {
-        final List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitionsForTasks = new ArrayList<>();
-        for (Map.Entry<String, Set<Integer>> taskEntry : taskEntrySet) {
-            List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitionList =
-                    topicNames.stream().map(topic -> {
-                        int numPartitionsForTopic = groupTopicMetadata.get(topic).numPartitions();
-                        StreamsGroupHeartbeatResponseData.TopicPartition tp = new StreamsGroupHeartbeatResponseData.TopicPartition();
-                        tp.setTopic(topic);
-                        List<Integer> tpPartitions = new ArrayList<>(taskEntry.getValue());
-                        if (numPartitionsForTopic < taskEntry.getValue().size()) {
-                            Collections.sort(tpPartitions);
-                            tp.setPartitions(tpPartitions.subList(0, numPartitionsForTopic));
-                        } else {
-                            tp.setPartitions(tpPartitions);
-                        }
-                        return tp;
-                    }).toList();
+    private static List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions(final Map<String, Set<Integer>> tasks,
+                                                                                          final Map<String, ConfiguredSubtopology> configuredSubtopologies,
+                                                                                          final Map<String, TopicMetadata> groupTopicMetadata) {
+        List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitionsForTasks = new ArrayList<>();
+        for (Map.Entry<String, Set<Integer>> taskEntry : tasks.entrySet()) {
+            String subtopologyId = taskEntry.getKey();
+            ConfiguredSubtopology configuredSubtopology = configuredSubtopologies.get(subtopologyId);
+            Set<String> sourceTopics = configuredSubtopology.sourceTopics();
+            Set<String> repartitionSourceTopics = configuredSubtopology.repartitionSourceTopics().keySet();
+            Set<String> allSourceTopic = new HashSet<>(sourceTopics);
+            allSourceTopic.addAll(repartitionSourceTopics);
+            List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitionList = topicPartitionListForTask(taskEntry.getValue(), allSourceTopic, groupTopicMetadata);
             topicPartitionsForTasks.addAll(topicPartitionList);
         }
         return topicPartitionsForTasks;
+    }
+
+    private static List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitionListForTask(final Set<Integer> taskSet,
+                                                                                                    final Set<String> topicNames,
+                                                                                                    final Map<String, TopicMetadata> groupTopicMetadata) {
+        return topicNames.stream().map(topic -> {
+            int numPartitionsForTopic = groupTopicMetadata.get(topic).numPartitions();
+            StreamsGroupHeartbeatResponseData.TopicPartition tp = new StreamsGroupHeartbeatResponseData.TopicPartition();
+            tp.setTopic(topic);
+            List<Integer> tpPartitions = new ArrayList<>(taskSet);
+            if (numPartitionsForTopic < taskSet.size()) {
+                Collections.sort(tpPartitions);
+                tp.setPartitions(tpPartitions.subList(0, numPartitionsForTopic));
+            } else {
+                tp.setPartitions(tpPartitions);
+            }
+            return tp;
+        }).toList();
     }
 }
