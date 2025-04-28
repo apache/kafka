@@ -44,14 +44,14 @@ public class ConsumerAssignmentPoller extends ShutdownableThread {
         Consumer<byte[], byte[]> consumer,
         List<String> topicsToSubscribe
     ) {
-        this(consumer, topicsToSubscribe, new HashSet<>(), null);
+        this(consumer, topicsToSubscribe, Set.of(), null);
     }
 
     public ConsumerAssignmentPoller(
         Consumer<byte[], byte[]> consumer,
         Set<TopicPartition> partitionsToAssign
     ) {
-        this(consumer, new ArrayList<>(), partitionsToAssign, null);
+        this(consumer, List.of(), partitionsToAssign, null);
     }
 
     public ConsumerAssignmentPoller(
@@ -90,7 +90,7 @@ public class ConsumerAssignmentPoller extends ShutdownableThread {
     }
 
     public Set<TopicPartition> consumerAssignment() {
-        return new HashSet<>(partitionAssignment);
+        return Set.copyOf(partitionAssignment);
     }
 
     /**
