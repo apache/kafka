@@ -94,7 +94,7 @@ public class ShareGroupBuilder {
         }
 
         // Add group epoch record.
-        records.add(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, groupEpoch));
+        records.add(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, groupEpoch, 0));
 
         // Add target assignment records.
         assignments.forEach((memberId, assignment) ->

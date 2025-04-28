@@ -21,10 +21,9 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ReadShareGroupStateSummaryRequestData;
 import org.apache.kafka.common.message.ReadShareGroupStateSummaryResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -64,9 +63,9 @@ public class ReadShareGroupStateSummaryResponse extends AbstractResponse {
         // No op
     }
 
-    public static ReadShareGroupStateSummaryResponse parse(ByteBuffer buffer, short version) {
+    public static ReadShareGroupStateSummaryResponse parse(Readable readable, short version) {
         return new ReadShareGroupStateSummaryResponse(
-            new ReadShareGroupStateSummaryResponseData(new ByteBufferAccessor(buffer), version)
+            new ReadShareGroupStateSummaryResponseData(readable, version)
         );
     }
 
