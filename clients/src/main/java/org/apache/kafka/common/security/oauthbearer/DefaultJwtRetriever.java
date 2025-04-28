@@ -16,6 +16,8 @@
  */
 package org.apache.kafka.common.security.oauthbearer;
 
+import org.apache.kafka.common.config.ConfigException;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.ClientCredentialsRequestGenerator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtBearerRequestGenerator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerConfig;
 import org.apache.kafka.common.utils.Time;
@@ -64,8 +66,10 @@ public class DefaultJwtRetriever implements JwtRetriever {
 
             if (grantType.equalsIgnoreCase(JwtBearerRequestGenerator.GRANT_TYPE)) {
                 delegate = new JwtBearerJwtRetriever(time);
-            } else {
+            } else if (grantType.equalsIgnoreCase(ClientCredentialsRequestGenerator.GRANT_TYPE)) {
                 delegate = new ClientCredentialsJwtRetriever(time);
+            } else {
+                throw new ConfigException("The grant type \"" + grantType + "\" is not supported by the class " + getClass().getName());
             }
         }
 
