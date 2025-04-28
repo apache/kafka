@@ -164,7 +164,7 @@ public class PreparedTxnStateTest {
 
     @Test
     public void testInvalidProducerIdEpochCombinations() {
-        // Valid combinations: both >= 0 or both -1
+        // Valid combinations: both >= 0
         new PreparedTxnState("0:0");
         new PreparedTxnState("123:45");
 
