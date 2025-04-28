@@ -22,7 +22,7 @@ import org.apache.kafka.clients.CommonClientConfigs
 import org.apache.kafka.common.config.{ConfigException, SaslConfigs}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
-import java.util.Properties
+import java.util.{Collections, Properties}
 import no.nav.security.mock.oauth2.MockOAuth2Server
 import org.apache.kafka.common.config.internals.BrokerSecurityConfigs
 import org.apache.kafka.common.security.auth.SecurityProtocol
@@ -51,14 +51,14 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
   protected def kafkaServerSaslMechanisms = List(kafkaClientSaslMechanism)
 
   val issuerId = "default"
-  var mockOAuthServer: Option[MockOAuth2Server] = None
+  var mockOAuthServer: MockOAuth2Server = _
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    mockOAuthServer = Option(new MockOAuth2Server())
-    mockOAuthServer.get.start()
-    val tokenEndpointUrl = mockOAuthServer.get.tokenEndpointUrl(issuerId).url().toString
-    val jwksUrl = mockOAuthServer.get.jwksUrl(issuerId).url().toString
+    mockOAuthServer = new MockOAuth2Server()
+    mockOAuthServer.start()
+    val tokenEndpointUrl = mockOAuthServer.tokenEndpointUrl(issuerId).url().toString
+    val jwksUrl = mockOAuthServer.jwksUrl(issuerId).url().toString
     System.setProperty("org.apache.kafka.sasl.oauthbearer.allowed.urls", s"$tokenEndpointUrl,$jwksUrl")
 
     val listenerNamePrefix = s"listener.name.${listenerName.value().toLowerCase}"
@@ -80,15 +80,15 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
 
   @AfterEach
   override def tearDown(): Unit = {
-    if (mockOAuthServer.isDefined)
-      mockOAuthServer.get.shutdown()
+    if (mockOAuthServer != null)
+      mockOAuthServer.shutdown()
 
     closeSasl()
     super.tearDown()
   }
 
   def defaultOAuthClientConfigs(): Properties = {
-    val tokenEndpointUrl = mockOAuthServer.get.tokenEndpointUrl(issuerId).url().toString
+    val tokenEndpointUrl = mockOAuthServer.tokenEndpointUrl(issuerId).url().toString
 
     val configs = new Properties()
     configs.put(CommonClientConfigs.SECURITY_PROTOCOL_CONFIG, securityProtocol.name)
@@ -104,6 +104,19 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testBasicClientCredentials(groupProtocol: String): Unit = {
     val configs = defaultOAuthClientConfigs()
+    assertClientsSucceed(configs)
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testBasicJwtBearer(groupProtocol: String): Unit = {
+    val jwt = mockOAuthServer.issueToken(issuerId, "jdoe", "someaudience", Collections.singletonMap("scope", "test"))
+    val assertionFile = TestUtils.tempFile(jwt.serialize())
+
+    val configs = defaultOAuthClientConfigs()
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_GRANT_TYPE, JwtBearerRequestGenerator.GRANT_TYPE)
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE, assertionFile.getAbsolutePath)
+
     assertClientsSucceed(configs)
   }
 
@@ -143,6 +156,19 @@ class ClientOAuthIntegrationTest extends IntegrationTestHarness with SaslSetup {
     configs.put(SaslConfigs.SASL_OAUTHBEARER_ASSERTION_FILE, missingFileName)
 
     assertClientsThrowException(configs, classOf[ConfigException], s"contains a file ($missingFileName) that doesn't exist")
+  }
+
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testUnsupportedGrantType(groupProtocol: String): Unit = {
+    val invalidGrantType = "this-is-an-invalid-grant-type"
+
+    val configs = defaultOAuthClientConfigs()
+    configs.put(SaslConfigs.SASL_OAUTHBEARER_GRANT_TYPE, invalidGrantType)
+    configs.remove(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_ID)
+    configs.remove(SaslConfigs.SASL_OAUTHBEARER_CLIENT_CREDENTIALS_CLIENT_SECRET)
+
+    assertClientsThrowException(configs, classOf[ConfigException], s"The grant type \"$invalidGrantType\" is not supported")
   }
 
   def assertClientsSucceed(configs: Properties): Unit = {
