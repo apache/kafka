@@ -297,9 +297,7 @@ public class ShareGroupCommand {
             Throwable topLevelResult = res.getKey();
             Map<String, Throwable> topicLevelResult = res.getValue();
 
-            if (topLevelResult == null) {
-                System.out.println("Request succeed for deleting offsets with topic " + String.join(", ", topics) + " group " + groupId);
-            } else {
+            if (topLevelResult != null) {
                 Errors topLevelError = Errors.forException(topLevelResult);
                 switch (topLevelError) {
                     case INVALID_GROUP_ID:
