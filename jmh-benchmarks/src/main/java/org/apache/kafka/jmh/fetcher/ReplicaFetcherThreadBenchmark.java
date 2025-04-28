@@ -32,7 +32,6 @@ import kafka.server.ReplicaQuota;
 import kafka.server.builders.LogManagerBuilder;
 import kafka.server.builders.ReplicaManagerBuilder;
 import kafka.server.metadata.KRaftMetadataCache;
-import kafka.utils.Pool;
 import kafka.utils.TestUtils;
 
 import org.apache.kafka.clients.FetchSessionHandler;
@@ -89,6 +88,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -107,7 +108,7 @@ import static org.apache.kafka.server.common.KRaftVersion.KRAFT_VERSION_1;
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class ReplicaFetcherThreadBenchmark {
     private final KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
-    private final Pool<TopicPartition, Partition> pool = new Pool<>(Option.empty());
+    private final ConcurrentMap<TopicPartition, Partition> pool = new ConcurrentHashMap<>();
     private final Metrics metrics = new Metrics();
     private final Option<Uuid> topicId = Option.apply(Uuid.randomUuid());
     @Param({"100", "500", "1000", "5000"})
@@ -246,13 +247,12 @@ public class ReplicaFetcherThreadBenchmark {
 
 
     static class ReplicaFetcherBenchThread extends ReplicaFetcherThread {
-        private final Pool<TopicPartition, Partition> pool;
+        private final ConcurrentMap<TopicPartition, Partition> pool;
 
         ReplicaFetcherBenchThread(KafkaConfig config,
                                   ReplicaManager replicaManager,
                                   ReplicaQuota replicaQuota,
-                                  Pool<TopicPartition,
-                                  Partition> partitions) {
+                                  ConcurrentMap<TopicPartition, Partition> partitions) {
             super("name",
                     new RemoteLeaderEndPoint(
                             String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3),
