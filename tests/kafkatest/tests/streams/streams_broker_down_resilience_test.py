@@ -40,6 +40,10 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
                                                                   self.outputTopic: {'partitions': 1, 'replication-factor': 1}},
                                                           num_brokers=1)
 
+    def setUp(self):
+        # do not start kafka
+        pass
+
     @cluster(num_nodes=7)
     @matrix(metadata_quorum=[quorum.combined_kraft])
     def test_streams_resilient_to_broker_down(self, metadata_quorum):
