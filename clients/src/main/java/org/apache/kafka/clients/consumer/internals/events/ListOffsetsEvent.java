@@ -50,7 +50,7 @@ public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicParti
      * @return empty map
      */
     public <T> Map<TopicPartition, T> emptyResults() {
-        return new HashMap<>();
+        return Map.of();
     }
 
     public Map<TopicPartition, Long> timestampsToSearch() {

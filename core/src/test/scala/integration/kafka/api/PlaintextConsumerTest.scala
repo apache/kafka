@@ -878,11 +878,11 @@ class PlaintextConsumerTest extends BaseConsumerTest {
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def test(groupProtocol: String): Unit = {
     val consumer = createConsumer()
-    val result1 = consumer.beginningOffsets(Collections.singleton(tp), Duration.ZERO)
+    val result1 = consumer.beginningOffsets(util.List.of(tp), Duration.ZERO)
     assertNotNull(result1)
     assertEquals(0, result1.size())
 
-    val result2 = consumer.endOffsets(Collections.singleton(tp), Duration.ZERO)
+    val result2 = consumer.endOffsets(util.List.of(tp), Duration.ZERO)
     assertNotNull(result2)
     assertEquals(0, result2.size())
   }
