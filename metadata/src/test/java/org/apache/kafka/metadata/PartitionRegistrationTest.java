@@ -56,11 +56,36 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class PartitionRegistrationTest {
     @Test
     public void testElectionWasClean() {
-        assertTrue(PartitionRegistration.electionWasClean(1, new int[]{1, 2}, new int[]{}));
-        assertFalse(PartitionRegistration.electionWasClean(1, new int[]{0, 2}, new int[]{}));
-        assertFalse(PartitionRegistration.electionWasClean(1, new int[]{}, new int[]{3, 4}));
-        assertTrue(PartitionRegistration.electionWasClean(3, new int[]{1, 2, 3, 4, 5, 6}, new int[]{}));
-        assertTrue(PartitionRegistration.electionWasClean(3, new int[]{}, new int[]{1, 2, 3}));
+        PartitionRegistration prevPartition = new PartitionRegistration(
+            new PartitionRecord().setPartitionId(0).setLeader(2).setReplicas(List.of(1, 2)).setIsr(List.of(1, 2)));
+        PartitionRegistration nextPartition = new PartitionRegistration(
+            new PartitionRecord().setPartitionId(0).setLeader(1).setReplicas(List.of(1, 2)).setIsr(List.of(1, 2)));
+        assertTrue(PartitionRegistration.electionWasClean(prevPartition, nextPartition));
+
+        prevPartition = new PartitionRegistration(
+            new PartitionRecord().setPartitionId(0).setLeader(0).setReplicas(List.of(0, 1, 2)).setIsr(List.of(0, 2)));
+        nextPartition = new PartitionRegistration(
+            new PartitionRecord().setPartitionId(0).setLeader(1).setReplicas(List.of(0, 1, 2)).setIsr(List.of(1, 2)));
+        assertFalse(PartitionRegistration.electionWasClean(prevPartition, nextPartition));
+
+        prevPartition = new PartitionRegistration(
+            new PartitionRecord().setPartitionId(0).setLeader(-1).setReplicas(List.of(0, 1, 2)).setEligibleLeaderReplicas(List.of(1, 2)));
+        nextPartition = new PartitionRegistration(
+            new PartitionRecord().setPartitionId(0).setLeader(0).setReplicas(List.of(0, 1, 2)).setIsr(List.of(0)));
+        assertFalse(PartitionRegistration.electionWasClean(prevPartition, nextPartition));
+
+        prevPartition = new PartitionRegistration(
+            new PartitionRecord().setPartitionId(0).setLeader(-1).setReplicas(List.of(0, 1, 2)).setEligibleLeaderReplicas(List.of(1, 2)));
+        nextPartition = new PartitionRegistration(
+            new PartitionRecord().setPartitionId(0).setLeader(2).setReplicas(List.of(0, 1, 2)).setIsr(List.of(2)));
+        assertTrue(PartitionRegistration.electionWasClean(prevPartition, nextPartition));
+
+        prevPartition = new PartitionRegistration(
+            new PartitionRecord().setPartitionId(0).setLeader(0).setReplicas(List.of(2, 1, 0)).setIsr(List.of(0, 1))
+                .setAddingReplicas(List.of(2)).setRemovingReplicas(List.of(0)));
+        nextPartition = new PartitionRegistration(
+            new PartitionRecord().setPartitionId(0).setLeader(2).setReplicas(List.of(2, 1)).setIsr(List.of(2, 1)));
+        assertTrue(PartitionRegistration.electionWasClean(prevPartition, nextPartition));
     }
 
     @Test
