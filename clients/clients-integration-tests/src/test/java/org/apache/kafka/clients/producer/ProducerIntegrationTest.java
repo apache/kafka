@@ -38,7 +38,6 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
-import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 
@@ -237,8 +236,8 @@ public class ProducerIntegrationTest {
             return metadata;
         }
 
-        private KafkaThread ioThread() {
-            KafkaThread ioThread = new KafkaThread("test_io_thread", sender, true);
+        private Sender.SenderThread ioThread() {
+            Sender.SenderThread ioThread = new Sender.SenderThread("test_io_thread", sender, true);
             ioThread.start();
             return ioThread;
         }
