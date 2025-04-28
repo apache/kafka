@@ -21,7 +21,6 @@ import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collections;
-import java.util.HashMap;
 import java.util.Map;
 
 /**
