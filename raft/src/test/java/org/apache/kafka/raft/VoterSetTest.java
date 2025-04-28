@@ -354,6 +354,28 @@ public final class VoterSetTest {
         assertTrue(voterSet.supportsVersion(KRaftVersion.KRAFT_VERSION_1));
     }
 
+    @Test
+    void testGetOldVoterForReplicaKey() {
+        ReplicaKey newKey = ReplicaKey.of(1, Uuid.ZERO_UUID);
+        ReplicaKey oldKey = ReplicaKey.of(1, Uuid.randomUuid());
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(ReplicaKey.of(0, Uuid.randomUuid()), oldKey));
+
+        assertEquals(Optional.of(oldKey), voters.getOldVoterForReplicaKey(newKey));
+        assertEquals(Optional.empty(), voters.getOldVoterForReplicaKey(oldKey));
+        assertEquals(Optional.empty(), voters.getOldVoterForReplicaKey(ReplicaKey.of(2, Uuid.randomUuid())));
+    }
+
+    @Test
+    void testDoesNotContainReplicaKey() {
+        ReplicaKey newKey = ReplicaKey.of(1, Uuid.ZERO_UUID);
+        ReplicaKey oldKey = ReplicaKey.of(1, Uuid.randomUuid());
+        VoterSet voters = VoterSetTest.voterSet(Stream.of(ReplicaKey.of(0, Uuid.randomUuid()), oldKey));
+
+        assertTrue(voters.doesNotContainReplicaId(ReplicaKey.of(2, Uuid.randomUuid())));
+        assertFalse(voters.doesNotContainReplicaId(oldKey));
+        assertFalse(voters.doesNotContainReplicaId(newKey));
+    }
+
     private void assertMajorities(boolean overlap, VoterSet a, VoterSet b) {
         assertEquals(
             overlap,

@@ -3274,6 +3274,38 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private long pollFollowerAsObserver(FollowerState state, long currentTimeMs) {
         if (state.hasFetchTimeoutExpired(currentTimeMs)) {
             return maybeSendFetchToAnyBootstrap(currentTimeMs);
+        } else if (partitionState.lastKraftVersion().isReconfigSupported() && followersAlwaysFlush &&
+            quorumConfig.autoJoinEnable() && state.hasAddRemoveVoterPeriodExpired(currentTimeMs)) {
+            System.out.println("trying to add or remove voter");
+            VoterSet voters = partitionState.lastVoterSet();
+            ReplicaKey localReplicaKey = quorum.localReplicaKeyOrThrow();
+            final boolean resetAddRemoveVoterTimer;
+            final long backoffMs;
+
+            Optional<ReplicaKey> oldVoter = voters.getOldVoterForReplicaKey(localReplicaKey);
+            if (oldVoter.isPresent()) {
+                var sendResult = maybeSendRemoveVoterRequest(state, currentTimeMs, oldVoter.get());
+                resetAddRemoveVoterTimer = sendResult.requestSent();
+                backoffMs = sendResult.timeToWaitMs();
+            } else if (voters.doesNotContainReplicaId(localReplicaKey)) {
+                var sendResult = maybeSendAddVoterRequest(state, currentTimeMs);
+                resetAddRemoveVoterTimer = sendResult.requestSent();
+                backoffMs = sendResult.timeToWaitMs();
+            } else {
+                // Reset the add/remove voter timer since there was no need to add or remove a voter
+                resetAddRemoveVoterTimer = true;
+                backoffMs = maybeSendFetchToBestNode(state, currentTimeMs);
+            }
+            if (resetAddRemoveVoterTimer) {
+                state.resetAddRemoveVoterPeriod(currentTimeMs);
+            }
+            return Math.min(
+                backoffMs,
+                Math.min(
+                    state.remainingFetchTimeMs(currentTimeMs),
+                    state.remainingAddRemoveVoterPeriodMs(currentTimeMs)
+                )
+            );
         } else {
             return maybeSendFetchToBestNode(state, currentTimeMs);
         }
@@ -3328,11 +3360,44 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
+    private AddRaftVoterRequestData buildAddVoterRequest() {
+        return RaftUtil.addVoterRequest(
+            clusterId,
+            // TODO: What to set the AddVoterRequest timeout to?
+            10000,
+            quorum.localReplicaKeyOrThrow(),
+            localListeners
+        );
+    }
+
+    private RemoveRaftVoterRequestData buildRemoveVoterRequest(ReplicaKey replicaKey) {
+        return RaftUtil.removeVoterRequest(
+            clusterId,
+            replicaKey
+        );
+    }
+
     private RequestSendResult maybeSendUpdateVoterRequest(FollowerState state, long currentTimeMs) {
         return maybeSendRequest(
             currentTimeMs,
             state.leaderNode(channel.listenerName()),
             this::buildUpdateVoterRequest
+        );
+    }
+
+    private RequestSendResult maybeSendAddVoterRequest(FollowerState state, long currentTimeMs) {
+        return maybeSendRequest(
+            currentTimeMs,
+            state.leaderNode(channel.listenerName()),
+            this::buildAddVoterRequest
+        );
+    }
+
+    private RequestSendResult maybeSendRemoveVoterRequest(FollowerState state, long currentTimeMs, ReplicaKey replicaKey) {
+        return maybeSendRequest(
+            currentTimeMs,
+            state.leaderNode(channel.listenerName()),
+            () -> buildRemoveVoterRequest(replicaKey)
         );
     }
 
