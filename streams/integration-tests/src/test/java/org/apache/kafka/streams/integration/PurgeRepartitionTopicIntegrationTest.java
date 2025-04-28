@@ -76,6 +76,7 @@ public class PurgeRepartitionTopicIntegrationTest {
             put("log.retention.check.interval.ms", PURGE_INTERVAL_MS);
             put("log.initial.task.delay.ms", INITIAL_TASK_DELAY_MS);
             put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, 0);
+            put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, PURGE_SEGMENT_BYTES);
         }
     });
 
@@ -114,8 +115,7 @@ public class PurgeRepartitionTopicIntegrationTest {
                     .get(resource)
                     .get();
                 return config.get(TopicConfig.CLEANUP_POLICY_CONFIG).value().equals(TopicConfig.CLEANUP_POLICY_DELETE)
-                        && config.get(TopicConfig.SEGMENT_MS_CONFIG).value().equals(PURGE_INTERVAL_MS.toString())
-                        && config.get(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG).value().equals(PURGE_SEGMENT_BYTES.toString());
+                        && config.get(TopicConfig.SEGMENT_MS_CONFIG).value().equals(PURGE_INTERVAL_MS.toString());
             } catch (final Exception e) {
                 return false;
             }
@@ -172,7 +172,6 @@ public class PurgeRepartitionTopicIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(APPLICATION_ID).getPath());
         streamsConfiguration.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_MS_CONFIG), PURGE_INTERVAL_MS);
-        streamsConfiguration.put(StreamsConfig.topicPrefix(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG), PURGE_SEGMENT_BYTES);
         streamsConfiguration.put(StreamsConfig.producerPrefix(ProducerConfig.BATCH_SIZE_CONFIG), PURGE_SEGMENT_BYTES / 2);    // we cannot allow batch size larger than segment size
 
         final StreamsBuilder builder = new StreamsBuilder();
