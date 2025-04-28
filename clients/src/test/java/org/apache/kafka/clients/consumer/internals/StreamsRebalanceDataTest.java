@@ -420,4 +420,21 @@ public class StreamsRebalanceDataTest {
 
         assertFalse(streamsRebalanceData.shutdownRequested());
     }
+
+    @Test
+    public void streamsRebalanceDataShouldBeConstructedWithEmptyStatuses() {
+        final UUID processId = UUID.randomUUID();
+        final Optional<StreamsRebalanceData.HostInfo> endpoint = Optional.of(new StreamsRebalanceData.HostInfo("localhost", 9090));
+        final Map<String, StreamsRebalanceData.Subtopology> subtopologies = Map.of();
+        final Map<String, String> clientTags = Map.of("clientTag1", "clientTagValue1");
+        final StreamsRebalanceData streamsRebalanceData = new StreamsRebalanceData(
+            processId,
+            endpoint,
+            subtopologies,
+            clientTags
+        );
+
+        assertTrue(streamsRebalanceData.statuses().isEmpty());
+    }
+
 }

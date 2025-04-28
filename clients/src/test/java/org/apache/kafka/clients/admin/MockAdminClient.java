@@ -1431,7 +1431,7 @@ public class MockAdminClient extends AdminClient {
     }
 
     @Override
-    public synchronized DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteShareGroupOffsetsOptions options) {
+    public synchronized DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<String> topics, DeleteShareGroupOffsetsOptions options) {
         throw new UnsupportedOperationException("Not implemented yet");
     }
 

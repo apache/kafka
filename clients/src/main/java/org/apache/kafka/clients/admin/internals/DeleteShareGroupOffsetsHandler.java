@@ -19,7 +19,6 @@ package org.apache.kafka.clients.admin.internals;
 import org.apache.kafka.clients.admin.DeleteShareGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.KafkaAdminClient;
 import org.apache.kafka.common.Node;
-import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.ApiException;
 import org.apache.kafka.common.message.DeleteShareGroupOffsetsRequestData;
 import org.apache.kafka.common.protocol.Errors;
@@ -38,24 +37,23 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 /**
  * This class is the handler for {@link KafkaAdminClient#deleteShareGroupOffsets(String, Set, DeleteShareGroupOffsetsOptions)} call
  */
-public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<CoordinatorKey, Map<TopicPartition, ApiException>> {
+public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<CoordinatorKey, Map<String, ApiException>> {
 
     private final CoordinatorKey groupId;
 
     private final Logger log;
 
-    private final Set<TopicPartition> partitions;
+    private final Set<String> topics;
 
     private final CoordinatorStrategy lookupStrategy;
 
-    public DeleteShareGroupOffsetsHandler(String groupId, Set<TopicPartition> partitions, LogContext logContext) {
+    public DeleteShareGroupOffsetsHandler(String groupId, Set<String> topics, LogContext logContext) {
         this.groupId = CoordinatorKey.byGroupId(groupId);
-        this.partitions = partitions;
+        this.topics = topics;
         this.log = logContext.logger(DeleteShareGroupOffsetsHandler.class);
         this.lookupStrategy = new CoordinatorStrategy(FindCoordinatorRequest.CoordinatorType.GROUP, logContext);
     }
@@ -70,7 +68,7 @@ public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coor
         return lookupStrategy;
     }
 
-    public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, ApiException>> newFuture(String groupId) {
+    public static AdminApiFuture.SimpleAdminApiFuture<CoordinatorKey, Map<String, ApiException>> newFuture(String groupId) {
         return AdminApiFuture.forKeys(Collections.singleton(CoordinatorKey.byGroupId(groupId)));
     }
 
@@ -85,26 +83,22 @@ public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coor
     DeleteShareGroupOffsetsRequest.Builder buildBatchedRequest(int brokerId, Set<CoordinatorKey> groupIds) {
         validateKeys(groupIds);
 
-        final List<DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic> topics =
+        final List<DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic> requestTopics =
             new ArrayList<>();
-        partitions.stream().collect(Collectors.groupingBy(TopicPartition::topic)).forEach((topic, topicPartitions) -> topics.add(
+        topics.forEach(topic -> requestTopics.add(
             new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
                 .setTopicName(topic)
-                .setPartitions(topicPartitions.stream()
-                    .map(TopicPartition::partition)
-                    .collect(Collectors.toList())
-                )
         ));
 
         return new DeleteShareGroupOffsetsRequest.Builder(
             new DeleteShareGroupOffsetsRequestData()
                 .setGroupId(groupId.idValue)
-                .setTopics(topics)
+                .setTopics(requestTopics)
         );
     }
 
     @Override
-    public ApiResult<CoordinatorKey, Map<TopicPartition, ApiException>> handleResponse(
+    public ApiResult<CoordinatorKey, Map<String, ApiException>> handleResponse(
         Node coordinator,
         Set<CoordinatorKey> groupIds,
         AbstractResponse abstractResponse
@@ -123,23 +117,21 @@ public class DeleteShareGroupOffsetsHandler extends AdminApiHandler.Batched<Coor
 
             return new ApiResult<>(Collections.emptyMap(), groupsFailed, new ArrayList<>(groupsToUnmap));
         } else {
-            final Map<TopicPartition, ApiException> partitionResults = new HashMap<>();
-            response.data().responses().forEach(topic ->
-                topic.partitions().forEach(partition -> {
-                    if (partition.errorCode() != Errors.NONE.code()) {
-                        final Errors partitionError = Errors.forCode(partition.errorCode());
-                        final String partitionErrorMessage = partition.errorMessage();
-                        log.debug("DeleteShareGroupOffsets request for group id {}, topic {} and partition {} failed and returned error {}." + partitionErrorMessage,
-                            groupId.idValue, topic.topicName(), partition.partitionIndex(), partitionError);
-                    }
-                    partitionResults.put(
-                        new TopicPartition(topic.topicName(), partition.partitionIndex()),
-                        Errors.forCode(partition.errorCode()).exception(partition.errorMessage())
-                    );
-                })
-            );
+            final Map<String, ApiException> topicResults = new HashMap<>();
+            response.data().responses().forEach(topic -> {
+                if (topic.errorCode() != Errors.NONE.code()) {
+                    final Errors topicError = Errors.forCode(topic.errorCode());
+                    final String topicErrorMessage = topic.errorMessage();
+                    log.debug("DeleteShareGroupOffsets request for group id {} and topic {} failed and returned error {}." + topicErrorMessage,
+                        groupId.idValue, topic.topicName(), topicError);
+                }
+                topicResults.put(
+                    topic.topicName(),
+                    Errors.forCode(topic.errorCode()).exception(topic.errorMessage())
+                );
+            });
 
-            return ApiResult.completed(groupId, partitionResults);
+            return ApiResult.completed(groupId, topicResults);
         }
     }
 
