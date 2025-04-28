@@ -3306,6 +3306,16 @@ public class KafkaAdminClientTest {
                 new GroupListing("group-1", Optional.empty(), ConsumerProtocol.PROTOCOL_TYPE, Optional.of(GroupState.STABLE))
             );
             assertEquals(expected, listing);
+
+            // But a type filter which is just consumer groups without classic groups is not permitted with an older broker.
+            env.kafkaClient().prepareResponse(prepareMetadataResponse(env.cluster(), Errors.NONE));
+            env.kafkaClient().prepareUnsupportedVersionResponse(request ->
+                request instanceof ListGroupsRequest && !((ListGroupsRequest) request).data().typesFilter().isEmpty()
+            );
+
+            options = new ListGroupsOptions().withTypes(Set.of(GroupType.CONSUMER));
+            result = env.adminClient().listGroups(options);
+            TestUtils.assertFutureThrows(UnsupportedVersionException.class, result.all());
         }
     }
 

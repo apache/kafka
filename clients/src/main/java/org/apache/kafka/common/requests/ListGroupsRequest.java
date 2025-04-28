@@ -60,9 +60,10 @@ public class ListGroupsRequest extends AbstractRequest {
                 HashSet<String> typesCopy = new HashSet<>(data.typesFilter());
                 boolean containedClassic = typesCopy.remove(GroupType.CLASSIC.toString());
                 boolean containedConsumer = typesCopy.remove(GroupType.CONSUMER.toString());
-                if (!typesCopy.isEmpty() && (containedClassic || !containedConsumer)) {
+                if (!typesCopy.isEmpty() || (!containedClassic && containedConsumer)) {
                     throw new UnsupportedVersionException("The broker only supports ListGroups " +
-                        "v" + version + ", but we need v5 or newer to request groups by type.");
+                        "v" + version + ", but we need v5 or newer to request groups by type. " +
+                        "Requested group types: [" + String.join(", ", data.typesFilter()) + "].");
                 }
                 return new ListGroupsRequest(data.duplicate().setTypesFilter(List.of()), version);
             }
