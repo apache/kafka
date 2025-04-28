@@ -19,6 +19,7 @@ package kafka.server
 
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.requests.FetchResponse
+import org.apache.kafka.server.LeaderEndPoint
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogStartOffsetIncrementReason}
 

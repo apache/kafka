@@ -24,11 +24,13 @@ import org.apache.kafka.common.errors.KafkaStorageException
 import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition
 import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_EPOCH
 import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, RequestUtils}
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.common.OffsetAndEpoch
 import org.apache.kafka.server.network.BrokerEndPoint
+import org.apache.kafka.server.LeaderEndPoint
 import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPartitionData}
 
 import java.util
@@ -62,8 +64,8 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
 
   override def brokerEndPoint(): BrokerEndPoint = sourceBroker
 
-  override def fetch(fetchRequest: FetchRequest.Builder): collection.Map[TopicPartition, FetchData] = {
-    var partitionData: Seq[(TopicPartition, FetchData)] = null
+  override def fetch(fetchRequest: FetchRequest.Builder): collection.Map[TopicPartition, FetchResponseData.PartitionData] = {
+    var partitionData: Seq[(TopicPartition, FetchResponseData.PartitionData)] = null
     val request = fetchRequest.build()
 
     // We can build the map from the request since it contains topic IDs and names.
@@ -134,43 +136,80 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     new OffsetAndEpoch(localLogStartOffset, epoch.orElse(0))
   }
 
-  override def fetchEpochEndOffsets(partitions: collection.Map[TopicPartition, EpochData]): Map[TopicPartition, EpochEndOffset] = {
-    partitions.map { case (tp, epochData) =>
+  override def fetchEpochEndOffsets(partitions: java.util.Map[TopicPartition, OffsetForLeaderPartition]): java.util.Map[TopicPartition, EpochEndOffset] = {
+    val result = new java.util.HashMap[TopicPartition, EpochEndOffset]()
+
+    partitions.asScala.foreach { case (tp, epochData) =>
       try {
-        val endOffset = if (epochData.leaderEpoch == UNDEFINED_EPOCH) {
+        val endOffset = if (epochData.leaderEpoch() == UNDEFINED_EPOCH) {
           new EpochEndOffset()
-            .setPartition(tp.partition)
-            .setErrorCode(Errors.NONE.code)
+            .setPartition(tp.partition())
+            .setErrorCode(Errors.NONE.code())
         } else {
           val partition = replicaManager.getPartitionOrException(tp)
           partition.lastOffsetForLeaderEpoch(
-            currentLeaderEpoch = RequestUtils.getLeaderEpoch(epochData.currentLeaderEpoch),
-            leaderEpoch = epochData.leaderEpoch,
+            currentLeaderEpoch = RequestUtils.getLeaderEpoch(epochData.currentLeaderEpoch()),
+            leaderEpoch = epochData.leaderEpoch(),
             fetchOnlyFromLeader = false)
         }
-        tp -> endOffset
+        result.put(tp, endOffset)
       } catch {
         case t: Throwable =>
           warn(s"Error when getting EpochEndOffset for $tp", t)
-          tp -> new EpochEndOffset()
-            .setPartition(tp.partition)
-            .setErrorCode(Errors.forException(t).code)
+          val errorOffset = new EpochEndOffset()
+            .setPartition(tp.partition())
+            .setErrorCode(Errors.forException(t).code())
+          result.put(tp, errorOffset)
       }
     }
+
+    result
   }
 
-  override def buildFetch(partitions: Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[Option[ReplicaFetch]] = {
-    // Only include replica in the fetch request if it is not throttled.
+  override def buildFetch(partitions: java.util.Map[TopicPartition, java.util.Map[String, Object]]): java.util.Map[String, Object] = {
+    val result = new java.util.HashMap[String, Object]()
+
+    val scalaPartitions = partitions.asScala.map { case (tp, stateMap) =>
+      val topicId = Option(stateMap.get("topicId").asInstanceOf[Uuid])
+      val fetchOffset = stateMap.get("fetchOffset").asInstanceOf[java.lang.Long].longValue()
+      val currentLeaderEpoch = stateMap.get("currentLeaderEpoch").asInstanceOf[java.lang.Integer].intValue()
+      val state = stateMap.get("state").asInstanceOf[String] match {
+        case "Truncating" => Truncating
+        case _ => Fetching
+      }
+
+      val fetchState = PartitionFetchState(
+        topicId,
+        fetchOffset,
+        None,
+        currentLeaderEpoch,
+        state,
+        Optional.empty()
+      )
+      (tp, fetchState)
+    }.toMap
+
     if (quota.isQuotaExceeded) {
-      ResultWithPartitions(None, Set.empty)
+      result.put("errors", new java.util.HashSet[TopicPartition]())
+      result.put("result", null)
     } else {
-      selectPartitionToFetch(partitions) match {
+      selectPartitionToFetch(scalaPartitions) match {
         case Some((tp, fetchState)) =>
-          buildFetchForPartition(tp, fetchState)
+          val ResultWithPartitions(replicaFetchOpt, partitionsWithError) = buildFetchForPartition(tp, fetchState)
+          result.put("errors", partitionsWithError.asJava)
+          replicaFetchOpt.foreach { replicaFetch =>
+            val fetchData = new java.util.HashMap[String, Object]()
+            fetchData.put("partitionData", replicaFetch.partitionData)
+            fetchData.put("fetchRequest", replicaFetch.fetchRequest)
+            result.put("result", fetchData)
+          }
+
         case None =>
-          ResultWithPartitions(None, Set.empty)
+          result.put("errors", new java.util.HashSet[TopicPartition]())
+          result.put("result", null)
       }
     }
+    result
   }
 
   private def selectPartitionToFetch(partitions: Map[TopicPartition, PartitionFetchState]): Option[(TopicPartition, PartitionFetchState)] = {

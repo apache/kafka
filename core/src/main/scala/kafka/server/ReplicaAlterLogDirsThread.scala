@@ -21,6 +21,7 @@ import kafka.cluster.Partition
 import kafka.server.ReplicaAlterLogDirsThread.{PromotionState, ReassignmentState}
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.requests.FetchResponse
+import org.apache.kafka.server.LeaderEndPoint
 import org.apache.kafka.server.common.{DirectoryEventHandler, OffsetAndEpoch, TopicIdPartition}
 import org.apache.kafka.storage.internals.log.{LogAppendInfo, LogStartOffsetIncrementReason}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
