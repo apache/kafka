@@ -17,20 +17,18 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.internals.Murmur3;
 import org.apache.kafka.image.MetadataImage;
-
-import com.google.common.hash.HashCode;
-import com.google.common.hash.HashFunction;
-import com.google.common.hash.Hasher;
-import com.google.common.hash.Hashing;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.nio.charset.StandardCharsets;
-import java.util.List;
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Stream;
 
@@ -48,77 +46,85 @@ public class GroupTest {
         .build();
 
     @Test
-    void testComputeTopicHash() {
+    void testComputeTopicHash() throws IOException {
         long result = Group.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
-        HashFunction hf = Hashing.murmur3_128();
-        Hasher topicHasher = hf.newHasher()
-            .putByte((byte) 0) // magic byte
-            .putLong(FOO_TOPIC_ID.hashCode()) // topic Id
-            .putString(FOO_TOPIC_NAME, StandardCharsets.UTF_8) // topic name
-            .putInt(FOO_NUM_PARTITIONS) // number of partitions
-            .putInt(0) // partition 0
-            .putString("rack0;rack1", StandardCharsets.UTF_8) // rack of partition 0
-            .putInt(1) // partition 1
-            .putString("rack1;rack2", StandardCharsets.UTF_8); // rack of partition 1
-        assertEquals(topicHasher.hash().asLong(), result);
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             DataOutputStream dos = new DataOutputStream(baos)) {
+            dos.writeByte(0); // magic byte
+            dos.writeLong(FOO_TOPIC_ID.hashCode()); // topic ID
+            dos.writeUTF(FOO_TOPIC_NAME); // topic name
+            dos.writeInt(FOO_NUM_PARTITIONS); // number of partitions
+            dos.writeInt(0); // partition 0
+            dos.writeUTF("0:rack0,1:rack1"); // rack of partition 0
+            dos.writeInt(1); // partition 1
+            dos.writeUTF("0:rack1,1:rack2"); // rack of partition 1
+            dos.flush();
+            assertEquals(Murmur3.hash64(baos.toByteArray()), result);
+        }
     }
 
     @Test
-    void testComputeTopicHashWithDifferentMagicByte() {
+    void testComputeTopicHashWithDifferentMagicByte() throws IOException {
         long result = Group.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
-        HashFunction hf = Hashing.murmur3_128();
-        Hasher topicHasher = hf.newHasher()
-            .putByte((byte) 1) // different magic byte
-            .putLong(FOO_TOPIC_ID.hashCode()) // topic Id
-            .putString(FOO_TOPIC_NAME, StandardCharsets.UTF_8) // topic name
-            .putInt(FOO_NUM_PARTITIONS) // number of partitions
-            .putInt(0) // partition 0
-            .putString("rack0;rack1", StandardCharsets.UTF_8) // rack of partition 0
-            .putInt(1) // partition 1
-            .putString("rack1;rack2", StandardCharsets.UTF_8); // rack of partition 1
-        assertNotEquals(topicHasher.hash().asLong(), result);
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             DataOutputStream dos = new DataOutputStream(baos)) {
+            dos.writeByte(1); // different magic byte
+            dos.writeLong(FOO_TOPIC_ID.hashCode()); // topic ID
+            dos.writeUTF(FOO_TOPIC_NAME); // topic name
+            dos.writeInt(FOO_NUM_PARTITIONS); // number of partitions
+            dos.writeInt(0); // partition 0
+            dos.writeUTF("0:rack0,1:rack1"); // rack of partition 0
+            dos.writeInt(1); // partition 1
+            dos.writeUTF("0:rack1,1:rack2"); // rack of partition 1
+            dos.flush();
+            assertNotEquals(Murmur3.hash64(baos.toByteArray()), result);
+        }
     }
 
     @Test
-    void testComputeTopicHashWithDifferentPartitionOrder() {
+    void testComputeTopicHashWithDifferentPartitionOrder() throws IOException {
         long result = Group.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
-        HashFunction hf = Hashing.murmur3_128();
-        Hasher topicHasher = hf.newHasher()
-            .putByte((byte) 0) // magic byte
-            .putLong(FOO_TOPIC_ID.hashCode()) // topic Id
-            .putString(FOO_TOPIC_NAME, StandardCharsets.UTF_8) // topic name
-            .putInt(FOO_NUM_PARTITIONS) // number of partitions
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             DataOutputStream dos = new DataOutputStream(baos)) {
+            dos.writeByte(0); // magic byte
+            dos.writeLong(FOO_TOPIC_ID.hashCode()); // topic ID
+            dos.writeUTF(FOO_TOPIC_NAME); // topic name
+            dos.writeInt(FOO_NUM_PARTITIONS); // number of partitions
             // different partition order
-            .putInt(1) // partition 1
-            .putString("rack1;rack2", StandardCharsets.UTF_8) // rack of partition 1
-            .putInt(0) // partition 0
-            .putString("rack0;rack1", StandardCharsets.UTF_8); // rack of partition 0
-        assertNotEquals(topicHasher.hash().asLong(), result);
+            dos.writeInt(1); // partition 1
+            dos.writeUTF("0:rack1,1:rack2"); // rack of partition 1
+            dos.writeInt(0); // partition 0
+            dos.writeUTF("0:rack0,1:rack1"); // rack of partition 0
+            dos.flush();
+            assertNotEquals(Murmur3.hash64(baos.toByteArray()), result);
+        }
     }
 
     @Test
-    void testComputeTopicHashWithDifferentRackOrder() {
+    void testComputeTopicHashWithDifferentRackOrder() throws IOException {
         long result = Group.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
-        HashFunction hf = Hashing.murmur3_128();
-        Hasher topicHasher = hf.newHasher()
-            .putByte((byte) 0) // magic byte
-            .putLong(FOO_TOPIC_ID.hashCode()) // topic Id
-            .putString(FOO_TOPIC_NAME, StandardCharsets.UTF_8) // topic name
-            .putInt(FOO_NUM_PARTITIONS) // number of partitions
-            .putInt(0) // partition 0
-            .putString("rack1;rack0", StandardCharsets.UTF_8) // different rack order of partition 0
-            .putInt(1) // partition 1
-            .putString("rack1;rack2", StandardCharsets.UTF_8); // rack of partition 1
-        assertNotEquals(topicHasher.hash().asLong(), result);
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             DataOutputStream dos = new DataOutputStream(baos)) {
+            dos.writeByte(0); // magic byte
+            dos.writeLong(FOO_TOPIC_ID.hashCode()); // topic ID
+            dos.writeUTF(FOO_TOPIC_NAME); // topic name
+            dos.writeInt(FOO_NUM_PARTITIONS); // number of partitions
+            dos.writeInt(0); // partition 0
+            dos.writeUTF("0:rack1,1:rack0"); // different rack order of partition 0
+            dos.writeInt(1); // partition 1
+            dos.writeUTF("0:rack1,1:rack2"); // rack of partition 1
+            dos.flush();
+            assertNotEquals(Murmur3.hash64(baos.toByteArray()), result);
+        }
     }
 
     @ParameterizedTest
     @MethodSource("differentFieldGenerator")
-    void testComputeTopicHashWithDifferentField(MetadataImage differentImage, Uuid topicId) {
+    void testComputeTopicHashWithDifferentField(MetadataImage differentImage, Uuid topicId) throws IOException {
         long result = Group.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
         assertNotEquals(
@@ -160,30 +166,28 @@ public class GroupTest {
     }
 
     @Test
-    void testComputeGroupHash() {
-        long result = Group.computeGroupHash(Map.of(
-            BAR_TOPIC_NAME, 123L,
-            FOO_TOPIC_NAME, 456L
-        ));
+    void testComputeGroupHashWithDifferentOrder() {
+        Map<String, Long> ascendTopicHashes = new LinkedHashMap<>();
+        ascendTopicHashes.put(BAR_TOPIC_NAME, 123L);
+        ascendTopicHashes.put(FOO_TOPIC_NAME, 456L);
 
-        long expected = Hashing.combineOrdered(List.of(
-            HashCode.fromLong(123L),
-            HashCode.fromLong(456L)
-        )).asLong();
-        assertEquals(expected, result);
+        Map<String, Long> descendTopicHashes = new LinkedHashMap<>();
+        descendTopicHashes.put(FOO_TOPIC_NAME, 456L);
+        descendTopicHashes.put(BAR_TOPIC_NAME, 123L);
+        assertEquals(Group.computeGroupHash(ascendTopicHashes), Group.computeGroupHash(descendTopicHashes));
     }
 
     @Test
-    void testComputeGroupHashWithDifferentOrder() {
-        long result = Group.computeGroupHash(Map.of(
+    void testComputeGroupHashWithSameKeyButDifferentValue() {
+        Map<String, Long> map1 = Map.of(
             BAR_TOPIC_NAME, 123L,
             FOO_TOPIC_NAME, 456L
-        ));
+        );
 
-        long unexpected = Hashing.combineOrdered(List.of(
-            HashCode.fromLong(456L),
-            HashCode.fromLong(123L)
-        )).asLong();
-        assertNotEquals(unexpected, result);
+        Map<String, Long> map2 = Map.of(
+            BAR_TOPIC_NAME, 456L,
+            FOO_TOPIC_NAME, 123L
+        );
+        assertNotEquals(Group.computeGroupHash(map1), Group.computeGroupHash(map2));
     }
 }
