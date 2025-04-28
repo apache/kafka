@@ -68,13 +68,9 @@ public class MetricsDuringTopicCreationDeletionTest {
      */
     @BeforeEach
     public void setUp() {
-        try {
-            initialOfflinePartitionsCount = getGauge("OfflinePartitionsCount").value();
-            initialPreferredReplicaImbalanceCount = getGauge("PreferredReplicaImbalanceCount").value();
-            initialUnderReplicatedPartitionCount = getGauge("UnderReplicatedPartitions").value();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        initialOfflinePartitionsCount = getGauge("OfflinePartitionsCount").value();
+        initialPreferredReplicaImbalanceCount = getGauge("PreferredReplicaImbalanceCount").value();
+        initialUnderReplicatedPartitionCount = getGauge("UnderReplicatedPartitions").value();
     }
 
     private Closeable runThread() {
