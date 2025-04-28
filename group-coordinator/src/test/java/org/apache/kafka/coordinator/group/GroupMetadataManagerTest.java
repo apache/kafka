@@ -28,15 +28,12 @@ import org.apache.kafka.common.errors.GroupMaxSizeReachedException;
 import org.apache.kafka.common.errors.IllegalGenerationException;
 import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.InvalidRegularExpression;
-import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
-import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
 import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
-import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
 import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
@@ -215,99 +212,6 @@ import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
 public class GroupMetadataManagerTest {
-
-    @Test
-    public void testConsumerHeartbeatRequestValidation() {
-        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
-        String memberId = Uuid.randomUuid().toString();
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withConfig(GroupCoordinatorConfig.CONSUMER_GROUP_ASSIGNORS_CONFIG, List.of(assignor))
-            .build();
-        Exception ex;
-
-        // MemberId must be present in all requests.
-        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()));
-        assertEquals("MemberId can't be empty.", ex.getMessage());
-
-        // GroupId must be present in all requests.
-        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setMemberId(memberId)));
-        assertEquals("GroupId can't be empty.", ex.getMessage());
-
-        // GroupId can't be all whitespaces.
-        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("   ")));
-        assertEquals("GroupId can't be empty.", ex.getMessage());
-
-        // RebalanceTimeoutMs must be present in the first request (epoch == 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("foo")
-                .setMemberEpoch(0)));
-        assertEquals("RebalanceTimeoutMs must be provided in first request.", ex.getMessage());
-
-        // TopicPartitions must be present and empty in the first request (epoch == 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("foo")
-                .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(5000)));
-        assertEquals("TopicPartitions must be empty when (re-)joining.", ex.getMessage());
-
-        // SubscribedTopicNames or SubscribedTopicRegex must be present in the first request (epoch == 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("foo")
-                .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(5000)
-                .setTopicPartitions(List.of())));
-        assertEquals("Either SubscribedTopicNames or SubscribedTopicRegex must be non-null when (re-)joining.", ex.getMessage());
-
-        // InstanceId must be non-empty if provided in all requests.
-        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setGroupId("foo")
-                .setMemberId(memberId)
-                .setMemberEpoch(1)
-                .setInstanceId("")));
-        assertEquals("InstanceId can't be empty.", ex.getMessage());
-
-        // RackId must be non-empty if provided in all requests.
-        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setGroupId("foo")
-                .setMemberId(memberId)
-                .setMemberEpoch(1)
-                .setRackId("")));
-        assertEquals("RackId can't be empty.", ex.getMessage());
-
-        // ServerAssignor must exist if provided in all requests.
-        ex = assertThrows(UnsupportedAssignorException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setGroupId("foo")
-                .setMemberId(memberId)
-                .setMemberEpoch(1)
-                .setServerAssignor("bar")));
-        assertEquals("ServerAssignor bar is not supported. Supported assignors: range.", ex.getMessage());
-
-        ex = assertThrows(InvalidRequestException.class, () -> context.consumerGroupHeartbeat(
-            new ConsumerGroupHeartbeatRequestData()
-                .setGroupId("foo")
-                .setMemberId(memberId)
-                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
-                .setRebalanceTimeoutMs(5000)
-                .setSubscribedTopicNames(List.of("foo", "bar"))
-                .setTopicPartitions(List.of())));
-
-        assertEquals("InstanceId can't be null.", ex.getMessage());
-    }
 
     @Test
     public void testConsumerHeartbeatRegexValidation() {
@@ -14838,59 +14742,6 @@ public class GroupMetadataManagerTest {
     }
 
     @Test
-    public void testShareGroupHeartbeatRequestValidation() {
-        MockPartitionAssignor assignor = new MockPartitionAssignor("share");
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .withShareGroupAssignor(assignor)
-            .build();
-        Exception ex;
-
-        // MemberId must be present in all requests.
-        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
-                new ShareGroupHeartbeatRequestData()));
-        assertEquals("MemberId can't be empty.", ex.getMessage());
-
-        // GroupId must be present in all requests.
-        String memberId = Uuid.randomUuid().toString();
-        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
-            new ShareGroupHeartbeatRequestData()
-                .setMemberId(memberId)));
-        assertEquals("GroupId can't be empty.", ex.getMessage());
-
-        // GroupId can't be all whitespaces.
-        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
-            new ShareGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("   ")));
-        assertEquals("GroupId can't be empty.", ex.getMessage());
-
-        // SubscribedTopicNames must be present and empty in the first request (epoch == 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
-            new ShareGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("foo")
-                .setMemberEpoch(0)));
-        assertEquals("SubscribedTopicNames must be set in first request.", ex.getMessage());
-
-        // MemberId must be non-empty in all requests except for the first one where it
-        // could be empty (epoch != 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
-            new ShareGroupHeartbeatRequestData()
-                .setGroupId("foo")
-                .setMemberEpoch(1)));
-        assertEquals("MemberId can't be empty.", ex.getMessage());
-
-        // RackId must be non-empty if provided in all requests.
-        ex = assertThrows(InvalidRequestException.class, () -> context.shareGroupHeartbeat(
-            new ShareGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("foo")
-                .setMemberEpoch(1)
-                .setRackId("")));
-        assertEquals("RackId can't be empty.", ex.getMessage());
-    }
-
-    @Test
     public void testShareGroupDescribeRequest() {
         GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder().build();
 
@@ -15486,168 +15337,6 @@ public class GroupMetadataManagerTest {
             .build()));
 
         assertEquals(ShareGroup.ShareGroupState.STABLE, context.shareGroupState(groupId));
-    }
-
-    @Test
-    public void testStreamsHeartbeatRequestValidation() {
-        String memberId = Uuid.randomUuid().toString();
-        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
-            .build();
-        Exception ex;
-
-        // MemberId must be present in all requests.
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()));
-        assertEquals("MemberId can't be empty.", ex.getMessage());
-
-        // MemberId can't be all whitespaces.
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setMemberId("   ")));
-        assertEquals("MemberId can't be empty.", ex.getMessage());
-
-        // GroupId must be present in all requests.
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setMemberId(memberId)));
-        assertEquals("GroupId can't be empty.", ex.getMessage());
-
-        // GroupId can't be all whitespaces.
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("   ")));
-        assertEquals("GroupId can't be empty.", ex.getMessage());
-
-        // RebalanceTimeoutMs must be present in the first request (epoch == 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("foo")
-                .setMemberEpoch(0)));
-        assertEquals("RebalanceTimeoutMs must be provided in first request.", ex.getMessage());
-
-        // ActiveTasks must be present and empty in the first request (epoch == 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("foo")
-                .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(1500)));
-        assertEquals("ActiveTasks must be empty when (re-)joining.", ex.getMessage());
-
-        // StandbyTasks must be present and empty in the first request (epoch == 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("foo")
-                .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(1500)
-                .setActiveTasks(List.of())));
-        assertEquals("StandbyTasks must be empty when (re-)joining.", ex.getMessage());
-
-        // WarmupTasks must be present and empty in the first request (epoch == 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("foo")
-                .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(1500)
-                .setActiveTasks(List.of())
-                .setStandbyTasks(List.of())));
-        assertEquals("WarmupTasks must be empty when (re-)joining.", ex.getMessage());
-
-        // Topology must be present in the first request (epoch == 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("foo")
-                .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(1500)
-                .setActiveTasks(List.of())
-                .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of())));
-        assertEquals("Topology must be non-null when (re-)joining.", ex.getMessage());
-
-        // InstanceId must be non-empty if provided in all requests.
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setGroupId("foo")
-                .setMemberId(memberId)
-                .setMemberEpoch(1)
-                .setInstanceId("")));
-        assertEquals("InstanceId can't be empty.", ex.getMessage());
-
-        // RackId must be non-empty if provided in all requests.
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setGroupId("foo")
-                .setMemberId(memberId)
-                .setMemberEpoch(1)
-                .setRackId("")));
-        assertEquals("RackId can't be empty.", ex.getMessage());
-
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setGroupId("foo")
-                .setMemberId(memberId)
-                .setMemberEpoch(LEAVE_GROUP_STATIC_MEMBER_EPOCH)
-                .setRebalanceTimeoutMs(1500)
-                .setTopology(new StreamsGroupHeartbeatRequestData.Topology())
-                .setActiveTasks(List.of())
-                .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of())));
-        assertEquals("InstanceId can't be null.", ex.getMessage());
-
-        // Member epoch cannot be < -2
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("foo")
-                .setMemberEpoch(-3)
-                .setRebalanceTimeoutMs(1500)
-        ));
-        assertEquals("MemberEpoch is -3, but must be greater than or equal to -2.", ex.getMessage());
-
-        // Topology must not be present in the later requests (epoch != 0).
-        ex = assertThrows(InvalidRequestException.class, () -> context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("foo")
-                .setMemberEpoch(1)
-                .setRebalanceTimeoutMs(1500)
-                .setActiveTasks(List.of())
-                .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of())
-                .setTopology(new StreamsGroupHeartbeatRequestData.Topology())
-        ));
-        assertEquals("Topology can only be provided when (re-)joining.", ex.getMessage());
-
-        // Topology must not contain changelog topics with fixed partition numbers
-        StreamsInvalidTopologyException topoEx = assertThrows(StreamsInvalidTopologyException.class, () -> context.streamsGroupHeartbeat(
-            new StreamsGroupHeartbeatRequestData()
-                .setMemberId(memberId)
-                .setGroupId("foo")
-                .setMemberEpoch(0)
-                .setRebalanceTimeoutMs(1500)
-                .setActiveTasks(List.of())
-                .setStandbyTasks(List.of())
-                .setWarmupTasks(List.of())
-                .setTopology(new StreamsGroupHeartbeatRequestData.Topology().setSubtopologies(
-                    List.of(
-                        new StreamsGroupHeartbeatRequestData.Subtopology()
-                            .setStateChangelogTopics(
-                                List.of(
-                                    new StreamsGroupHeartbeatRequestData.TopicInfo()
-                                        .setName("changelog_topic_with_fixed_partition")
-                                        .setPartitions(3)
-                                )
-                            )
-                    )
-                ))
-        ));
-        assertEquals("Changelog topic changelog_topic_with_fixed_partition must have an undefined partition count, but it is set to 3.",
-            topoEx.getMessage());
     }
 
     @Test
@@ -20978,7 +20667,6 @@ public class GroupMetadataManagerTest {
             .build();
 
         String groupId = "share-group";
-        Uuid memberId = Uuid.randomUuid();
         String topicName1 = "topic-1";
         String topicName2 = "topic-2";
         Uuid topicId1 = Uuid.randomUuid();
@@ -20991,30 +20679,21 @@ public class GroupMetadataManagerTest {
 
         context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
 
-        context.shareGroupHeartbeat(
-            new ShareGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId.toString())
-                .setMemberEpoch(0)
-                .setSubscribedTopicNames(List.of(topicName1, topicName2)));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
-        context.groupMetadataManager.replay(
-            new ShareGroupStatePartitionMetadataKey()
-                .setGroupId(groupId),
-            new ShareGroupStatePartitionMetadataValue()
-                .setInitializingTopics(List.of())
-                .setInitializedTopics(List.of(
-                    new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
-                        .setTopicId(topicId1)
-                        .setTopicName(topicName1)
-                        .setPartitions(List.of(0, 1, 2)),
-                    new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
-                        .setTopicId(topicId2)
-                        .setTopicName(topicName2)
-                        .setPartitions(List.of(0, 1))
-                ))
-                .setDeletingTopics(List.of())
+        context.replay(
+            GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(),
+                Map.of(
+                    topicId1, Map.entry(topicName1, Set.of(0, 1, 2)),
+                    topicId2, Map.entry(topicName2, Set.of(0, 1))
+                ),
+                Map.of()
+            )
         );
+
+        context.commit();
 
         List<DeleteShareGroupStateRequestData.DeleteStateData> expectedResult = List.of(
             new DeleteShareGroupStateRequestData.DeleteStateData()
@@ -21037,23 +20716,148 @@ public class GroupMetadataManagerTest {
                 ))
         );
 
+        List<CoordinatorRecord> expectedRecords = List.of(
+            newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(),
+                Map.of(),
+                Map.of(topicId1, topicName1, topicId2, topicName2)
+            )
+        );
+
         DeleteShareGroupOffsetsRequestData requestData = new DeleteShareGroupOffsetsRequestData()
             .setGroupId(groupId)
             .setTopics(List.of(
                 new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
-                    .setTopicName(topicName1)
-                    .setPartitions(List.of(0, 1, 2)),
+                    .setTopicName(topicName1),
                 new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
                     .setTopicName(topicName2)
-                    .setPartitions(List.of(0, 1))
             ));
         List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList = new ArrayList<>();
 
+        List<CoordinatorRecord> records = new ArrayList<>();
+
         List<DeleteShareGroupStateRequestData.DeleteStateData> result =
-            context.groupMetadataManager.sharePartitionsEligibleForOffsetDeletion(groupId, requestData, errorTopicResponseList);
+            context.groupMetadataManager.sharePartitionsEligibleForOffsetDeletion(groupId, requestData, errorTopicResponseList, records);
 
         assertTrue(errorTopicResponseList.isEmpty());
         assertEquals(expectedResult, result);
+        assertRecordsEquals(expectedRecords, records);
+    }
+
+    @Test
+    public void testSharePartitionsEligibleForOffsetDeletionContainsDeletingTopics() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        String groupId = "share-group";
+        String topicName1 = "topic-1";
+        String topicName2 = "topic-2";
+        String topicName3 = "topic-3";
+        String topicName4 = "topic-4";
+        Uuid topicId1 = Uuid.randomUuid();
+        Uuid topicId2 = Uuid.randomUuid();
+        Uuid topicId3 = Uuid.randomUuid();
+        Uuid topicId4 = Uuid.randomUuid();
+
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(topicId1, topicName1, 3)
+            .addTopic(topicId2, topicName2, 2)
+            .addTopic(topicId3, topicName3, 2)
+            .addTopic(topicId4, topicName4, 2)
+            .build();
+
+        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
+
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
+
+        context.replay(
+            GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(),
+                Map.of(
+                    topicId1, Map.entry(topicName1, Set.of(0, 1, 2)),
+                    topicId2, Map.entry(topicName2, Set.of(0, 1))
+                ),
+                Map.of(
+                    topicId3, topicName3,
+                    topicId4, topicName4
+                )
+            )
+        );
+
+        context.commit();
+
+        // Because "topic-4" not a part of the request data, it will not be added to the result, even though it is part
+        // of the deletingTopics set. "topic-3" isn't currently initialized for the group, but since it is part of the
+        // deletingTopics set, it will still be included in the result and tried to get deleted by the persister.
+        List<DeleteShareGroupStateRequestData.DeleteStateData> expectedResult = List.of(
+            new DeleteShareGroupStateRequestData.DeleteStateData()
+                .setTopicId(topicId1)
+                .setPartitions(List.of(
+                    new DeleteShareGroupStateRequestData.PartitionData()
+                        .setPartition(0),
+                    new DeleteShareGroupStateRequestData.PartitionData()
+                        .setPartition(1),
+                    new DeleteShareGroupStateRequestData.PartitionData()
+                        .setPartition(2)
+                )),
+            new DeleteShareGroupStateRequestData.DeleteStateData()
+                .setTopicId(topicId2)
+                .setPartitions(List.of(
+                    new DeleteShareGroupStateRequestData.PartitionData()
+                        .setPartition(0),
+                    new DeleteShareGroupStateRequestData.PartitionData()
+                        .setPartition(1)
+                )),
+            new DeleteShareGroupStateRequestData.DeleteStateData()
+                .setTopicId(topicId3)
+                .setPartitions(List.of(
+                    new DeleteShareGroupStateRequestData.PartitionData()
+                        .setPartition(0),
+                    new DeleteShareGroupStateRequestData.PartitionData()
+                        .setPartition(1)
+                ))
+        );
+
+        // The ShareGroupStatePartitionMetadata record will contain all 4 topics in the deletingTopics list
+        List<CoordinatorRecord> expectedRecords = List.of(
+            newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(),
+                Map.of(),
+                Map.of(
+                    topicId1, topicName1,
+                    topicId2, topicName2,
+                    topicId3, topicName3,
+                    topicId4, topicName4
+                )
+            )
+        );
+
+        DeleteShareGroupOffsetsRequestData requestData = new DeleteShareGroupOffsetsRequestData()
+            .setGroupId(groupId)
+            .setTopics(List.of(
+                new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
+                    .setTopicName(topicName1),
+                new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
+                    .setTopicName(topicName2),
+                new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
+                    .setTopicName(topicName3)
+            ));
+        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList = new ArrayList<>();
+
+        List<CoordinatorRecord> records = new ArrayList<>();
+
+        List<DeleteShareGroupStateRequestData.DeleteStateData> result =
+            context.groupMetadataManager.sharePartitionsEligibleForOffsetDeletion(groupId, requestData, errorTopicResponseList, records);
+
+        assertTrue(errorTopicResponseList.isEmpty());
+        assertEquals(expectedResult, result);
+        assertRecordsEquals(expectedRecords, records);
     }
 
     @Test
@@ -21065,7 +20869,6 @@ public class GroupMetadataManagerTest {
             .build();
 
         String groupId = "share-group";
-        Uuid memberId = Uuid.randomUuid();
         String topicName1 = "topic-1";
         String topicName2 = "topic-2";
         Uuid topicId1 = Uuid.randomUuid();
@@ -21076,26 +20879,18 @@ public class GroupMetadataManagerTest {
 
         context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
 
-        context.shareGroupHeartbeat(
-            new ShareGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId.toString())
-                .setMemberEpoch(0)
-                .setSubscribedTopicNames(List.of(topicName1)));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
-        context.groupMetadataManager.replay(
-            new ShareGroupStatePartitionMetadataKey()
-                .setGroupId(groupId),
-            new ShareGroupStatePartitionMetadataValue()
-                .setInitializingTopics(List.of())
-                .setInitializedTopics(List.of(
-                    new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
-                        .setTopicId(topicId1)
-                        .setTopicName(topicName1)
-                        .setPartitions(List.of(0, 1, 2))
-                ))
-                .setDeletingTopics(List.of())
+        context.replay(
+            GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(),
+                Map.of(topicId1, Map.entry(topicName1, Set.of(0, 1, 2))),
+                Map.of()
+            )
         );
+
+        context.commit();
 
         List<DeleteShareGroupStateRequestData.DeleteStateData> expectedResult = List.of(
             new DeleteShareGroupStateRequestData.DeleteStateData()
@@ -21110,39 +20905,41 @@ public class GroupMetadataManagerTest {
                 ))
         );
 
+        List<CoordinatorRecord> expectedRecords = List.of(
+            newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(),
+                Map.of(),
+                Map.of(topicId1, topicName1)
+            )
+        );
+
         DeleteShareGroupOffsetsRequestData requestData = new DeleteShareGroupOffsetsRequestData()
             .setGroupId(groupId)
             .setTopics(List.of(
                 new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
-                    .setTopicName(topicName1)
-                    .setPartitions(List.of(0, 1, 2)),
+                    .setTopicName(topicName1),
                 new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
                     .setTopicName(topicName2)
-                    .setPartitions(List.of(0, 1))
             ));
         List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList = new ArrayList<>();
 
+        List<CoordinatorRecord> records = new ArrayList<>();
+
         List<DeleteShareGroupStateRequestData.DeleteStateData> result =
-            context.groupMetadataManager.sharePartitionsEligibleForOffsetDeletion(groupId, requestData, errorTopicResponseList);
+            context.groupMetadataManager.sharePartitionsEligibleForOffsetDeletion(groupId, requestData, errorTopicResponseList, records);
 
         assertEquals(
             List.of(
                 new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
                     .setTopicName(topicName2)
-                    .setPartitions(List.of(
-                        new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
-                            .setPartitionIndex(0)
-                            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                            .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message()),
-                        new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
-                            .setPartitionIndex(1)
-                            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                            .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
-                    ))
+                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                    .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
             ),
             errorTopicResponseList
         );
         assertEquals(expectedResult, result);
+        assertRecordsEquals(expectedRecords, records);
     }
 
     @Test
@@ -21154,7 +20951,6 @@ public class GroupMetadataManagerTest {
             .build();
 
         String groupId = "share-group";
-        Uuid memberId = Uuid.randomUuid();
         String topicName1 = "topic-1";
         String topicName2 = "topic-2";
         Uuid topicId1 = Uuid.randomUuid();
@@ -21167,31 +20963,18 @@ public class GroupMetadataManagerTest {
 
         context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
 
-        context.shareGroupHeartbeat(
-            new ShareGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId.toString())
-                .setMemberEpoch(0)
-                .setSubscribedTopicNames(List.of(topicName1, topicName2)));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
-        context.groupMetadataManager.replay(
-            new ShareGroupStatePartitionMetadataKey()
-                .setGroupId(groupId),
-            new ShareGroupStatePartitionMetadataValue()
-                .setInitializedTopics(List.of(
-                    new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
-                        .setTopicId(topicId1)
-                        .setTopicName(topicName1)
-                        .setPartitions(List.of(0, 1, 2))
-                ))
-                .setInitializingTopics(List.of(
-                    new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
-                        .setTopicId(topicId2)
-                        .setTopicName(topicName2)
-                        .setPartitions(List.of(0, 1))
-                ))
-                .setDeletingTopics(List.of())
+        context.replay(
+            GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(topicId2, Map.entry(topicName2, Set.of(0, 1))),
+                Map.of(topicId1, Map.entry(topicName1, Set.of(0, 1, 2))),
+                Map.of()
+            )
         );
+
+        context.commit();
 
         List<DeleteShareGroupStateRequestData.DeleteStateData> expectedResult = List.of(
             new DeleteShareGroupStateRequestData.DeleteStateData()
@@ -21206,23 +20989,41 @@ public class GroupMetadataManagerTest {
                 ))
         );
 
+        List<CoordinatorRecord> expectedRecords = List.of(
+            newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(topicId2, Map.entry(topicName2, Set.of(0, 1))),
+                Map.of(),
+                Map.of(topicId1, topicName1)
+            )
+        );
+
         DeleteShareGroupOffsetsRequestData requestData = new DeleteShareGroupOffsetsRequestData()
             .setGroupId(groupId)
             .setTopics(List.of(
                 new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
-                    .setTopicName(topicName1)
-                    .setPartitions(List.of(0, 1, 2)),
+                    .setTopicName(topicName1),
                 new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
                     .setTopicName(topicName2)
-                    .setPartitions(List.of(0, 1))
             ));
         List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList = new ArrayList<>();
 
-        List<DeleteShareGroupStateRequestData.DeleteStateData> result =
-            context.groupMetadataManager.sharePartitionsEligibleForOffsetDeletion(groupId, requestData, errorTopicResponseList);
+        List<CoordinatorRecord> records = new ArrayList<>();
 
-        assertTrue(errorTopicResponseList.isEmpty());
+        List<DeleteShareGroupStateRequestData.DeleteStateData> result =
+            context.groupMetadataManager.sharePartitionsEligibleForOffsetDeletion(groupId, requestData, errorTopicResponseList, records);
+
+        assertEquals(
+            List.of(
+                new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                    .setTopicName(topicName2)
+                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                    .setErrorMessage("There is no offset information to delete.")
+            ),
+            errorTopicResponseList
+        );
         assertEquals(expectedResult, result);
+        assertRecordsEquals(expectedRecords, records);
     }
 
     @Test
@@ -21234,7 +21035,6 @@ public class GroupMetadataManagerTest {
             .build();
 
         String groupId = "share-group";
-        Uuid memberId = Uuid.randomUuid();
         String topicName1 = "topic-1";
         String topicName2 = "topic-2";
         String topicName3 = "topic-3";
@@ -21248,31 +21048,18 @@ public class GroupMetadataManagerTest {
 
         context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
 
-        context.shareGroupHeartbeat(
-            new ShareGroupHeartbeatRequestData()
-                .setGroupId(groupId)
-                .setMemberId(memberId.toString())
-                .setMemberEpoch(0)
-                .setSubscribedTopicNames(List.of(topicName1, topicName2)));
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
 
-        context.groupMetadataManager.replay(
-            new ShareGroupStatePartitionMetadataKey()
-                .setGroupId(groupId),
-            new ShareGroupStatePartitionMetadataValue()
-                .setInitializedTopics(List.of(
-                    new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
-                        .setTopicId(topicId1)
-                        .setTopicName(topicName1)
-                        .setPartitions(List.of(0, 1, 2))
-                ))
-                .setInitializingTopics(List.of(
-                    new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
-                        .setTopicId(topicId2)
-                        .setTopicName(topicName2)
-                        .setPartitions(List.of(0, 1))
-                ))
-                .setDeletingTopics(List.of())
+        context.replay(
+            GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(topicId2, Map.entry(topicName2, Set.of(0, 1))),
+                Map.of(topicId1, Map.entry(topicName1, Set.of(0, 1, 2))),
+                Map.of()
+            )
         );
+
+        context.commit();
 
         List<DeleteShareGroupStateRequestData.DeleteStateData> expectedResult = List.of(
             new DeleteShareGroupStateRequestData.DeleteStateData()
@@ -21287,42 +21074,161 @@ public class GroupMetadataManagerTest {
                 ))
         );
 
+        List<CoordinatorRecord> expectedRecords = List.of(
+            newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(topicId2, Map.entry(topicName2, Set.of(0, 1))),
+                Map.of(),
+                Map.of(topicId1, topicName1)
+            )
+        );
+
         DeleteShareGroupOffsetsRequestData requestData = new DeleteShareGroupOffsetsRequestData()
             .setGroupId(groupId)
             .setTopics(List.of(
                 new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
-                    .setTopicName(topicName1)
-                    .setPartitions(List.of(0, 1, 2)),
+                    .setTopicName(topicName1),
                 new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
-                    .setTopicName(topicName2)
-                    .setPartitions(List.of(0, 1)),
+                    .setTopicName(topicName2),
                 new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
                     .setTopicName(topicName3)
-                    .setPartitions(List.of(0, 1))
             ));
         List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList = new ArrayList<>();
 
+        List<CoordinatorRecord> records = new ArrayList<>();
+
         List<DeleteShareGroupStateRequestData.DeleteStateData> result =
-            context.groupMetadataManager.sharePartitionsEligibleForOffsetDeletion(groupId, requestData, errorTopicResponseList);
+            context.groupMetadataManager.sharePartitionsEligibleForOffsetDeletion(groupId, requestData, errorTopicResponseList, records);
 
         assertEquals(
             List.of(
                 new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                    .setTopicName(topicName2)
+                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                    .setErrorMessage("There is no offset information to delete."),
+                new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
                     .setTopicName(topicName3)
-                    .setPartitions(List.of(
-                        new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
-                            .setPartitionIndex(0)
-                            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                            .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message()),
-                        new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
-                            .setPartitionIndex(1)
-                            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                            .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
-                    ))
+                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                    .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
             ),
             errorTopicResponseList
         );
         assertEquals(expectedResult, result);
+        assertRecordsEquals(expectedRecords, records);
+    }
+
+    @Test
+    public void testCompleteDeleteShareGroupOffsets() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        String groupId = "share-group";
+        String topicName1 = "topic-1";
+        String topicName2 = "topic-2";
+        Uuid topicId1 = Uuid.randomUuid();
+        Uuid topicId2 = Uuid.randomUuid();
+
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(topicId1, topicName1, 3)
+            .addTopic(topicId2, topicName2, 2)
+            .build();
+
+        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
+
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
+
+        context.replay(
+            GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(),
+                Map.of(),
+                Map.of(
+                    topicId1, topicName1,
+                    topicId2, topicName2
+                )
+            )
+        );
+
+        context.commit();
+
+        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> expectedResult = List.of(
+            new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                .setTopicId(topicId1)
+                .setTopicName(topicName1)
+                .setErrorCode(Errors.NONE.code())
+                .setErrorMessage(null),
+            new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                .setTopicId(topicId2)
+                .setTopicName(topicName2)
+                .setErrorCode(Errors.NONE.code())
+                .setErrorMessage(null)
+        );
+
+        List<CoordinatorRecord> expectedRecords = List.of(
+            newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                Map.of(),
+                Map.of(),
+                Map.of()
+            )
+        );
+
+        Map<Uuid, String> topics = Map.of(
+            topicId1, topicName1,
+            topicId2, topicName2
+        );
+
+        List<CoordinatorRecord> records = new ArrayList<>();
+
+        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> result =
+            context.groupMetadataManager.completeDeleteShareGroupOffsets(groupId, topics, records);
+
+        assertEquals(convertResponseTopicListToMap(expectedResult), convertResponseTopicListToMap(result));
+        assertRecordsEquals(expectedRecords, records);
+    }
+
+    @Test
+    public void testCompleteDeleteShareGroupOffsetsEmptyResult() {
+        MockPartitionAssignor assignor = new MockPartitionAssignor("range");
+        assignor.prepareGroupAssignment(new GroupAssignment(Map.of()));
+        GroupMetadataManagerTestContext context = new GroupMetadataManagerTestContext.Builder()
+            .withShareGroupAssignor(assignor)
+            .build();
+
+        String groupId = "share-group";
+        String topicName1 = "topic-1";
+        String topicName2 = "topic-2";
+        Uuid topicId1 = Uuid.randomUuid();
+        Uuid topicId2 = Uuid.randomUuid();
+
+        MetadataImage image = new MetadataImageBuilder()
+            .addTopic(topicId1, topicName1, 3)
+            .addTopic(topicId2, topicName2, 2)
+            .build();
+
+        context.groupMetadataManager.onNewMetadataImage(image, mock(MetadataDelta.class));
+
+        context.replay(GroupCoordinatorRecordHelpers.newShareGroupEpochRecord(groupId, 0, 0));
+
+        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> expectedResult = List.of();
+
+        List<CoordinatorRecord> expectedRecords = List.of();
+
+        Map<Uuid, String> topics = Map.of(
+            topicId1, topicName1,
+            topicId2, topicName2
+        );
+
+        List<CoordinatorRecord> records = new ArrayList<>();
+
+        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> result =
+            context.groupMetadataManager.completeDeleteShareGroupOffsets(groupId, topics, records);
+
+        assertEquals(convertResponseTopicListToMap(expectedResult), convertResponseTopicListToMap(result));
+        assertRecordsEquals(expectedRecords, records);
     }
 
     @Test
@@ -21913,5 +21819,12 @@ public class GroupMetadataManagerTest {
         } else {
             assertTrue(deleteRequest.isEmpty());
         }
+    }
+
+    private Map<Uuid, DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> convertResponseTopicListToMap(
+        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> responseTopics
+    ) {
+        return responseTopics.stream()
+            .collect(Collectors.toMap(DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic::topicId, Function.identity()));
     }
 }
