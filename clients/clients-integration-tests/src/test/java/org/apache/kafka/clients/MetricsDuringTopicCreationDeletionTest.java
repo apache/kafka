@@ -81,20 +81,18 @@ public class MetricsDuringTopicCreationDeletionTest {
         var closed = new AtomicBoolean(false);
         var f = CompletableFuture.runAsync(() -> {
             while (!closed.get()) {
-                clusterInstance.brokers().values().forEach(broker -> {
-                    if (running) {
-                        // Get UnderReplicatedPartitions through JMX
-                        Optional<Integer> underReplicatedCount = KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
-                                .filter(entry -> entry.getKey().getName().endsWith("UnderReplicatedPartitions"))
-                                .map(entry -> ((Gauge<Integer>) entry.getValue()).value())
-                                .findFirst();
+                if (running) {
+                    // Get UnderReplicatedPartitions through JMX
+                    Optional<Integer> underReplicatedCount = KafkaYammerMetrics.defaultRegistry().allMetrics().entrySet().stream()
+                            .filter(entry -> entry.getKey().getName().endsWith("UnderReplicatedPartitions"))
+                            .map(entry -> ((Gauge<Integer>) entry.getValue()).value())
+                            .findFirst();
 
-                        int count = underReplicatedCount.orElse(0);
-                        if (count != initialUnderReplicatedPartitionCount) {
-                            running = false;
-                        }
+                    int count = underReplicatedCount.orElse(0);
+                    if (count != initialUnderReplicatedPartitionCount) {
+                        running = false;
                     }
-                });
+                }
 
                 int offlinePartitionsCount = getGauge("OfflinePartitionsCount").value();
                 if (offlinePartitionsCount != initialOfflinePartitionsCount) {
