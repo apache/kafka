@@ -19,27 +19,15 @@ package org.apache.kafka.coordinator.group;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
-import org.apache.kafka.image.ClusterImage;
-import org.apache.kafka.image.TopicImage;
-import org.apache.kafka.metadata.BrokerRegistration;
 
-import net.jpountz.xxhash.XXHash64;
-import net.jpountz.xxhash.XXHashFactory;
-
-import java.io.ByteArrayOutputStream;
-import java.io.DataOutputStream;
-import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
-import java.util.function.LongFunction;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 /**
  * Interface common for all groups.
@@ -220,91 +208,5 @@ public interface Group {
      */
     default boolean shouldExpire() {
         return true;
-    }
-
-    /**
-     * The magic byte used to identify the version of topic hash function.
-     */
-    byte TOPIC_HASH_MAGIC_BYTE = 0x00;
-    XXHash64 LZ4_HASH_INSTANCE = XXHashFactory.fastestInstance().hash64();
-
-    /**
-     * Computes the hash of the topics in a group.
-     *
-     * @param topicHashes The map of topic hashes. Key is topic name and value is the topic hash.
-     * @return The hash of the group.
-     */
-    static long computeGroupHash(Map<String, Long> topicHashes) {
-        // Convert long to byte array. This is taken from guava LongHashCode#asBytes.
-        // https://github.com/google/guava/blob/bdf2a9d05342fca852645278d474082905e09d94/guava/src/com/google/common/hash/HashCode.java#L187-L199
-        LongFunction<byte[]> longToBytes = (long value) -> new byte[] {
-            (byte) value,
-            (byte) (value >> 8),
-            (byte) (value >> 16),
-            (byte) (value >> 24),
-            (byte) (value >> 32),
-            (byte) (value >> 40),
-            (byte) (value >> 48),
-            (byte) (value >> 56)
-        };
-
-        // Combine the sorted topic hashes.
-        byte[] resultBytes = new byte[8];
-        topicHashes.entrySet()
-            .stream()
-            .sorted(Map.Entry.comparingByKey()) // sort by topic name
-            .map(Map.Entry::getValue)
-            .map(longToBytes::apply)
-            .forEach(nextBytes -> {
-                // Combine ordered hashes. This is taken from guava Hashing#combineOrdered.
-                // https://github.com/google/guava/blob/bdf2a9d05342fca852645278d474082905e09d94/guava/src/com/google/common/hash/Hashing.java#L689-L712
-                for (int i = 0; i < nextBytes.length; i++) {
-                    resultBytes[i] = (byte) (resultBytes[i] * 37 ^ nextBytes[i]);
-                }
-            });
-
-        // Convert the byte array to long. This is taken from guava BytesHashCode#asLong.
-        // https://github.com/google/guava/blob/bdf2a9d05342fca852645278d474082905e09d94/guava/src/com/google/common/hash/HashCode.java#L279-L295
-        long retVal = (resultBytes[0] & 0xFF);
-        for (int i = 1; i < resultBytes.length; i++) {
-            retVal |= (resultBytes[i] & 0xFFL) << (i * 8);
-        }
-        return retVal;
-    }
-
-    /**
-     * Computes the hash of the topic id, name, number of partitions, and partition racks by Murmur3.
-     *
-     * @param topicImage   The topic image.
-     * @param clusterImage The cluster image.
-     * @return The hash of the topic.
-     */
-    static long computeTopicHash(TopicImage topicImage, ClusterImage clusterImage) throws IOException {
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             DataOutputStream dos = new DataOutputStream(baos)) {
-            dos.writeByte(TOPIC_HASH_MAGIC_BYTE); // magic byte
-            dos.writeLong(topicImage.id().hashCode()); // topic ID
-            dos.writeUTF(topicImage.name()); // topic name
-            dos.writeInt(topicImage.partitions().size()); // number of partitions
-            for (int i = 0; i < topicImage.partitions().size(); i++) {
-                dos.writeInt(i); // partition id
-                List<String> sortedRacksList = Arrays.stream(topicImage.partitions().get(i).replicas)
-                    .mapToObj(clusterImage::broker)
-                    .filter(Objects::nonNull)
-                    .map(BrokerRegistration::rack)
-                    .filter(Optional::isPresent)
-                    .map(Optional::get)
-                    .sorted()
-                    .toList();
-
-                String racks = IntStream.range(0, sortedRacksList.size())
-                    .mapToObj(idx -> idx + ":" + sortedRacksList.get(idx)) // Format: "index:value"
-                    .collect(Collectors.joining(",")); // Separator between "index:value" pairs
-                dos.writeUTF(racks); // sorted racks
-            }
-            dos.flush();
-            byte[] topicBytes = baos.toByteArray();
-            return LZ4_HASH_INSTANCE.hash(topicBytes, 0, topicBytes.length, 0);
-        }
     }
 }

@@ -25,14 +25,23 @@ import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
+import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import com.google.re2j.Pattern;
 import com.google.re2j.PatternSyntaxException;
 
+import net.jpountz.xxhash.XXHash64;
+import net.jpountz.xxhash.XXHashFactory;
+
+import java.io.ByteArrayOutputStream;
+import java.io.DataOutputStream;
+import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -40,11 +49,14 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
 import java.util.Set;
+import java.util.function.LongFunction;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 public class Utils {
     private Utils() {}
@@ -322,6 +334,86 @@ public class Utils {
             throw new InvalidRegularExpression(
                 String.format("SubscribedTopicRegex `%s` is not a valid regular expression: %s.",
                     regex, ex.getDescription()));
+        }
+    }
+
+    /**
+     * The magic byte used to identify the version of topic hash function.
+     */
+    static final byte TOPIC_HASH_MAGIC_BYTE = 0x00;
+    static final XXHash64 LZ4_HASH_INSTANCE = XXHashFactory.fastestInstance().hash64();
+
+    /**
+     * Computes the hash of the topics in a group.
+     *
+     * @param topicHashes The map of topic hashes. Key is topic name and value is the topic hash.
+     * @return The hash of the group.
+     */
+    static long computeGroupHash(Map<String, Long> topicHashes) {
+        // Convert long to byte array. This is taken from guava LongHashCode#asBytes.
+        // https://github.com/google/guava/blob/bdf2a9d05342fca852645278d474082905e09d94/guava/src/com/google/common/hash/HashCode.java#L187-L199
+        LongFunction<byte[]> longToBytes = (long value) -> new byte[] {
+            (byte) value,
+            (byte) (value >> 8),
+            (byte) (value >> 16),
+            (byte) (value >> 24),
+            (byte) (value >> 32),
+            (byte) (value >> 40),
+            (byte) (value >> 48),
+            (byte) (value >> 56)
+        };
+
+        // Combine the sorted topic hashes.
+        byte[] resultBytes = new byte[8];
+        topicHashes.entrySet()
+            .stream()
+            .sorted(Map.Entry.comparingByKey()) // sort by topic name
+            .map(Map.Entry::getValue)
+            .map(longToBytes::apply)
+            .forEach(nextBytes -> {
+                // Combine ordered hashes. This is taken from guava Hashing#combineOrdered.
+                // https://github.com/google/guava/blob/bdf2a9d05342fca852645278d474082905e09d94/guava/src/com/google/common/hash/Hashing.java#L689-L712
+                for (int i = 0; i < nextBytes.length; i++) {
+                    resultBytes[i] = (byte) (resultBytes[i] * 37 ^ nextBytes[i]);
+                }
+            });
+
+        return LZ4_HASH_INSTANCE.hash(resultBytes, 0, resultBytes.length, 0);
+    }
+
+    /**
+     * Computes the hash of the topic id, name, number of partitions, and partition racks by XXHash64.
+     *
+     * @param topicImage   The topic image.
+     * @param clusterImage The cluster image.
+     * @return The hash of the topic.
+     */
+    static long computeTopicHash(TopicImage topicImage, ClusterImage clusterImage) throws IOException {
+        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
+             DataOutputStream dos = new DataOutputStream(baos)) {
+            dos.writeByte(TOPIC_HASH_MAGIC_BYTE); // magic byte
+            dos.writeLong(topicImage.id().hashCode()); // topic ID
+            dos.writeUTF(topicImage.name()); // topic name
+            dos.writeInt(topicImage.partitions().size()); // number of partitions
+            for (int i = 0; i < topicImage.partitions().size(); i++) {
+                dos.writeInt(i); // partition id
+                List<String> sortedRacksList = Arrays.stream(topicImage.partitions().get(i).replicas)
+                    .mapToObj(clusterImage::broker)
+                    .filter(Objects::nonNull)
+                    .map(BrokerRegistration::rack)
+                    .filter(Optional::isPresent)
+                    .map(Optional::get)
+                    .sorted()
+                    .toList();
+
+                String racks = IntStream.range(0, sortedRacksList.size())
+                    .mapToObj(idx -> idx + ":" + sortedRacksList.get(idx)) // Format: "index:value"
+                    .collect(Collectors.joining(",")); // Separator between "index:value" pairs
+                dos.writeUTF(racks); // sorted racks
+            }
+            dos.flush();
+            byte[] topicBytes = baos.toByteArray();
+            return LZ4_HASH_INSTANCE.hash(topicBytes, 0, topicBytes.length, 0);
         }
     }
 }

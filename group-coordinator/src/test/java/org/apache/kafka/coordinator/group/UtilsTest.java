@@ -37,7 +37,7 @@ import java.util.stream.Stream;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 
-public class GroupTest {
+public class UtilsTest {
     private static final Uuid FOO_TOPIC_ID = Uuid.randomUuid();
     private static final String FOO_TOPIC_NAME = "foo";
     private static final String BAR_TOPIC_NAME = "bar";
@@ -50,7 +50,7 @@ public class GroupTest {
 
     @Test
     void testComputeTopicHash() throws IOException {
-        long result = Group.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
+        long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              DataOutputStream dos = new DataOutputStream(baos)) {
@@ -70,7 +70,7 @@ public class GroupTest {
 
     @Test
     void testComputeTopicHashWithDifferentMagicByte() throws IOException {
-        long result = Group.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
+        long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              DataOutputStream dos = new DataOutputStream(baos)) {
@@ -90,7 +90,7 @@ public class GroupTest {
 
     @Test
     void testComputeTopicHashWithDifferentPartitionOrder() throws IOException {
-        long result = Group.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
+        long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              DataOutputStream dos = new DataOutputStream(baos)) {
@@ -111,7 +111,7 @@ public class GroupTest {
 
     @Test
     void testComputeTopicHashWithDifferentRackOrder() throws IOException {
-        long result = Group.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
+        long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
         try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
              DataOutputStream dos = new DataOutputStream(baos)) {
@@ -132,10 +132,10 @@ public class GroupTest {
     @ParameterizedTest
     @MethodSource("differentFieldGenerator")
     void testComputeTopicHashWithDifferentField(MetadataImage differentImage, Uuid topicId) throws IOException {
-        long result = Group.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
+        long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
         assertNotEquals(
-            Group.computeTopicHash(
+            Utils.computeTopicHash(
                 differentImage.topics().getTopic(topicId),
                 differentImage.cluster()
             ),
@@ -147,26 +147,26 @@ public class GroupTest {
         Uuid differentTopicId = Uuid.randomUuid();
         return Stream.of(
             Arguments.of(new MetadataImageBuilder() // different topic id
-                .addTopic(differentTopicId, FOO_TOPIC_NAME, FOO_NUM_PARTITIONS)
-                .addRacks()
-                .build(),
+                    .addTopic(differentTopicId, FOO_TOPIC_NAME, FOO_NUM_PARTITIONS)
+                    .addRacks()
+                    .build(),
                 differentTopicId
             ),
             Arguments.of(new MetadataImageBuilder() // different topic name
-                .addTopic(FOO_TOPIC_ID, "bar", FOO_NUM_PARTITIONS)
-                .addRacks()
-                .build(),
+                    .addTopic(FOO_TOPIC_ID, "bar", FOO_NUM_PARTITIONS)
+                    .addRacks()
+                    .build(),
                 FOO_TOPIC_ID
             ),
             Arguments.of(new MetadataImageBuilder() // different partitions
-                .addTopic(FOO_TOPIC_ID, FOO_TOPIC_NAME, 1)
-                .addRacks()
-                .build(),
+                    .addTopic(FOO_TOPIC_ID, FOO_TOPIC_NAME, 1)
+                    .addRacks()
+                    .build(),
                 FOO_TOPIC_ID
             ),
             Arguments.of(new MetadataImageBuilder() // different racks
-                .addTopic(FOO_TOPIC_ID, FOO_TOPIC_NAME, FOO_NUM_PARTITIONS)
-                .build(),
+                    .addTopic(FOO_TOPIC_ID, FOO_TOPIC_NAME, FOO_NUM_PARTITIONS)
+                    .build(),
                 FOO_TOPIC_ID
             )
         );
@@ -181,7 +181,7 @@ public class GroupTest {
         Map<String, Long> descendTopicHashes = new LinkedHashMap<>();
         descendTopicHashes.put(FOO_TOPIC_NAME, 456L);
         descendTopicHashes.put(BAR_TOPIC_NAME, 123L);
-        assertEquals(Group.computeGroupHash(ascendTopicHashes), Group.computeGroupHash(descendTopicHashes));
+        assertEquals(Utils.computeGroupHash(ascendTopicHashes), Utils.computeGroupHash(descendTopicHashes));
     }
 
     @Test
@@ -195,6 +195,6 @@ public class GroupTest {
             BAR_TOPIC_NAME, 456L,
             FOO_TOPIC_NAME, 123L
         );
-        assertNotEquals(Group.computeGroupHash(map1), Group.computeGroupHash(map2));
+        assertNotEquals(Utils.computeGroupHash(map1), Utils.computeGroupHash(map2));
     }
 }
