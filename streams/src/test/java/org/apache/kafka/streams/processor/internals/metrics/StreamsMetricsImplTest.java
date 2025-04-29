@@ -519,25 +519,21 @@ public class StreamsMetricsImplTest {
         final MetricName metricName =
                 new MetricName(METRIC_NAME1, STATE_STORE_LEVEL_GROUP, DESCRIPTION1, STORE_LEVEL_TAG_MAP);
         final MetricConfig metricConfig = new MetricConfig().recordLevel(INFO_RECORDING_LEVEL);
-        final AtomicReference<KafkaMetric> metricCreatedViaThread1;
-        final AtomicReference<KafkaMetric> metricCreatedViaThread2;
-        final Thread thread1;
-        final Thread thread2;
         try (Metrics metrics = new Metrics(metricConfig)) {
             assertNull(metrics.metric(metricName));
-            metricCreatedViaThread1 = new AtomicReference<>();
-            metricCreatedViaThread2 = new AtomicReference<>();
+            final AtomicReference<KafkaMetric> metricCreatedViaThread1 = new AtomicReference<>();
+            final AtomicReference<KafkaMetric> metricCreatedViaThread2 = new AtomicReference<>();
 
-            thread1 = new Thread(() -> metricCreatedViaThread1.set(metrics.addMetricIfAbsent(metricName, metricConfig, VALUE_PROVIDER)));
-            thread2 = new Thread(() -> metricCreatedViaThread2.set(metrics.addMetricIfAbsent(metricName, metricConfig, VALUE_PROVIDER)));
+            final Thread thread1 = new Thread(() -> metricCreatedViaThread1.set(metrics.addMetricIfAbsent(metricName, metricConfig, VALUE_PROVIDER)));
+            final Thread thread2 = new Thread(() -> metricCreatedViaThread2.set(metrics.addMetricIfAbsent(metricName, metricConfig, VALUE_PROVIDER)));
+
+            thread1.start();
+            thread2.start();
+
+            thread1.join();
+            thread2.join();
+            assertEquals(metricCreatedViaThread1.get(), metricCreatedViaThread2.get());
         }
-
-        thread1.start();
-        thread2.start();
-
-        thread1.join();
-        thread2.join();
-        assertEquals(metricCreatedViaThread1.get(), metricCreatedViaThread2.get());
     }
 
     @Test
