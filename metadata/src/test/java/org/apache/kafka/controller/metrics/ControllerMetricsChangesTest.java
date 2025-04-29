@@ -17,7 +17,6 @@
 
 package org.apache.kafka.controller.metrics;
 
-import com.yammer.metrics.core.MetricsRegistry;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.metadata.PartitionChangeRecord;
 import org.apache.kafka.common.metadata.PartitionRecord;
@@ -27,6 +26,8 @@ import org.apache.kafka.image.writer.ImageWriterOptions;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.server.common.MetadataVersion;
+
+import com.yammer.metrics.core.MetricsRegistry;
 
 import org.junit.jupiter.api.Test;
 
