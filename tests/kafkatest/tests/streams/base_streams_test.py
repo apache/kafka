@@ -37,7 +37,11 @@ class BaseStreamsTest(Test):
             test_context, self.num_brokers,
             None, topics=self.topics,
             controller_num_nodes_override=self.num_controllers,
-            use_streams_groups=True
+            use_streams_groups=True,
+            server_prop_overrides=[
+                [ "group.streams.min.session.timeout.ms", "10000" ], # Need to up the lower bound
+                [ "group.streams.session.timeout.ms", "10000" ] # As in classic groups, set this to 10s
+            ]
         )
 
     def setUp(self):
