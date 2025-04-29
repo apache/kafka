@@ -20,7 +20,6 @@ package kafka.log
 import java.util.{Optional, Properties}
 import java.util.concurrent.{Callable, Executors}
 import kafka.utils.TestUtils
-import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
