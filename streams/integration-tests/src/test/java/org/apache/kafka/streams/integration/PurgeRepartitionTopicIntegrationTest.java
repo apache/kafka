@@ -24,11 +24,10 @@ import org.apache.kafka.clients.producer.ProducerConfig;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.config.ConfigResource;
 import org.apache.kafka.common.config.TopicConfig;
-import org.apache.kafka.common.serialization.IntegerSerializer;
+import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.Serdes;
 import org.apache.kafka.common.utils.MockTime;
 import org.apache.kafka.common.utils.Time;
-import org.apache.kafka.server.config.ServerLogConfigs;
 import org.apache.kafka.streams.KafkaStreams;
 import org.apache.kafka.streams.KeyValue;
 import org.apache.kafka.streams.StreamsBuilder;
@@ -50,6 +49,7 @@ import org.junit.jupiter.api.Timeout;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
@@ -68,7 +68,7 @@ public class PurgeRepartitionTopicIntegrationTest {
     private static Admin adminClient;
     private static KafkaStreams kafkaStreams;
     private static final Integer PURGE_INTERVAL_MS = 10;
-    private static final Integer PURGE_SEGMENT_BYTES = 2000;
+    private static final Integer PURGE_SEGMENT_BYTES = 1024 * 1024;
     private static final Integer INITIAL_TASK_DELAY_MS = 0;
 
     public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(NUM_BROKERS, new Properties() {
@@ -76,7 +76,6 @@ public class PurgeRepartitionTopicIntegrationTest {
             put("log.retention.check.interval.ms", PURGE_INTERVAL_MS);
             put("log.initial.task.delay.ms", INITIAL_TASK_DELAY_MS);
             put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, 0);
-            put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, PURGE_SEGMENT_BYTES);
         }
     });
 
@@ -115,7 +114,8 @@ public class PurgeRepartitionTopicIntegrationTest {
                     .get(resource)
                     .get();
                 return config.get(TopicConfig.CLEANUP_POLICY_CONFIG).value().equals(TopicConfig.CLEANUP_POLICY_DELETE)
-                        && config.get(TopicConfig.SEGMENT_MS_CONFIG).value().equals(PURGE_INTERVAL_MS.toString());
+                        && config.get(TopicConfig.SEGMENT_MS_CONFIG).value().equals(PURGE_INTERVAL_MS.toString())
+                        && config.get(TopicConfig.SEGMENT_BYTES_CONFIG).value().equals(PURGE_SEGMENT_BYTES.toString());
             } catch (final Exception e) {
                 return false;
             }
@@ -168,10 +168,11 @@ public class PurgeRepartitionTopicIntegrationTest {
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, PURGE_INTERVAL_MS);
         streamsConfiguration.put(StreamsConfig.REPARTITION_PURGE_INTERVAL_MS_CONFIG, PURGE_INTERVAL_MS);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, CLUSTER.bootstrapServers());
-        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
-        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.Integer().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.ByteArray().getClass());
+        streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.ByteArray().getClass());
         streamsConfiguration.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(APPLICATION_ID).getPath());
         streamsConfiguration.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_MS_CONFIG), PURGE_INTERVAL_MS);
+        streamsConfiguration.put(StreamsConfig.topicPrefix(TopicConfig.SEGMENT_BYTES_CONFIG), PURGE_SEGMENT_BYTES);
         streamsConfiguration.put(StreamsConfig.producerPrefix(ProducerConfig.BATCH_SIZE_CONFIG), PURGE_SEGMENT_BYTES / 2);    // we cannot allow batch size larger than segment size
 
         final StreamsBuilder builder = new StreamsBuilder();
@@ -195,15 +196,17 @@ public class PurgeRepartitionTopicIntegrationTest {
     @Test
     public void shouldRestoreState() throws Exception {
         // produce some data to input topic
-        final List<KeyValue<Integer, Integer>> messages = new ArrayList<>();
+        final List<KeyValue<byte[], byte[]>> messages = new ArrayList<>();
         for (int i = 0; i < 1000; i++) {
-            messages.add(new KeyValue<>(i, i));
+            final byte[] data = new byte[1024];
+            Arrays.fill(data, (byte) i);
+            messages.add(new KeyValue<>(data, data));
         }
         IntegrationTestUtils.produceKeyValuesSynchronouslyWithTimestamp(INPUT_TOPIC,
                 messages,
                 TestUtils.producerConfig(CLUSTER.bootstrapServers(),
-                        IntegerSerializer.class,
-                        IntegerSerializer.class),
+                        ByteArraySerializer.class,
+                        ByteArraySerializer.class),
                 time.milliseconds());
 
         kafkaStreams.start();
