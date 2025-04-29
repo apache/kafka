@@ -38,6 +38,7 @@ import org.apache.kafka.common.Metric;
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.PartitionInfo;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.config.ConfigException;
@@ -1505,7 +1506,7 @@ public class KafkaProducerTest {
         KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
 
         String topic = "foo";
-        TopicPartition topicPartition = new TopicPartition(topic, 0);
+        TopicIdPartition topicIdPartition = new TopicIdPartition(Uuid.randomUuid(), 0, topic);
         Cluster cluster = TestUtils.singletonCluster(topic, 1);
 
         when(ctx.sender.isRunning()).thenReturn(true);
@@ -1544,8 +1545,8 @@ public class KafkaProducerTest {
 
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some-txn", NODE));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
-        client.prepareResponse(produceResponse(topicPartition, 1L, Errors.CONCURRENT_TRANSACTIONS, 0, 1));
-        client.prepareResponse(produceResponse(topicPartition, 1L, Errors.NONE, 0, 1));
+        client.prepareResponse(produceResponse(topicIdPartition, 1L, Errors.CONCURRENT_TRANSACTIONS, 0, 1));
+        client.prepareResponse(produceResponse(topicIdPartition, 1L, Errors.NONE, 0, 1));
         client.prepareResponse(endTxnResponse(Errors.NONE));
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(
@@ -1831,6 +1832,7 @@ public class KafkaProducerTest {
         KafkaProducerTestContext<String> ctx = new KafkaProducerTestContext<>(testInfo, serializer);
 
         String topic = "foo";
+        Uuid topicId = Uuid.fromString("klZ9sa2rSvig6QpgGXzALT");
         TopicPartition topicPartition = new TopicPartition(topic, 0);
         Cluster cluster = TestUtils.singletonCluster(topic, 1);
 
@@ -1870,7 +1872,7 @@ public class KafkaProducerTest {
 
         client.prepareResponse(FindCoordinatorResponse.prepareResponse(Errors.NONE, "some-txn", NODE));
         client.prepareResponse(initProducerIdResponse(1L, (short) 5, Errors.NONE));
-        client.prepareResponse(produceResponse(topicPartition, 1L, Errors.NONE, 0, 1));
+        client.prepareResponse(produceResponse(new TopicIdPartition(topicId, topicPartition), 1L, Errors.NONE, 0, 1));
         client.prepareResponse(endTxnResponse(Errors.NONE));
 
         try (KafkaProducer<String, String> producer = new KafkaProducer<>(
@@ -2753,9 +2755,9 @@ public class KafkaProducerTest {
     }
 
     @SuppressWarnings("deprecation")
-    private ProduceResponse produceResponse(TopicPartition tp, long offset, Errors error, int throttleTimeMs, int logStartOffset) {
+    private ProduceResponse produceResponse(TopicIdPartition topicIdPartition, long offset, Errors error, int throttleTimeMs, int logStartOffset) {
         ProduceResponse.PartitionResponse resp = new ProduceResponse.PartitionResponse(error, offset, RecordBatch.NO_TIMESTAMP, logStartOffset);
-        Map<TopicPartition, ProduceResponse.PartitionResponse> partResp = singletonMap(tp, resp);
+        Map<TopicIdPartition, ProduceResponse.PartitionResponse> partResp = singletonMap(topicIdPartition, resp);
         return new ProduceResponse(partResp, throttleTimeMs);
     }
 
