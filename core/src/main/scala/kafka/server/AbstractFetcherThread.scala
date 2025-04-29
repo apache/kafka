@@ -18,7 +18,7 @@
 package kafka.server
 
 import com.yammer.metrics.core.Meter
-import kafka.server.AbstractFetcherThread.{ReplicaFetch, ResultWithPartitions}
+import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.utils.CoreUtils.inLock
 import kafka.utils.Logging
 import org.apache.kafka.common.errors._
