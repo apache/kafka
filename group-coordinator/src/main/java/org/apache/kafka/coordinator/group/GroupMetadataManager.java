@@ -2111,7 +2111,7 @@ public class GroupMetadataManager {
                 endpointToPartitionsList.add(endpointToPartitions);
             }
         }
-        return endpointToPartitionsList;
+        return endpointToPartitionsList.isEmpty() ? null : endpointToPartitionsList;
     }
 
     /**
