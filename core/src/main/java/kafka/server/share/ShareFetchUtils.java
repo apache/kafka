@@ -29,6 +29,7 @@ import org.apache.kafka.common.message.ShareFetchResponseData.AcquiredRecords;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.FileLogInputStream.FileChannelRecordBatch;
 import org.apache.kafka.common.record.FileRecords;
+import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Records;
 import org.apache.kafka.common.requests.ListOffsetsRequest;
 import org.apache.kafka.coordinator.group.GroupConfigManager;
@@ -83,7 +84,7 @@ public class ShareFetchUtils {
 
             if (fetchPartitionData.error.code() != Errors.NONE.code()) {
                 partitionData
-                    .setRecords(null)
+                    .setRecords(MemoryRecords.EMPTY)
                     .setErrorCode(fetchPartitionData.error.code())
                     .setErrorMessage(fetchPartitionData.error.message())
                     .setAcquiredRecords(List.of());
@@ -123,7 +124,7 @@ public class ShareFetchUtils {
                 // if we want parallel requests for the same share partition or not.
                 if (shareAcquiredRecords.acquiredRecords().isEmpty()) {
                     partitionData
-                        .setRecords(null)
+                        .setRecords(MemoryRecords.EMPTY)
                         .setAcquiredRecords(List.of());
                 } else {
                     partitionData

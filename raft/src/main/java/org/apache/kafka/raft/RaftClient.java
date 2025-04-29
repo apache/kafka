@@ -228,7 +228,7 @@ public interface RaftClient<T> extends AutoCloseable {
      * Returns the current end of the log. This method is thread-safe.
      *
      * @return the log end offset, which is one greater than the offset of the last record written,
-     * or 0 if there have not been any records written.
+     *         or 0 if there have not been any records written.
      */
     long logEndOffset();
 
@@ -238,4 +238,18 @@ public interface RaftClient<T> extends AutoCloseable {
      * @return the current kraft.version.
      */
     KRaftVersion kraftVersion();
+
+    /**
+     * Request that the leader to upgrade the kraft version.
+     *
+     * @param epoch the current epoch
+     * @param version the new kraft version to upgrade to
+     * @param validateOnly whether to just validate the change and not persist it
+     * @throws ApiException when the upgrade fails to validate
+     */
+    void upgradeKRaftVersion(
+        int epoch,
+        KRaftVersion version,
+        boolean validateOnly
+    );
 }
