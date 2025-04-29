@@ -261,8 +261,13 @@ public class ShareCoordinatorService implements ShareCoordinator {
 
         log.info("Starting up.");
         numPartitions = shareGroupTopicPartitionCount.getAsInt();
-        setupRecordPruning();
+        setupPeriodicJobs();
         log.info("Startup complete.");
+    }
+
+    private void setupPeriodicJobs() {
+        setupRecordPruning();
+        setupSnapshotColdPartitions();
     }
 
     private void setupRecordPruning() {
@@ -339,6 +344,28 @@ public class ShareCoordinatorService implements ShareCoordinator {
             }
         });
         return fut;
+    }
+
+    private void setupSnapshotColdPartitions() {
+        log.info("Scheduling cold share-partition snapshotting.");
+        timer.add(new TimerTask(config.shareCoordinatorColdPartitionSnapshotIntervalMs()) {
+            @Override
+            public void run() {
+                List<CompletableFuture<Void>> futures = runtime.scheduleWriteAllOperation(
+                    "snapshot-cold-partitions",
+                    Duration.ofMillis(config.shareCoordinatorWriteTimeoutMs()),
+                    ShareCoordinatorShard::snapshotColdPartitions
+                );
+
+                CompletableFuture.allOf(futures.toArray(new CompletableFuture<?>[]{}))
+                    .whenComplete((__, exp) -> {
+                        if (exp != null) {
+                            log.error("Received error while snapshotting cold partitions.", exp);
+                        }
+                        setupSnapshotColdPartitions();
+                    });
+            }
+        });
     }
 
     @Override
