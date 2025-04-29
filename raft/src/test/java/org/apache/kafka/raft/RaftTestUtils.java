@@ -32,22 +32,22 @@ import java.util.Optional;
 
 public class RaftTestUtils {
     static ApiMessage roundTripApiMessage(ApiMessage message, short version) {
-        ObjectSerializationCache cache =  new ObjectSerializationCache();
-        ByteArrayOutputStream buffer = new ByteArrayOutputStream(message.size(cache, version));
+        var cache =  new ObjectSerializationCache();
+        var buffer = new ByteArrayOutputStream(message.size(cache, version));
 
         // Encode the message to a byte array with the given version
-        DataOutputStreamWritable writer = new DataOutputStreamWritable(new DataOutputStream(buffer));
+        var writer = new DataOutputStreamWritable(new DataOutputStream(buffer));
         message.write(writer, cache, version);
 
         // Decode the message from the byte array
-        ByteBufferAccessor reader = new ByteBufferAccessor(ByteBuffer.wrap(buffer.toByteArray()));
+        var reader = new ByteBufferAccessor(ByteBuffer.wrap(buffer.toByteArray()));
         message.read(reader, version);
 
         return message;
     }
 
     static <T> void writeBootstrapSnapshot(ReplicatedLog log, Optional<VoterSet> voters, KRaftVersion version, RecordSerde<T> serde) {
-        RecordsSnapshotWriter.Builder builder = new RecordsSnapshotWriter.Builder()
+        var builder = new RecordsSnapshotWriter.Builder()
             .setRawSnapshotWriter(
                 log.createNewSnapshotUnchecked(Snapshots.BOOTSTRAP_SNAPSHOT_ID).get()
             )

@@ -141,11 +141,11 @@ public class RaftEventSimulationTest {
         @ForAll int seed,
         @ForAll @IntRange(min = 3, max = 5) int numVoters
     ) {
-        Random random = new Random(seed);
-        Cluster cluster = new Cluster(numVoters, 0, random, KRaftVersion.LATEST_PRODUCTION);
-        MessageRouter router = new MessageRouter(cluster);
-        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
-        Set<Integer> expectedVoterIds = new HashSet<>(cluster.initialVoters.keySet());
+        var random = new Random(seed);
+        var cluster = new Cluster(numVoters, 0, random, KRaftVersion.LATEST_PRODUCTION);
+        var router = new MessageRouter(cluster);
+        var scheduler = schedulerWithDefaultInvariants(cluster);
+        var expectedVoterIds = new HashSet<>(cluster.initialVoters.keySet());
 
         initializeClusterAndStartAppending(cluster, router, scheduler, 2);
 
@@ -161,13 +161,13 @@ public class RaftEventSimulationTest {
     void canAddAndRemoveVoters(
         @ForAll int seed
     ) {
-        Random random = new Random(seed);
+        var random = new Random(seed);
         int numVoters = 3;
         int numObservers = 2;
-        Cluster cluster = new Cluster(numVoters, numObservers, random, KRaftVersion.LATEST_PRODUCTION);
-        MessageRouter router = new MessageRouter(cluster);
-        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
-        Set<Integer> expectedVoterIds = new HashSet<>(cluster.initialVoters.keySet());
+        var cluster = new Cluster(numVoters, numObservers, random, KRaftVersion.LATEST_PRODUCTION);
+        var router = new MessageRouter(cluster);
+        var scheduler = schedulerWithDefaultInvariants(cluster);
+        var expectedVoterIds = new HashSet<>(cluster.initialVoters.keySet());
 
         initializeClusterAndStartAppending(cluster, router, scheduler, 10);
 
@@ -339,11 +339,11 @@ public class RaftEventSimulationTest {
         @ForAll @IntRange(min = 1, max = 3) int numObservers
     ) {
         int numVoters = 5;
-        Random random = new Random(seed);
-        Cluster cluster = new Cluster(numVoters, numObservers, random, KRaftVersion.LATEST_PRODUCTION);
-        MessageRouter router = new MessageRouter(cluster);
-        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
-        Set<Integer> expectedVoterIds = new HashSet<>(cluster.initialVoters.keySet());
+        var random = new Random(seed);
+        var cluster = new Cluster(numVoters, numObservers, random, KRaftVersion.LATEST_PRODUCTION);
+        var router = new MessageRouter(cluster);
+        var scheduler = schedulerWithDefaultInvariants(cluster);
+        var expectedVoterIds = new HashSet<>(cluster.initialVoters.keySet());
 
         initializeClusterAndStartAppending(cluster, router, scheduler, 10);
 
@@ -567,11 +567,11 @@ public class RaftEventSimulationTest {
         @ForAll int seed,
         @ForAll @IntRange(min = 3, max = 5) int numVoters
     ) {
-        Random random = new Random(seed);
-        Cluster cluster = new Cluster(numVoters, 1, random, KRaftVersion.LATEST_PRODUCTION);
-        MessageRouter router = new MessageRouter(cluster);
-        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
-        Set<Integer> expectedVoterIds = new HashSet<>(cluster.initialVoters.keySet());
+        var random = new Random(seed);
+        var cluster = new Cluster(numVoters, 1, random, KRaftVersion.LATEST_PRODUCTION);
+        var router = new MessageRouter(cluster);
+        var scheduler = schedulerWithDefaultInvariants(cluster);
+        var expectedVoterIds = new HashSet<>(cluster.initialVoters.keySet());
 
         initializeClusterAndStartAppending(cluster, router, scheduler, 10);
 
@@ -595,11 +595,11 @@ public class RaftEventSimulationTest {
         @ForAll @IntRange(min = 3, max = 5) int numVoters,
         @ForAll @IntRange(min = 0, max = 2) int numObservers
     ) {
-        Random random = new Random(seed);
-        Cluster cluster = new Cluster(numVoters, numObservers, random, KRaftVersion.LATEST_PRODUCTION);
-        MessageRouter router = new MessageRouter(cluster);
-        EventScheduler scheduler = schedulerWithDefaultInvariants(cluster);
-        Set<Integer> expectedVoterIds = new HashSet<>(cluster.initialVoters.keySet());
+        var random = new Random(seed);
+        var cluster = new Cluster(numVoters, numObservers, random, KRaftVersion.LATEST_PRODUCTION);
+        var router = new MessageRouter(cluster);
+        var scheduler = schedulerWithDefaultInvariants(cluster);
+        var expectedVoterIds = new HashSet<>(cluster.initialVoters.keySet());
 
         initializeClusterAndStartAppending(cluster, router, scheduler, 10);
 
@@ -823,11 +823,11 @@ public class RaftEventSimulationTest {
             cluster.withCurrentLeader(leader -> {
                 if (!leader.client.isShuttingDown()) {
                     int nodeId = nodeToRemove.nodeId;
-                    ApiMessage req = RaftUtil.removeVoterRequest(
+                    var req = RaftUtil.removeVoterRequest(
                         cluster.clusterId,
                         ReplicaKey.of(nodeId, cluster.persistentStates.get(nodeId).nodeDirectoryId)
                     );
-                    RaftRequest.Inbound inboundRequest = new RaftRequest.Inbound(
+                    var inboundRequest = new RaftRequest.Inbound(
                         nodeToRemove.channel.listenerName(),
                         nodeToRemove.channel.newCorrelationId(),
                         (short) 0,
@@ -883,7 +883,7 @@ public class RaftEventSimulationTest {
         void scheduleUntil(Runnable action, Supplier<Boolean> exitCondition, int delayMs, int periodMs, int jitterMs) {
             long initialDeadlineMs = time.milliseconds() + delayMs;
             int eventId = eventIdGenerator.incrementAndGet();
-            ScheduledUntilConditionMetEvent event = new ScheduledUntilConditionMetEvent(action, eventId, random, initialDeadlineMs, periodMs, jitterMs, exitCondition);
+            var event = new ScheduledUntilConditionMetEvent(action, eventId, random, initialDeadlineMs, periodMs, jitterMs, exitCondition);
             queue.offer(event);
         }
 
@@ -1035,7 +1035,7 @@ public class RaftEventSimulationTest {
             if (leader.isEmpty()) {
                 return false;
             } else {
-                VoterSet lastCommittedVoterSet = leader.get().log.lastCommittedVoterSet();
+                var lastCommittedVoterSet = leader.get().log.lastCommittedVoterSet();
                 return lastCommittedVoterSet.voterIds().equals(voterIds);
             }
         }
@@ -1306,7 +1306,7 @@ public class RaftEventSimulationTest {
             ApiKeys apiKey = ApiKeys.forId(request.data().apiKey());
             switch (apiKey) {
                 case API_VERSIONS:
-                    ApiMessage apiVersionsResponse = new ApiVersionsResponse.Builder().
+                    ApiVersionsResponseData apiVersionsResponse = new ApiVersionsResponse.Builder().
                         setSupportedFeatures(
                             Features.supportedFeatures(
                                 Collections.singletonMap(
@@ -1320,8 +1320,9 @@ public class RaftEventSimulationTest {
                         ).
                         setApiVersions(new ApiVersionsResponseData.ApiVersionCollection()).
                         setFinalizedFeatures(Collections.emptyMap()).
-                        build().data();
-                    RaftResponse.Outbound apiVersions = new RaftResponse.Outbound(request.correlationId(), apiVersionsResponse);
+                        build().
+                        data();
+                    var apiVersions = new RaftResponse.Outbound(request.correlationId(), apiVersionsResponse);
                     request.completion.complete(apiVersions);
                     break;
                 default:
@@ -1491,10 +1492,10 @@ public class RaftEventSimulationTest {
             * */
             cluster.leaderWithMaxEpoch().ifPresent(leaderNode -> {
                 leaderNode.client.highWatermark().ifPresent(highWatermark -> {
-                    VoterSet voterSet = leaderNode.log.lastVoterSet();
+                    var voterSet = leaderNode.log.lastVoterSet();
                     long numReachedHighWatermark = numReachedHighWatermark(highWatermark, voterSet.voterIds());
                     if (numReachedHighWatermark < RaftTestUtils.majoritySize(voterSet.size())) {
-                        VoterSet otherVoterSet = leaderNode.log.lastCommittedVoterSet();
+                        var otherVoterSet = leaderNode.log.lastCommittedVoterSet();
                         long nodesReachedHighWatermark = numReachedHighWatermark(highWatermark, otherVoterSet.voterIds());
                         assertTrue(
                             nodesReachedHighWatermark >= RaftTestUtils.majoritySize(otherVoterSet.size()),
