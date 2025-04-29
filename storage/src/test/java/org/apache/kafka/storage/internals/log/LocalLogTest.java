@@ -19,7 +19,6 @@ package org.apache.kafka.storage.internals.log;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.compress.Compression;
-import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.record.MemoryRecords;
 import org.apache.kafka.common.record.Record;
