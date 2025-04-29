@@ -142,7 +142,7 @@ public class MockProducer<K, V> implements Producer<K, V> {
     }
 
     @Override
-    public void initTransactions() {
+    public void initTransactions(boolean keepPreparedTxn) {
         verifyNotClosed();
         verifyNotFenced();
         if (this.transactionInitialized) {

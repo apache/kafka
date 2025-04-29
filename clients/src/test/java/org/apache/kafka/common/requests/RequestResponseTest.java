@@ -199,6 +199,7 @@ import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResp
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponsePartitionCollection;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopic;
 import org.apache.kafka.common.message.OffsetDeleteResponseData.OffsetDeleteResponseTopicCollection;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopic;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderTopicCollection;
@@ -276,8 +277,6 @@ import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
 
 import java.nio.BufferUnderflowException;
 import java.nio.ByteBuffer;
@@ -328,6 +327,8 @@ import static org.junit.jupiter.api.Assertions.fail;
 
 // This class performs tests requests and responses for all API keys
 public class RequestResponseTest {
+
+    private static final Uuid TOPIC_ID = Uuid.randomUuid();
 
     // Exception includes a message that we verify is not included in error responses
     private final UnknownServerException unknownServerException = new UnknownServerException("secret");
@@ -663,7 +664,7 @@ public class RequestResponseTest {
         ResponseHeader responseHeader = ResponseHeader.parse(channel.buffer(), responseHeaderVersion);
         assertEquals(correlationId, responseHeader.correlationId());
 
-        assertEquals(fetchResponse.serialize(version), buf);
+        assertEquals(fetchResponse.serialize(version).buffer(), buf);
         FetchResponseData deserialized = new FetchResponseData(new ByteBufferAccessor(buf), version);
         ObjectSerializationCache serializationCache = new ObjectSerializationCache();
         assertEquals(size, responseHeader.size() + deserialized.size(serializationCache, version));
@@ -771,55 +772,6 @@ public class RequestResponseTest {
     }
 
     @Test
-    public void testOffsetFetchRequestBuilderToStringV0ToV7() {
-        List<Boolean> stableFlags = asList(true, false);
-        for (Boolean requireStable : stableFlags) {
-            String allTopicPartitionsString = new OffsetFetchRequest.Builder(
-                "someGroup",
-                requireStable,
-                null,
-                false
-            ).toString();
-
-            assertTrue(allTopicPartitionsString.contains("groupId='', topics=[],"
-                + " groups=[OffsetFetchRequestGroup(groupId='someGroup', memberId=null, memberEpoch=-1, topics=null)], requireStable=" + requireStable));
-            String string = new OffsetFetchRequest.Builder(
-                "group1",
-                requireStable,
-                singletonList(
-                    new TopicPartition("test11", 1)),
-                false
-            ).toString();
-            assertTrue(string.contains("test11"));
-            assertTrue(string.contains("group1"));
-            assertTrue(string.contains("requireStable=" + requireStable));
-        }
-    }
-
-    @ParameterizedTest
-    @ValueSource(booleans = {false, true})
-    public void testOffsetFetchRequestBuilderToStringV8AndAbove(boolean requireStable) {
-        String allTopicPartitionsString = new OffsetFetchRequest.Builder(
-            Collections.singletonMap("someGroup", null),
-            requireStable,
-            false
-        ).toString();
-        assertTrue(allTopicPartitionsString.contains("groups=[OffsetFetchRequestGroup"
-            + "(groupId='someGroup', memberId=null, memberEpoch=-1, topics=null)], requireStable=" + requireStable));
-
-        String subsetTopicPartitionsString = new OffsetFetchRequest.Builder(
-            Collections.singletonMap(
-                "group1",
-                singletonList(new TopicPartition("test11", 1))),
-            requireStable,
-            false
-        ).toString();
-        assertTrue(subsetTopicPartitionsString.contains("test11"));
-        assertTrue(subsetTopicPartitionsString.contains("group1"));
-        assertTrue(subsetTopicPartitionsString.contains("requireStable=" + requireStable));
-    }
-
-    @Test
     public void testApiVersionsRequestBeforeV3Validation() {
         for (short version = 0; version < 3; version++) {
             ApiVersionsRequest request = new ApiVersionsRequest(new ApiVersionsRequestData(), version);
@@ -915,8 +867,8 @@ public class RequestResponseTest {
     @Test
     public void testApiVersionResponseParsingFallback() {
         for (short version : API_VERSIONS.allVersions()) {
-            ByteBuffer buffer = defaultApiVersionsResponse().serialize((short) 0);
-            ApiVersionsResponse response = ApiVersionsResponse.parse(buffer, version);
+            ByteBufferAccessor readable = defaultApiVersionsResponse().serialize((short) 0);
+            ApiVersionsResponse response = ApiVersionsResponse.parse(readable, version);
             assertEquals(Errors.NONE.code(), response.data().errorCode());
         }
     }
@@ -924,15 +876,16 @@ public class RequestResponseTest {
     @Test
     public void testApiVersionResponseParsingFallbackException() {
         for (final short version : API_VERSIONS.allVersions()) {
-            assertThrows(BufferUnderflowException.class, () -> ApiVersionsResponse.parse(ByteBuffer.allocate(0), version));
+            assertThrows(BufferUnderflowException.class,
+                () -> ApiVersionsResponse.parse(new ByteBufferAccessor(ByteBuffer.allocate(0)), version));
         }
     }
 
     @Test
     public void testApiVersionResponseParsing() {
         for (short version : API_VERSIONS.allVersions()) {
-            ByteBuffer buffer = defaultApiVersionsResponse().serialize(version);
-            ApiVersionsResponse response = ApiVersionsResponse.parse(buffer, version);
+            ByteBufferAccessor readable = defaultApiVersionsResponse().serialize(version);
+            ApiVersionsResponse response = ApiVersionsResponse.parse(readable, version);
             assertEquals(Errors.NONE.code(), response.data().errorCode());
         }
     }
@@ -1998,9 +1951,10 @@ public class RequestResponseTest {
         // Check for equality and hashCode of the Struct only if indicated (it is likely to fail if any of the fields
         // in the response is a HashMap with multiple elements since ordering of the elements may vary)
         try {
-            ByteBuffer serializedBytes = response.serialize(version);
-            AbstractResponse deserialized = AbstractResponse.parseResponse(response.apiKey(), serializedBytes, version);
-            ByteBuffer serializedBytes2 = deserialized.serialize(version);
+            ByteBufferAccessor readable = response.serialize(version);
+            ByteBuffer serializedBytes = readable.buffer();
+            AbstractResponse deserialized = AbstractResponse.parseResponse(response.apiKey(), readable, version);
+            ByteBuffer serializedBytes2 = deserialized.serialize(version).buffer();
             serializedBytes.rewind();
             assertEquals(serializedBytes, serializedBytes2, "Response " + response + "failed equality test");
         } catch (Exception e) {
@@ -2401,7 +2355,7 @@ public class RequestResponseTest {
     }
 
     private OffsetCommitRequest createOffsetCommitRequest(short version) {
-        return new OffsetCommitRequest.Builder(new OffsetCommitRequestData()
+        return OffsetCommitRequest.Builder.forTopicNames(new OffsetCommitRequestData()
                 .setGroupId("group1")
                 .setMemberId("consumer1")
                 .setGroupInstanceId(null)
@@ -2409,6 +2363,7 @@ public class RequestResponseTest {
                 .setTopics(singletonList(
                         new OffsetCommitRequestData.OffsetCommitRequestTopic()
                                 .setName("test")
+                                .setTopicId(TOPIC_ID)
                                 .setPartitions(asList(
                                         new OffsetCommitRequestData.OffsetCommitRequestPartition()
                                                 .setPartitionIndex(0)
@@ -2430,6 +2385,7 @@ public class RequestResponseTest {
                 .setTopics(singletonList(
                         new OffsetCommitResponseData.OffsetCommitResponseTopic()
                                 .setName("test")
+                                .setTopicId(TOPIC_ID)
                                 .setPartitions(singletonList(
                                         new OffsetCommitResponseData.OffsetCommitResponsePartition()
                                                 .setPartitionIndex(0)
@@ -2440,66 +2396,83 @@ public class RequestResponseTest {
     }
 
     private OffsetFetchRequest createOffsetFetchRequest(short version, boolean requireStable) {
-        if (version < 8) {
-            return new OffsetFetchRequest.Builder(
-                "group1",
-                requireStable,
-                singletonList(new TopicPartition("test11", 1)),
-                false)
-                .build(version);
-        }
         return new OffsetFetchRequest.Builder(
-                Collections.singletonMap(
-                "group1",
-                singletonList(new TopicPartition("test11", 1))),
-            requireStable,
-            false)
-            .build(version);
+            new OffsetFetchRequestData()
+                .setRequireStable(requireStable)
+                .setGroups(List.of(
+                    new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                        .setGroupId("group1")
+                        .setMemberId(version >= 9 ? "memberid" : null)
+                        .setMemberEpoch(version >= 9 ? 10 : -1)
+                        .setTopics(List.of(
+                            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                                .setName("test11")
+                                .setPartitionIndexes(List.of(1))
+                        ))
+                )),
+            false
+        ).build(version);
     }
 
     private OffsetFetchRequest createOffsetFetchRequestWithMultipleGroups(short version, boolean requireStable) {
-        Map<String, List<TopicPartition>> groupToPartitionMap = new HashMap<>();
-        List<TopicPartition> topic1 = singletonList(
-            new TopicPartition("topic1", 0));
-        List<TopicPartition> topic2 = asList(
-            new TopicPartition("topic1", 0),
-            new TopicPartition("topic2", 0),
-            new TopicPartition("topic2", 1));
-        List<TopicPartition> topic3 = asList(
-            new TopicPartition("topic1", 0),
-            new TopicPartition("topic2", 0),
-            new TopicPartition("topic2", 1),
-            new TopicPartition("topic3", 0),
-            new TopicPartition("topic3", 1),
-            new TopicPartition("topic3", 2));
-        groupToPartitionMap.put("group1", topic1);
-        groupToPartitionMap.put("group2", topic2);
-        groupToPartitionMap.put("group3", topic3);
-        groupToPartitionMap.put("group4", null);
-        groupToPartitionMap.put("group5", null);
-
         return new OffsetFetchRequest.Builder(
-            groupToPartitionMap,
-            requireStable,
+            new OffsetFetchRequestData()
+                .setRequireStable(requireStable)
+                .setGroups(List.of(
+                    new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                        .setGroupId("group1")
+                        .setTopics(List.of(
+                            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                                .setName("topic1")
+                                .setPartitionIndexes(List.of(0))
+                        )),
+                    new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                        .setGroupId("group2")
+                        .setTopics(List.of(
+                            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                                .setName("topic1")
+                                .setPartitionIndexes(List.of(0)),
+                            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                                .setName("topic2")
+                                .setPartitionIndexes(List.of(0, 1))
+                        )),
+                    new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                        .setGroupId("group3")
+                        .setTopics(List.of(
+                            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                                .setName("topic1")
+                                .setPartitionIndexes(List.of(0)),
+                            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                                .setName("topic2")
+                                .setPartitionIndexes(List.of(0, 1)),
+                            new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                                .setName("topic3")
+                                .setPartitionIndexes(List.of(0, 1, 2))
+                        )),
+                    new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                        .setGroupId("group4")
+                        .setTopics(null),
+                    new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                        .setGroupId("group5")
+                        .setTopics(null)
+                )),
             false
         ).build(version);
     }
 
     private OffsetFetchRequest createOffsetFetchRequestForAllPartition(short version, boolean requireStable) {
-        if (version < 8) {
-            return new OffsetFetchRequest.Builder(
-                "group1",
-                requireStable,
-                null,
-                false)
-                .build(version);
-        }
         return new OffsetFetchRequest.Builder(
-            Collections.singletonMap(
-                "group1", null),
-            requireStable,
-            false)
-            .build(version);
+            new OffsetFetchRequestData()
+                .setRequireStable(requireStable)
+                .setGroups(List.of(
+                    new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                        .setGroupId("group1")
+                        .setMemberId(version >= 9 ? "memberid" : null)
+                        .setMemberEpoch(version >= 9 ? 10 : -1)
+                        .setTopics(null)
+                )),
+            false
+        ).build(version);
     }
 
     private OffsetFetchResponse createOffsetFetchResponse(short version) {
@@ -3785,8 +3758,7 @@ public class RequestResponseTest {
         DeleteShareGroupOffsetsRequestData data = new DeleteShareGroupOffsetsRequestData()
             .setGroupId("group")
             .setTopics(List.of(new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
-                .setTopicName("topic-1")
-                .setPartitions(List.of(0))));
+                .setTopicName("topic-1")));
         return new DeleteShareGroupOffsetsRequest.Builder(data).build(version);
     }
 
@@ -3821,9 +3793,7 @@ public class RequestResponseTest {
             .setResponses(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
                 .setTopicName("topic-1")
                 .setTopicId(Uuid.randomUuid())
-                .setPartitions(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
-                    .setPartitionIndex(0)
-                    .setErrorCode(Errors.NONE.code())))));
+                .setErrorCode(Errors.NONE.code())));
         return new DeleteShareGroupOffsetsResponse(data);
     }
 

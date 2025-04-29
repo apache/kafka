@@ -21,10 +21,9 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.InitializeShareGroupStateRequestData;
 import org.apache.kafka.common.message.InitializeShareGroupStateResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.EnumMap;
 import java.util.List;
@@ -64,9 +63,9 @@ public class InitializeShareGroupStateResponse extends AbstractResponse {
         // No op
     }
 
-    public static InitializeShareGroupStateResponse parse(ByteBuffer buffer, short version) {
+    public static InitializeShareGroupStateResponse parse(Readable readable, short version) {
         return new InitializeShareGroupStateResponse(
-            new InitializeShareGroupStateResponseData(new ByteBufferAccessor(buffer), version)
+            new InitializeShareGroupStateResponseData(readable, version)
         );
     }
 

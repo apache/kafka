@@ -127,6 +127,11 @@ public class SnapshotEmitterTest {
         }
 
         @Override
+        public void upgradeKRaftVersion(int epoch, KRaftVersion version, boolean validateOnly) {
+            // nothing to do
+        }
+
+        @Override
         public void close() throws Exception {
             // nothing to do
         }

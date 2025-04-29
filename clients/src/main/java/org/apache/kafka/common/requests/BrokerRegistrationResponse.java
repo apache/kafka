@@ -19,10 +19,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.BrokerRegistrationResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.EnumMap;
 import java.util.Map;
 
@@ -56,8 +55,8 @@ public class BrokerRegistrationResponse extends AbstractResponse {
         return errorCounts;
     }
 
-    public static BrokerRegistrationResponse parse(ByteBuffer buffer, short version) {
-        return new BrokerRegistrationResponse(new BrokerRegistrationResponseData(new ByteBufferAccessor(buffer), version));
+    public static BrokerRegistrationResponse parse(Readable readable, short version) {
+        return new BrokerRegistrationResponse(new BrokerRegistrationResponseData(readable, version));
     }
 
     @Override
