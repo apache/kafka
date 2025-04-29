@@ -63,6 +63,7 @@ public class MockLog implements ReplicatedLog {
     private final List<EpochStartOffset> epochStartOffsets = new ArrayList<>();
     private final List<LogBatch> batches = new ArrayList<>();
     private final NavigableMap<OffsetAndEpoch, MockRawSnapshotReader> snapshots = new TreeMap<>();
+    private final NavigableMap<Long, VoterSet> voterSets = new TreeMap<>();
     private final TopicPartition topicPartition;
     private final Uuid topicId;
     private final Logger logger;
@@ -71,11 +72,6 @@ public class MockLog implements ReplicatedLog {
     private LogOffsetMetadata highWatermark = new LogOffsetMetadata(0, Optional.empty());
     private long firstUnflushedOffset = 0;
     private boolean flushedSinceLastChecked = false;
-    // These are used to mock the internal partition state listener for simulation testing.
-    private VoterSet lastCommittedVoterSet;
-    private long lastCommittedVoterSetOffset;
-    private VoterSet lastVoterSet;
-    private long lastVoterSetOffset;
 
     public MockLog(
         TopicPartition topicPartition,
@@ -88,10 +84,7 @@ public class MockLog implements ReplicatedLog {
     }
 
     public void setInitialVoterSet(VoterSet voters) {
-        this.lastCommittedVoterSet = voters;
-        this.lastCommittedVoterSetOffset = -1;
-        this.lastVoterSet = voters;
-        this.lastVoterSetOffset = -1;
+        voterSets.put(-1L, voters);
     }
 
     @Override
@@ -105,10 +98,7 @@ public class MockLog implements ReplicatedLog {
         batches.removeIf(entry -> entry.lastOffset() >= offset);
         epochStartOffsets.removeIf(epochStartOffset -> epochStartOffset.startOffset >= offset);
         firstUnflushedOffset = Math.min(firstUnflushedOffset, endOffset().offset());
-        if (lastVoterSetOffset >= offset) {
-            lastVoterSet = lastCommittedVoterSet;
-            lastVoterSetOffset = lastCommittedVoterSetOffset;
-        }
+        voterSets.tailMap(offset, true).clear();
     }
 
     @Override
@@ -122,20 +112,16 @@ public class MockLog implements ReplicatedLog {
                 logger.debug("Truncating to the latest snapshot at {}", snapshotId);
 
                 batches.clear();
+                voterSets.clear();
                 epochStartOffsets.clear();
                 snapshots.headMap(snapshotId, false).clear();
                 snapshots.get(snapshotId).records().batches().forEach(batch -> {
                     if (batch.isControlBatch()) {
                         Iterator<Record> recordIterator = batch.iterator();
                         while (recordIterator.hasNext()) {
-                            Record record = recordIterator.next();
-                            ControlRecordType type = ControlRecordType.parse(record.key());
-                            if (type == ControlRecordType.KRAFT_VOTERS) {
-                                VoterSet voters = VoterSet.fromVotersRecord(ControlRecordUtils.deserializeVotersRecord(record.value()));
-                                lastVoterSet = voters;
-                                lastVoterSetOffset = batch.lastOffset();
-                                lastCommittedVoterSet = voters;
-                                lastCommittedVoterSetOffset = batch.lastOffset();
+                            var record = recordIterator.next();
+                            if (ControlRecordType.parse(record.key()) == ControlRecordType.KRAFT_VOTERS) {
+                                voterSets.put(record.offset(), VoterSet.fromVotersRecord(ControlRecordUtils.deserializeVotersRecord(record.value())));
                             }
                         }
                     }
@@ -165,10 +151,6 @@ public class MockLog implements ReplicatedLog {
 
         assertValidHighWatermarkMetadata(offsetMetadata);
         this.highWatermark = offsetMetadata;
-        if (this.highWatermark.offset() > lastVoterSetOffset) {
-            lastCommittedVoterSet = lastVoterSet;
-            lastCommittedVoterSetOffset = lastVoterSetOffset;
-        }
     }
 
     @Override
@@ -392,9 +374,9 @@ public class MockLog implements ReplicatedLog {
                 for (LogEntry entry : logBatch.entries) {
                     ControlRecordType type = ControlRecordType.parse(entry.record.key());
                     if (type == ControlRecordType.KRAFT_VOTERS) {
-                        lastVoterSet = VoterSet.fromVotersRecord(ControlRecordUtils.deserializeVotersRecord(entry.record.value()));
+                        var newVoters = VoterSet.fromVotersRecord(ControlRecordUtils.deserializeVotersRecord(entry.record.value()));
                         // Set the offset to be the last offset of the batch since this is what we check during truncation
-                        lastVoterSetOffset = logBatch.lastOffset();
+                        voterSets.put(logBatch.lastOffset(), newVoters);
                     }
                 }
             }
@@ -676,11 +658,11 @@ public class MockLog implements ReplicatedLog {
     }
 
     public VoterSet lastVoterSet() {
-        return lastVoterSet;
+        return voterSets.lastEntry().getValue();
     }
 
     public VoterSet lastCommittedVoterSet() {
-        return lastCommittedVoterSet;
+        return voterSets.floorEntry(highWatermark.offset() - 1).getValue();
     }
 
     static class MockOffsetMetadata implements OffsetMetadata {

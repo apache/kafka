@@ -112,11 +112,11 @@ public class MockLogTest {
     @Test
     public void testTruncationToWithVoterSetRecord() {
         int epoch = 2;
-        VoterSet initialVoters = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(0, 1, 2), true));
+        var initialVoters = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(0, 1, 2), true));
         log.setInitialVoterSet(initialVoters);
 
         appendBatch(2, epoch);
-        VoterSet newVoters = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(0, 1, 2, 3), true));
+        var newVoters = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(0, 1, 2, 3), true));
         appendVoterSetRecord(newVoters, epoch);
         appendBatch(2, epoch);
 
@@ -142,17 +142,27 @@ public class MockLogTest {
     public void testTruncationToLatestSnapshotWithVoterSetRecord() {
         int numberOfRecords = 10;
         int epoch = 1;
-        OffsetAndEpoch snapshotId = new OffsetAndEpoch(2 * numberOfRecords, epoch);
-        VoterSet initialVoters = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(0, 1, 2), true));
+        var snapshotId = new OffsetAndEpoch(2 * numberOfRecords, epoch);
+        var initialVoters = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(0, 1, 2), true));
         log.setInitialVoterSet(initialVoters);
 
         appendBatch(numberOfRecords - 1, epoch);
-        VoterSet snapshotVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(0, 1, 2, 3), true));
+        var snapshotVoterSet = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(0, 1, 2, 3), true));
         appendVoterSetRecord(snapshotVoterSet, epoch);
         assertEquals(snapshotVoterSet, log.lastVoterSet());
         assertEquals(initialVoters, log.lastCommittedVoterSet());
 
         try (RawSnapshotWriter snapshot = log.createNewSnapshotUnchecked(snapshotId).get()) {
+            var bufferSupplier = BufferSupplier.NO_CACHING;
+            snapshot.append(
+                MemoryRecords.withVotersRecord(
+                    log.endOffset().offset(),
+                    0,
+                    epoch,
+                    bufferSupplier.get(300),
+                    snapshotVoterSet.toVotersRecord((short) 0)
+                )
+            );
             snapshot.freeze();
         }
 
@@ -186,24 +196,24 @@ public class MockLogTest {
     @Test
     public void testUpdateHighWatermarkWithVoterSetRecord() {
         int epoch = 1;
-        VoterSet initialVoters = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(0, 1, 2), true));
+        var initialVoters = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(0, 1, 2), true));
         log.setInitialVoterSet(initialVoters);
 
         appendBatch(5, epoch);
-        VoterSet newVoters = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(0, 1, 2, 3), true));
+        var newVoters = VoterSetTest.voterSet(VoterSetTest.voterMap(IntStream.of(0, 1, 2, 3), true));
         appendVoterSetRecord(newVoters, epoch);
 
         assertEquals(0, log.highWatermark().offset());
         assertEquals(newVoters, log.lastVoterSet());
         assertEquals(initialVoters, log.lastCommittedVoterSet());
 
-        LogOffsetMetadata newOffset = new LogOffsetMetadata(5L);
+        var newOffset = new LogOffsetMetadata(5L);
         log.updateHighWatermark(newOffset);
         assertEquals(newOffset.offset(), log.highWatermark().offset());
         assertEquals(newVoters, log.lastVoterSet());
         assertEquals(initialVoters, log.lastCommittedVoterSet());
 
-        LogOffsetMetadata endOffset = log.endOffset();
+        var endOffset = log.endOffset();
         log.updateHighWatermark(endOffset);
         assertEquals(endOffset.offset(), log.highWatermark().offset());
         assertEquals(newVoters, log.lastVoterSet());
