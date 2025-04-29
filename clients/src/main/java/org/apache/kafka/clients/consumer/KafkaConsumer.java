@@ -1781,7 +1781,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * <p>
      * Close the consumer with {@link CloseOptions.GroupMembershipOperation#DEFAULT default leave group behavior}
      * cleanly within the specified timeout. This method waits up to
-     * {@code timeout} for the consumer to complete pending commits and maybe leaves the group (if the member is dynamic).
+     * {@code timeout} for the consumer to complete pending commits and maybe leave the group (if the member is dynamic).
      * If auto-commit is enabled, this will commit the current offsets if possible within the
      * timeout. If the consumer is unable to complete offset commits and to gracefully leave the group (if applicable)
      * before the timeout expires, the consumer is force closed. Note that {@link #wakeup()} cannot be
@@ -1814,7 +1814,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * If no leave group behavior is specified, the {@link CloseOptions.GroupMembershipOperation#DEFAULT default
      * leave group behavior} is used.
      * <p>
-     * This method waits up to the timeout for the consumer to complete pending commits and maybe leaves the group,
+     * This method waits up to the timeout for the consumer to complete pending commits and maybe leave the group,
      * depending on the specified leave group behavior.
      * If auto-commit is enabled, this will commit the current offsets if possible within the
      * timeout. If the consumer is unable to complete offset commits and to gracefully leave the group (if applicable)
