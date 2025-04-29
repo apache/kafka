@@ -72,7 +72,8 @@ object LogTestUtils {
                       fileDeleteDelayMs: Long = ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT,
                       remoteLogStorageEnable: Boolean = LogConfig.DEFAULT_REMOTE_STORAGE_ENABLE,
                       remoteLogCopyDisable: Boolean = DEFAULT_REMOTE_LOG_COPY_DISABLE_CONFIG,
-                      remoteLogDeleteOnDisable: Boolean = DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE_CONFIG): LogConfig = {
+                      remoteLogDeleteOnDisable: Boolean = DEFAULT_REMOTE_LOG_DELETE_ON_DISABLE_CONFIG,
+                      internalSegmentBytes : Integer = null): LogConfig = {
     val logProps = new Properties()
     logProps.put(TopicConfig.SEGMENT_MS_CONFIG, segmentMs: java.lang.Long)
     logProps.put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, segmentBytes: Integer)
@@ -89,7 +90,7 @@ object LogTestUtils {
     logProps.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, remoteLogStorageEnable: java.lang.Boolean)
     logProps.put(TopicConfig.REMOTE_LOG_COPY_DISABLE_CONFIG, remoteLogCopyDisable: java.lang.Boolean)
     logProps.put(TopicConfig.REMOTE_LOG_DELETE_ON_DISABLE_CONFIG, remoteLogDeleteOnDisable: java.lang.Boolean)
-    new LogConfig(logProps)
+    new LogConfig(logProps, internalSegmentBytes)
   }
 
   def createLog(dir: File,

@@ -403,7 +403,7 @@ public class LogConfig extends AbstractConfig {
 
     public int initFileSize() {
         if (preallocate)
-            return segmentSize;
+            return segmentSize();
         else
             return 0;
     }
@@ -437,15 +437,19 @@ public class LogConfig extends AbstractConfig {
         return ConfigUtils.configMapToRedactedString(overriddenTopicProps, CONFIG);
     }
 
-    /**
-     * Create a log config instance using the given properties and defaults
-     */
-    public static LogConfig fromProps(Map<?, ?> defaults, Properties overrides) {
+    public static LogConfig fromProps(Map<?, ?> defaults, Properties overrides, Integer internalLogSegmentSize) {
         Properties props = new Properties();
         props.putAll(defaults);
         props.putAll(overrides);
         Set<String> overriddenKeys = overrides.keySet().stream().map(k -> (String) k).collect(Collectors.toSet());
-        return new LogConfig(props, overriddenKeys);
+        return new LogConfig(props, overriddenKeys, internalLogSegmentSize);
+    }
+
+    /**
+     * Create a log config instance using the given properties and defaults
+     */
+    public static LogConfig fromProps(Map<?, ?> defaults, Properties overrides) {
+        return fromProps(defaults, overrides, null);
     }
 
     // Visible for testing, return a copy since it's a mutable global variable
@@ -643,7 +647,7 @@ public class LogConfig extends AbstractConfig {
     @Override
     public String toString() {
         return "LogConfig{" +
-                "segmentSize=" + segmentSize +
+                "segmentSize=" + segmentSize() +
                 ", segmentMs=" + segmentMs +
                 ", segmentJitterMs=" + segmentJitterMs +
                 ", maxIndexSize=" + maxIndexSize +

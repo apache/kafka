@@ -582,7 +582,7 @@ class LogManager(logDirs: Seq[File],
       val overrides = configRepository.topicConfig(topicName)
       // save memory by only including configs for topics with overrides
       if (!overrides.isEmpty) {
-        val logConfig = LogConfig.fromProps(defaultProps, overrides)
+        val logConfig = LogConfig.fromProps(defaultProps, overrides, defaultConfig.segmentSize())
         topicConfigOverrides(topicName) = logConfig
       }
     }

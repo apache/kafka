@@ -27,7 +27,6 @@ import org.apache.kafka.common.{DirectoryId, KafkaException, TopicPartition, Uui
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.metadata.{ConfigRepository, MockConfigRepository}
 import org.apache.kafka.metadata.properties.{MetaProperties, MetaPropertiesEnsemble, MetaPropertiesVersion, PropertiesUtils}
-import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
 import org.mockito.ArgumentMatchers.any
@@ -61,10 +60,9 @@ class LogManagerTest {
   val maxRollInterval = 100
   val maxLogAgeMs: Int = 10 * 60 * 1000
   val logProps = new Properties()
-  logProps.put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
   logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 4096: java.lang.Integer)
   logProps.put(TopicConfig.RETENTION_MS_CONFIG, maxLogAgeMs: java.lang.Integer)
-  val logConfig = new LogConfig(logProps)
+  val logConfig = new LogConfig(logProps, 1024)
   var logDir: File = _
   var logManager: LogManager = _
   val name = "kafka"
@@ -392,11 +390,17 @@ class LogManagerTest {
     logManager.shutdown()
     val segmentBytes = 10 * setSize
     val properties = new Properties()
-    properties.put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, segmentBytes.toString)
     properties.put(TopicConfig.RETENTION_BYTES_CONFIG, (5L * 10L * setSize + 10L).toString)
     val configRepository = MockConfigRepository.forTopic(name, properties)
 
-    logManager = createLogManager(configRepository = configRepository)
+    logManager = TestUtils.createLogManager(
+      defaultConfig = new LogConfig(logProps, segmentBytes),
+      configRepository = configRepository,
+      logDirs = Seq(this.logDir),
+      time = this.time,
+      recoveryThreadsPerDataDir = 1,
+      initialTaskDelayMs = initialTaskDelayMs
+    )
     logManager.startup(Set.empty)
 
     // create a log
@@ -450,7 +454,14 @@ class LogManagerTest {
     logManager.shutdown()
     val configRepository = MockConfigRepository.forTopic(name, TopicConfig.CLEANUP_POLICY_CONFIG, policy)
 
-    logManager = createLogManager(configRepository = configRepository)
+    logManager = TestUtils.createLogManager(
+      defaultConfig = new LogConfig(logProps, 1024),
+      configRepository = configRepository,
+      logDirs = Seq(this.logDir),
+      time = this.time,
+      recoveryThreadsPerDataDir = 1,
+      initialTaskDelayMs = initialTaskDelayMs
+    )
     val log = logManager.getOrCreateLog(new TopicPartition(name, 0), topicId = Optional.empty)
     var offset = 0L
     for (_ <- 0 until 200) {

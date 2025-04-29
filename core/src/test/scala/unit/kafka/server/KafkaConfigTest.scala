@@ -815,6 +815,7 @@ class KafkaConfigTest {
         case ServerLogConfigs.LOG_DIRS_CONFIG => // ignore string
         case ServerLogConfigs.LOG_DIR_CONFIG => // ignore string
         case ServerLogConfigs.LOG_SEGMENT_BYTES_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", Records.LOG_OVERHEAD - 1)
+        case ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG => // no op
 
         case ServerLogConfigs.LOG_ROLL_TIME_MILLIS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
         case ServerLogConfigs.LOG_ROLL_TIME_HOURS_CONFIG => assertPropertyInvalid(baseProperties, name, "not_a_number", "0")
