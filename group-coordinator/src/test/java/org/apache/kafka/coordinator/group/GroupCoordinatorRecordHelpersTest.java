@@ -45,6 +45,7 @@ import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitKey;
 import org.apache.kafka.coordinator.group.generated.OffsetCommitValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataKey;
+import org.apache.kafka.coordinator.group.generated.ShareGroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataKey;
 import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.coordinator.group.modern.MemberState;
@@ -84,6 +85,7 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentEpochTombstoneRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newConsumerGroupTargetAssignmentTombstoneRecord;
+import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochRecord;
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupEpochTombstoneRecord;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -251,13 +253,15 @@ public class GroupCoordinatorRecordHelpersTest {
                 .setGroupId("group-id"),
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue()
-                    .setEpoch(10),
+                    .setEpoch(10)
+                    .setMetadataHash(10),
                 (short) 0
             )
         );
 
         assertEquals(expectedRecord, newConsumerGroupEpochRecord(
             "group-id",
+            10,
             10
         ));
     }
@@ -853,6 +857,26 @@ public class GroupCoordinatorRecordHelpersTest {
         );
 
         assertEquals(expectedRecord, record);
+    }
+
+    @Test
+    public void testNewShareGroupEpochRecord() {
+        CoordinatorRecord expectedRecord = CoordinatorRecord.record(
+            new ShareGroupMetadataKey()
+                .setGroupId("group-id"),
+            new ApiMessageAndVersion(
+                new ShareGroupMetadataValue()
+                    .setEpoch(10)
+                    .setMetadataHash(10),
+                (short) 0
+            )
+        );
+
+        assertEquals(expectedRecord, newShareGroupEpochRecord(
+            "group-id",
+            10,
+            10
+        ));
     }
 
     /**
