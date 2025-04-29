@@ -876,7 +876,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def test(groupProtocol: String): Unit = {
+  def testBeginningAndEndOffsetsWhenTimeoutZero(groupProtocol: String): Unit = {
     val consumer = createConsumer()
     val result1 = consumer.beginningOffsets(util.List.of(tp), Duration.ZERO)
     assertNotNull(result1)
