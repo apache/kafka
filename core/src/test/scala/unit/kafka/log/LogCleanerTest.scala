@@ -57,10 +57,9 @@ class LogCleanerTest extends Logging {
   val tmpdir = TestUtils.tempDir()
   val dir = TestUtils.randomPartitionLogDir(tmpdir)
   val logProps = new Properties()
-  logProps.put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
   logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 1024: java.lang.Integer)
   logProps.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
-  val logConfig = new LogConfig(logProps)
+  val logConfig = new LogConfig(logProps, 1024)
   val time = new MockTime()
   val throttler = new Throttler(Double.MaxValue, Long.MaxValue, "throttler", "entries", time)
   val tombstoneRetentionMs = 86400000
@@ -149,9 +148,8 @@ class LogCleanerTest extends Logging {
   def testCleanSegments(): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
 
-    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps, 1024))
 
     // append messages to the log until we have four segments
     while (log.numberOfSegments < 4)
@@ -995,9 +993,8 @@ class LogCleanerTest extends Logging {
   def testCleaningWithDeletes(): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
 
-    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps, 1024))
 
     // append messages with the keys 0 through N
     while (log.numberOfSegments < 2)
@@ -1244,8 +1241,7 @@ class LogCleanerTest extends Logging {
   def testLogToCleanWithUncleanableSection(): Unit = {
     // create a log with small segment size
     val logProps = new Properties()
-    logProps.put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, 100: java.lang.Integer)
-    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps))
+    val log = makeLog(config = LogConfig.fromProps(logConfig.originals, logProps, 100))
 
     // create 6 segments with only one message in each segment
     def createRecords = TestUtils.singletonRecords(value = Array.fill[Byte](25)(0), key = 1.toString.getBytes)
@@ -1667,11 +1663,10 @@ class LogCleanerTest extends Logging {
   def testRecoveryAfterCrash(): Unit = {
     val cleaner = makeCleaner(Int.MaxValue)
     val logProps = new Properties()
-    logProps.put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, 300: java.lang.Integer)
     logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, 1: java.lang.Integer)
     logProps.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, 10: java.lang.Integer)
 
-    val config = LogConfig.fromProps(logConfig.originals, logProps)
+    val config = LogConfig.fromProps(logConfig.originals, logProps, 300)
 
    // create a log and append some messages
     var log = makeLog(config = config)

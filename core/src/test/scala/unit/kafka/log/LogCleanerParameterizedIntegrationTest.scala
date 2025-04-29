@@ -156,7 +156,7 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
     val log = cleaner.logs.get(topicPartitions(0))
     val props = logConfigProperties(maxMessageSize = maxMessageSize)
     props.put(TopicConfig.MESSAGE_TIMESTAMP_TYPE_CONFIG, TimestampType.LOG_APPEND_TIME.name)
-    val logConfig = new LogConfig(props)
+    val logConfig = new LogConfig(props, 2048)
     log.updateConfig(logConfig)
 
     val appends1 = writeDups(numKeys = 100, numDups = 3, log = log, codec = compression, magicValue = RecordBatch.MAGIC_VALUE_V0)
@@ -198,10 +198,10 @@ class LogCleanerParameterizedIntegrationTest extends AbstractLogCleanerIntegrati
   def testCleaningNestedMessagesWithV0V1(compressionType: CompressionType): Unit = {
     val compression = Compression.of(compressionType).build()
     val maxMessageSize = 192
-    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize, segmentSize = 256)
+    cleaner = makeCleaner(partitions = topicPartitions, maxMessageSize = maxMessageSize, internalSegmentSize = 256)
 
     val log = cleaner.logs.get(topicPartitions(0))
-    val logConfig = new LogConfig(logConfigProperties(maxMessageSize = maxMessageSize, segmentSize = 256))
+    val logConfig = new LogConfig(logConfigProperties(maxMessageSize = maxMessageSize), 256)
     log.updateConfig(logConfig)
 
     // with compression enabled, these messages will be written as a single message containing all the individual messages

@@ -24,7 +24,6 @@ import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, RecordVersion}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.util.MockTime
 import org.apache.kafka.storage.internals.log.{CleanerConfig, LogCleaner, LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
@@ -68,11 +67,9 @@ abstract class AbstractLogCleanerIntegrationTest {
                           minCleanableDirtyRatio: Float = defaultMinCleanableDirtyRatio,
                           minCompactionLagMs: Long = defaultMinCompactionLagMS,
                           deleteDelay: Int = defaultDeleteDelay,
-                          segmentSize: Int = defaultSegmentSize,
                           maxCompactionLagMs: Long = defaultMaxCompactionLagMs): Properties = {
     val props = new Properties()
     props.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageSize: java.lang.Integer)
-    props.put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, segmentSize: java.lang.Integer)
     props.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 100*1024: java.lang.Integer)
     props.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, deleteDelay: java.lang.Integer)
     props.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
@@ -90,7 +87,7 @@ abstract class AbstractLogCleanerIntegrationTest {
                   maxMessageSize: Int = defaultMaxMessageSize,
                   minCompactionLagMs: Long = defaultMinCompactionLagMS,
                   deleteDelay: Int = defaultDeleteDelay,
-                  segmentSize: Int = defaultSegmentSize,
+                  internalSegmentSize: Int = defaultSegmentSize,
                   maxCompactionLagMs: Long = defaultMaxCompactionLagMs,
                   cleanerIoBufferSize: Option[Int] = None,
                   propertyOverrides: Properties = new Properties()): LogCleaner = {
@@ -105,8 +102,7 @@ abstract class AbstractLogCleanerIntegrationTest {
         minCleanableDirtyRatio = minCleanableDirtyRatio,
         minCompactionLagMs = minCompactionLagMs,
         deleteDelay = deleteDelay,
-        segmentSize = segmentSize,
-        maxCompactionLagMs = maxCompactionLagMs))
+        maxCompactionLagMs = maxCompactionLagMs), internalSegmentSize)
       val log = UnifiedLog.create(
         dir,
         logConfig,

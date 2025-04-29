@@ -52,7 +52,7 @@ class LogCleanerLagIntegrationTest extends AbstractLogCleanerIntegrationTest wit
     cleaner = makeCleaner(partitions = topicPartitions,
       backoffMs = cleanerBackOffMs,
       minCompactionLagMs = minCompactionLag,
-      segmentSize = segmentSize)
+      internalSegmentSize = segmentSize)
     val log = cleaner.logs.get(topicPartitions(0))
 
     // t = T0
