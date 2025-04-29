@@ -29,6 +29,7 @@ class BaseStreamsTest(Test):
     see tests/kafkatest/tests/kafka_test.py for more info
     """
     def __init__(self, test_context, topics, num_controllers=1, num_brokers=3):
+        super(BaseStreamsTest, self).__init__(test_context = test_context)
         self.num_controllers = num_controllers
         self.num_brokers = num_brokers
         self.topics = topics
