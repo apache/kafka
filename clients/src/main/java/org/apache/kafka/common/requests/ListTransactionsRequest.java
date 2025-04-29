@@ -39,7 +39,7 @@ public class ListTransactionsRequest extends AbstractRequest {
                         " If client is connected to an older broker, do not specify duration filter or set duration filter to -1.");
             }
             if (data.transactionalIdPattern() != null && version < 2) {
-                throw new UnsupportedVersionException("Transactional ID pattern filter can be set only when using API version 1 or higher." +
+                throw new UnsupportedVersionException("Transactional ID pattern filter can be set only when using API version 2 or higher." +
                     " If client is connected to an older broker, do not specify the pattern filter.");
             }
             return new ListTransactionsRequest(data, version);
