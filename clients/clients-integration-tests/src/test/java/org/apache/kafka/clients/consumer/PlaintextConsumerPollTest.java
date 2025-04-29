@@ -64,7 +64,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 @ClusterTestDefaults(
     types = {Type.KRAFT},
-    brokers = PlaintextConsumerFetchTest.BROKER_COUNT,
+    brokers = PlaintextConsumerPollTest.BROKER_COUNT,
     serverProperties = {
         @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
         @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "3"),
