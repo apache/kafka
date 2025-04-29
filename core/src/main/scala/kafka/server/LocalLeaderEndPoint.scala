@@ -35,7 +35,7 @@ import org.apache.kafka.server.storage.log.{FetchIsolation, FetchParams, FetchPa
 
 import java.util
 import java.util.Optional
-import scala.collection.{Map, Seq, Set, mutable}
+import scala.collection.{Map, Seq, mutable}
 import scala.jdk.CollectionConverters._
 
 /**
@@ -64,7 +64,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
 
   override def brokerEndPoint(): BrokerEndPoint = sourceBroker
 
-  override def fetch(fetchRequest: FetchRequest.Builder): collection.Map[TopicPartition, FetchResponseData.PartitionData] = {
+  override def fetch(fetchRequest: FetchRequest.Builder): java.util.Map[TopicPartition, FetchResponseData.PartitionData] = {
     var partitionData: Seq[(TopicPartition, FetchResponseData.PartitionData)] = null
     val request = fetchRequest.build()
 
@@ -77,7 +77,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
 
     def processResponseCallback(responsePartitionData: Seq[(TopicIdPartition, FetchPartitionData)]): Unit = {
       partitionData = responsePartitionData.map { case (tp, data) =>
-        val abortedTransactions =  data.abortedTransactions.orElse(null)
+        val abortedTransactions = data.abortedTransactions.orElse(null)
         val lastStableOffset: Long = data.lastStableOffset.orElse(FetchResponse.INVALID_LAST_STABLE_OFFSET)
         tp.topicPartition -> new FetchResponseData.PartitionData()
           .setPartitionIndex(tp.topicPartition.partition)
@@ -111,8 +111,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
 
     if (partitionData == null)
       throw new IllegalStateException(s"Failed to fetch data for partitions ${fetchData.keySet().toArray.mkString(",")}")
-
-    partitionData.toMap
+    partitionData.toMap.asJava
   }
 
   override def fetchEarliestOffset(topicPartition: TopicPartition, currentLeaderEpoch: Int): OffsetAndEpoch = {
