@@ -8242,16 +8242,30 @@ class KafkaApisTest extends Logging {
   @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
   def testHandleOffsetFetchWithMultipleGroups(version: Short): Unit = {
     def makeRequest(version: Short): RequestChannel.Request = {
-      val groups = Map(
-        "group-1" -> List(
-          new TopicPartition("foo", 0),
-          new TopicPartition("foo", 1)
-        ).asJava,
-        "group-2" -> null,
-        "group-3" -> null,
-        "group-4" -> null,
-      ).asJava
-      buildRequest(new OffsetFetchRequest.Builder(groups, false, false).build(version))
+      buildRequest(
+        new OffsetFetchRequest.Builder(
+          new OffsetFetchRequestData()
+            .setGroups(List(
+              new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group-1")
+                .setTopics(List(
+                  new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName("foo")
+                    .setPartitionIndexes(List[Integer](0, 1).asJava)
+                ).asJava),
+              new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group-2")
+                .setTopics(null),
+              new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group-3")
+                .setTopics(null),
+              new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group-4")
+                .setTopics(null),
+            ).asJava),
+          false
+        ).build(version)
+      )
     }
 
     if (version < 8) {
@@ -8364,12 +8378,17 @@ class KafkaApisTest extends Logging {
   def testHandleOffsetFetchWithSingleGroup(version: Short): Unit = {
     def makeRequest(version: Short): RequestChannel.Request = {
       buildRequest(new OffsetFetchRequest.Builder(
-        "group-1",
-        false,
-        List(
-          new TopicPartition("foo", 0),
-          new TopicPartition("foo", 1)
-        ).asJava,
+        new OffsetFetchRequestData()
+          .setRequireStable(false)
+          .setGroups(List(
+            new OffsetFetchRequestData.OffsetFetchRequestGroup()
+              .setGroupId("group-1")
+              .setTopics(List(
+                new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                  .setName("foo")
+                  .setPartitionIndexes(List[Integer](0, 1).asJava)
+              ).asJava)
+          ).asJava),
         false
       ).build(version))
     }
@@ -8434,17 +8453,18 @@ class KafkaApisTest extends Logging {
   }
 
   @ParameterizedTest
-  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH)
+  // Version 1 does not support fetching offsets for all topics.
+  @ApiKeyVersionsSource(apiKey = ApiKeys.OFFSET_FETCH, fromVersion = 2)
   def testHandleOffsetFetchAllOffsetsWithSingleGroup(version: Short): Unit = {
-    // Version 0 gets offsets from Zookeeper. Version 1 does not support fetching all
-    // offsets request. We are not interested in testing these here.
-    if (version < 2) return
-
     def makeRequest(version: Short): RequestChannel.Request = {
       buildRequest(new OffsetFetchRequest.Builder(
-        "group-1",
-        false,
-        null, // all offsets.
+        new OffsetFetchRequestData()
+          .setRequireStable(false)
+          .setGroups(List(
+            new OffsetFetchRequestData.OffsetFetchRequestGroup()
+              .setGroupId("group-1")
+              .setTopics(null) // all offsets.
+          ).asJava),
         false
       ).build(version))
     }
@@ -8509,19 +8529,40 @@ class KafkaApisTest extends Logging {
   @Test
   def testHandleOffsetFetchAuthorization(): Unit = {
     def makeRequest(version: Short): RequestChannel.Request = {
-      val groups = Map(
-        "group-1" -> List(
-          new TopicPartition("foo", 0),
-          new TopicPartition("bar", 0)
-        ).asJava,
-        "group-2" -> List(
-          new TopicPartition("foo", 0),
-          new TopicPartition("bar", 0)
-        ).asJava,
-        "group-3" -> null,
-        "group-4" -> null,
-      ).asJava
-      buildRequest(new OffsetFetchRequest.Builder(groups, false, false).build(version))
+      buildRequest(
+        new OffsetFetchRequest.Builder(
+          new OffsetFetchRequestData()
+            .setGroups(List(
+              new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group-1")
+                .setTopics(List(
+                  new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName("foo")
+                    .setPartitionIndexes(List[Integer](0).asJava),
+                  new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName("bar")
+                    .setPartitionIndexes(List[Integer](0).asJava)
+                ).asJava),
+              new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group-2")
+                .setTopics(List(
+                  new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName("foo")
+                    .setPartitionIndexes(List[Integer](0).asJava),
+                  new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName("bar")
+                    .setPartitionIndexes(List[Integer](0).asJava)
+                ).asJava),
+              new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group-3")
+                .setTopics(null),
+              new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group-4")
+                .setTopics(null),
+            ).asJava),
+          false
+        ).build(version)
+      )
     }
 
     val requestChannelRequest = makeRequest(ApiKeys.OFFSET_FETCH.latestVersion)
@@ -8662,17 +8703,34 @@ class KafkaApisTest extends Logging {
   @Test
   def testHandleOffsetFetchWithUnauthorizedTopicAndTopLevelError(): Unit = {
     def makeRequest(version: Short): RequestChannel.Request = {
-      val groups = Map(
-        "group-1" -> List(
-          new TopicPartition("foo", 0),
-          new TopicPartition("bar", 0)
-        ).asJava,
-        "group-2" -> List(
-          new TopicPartition("foo", 0),
-          new TopicPartition("bar", 0)
-        ).asJava
-      ).asJava
-      buildRequest(new OffsetFetchRequest.Builder(groups, false, false).build(version))
+      buildRequest(
+        new OffsetFetchRequest.Builder(
+          new OffsetFetchRequestData()
+            .setGroups(List(
+              new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group-1")
+                .setTopics(List(
+                  new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName("foo")
+                    .setPartitionIndexes(List[Integer](0).asJava),
+                  new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName("bar")
+                    .setPartitionIndexes(List[Integer](0).asJava)
+                ).asJava),
+              new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                .setGroupId("group-2")
+                .setTopics(List(
+                  new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName("foo")
+                    .setPartitionIndexes(List[Integer](0).asJava),
+                  new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName("bar")
+                    .setPartitionIndexes(List[Integer](0).asJava)
+                ).asJava)
+            ).asJava),
+          false
+        ).build(version)
+      )
     }
 
     val requestChannelRequest = makeRequest(ApiKeys.OFFSET_FETCH.latestVersion)
