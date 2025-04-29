@@ -582,7 +582,7 @@ class LogManager(logDirs: Seq[File],
       val overrides = configRepository.topicConfig(topicName)
       // save memory by only including configs for topics with overrides
       if (!overrides.isEmpty) {
-        val logConfig = LogConfig.fromProps(defaultProps, overrides, defaultConfig.segmentSize())
+        val logConfig = LogConfig.fromProps(defaultProps, overrides)
         topicConfigOverrides(topicName) = logConfig
       }
     }
@@ -948,7 +948,7 @@ class LogManager(logDirs: Seq[File],
                         wasRemoteLogEnabled: Boolean): Unit = {
     topicConfigUpdated(topic)
     val logs = logsByTopic(topic)
-    val newLogConfig = LogConfig.fromProps(currentDefaultConfig.originals, newTopicConfig, currentDefaultConfig.segmentSize())
+    val newLogConfig = LogConfig.fromProps(currentDefaultConfig.originals, newTopicConfig)
     val isRemoteLogStorageEnabled = newLogConfig.remoteStorageEnable()
     // We would like to validate the configuration no matter whether the logs have materialised on disk or not.
     // Otherwise we risk someone creating a tiered-topic, disabling Tiered Storage cluster-wide and the check

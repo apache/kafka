@@ -263,7 +263,7 @@ public class LogConfig extends AbstractConfig {
      * should also be in `KafkaConfig#extractLogConfigMap`.
      */
     private final int segmentSize;
-    private final Integer internalSegmentSize;
+    public final Integer internalSegmentSize;
     public final long segmentMs;
     public final long segmentJitterMs;
     public final int maxIndexSize;
