@@ -75,7 +75,6 @@ import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryReporter;
 import org.apache.kafka.common.telemetry.internals.ClientTelemetryUtils;
 import org.apache.kafka.common.utils.AppInfoParser;
-import org.apache.kafka.common.utils.KafkaThread;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.common.utils.Timer;
@@ -256,7 +255,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     private final ProducerMetadata metadata;
     private final RecordAccumulator accumulator;
     private final Sender sender;
-    private final Thread ioThread;
+    private final Sender.SenderThread ioThread;
     private final Compression compression;
     private final Sensor errors;
     private final Time time;
@@ -454,7 +453,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
             this.errors = this.metrics.sensor("errors");
             this.sender = newSender(logContext, kafkaClient, this.metadata);
             String ioThreadName = NETWORK_THREAD_PREFIX + " | " + clientId;
-            this.ioThread = new KafkaThread(ioThreadName, this.sender, true);
+            this.ioThread = new Sender.SenderThread(ioThreadName, this.sender, true);
             this.ioThread.start();
             config.logUnused();
             AppInfoParser.registerAppInfo(JMX_PREFIX, clientId, metrics, time.milliseconds());
@@ -480,7 +479,7 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
                   ProducerInterceptors<K, V> interceptors,
                   Partitioner partitioner,
                   Time time,
-                  KafkaThread ioThread,
+                  Sender.SenderThread ioThread,
                   Optional<ClientTelemetryReporter> clientTelemetryReporter) {
         this.producerConfig = config;
         this.time = time;
@@ -596,14 +595,17 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
 
         if (config.getBoolean(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG)) {
             final String transactionalId = config.getString(ProducerConfig.TRANSACTIONAL_ID_CONFIG);
+            final boolean enable2PC = config.getBoolean(ProducerConfig.TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG);
             final int transactionTimeoutMs = config.getInt(ProducerConfig.TRANSACTION_TIMEOUT_CONFIG);
             final long retryBackoffMs = config.getLong(ProducerConfig.RETRY_BACKOFF_MS_CONFIG);
+            
             transactionManager = new TransactionManager(
                 logContext,
                 transactionalId,
                 transactionTimeoutMs,
                 retryBackoffMs,
-                apiVersions
+                apiVersions,
+                enable2PC
             );
 
             if (transactionManager.isTransactional())
@@ -618,8 +620,13 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
     }
 
     /**
+     * Initialize the transactional state for this producer, similar to {@link #initTransactions()} but
+     * with additional capabilities to keep a previously prepared transaction.
+     *
      * Needs to be called before any other methods when the {@code transactional.id} is set in the configuration.
-     * This method does the following:
+     *
+     * When {@code keepPreparedTxn} is {@code false}, this behaves like the standard transactional
+     * initialization where the method does the following:
      * <ol>
      * <li>Ensures any transactions initiated by previous instances of the producer with the same
      *      {@code transactional.id} are completed. If the previous instance had failed with a transaction in
@@ -628,26 +635,38 @@ public class KafkaProducer<K, V> implements Producer<K, V> {
      * <li>Gets the internal producer id and epoch, used in all future transactional
      *      messages issued by the producer.</li>
      * </ol>
+     *
+     * <p>
+     * When {@code keepPreparedTxn} is set to {@code true}, the producer does <em>not</em> automatically abort existing
+     * transactions. Instead, it enters a recovery mode allowing only finalization of those previously
+     * prepared transactions.
+     * This behavior is especially crucial for 2PC scenarios, where transactions should remain intact
+     * until the external transaction manager decides whether to commit or abort.
+     * <p>
+     *
+     * @param keepPreparedTxn true to retain any in-flight prepared transactions (necessary for 2PC
+     *                        recovery), false to abort existing transactions and behave like
+     *                        the standard initTransactions.
+     *
      * Note that this method will raise {@link TimeoutException} if the transactional state cannot
      * be initialized before expiration of {@code max.block.ms}. Additionally, it will raise {@link InterruptException}
      * if interrupted. It is safe to retry in either case, but once the transactional state has been successfully
      * initialized, this method should no longer be used.
      *
-     * @throws IllegalStateException if no {@code transactional.id} has been configured
-     * @throws org.apache.kafka.common.errors.UnsupportedVersionException fatal error indicating the broker
-     *         does not support transactions (i.e. if its version is lower than 0.11.0.0)
-     * @throws org.apache.kafka.common.errors.AuthorizationException error indicating that the configured
-     *         transactional.id is not authorized, or the idempotent producer id is unavailable. See the exception for
-     *         more details.  User may retry this function call after fixing the permission.
-     * @throws KafkaException if the producer has encountered a previous fatal error or for any other unexpected error
+     * @throws IllegalStateException if no {@code transactional.id} is configured
+     * @throws org.apache.kafka.common.errors.UnsupportedVersionException if the broker does not
+     *         support transactions (i.e. if its version is lower than 0.11.0.0)
+     * @throws org.apache.kafka.common.errors.TransactionalIdAuthorizationException if the configured
+     *         {@code transactional.id} is unauthorized either for normal transaction writes or 2PC.
+     * @throws KafkaException if the producer encounters a fatal error or any other unexpected error
      * @throws TimeoutException if the time taken for initialize the transaction has surpassed <code>max.block.ms</code>.
      * @throws InterruptException if the thread is interrupted while blocked
      */
-    public void initTransactions() {
+    public void initTransactions(boolean keepPreparedTxn) {
         throwIfNoTransactionManager();
         throwIfProducerClosed();
         long now = time.nanoseconds();
-        TransactionalRequestResult result = transactionManager.initializeTransactions();
+        TransactionalRequestResult result = transactionManager.initializeTransactions(keepPreparedTxn);
         sender.wakeup();
         result.await(maxBlockTimeMs, TimeUnit.MILLISECONDS);
         producerMetrics.recordInit(time.nanoseconds() - now);

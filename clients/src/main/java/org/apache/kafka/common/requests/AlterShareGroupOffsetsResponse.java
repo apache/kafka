@@ -19,10 +19,9 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.AlterShareGroupOffsetsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.EnumMap;
 import java.util.Map;
 
@@ -59,9 +58,9 @@ public class AlterShareGroupOffsetsResponse extends AbstractResponse {
         return data;
     }
 
-    public static AlterShareGroupOffsetsResponse parse(ByteBuffer buffer, short version) {
+    public static AlterShareGroupOffsetsResponse parse(Readable readable, short version) {
         return new AlterShareGroupOffsetsResponse(
-            new AlterShareGroupOffsetsResponseData(new ByteBufferAccessor(buffer), version)
+            new AlterShareGroupOffsetsResponseData(readable, version)
         );
     }
 }

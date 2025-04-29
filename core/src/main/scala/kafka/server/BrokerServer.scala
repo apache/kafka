@@ -426,9 +426,7 @@ class BrokerServer(
         ))
       val fetchManager = new FetchManager(Time.SYSTEM, new FetchSessionCache(fetchSessionCacheShards))
 
-      val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(
-        config.shareGroupConfig.shareGroupMaxGroups * config.groupCoordinatorConfig.shareGroupMaxSize
-      )
+      val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(config.shareGroupConfig.shareGroupMaxShareSessions())
 
       sharePartitionManager = new SharePartitionManager(
         replicaManager,

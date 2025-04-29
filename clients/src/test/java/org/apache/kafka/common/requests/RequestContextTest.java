@@ -84,7 +84,7 @@ public class RequestContextTest {
         assertEquals(correlationId, responseHeader.correlationId());
 
         ApiVersionsResponse response = (ApiVersionsResponse) AbstractResponse.parseResponse(ApiKeys.API_VERSIONS,
-            responseBuffer, (short) 0);
+            new ByteBufferAccessor(responseBuffer), (short) 0);
         assertEquals(Errors.UNSUPPORTED_VERSION.code(), response.data().errorCode());
         assertTrue(response.data().apiKeys().isEmpty());
     }
