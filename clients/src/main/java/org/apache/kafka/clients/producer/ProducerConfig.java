@@ -355,6 +355,11 @@ public class ProducerConfig extends AbstractConfig {
             "By default the TransactionId is not configured, which means transactions cannot be used. " +
             "Note that, by default, transactions require a cluster of at least three brokers which is the recommended setting for production; for development you can change this, by adjusting broker setting <code>transaction.state.log.replication.factor</code>.";
 
+    /** <code> transaction.two.phase.commit.enable </code> */
+    public static final String TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG = "transaction.two.phase.commit.enable";
+    private static final String TRANSACTION_TWO_PHASE_COMMIT_ENABLE_DOC = "If set to true, then the broker is informed that the client is participating in " +
+            "two phase commit protocol and transactions that this client starts never expire.";
+
     /**
      * <code>security.providers</code>
      */
@@ -526,6 +531,11 @@ public class ProducerConfig extends AbstractConfig {
                                         new ConfigDef.NonEmptyString(),
                                         Importance.LOW,
                                         TRANSACTIONAL_ID_DOC)
+                                .define(TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG,
+                                        Type.BOOLEAN,
+                                        false,
+                                        Importance.LOW,
+                                        TRANSACTION_TWO_PHASE_COMMIT_ENABLE_DOC)
                                 .define(CommonClientConfigs.METADATA_RECOVERY_STRATEGY_CONFIG,
                                         Type.STRING,
                                         CommonClientConfigs.DEFAULT_METADATA_RECOVERY_STRATEGY,
@@ -608,6 +618,20 @@ public class ProducerConfig extends AbstractConfig {
         boolean userConfiguredTransactions = originalConfigs.containsKey(TRANSACTIONAL_ID_CONFIG);
         if (!idempotenceEnabled && userConfiguredTransactions) {
             throw new ConfigException("Cannot set a " + ProducerConfig.TRANSACTIONAL_ID_CONFIG + " without also enabling idempotence.");
+        }
+
+        // Validate that transaction.timeout.ms is not set when transaction.two.phase.commit.enable is true
+        // In standard Kafka transactions, the broker enforces transaction.timeout.ms and aborts any
+        // transaction that isn't completed in time. With two-phase commit (2PC), an external coordinator
+        // decides when to finalize, so broker-side timeouts don't apply. Disallow using both.
+        boolean enable2PC = this.getBoolean(TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG);
+        boolean userConfiguredTransactionTimeout = originalConfigs.containsKey(TRANSACTION_TIMEOUT_CONFIG);
+        if (enable2PC && userConfiguredTransactionTimeout) {
+            throw new ConfigException(
+                "Cannot set " + ProducerConfig.TRANSACTION_TIMEOUT_CONFIG +
+                " when " + ProducerConfig.TRANSACTION_TWO_PHASE_COMMIT_ENABLE_CONFIG +
+                " is set to true. Transactions will not expire with two-phase commit enabled."
+            );
         }
     }
 

@@ -28,7 +28,6 @@ import org.apache.kafka.clients.consumer.OffsetAndTimestamp;
 import org.apache.kafka.clients.consumer.internals.AsyncKafkaConsumer;
 import org.apache.kafka.clients.consumer.internals.AutoOffsetResetStrategy;
 import org.apache.kafka.clients.consumer.internals.StreamsRebalanceData;
-import org.apache.kafka.clients.consumer.internals.StreamsRebalanceEventsProcessor;
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.Metric;
@@ -40,7 +39,9 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.TimeoutException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.KafkaFutureImpl;
+import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 import org.apache.kafka.common.metrics.Sensor;
+import org.apache.kafka.common.requests.StreamsGroupHeartbeatResponse;
 import org.apache.kafka.common.serialization.ByteArrayDeserializer;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -354,12 +355,12 @@ public class StreamThread extends Thread implements ProcessingThread {
     private final Queue<StreamsException> nonFatalExceptionsToHandle;
 
     private final Optional<StreamsRebalanceData> streamsRebalanceData;
-    private final Optional<StreamsRebalanceEventsProcessor> streamsRebalanceEventsProcessor;
     private final StreamsMetadataState streamsMetadataState;
 
     // These are used to signal from outside the stream thread, but the variables themselves are internal to the thread
     private final AtomicLong cacheResizeSize = new AtomicLong(-1L);
     private final AtomicBoolean leaveGroupRequested = new AtomicBoolean(false);
+    private final AtomicLong lastShutdownWarningTimestamp = new AtomicLong(0L);
     private final boolean eosEnabled;
     private final boolean stateUpdaterEnabled;
     private final boolean processingThreadsEnabled;
@@ -522,7 +523,6 @@ public class StreamThread extends Thread implements ProcessingThread {
             streamsUncaughtExceptionHandler,
             cache::resize,
             mainConsumerSetup.streamsRebalanceData,
-            mainConsumerSetup.streamsRebalanceEventsProcessor,
             streamsMetadataState
         );
 
@@ -538,7 +538,7 @@ public class StreamThread extends Thread implements ProcessingThread {
                                                        final Map<String, Object> consumerConfigs) {
         if (config.getString(StreamsConfig.GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name)) {
             if (topologyMetadata.hasNamedTopologies()) {
-                throw new IllegalStateException("Named topologies and the CONSUMER protocol cannot be used at the same time.");
+                throw new IllegalStateException("Named topologies and the STREAMS protocol cannot be used at the same time.");
             }
             log.info("Streams rebalance protocol enabled for thread {}", threadId);
 
@@ -550,8 +550,6 @@ public class StreamThread extends Thread implements ProcessingThread {
                     topologyMetadata
                 )
             );
-            final Optional<StreamsRebalanceEventsProcessor> streamsRebalanceEventsProcessor =
-                Optional.of(new StreamsRebalanceEventsProcessor(streamsRebalanceData.get()));
             final ByteArrayDeserializer keyDeserializer = new ByteArrayDeserializer();
             final ByteArrayDeserializer valueDeserializer = new ByteArrayDeserializer();
             return new MainConsumerSetup(
@@ -559,16 +557,13 @@ public class StreamThread extends Thread implements ProcessingThread {
                     new ConsumerConfig(ConsumerConfig.appendDeserializerToConfig(consumerConfigs, keyDeserializer, valueDeserializer)),
                     keyDeserializer,
                     valueDeserializer,
-                    streamsRebalanceData,
-                    streamsRebalanceEventsProcessor
+                    streamsRebalanceData
                 ),
-                streamsRebalanceData,
-                streamsRebalanceEventsProcessor
+                streamsRebalanceData
             );
         } else {
-            return  new MainConsumerSetup(
+            return new MainConsumerSetup(
                 clientSupplier.getConsumer(consumerConfigs),
-                Optional.empty(),
                 Optional.empty()
             );
         }
@@ -577,14 +572,11 @@ public class StreamThread extends Thread implements ProcessingThread {
     private static class MainConsumerSetup {
         public final Consumer<byte[], byte[]> mainConsumer;
         public final Optional<StreamsRebalanceData> streamsRebalanceData;
-        public final Optional<StreamsRebalanceEventsProcessor> streamsRebalanceEventsProcessor;
 
         public MainConsumerSetup(final Consumer<byte[], byte[]> mainConsumer,
-                                 final Optional<StreamsRebalanceData> streamsRebalanceData,
-                                 final Optional<StreamsRebalanceEventsProcessor> streamsRebalanceEventsProcessor) {
+                                 final Optional<StreamsRebalanceData> streamsRebalanceData) {
             this.mainConsumer = mainConsumer;
             this.streamsRebalanceData = streamsRebalanceData;
-            this.streamsRebalanceEventsProcessor = streamsRebalanceEventsProcessor;
         }
     }
 
@@ -753,7 +745,6 @@ public class StreamThread extends Thread implements ProcessingThread {
                         final BiConsumer<Throwable, Boolean> streamsUncaughtExceptionHandler,
                         final java.util.function.Consumer<Long> cacheResizer,
                         final Optional<StreamsRebalanceData> streamsRebalanceData,
-                        final Optional<StreamsRebalanceEventsProcessor> streamsRebalanceEventsProcessor,
                         final StreamsMetadataState streamsMetadataState
                         ) {
         super(threadId);
@@ -839,12 +830,6 @@ public class StreamThread extends Thread implements ProcessingThread {
         this.logSummaryIntervalMs = config.getLong(StreamsConfig.LOG_SUMMARY_INTERVAL_MS_CONFIG);
 
         this.streamsRebalanceData = streamsRebalanceData;
-        this.streamsRebalanceEventsProcessor = streamsRebalanceEventsProcessor;
-        if (streamsRebalanceData.isPresent() && streamsRebalanceEventsProcessor.isPresent()) {
-            streamsRebalanceEventsProcessor.get().setRebalanceCallbacks(
-                new DefaultStreamsGroupRebalanceCallbacks(log, time, streamsRebalanceData.get(), this, taskManager)
-            );
-        }
         this.streamsMetadataState = streamsMetadataState;
     }
 
@@ -1049,8 +1034,14 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     public void maybeSendShutdown() {
         if (assignmentErrorCode.get() == AssignorError.SHUTDOWN_REQUESTED.code()) {
-            log.warn("Detected that shutdown was requested. " +
-                    "All clients in this app will now begin to shutdown");
+            final long now = time.milliseconds();
+            final long lastLogged = lastShutdownWarningTimestamp.get();
+            if (now - lastLogged >= 10_000L) {
+                if (lastShutdownWarningTimestamp.compareAndSet(lastLogged, now)) {
+                    log.warn("Detected that shutdown was requested. " +
+                            "All clients in this app will now begin to shutdown");
+                }
+            }
             mainConsumer.enforceRebalance("Shutdown requested");
         }
     }
@@ -1092,8 +1083,9 @@ public class StreamThread extends Thread implements ProcessingThread {
         shutdownErrorHook.run();
     }
 
-    public void sendShutdownRequest(final AssignorError assignorError) {
-        assignmentErrorCode.set(assignorError.code());
+    public void sendShutdownRequest() {
+        assignmentErrorCode.set(AssignorError.SHUTDOWN_REQUESTED.code());
+        streamsRebalanceData.ifPresent(StreamsRebalanceData::requestShutdown);
     }
 
     private void handleTaskMigrated(final TaskMigratedException e) {
@@ -1108,9 +1100,26 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     private void subscribeConsumer() {
         if (topologyMetadata.usesPatternSubscription()) {
+            if (streamsRebalanceData.isPresent()) {
+                throw new IllegalArgumentException("Pattern subscription is not yet supported with the Streams rebalance " +
+                    "protocol");
+            }
             mainConsumer.subscribe(topologyMetadata.sourceTopicPattern(), rebalanceListener);
         } else {
-            mainConsumer.subscribe(topologyMetadata.allFullSourceTopicNames(), rebalanceListener);
+            if (streamsRebalanceData.isPresent()) {
+                ((AsyncKafkaConsumer<byte[], byte[]>) mainConsumer).subscribe(
+                    topologyMetadata.allFullSourceTopicNames(),
+                    new DefaultStreamsRebalanceListener(
+                        log,
+                        time,
+                        streamsRebalanceData.get(),
+                        this,
+                        taskManager
+                    )
+                );
+            } else {
+                mainConsumer.subscribe(topologyMetadata.allFullSourceTopicNames(), rebalanceListener);
+            }
         }
     }
 
@@ -1141,12 +1150,12 @@ public class StreamThread extends Thread implements ProcessingThread {
         final long startMs = time.milliseconds();
         now = startMs;
 
-        maybeHandleAssignmentFromStreamsRebalanceProtocol();
-
         final long pollLatency;
         taskManager.resumePollingForPartitionsWithAvailableSpace();
         pollLatency = pollPhase();
         totalPolledSinceLastSummary += 1;
+
+        handleStreamsRebalanceData();
 
         // Shutdown hook could potentially be triggered and transit the thread state to PENDING_SHUTDOWN during #pollRequests().
         // The task manager internal states could be uninitialized if the state transition happens during #onPartitionsAssigned().
@@ -1296,6 +1305,8 @@ public class StreamThread extends Thread implements ProcessingThread {
         final long pollLatency;
         taskManager.resumePollingForPartitionsWithAvailableSpace();
         pollLatency = pollPhase();
+
+        handleStreamsRebalanceData();
 
         // Shutdown hook could potentially be triggered and transit the thread state to PENDING_SHUTDOWN during #pollRequests().
         // The task manager internal states could be uninitialized if the state transition happens during #onPartitionsAssigned().
@@ -1478,17 +1489,13 @@ public class StreamThread extends Thread implements ProcessingThread {
         return records;
     }
 
-    public void maybeHandleAssignmentFromStreamsRebalanceProtocol() {
+    public void handleStreamsRebalanceData() {
         if (streamsRebalanceData.isPresent()) {
-
-            if (streamsRebalanceData.get().shutdownRequested()) {
-                assignmentErrorCode.set(AssignorError.SHUTDOWN_REQUESTED.code());
+            for (final StreamsGroupHeartbeatResponseData.Status status : streamsRebalanceData.get().statuses()) {
+                if (status.statusCode() == StreamsGroupHeartbeatResponse.Status.SHUTDOWN_APPLICATION.code()) {
+                    shutdownErrorHook.run();
+                }
             }
-
-            // ToDo: process IQ-related metadata
-
-            // Process assignment from Streams Rebalance Protocol
-            streamsRebalanceEventsProcessor.get().process();
         }
     }
 
@@ -2020,5 +2027,9 @@ public class StreamThread extends Thread implements ProcessingThread {
 
     Admin adminClient() {
         return adminClient;
+    }
+
+    Optional<StreamsRebalanceData> streamsRebalanceData() {
+        return streamsRebalanceData;
     }
 }

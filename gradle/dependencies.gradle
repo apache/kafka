@@ -125,7 +125,7 @@ versions += [
   zinc: "1.9.2",
   // When updating the zstd version, please do as well in docker/native/native-image-configs/resource-config.json
   // Also make sure the compression levels in org.apache.kafka.common.record.CompressionType are still valid
-  zstd: "1.5.6-6",
+  zstd: "1.5.6-10",
   junitPlatform: "1.10.2",
   hdrHistogram: "2.2.2"
 ]

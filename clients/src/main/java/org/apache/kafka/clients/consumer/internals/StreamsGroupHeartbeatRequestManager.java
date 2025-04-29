@@ -237,6 +237,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                     repartitionTopicInfo.topicConfigs().add(new StreamsGroupHeartbeatRequestData.KeyValue().setKey(k).setValue(v))
                 );
                 repartitionTopicsInfo.add(repartitionTopicInfo);
+                repartitionTopicInfo.topicConfigs().sort(Comparator.comparing(StreamsGroupHeartbeatRequestData.KeyValue::key));
             }
             repartitionTopicsInfo.sort(Comparator.comparing(StreamsGroupHeartbeatRequestData.TopicInfo::name));
             return repartitionTopicsInfo;
@@ -251,6 +252,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 changelogTopic.getValue().topicConfigs().forEach((k, v) ->
                     changelogTopicInfo.topicConfigs().add(new StreamsGroupHeartbeatRequestData.KeyValue().setKey(k).setValue(v))
                 );
+                changelogTopicInfo.topicConfigs().sort(Comparator.comparing(StreamsGroupHeartbeatRequestData.KeyValue::key));
                 changelogTopicsInfo.add(changelogTopicInfo);
             }
             changelogTopicsInfo.sort(Comparator.comparing(StreamsGroupHeartbeatRequestData.TopicInfo::name));
@@ -519,11 +521,14 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         }
 
         List<StreamsGroupHeartbeatResponseData.Status> statuses = data.status();
-        if (statuses != null && !statuses.isEmpty()) {
-            String statusDetails = statuses.stream()
-                .map(status -> "(" + status.statusCode() + ") " + status.statusDetail())
-                .collect(Collectors.joining(", "));
-            logger.warn("Membership is in the following statuses: {}", statusDetails);
+        if (statuses != null) {
+            streamsRebalanceData.setStatuses(statuses);
+            if (!statuses.isEmpty()) {
+                String statusDetails = statuses.stream()
+                    .map(status -> "(" + status.statusCode() + ") " + status.statusDetail())
+                    .collect(Collectors.joining(", "));
+                logger.warn("Membership is in the following statuses: {}", statusDetails);
+            }
         }
 
         membershipManager.onHeartbeatSuccess(response);

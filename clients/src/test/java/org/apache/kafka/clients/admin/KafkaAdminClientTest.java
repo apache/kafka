@@ -3268,6 +3268,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testListConsumerGroups() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(4, 0),
                 AdminClientConfig.RETRIES_CONFIG, "2")) {
@@ -3377,6 +3378,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testListConsumerGroupsMetadataFailure() throws Exception {
         final Cluster cluster = mockCluster(3, 0);
         final Time time = new MockTime();
@@ -3400,6 +3402,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testListConsumerGroupsWithStates() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -3433,6 +3436,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testListConsumerGroupsWithTypes() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
@@ -3495,6 +3499,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testListConsumerGroupsWithStatesOlderBrokerVersion() throws Exception {
         ApiVersion listGroupV3 = new ApiVersion()
                 .setApiKey(ApiKeys.LIST_GROUPS.id)
@@ -3533,6 +3538,7 @@ public class KafkaAdminClientTest {
     }
 
     @Test
+    @SuppressWarnings("removal")
     public void testListConsumerGroupsWithTypesOlderBrokerVersion() throws Exception {
         ApiVersion listGroupV4 = new ApiVersion()
             .setApiKey(ApiKeys.LIST_GROUPS.id)
@@ -4390,7 +4396,7 @@ public class KafkaAdminClientTest {
             ClientRequest clientRequest = mockClient.requests().peek();
             assertNotNull(clientRequest);
             assertEquals(300, clientRequest.requestTimeoutMs());
-            OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).data;
+            OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).build().data();
             assertTrue(data.requireStable());
             assertEquals(Collections.singletonList(GROUP_ID),
                     data.groups().stream().map(OffsetFetchRequestGroup::groupId).collect(Collectors.toList()));
@@ -4785,7 +4791,7 @@ public class KafkaAdminClientTest {
         waitForRequest(mockClient, ApiKeys.OFFSET_FETCH);
 
         ClientRequest clientRequest = mockClient.requests().peek();
-        OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).data;
+        OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).build().data();
         Map<String, Map<TopicPartition, PartitionData>> results = new HashMap<>();
         Map<String, Errors> errors = new HashMap<>();
         data.groups().forEach(group -> {
@@ -4807,7 +4813,7 @@ public class KafkaAdminClientTest {
         waitForRequest(mockClient, ApiKeys.OFFSET_FETCH);
 
         ClientRequest clientRequest = mockClient.requests().peek();
-        OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).data;
+        OffsetFetchRequestData data = ((OffsetFetchRequest.Builder) clientRequest.requestBuilder()).build().data();
         Map<String, Map<TopicPartition, PartitionData>> results = new HashMap<>();
         Map<String, Errors> errors = new HashMap<>();
         data.groups().forEach(group -> {
@@ -10795,10 +10801,10 @@ public class KafkaAdminClientTest {
 
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
-            final Set<TopicPartition> partitions = Collections.singleton(new TopicPartition("A", 0));
+            final Set<String> topics = Collections.singleton("A");
             final DeleteShareGroupOffsetsOptions options = new DeleteShareGroupOffsetsOptions();
 
-            env.adminClient().deleteShareGroupOffsets(GROUP_ID, partitions, options);
+            env.adminClient().deleteShareGroupOffsets(GROUP_ID, topics, options);
 
             final MockClient mockClient = env.kafkaClient();
             waitForRequest(mockClient, ApiKeys.DELETE_SHARE_GROUP_OFFSETS);
@@ -10819,26 +10825,27 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
+            Uuid fooId = Uuid.randomUuid();
+            String fooName = "foo";
+            Uuid barId = Uuid.randomUuid();
+            String barName = "bar";
+
+            String zooName = "zoo";
+
             DeleteShareGroupOffsetsResponseData data = new DeleteShareGroupOffsetsResponseData().setResponses(
                 List.of(
-                    new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic().setTopicName("foo").setPartitions(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition().setPartitionIndex(0), new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition().setPartitionIndex(1))),
-                    new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic().setTopicName("bar").setPartitions(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition().setPartitionIndex(0)))
+                    new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic().setTopicName(fooName).setTopicId(fooId),
+                    new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic().setTopicName(barName).setTopicId(barId)
                 )
             );
 
-            TopicPartition fooTopicPartition0 = new TopicPartition("foo", 0);
-            TopicPartition fooTopicPartition1 = new TopicPartition("foo", 1);
-            TopicPartition barPartition0 = new TopicPartition("bar", 0);
-            TopicPartition zooTopicPartition0 = new TopicPartition("zoo", 0);
-
             env.kafkaClient().prepareResponse(new DeleteShareGroupOffsetsResponse(data));
-            final DeleteShareGroupOffsetsResult result = env.adminClient().deleteShareGroupOffsets(GROUP_ID, Set.of(fooTopicPartition0, fooTopicPartition1, barPartition0));
+            final DeleteShareGroupOffsetsResult result = env.adminClient().deleteShareGroupOffsets(GROUP_ID, Set.of(fooName, barName));
 
             assertNull(result.all().get());
-            assertNull(result.partitionResult(fooTopicPartition0).get());
-            assertNull(result.partitionResult(fooTopicPartition1).get());
-            assertNull(result.partitionResult(barPartition0).get());
-            assertThrows(IllegalArgumentException.class, () -> result.partitionResult(zooTopicPartition0));
+            assertNull(result.topicResult(fooName).get());
+            assertNull(result.topicResult(barName).get());
+            assertThrows(IllegalArgumentException.class, () -> result.topicResult(zooName));
         }
     }
 
@@ -10850,7 +10857,7 @@ public class KafkaAdminClientTest {
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
             DeleteShareGroupOffsetsResponseData data = new DeleteShareGroupOffsetsResponseData().setResponses(
-                Collections.emptyList()
+                List.of()
             );
             env.kafkaClient().prepareResponse(new DeleteShareGroupOffsetsResponse(data));
 
@@ -10869,41 +10876,46 @@ public class KafkaAdminClientTest {
                 .setErrorCode(Errors.GROUP_AUTHORIZATION_FAILED.code())
                 .setErrorMessage(Errors.GROUP_AUTHORIZATION_FAILED.message());
 
-            TopicPartition fooTopicPartition0 = new TopicPartition("foo", 0);
-            TopicPartition fooTopicPartition1 = new TopicPartition("foo", 1);
-            TopicPartition barTopicPartition0 = new TopicPartition("bar", 0);
+            String fooName = "foo";
+            String barName = "bar";
 
             env.kafkaClient().prepareResponse(new DeleteShareGroupOffsetsResponse(data));
-            final DeleteShareGroupOffsetsResult result = env.adminClient().deleteShareGroupOffsets(GROUP_ID, Set.of(fooTopicPartition0, fooTopicPartition1, barTopicPartition0));
+            final DeleteShareGroupOffsetsResult result = env.adminClient().deleteShareGroupOffsets(GROUP_ID, Set.of(fooName, barName));
 
             TestUtils.assertFutureThrows(Errors.GROUP_AUTHORIZATION_FAILED.exception().getClass(), result.all());
         }
     }
 
     @Test
-    public void testDeleteShareGroupOffsetsWithErrorInOnePartition() throws Exception {
+    public void testDeleteShareGroupOffsetsWithErrorInOneTopic() throws Exception {
         try (AdminClientUnitTestEnv env = new AdminClientUnitTestEnv(mockCluster(1, 0))) {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
+            Uuid fooId = Uuid.randomUuid();
+            String fooName = "foo";
+            Uuid barId = Uuid.randomUuid();
+            String barName = "bar";
+
             DeleteShareGroupOffsetsResponseData data = new DeleteShareGroupOffsetsResponseData().setResponses(
                 List.of(
-                    new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic().setTopicName("foo").setPartitions(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition().setPartitionIndex(0), new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition().setPartitionIndex(1).setErrorCode(Errors.KAFKA_STORAGE_ERROR.code()).setErrorMessage(Errors.KAFKA_STORAGE_ERROR.message()))),
-                    new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic().setTopicName("bar").setPartitions(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition().setPartitionIndex(0)))
+                    new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                        .setTopicName(fooName)
+                        .setTopicId(fooId)
+                        .setErrorCode(Errors.KAFKA_STORAGE_ERROR.code())
+                        .setErrorMessage(Errors.KAFKA_STORAGE_ERROR.message()),
+                    new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                        .setTopicName(barName)
+                        .setTopicId(barId)
                 )
             );
 
-            TopicPartition fooTopicPartition0 = new TopicPartition("foo", 0);
-            TopicPartition fooTopicPartition1 = new TopicPartition("foo", 1);
-            TopicPartition barTopicPartition0 = new TopicPartition("bar", 0);
-
             env.kafkaClient().prepareResponse(new DeleteShareGroupOffsetsResponse(data));
-            final DeleteShareGroupOffsetsResult result = env.adminClient().deleteShareGroupOffsets(GROUP_ID, Set.of(fooTopicPartition0, fooTopicPartition1, barTopicPartition0));
+            final DeleteShareGroupOffsetsResult result = env.adminClient().deleteShareGroupOffsets(GROUP_ID, Set.of(fooName, barName));
 
             TestUtils.assertFutureThrows(Errors.KAFKA_STORAGE_ERROR.exception().getClass(), result.all());
-            assertNull(result.partitionResult(fooTopicPartition0).get());
-            TestUtils.assertFutureThrows(Errors.KAFKA_STORAGE_ERROR.exception().getClass(), result.partitionResult(fooTopicPartition1));
-            assertNull(result.partitionResult(barTopicPartition0).get());
+            TestUtils.assertFutureThrows(Errors.KAFKA_STORAGE_ERROR.exception().getClass(), result.topicResult(fooName));
+            assertNull(result.topicResult(barName).get());
         }
     }
 
@@ -10913,24 +10925,25 @@ public class KafkaAdminClientTest {
             env.kafkaClient().setNodeApiVersions(NodeApiVersions.create());
             env.kafkaClient().prepareResponse(prepareFindCoordinatorResponse(Errors.NONE, env.cluster().controller()));
 
+            Uuid fooId = Uuid.randomUuid();
+            String fooName = "foo";
+
+            String barName = "bar";
+
             DeleteShareGroupOffsetsResponseData data = new DeleteShareGroupOffsetsResponseData().setResponses(
                 List.of(
-                    new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic().setTopicName("foo").setPartitions(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition().setPartitionIndex(0), new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition().setPartitionIndex(1))),
-                    new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic().setTopicName("bar").setPartitions(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition().setPartitionIndex(0)))
+                    new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                        .setTopicName(fooName)
+                        .setTopicId(fooId)
                 )
             );
 
-            TopicPartition fooTopicPartition0 = new TopicPartition("foo", 0);
-            TopicPartition fooTopicPartition1 = new TopicPartition("foo", 1);
-            TopicPartition barTopicPartition0 = new TopicPartition("bar", 0);
-            TopicPartition barTopicPartition1 = new TopicPartition("bar", 1);
-
             env.kafkaClient().prepareResponse(new DeleteShareGroupOffsetsResponse(data));
-            final DeleteShareGroupOffsetsResult result = env.adminClient().deleteShareGroupOffsets(GROUP_ID, Set.of(fooTopicPartition0, fooTopicPartition1, barTopicPartition0));
+            final DeleteShareGroupOffsetsResult result = env.adminClient().deleteShareGroupOffsets(GROUP_ID, Set.of(fooName));
 
             assertDoesNotThrow(() -> result.all().get());
-            assertThrows(IllegalArgumentException.class, () -> result.partitionResult(barTopicPartition1));
-            assertNull(result.partitionResult(barTopicPartition0).get());
+            assertThrows(IllegalArgumentException.class, () -> result.topicResult(barName));
+            assertNull(result.topicResult(fooName).get());
         }
     }
 

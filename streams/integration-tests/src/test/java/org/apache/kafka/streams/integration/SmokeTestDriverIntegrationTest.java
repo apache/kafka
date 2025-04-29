@@ -114,6 +114,8 @@ public class SmokeTestDriverIntegrationTest {
         "true, false, true",
         "false, false, false",
         "true, false, false",
+        "true, true, true",
+        "true, true, false"
     })
     public void shouldWorkWithRebalance(
         final boolean stateUpdaterEnabled,

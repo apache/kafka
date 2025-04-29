@@ -25,10 +25,9 @@ import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchRespon
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponseTopic;
 import org.apache.kafka.common.message.OffsetFetchResponseData.OffsetFetchResponseTopics;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.EnumMap;
@@ -391,8 +390,8 @@ public class OffsetFetchResponse extends AbstractResponse {
         return buildResponseData(groupId);
     }
 
-    public static OffsetFetchResponse parse(ByteBuffer buffer, short version) {
-        return new OffsetFetchResponse(new OffsetFetchResponseData(new ByteBufferAccessor(buffer), version), version);
+    public static OffsetFetchResponse parse(Readable readable, short version) {
+        return new OffsetFetchResponse(new OffsetFetchResponseData(readable, version), version);
     }
 
     @Override
