@@ -693,6 +693,26 @@ public class ShareGroupCommandTest {
     }
 
     @Test
+    public void testDeleteShareGroupOffsetsMultipleGroups() {
+        String firstGroup = "first-group";
+        String secondGroup = "second-group";
+        String firstTopic = "t1";
+        String secondTopic = "t2";
+        String bootstrapServer = "localhost:9092";
+
+        List<String> cgcArgs = new ArrayList<>(Arrays.asList("--bootstrap-server", bootstrapServer, "--delete-offsets", "--group", firstGroup, "--group", secondGroup, "--topic", firstTopic, "--topic", secondTopic));
+        Admin adminClient = mock(KafkaAdminClient.class);
+
+        try (ShareGroupService service = getShareGroupService(cgcArgs.toArray(new String[0]), adminClient)) {
+            service.deleteOffsets();
+            fail("Expected error was not detected while trying delete offsets multiple groups");
+        } catch (Exception e) {
+            String expectedErrorMessage = "Found multiple arguments for option group, but you asked for only one";
+            assertEquals(expectedErrorMessage, e.getMessage());
+        }
+    }
+
+    @Test
     public void testDeleteShareGroupOffsetsTopLevelError() throws Exception {
         String firstGroup = "first-group";
         String firstTopic = "t1";
@@ -723,27 +743,24 @@ public class ShareGroupCommandTest {
                     return false;
                 }
 
-                List<String> errorLine = Stream.concat(
+                List<String> error = Stream.concat(
                     Stream.of("Error:"),
                     Arrays.stream(errorMessage.trim().split("\\s+"))
                     ).toList();
 
-                List<String> firstLine = new ArrayList<>(errorLine);
+                List<String> errorLine = new ArrayList<>(error);
+                List<String> expectedResultHeader = List.of("TOPIC", "STATUS");
+                List<String> expectedResultValue1 =  new ArrayList<>();
+                expectedResultValue1.add(firstTopic);
+                expectedResultValue1.addAll(error);
+                List<String> expectedResultValue2 =  new ArrayList<>();
+                expectedResultValue2.add(secondTopic);
+                expectedResultValue2.addAll(error);
 
-                List<String> secondLine = List.of("TOPIC", "STATUS");
-
-                List<String> thirdLine =  new ArrayList<>();
-                thirdLine.add(firstTopic);
-                thirdLine.addAll(errorLine);
-
-                List<String> fourthLine =  new ArrayList<>();
-                fourthLine.add(secondTopic);
-                fourthLine.addAll(errorLine);
-
-                return Arrays.stream(lines[0].trim().split("\\s+")).toList().equals(firstLine) &&
-                    Arrays.stream(lines[2].trim().split("\\s+")).toList().equals(secondLine) &&
-                    Arrays.stream(lines[3].trim().split("\\s+")).toList().equals(thirdLine) &&
-                    Arrays.stream(lines[4].trim().split("\\s+")).toList().equals(fourthLine);
+                return Arrays.stream(lines[0].trim().split("\\s+")).toList().equals(errorLine) &&
+                    Arrays.stream(lines[2].trim().split("\\s+")).toList().equals(expectedResultHeader) &&
+                    Arrays.stream(lines[3].trim().split("\\s+")).toList().equals(expectedResultValue1) &&
+                    Arrays.stream(lines[4].trim().split("\\s+")).toList().equals(expectedResultValue2);
             }, "Expected a data row and no error in delete offsets result with group: " + firstGroup + " and topic: " + firstTopic);
         }
     }
@@ -778,22 +795,20 @@ public class ShareGroupCommandTest {
                     return false;
                 }
 
-                List<String> errorLine = Stream.concat(
+                List<String> error = Stream.concat(
                     Stream.of("Error:"),
                     Arrays.stream(errorMessage.trim().split("\\s+"))
                 ).toList();
 
-                List<String> firstLine = List.of("TOPIC", "STATUS");
+                List<String> expectedResultHeader = List.of("TOPIC", "STATUS");
+                List<String> expectedResultValue1 =  List.of(firstTopic, "Successful");
+                List<String> expectedResultValue2 =  new ArrayList<>();
+                expectedResultValue2.add(secondTopic);
+                expectedResultValue2.addAll(error);
 
-                List<String> secondLine =  List.of(firstTopic, "Successful");
-
-                List<String> thirdLine =  new ArrayList<>();
-                thirdLine.add(secondTopic);
-                thirdLine.addAll(errorLine);
-
-                return Arrays.stream(lines[0].trim().split("\\s+")).toList().equals(firstLine) &&
-                    Arrays.stream(lines[1].trim().split("\\s+")).toList().equals(secondLine) &&
-                    Arrays.stream(lines[2].trim().split("\\s+")).toList().equals(thirdLine);
+                return Arrays.stream(lines[0].trim().split("\\s+")).toList().equals(expectedResultHeader) &&
+                    Arrays.stream(lines[1].trim().split("\\s+")).toList().equals(expectedResultValue1) &&
+                    Arrays.stream(lines[2].trim().split("\\s+")).toList().equals(expectedResultValue2);
             }, "Expected a data row and no error in delete offsets result with group: " + firstGroup + " and topic: " + firstTopic);
         }
     }
@@ -1060,7 +1075,7 @@ public class ShareGroupCommandTest {
     }
 
     private Runnable deleteOffsets(ShareGroupCommand.ShareGroupService service) {
-        return () -> Assertions.assertDoesNotThrow(() -> service.deleteOffsets());
+        return () -> Assertions.assertDoesNotThrow(service::deleteOffsets);
     }
 
     private boolean checkArgsHeaderOutput(List<String> args, String output) {

@@ -292,7 +292,7 @@ public class ShareGroupCommand {
             String groupId = opts.options.valueOf(opts.groupOpt);
             List<String> topics = opts.options.valuesOf(opts.topicOpt);
 
-            Entry<Throwable, Map<String, Throwable>> res = deleteOffsets(groupId, new HashSet<>(topics));
+            Entry<Throwable, Map<String, Throwable>> res = sendDeleteShareGroupOffsetsRequest(groupId, new HashSet<>(topics));
 
             Throwable topLevelResult = res.getKey();
             Map<String, Throwable> topicLevelResult = res.getValue();
@@ -339,7 +339,7 @@ public class ShareGroupCommand {
             System.out.println();
         }
 
-        Entry<Throwable, Map<String, Throwable>> deleteOffsets(String groupId, Set<String> topics) {
+        Entry<Throwable, Map<String, Throwable>> sendDeleteShareGroupOffsetsRequest(String groupId, Set<String> topics) {
             Map<String, Throwable> topicLevelResult = new HashMap<>();
 
             DeleteShareGroupOffsetsResult deleteResult = adminClient.deleteShareGroupOffsets(
