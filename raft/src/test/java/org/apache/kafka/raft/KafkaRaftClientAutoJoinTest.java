@@ -17,9 +17,8 @@
 package org.apache.kafka.raft;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.message.AddRaftVoterRequestData;
-import org.apache.kafka.common.message.RemoveRaftVoterRequestData;
-import org.apache.kafka.common.protocol.ApiKeys;
+import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.record.MemoryRecords;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
@@ -27,59 +26,103 @@ import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.raft.KafkaRaftClientTest.replicaKey;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class KafkaRaftClientAutoJoinTest {
+    private static final int NUMBER_FETCH_TIMEOUTS_IN_ADD_REMOVE_PERIOD = 1;
 
     @Test
-    public void testRemoveOldVoter() throws Exception {
-        ReplicaKey leader = replicaKey(randomReplicaId(), true);
-        ReplicaKey oldFollower = replicaKey(leader.id() + 1, true);
-        ReplicaKey newFollowerKey = ReplicaKey.of(oldFollower.id(), Uuid.ONE_UUID);
+    public void testAutoRemoveOldVoter() throws Exception {
+        var leader = replicaKey(randomReplicaId(), true);
+        var oldFollower = replicaKey(leader.id() + 1, true);
+        var newFollowerKey = ReplicaKey.of(oldFollower.id(), Uuid.ONE_UUID);
         int epoch = 1;
 
-        VoterSet voters = VoterSetTest.voterSet(Stream.of(leader, oldFollower));
+        var voters = VoterSetTest.voterSet(Stream.of(leader, oldFollower));
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(newFollowerKey.id(), newFollowerKey.directoryId().get())
+        var context = new RaftClientTestContext.Builder(newFollowerKey.id(), newFollowerKey.directoryId().get())
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withElectedLeader(epoch, leader.id())
             .withAutoJoinEnabled(true)
             .withAlwaysFlush(true)
             .build();
-        context.time.sleep(2 * context.fetchTimeoutMs);
-        FollowerState state = context.client.quorum().followerStateOrThrow();
-        state.resetFetchTimeoutForSuccessfulFetch(context.time.milliseconds());
+
+        completeFetch(context, epoch, newFollowerKey.id());
+
+        context.time.sleep(context.fetchTimeoutMs - 1);
         context.pollUntilRequest();
-        RemoveRaftVoterRequestData removeVoterRequest = (RemoveRaftVoterRequestData) context.channel.drainSentRequests(Optional.of(ApiKeys.REMOVE_RAFT_VOTER)).get(0).data();
-        assertEquals(oldFollower.id(), removeVoterRequest.voterId());
-        assertEquals(oldFollower.directoryId().get(), removeVoterRequest.voterDirectoryId());
+        var removeRequest = context.assertSentRemoveVoterRequest(oldFollower);
+        context.deliverResponse(
+            removeRequest.correlationId(),
+            removeRequest.destination(),
+            RaftUtil.removeVoterResponse(Errors.NONE, Errors.NONE.message())
+        );
+
+        // after sending a remove voter the next request should be a fetch
+        context.pollUntilRequest();
+        var fetchRequest = context.assertSentFetchRequest();
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
     }
 
     @Test
-    public void testAddNewVoter() throws Exception {
-        ReplicaKey leader = replicaKey(randomReplicaId(), true);
-        ReplicaKey follower = replicaKey(leader.id() + 1, true);
-        ReplicaKey newVoter = replicaKey(follower.id() + 1, true);
+    public void testAutoAddNewVoter() throws Exception {
+        var leader = replicaKey(randomReplicaId(), true);
+        var follower = replicaKey(leader.id() + 1, true);
+        var newVoter = replicaKey(follower.id() + 1, true);
         int epoch = 1;
 
-        VoterSet voters = VoterSetTest.voterSet(Stream.of(leader, follower));
+        var voters = VoterSetTest.voterSet(Stream.of(leader, follower));
 
-        RaftClientTestContext context = new RaftClientTestContext.Builder(newVoter.id(), newVoter.directoryId().get())
+        var context = new RaftClientTestContext.Builder(newVoter.id(), newVoter.directoryId().get())
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withElectedLeader(epoch, leader.id())
             .withAutoJoinEnabled(true)
             .withAlwaysFlush(true)
             .build();
-        context.time.sleep(2 * context.fetchTimeoutMs);
-        FollowerState state = context.client.quorum().followerStateOrThrow();
-        state.resetFetchTimeoutForSuccessfulFetch(context.time.milliseconds());
+
+        completeFetch(context, epoch, newVoter.id());
+
+        context.time.sleep(context.fetchTimeoutMs - 1);
         context.pollUntilRequest();
-        AddRaftVoterRequestData addVoterRequest = (AddRaftVoterRequestData) context.channel.drainSentRequests(Optional.of(ApiKeys.ADD_RAFT_VOTER)).get(0).data();
-        assertEquals(newVoter.id(), addVoterRequest.voterId());
-        assertEquals(newVoter.directoryId().get(), addVoterRequest.voterDirectoryId());
-        // TODO: check listeners if possible
+        var addRequest = context.assertSentAddVoterRequest(newVoter, context.client.quorum().localVoterNodeOrThrow().listeners());
+        context.deliverResponse(
+            addRequest.correlationId(),
+            addRequest.destination(),
+            RaftUtil.removeVoterResponse(Errors.NONE, Errors.NONE.message())
+        );
+
+        // after sending an add voter the next request should be a fetch
+        context.pollUntilRequest();
+        var fetchRequest = context.assertSentFetchRequest();
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+    }
+
+
+
+    // Used to prevent fetch timer expiration when advancing time
+    private void completeFetch(RaftClientTestContext context, int epoch, int fetchingId) throws Exception {
+        // waiting for FETCH requests until the AddVoter request is sent
+        for (int i = 0; i < NUMBER_FETCH_TIMEOUTS_IN_ADD_REMOVE_PERIOD; i++) {
+            context.time.sleep(context.fetchTimeoutMs - 1);
+            context.pollUntilRequest();
+            var fetchRequest = context.assertSentFetchRequest();
+            context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+
+            context.deliverResponse(
+                fetchRequest.correlationId(),
+                fetchRequest.destination(),
+                context.fetchResponse(
+                    epoch,
+                    fetchingId,
+                    MemoryRecords.EMPTY,
+                    0L,
+                    Errors.NONE
+                )
+            );
+            // poll kraft to handle the fetch response
+            context.client.poll();
+        }
     }
 
     private int randomReplicaId() {

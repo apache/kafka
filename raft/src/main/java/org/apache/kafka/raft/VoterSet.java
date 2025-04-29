@@ -339,10 +339,9 @@ public final class VoterSet {
 
     /**
      * Gets the old voter for a given replica key if it exists.
-     *
      * An old voter is a voter that has the same replica id as the given replica key, but a different directory id.
      *
-     * @param replicaKey
+     * @param replicaKey the replica key to check against
      * @return the replica key with the same id but a different directory id, if present, Optional.empty() otherwise
      */
     public Optional<ReplicaKey> getOldVoterForReplicaKey(ReplicaKey replicaKey) {
@@ -350,13 +349,12 @@ public final class VoterSet {
             .values()
             .stream()
             .map(VoterNode::voterKey)
-            .filter(voter -> voter.id() == replicaKey.id() &&
-                !voter.directoryId().equals(replicaKey.directoryId()))
+            .filter(voter -> voter.id() == replicaKey.id() && !voter.directoryId().equals(replicaKey.directoryId()))
             .findFirst();
     }
 
     /**
-     * @param replicaKey
+     * @param replicaKey the replica key to check against
      * @return true if the voter set does not contain the given replica id, false otherwise
      */
     public boolean doesNotContainReplicaId(ReplicaKey replicaKey) {

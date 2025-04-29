@@ -168,7 +168,7 @@ public class FollowerState implements EpochState {
 
     private long addRemoveVoterPeriodMs() {
         // Allow for a few rounds of fetch request before attempting to add or remove itself
-        return 2L * fetchTimeoutMs;
+        return fetchTimeoutMs;
     }
 
     public boolean hasAddRemoveVoterPeriodExpired(long currentTimeMs) {

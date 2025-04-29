@@ -1256,6 +1256,25 @@ public final class RaftClientTestContext {
         return sentRequests.get(0);
     }
 
+    RaftRequest.Outbound assertSentAddVoterRequest(
+        ReplicaKey replicaKey,
+        Endpoints endpoints
+    ) {
+        List<RaftRequest.Outbound> sentRequests = channel.drainSentRequests(Optional.of(ApiKeys.ADD_RAFT_VOTER));
+        assertEquals(1, sentRequests.size());
+
+        var request = sentRequests.get(0);
+        assertInstanceOf(AddRaftVoterRequestData.class, request.data());
+
+        var addRaftVoterRequestData = (AddRaftVoterRequestData) request.data();
+        assertEquals(clusterId, addRaftVoterRequestData.clusterId());
+        assertEquals(replicaKey.id(), addRaftVoterRequestData.voterId());
+        assertEquals(replicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID), addRaftVoterRequestData.voterDirectoryId());
+        assertEquals(endpoints, Endpoints.fromAddVoterRequest(addRaftVoterRequestData.listeners()));
+
+        return request;
+    }
+
     AddRaftVoterResponseData assertSentAddVoterResponse(Errors error) {
         List<RaftResponse.Outbound> sentResponses = drainSentResponses(ApiKeys.ADD_RAFT_VOTER);
         assertEquals(1, sentResponses.size());
@@ -1267,6 +1286,23 @@ public final class RaftClientTestContext {
         assertEquals(error, Errors.forCode(addVoterResponse.errorCode()));
 
         return addVoterResponse;
+    }
+
+    RaftRequest.Outbound assertSentRemoveVoterRequest(
+        ReplicaKey replicaKey
+    ) {
+        List<RaftRequest.Outbound> sentRequests = channel.drainSentRequests(Optional.of(ApiKeys.REMOVE_RAFT_VOTER));
+        assertEquals(1, sentRequests.size());
+
+        var request = sentRequests.get(0);
+        assertInstanceOf(RemoveRaftVoterRequestData.class, request.data());
+
+        var removeRaftVoterRequestData = (RemoveRaftVoterRequestData) request.data();
+        assertEquals(clusterId, removeRaftVoterRequestData.clusterId());
+        assertEquals(replicaKey.id(), removeRaftVoterRequestData.voterId());
+        assertEquals(replicaKey.directoryId().orElse(ReplicaKey.NO_DIRECTORY_ID), removeRaftVoterRequestData.voterDirectoryId());
+
+        return request;
     }
 
     RemoveRaftVoterResponseData assertSentRemoveVoterResponse(Errors error) {

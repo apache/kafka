@@ -356,9 +356,9 @@ public final class VoterSetTest {
 
     @Test
     void testGetOldVoterForReplicaKey() {
-        ReplicaKey newKey = ReplicaKey.of(1, Uuid.ZERO_UUID);
-        ReplicaKey oldKey = ReplicaKey.of(1, Uuid.randomUuid());
-        VoterSet voters = VoterSetTest.voterSet(Stream.of(ReplicaKey.of(0, Uuid.randomUuid()), oldKey));
+        var newKey = ReplicaKey.of(1, Uuid.ZERO_UUID);
+        var oldKey = ReplicaKey.of(1, Uuid.randomUuid());
+        var voters = VoterSetTest.voterSet(Stream.of(ReplicaKey.of(0, Uuid.randomUuid()), oldKey));
 
         assertEquals(Optional.of(oldKey), voters.getOldVoterForReplicaKey(newKey));
         assertEquals(Optional.empty(), voters.getOldVoterForReplicaKey(oldKey));
@@ -367,9 +367,9 @@ public final class VoterSetTest {
 
     @Test
     void testDoesNotContainReplicaKey() {
-        ReplicaKey newKey = ReplicaKey.of(1, Uuid.ZERO_UUID);
-        ReplicaKey oldKey = ReplicaKey.of(1, Uuid.randomUuid());
-        VoterSet voters = VoterSetTest.voterSet(Stream.of(ReplicaKey.of(0, Uuid.randomUuid()), oldKey));
+        var newKey = ReplicaKey.of(1, Uuid.ZERO_UUID);
+        var oldKey = ReplicaKey.of(1, Uuid.randomUuid());
+        var voters = VoterSetTest.voterSet(Stream.of(ReplicaKey.of(0, Uuid.randomUuid()), oldKey));
 
         assertTrue(voters.doesNotContainReplicaId(ReplicaKey.of(2, Uuid.randomUuid())));
         assertFalse(voters.doesNotContainReplicaId(oldKey));

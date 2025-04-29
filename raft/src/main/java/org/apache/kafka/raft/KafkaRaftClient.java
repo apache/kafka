@@ -2280,6 +2280,25 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         );
     }
 
+    private boolean handleAddVoterResponse(
+        RaftResponse.Inbound responseMetadata,
+        long currentTimeMs
+    ) {
+        RemoveRaftVoterResponseData data = (RemoveRaftVoterResponseData) responseMetadata.data();
+
+        Errors error = Errors.forCode(data.errorCode());
+
+        if (error == Errors.NONE || error == Errors.UNSUPPORTED_VERSION || error == Errors.DUPLICATE_VOTER) {
+            return true;
+        } else if (error == Errors.REQUEST_TIMED_OUT) {
+            FollowerState follower = quorum.followerStateOrThrow();
+            follower.resetAddRemoveVoterPeriod(currentTimeMs);
+            return true;
+        } else {
+            return handleUnexpectedError(error, responseMetadata);
+        }
+    }
+
     private CompletableFuture<RemoveRaftVoterResponseData> handleRemoveVoterRequest(
         RaftRequest.Inbound requestMetadata,
         long currentTimeMs
@@ -2321,6 +2340,25 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             oldVoter.get(),
             currentTimeMs
         );
+    }
+
+    private boolean handleRemoveVoterResponse(
+        RaftResponse.Inbound responseMetadata,
+        long currentTimeMs
+    ) {
+        RemoveRaftVoterResponseData data = (RemoveRaftVoterResponseData) responseMetadata.data();
+
+        Errors error = Errors.forCode(data.errorCode());
+
+        if (error == Errors.NONE || error == Errors.UNSUPPORTED_VERSION || error == Errors.VOTER_NOT_FOUND) {
+            return true;
+        } else if (error == Errors.REQUEST_TIMED_OUT) {
+            FollowerState follower = quorum.followerStateOrThrow();
+            follower.resetAddRemoveVoterPeriod(currentTimeMs);
+            return true;
+        } else {
+            return handleUnexpectedError(error, responseMetadata);
+        }
     }
 
     private CompletableFuture<UpdateRaftVoterResponseData> handleUpdateVoterRequest(
@@ -2616,6 +2654,14 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
 
             case UPDATE_RAFT_VOTER:
                 handledSuccessfully = handleUpdateVoterResponse(response, currentTimeMs);
+                break;
+
+            case ADD_RAFT_VOTER:
+                handledSuccessfully = handleAddVoterResponse(response, currentTimeMs);
+                break;
+
+            case REMOVE_RAFT_VOTER:
+                handledSuccessfully = handleRemoveVoterResponse(response, currentTimeMs);
                 break;
 
             default:
@@ -3276,7 +3322,6 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return maybeSendFetchToAnyBootstrap(currentTimeMs);
         } else if (partitionState.lastKraftVersion().isReconfigSupported() && followersAlwaysFlush &&
             quorumConfig.autoJoinEnable() && state.hasAddRemoveVoterPeriodExpired(currentTimeMs)) {
-            System.out.println("trying to add or remove voter");
             VoterSet voters = partitionState.lastVoterSet();
             ReplicaKey localReplicaKey = quorum.localReplicaKeyOrThrow();
             final boolean resetAddRemoveVoterTimer;
