@@ -297,6 +297,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         self.use_transactions_v2 = use_transactions_v2
         self.use_share_groups = use_share_groups
 
+        # Set offsets_commit_timeout based on context
         if context.injected_args is not None:
             self.offsets_commit_timeout = context.injected_args.get('offsets_commit_timeout')
 
