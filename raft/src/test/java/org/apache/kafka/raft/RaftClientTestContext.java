@@ -82,7 +82,6 @@ import java.io.IOException;
 import java.net.InetSocketAddress;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -380,7 +379,7 @@ public final class RaftClientTestContext {
             Metrics metrics = new Metrics(time);
             MockNetworkChannel channel = new MockNetworkChannel();
             MockListener listener = new MockListener(localId);
-            Map<Integer, InetSocketAddress> staticVoterAddressMap = Collections.emptyMap();
+            Map<Integer, InetSocketAddress> staticVoterAddressMap = Map.of();
             if (isStartingVotersStatic) {
                 staticVoterAddressMap = startingVoters
                     .voterNodes(startingVoters.voterIds().stream(), channel.listenerName())
@@ -415,7 +414,7 @@ public final class RaftClientTestContext {
 
             List<InetSocketAddress> computedBootstrapServers = bootstrapServers.orElseGet(() -> {
                 if (isStartingVotersStatic) {
-                    return Collections.emptyList();
+                    return List.of();
                 } else {
                     return startingVoters
                         .voterNodes(startingVoters.voterIds().stream(), channel.listenerName())
@@ -730,7 +729,7 @@ public final class RaftClientTestContext {
 
     // Voters are only written to ElectionState in KRaftVersion 0
     private Set<Integer> expectedVoters() {
-        return kraftVersion.isReconfigSupported() ? Collections.emptySet() : startingVoters.voterIds();
+        return kraftVersion.isReconfigSupported() ? Set.of() : startingVoters.voterIds();
     }
 
     DescribeQuorumResponseData collectDescribeQuorumResponse() {
@@ -869,8 +868,7 @@ public final class RaftClientTestContext {
     ) {
         List<RaftRequest.Outbound> voteRequests = new ArrayList<>();
         for (RaftRequest.Outbound raftMessage : channel.drainSendQueue()) {
-            if (raftMessage.data() instanceof VoteRequestData) {
-                VoteRequestData request = (VoteRequestData) raftMessage.data();
+            if (raftMessage.data() instanceof VoteRequestData request) {
                 VoteRequestData.PartitionData partitionRequest = unwrap(request);
 
                 assertTrue(partitionRequest.preVote());
@@ -1040,7 +1038,7 @@ public final class RaftClientTestContext {
     RaftRequest.Outbound assertSentEndQuorumEpochRequest(int epoch, int destinationId) {
         List<RaftRequest.Outbound> endQuorumRequests = collectEndQuorumRequests(
             epoch,
-            Collections.singleton(destinationId),
+            Set.of(destinationId),
             Optional.empty()
         );
         assertEquals(1, endQuorumRequests.size());
@@ -1320,7 +1318,7 @@ public final class RaftClientTestContext {
             int id = updateVoterResponse.currentLeader().leaderId();
             Endpoints expectedLeaderEndpoints = startingVoters.listeners(id);
             Endpoints responseEndpoints = Endpoints.fromInetSocketAddresses(
-                Collections.singletonMap(
+                Map.of(
                     channel.listenerName(),
                     InetSocketAddress.createUnresolved(
                         updateVoterResponse.currentLeader().host(),

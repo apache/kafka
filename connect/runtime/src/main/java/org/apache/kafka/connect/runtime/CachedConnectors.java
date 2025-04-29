@@ -54,7 +54,7 @@ public class CachedConnectors {
         }
     }
 
-    private Connector lookup(String connectorName, VersionRange range) throws Exception {
+    private Connector lookup(String connectorName, VersionRange range) {
         String version = range == null ? LATEST_VERSION : range.toString();
         if (connectors.containsKey(connectorName) && connectors.get(connectorName).containsKey(version)) {
             return connectors.get(connectorName).get(version);
@@ -73,7 +73,7 @@ public class CachedConnectors {
         }
     }
 
-    public Connector getConnector(String connectorName, VersionRange range) throws Exception {
+    public Connector getConnector(String connectorName, VersionRange range) {
         validate(connectorName, range);
         return lookup(connectorName, range);
     }
