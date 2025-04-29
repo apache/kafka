@@ -3322,8 +3322,8 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return maybeSendFetchToAnyBootstrap(currentTimeMs);
         } else if (partitionState.lastKraftVersion().isReconfigSupported() && followersAlwaysFlush &&
             quorumConfig.autoJoinEnable() && state.hasAddRemoveVoterPeriodExpired(currentTimeMs)) {
-            VoterSet voters = partitionState.lastVoterSet();
-            ReplicaKey localReplicaKey = quorum.localReplicaKeyOrThrow();
+            var voters = partitionState.lastVoterSet();
+            var localReplicaKey = quorum.localReplicaKeyOrThrow();
             final boolean resetAddRemoveVoterTimer;
             final long backoffMs;
 

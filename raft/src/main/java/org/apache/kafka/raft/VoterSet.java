@@ -338,7 +338,7 @@ public final class VoterSet {
     }
 
     /**
-     * Gets the old voter for a given replica key if it exists.
+     * Gets the old voter's replica key for a given replica key if it exists.
      * An old voter is a voter that has the same replica id as the given replica key, but a different directory id.
      *
      * @param replicaKey the replica key to check against

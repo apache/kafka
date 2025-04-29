@@ -22,6 +22,7 @@ import org.apache.kafka.common.record.MemoryRecords;
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Stream;
 
@@ -98,7 +99,83 @@ public class KafkaRaftClientAutoJoinTest {
         context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
     }
 
+    @Test
+    public void testBrokersDoNotAutoJoin() throws Exception {
+        var leader = replicaKey(randomReplicaId(), true);
+        var follower = replicaKey(leader.id() + 1, true);
+        var newBroker = replicaKey(follower.id() + 1, true);
+        int epoch = 1;
 
+        var voters = VoterSetTest.voterSet(Stream.of(leader, follower));
+
+        var context = new RaftClientTestContext.Builder(newBroker.id(), newBroker.directoryId().get())
+            .withKip853Rpc(true)
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withElectedLeader(epoch, leader.id())
+            .withAutoJoinEnabled(true)
+            .withAlwaysFlush(false)
+            .build();
+
+        completeFetch(context, epoch, newBroker.id());
+
+        context.time.sleep(context.fetchTimeoutMs - 1);
+        context.pollUntilRequest();
+
+        // When alwaysFlush == false, the client is not for a controller process, so it should not send an add voter request
+        var fetchRequest = context.assertSentFetchRequest();
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+    }
+
+    @Test
+    public void testObserverDoesNotAutoJoinIfConfigNotSet() throws Exception {
+        var leader = replicaKey(randomReplicaId(), true);
+        var follower = replicaKey(leader.id() + 1, true);
+        var observer = replicaKey(follower.id() + 1, true);
+        int epoch = 1;
+
+        var voters = VoterSetTest.voterSet(Stream.of(leader, follower));
+
+        var context = new RaftClientTestContext.Builder(observer.id(), observer.directoryId().get())
+            .withKip853Rpc(true)
+            .withBootstrapSnapshot(Optional.of(voters))
+            .withElectedLeader(epoch, leader.id())
+            .withAutoJoinEnabled(false)
+            .withAlwaysFlush(true)
+            .build();
+
+        completeFetch(context, epoch, observer.id());
+
+        context.time.sleep(context.fetchTimeoutMs - 1);
+        context.pollUntilRequest();
+
+        // When controller.quorum.auto.join.enable is not set, the controller should not send add voter
+        var fetchRequest = context.assertSentFetchRequest();
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+    }
+
+    @Test
+    public void testObserverDoesNotAutoJoinWithKRaftVersion0() throws Exception {
+        var leader = replicaKey(randomReplicaId(), false);
+        var follower = replicaKey(leader.id() + 1, false);
+        var observer = replicaKey(follower.id() + 1, false);
+        int epoch = 1;
+
+        var context = new RaftClientTestContext.Builder(observer.id(), Set.of(leader.id(), follower.id()))
+            .withKip853Rpc(false)
+            .withElectedLeader(epoch, leader.id())
+            .withAutoJoinEnabled(true)
+            .withAlwaysFlush(true)
+            .build();
+
+        completeFetch(context, epoch, observer.id());
+
+        context.time.sleep(context.fetchTimeoutMs - 1);
+        context.pollUntilRequest();
+
+        // When using kraft.version == 0, the controller should not send add voter, even if the config is set
+        var fetchRequest = context.assertSentFetchRequest();
+        context.assertFetchRequestData(fetchRequest, epoch, 0L, 0);
+    }
 
     // Used to prevent fetch timer expiration when advancing time
     private void completeFetch(RaftClientTestContext context, int epoch, int fetchingId) throws Exception {
