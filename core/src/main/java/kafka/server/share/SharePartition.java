@@ -3026,16 +3026,7 @@ public class SharePartition {
                 }
                 state = state.validateTransition(newState);
                 if (newState != RecordState.ARCHIVED) {
-                    switch (ops) {
-                        case INCREASE -> deliveryCount++;
-                        case DECREASE -> deliveryCount--;
-                        // do nothing
-                        case NO_OP -> { }
-                        default -> {
-                            log.error("Invalid ops for delivery count.");
-                            return null;
-                        }
-                    }
+                    deliveryCount = updatedDeliveryCount(ops);
                 }
                 memberId = newMemberId;
                 return this;
@@ -3043,6 +3034,15 @@ public class SharePartition {
                 log.error("Failed to update state of the records", e);
                 return null;
             }
+        }
+
+        private int updatedDeliveryCount(DeliveryCountOps ops) {
+            return switch (ops) {
+                case INCREASE -> deliveryCount + 1;
+                case DECREASE -> deliveryCount - 1;
+                // do nothing
+                case NO_OP -> deliveryCount;
+            };
         }
 
         private void archive(String newMemberId) {
