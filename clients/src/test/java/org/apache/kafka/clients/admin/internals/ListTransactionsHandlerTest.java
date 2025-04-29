@@ -103,6 +103,17 @@ public class ListTransactionsHandlerTest {
     }
 
     @Test
+    public void testBuildRequestWithNullFilteredTransactionalIdPattern() {
+        int brokerId = 1;
+        BrokerKey brokerKey = new BrokerKey(OptionalInt.of(brokerId));
+        ListTransactionsOptions options = new ListTransactionsOptions()
+            .filterOnTransactionalIdPattern(null);
+        ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
+        ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, Set.of(brokerKey)).build();
+        assertNull(request.data().transactionalIdPattern());
+    }
+
+    @Test
     public void testBuildRequestWithEmptyFilteredTransactionalIdPattern() {
         int brokerId = 1;
         BrokerKey brokerKey = new BrokerKey(OptionalInt.of(brokerId));

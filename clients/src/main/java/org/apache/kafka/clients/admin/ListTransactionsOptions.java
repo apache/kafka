@@ -80,7 +80,7 @@ public class ListTransactionsOptions extends AbstractOptions<ListTransactionsOpt
      * @return this object
      */
     public ListTransactionsOptions filterOnTransactionalIdPattern(String pattern) {
-        this.filteredTransactionalIdPattern = pattern;
+        this.filteredTransactionalIdPattern = pattern == null ? "" : pattern;
         return this;
     }
 
