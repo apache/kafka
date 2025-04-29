@@ -27,6 +27,7 @@ import org.apache.kafka.common.requests.{AlterReplicaLogDirsRequest, AlterReplic
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.storage.internals.log.LogFileUtils
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.ValueSource
 
@@ -38,10 +39,24 @@ import scala.util.Random
 class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
   override val logDirCount = 5
   override val brokerCount = 1
-
+  var testInfo : TestInfo = _
   val topic = "topic"
 
+  @BeforeEach
+  override def setUp(testInfo: TestInfo): Unit = {
+    this.testInfo = testInfo
+    if (testInfo.getTestMethod.get.getName ==  "testAlterReplicaLogDirsRequestWithRetention") {
+      this.serverConfig.put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, "1024")
+      this.controllerConfig.put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, "1024")
+    }
+    super.setUp(testInfo)
+  }
+
   override def brokerPropertyOverrides(properties: Properties): Unit = {
+    if (testInfo != null && testInfo.getTestMethod.get.getName ==  "testAlterReplicaLogDirsRequestWithRetention") {
+      properties.put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, "1024")
+      properties.put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, "1024")
+    }
     properties.put(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, "0")
     properties.put(ServerLogConfigs.LOG_CLEANUP_INTERVAL_MS_CONFIG, "1000")
   }
@@ -148,7 +163,6 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     // We don't want files with `.deleted` suffix are removed too fast,
     // so we can validate there will be orphan files and orphan files will be removed eventually.
     topicProperties.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, "10000")
-    topicProperties.put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, "1024")
 
     createTopic(topic, partitionNum, 1, topicProperties)
     assertEquals(logDir1, brokers.head.logManager.getLog(tp).get.dir.getParent)
