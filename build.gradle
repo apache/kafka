@@ -1414,6 +1414,7 @@ project(':group-coordinator') {
     implementation project(':coordinator-common')
     implementation libs.jacksonDatabind
     implementation libs.jacksonJDK8Datatypes
+    implementation libs.lz4
     implementation libs.metrics
     implementation libs.hdrHistogram
     implementation libs.re2j

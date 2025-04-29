@@ -17,12 +17,14 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.KafkaException;
-import org.apache.kafka.common.internals.Murmur3;
 import org.apache.kafka.common.message.ListGroupsResponseData;
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.image.ClusterImage;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.metadata.BrokerRegistration;
+
+import net.jpountz.xxhash.XXHash64;
+import net.jpountz.xxhash.XXHashFactory;
 
 import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
@@ -224,6 +226,7 @@ public interface Group {
      * The magic byte used to identify the version of topic hash function.
      */
     byte TOPIC_HASH_MAGIC_BYTE = 0x00;
+    XXHash64 LZ4_HASH_INSTANCE = XXHashFactory.fastestInstance().hash64();
 
     /**
      * Computes the hash of the topics in a group.
@@ -300,7 +303,8 @@ public interface Group {
                 dos.writeUTF(racks); // sorted racks
             }
             dos.flush();
-            return Murmur3.hash64(baos.toByteArray());
+            byte[] topicBytes = baos.toByteArray();
+            return LZ4_HASH_INSTANCE.hash(topicBytes, 0, topicBytes.length, 0);
         }
     }
 }

@@ -17,8 +17,10 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
-import org.apache.kafka.common.internals.Murmur3;
 import org.apache.kafka.image.MetadataImage;
+
+import net.jpountz.xxhash.XXHash64;
+import net.jpountz.xxhash.XXHashFactory;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
@@ -44,6 +46,7 @@ public class GroupTest {
         .addTopic(FOO_TOPIC_ID, FOO_TOPIC_NAME, FOO_NUM_PARTITIONS)
         .addRacks()
         .build();
+    private static final XXHash64 LZ4_HASH_INSTANCE = XXHashFactory.fastestInstance().hash64();
 
     @Test
     void testComputeTopicHash() throws IOException {
@@ -60,7 +63,8 @@ public class GroupTest {
             dos.writeInt(1); // partition 1
             dos.writeUTF("0:rack1,1:rack2"); // rack of partition 1
             dos.flush();
-            assertEquals(Murmur3.hash64(baos.toByteArray()), result);
+            byte[] topicBytes = baos.toByteArray();
+            assertEquals(LZ4_HASH_INSTANCE.hash(topicBytes, 0, topicBytes.length, 0), result);
         }
     }
 
@@ -79,7 +83,8 @@ public class GroupTest {
             dos.writeInt(1); // partition 1
             dos.writeUTF("0:rack1,1:rack2"); // rack of partition 1
             dos.flush();
-            assertNotEquals(Murmur3.hash64(baos.toByteArray()), result);
+            byte[] topicBytes = baos.toByteArray();
+            assertNotEquals(LZ4_HASH_INSTANCE.hash(topicBytes, 0, topicBytes.length, 0), result);
         }
     }
 
@@ -99,7 +104,8 @@ public class GroupTest {
             dos.writeInt(0); // partition 0
             dos.writeUTF("0:rack0,1:rack1"); // rack of partition 0
             dos.flush();
-            assertNotEquals(Murmur3.hash64(baos.toByteArray()), result);
+            byte[] topicBytes = baos.toByteArray();
+            assertNotEquals(LZ4_HASH_INSTANCE.hash(topicBytes, 0, topicBytes.length, 0), result);
         }
     }
 
@@ -118,7 +124,8 @@ public class GroupTest {
             dos.writeInt(1); // partition 1
             dos.writeUTF("0:rack1,1:rack2"); // rack of partition 1
             dos.flush();
-            assertNotEquals(Murmur3.hash64(baos.toByteArray()), result);
+            byte[] topicBytes = baos.toByteArray();
+            assertNotEquals(LZ4_HASH_INSTANCE.hash(topicBytes, 0, topicBytes.length, 0), result);
         }
     }
 
