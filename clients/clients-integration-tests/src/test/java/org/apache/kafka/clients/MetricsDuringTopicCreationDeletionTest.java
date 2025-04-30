@@ -31,7 +31,6 @@ import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.atomic.AtomicBoolean;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -45,7 +44,7 @@ public class MetricsDuringTopicCreationDeletionTest {
 
     private final ClusterInstance clusterInstance;
     private final List<String> topics;
-    private final AtomicBoolean running = new AtomicBoolean(true);
+    private volatile boolean running = true;
 
     public MetricsDuringTopicCreationDeletionTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;
@@ -76,10 +75,10 @@ public class MetricsDuringTopicCreationDeletionTest {
         final int initialPreferredReplicaImbalanceCount = getGauge("PreferredReplicaImbalanceCount").value();
         final int initialUnderReplicatedPartitionsCount = getGauge("UnderReplicatedPartitions").value();
 
-        running.set(true);
+        running = true;
 
         CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
-            while (running.get()) {
+            while (running) {
                 int offlinePartitionsCount = getGauge("OfflinePartitionsCount").value();
                 int preferredReplicaImbalanceCount = getGauge("PreferredReplicaImbalanceCount").value();
                 int underReplicatedPartitionsCount = getGauge("UnderReplicatedPartitions").value();
@@ -87,38 +86,24 @@ public class MetricsDuringTopicCreationDeletionTest {
                 if (offlinePartitionsCount != initialOfflinePartitionsCount ||
                         preferredReplicaImbalanceCount != initialPreferredReplicaImbalanceCount ||
                         underReplicatedPartitionsCount != initialUnderReplicatedPartitionsCount) {
-                    running.set(false);
+                    running = false;
+                }
+
+                try {
+                    Thread.sleep(100); // Avoid busy loop
+                } catch (InterruptedException ignored) {
+
                 }
             }
         });
 
         Closeable runThread = () -> {
-            running.set(false);
+            running = false;
             future.join();
         };
 
         try (runThread) {
-            for (int i = 1; i <= CREATE_DELETE_ITERATIONS && running.get(); i++) {
-                // Create topics
-                for (String topic : topics) {
-                    if (!running.get()) break;
-                    try {
-                        clusterInstance.createTopic(topic, PARTITION_NUM, (short) REPLICATION_FACTOR);
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
-
-                // Delete topics
-                for (String topic : topics) {
-                    if (!running.get()) break;
-                    try {
-                        clusterInstance.deleteTopic(topic);
-                    } catch (Exception e) {
-                        e.printStackTrace();
-                    }
-                }
-            }
+            createAndDeleteTopics();
         }
 
         final int finalOfflinePartitionsCount = getGauge("OfflinePartitionsCount").value();
@@ -131,6 +116,28 @@ public class MetricsDuringTopicCreationDeletionTest {
                 "Expect PreferredReplicaImbalanceCount to be " + initialPreferredReplicaImbalanceCount + ", but got: " + finalPreferredReplicaImbalanceCount);
         assertEquals(initialUnderReplicatedPartitionsCount, finalUnderReplicatedPartitionsCount,
                 "Expect UnderReplicatedPartitionCount to be " + initialUnderReplicatedPartitionsCount + ", but got: " + finalUnderReplicatedPartitionsCount);
+    }
+
+    private void createAndDeleteTopics() {
+        for (int i = 1; i <= CREATE_DELETE_ITERATIONS && running; i++) {
+            for (String topic : topics) {
+                if (!running) break;
+                try {
+                    clusterInstance.createTopic(topic, PARTITION_NUM, (short) REPLICATION_FACTOR);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+
+            for (String topic : topics) {
+                if (!running) break;
+                try {
+                    clusterInstance.deleteTopic(topic);
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }
+        }
     }
 
     private Gauge<Integer> getGauge(String metricName) {
