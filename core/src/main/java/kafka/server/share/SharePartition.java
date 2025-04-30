@@ -1367,6 +1367,7 @@ public class SharePartition {
             fetchLockReleasedTimeMs = currentTime;
             fetchLock.set(false);
         } else {
+            // This code should not be reached unless we are in error-prone scenarios.
             log.warn("Instance {} does not hold the fetch lock, yet trying to release it for share partition {}-{}",
                 fetchId, groupId, topicIdPartition);
         }
