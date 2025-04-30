@@ -176,8 +176,8 @@ public class AdminClientTestUtils {
         return new ListClientMetricsResourcesResult(future);
     }
 
-    public static ListShareGroupOffsetsResult createListShareGroupOffsetsResult(Map<String, KafkaFuture<Map<TopicPartition, Long>>> groupOffsets) {
-        Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, Long>>> coordinatorFutures = groupOffsets.entrySet().stream()
+    public static ListShareGroupOffsetsResult createListShareGroupOffsetsResult(Map<String, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> groupOffsets) {
+        Map<CoordinatorKey, KafkaFuture<Map<TopicPartition, OffsetAndMetadata>>> coordinatorFutures = groupOffsets.entrySet().stream()
             .collect(Collectors.toMap(
                 entry -> CoordinatorKey.byGroupId(entry.getKey()),
                 Map.Entry::getValue
