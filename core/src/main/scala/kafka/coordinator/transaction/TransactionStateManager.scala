@@ -354,7 +354,7 @@ class TransactionStateManager(brokerId: Int,
         }
 
         val states = new java.util.ArrayList[ListTransactionsResponseData.TransactionState]
-        val pattern = if (filterTransactionalIdPattern.nonEmpty) {
+        val pattern = if (filterTransactionalIdPattern != null && filterTransactionalIdPattern.nonEmpty) {
           try {
             Pattern.compile(filterTransactionalIdPattern)
           }

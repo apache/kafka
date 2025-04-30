@@ -2472,11 +2472,7 @@ class KafkaApis(val requestChannel: RequestChannel,
     val filteredProducerIds = listTransactionsRequest.data.producerIdFilters.asScala.map(Long.unbox).toSet
     val filteredStates = listTransactionsRequest.data.stateFilters.asScala.toSet
     val durationFilter = listTransactionsRequest.data.durationFilter()
-    val transactionalIdPatternFilter = if (listTransactionsRequest.data.transactionalIdPattern == null) {
-      ""
-    } else {
-      listTransactionsRequest.data.transactionalIdPattern
-    }
+    val transactionalIdPatternFilter = listTransactionsRequest.data.transactionalIdPattern
     val response = txnCoordinator.handleListTransactions(
       filteredProducerIds,
       filteredStates,
