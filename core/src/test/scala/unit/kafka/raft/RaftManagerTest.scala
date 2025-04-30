@@ -28,6 +28,7 @@ import kafka.utils.TestUtils
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.metrics.Metrics
+import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.raft.{Endpoints, MetadataLogConfig, QuorumConfig}
@@ -88,7 +89,7 @@ class RaftManagerTest {
     val endpoints = Endpoints.fromInetSocketAddresses(
       config.effectiveAdvertisedControllerListeners
         .map { endpoint =>
-          (endpoint.listenerName, InetSocketAddress.createUnresolved(endpoint.host, endpoint.port))
+          (ListenerName.normalised(endpoint.listener), InetSocketAddress.createUnresolved(endpoint.host, endpoint.port))
         }
         .toMap
         .asJava
