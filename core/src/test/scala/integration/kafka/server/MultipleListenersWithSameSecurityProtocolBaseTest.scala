@@ -132,7 +132,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
     TestUtils.ensureConsistentKRaftMetadata(servers, controllerServer)
 
     servers.head.config.listeners.foreach { endPoint =>
-      val listenerName = endPoint.listenerName
+      val listenerName = ListenerName.normalised(endPoint.listener)
 
       val trustStoreFile =
         if (JaasTestUtils.usesSslTransportLayer(endPoint.securityProtocol)) Some(this.trustStoreFile)
@@ -155,7 +155,7 @@ abstract class MultipleListenersWithSameSecurityProtocolBaseTest extends QuorumT
       }
 
       if (JaasTestUtils.usesSaslAuthentication(endPoint.securityProtocol)) {
-        kafkaServerSaslMechanisms(endPoint.listenerName.value).foreach { mechanism =>
+        kafkaServerSaslMechanisms(endPoint.listener).foreach { mechanism =>
           addProducerConsumer(listenerName, mechanism, Some(kafkaClientSaslProperties(mechanism, dynamicJaasConfig = true)))
         }
       } else {

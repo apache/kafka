@@ -16,7 +16,6 @@
  */
 package org.apache.kafka.common;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.security.auth.SecurityProtocol;
 
 import java.util.Objects;
@@ -26,27 +25,35 @@ import java.util.Optional;
  * Represents a broker endpoint.
  */
 
-@InterfaceStability.Evolving
 public class Endpoint {
 
-    private final String listenerName;
+    private final String listener;
     private final SecurityProtocol securityProtocol;
     private final String host;
     private final int port;
 
-    public Endpoint(String listenerName, SecurityProtocol securityProtocol, String host, int port) {
-        this.listenerName = listenerName;
+    public Endpoint(String listener, SecurityProtocol securityProtocol, String host, int port) {
+        this.listener = listener;
         this.securityProtocol = securityProtocol;
         this.host = host;
         this.port = port;
     }
 
     /**
+     * Returns the listener name of this endpoint.
+     */
+    public String listener() {
+        return listener;
+    }
+
+    /**
      * Returns the listener name of this endpoint. This is non-empty for endpoints provided
      * to broker plugins, but may be empty when used in clients.
+     * @deprecated Since 4.1. Use {@link #listener()} instead. This function will be removed in 5.0.
      */
+    @Deprecated(since = "4.1", forRemoval = true)
     public Optional<String> listenerName() {
-        return Optional.ofNullable(listenerName);
+        return Optional.ofNullable(listener);
     }
 
     /**
@@ -80,7 +87,7 @@ public class Endpoint {
         }
 
         Endpoint that = (Endpoint) o;
-        return Objects.equals(this.listenerName, that.listenerName) &&
+        return Objects.equals(this.listener, that.listener) &&
             Objects.equals(this.securityProtocol, that.securityProtocol) &&
             Objects.equals(this.host, that.host) &&
             this.port == that.port;
@@ -89,13 +96,13 @@ public class Endpoint {
 
     @Override
     public int hashCode() {
-        return Objects.hash(listenerName, securityProtocol, host, port);
+        return Objects.hash(listener, securityProtocol, host, port);
     }
 
     @Override
     public String toString() {
         return "Endpoint(" +
-            "listenerName='" + listenerName + '\'' +
+            "listenerName='" + listener + '\'' +
             ", securityProtocol=" + securityProtocol +
             ", host='" + host + '\'' +
             ", port=" + port +
