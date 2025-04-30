@@ -95,11 +95,14 @@ public class VersionedPluginBuilder {
 
     public synchronized Path build(String pluginDir) throws IOException {
         Path pluginDirPath = Files.createTempDirectory(pluginDir);
+        pluginDirPath.toFile().deleteOnExit();
         Path subDir = Files.createDirectory(pluginDirPath.resolve("lib"));
+        subDir.toFile().deleteOnExit();
         for (BuildInfo buildInfo : pluginBuilds) {
             Path jarFile = TestPlugins.createPluginJar(buildInfo.plugin.resourceDir(), ignored -> false, Collections.singletonMap(VERSION_PLACEHOLDER, buildInfo.version));
             Path targetJar = subDir.resolve(jarFile.getFileName()).toAbsolutePath();
             buildInfo.setLocation(targetJar.toString());
+            targetJar.toFile().deleteOnExit();
             Files.move(jarFile, targetJar);
         }
         return pluginDirPath.toAbsolutePath();

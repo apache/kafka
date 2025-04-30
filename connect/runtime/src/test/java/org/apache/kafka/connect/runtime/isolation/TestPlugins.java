@@ -52,7 +52,6 @@ import javax.tools.JavaCompiler;
 import javax.tools.StandardJavaFileManager;
 import javax.tools.ToolProvider;
 
-
 /**
  * Utility class for constructing test plugins for Connect.
  *
@@ -460,7 +459,7 @@ public class TestPlugins {
                     .filter(Files::isRegularFile)
                     .map(Path::toFile)
                     .filter(file -> file.getName().endsWith(".java"))
-                    .map(file -> copyAndReplace(file, replacements))
+                    .map(file -> replacements.isEmpty() ? file : copyAndReplace(file, replacements))
                     .collect(Collectors.toList());
         }
 
@@ -480,17 +479,10 @@ public class TestPlugins {
             if (!success) {
                 throw new RuntimeException("Failed to compile test plugin:\n" + writer);
             }
-        } finally {
-            if (!replacements.isEmpty()) {
-                sourceFiles.forEach(File::delete);
-            }
         }
     }
 
     private static File copyAndReplace(File source, Map<String, String> replacements) throws RuntimeException {
-        if (replacements.isEmpty()) {
-            return source;
-        }
         try {
             String content = Files.readString(source.toPath());
             for (Map.Entry<String, String> entry : replacements.entrySet()) {
@@ -498,6 +490,7 @@ public class TestPlugins {
             }
             File tmpFile = new File(System.getProperty("java.io.tmpdir") + File.separator + source.getName());
             Files.writeString(tmpFile.toPath(), content);
+            tmpFile.deleteOnExit();
             return tmpFile;
         } catch (IOException e) {
             throw new RuntimeException("Could not copy and replace file: " + source, e);
