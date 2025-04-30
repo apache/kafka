@@ -100,7 +100,7 @@ public class ConsumerAssignmentPoller extends ShutdownableThread {
      * in the doWork() method
      * <p>
      * This method does not allow changing the subscription until doWork processes the previous call
-     * to this method. This is just to avoid race conditions and enough functionality for testing purposes
+     * to this method. This is just to avoid race conditions and provide enough functionality for testing purposes
      *
      * @param newTopicsToSubscribe new topics to subscribe to
      */
