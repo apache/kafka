@@ -77,7 +77,7 @@ class ActiveTaskCreator {
                       final String threadId,
                       final int threadIdx,
                       final UUID processId,
-                      final LogContext logContext,
+                      final Logger log,
                       final boolean stateUpdaterEnabled,
                       final boolean processingThreadsEnabled) {
         this.topologyMetadata = topologyMetadata;
@@ -91,11 +91,14 @@ class ActiveTaskCreator {
         this.threadId = threadId;
         this.threadIdx = threadIdx;
         this.processId = processId;
-        this.log = logContext.logger(getClass());
+        this.log = log;
         this.stateUpdaterEnabled = stateUpdaterEnabled;
         this.processingThreadsEnabled = processingThreadsEnabled;
 
         createTaskSensor = ThreadMetrics.createTaskSensor(threadId, streamsMetrics);
+
+        final String threadIdPrefix = String.format("stream-thread [%s] ", Thread.currentThread().getName());
+        final LogContext logContext = new LogContext(threadIdPrefix);
 
         streamsProducer = new StreamsProducer(
             producer(),

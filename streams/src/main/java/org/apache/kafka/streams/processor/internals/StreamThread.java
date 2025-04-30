@@ -71,7 +71,6 @@ import org.apache.kafka.streams.state.HostInfo;
 import org.apache.kafka.streams.state.internals.ThreadCache;
 
 import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
 import java.util.Arrays;
@@ -396,7 +395,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         final String logPrefix = String.format("stream-thread [%s] ", threadId);
         final LogContext logContext = new LogContext(logPrefix);
         final LogContext restorationLogContext = stateUpdaterEnabled ? new LogContext(String.format("state-updater [%s] ", restorationThreadId)) : logContext;
-        final Logger log = LoggerFactory.getLogger(StreamThread.class);
+        final Logger log = logContext.logger(StreamThread.class);
 
         final ReferenceContainer referenceContainer = new ReferenceContainer();
         referenceContainer.adminClient = adminClient;
@@ -404,7 +403,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         referenceContainer.time = time;
         referenceContainer.clientTags = config.getClientTags();
 
-        log.info("Creating restore consumer client for thread {}", threadId);
+        log.info("Creating restore consumer client");
         final Map<String, Object> restoreConsumerConfigs = config.getRestoreConsumerConfigs(restoreConsumerClientId(restorationThreadId));
         final Consumer<byte[], byte[]> restoreConsumer = clientSupplier.getRestoreConsumer(restoreConsumerConfigs);
 
@@ -433,7 +432,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             threadId,
             threadIdx,
             processId,
-            logContext,
+            log,
             stateUpdaterEnabled,
             proceessingThreadsEnabled
         );
@@ -444,10 +443,10 @@ public class StreamThread extends Thread implements ProcessingThread {
             stateDirectory,
             changelogReader,
             threadId,
-            logContext,
+            log,
             stateUpdaterEnabled);
 
-        final Tasks tasks = new Tasks(logContext);
+        final Tasks tasks = new Tasks(new LogContext(logPrefix));
         final boolean processingThreadsEnabled =
             InternalConfig.processingThreadsEnabled(config.originals());
 
@@ -482,7 +481,7 @@ public class StreamThread extends Thread implements ProcessingThread {
         );
         referenceContainer.taskManager = taskManager;
 
-        log.info("Creating consumer client for thread {}", threadId);
+        log.info("Creating consumer client");
         final String applicationId = config.getString(StreamsConfig.APPLICATION_ID_CONFIG);
         final Map<String, Object> consumerConfigs = config.getMainConsumerConfigs(applicationId, consumerClientId(threadId), threadIdx);
         consumerConfigs.put(StreamsConfig.InternalConfig.REFERENCE_CONTAINER_PARTITION_ASSIGNOR, referenceContainer);
@@ -493,7 +492,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             consumerConfigs.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "none");
         }
 
-        final MainConsumerSetup mainConsumerSetup = setupMainConsumer(topologyMetadata, config, clientSupplier, processId, log, threadId, consumerConfigs);
+        final MainConsumerSetup mainConsumerSetup = setupMainConsumer(topologyMetadata, config, clientSupplier, processId, log, consumerConfigs);
 
         taskManager.setMainConsumer(mainConsumerSetup.mainConsumer);
         referenceContainer.mainConsumer = mainConsumerSetup.mainConsumer;
@@ -534,13 +533,12 @@ public class StreamThread extends Thread implements ProcessingThread {
                                                        final KafkaClientSupplier clientSupplier,
                                                        final UUID processId,
                                                        final Logger log,
-                                                       final String threadId,
                                                        final Map<String, Object> consumerConfigs) {
         if (config.getString(StreamsConfig.GROUP_PROTOCOL_CONFIG).equalsIgnoreCase(GroupProtocol.STREAMS.name)) {
             if (topologyMetadata.hasNamedTopologies()) {
                 throw new IllegalStateException("Named topologies and the STREAMS protocol cannot be used at the same time.");
             }
-            log.info("Streams rebalance protocol enabled for thread {}", threadId);
+            log.info("Streams rebalance protocol enabled");
 
             final Optional<StreamsRebalanceData> streamsRebalanceData = Optional.of(
                 initStreamsRebalanceData(
