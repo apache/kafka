@@ -55,6 +55,7 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -344,20 +345,20 @@ public class DelayedShareFetch extends DelayedOperation {
         sharePartitionsForAcquire.forEach((topicIdPartition, sharePartition) -> {
             // Add the share partition to the list of partitions to be fetched only if we can
             // acquire the fetch lock on it.
-            if (sharePartition.maybeAcquireFetchLock()) {
+            if (sharePartition.maybeAcquireFetchLock(this)) {
                 try {
                     // If the share partition is already at capacity, we should not attempt to fetch.
                     if (sharePartition.canAcquireRecords()) {
                         topicPartitionData.put(topicIdPartition, sharePartition.nextFetchOffset());
                     } else {
-                        sharePartition.releaseFetchLock();
+                        sharePartition.releaseFetchLock(this);
                         log.trace("Record lock partition limit exceeded for SharePartition {}, " +
                             "cannot acquire more records", sharePartition);
                     }
                 } catch (Exception e) {
                     log.error("Error checking condition for SharePartition: {}", sharePartition, e);
                     // Release the lock, if error occurred.
-                    sharePartition.releaseFetchLock();
+                    sharePartition.releaseFetchLock(this);
                 }
             }
         });
@@ -569,7 +570,7 @@ public class DelayedShareFetch extends DelayedOperation {
     void releasePartitionLocks(Set<TopicIdPartition> topicIdPartitions) {
         topicIdPartitions.forEach(tp -> {
             SharePartition sharePartition = sharePartitions.get(tp);
-            sharePartition.releaseFetchLock();
+            sharePartition.releaseFetchLock(this);
         });
     }
 
@@ -848,6 +849,21 @@ public class DelayedShareFetch extends DelayedOperation {
             releasePartitionLocksAndAddToActionQueue(partitionsAcquired.keySet());
         }
         return completedByMe;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        DelayedShareFetch that = (DelayedShareFetch) o;
+        return shareFetch.equals(that.shareFetch) && replicaManager.equals(that.replicaManager) &&
+            exceptionHandler.equals(that.exceptionHandler) && sharePartitions.equals(that.sharePartitions) &&
+            shareGroupMetrics.equals(that.shareGroupMetrics) && time.equals(that.time);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(shareFetch, replicaManager, exceptionHandler, sharePartitions, shareGroupMetrics, time);
     }
 
     public record RemoteFetch(

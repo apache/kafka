@@ -1605,12 +1605,14 @@ public class SharePartitionTest {
             .withSharePartitionMetrics(sharePartitionMetrics)
             .build();
 
+        DelayedShareFetch delayedShareFetch = mock(DelayedShareFetch.class);
+
         sharePartition.maybeInitialize();
-        assertTrue(sharePartition.maybeAcquireFetchLock());
+        assertTrue(sharePartition.maybeAcquireFetchLock(delayedShareFetch));
         // Lock cannot be acquired again, as already acquired.
-        assertFalse(sharePartition.maybeAcquireFetchLock());
+        assertFalse(sharePartition.maybeAcquireFetchLock(delayedShareFetch));
         // Release the lock.
-        sharePartition.releaseFetchLock();
+        sharePartition.releaseFetchLock(delayedShareFetch);
 
         assertEquals(1, sharePartitionMetrics.fetchLockTimeMs().count());
         assertEquals(10, sharePartitionMetrics.fetchLockTimeMs().sum());
@@ -1619,9 +1621,9 @@ public class SharePartitionTest {
         assertEquals(100, sharePartitionMetrics.fetchLockRatio().mean());
 
         // Lock can be acquired again.
-        assertTrue(sharePartition.maybeAcquireFetchLock());
+        assertTrue(sharePartition.maybeAcquireFetchLock(delayedShareFetch));
         // Release lock to update metrics and verify.
-        sharePartition.releaseFetchLock();
+        sharePartition.releaseFetchLock(delayedShareFetch);
 
         assertEquals(2, sharePartitionMetrics.fetchLockTimeMs().count());
         assertEquals(40, sharePartitionMetrics.fetchLockTimeMs().sum());
@@ -1649,14 +1651,15 @@ public class SharePartitionTest {
             .thenReturn(80L) // for time when lock is released
             .thenReturn(160L); // to update lock idle duration while acquiring lock again.
 
-        assertTrue(sharePartition.maybeAcquireFetchLock());
-        sharePartition.releaseFetchLock();
+        DelayedShareFetch delayedShareFetch = mock(DelayedShareFetch.class);
+        assertTrue(sharePartition.maybeAcquireFetchLock(delayedShareFetch));
+        sharePartition.releaseFetchLock(delayedShareFetch);
         // Acquired time is 70 but last lock acquisition time was still 0, as it's the first request
         // when last acquisition time was recorded. The last acquisition time should be updated to 80.
         assertEquals(2, sharePartitionMetrics.fetchLockRatio().count());
         assertEquals(100, sharePartitionMetrics.fetchLockRatio().mean());
 
-        assertTrue(sharePartition.maybeAcquireFetchLock());
+        assertTrue(sharePartition.maybeAcquireFetchLock(delayedShareFetch));
         // Update metric again with 0 as acquire time and 80 as idle duration ms.
         sharePartition.recordFetchLockRatioMetric(0);
         assertEquals(3, sharePartitionMetrics.fetchLockRatio().count());
