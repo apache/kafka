@@ -408,6 +408,9 @@ public class Utils {
                     .toList();
 
                 String racks = IntStream.range(0, sortedRacksList.size())
+                    // The rack string combination cannot use simple separator like ",", because there is no limitation for rack character.
+                    // If using simple separator like "," it may hit edge case like ",," and ",,," / ",,," and ",,".
+                    // Add index before the rack string to avoid the edge case.
                     .mapToObj(idx -> idx + ":" + sortedRacksList.get(idx)) // Format: "index:value"
                     .collect(Collectors.joining(",")); // Separator between "index:value" pairs
                 dos.writeUTF(racks); // sorted racks
