@@ -796,8 +796,6 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       .setGroupId(shareGroup)
       .setTopics(List(new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
         .setTopicName(topic)
-        .setPartitions(List(Integer.valueOf(part)
-        ).asJava)
       ).asJava)).build(ApiKeys.DELETE_SHARE_GROUP_OFFSETS.latestVersion)
 
   private def sendRequests(requestKeyToRequest: mutable.Map[ApiKeys, AbstractRequest], topicExists: Boolean = true,
@@ -2971,7 +2969,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
   @ParameterizedTest
   @ValueSource(strings = Array("kip932"))
-  def testShareFetchWithoutTopicReadeAcl(quorum: String): Unit = {
+  def testShareFetchWithoutTopicReadAcl(quorum: String): Unit = {
     createTopicWithBrokerPrincipal(topic)
     addAndVerifyAcls(shareGroupReadAcl(shareGroupResource), shareGroupResource)
 
@@ -3152,7 +3150,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   def testReadShareGroupStateSummaryWithClusterAcl(quorum: String): Unit = {
     addAndVerifyAcls(clusterAcl(clusterResource), clusterResource)
 
-    val request = readShareGroupStateRequest
+    val request = readShareGroupStateSummaryRequest
     val resource = Set[ResourceType](CLUSTER)
     sendRequestAndVerifyResponseError(request, resource, isAuthorized = true)
   }
@@ -3281,7 +3279,8 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
 
     val request = deleteShareGroupOffsetsRequest
     val response = connectAndReceive[DeleteShareGroupOffsetsResponse](request, listenerName = listenerName)
-    assertEquals(0, response.data.responses.size)
+    assertEquals(1, response.data.responses.size)
+    assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code, response.data.responses.get(0).errorCode, s"Unexpected response $response")
   }
 
   private def sendAndReceiveFirstRegexHeartbeat(memberId: String,
