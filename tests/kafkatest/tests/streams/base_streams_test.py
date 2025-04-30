@@ -29,6 +29,7 @@ class BaseStreamsTest(Test):
     see tests/kafkatest/tests/kafka_test.py for more info
     """
     def __init__(self, test_context, topics, num_controllers=1, num_brokers=3):
+        super(BaseStreamsTest, self).__init__(test_context = test_context)
         self.num_controllers = num_controllers
         self.num_brokers = num_brokers
         self.topics = topics
@@ -95,15 +96,16 @@ class BaseStreamsTest(Test):
                    err_msg="At %s streams did not process messages in %s seconds " % (test_state, timeout_sec))
 
     @staticmethod
-    def get_configs(extra_configs=""):
+    def get_configs(group_protocol="classic", extra_configs=""):
         # Consumer max.poll.interval > min(max.block.ms, ((retries + 1) * request.timeout)
         consumer_poll_ms = "consumer.max.poll.interval.ms=50000"
         retries_config = "producer.retries=2"
         request_timeout = "producer.request.timeout.ms=15000"
         max_block_ms = "producer.max.block.ms=30000"
+        group_protocol = "group.protocol=" + group_protocol
 
         # java code expects configs in key=value,key=value format
-        updated_configs = consumer_poll_ms + "," + retries_config + "," + request_timeout + "," + max_block_ms + extra_configs
+        updated_configs = consumer_poll_ms + "," + retries_config + "," + request_timeout + "," + max_block_ms + "," + group_protocol + extra_configs
 
         return updated_configs
 
