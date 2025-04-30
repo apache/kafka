@@ -21,7 +21,6 @@ import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.server.util.ShutdownableThread;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
