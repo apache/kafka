@@ -23,6 +23,7 @@ import org.apache.kafka.common.message.ConsumerGroupHeartbeatRequestData;
 import org.apache.kafka.common.message.ConsumerProtocolAssignment;
 import org.apache.kafka.common.message.ConsumerProtocolSubscription;
 import org.apache.kafka.common.protocol.ApiMessage;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupCurrentMemberAssignmentValue;
 import org.apache.kafka.image.ClusterImage;
@@ -37,9 +38,9 @@ import com.google.re2j.PatternSyntaxException;
 import net.jpountz.xxhash.XXHash64;
 import net.jpountz.xxhash.XXHashFactory;
 
-import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
@@ -389,8 +390,8 @@ public class Utils {
      * @return The hash of the topic.
      */
     static long computeTopicHash(TopicImage topicImage, ClusterImage clusterImage) throws IOException {
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             DataOutputStream dos = new DataOutputStream(baos)) {
+        try (ByteBufferOutputStream bbos = new ByteBufferOutputStream(512);
+             DataOutputStream dos = new DataOutputStream(bbos)) {
             dos.writeByte(TOPIC_HASH_MAGIC_BYTE); // magic byte
             dos.writeLong(topicImage.id().hashCode()); // topic ID
             dos.writeUTF(topicImage.name()); // topic name
@@ -412,8 +413,8 @@ public class Utils {
                 dos.writeUTF(racks); // sorted racks
             }
             dos.flush();
-            byte[] topicBytes = baos.toByteArray();
-            return LZ4_HASH_INSTANCE.hash(topicBytes, 0, topicBytes.length, 0);
+            ByteBuffer topicBytes = bbos.buffer().flip();
+            return LZ4_HASH_INSTANCE.hash(topicBytes, 0);
         }
     }
 }

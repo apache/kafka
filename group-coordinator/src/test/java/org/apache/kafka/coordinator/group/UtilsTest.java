@@ -17,6 +17,7 @@
 package org.apache.kafka.coordinator.group;
 
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.utils.ByteBufferOutputStream;
 import org.apache.kafka.image.MetadataImage;
 
 import net.jpountz.xxhash.XXHash64;
@@ -27,9 +28,9 @@ import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.Arguments;
 import org.junit.jupiter.params.provider.MethodSource;
 
-import java.io.ByteArrayOutputStream;
 import java.io.DataOutputStream;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.stream.Stream;
@@ -52,8 +53,8 @@ public class UtilsTest {
     void testComputeTopicHash() throws IOException {
         long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             DataOutputStream dos = new DataOutputStream(baos)) {
+        try (ByteBufferOutputStream bbos = new ByteBufferOutputStream(512);
+             DataOutputStream dos = new DataOutputStream(bbos)) {
             dos.writeByte(0); // magic byte
             dos.writeLong(FOO_TOPIC_ID.hashCode()); // topic ID
             dos.writeUTF(FOO_TOPIC_NAME); // topic name
@@ -63,8 +64,8 @@ public class UtilsTest {
             dos.writeInt(1); // partition 1
             dos.writeUTF("0:rack1,1:rack2"); // rack of partition 1
             dos.flush();
-            byte[] topicBytes = baos.toByteArray();
-            assertEquals(LZ4_HASH_INSTANCE.hash(topicBytes, 0, topicBytes.length, 0), result);
+            ByteBuffer topicBytes = bbos.buffer().flip();
+            assertEquals(LZ4_HASH_INSTANCE.hash(topicBytes, 0), result);
         }
     }
 
@@ -72,8 +73,8 @@ public class UtilsTest {
     void testComputeTopicHashWithDifferentMagicByte() throws IOException {
         long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             DataOutputStream dos = new DataOutputStream(baos)) {
+        try (ByteBufferOutputStream bbos = new ByteBufferOutputStream(512);
+             DataOutputStream dos = new DataOutputStream(bbos)) {
             dos.writeByte(1); // different magic byte
             dos.writeLong(FOO_TOPIC_ID.hashCode()); // topic ID
             dos.writeUTF(FOO_TOPIC_NAME); // topic name
@@ -83,8 +84,8 @@ public class UtilsTest {
             dos.writeInt(1); // partition 1
             dos.writeUTF("0:rack1,1:rack2"); // rack of partition 1
             dos.flush();
-            byte[] topicBytes = baos.toByteArray();
-            assertNotEquals(LZ4_HASH_INSTANCE.hash(topicBytes, 0, topicBytes.length, 0), result);
+            ByteBuffer topicBytes = bbos.buffer().flip();
+            assertNotEquals(LZ4_HASH_INSTANCE.hash(topicBytes, 0), result);
         }
     }
 
@@ -92,8 +93,8 @@ public class UtilsTest {
     void testComputeTopicHashWithDifferentPartitionOrder() throws IOException {
         long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             DataOutputStream dos = new DataOutputStream(baos)) {
+        try (ByteBufferOutputStream bbos = new ByteBufferOutputStream(512);
+             DataOutputStream dos = new DataOutputStream(bbos)) {
             dos.writeByte(0); // magic byte
             dos.writeLong(FOO_TOPIC_ID.hashCode()); // topic ID
             dos.writeUTF(FOO_TOPIC_NAME); // topic name
@@ -104,8 +105,8 @@ public class UtilsTest {
             dos.writeInt(0); // partition 0
             dos.writeUTF("0:rack0,1:rack1"); // rack of partition 0
             dos.flush();
-            byte[] topicBytes = baos.toByteArray();
-            assertNotEquals(LZ4_HASH_INSTANCE.hash(topicBytes, 0, topicBytes.length, 0), result);
+            ByteBuffer topicBytes = bbos.buffer().flip();
+            assertNotEquals(LZ4_HASH_INSTANCE.hash(topicBytes, 0), result);
         }
     }
 
@@ -113,8 +114,8 @@ public class UtilsTest {
     void testComputeTopicHashWithDifferentRackOrder() throws IOException {
         long result = Utils.computeTopicHash(FOO_METADATA_IMAGE.topics().getTopic(FOO_TOPIC_ID), FOO_METADATA_IMAGE.cluster());
 
-        try (ByteArrayOutputStream baos = new ByteArrayOutputStream();
-             DataOutputStream dos = new DataOutputStream(baos)) {
+        try (ByteBufferOutputStream bbos = new ByteBufferOutputStream(512);
+             DataOutputStream dos = new DataOutputStream(bbos)) {
             dos.writeByte(0); // magic byte
             dos.writeLong(FOO_TOPIC_ID.hashCode()); // topic ID
             dos.writeUTF(FOO_TOPIC_NAME); // topic name
@@ -124,8 +125,8 @@ public class UtilsTest {
             dos.writeInt(1); // partition 1
             dos.writeUTF("0:rack1,1:rack2"); // rack of partition 1
             dos.flush();
-            byte[] topicBytes = baos.toByteArray();
-            assertNotEquals(LZ4_HASH_INSTANCE.hash(topicBytes, 0, topicBytes.length, 0), result);
+            ByteBuffer topicBytes = bbos.buffer().flip();
+            assertNotEquals(LZ4_HASH_INSTANCE.hash(topicBytes, 0), result);
         }
     }
 
