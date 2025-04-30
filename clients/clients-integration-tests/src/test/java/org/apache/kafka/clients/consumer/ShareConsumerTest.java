@@ -2021,6 +2021,39 @@ public class ShareConsumerTest {
         verifyShareGroupStateTopicRecordsProduced();
     }
 
+    @ClusterTest
+    public void testDeliveryCountDifferentBehaviorWhenClosingSessionWithExplicitAcknowledgement() {
+        alterShareAutoOffsetReset("group1", "earliest");
+        try (Producer<byte[], byte[]> producer = createProducer();
+            ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer(
+                "group1",
+                Map.of(ConsumerConfig.SHARE_ACKNOWLEDGEMENT_MODE_CONFIG, EXPLICIT))) {
+
+            ProducerRecord<byte[], byte[]> record = new ProducerRecord<>(tp.topic(), tp.partition(), null,
+                "key".getBytes(), "value".getBytes());
+            producer.send(record);
+            producer.send(record);
+            producer.flush();
+
+            shareConsumer.subscribe(Set.of(tp.topic()));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 2);
+            assertEquals(2, records.count());
+            // Acknowledge the first record with AcknowledgeType.RELEASE
+            shareConsumer.acknowledge(records.records(tp).get(0), AcknowledgeType.RELEASE);
+            Map<TopicIdPartition, Optional<KafkaException>> result = shareConsumer.commitSync();
+            assertEquals(1, result.size());
+        }
+
+        // Test delivery count
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group1", Map.of())) {
+            shareConsumer.subscribe(Set.of(tp.topic()));
+            ConsumerRecords<byte[], byte[]> records = waitedPoll(shareConsumer, 2500L, 2);
+            assertEquals(2, records.count());
+            assertEquals((short) 2, records.records(tp).get(0).deliveryCount().get());
+            assertEquals((short) 1, records.records(tp).get(1).deliveryCount().get());
+        }
+    }
+
     @ClusterTest(
         brokers = 3,
         serverProperties = {
