@@ -575,8 +575,8 @@ public class MockConsumer<K, V> implements Consumer<K, V> {
         close(Duration.ofMillis(DEFAULT_CLOSE_TIMEOUT_MS));
     }
 
+    @Deprecated
     @Override
-    @SuppressWarnings("deprecation")
     public synchronized void close(Duration timeout) {
         this.closed = true;
     }
