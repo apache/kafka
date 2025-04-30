@@ -7071,6 +7071,28 @@ public class SharePartitionTest {
         assertEquals(1, actual.get(3).producerId());
     }
 
+    @Test
+    public void testFetchLockReleasedByDifferentDelayedShareFetch() {
+        SharePartition sharePartition = SharePartitionBuilder.builder()
+            .withState(SharePartitionState.ACTIVE)
+            .build();
+
+        DelayedShareFetch delayedShareFetch1 = mock(DelayedShareFetch.class);
+        DelayedShareFetch delayedShareFetch2 = mock(DelayedShareFetch.class);
+
+        // Initially, fetch lock is not acquired.
+        assertFalse(sharePartition.fetchLock());
+        // delayedShareFetch1 acquires the fetch lock.
+        assertTrue(sharePartition.maybeAcquireFetchLock(delayedShareFetch1));
+        // If we release fetch lock by delayedShareFetch2, it won't work.
+        sharePartition.releaseFetchLock(delayedShareFetch2);
+        assertTrue(sharePartition.fetchLock()); // Fetch lock hasn't been released.
+
+        // If we release fetch lock by delayedShareFetch1, it will work correctly.
+        sharePartition.releaseFetchLock(delayedShareFetch1);
+        assertFalse(sharePartition.fetchLock()); // Fetch lock has been released.
+    }
+
     /**
      * This function produces transactional data of a given no. of records followed by a transactional marker (COMMIT/ABORT).
      */

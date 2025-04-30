@@ -2745,6 +2745,11 @@ public class SharePartition {
         return initialReadGapOffset;
     }
 
+    // Visible for testing.
+    boolean fetchLock() {
+        return fetchLock.get();
+    }
+
     /**
      * The InitialReadGapOffset class is used to record the gap start and end offset of the probable gaps
      * of available records which are neither known to Persister nor to SharePartition. Share Partition
