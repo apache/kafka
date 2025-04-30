@@ -21,7 +21,6 @@ import org.apache.kafka.image.TopicDelta;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.metadata.BrokerRegistration;
 import org.apache.kafka.metadata.PartitionRegistration;
-import org.apache.kafka.metadata.Replicas;
 
 import java.util.Map.Entry;
 
@@ -117,18 +116,6 @@ class ControllerMetricsChanges {
                 PartitionRegistration prevPartition = prev.partitions().get(partitionId);
                 PartitionRegistration nextPartition = entry.getValue();
                 handlePartitionChange(prevPartition, nextPartition);
-
-                // Though we don't know if there is an unclean leader election/ELR election happened in the very beginning
-                // of the topic delta, we should make sure to record at least one for the possible election.
-                if (prevPartition != null && PartitionRegistration.electionWasUnclean(
-                        prevPartition.leaderRecoveryState.value(), nextPartition.leaderRecoveryState.value()) &&
-                    !topicDelta.partitionToUncleanLeaderElectionCount().containsKey(partitionId)) {
-                    uncleanLeaderElection++;
-                }
-                if (prevPartition != null && Replicas.contains(prevPartition.elr, nextPartition.leader) &&
-                    !topicDelta.partitionToElrElectionCount().containsKey(partitionId)) {
-                    electionFromElr++;
-                }
             }
         }
         topicDelta.partitionToUncleanLeaderElectionCount().forEach((partitionId, count) -> uncleanLeaderElection += count);
