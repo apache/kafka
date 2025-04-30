@@ -20,7 +20,6 @@ package org.apache.kafka.controller.metrics;
 import org.apache.kafka.image.TopicDelta;
 import org.apache.kafka.image.TopicImage;
 import org.apache.kafka.metadata.BrokerRegistration;
-import org.apache.kafka.metadata.LeaderRecoveryState;
 import org.apache.kafka.metadata.PartitionRegistration;
 import org.apache.kafka.metadata.Replicas;
 
