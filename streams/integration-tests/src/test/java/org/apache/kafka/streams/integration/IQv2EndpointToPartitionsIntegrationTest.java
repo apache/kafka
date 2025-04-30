@@ -72,7 +72,7 @@ public class IQv2EndpointToPartitionsIntegrationTest {
     public void startCluster(final int standbyConfig) throws IOException {
         final Properties properties = new Properties();
         properties.put(GroupCoordinatorConfig.STREAMS_GROUP_NUM_STANDBY_REPLICAS_CONFIG, standbyConfig);
-        cluster = EmbeddedKafkaCluster.withStreamsRebalanceProtocol(NUM_BROKERS, properties);
+        cluster = new EmbeddedKafkaCluster(NUM_BROKERS, properties);
         cluster.start();
     }
 
