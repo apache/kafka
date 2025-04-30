@@ -96,7 +96,7 @@ import static org.mockito.Mockito.when;
 public class InternalTopicManagerTest {
     private final Node broker1 = new Node(0, "dummyHost-1", 1234);
     private final Node broker2 = new Node(1, "dummyHost-2", 1234);
-    private final List<Node> cluster = new ArrayList<Node>(2) {
+    private final List<Node> cluster = new ArrayList<>(2) {
         {
             add(broker1);
             add(broker2);
@@ -115,7 +115,7 @@ public class InternalTopicManagerTest {
     private InternalTopicManager internalTopicManager;
     private final MockTime time = new MockTime(0);
 
-    private final Map<String, Object> config = new HashMap<String, Object>() {
+    private final Map<String, Object> config = new HashMap<>() {
         {
             put(StreamsConfig.APPLICATION_ID_CONFIG, "app-id");
             put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, broker1.host() + ":" + broker1.port());
@@ -361,8 +361,8 @@ public class InternalTopicManagerTest {
         final InternalTopicManager internalTopicManager =
                 new InternalTopicManager(time, mockAdminClient, new StreamsConfig(config));
         try {
-            final Set<String> topic1set = new HashSet<String>(Collections.singletonList(topic1));
-            final Set<String> topic2set = new HashSet<String>(Collections.singletonList(topic2));
+            final Set<String> topic1set = new HashSet<>(Collections.singletonList(topic1));
+            final Set<String> topic2set = new HashSet<>(Collections.singletonList(topic2));
 
             internalTopicManager.getNumPartitions(topic1set, topic2set);
 
@@ -373,8 +373,8 @@ public class InternalTopicManagerTest {
         mockAdminClient.timeoutNextRequest(1);
 
         try {
-            final Set<String> topic1set = new HashSet<String>(Collections.singletonList(topic1));
-            final Set<String> topic2set = new HashSet<String>(Collections.singletonList(topic2));
+            final Set<String> topic1set = new HashSet<>(Collections.singletonList(topic1));
+            final Set<String> topic2set = new HashSet<>(Collections.singletonList(topic2));
 
             internalTopicManager.getNumPartitions(topic1set, topic2set);
 
@@ -710,22 +710,22 @@ public class InternalTopicManagerTest {
         internalTopicManager.makeReady(Collections.singletonMap(topic4, topicConfig4));
 
         assertEquals(Set.of(topic1, topic2, topic3, topic4), mockAdminClient.listTopics().names().get());
-        assertEquals(new TopicDescription(topic1, false, new ArrayList<TopicPartitionInfo>() {
+        assertEquals(new TopicDescription(topic1, false, new ArrayList<>() {
             {
                 add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
             }
         }), mockAdminClient.describeTopics(Collections.singleton(topic1)).topicNameValues().get(topic1).get());
-        assertEquals(new TopicDescription(topic2, false, new ArrayList<TopicPartitionInfo>() {
+        assertEquals(new TopicDescription(topic2, false, new ArrayList<>() {
             {
                 add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
             }
         }), mockAdminClient.describeTopics(Collections.singleton(topic2)).topicNameValues().get(topic2).get());
-        assertEquals(new TopicDescription(topic3, false, new ArrayList<TopicPartitionInfo>() {
+        assertEquals(new TopicDescription(topic3, false, new ArrayList<>() {
             {
                 add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
             }
         }), mockAdminClient.describeTopics(Collections.singleton(topic3)).topicNameValues().get(topic3).get());
-        assertEquals(new TopicDescription(topic4, false, new ArrayList<TopicPartitionInfo>() {
+        assertEquals(new TopicDescription(topic4, false, new ArrayList<>() {
             {
                 add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList(), Collections.emptyList(), Collections.emptyList()));
             }
@@ -804,7 +804,7 @@ public class InternalTopicManagerTest {
         mockAdminClient.addTopic(
             false,
             topic1,
-            new ArrayList<TopicPartitionInfo>() {
+            new ArrayList<>() {
                 {
                     add(new TopicPartitionInfo(0, broker1, singleReplica, Collections.emptyList()));
                     add(new TopicPartitionInfo(1, broker1, singleReplica, Collections.emptyList()));

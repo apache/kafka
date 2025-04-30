@@ -31,7 +31,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 public class ProcessorMetadataTest {
 
     @Test
-    public void shouldAddandGetKeyValueWithEmptyConstructor() {
+    public void shouldAddAndGetKeyValueWithEmptyConstructor() {
         final ProcessorMetadata metadata = new ProcessorMetadata();
         final String key = "some_key";
         final long value = 100L;
@@ -46,7 +46,7 @@ public class ProcessorMetadataTest {
     }
 
     @Test
-    public void shouldAddandGetKeyValueWithExistingMeta() {
+    public void shouldAddAndGetKeyValueWithExistingMeta() {
         final Map<String, Long> map = new HashMap<>();
         map.put("key1", 1L);
         map.put("key2", 2L);
