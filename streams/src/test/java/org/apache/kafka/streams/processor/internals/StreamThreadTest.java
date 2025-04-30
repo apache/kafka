@@ -3805,6 +3805,11 @@ public class StreamThreadTest {
         final Runnable shutdownErrorHook = mock(Runnable.class);
 
         final Properties props = configProps(false, false, false);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
+                new TopologyMetadata(internalTopologyBuilder, new StreamsConfig(props)),
+                StreamsMetadataState.UNKNOWN_HOST,
+                new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
         final StreamsConfig config = new StreamsConfig(props);
         thread = new StreamThread(
             new MockTime(1),
@@ -3828,7 +3833,7 @@ public class StreamThreadTest {
             HANDLER,
             null,
             Optional.of(streamsRebalanceData),
-            null
+            streamsMetadataState
         ).updateThreadMetadata(adminClientId(CLIENT_ID));
 
         thread.setState(State.STARTING);
@@ -3860,6 +3865,11 @@ public class StreamThreadTest {
         final Properties props = configProps(false, false, false);
         final Runnable shutdownErrorHook = mock(Runnable.class);
         final StreamsConfig config = new StreamsConfig(props);
+        final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
+                new TopologyMetadata(internalTopologyBuilder, config),
+                StreamsMetadataState.UNKNOWN_HOST,
+                new LogContext(String.format("stream-client [%s] ", CLIENT_ID))
+        );
         thread = new StreamThread(
             new MockTime(1),
             config,
@@ -3882,7 +3892,7 @@ public class StreamThreadTest {
             HANDLER,
             null,
             Optional.of(streamsRebalanceData),
-            null
+            streamsMetadataState
         ).updateThreadMetadata(adminClientId(CLIENT_ID));
 
         thread.setState(State.STARTING);
