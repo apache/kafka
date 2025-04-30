@@ -3039,7 +3039,8 @@ public class SenderTest {
                 "testRetriableException",
                 60000,
                 RETRY_BACKOFF_MS,
-                apiVersions
+                apiVersions,
+                false
         );
 
         // Setup with transaction state and initialize transactions with single retry
