@@ -225,6 +225,28 @@ class KafkaApisTest extends Logging {
     }
   }
 
+  def initializeMetadataCacheWithShareGroupsEnabled(enableShareGroups: Boolean = true): MetadataCache = {
+    val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
+    val delta = new MetadataDelta(MetadataImage.EMPTY);
+    delta.replay(new FeatureLevelRecord()
+      .setName(MetadataVersion.FEATURE_NAME)
+      .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
+    )
+    if (enableShareGroups) {
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
+      )
+    } else {
+      delta.replay(new FeatureLevelRecord()
+        .setName(ShareVersion.FEATURE_NAME)
+        .setFeatureLevel(ShareVersion.SV_0.featureLevel())
+      )
+    }
+    cache.setImage(delta.apply(MetadataProvenance.EMPTY))
+    cache
+  }
+
   @Test
   def testDescribeConfigsWithAuthorizer(): Unit = {
     val authorizer: Authorizer = mock(classOf[Authorizer])
@@ -4142,20 +4164,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4219,20 +4228,7 @@ class KafkaApisTest extends Logging {
   def testHandleShareFetchRequestInvalidRequestOnInitialEpoch(): Unit = {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4331,20 +4327,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4445,20 +4428,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4500,20 +4470,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4584,20 +4541,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4655,20 +4599,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4726,20 +4657,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4825,20 +4743,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -4921,20 +4826,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.randomUuid()
 
@@ -5144,20 +5036,7 @@ class KafkaApisTest extends Logging {
     val topicName4 = "foo4"
     val topicId4 = Uuid.randomUuid()
 
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName1, 2, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
     addTopicToMetadataCache(topicName3, 1, topicId = topicId3)
@@ -5617,20 +5496,7 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
 
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -5778,20 +5644,7 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
 
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -5921,20 +5774,7 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
 
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -6067,20 +5907,7 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid()
     val topicId3 = Uuid.randomUuid()
 
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
     // topicName3 is not in the metadataCache.
@@ -6256,20 +6083,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.randomUuid()
 
@@ -6451,20 +6265,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -6513,20 +6314,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -6593,20 +6381,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.randomUuid()
 
@@ -6717,20 +6492,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -6779,20 +6541,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -6839,20 +6588,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -6899,20 +6635,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val groupId: String = "group"
     val memberId: Uuid = Uuid.ZERO_UUID
@@ -6965,20 +6688,7 @@ class KafkaApisTest extends Logging {
     val partitionIndex = 0
     val topicIdPartition = new TopicIdPartition(topicId, new TopicPartition(topicName, partitionIndex))
     val topicPartition = topicIdPartition.topicPartition
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicPartition.topic, numPartitions = 1, numBrokers = 3, topicId)
     val memberId: Uuid = Uuid.ZERO_UUID
 
@@ -7050,20 +6760,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.randomUuid()
 
@@ -7112,20 +6809,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.randomUuid()
 
@@ -7194,20 +6878,7 @@ class KafkaApisTest extends Logging {
     val topicName = "foo"
     val topicId = Uuid.randomUuid()
     val partitionIndex = 0
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName, 1, topicId = topicId)
     val memberId: Uuid = Uuid.randomUuid()
 
@@ -7279,20 +6950,7 @@ class KafkaApisTest extends Logging {
   def testGetAcknowledgeBatchesFromShareFetchRequest(): Unit = {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     val shareFetchRequestData = new ShareFetchRequestData().
       setGroupId("group").
       setMemberId(Uuid.randomUuid().toString).
@@ -7361,20 +7019,7 @@ class KafkaApisTest extends Logging {
   def testGetAcknowledgeBatchesFromShareFetchRequestError(): Unit = {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     val shareFetchRequestData = new ShareFetchRequestData().
       setGroupId("group").
       setMemberId(Uuid.randomUuid().toString).
@@ -7437,20 +7082,7 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
 
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData().
       setGroupId("group").
       setMemberId(Uuid.randomUuid().toString).
@@ -7518,20 +7150,7 @@ class KafkaApisTest extends Logging {
   def testGetAcknowledgeBatchesFromShareAcknowledgeRequestError(): Unit = {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     val shareAcknowledgeRequestData = new ShareAcknowledgeRequestData().
       setGroupId("group").
       setMemberId(Uuid.randomUuid().toString).
@@ -7603,20 +7222,7 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid()
     val memberId = Uuid.randomUuid()
 
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -7691,20 +7297,7 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid()
     val memberId = Uuid.randomUuid()
 
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -7779,20 +7372,7 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid()
     val memberId = Uuid.randomUuid()
 
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     // Topic with id topicId1 is not present in Metadata Cache
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -7868,20 +7448,7 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid()
     val memberId = Uuid.randomUuid()
 
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -7949,20 +7516,7 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid()
     val topicId2 = Uuid.randomUuid()
 
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     val responseAcknowledgeData: mutable.Map[TopicIdPartition, ShareAcknowledgeResponseData.PartitionData] = mutable.Map()
     responseAcknowledgeData += (new TopicIdPartition(topicId1, new TopicPartition("foo", 0)) ->
       new ShareAcknowledgeResponseData.PartitionData().setPartitionIndex(0).setErrorCode(Errors.NONE.code))
@@ -11443,20 +10997,7 @@ class KafkaApisTest extends Logging {
       requestChannelRequest.context,
       shareGroupHeartbeatRequest
     )).thenReturn(future)
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
@@ -11477,20 +11018,7 @@ class KafkaApisTest extends Logging {
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
     )
@@ -11502,20 +11030,7 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testShareGroupHeartbeatRequestTopicAuthorizationFailed(): Unit = {
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     val groupId = "group"
     val fooTopicName = "foo"
     val barTopicName = "bar"
@@ -11563,20 +11078,7 @@ class KafkaApisTest extends Logging {
       requestChannelRequest.context,
       shareGroupHeartbeatRequest
     )).thenReturn(future)
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     kafkaApis = createKafkaApis()
     kafkaApis.handle(requestChannelRequest, RequestLocal.noCaching)
 
@@ -11950,20 +11452,7 @@ class KafkaApisTest extends Logging {
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(util.List.of(AuthorizationResult.DENIED))
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
     )
@@ -11990,20 +11479,7 @@ class KafkaApisTest extends Logging {
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(util.List.of(AuthorizationResult.DENIED))
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
     )
@@ -12027,20 +11503,7 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid
     val topicName3 = "topic-3"
     val topicId3 = Uuid.randomUuid
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 1, topicId = topicId2)
     addTopicToMetadataCache(topicName3, 1, topicId = topicId3)
@@ -12154,20 +11617,7 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid
     val topicName3 = "topic-3"
     val topicId3 = Uuid.randomUuid
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 1, topicId = topicId2)
     addTopicToMetadataCache(topicName3, 1, topicId = topicId3)
@@ -12344,20 +11794,7 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid
     val topicName3 = "topic-3"
     val topicId3 = Uuid.randomUuid
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 1, topicId = topicId2)
     addTopicToMetadataCache(topicName3, 1, topicId = topicId3)
@@ -12518,20 +11955,7 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid
     val topicName3 = "topic-3"
     val topicId3 = Uuid.randomUuid
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 1, topicId = topicId2)
     addTopicToMetadataCache(topicName3, 1, topicId = topicId3)
@@ -12630,20 +12054,7 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testDescribeShareGroupOffsetsRequestEmptyGroupsSuccess(): Unit = {
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
 
     val describeShareGroupOffsetsRequest = new DescribeShareGroupOffsetsRequestData
 
@@ -12664,20 +12075,7 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testDescribeShareGroupOffsetsRequestEmptyTopicsSuccess(): Unit = {
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
 
     val describeShareGroupOffsetsRequestGroup = new DescribeShareGroupOffsetsRequestGroup().setGroupId("group")
 
@@ -12730,20 +12128,7 @@ class KafkaApisTest extends Logging {
     val authorizer: Authorizer = mock(classOf[Authorizer])
     when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
       .thenReturn(util.List.of(AuthorizationResult.DENIED))
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     kafkaApis = createKafkaApis(
       authorizer = Some(authorizer),
     )
@@ -12774,20 +12159,7 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid
     val topicName2 = "topic-2"
     val topicId2 = Uuid.randomUuid
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName1, 2, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -12869,20 +12241,7 @@ class KafkaApisTest extends Logging {
     val topicId2 = Uuid.randomUuid
     val topicName3 = "topic-3"
     val topicId3 = Uuid.randomUuid
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
     addTopicToMetadataCache(topicName3, 3, topicId = topicId3)
@@ -12943,20 +12302,7 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid
     val topicName2 = "topic-2"
     val topicId2 = Uuid.randomUuid
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -12994,20 +12340,7 @@ class KafkaApisTest extends Logging {
     val topicId1 = Uuid.randomUuid
     val topicName2 = "topic-2"
     val topicId2 = Uuid.randomUuid
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     addTopicToMetadataCache(topicName1, 1, topicId = topicId1)
     addTopicToMetadataCache(topicName2, 2, topicId = topicId2)
 
@@ -13045,20 +12378,7 @@ class KafkaApisTest extends Logging {
 
   @Test
   def testDeleteShareGroupOffsetsRequestEmptyTopicsSuccess(): Unit = {
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
 
     val deleteShareGroupOffsetsRequest = new DeleteShareGroupOffsetsRequestData()
       .setGroupId("group")
@@ -13356,27 +12676,7 @@ class KafkaApisTest extends Logging {
       any[RequestContext],
       any[util.List[String]]
     )).thenReturn(future)
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      if (enableShareGroups) {
-        delta.replay(new FeatureLevelRecord()
-          .setName(ShareVersion.FEATURE_NAME)
-          .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-        )
-      } else {
-        delta.replay(new FeatureLevelRecord()
-          .setName(ShareVersion.FEATURE_NAME)
-          .setFeatureLevel(ShareVersion.SV_0.featureLevel())
-        )
-      }
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled(enableShareGroups)
     kafkaApis = createKafkaApis(
       authorizer = Option(authorizer),
     )
@@ -13403,20 +12703,7 @@ class KafkaApisTest extends Logging {
       any[RequestContext],
       any[ReadShareGroupStateRequestData]
     )).thenReturn(future)
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     kafkaApis = createKafkaApis(
       overrideProperties = configOverrides,
       authorizer = Option(authorizer),
@@ -13445,20 +12732,7 @@ class KafkaApisTest extends Logging {
       any[RequestContext],
       any[ReadShareGroupStateSummaryRequestData]
     )).thenReturn(future)
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     kafkaApis = createKafkaApis(
       overrideProperties = configOverrides,
       authorizer = Option(authorizer),
@@ -13487,20 +12761,7 @@ class KafkaApisTest extends Logging {
       any[RequestContext],
       any[WriteShareGroupStateRequestData]
     )).thenReturn(future)
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     kafkaApis = createKafkaApis(
       overrideProperties = configOverrides,
       authorizer = Option(authorizer),
@@ -13529,20 +12790,7 @@ class KafkaApisTest extends Logging {
       any[RequestContext],
       any[DeleteShareGroupStateRequestData]
     )).thenReturn(future)
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     kafkaApis = createKafkaApis(
       overrideProperties = configOverrides,
       authorizer = Option(authorizer),
@@ -13571,20 +12819,7 @@ class KafkaApisTest extends Logging {
       any[RequestContext],
       any[InitializeShareGroupStateRequestData]
     )).thenReturn(future)
-    metadataCache = {
-      val cache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_1)
-      val delta = new MetadataDelta(MetadataImage.EMPTY);
-      delta.replay(new FeatureLevelRecord()
-        .setName(MetadataVersion.FEATURE_NAME)
-        .setFeatureLevel(MetadataVersion.MINIMUM_VERSION.featureLevel())
-      )
-      delta.replay(new FeatureLevelRecord()
-        .setName(ShareVersion.FEATURE_NAME)
-        .setFeatureLevel(ShareVersion.SV_1.featureLevel())
-      )
-      cache.setImage(delta.apply(MetadataProvenance.EMPTY))
-      cache
-    }
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
     kafkaApis = createKafkaApis(
       overrideProperties = configOverrides,
       authorizer = Option(authorizer),
