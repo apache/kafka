@@ -17,7 +17,7 @@
 package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.InvalidRecordException;
-import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.errors.UnsupportedCompressionTypeException;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.message.ProduceResponseData;
@@ -96,7 +96,7 @@ public class ProduceRequest extends AbstractRequest {
     // Care should be taken in methods that use this field.
     private volatile ProduceRequestData data;
     // the partitionSizes is lazily initialized since it is used by server-side in production.
-    private volatile Map<TopicPartition, Integer> partitionSizes;
+    private volatile Map<TopicIdPartition, Integer> partitionSizes;
 
     public ProduceRequest(ProduceRequestData produceRequestData, short version) {
         super(ApiKeys.PRODUCE, version);
@@ -107,15 +107,20 @@ public class ProduceRequest extends AbstractRequest {
     }
 
     // visible for testing
-    Map<TopicPartition, Integer> partitionSizes() {
+    Map<TopicIdPartition, Integer> partitionSizes() {
         if (partitionSizes == null) {
             // this method may be called by different thread (see the comment on data)
             synchronized (this) {
                 if (partitionSizes == null) {
-                    Map<TopicPartition, Integer> tmpPartitionSizes = new HashMap<>();
+                    Map<TopicIdPartition, Integer> tmpPartitionSizes = new HashMap<>();
                     data.topicData().forEach(topicData ->
                         topicData.partitionData().forEach(partitionData ->
-                            tmpPartitionSizes.compute(new TopicPartition(topicData.name(), partitionData.index()),
+                            // While topic id and name might not be populated at the same time in the request all the time;
+                            // for example on server side they will never be populated together while in produce client they will be,
+                            // to simplify initializing `TopicIdPartition` the code will use both topic name and id.
+                            // TopicId will be Uuid.ZERO_UUID in versions < 13 and topic name will be used as main identifier of topic partition.
+                            // TopicName will be empty string in versions >= 13 and topic id will be used as the main identifier.
+                            tmpPartitionSizes.compute(new TopicIdPartition(topicData.topicId(), partitionData.index(), topicData.name()),
                                 (ignored, previousValue) ->
                                     partitionData.records().sizeInBytes() + (previousValue == null ? 0 : previousValue))
                         )
@@ -161,14 +166,14 @@ public class ProduceRequest extends AbstractRequest {
         if (acks == 0) return null;
         ApiError apiError = ApiError.fromThrowable(e);
         ProduceResponseData data = new ProduceResponseData().setThrottleTimeMs(throttleTimeMs);
-        partitionSizes().forEach((tp, ignored) -> {
-            ProduceResponseData.TopicProduceResponse tpr = data.responses().find(tp.topic());
+        partitionSizes().forEach((tpId, ignored) -> {
+            ProduceResponseData.TopicProduceResponse tpr = data.responses().find(tpId.topic(), tpId.topicId());
             if (tpr == null) {
-                tpr = new ProduceResponseData.TopicProduceResponse().setName(tp.topic());
+                tpr = new ProduceResponseData.TopicProduceResponse().setName(tpId.topic()).setTopicId(tpId.topicId());
                 data.responses().add(tpr);
             }
             tpr.partitionResponses().add(new ProduceResponseData.PartitionProduceResponse()
-                    .setIndex(tp.partition())
+                    .setIndex(tpId.partition())
                     .setRecordErrors(Collections.emptyList())
                     .setBaseOffset(INVALID_OFFSET)
                     .setLogAppendTimeMs(RecordBatch.NO_TIMESTAMP)

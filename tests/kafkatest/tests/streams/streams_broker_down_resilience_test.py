@@ -41,8 +41,8 @@ class StreamsBrokerDownResilience(BaseStreamsTest):
                                                           num_brokers=1)
 
     def setUp(self):
-        if self.zk:
-            self.zk.start()
+        # do not start kafka
+        pass
 
     @cluster(num_nodes=7)
     @matrix(metadata_quorum=[quorum.combined_kraft])

@@ -14,8 +14,6 @@
 // limitations under the License.
 
 import org.ajoberstar.grgit.Grgit
-import org.gradle.api.JavaVersion
-
 import java.nio.charset.StandardCharsets
 
 buildscript {
@@ -3338,7 +3336,7 @@ project(':jmh-benchmarks') {
       if (System.getProperty("jmhArgs")) {
           args System.getProperty("jmhArgs").split(' ')
       }
-      args = [shadowJar.archivePath, *args]
+      args = [shadowJar.archiveFile.get().asFile, *args]
     }
   }
 
