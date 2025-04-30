@@ -81,6 +81,8 @@ SHARE_COORDINATOR_STATE_TOPIC_REPLICATION_FACTOR ="share.coordinator.state.topic
 SHARE_COORDINATOR_STATE_TOPIC_MIN_ISR = "share.coordinator.state.topic.min.isr"
 SHARE_GROUP_ENABLE = "group.share.enable"
 
+UNSTABLE_API_VERSIONS_ENABLE = "unstable.api.versions.enable"
+
 """
 From KafkaConfig.scala
 
