@@ -238,14 +238,7 @@ public class KafkaProducerTest {
 
     @Test
     public void testAcksAndIdempotenceForIdempotentProducers() {
-        Properties baseProps = new Properties() {{
-                setProperty(
-                    ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-                setProperty(
-                    ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-                setProperty(
-                    ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            }};
+        Properties baseProps = baseProperties();
 
         Properties validProps = new Properties() {{
                 putAll(baseProps);
@@ -348,11 +341,7 @@ public class KafkaProducerTest {
 
     @Test
     public void testRetriesAndIdempotenceForIdempotentProducers() {
-        Properties baseProps = new Properties() {{
-                setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-                setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-                setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            }};
+        Properties baseProps = baseProperties();
 
         Properties validProps = new Properties() {{
                 putAll(baseProps);
@@ -414,13 +403,17 @@ public class KafkaProducerTest {
             "Must set retries to non-zero when using the transactional producer.");
     }
 
+    private Properties baseProperties() {
+        Properties baseProps = new Properties();
+        baseProps.setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
+        baseProps.setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        baseProps.setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
+        return baseProps;
+    }
+
     @Test
     public void testInflightRequestsAndIdempotenceForIdempotentProducers() {
-        Properties baseProps = new Properties() {{
-                setProperty(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
-                setProperty(ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-                setProperty(ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName());
-            }};
+        Properties baseProps = baseProperties();
 
         Properties validProps = new Properties() {{
                 putAll(baseProps);
@@ -1590,7 +1583,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testCommitTransactionWithRecordTooLargeException() throws Exception {
+    public void testCommitTransactionWithRecordTooLargeException() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
@@ -1620,7 +1613,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testCommitTransactionWithMetadataTimeoutForMissingTopic() throws Exception {
+    public void testCommitTransactionWithMetadataTimeoutForMissingTopic() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
@@ -1657,7 +1650,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testCommitTransactionWithMetadataTimeoutForPartitionOutOfRange() throws Exception {
+    public void testCommitTransactionWithMetadataTimeoutForPartitionOutOfRange() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9999");
@@ -1694,7 +1687,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testCommitTransactionWithSendToInvalidTopic() throws Exception {
+    public void testCommitTransactionWithSendToInvalidTopic() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.TRANSACTIONAL_ID_CONFIG, "some.id");
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
@@ -2131,7 +2124,7 @@ public class KafkaProducerTest {
     }
 
     @Test
-    public void testSendToInvalidTopic() throws Exception {
+    public void testSendToInvalidTopic() {
         Map<String, Object> configs = new HashMap<>();
         configs.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, "localhost:9000");
         configs.put(ProducerConfig.MAX_BLOCK_MS_CONFIG, "15000");
@@ -2937,8 +2930,12 @@ public class KafkaProducerTest {
 
     private static final String NAME = "name";
     private static final String DESCRIPTION = "description";
-    private static final Map<String, String> TAGS = Collections.singletonMap("k", "v");
+    private static final LinkedHashMap<String, String> TAGS = new LinkedHashMap<>();
     private static final double VALUE = 123.0;
+
+    static {
+        TAGS.put("t1", "v1");
+    }
 
     public static class MonitorableSerializer extends MockSerializer implements Monitorable {
 
