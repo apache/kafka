@@ -21260,14 +21260,29 @@ public class GroupMetadataManagerTest {
                 .setMemberEpoch(0)
                 .setSubscribedTopicNames(List.of(t1Name, t2Name)));
 
-        assertTrue(result.records().contains(
-            newShareGroupStatePartitionMetadataRecord(groupId, mkShareGroupStateMap(List.of(
-                    mkShareGroupStateMetadataEntry(t1Uuid, t1Name, List.of(0, 1)),
-                    mkShareGroupStateMetadataEntry(t2Uuid, t2Name, List.of(0, 1))
-                )),
-                Map.of(),
-                Map.of()
-            ))
+        CoordinatorRecord shareGroupStatePartitionMetadataRecord = null;
+
+        for (CoordinatorRecord record : result.records()) {
+            if (record.key() instanceof ShareGroupStatePartitionMetadataKey) {
+                shareGroupStatePartitionMetadataRecord = record;
+            }
+        }
+
+        assertShareGroupStatePartitionMetadataRecord(
+            shareGroupStatePartitionMetadataRecord,
+            groupId,
+            List.of(
+                new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                    .setTopicId(t1Uuid)
+                    .setTopicName(t1Name)
+                    .setPartitions(List.of(0, 1)),
+                new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                    .setTopicId(t2Uuid)
+                    .setTopicName(t2Name)
+                    .setPartitions(List.of(0, 1))
+            ),
+            List.of(),
+            List.of()
         );
 
         verifyShareGroupHeartbeatInitializeRequest(
@@ -21340,6 +21355,36 @@ public class GroupMetadataManagerTest {
                 )),
                 Map.of()
             ))
+        );
+
+        shareGroupStatePartitionMetadataRecord = null;
+
+        for (CoordinatorRecord record : result.records()) {
+            if (record.key() instanceof ShareGroupStatePartitionMetadataKey) {
+                shareGroupStatePartitionMetadataRecord = record;
+            }
+        }
+
+        assertShareGroupStatePartitionMetadataRecord(
+            shareGroupStatePartitionMetadataRecord,
+            groupId,
+            List.of(
+                new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                    .setTopicId(t1Uuid)
+                    .setTopicName(t1Name)
+                    .setPartitions(List.of(2, 3))
+            ),
+            List.of(
+                new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                    .setTopicId(t1Uuid)
+                    .setTopicName(t1Name)
+                    .setPartitions(List.of(0, 1)),
+                new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                    .setTopicId(t2Uuid)
+                    .setTopicName(t2Name)
+                    .setPartitions(List.of(0, 1))
+            ),
+            List.of()
         );
 
         verifyShareGroupHeartbeatInitializeRequest(
@@ -21826,5 +21871,34 @@ public class GroupMetadataManagerTest {
     ) {
         return responseTopics.stream()
             .collect(Collectors.toMap(DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic::topicId, Function.identity()));
+    }
+
+    private void assertShareGroupStatePartitionMetadataRecord(
+        CoordinatorRecord record,
+        String groupId,
+        List<ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo> expInitializingTopics,
+        List<ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo> expInitialedTopics,
+        List<ShareGroupStatePartitionMetadataValue.TopicInfo> expDeletingTopics
+    ) {
+        assertNotNull(record);
+        assertEquals(groupId, ((ShareGroupStatePartitionMetadataKey) record.key()).groupId());
+        List<ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo> initializingTopics =
+            ((ShareGroupStatePartitionMetadataValue) record.value().message()).initializingTopics();
+        List<ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo> initializedTopics =
+            ((ShareGroupStatePartitionMetadataValue) record.value().message()).initializedTopics();
+        List<ShareGroupStatePartitionMetadataValue.TopicInfo> deletingTopics =
+            ((ShareGroupStatePartitionMetadataValue) record.value().message()).deletingTopics();
+        assertEquals(expInitializingTopics.size(), initializingTopics.size());
+        assertEquals(expInitialedTopics.size(), initializedTopics.size());
+        assertEquals(expDeletingTopics.size(), deletingTopics.size());
+        for (ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo initializingTopic : expInitializingTopics) {
+            assertTrue(initializingTopics.contains(initializingTopic));
+        }
+        for (ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo initializedTopic : expInitialedTopics) {
+            assertTrue(initializedTopics.contains(initializedTopic));
+        }
+        for (ShareGroupStatePartitionMetadataValue.TopicInfo deletingTopic : expDeletingTopics) {
+            assertTrue(deletingTopics.contains(deletingTopic));
+        }
     }
 }
