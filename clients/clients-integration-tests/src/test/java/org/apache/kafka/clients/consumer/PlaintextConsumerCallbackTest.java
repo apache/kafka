@@ -16,10 +16,7 @@
  */
 package org.apache.kafka.clients.consumer;
 
-import org.apache.kafka.clients.producer.Producer;
-import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.TestUtils;
 import org.apache.kafka.common.test.api.ClusterTest;
@@ -27,7 +24,6 @@ import org.apache.kafka.common.test.api.ClusterTestDefaults;
 import org.apache.kafka.common.test.api.Type;
 
 import java.time.Duration;
-import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
@@ -35,6 +31,8 @@ import java.util.Map;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.function.BiConsumer;
 
+import static org.apache.kafka.clients.ClientsTestUtils.consumeAndVerifyRecords;
+import static org.apache.kafka.clients.ClientsTestUtils.sendRecords;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.ENABLE_AUTO_COMMIT_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
 import static org.apache.kafka.clients.consumer.GroupProtocol.CLASSIC;
@@ -198,7 +196,7 @@ public class PlaintextConsumerCallbackTest {
             var totalRecords = 120;
             var startingTimestamp = 0L;
 
-            sendRecords(totalRecords, startingTimestamp);
+            sendRecords(cluster, tp, totalRecords, startingTimestamp);
 
             triggerOnPartitionsAssigned(tp, consumer, (executeConsumer, partitions) -> {
                 executeConsumer.seek(tp, startingOffset);
@@ -209,6 +207,7 @@ public class PlaintextConsumerCallbackTest {
             consumer.resume(List.of(tp));
             consumeAndVerifyRecords(
                 consumer,
+                tp,
                 (int) (totalRecords - startingOffset),
                 (int) startingOffset,
                 (int) startingOffset,
@@ -289,64 +288,5 @@ public class PlaintextConsumerCallbackTest {
             GROUP_PROTOCOL_CONFIG, protocol.name().toLowerCase(Locale.ROOT),
             ENABLE_AUTO_COMMIT_CONFIG, "false"
         ));
-    }
-
-    private void sendRecords(int numRecords, long startingTimestamp) {
-        try (Producer<byte[], byte[]> producer = cluster.producer()) {
-            for (var i = 0; i < numRecords; i++) {
-                var timestamp = startingTimestamp + i;
-                var record = new ProducerRecord<>(
-                    tp.topic(),
-                    tp.partition(),
-                    timestamp,
-                    ("key " + i).getBytes(),
-                    ("value " + i).getBytes()
-                );
-                producer.send(record);
-            }
-            producer.flush();
-        }
-    }
-
-    protected void consumeAndVerifyRecords(
-        Consumer<byte[], byte[]> consumer,
-        int numRecords,
-        int startingOffset,
-        int startingKeyAndValueIndex,
-        long startingTimestamp
-    ) throws InterruptedException {
-        var records = consumeRecords(consumer, numRecords);
-        for (var i = 0; i < numRecords; i++) {
-            var record = records.get(i);
-            var offset = startingOffset + i;
-
-            assertEquals(tp.topic(), record.topic());
-            assertEquals(tp.partition(), record.partition());
-
-            assertEquals(TimestampType.CREATE_TIME, record.timestampType());
-            var timestamp = startingTimestamp + i;
-            assertEquals(timestamp, record.timestamp());
-
-            assertEquals(offset, record.offset());
-            var keyAndValueIndex = startingKeyAndValueIndex + i;
-            assertEquals("key " + keyAndValueIndex, new String(record.key()));
-            assertEquals("value " + keyAndValueIndex, new String(record.value()));
-            // this is true only because K and V are byte arrays
-            assertEquals(("key " + keyAndValueIndex).length(), record.serializedKeySize());
-            assertEquals(("value " + keyAndValueIndex).length(), record.serializedValueSize());
-        }
-    }
-
-    protected <K, V> List<ConsumerRecord<K, V>> consumeRecords(
-        Consumer<K, V> consumer,
-        int numRecords
-    ) throws InterruptedException {
-        List<ConsumerRecord<K, V>> records = new ArrayList<>();
-        TestUtils.waitForCondition(() -> {
-            consumer.poll(Duration.ofMillis(100)).forEach(records::add);
-            return records.size() >= numRecords;
-        }, 60000, "Timed out before consuming expected " + numRecords + " records.");
-
-        return records;
     }
 }

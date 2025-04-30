@@ -57,9 +57,9 @@ public class PreparedTxnState {
             this.epoch = Short.parseShort(parts[1]);
 
             // Validate the producerId and epoch values.
-            if (!((this.producerId >= 0 && this.epoch >= 0) || (this.producerId == -1 && this.epoch == -1))) {
+            if (!(this.producerId >= 0 && this.epoch >= 0)) {
                 throw new IllegalArgumentException("Invalid producer ID and epoch values: " +
-                    producerId + ":" + epoch + ". Both must be either >= 0 or both -1");
+                    producerId + ":" + epoch + ". Both must be >= 0");
             }
         } catch (NumberFormatException e) {
             throw new IllegalArgumentException("Invalid serialized transaction state format: " + serializedState, e);
@@ -71,8 +71,6 @@ public class PreparedTxnState {
      *
      * @param producerId        The producer ID
      * @param epoch             The producer epoch
-     *
-     * package-private for testing
      */
     PreparedTxnState(long producerId, short epoch) {
         this.producerId = producerId;
@@ -106,7 +104,7 @@ public class PreparedTxnState {
      */
     @Override
     public String toString() {
-        if (producerId == RecordBatch.NO_PRODUCER_ID && epoch == RecordBatch.NO_PRODUCER_EPOCH) {
+        if (!hasTransaction()) {
             return "";
         }
         return producerId + ":" + epoch;

@@ -50,8 +50,6 @@ import org.apache.kafka.test.StreamsTestUtils;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -71,8 +69,6 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 
 @SuppressWarnings("deprecation")
 public class RepartitionOptimizingTest {
-
-    private static final Logger log = LoggerFactory.getLogger(RepartitionOptimizingTest.class);
 
     private static final String INPUT_TOPIC = "input";
     private static final String COUNT_TOPIC = "outputTopic_0";

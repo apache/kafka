@@ -30,11 +30,9 @@ import org.apache.kafka.common.errors.InconsistentGroupProtocolException;
 import org.apache.kafka.common.errors.InvalidRegularExpression;
 import org.apache.kafka.common.errors.InvalidRequestException;
 import org.apache.kafka.common.errors.RebalanceInProgressException;
-import org.apache.kafka.common.errors.StreamsInvalidTopologyException;
 import org.apache.kafka.common.errors.UnknownMemberIdException;
 import org.apache.kafka.common.errors.UnknownServerException;
 import org.apache.kafka.common.errors.UnreleasedInstanceIdException;
-import org.apache.kafka.common.errors.UnsupportedAssignorException;
 import org.apache.kafka.common.errors.UnsupportedVersionException;
 import org.apache.kafka.common.internals.Plugin;
 import org.apache.kafka.common.message.ConsumerGroupDescribeResponseData;
@@ -160,6 +158,7 @@ import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
+import org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManager;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
 import org.apache.kafka.coordinator.group.streams.topics.TopicConfigurationException;
 import org.apache.kafka.image.MetadataDelta;
@@ -212,7 +211,6 @@ import static org.apache.kafka.common.protocol.Errors.COORDINATOR_NOT_AVAILABLE;
 import static org.apache.kafka.common.protocol.Errors.ILLEGAL_GENERATION;
 import static org.apache.kafka.common.protocol.Errors.NOT_COORDINATOR;
 import static org.apache.kafka.common.protocol.Errors.UNKNOWN_SERVER_ERROR;
-import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.CONSUMER_GENERATED_MEMBER_ID_REQUIRED_VERSION;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.ConsumerGroupHeartbeatRequest.LEAVE_GROUP_STATIC_MEMBER_EPOCH;
 import static org.apache.kafka.common.requests.JoinGroupRequest.UNKNOWN_MEMBER_ID;
@@ -240,10 +238,6 @@ import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.n
 import static org.apache.kafka.coordinator.group.GroupCoordinatorRecordHelpers.newShareGroupTargetAssignmentTombstoneRecord;
 import static org.apache.kafka.coordinator.group.Utils.assignmentToString;
 import static org.apache.kafka.coordinator.group.Utils.ofSentinel;
-import static org.apache.kafka.coordinator.group.Utils.throwIfEmptyString;
-import static org.apache.kafka.coordinator.group.Utils.throwIfNotEmptyCollection;
-import static org.apache.kafka.coordinator.group.Utils.throwIfNotNull;
-import static org.apache.kafka.coordinator.group.Utils.throwIfNull;
 import static org.apache.kafka.coordinator.group.Utils.throwIfRegularExpressionIsInvalid;
 import static org.apache.kafka.coordinator.group.Utils.toConsumerProtocolAssignment;
 import static org.apache.kafka.coordinator.group.Utils.toTopicPartitions;
@@ -1418,137 +1412,6 @@ public class GroupMetadataManager {
         groups.remove(groupId);
     }
 
-    private static void throwIfInvalidTopology(
-        StreamsGroupHeartbeatRequestData.Topology topology
-    ) throws StreamsInvalidTopologyException {
-        for (StreamsGroupHeartbeatRequestData.Subtopology subtopology: topology.subtopologies()) {
-            for (StreamsGroupHeartbeatRequestData.TopicInfo topicInfo: subtopology.stateChangelogTopics()) {
-                if (topicInfo.partitions() != 0) {
-                    throw new StreamsInvalidTopologyException(String.format(
-                        "Changelog topic %s must have an undefined partition count, but it is set to %d.",
-                        topicInfo.name(), topicInfo.partitions()
-                    ));
-                }
-            }
-        }
-    }
-
-    /**
-     * Validates the request.
-     *
-     * @param request The request to validate.
-     * @param apiVersion The version of ConsumerGroupHeartbeat RPC
-     * @throws InvalidRequestException if the request is not valid.
-     * @throws UnsupportedAssignorException if the assignor is not supported.
-     */
-    private void throwIfConsumerGroupHeartbeatRequestIsInvalid(
-        ConsumerGroupHeartbeatRequestData request,
-        int apiVersion
-    ) throws InvalidRequestException, UnsupportedAssignorException {
-        if (apiVersion >= CONSUMER_GENERATED_MEMBER_ID_REQUIRED_VERSION ||
-            request.memberEpoch() > 0 ||
-            request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH
-        ) {
-            throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
-        }
-
-        throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
-        throwIfEmptyString(request.instanceId(), "InstanceId can't be empty.");
-        throwIfEmptyString(request.rackId(), "RackId can't be empty.");
-
-        if (request.memberEpoch() == 0) {
-            if (request.rebalanceTimeoutMs() == -1) {
-                throw new InvalidRequestException("RebalanceTimeoutMs must be provided in first request.");
-            }
-            if (request.topicPartitions() == null || !request.topicPartitions().isEmpty()) {
-                throw new InvalidRequestException("TopicPartitions must be empty when (re-)joining.");
-            }
-            // We accept members joining with an empty list of names or an empty regex. It basically
-            // means that they are not subscribed to any topics, but they are part of the group.
-            if (request.subscribedTopicNames() == null && request.subscribedTopicRegex() == null) {
-                throw new InvalidRequestException("Either SubscribedTopicNames or SubscribedTopicRegex must" +
-                    " be non-null when (re-)joining.");
-            }
-        } else if (request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
-            throwIfNull(request.instanceId(), "InstanceId can't be null.");
-        } else if (request.memberEpoch() < LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
-            throw new InvalidRequestException("MemberEpoch is invalid.");
-        }
-
-        if (request.serverAssignor() != null && !consumerGroupAssignors.containsKey(request.serverAssignor())) {
-            throw new UnsupportedAssignorException("ServerAssignor " + request.serverAssignor()
-                + " is not supported. Supported assignors: " + String.join(", ", consumerGroupAssignors.keySet())
-                + ".");
-        }
-    }
-
-    /**
-     * Validates the ShareGroupHeartbeat request.
-     *
-     * @param request The request to validate.
-     * @throws InvalidRequestException if the request is not valid.
-     * @throws UnsupportedAssignorException if the assignor is not supported.
-     */
-    private void throwIfShareGroupHeartbeatRequestIsInvalid(
-        ShareGroupHeartbeatRequestData request
-    ) throws InvalidRequestException, UnsupportedAssignorException {
-        throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
-        throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
-        throwIfEmptyString(request.rackId(), "RackId can't be empty.");
-
-        if (request.memberEpoch() == 0) {
-            if (request.subscribedTopicNames() == null || request.subscribedTopicNames().isEmpty()) {
-                throw new InvalidRequestException("SubscribedTopicNames must be set in first request.");
-            }
-        } else if (request.memberEpoch() < ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH) {
-            throw new InvalidRequestException("MemberEpoch is invalid.");
-        }
-    }
-
-    /**
-     * Validates the request.
-     *
-     * @param request The request to validate.
-     * @throws InvalidRequestException if the request is not valid.
-     * @throws UnsupportedAssignorException if the assignor is not supported.
-     */
-    private static void throwIfStreamsGroupHeartbeatRequestIsInvalid(
-        StreamsGroupHeartbeatRequestData request
-    ) throws InvalidRequestException {
-        throwIfEmptyString(request.memberId(), "MemberId can't be empty.");
-        throwIfEmptyString(request.groupId(), "GroupId can't be empty.");
-        throwIfEmptyString(request.instanceId(), "InstanceId can't be empty.");
-        throwIfEmptyString(request.rackId(), "RackId can't be empty.");
-
-        if (request.memberEpoch() == 0) {
-            if (request.rebalanceTimeoutMs() == -1) {
-                throw new InvalidRequestException("RebalanceTimeoutMs must be provided in first request.");
-            }
-            throwIfNotEmptyCollection(request.activeTasks(), "ActiveTasks must be empty when (re-)joining.");
-            throwIfNotEmptyCollection(request.standbyTasks(), "StandbyTasks must be empty when (re-)joining.");
-            throwIfNotEmptyCollection(request.warmupTasks(), "WarmupTasks must be empty when (re-)joining.");
-            throwIfNull(request.topology(), "Topology must be non-null when (re-)joining.");
-            if (request.topology() != null) {
-                throwIfInvalidTopology(request.topology());
-            }
-        } else if (request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
-            throwIfNull(request.instanceId(), "InstanceId can't be null.");
-        } else if (request.memberEpoch() < LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
-            throw new InvalidRequestException(String.format("MemberEpoch is %d, but must be greater than or equal to -2.",
-                request.memberEpoch()));
-        }
-
-        if (request.activeTasks() != null || request.standbyTasks() != null || request.warmupTasks() != null) {
-            throwIfNull(request.activeTasks(), "If one task-type is non-null, all must be non-null.");
-            throwIfNull(request.standbyTasks(), "If one task-type is non-null, all must be non-null.");
-            throwIfNull(request.warmupTasks(), "If one task-type is non-null, all must be non-null.");
-        }
-
-        if (request.memberEpoch() != 0) {
-            throwIfNotNull(request.topology(), "Topology can only be provided when (re-)joining.");
-        }
-    }
-
     /**
      * Verifies that the partitions currently owned by the member (the ones set in the
      * request) matches the ones that the member should own. It matches if the consumer
@@ -2069,7 +1932,7 @@ public class GroupMetadataManager {
         int groupEpoch = group.groupEpoch();
         if (bumpGroupEpoch) {
             groupEpoch += 1;
-            records.add(newStreamsGroupEpochRecord(groupId, groupEpoch));
+            records.add(newStreamsGroupEpochRecord(groupId, groupEpoch, 0));
             log.info("[GroupId {}][MemberId {}] Bumped streams group epoch to {}.", groupId, memberId, groupEpoch);
             metrics.record(STREAMS_GROUP_REBALANCES_SENSOR_NAME);
             group.setMetadataRefreshDeadline(currentTimeMs + METADATA_REFRESH_INTERVAL_MS, groupEpoch);
@@ -2120,7 +1983,8 @@ public class GroupMetadataManager {
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
-            .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId));
+            .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId))
+            .setPartitionsByUserEndpoint(maybeBuildEndpointToPartitions(group));
 
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
@@ -2229,6 +2093,25 @@ public class GroupMetadataManager {
                 .setSubtopologyId(entry.getKey())
                 .setPartitions(entry.getValue().stream().sorted().toList()))
             .collect(Collectors.toList());
+    }
+
+    private List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> maybeBuildEndpointToPartitions(StreamsGroup group) {
+        List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList = new ArrayList<>();
+        final Map<String, StreamsGroupMember> members = group.members();
+        for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {
+            final String memberIdForAssignment = entry.getKey();
+            final Optional<StreamsGroupMemberMetadataValue.Endpoint> endpointOptional = members.get(memberIdForAssignment).userEndpoint();
+            StreamsGroupMember groupMember = entry.getValue();
+            if (endpointOptional.isPresent()) {
+                final StreamsGroupMemberMetadataValue.Endpoint endpoint = endpointOptional.get();
+                final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
+                responseEndpoint.setHost(endpoint.host());
+                responseEndpoint.setPort(endpoint.port());
+                StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = EndpointToPartitionsManager.endpointToPartitions(groupMember, responseEndpoint, group);
+                endpointToPartitionsList.add(endpointToPartitions);
+            }
+        }
+        return endpointToPartitionsList.isEmpty() ? null : endpointToPartitionsList;
     }
 
     /**
@@ -2697,7 +2580,7 @@ public class GroupMetadataManager {
 
             if (bumpGroupEpoch) {
                 groupEpoch += 1;
-                records.add(newShareGroupEpochRecord(groupId, groupEpoch));
+                records.add(newShareGroupEpochRecord(groupId, groupEpoch, 0));
                 log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
             }
 
@@ -3404,7 +3287,7 @@ public class GroupMetadataManager {
 
             if (bumpGroupEpoch) {
                 int groupEpoch = group.groupEpoch() + 1;
-                records.add(newConsumerGroupEpochRecord(groupId, groupEpoch));
+                records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, 0));
                 log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
                 metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
                 group.setMetadataRefreshDeadline(
@@ -3720,7 +3603,7 @@ public class GroupMetadataManager {
 
         if (bumpGroupEpoch) {
             groupEpoch += 1;
-            records.add(newConsumerGroupEpochRecord(groupId, groupEpoch));
+            records.add(newConsumerGroupEpochRecord(groupId, groupEpoch, 0));
             log.info("[GroupId {}] Bumped group epoch to {}.", groupId, groupEpoch);
             metrics.record(CONSUMER_GROUP_REBALANCES_SENSOR_NAME);
         }
@@ -3979,9 +3862,13 @@ public class GroupMetadataManager {
         String groupId,
         String instanceId,
         String memberId,
-        int memberEpoch
+        int memberEpoch,
+        boolean shutdownApplication
     ) throws ApiException {
         StreamsGroup group = streamsGroup(groupId);
+        if (shutdownApplication) {
+            group.setShutdownRequestMemberId(memberId);
+        }
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
             .setMemberId(memberId)
             .setMemberEpoch(memberEpoch);
@@ -4119,7 +4006,7 @@ public class GroupMetadataManager {
 
             // We bump the group epoch.
             int groupEpoch = group.groupEpoch() + 1;
-            records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch));
+            records.add(newConsumerGroupEpochRecord(group.groupId(), groupEpoch, 0));
             log.info("[GroupId {}] Bumped group epoch to {}.", group.groupId(), groupEpoch);
 
             for (ConsumerGroupMember member : members) {
@@ -4163,7 +4050,7 @@ public class GroupMetadataManager {
 
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
-        records.add(newShareGroupEpochRecord(group.groupId(), groupEpoch));
+        records.add(newShareGroupEpochRecord(group.groupId(), groupEpoch, 0));
 
         cancelGroupSessionTimeout(group.groupId(), member.memberId());
 
@@ -4226,7 +4113,7 @@ public class GroupMetadataManager {
 
         // We bump the group epoch.
         int groupEpoch = group.groupEpoch() + 1;
-        records.add(newStreamsGroupEpochRecord(group.groupId(), groupEpoch));
+        records.add(newStreamsGroupEpochRecord(group.groupId(), groupEpoch, 0));
 
         cancelTimers(group.groupId(), member.memberId());
 
@@ -4683,8 +4570,6 @@ public class GroupMetadataManager {
         AuthorizableRequestContext context,
         ConsumerGroupHeartbeatRequestData request
     ) throws ApiException {
-        throwIfConsumerGroupHeartbeatRequestIsInvalid(request, context.requestVersion());
-
         if (request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH || request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             // -1 means that the member wants to leave the group.
             // -2 means that a static member wants to leave the group.
@@ -4725,8 +4610,6 @@ public class GroupMetadataManager {
         AuthorizableRequestContext context,
         StreamsGroupHeartbeatRequestData request
     ) throws ApiException {
-        throwIfStreamsGroupHeartbeatRequestIsInvalid(request);
-
         if (request.memberEpoch() == LEAVE_GROUP_MEMBER_EPOCH || request.memberEpoch() == LEAVE_GROUP_STATIC_MEMBER_EPOCH) {
             // -1 means that the member wants to leave the group.
             // -2 means that a static member wants to leave the group.
@@ -4734,7 +4617,8 @@ public class GroupMetadataManager {
                 request.groupId(),
                 request.instanceId(),
                 request.memberId(),
-                request.memberEpoch()
+                request.memberEpoch(),
+                request.shutdownApplication()
             );
         } else {
             return streamsGroupHeartbeat(
@@ -4808,8 +4692,6 @@ public class GroupMetadataManager {
         AuthorizableRequestContext context,
         ShareGroupHeartbeatRequestData request
     ) throws ApiException {
-        throwIfShareGroupHeartbeatRequestIsInvalid(request);
-
         if (request.memberEpoch() == ShareGroupHeartbeatRequest.LEAVE_GROUP_MEMBER_EPOCH) {
             // -1 means that the member wants to leave the group.
             CoordinatorResult<ShareGroupHeartbeatResponseData, CoordinatorRecord> result = shareGroupLeave(
@@ -4963,9 +4845,13 @@ public class GroupMetadataManager {
 
     private Map<Uuid, String> attachTopicName(Set<Uuid> topicIds) {
         TopicsImage topicsImage = metadataImage.topics();
-        return topicIds.stream()
-            .map(topicId -> Map.entry(topicId, topicsImage.getTopic(topicId).name()))
-            .collect(Collectors.toMap(Map.Entry::getKey, Map.Entry::getValue));
+        Map<Uuid, String> finalMap = new HashMap<>();
+        for (Uuid topicId : topicIds) {
+            TopicImage topicImage = topicsImage.getTopic(topicId);
+            String topicName = (topicImage != null) ? topicImage.name() : "<UNKNOWN>";
+            finalMap.put(topicId, topicName);
+        }
+        return Collections.unmodifiableMap(finalMap);
     }
 
     private Map<Uuid, Map.Entry<String, Set<Integer>>> attachTopicName(Map<Uuid, Set<Integer>> initMap) {
@@ -4973,7 +4859,8 @@ public class GroupMetadataManager {
         Map<Uuid, Map.Entry<String, Set<Integer>>> finalMap = new HashMap<>();
         for (Map.Entry<Uuid, Set<Integer>> entry : initMap.entrySet()) {
             Uuid topicId = entry.getKey();
-            String topicName = topicsImage.getTopic(topicId).name();
+            TopicImage topicImage = topicsImage.getTopic(topicId);
+            String topicName = (topicImage != null) ? topicImage.name() : "<UNKNOWN>";
             finalMap.put(topicId, Map.entry(topicName, entry.getValue()));
         }
         return Collections.unmodifiableMap(finalMap);
@@ -8120,48 +8007,129 @@ public class GroupMetadataManager {
 
     /**
      * Returns a list of delete share group state request topic objects to be used with the persister.
-     * @param groupId - group ID of the share group
-     * @param requestData - the request data for DeleteShareGroupOffsets request
-     * @param errorTopicResponseList - the list of topics not found in the metadata image
+     * @param groupId                    group ID of the share group
+     * @param requestData                the request data for DeleteShareGroupOffsets request
+     * @param errorTopicResponseList     the list of topics not found in the metadata image
+     * @param records                    List of coordinator records to append to
+     *
      * @return List of objects representing the share group state delete request for topics.
      */
     public List<DeleteShareGroupStateRequestData.DeleteStateData> sharePartitionsEligibleForOffsetDeletion(
         String groupId,
         DeleteShareGroupOffsetsRequestData requestData,
-        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList
+        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList,
+        List<CoordinatorRecord> records
     ) {
         List<DeleteShareGroupStateRequestData.DeleteStateData> deleteShareGroupStateRequestTopicsData = new ArrayList<>();
+        Map<Uuid, Set<Integer>> initializedTopics = new HashMap<>();
 
-        Map<Uuid, Set<Integer>> initializedSharePartitions = initializedShareGroupPartitions(groupId);
+        ShareGroupStatePartitionMetadataInfo currentMap = shareGroupPartitionMetadata.get(groupId);
+
+        if (currentMap == null) {
+            return deleteShareGroupStateRequestTopicsData;
+        }
+
+        currentMap.initializedTopics().forEach((topicId, partitions) -> initializedTopics.put(topicId, new HashSet<>(partitions)));
+        Set<Uuid> deletingTopics = new HashSet<>(currentMap.deletingTopics());
+
         requestData.topics().forEach(topic -> {
-            Uuid topicId = metadataImage.topics().topicNameToIdView().get(topic.topicName());
-            if (topicId != null) {
+            TopicImage topicImage = metadataImage.topics().getTopic(topic.topicName());
+            if (topicImage != null) {
+                Uuid topicId = topicImage.id();
                 // A deleteState request to persister should only be sent with those topic partitions for which corresponding
                 // share partitions are initialized for the group.
-                if (initializedSharePartitions.containsKey(topicId)) {
+                if (initializedTopics.containsKey(topicId)) {
                     List<DeleteShareGroupStateRequestData.PartitionData> partitions = new ArrayList<>();
-                    topic.partitions().forEach(partition -> {
-                        if (initializedSharePartitions.get(topicId).contains(partition)) {
-                            partitions.add(new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition));
-                        }
-                    });
-                    deleteShareGroupStateRequestTopicsData.add(new DeleteShareGroupStateRequestData.DeleteStateData()
-                        .setTopicId(topicId)
-                        .setPartitions(partitions));
+                    initializedTopics.get(topicId).forEach(partition ->
+                        partitions.add(new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition)));
+                    deleteShareGroupStateRequestTopicsData.add(
+                        new DeleteShareGroupStateRequestData.DeleteStateData()
+                            .setTopicId(topicId)
+                            .setPartitions(partitions)
+                    );
+                    // Removing the topic from initializedTopics map.
+                    initializedTopics.remove(topicId);
+                    // Adding the topic to deletingTopics map.
+                    deletingTopics.add(topicId);
+                } else if (deletingTopics.contains(topicId)) {
+                    // If the topic for which delete share group offsets request is sent is already present in the deletingTopics set,
+                    // we will include that topic in the delete share group state request.
+                    List<DeleteShareGroupStateRequestData.PartitionData> partitions = new ArrayList<>();
+                    topicImage.partitions().keySet().forEach(partition ->
+                        partitions.add(new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition)));
+                    deleteShareGroupStateRequestTopicsData.add(
+                        new DeleteShareGroupStateRequestData.DeleteStateData()
+                            .setTopicId(topicId)
+                            .setPartitions(partitions)
+                    );
+                } else {
+                    errorTopicResponseList.add(
+                        new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                            .setTopicName(topic.topicName())
+                            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                            .setErrorMessage("There is no offset information to delete."));
                 }
             } else {
                 errorTopicResponseList.add(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
                     .setTopicName(topic.topicName())
-                    .setPartitions(topic.partitions().stream().map(
-                        partition -> new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
-                            .setPartitionIndex(partition)
-                            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                            .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
-                    ).collect(Collectors.toCollection(ArrayList::new))));
+                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                    .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
+                );
             }
         });
 
+        records.add(
+            GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                attachTopicName(currentMap.initializingTopics()),
+                attachTopicName(initializedTopics),
+                attachTopicName(deletingTopics)
+            )
+        );
+
         return deleteShareGroupStateRequestTopicsData;
+    }
+
+    /**
+     * Returns a list of {@link DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic} corresponding to the
+     * topics for which persister delete share group state request was successful
+     * @param groupId                    group ID of the share group
+     * @param topics                     a map of topicId to topic name
+     * @param records                    List of coordinator records to append to
+     *
+     * @return List of objects for which request was successful
+     */
+    public List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> completeDeleteShareGroupOffsets(
+        String groupId,
+        Map<Uuid, String> topics,
+        List<CoordinatorRecord> records
+    ) {
+        ShareGroupStatePartitionMetadataInfo currentMap = shareGroupPartitionMetadata.get(groupId);
+
+        if (currentMap == null) {
+            return List.of();
+        }
+
+        Set<Uuid> updatedDeletingTopics = new HashSet<>(currentMap.deletingTopics());
+
+        topics.keySet().forEach(updatedDeletingTopics::remove);
+
+        records.add(
+            GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                attachTopicName(currentMap.initializingTopics()),
+                attachTopicName(currentMap.initializedTopics()),
+                attachTopicName(updatedDeletingTopics)
+            )
+        );
+
+        return topics.entrySet().stream().map(entry ->
+            new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                .setTopicId(entry.getKey())
+                .setTopicName(entry.getValue())
+                .setErrorCode(Errors.NONE.code())
+                .setErrorMessage(null)
+        ).toList();
     }
 
     /**
