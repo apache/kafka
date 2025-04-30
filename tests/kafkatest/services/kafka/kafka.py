@@ -788,7 +788,6 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         if self.use_share_groups is not None and self.use_share_groups is True:
             override_configs[config_property.SHARE_GROUP_ENABLE] = str(self.use_share_groups)
-            enabledProtocols += ',share'
 
         if self.use_streams_groups is True:
             override_configs[config_property.UNSTABLE_API_VERSIONS_ENABLE] = str(True)

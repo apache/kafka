@@ -196,7 +196,7 @@ class BrokerMetadataPublisherTest {
       replicaManager,
       groupCoordinator,
       mock(classOf[TransactionCoordinator]),
-      Some(mock(classOf[ShareCoordinator])),
+      mock(classOf[ShareCoordinator]),
       mock(classOf[DynamicConfigPublisher]),
       mock(classOf[DynamicClientQuotaPublisher]),
       mock(classOf[DynamicTopicClusterQuotaPublisher]),
