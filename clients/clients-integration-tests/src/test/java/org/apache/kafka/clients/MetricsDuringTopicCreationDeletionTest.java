@@ -30,7 +30,6 @@ import com.yammer.metrics.core.Gauge;
 import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 
@@ -48,37 +47,12 @@ public class MetricsDuringTopicCreationDeletionTest {
     private final List<String> topics;
     private final AtomicBoolean running = new AtomicBoolean(true);
 
-    private int initialOfflinePartitionsCount;
-    private int initialPreferredReplicaImbalanceCount;
-    private int initialUnderReplicatedPartitionsCount;
-
     public MetricsDuringTopicCreationDeletionTest(ClusterInstance clusterInstance) {
         this.clusterInstance = clusterInstance;
         this.topics = new ArrayList<>();
         for (int n = 0; n < TOPIC_NUM; n++) {
             topics.add(TOPIC_NAME_PREFIX + n);
         }
-    }
-
-    private Closeable runThread() {
-        var f = CompletableFuture.runAsync(() -> {
-            while (running.get()) {
-
-                int offlinePartitionsCount = getGauge("OfflinePartitionsCount").value();
-                int preferredReplicaImbalanceCount = getGauge("PreferredReplicaImbalanceCount").value();
-                int underReplicatedPartitionsCount = getGauge("UnderReplicatedPartitions").value();
-
-                if (offlinePartitionsCount != initialOfflinePartitionsCount ||
-                    preferredReplicaImbalanceCount != initialPreferredReplicaImbalanceCount ||
-                    underReplicatedPartitionsCount != initialUnderReplicatedPartitionsCount) {
-                    running.set(false);
-                }
-            }
-        });
-        return () -> {
-            running.set(false);
-            f.join();
-        };
     }
 
     /*
@@ -103,7 +77,27 @@ public class MetricsDuringTopicCreationDeletionTest {
         final int initialUnderReplicatedPartitionsCount = getGauge("UnderReplicatedPartitions").value();
 
         running.set(true);
-        try (var ignored = runThread()) {
+
+        CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
+            while (running.get()) {
+                int offlinePartitionsCount = getGauge("OfflinePartitionsCount").value();
+                int preferredReplicaImbalanceCount = getGauge("PreferredReplicaImbalanceCount").value();
+                int underReplicatedPartitionsCount = getGauge("UnderReplicatedPartitions").value();
+
+                if (offlinePartitionsCount != initialOfflinePartitionsCount ||
+                        preferredReplicaImbalanceCount != initialPreferredReplicaImbalanceCount ||
+                        underReplicatedPartitionsCount != initialUnderReplicatedPartitionsCount) {
+                    running.set(false);
+                }
+            }
+        });
+
+        Closeable runThread = () -> {
+            running.set(false);
+            future.join();
+        };
+
+        try (runThread) {
             for (int i = 1; i <= CREATE_DELETE_ITERATIONS && running.get(); i++) {
                 // Create topics
                 for (String topic : topics) {
@@ -127,7 +121,6 @@ public class MetricsDuringTopicCreationDeletionTest {
             }
         }
 
-        // final assertion
         final int finalOfflinePartitionsCount = getGauge("OfflinePartitionsCount").value();
         final int finalPreferredReplicaImbalanceCount = getGauge("PreferredReplicaImbalanceCount").value();
         final int finalUnderReplicatedPartitionsCount = getGauge("UnderReplicatedPartitions").value();
