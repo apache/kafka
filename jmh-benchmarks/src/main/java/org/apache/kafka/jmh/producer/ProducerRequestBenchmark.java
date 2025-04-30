@@ -17,6 +17,7 @@
 
 package org.apache.kafka.jmh.producer;
 
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.compress.Compression;
 import org.apache.kafka.common.message.ProduceRequestData;
 import org.apache.kafka.common.protocol.Errors;
@@ -52,7 +53,7 @@ public class ProducerRequestBenchmark {
     private static final int NUMBER_OF_PARTITIONS = 3;
     private static final int NUMBER_OF_RECORDS = 3;
     private static final List<ProduceRequestData.TopicProduceData> TOPIC_PRODUCE_DATA = Collections.singletonList(new ProduceRequestData.TopicProduceData()
-            .setName("tp")
+            .setTopicId(Uuid.fromString("4NeOmt3TH3vW7AKKORPaCW"))
             .setPartitionData(IntStream.range(0, NUMBER_OF_PARTITIONS).mapToObj(partitionIndex -> new ProduceRequestData.PartitionProduceData()
                 .setIndex(partitionIndex)
                 .setRecords(MemoryRecords.withRecords(Compression.NONE, IntStream.range(0, NUMBER_OF_RECORDS)

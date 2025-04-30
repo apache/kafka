@@ -65,7 +65,7 @@ public class WrappingStoreProviderTest {
     @Test
     public void shouldFindKeyValueStores() {
         final List<ReadOnlyKeyValueStore<String, String>> results =
-                wrappingStoreProvider.stores("kv", QueryableStoreTypes.<String, String>keyValueStore());
+                wrappingStoreProvider.stores("kv", QueryableStoreTypes.keyValueStore());
         assertEquals(2, results.size());
     }
 
@@ -95,7 +95,7 @@ public class WrappingStoreProviderTest {
     public void shouldReturnAllStoreWhenQueryWithoutPartition() {
         wrappingStoreProvider.setStoreQueryParameters(StoreQueryParameters.fromNameAndType("kv", QueryableStoreTypes.<String, String>keyValueStore()));
         final List<ReadOnlyKeyValueStore<String, String>> results =
-                wrappingStoreProvider.stores("kv", QueryableStoreTypes.<String, String>keyValueStore());
+                wrappingStoreProvider.stores("kv", QueryableStoreTypes.keyValueStore());
         assertEquals(numStateStorePartitions, results.size());
     }
 
@@ -103,7 +103,7 @@ public class WrappingStoreProviderTest {
     public void shouldReturnSingleStoreWhenQueryWithPartition() {
         wrappingStoreProvider.setStoreQueryParameters(StoreQueryParameters.fromNameAndType("kv", QueryableStoreTypes.<String, String>keyValueStore()).withPartition(numStateStorePartitions - 1));
         final List<ReadOnlyKeyValueStore<String, String>> results =
-                wrappingStoreProvider.stores("kv", QueryableStoreTypes.<String, String>keyValueStore());
+                wrappingStoreProvider.stores("kv", QueryableStoreTypes.keyValueStore());
         assertEquals(1, results.size());
     }
 }

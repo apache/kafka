@@ -56,7 +56,6 @@ import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.api.ClusterConfigProperty;
 import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.coordinator.group.GroupConfig;
 import org.apache.kafka.coordinator.group.modern.share.ShareGroupConfig;
@@ -114,8 +113,6 @@ import static org.junit.jupiter.api.Assertions.fail;
 @ClusterTestDefaults(
     serverProperties = {
         @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
-        @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
-        @ClusterConfigProperty(key = "group.share.enable", value = "true"),
         @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
         @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
         @ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
@@ -124,8 +121,7 @@ import static org.junit.jupiter.api.Assertions.fail;
         @ClusterConfigProperty(key = "share.coordinator.state.topic.replication.factor", value = "1"),
         @ClusterConfigProperty(key = "transaction.state.log.min.isr", value = "1"),
         @ClusterConfigProperty(key = "transaction.state.log.replication.factor", value = "1")
-    },
-    types = {Type.KRAFT}
+    }
 )
 public class ShareConsumerTest {
     private final ClusterInstance cluster;
@@ -1852,8 +1848,6 @@ public class ShareConsumerTest {
         brokers = 3,
         serverProperties = {
             @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
-            @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
-            @ClusterConfigProperty(key = "group.share.enable", value = "true"),
             @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
             @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "3"),
@@ -2003,8 +1997,6 @@ public class ShareConsumerTest {
         brokers = 3,
         serverProperties = {
             @ClusterConfigProperty(key = "auto.create.topics.enable", value = "false"),
-            @ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
-            @ClusterConfigProperty(key = "group.share.enable", value = "true"),
             @ClusterConfigProperty(key = "group.share.partition.max.record.locks", value = "10000"),
             @ClusterConfigProperty(key = "group.share.record.lock.duration.ms", value = "15000"),
             @ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "3"),
