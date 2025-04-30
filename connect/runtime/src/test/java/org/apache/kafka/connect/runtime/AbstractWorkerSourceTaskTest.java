@@ -964,7 +964,7 @@ public class AbstractWorkerSourceTaskTest {
                 taskId, sourceTask, statusListener, TargetState.STARTED, configState, keyConverterPlugin, valueConverterPlugin, headerConverterPlugin, transformationChain,
                 workerTransactionContext, producer, admin, TopicCreationGroup.configuredGroups(sourceConfig), offsetReader, offsetWriter, offsetStore,
                 config, metrics, errorHandlingMetrics,  plugins.delegatingLoader(), Time.SYSTEM, retryWithToleranceOperator,
-                statusBackingStore, Runnable::run, errorReportersSupplier, TestPlugins.noOpLoaderSwap()) {
+                statusBackingStore, Runnable::run, errorReportersSupplier, null, TestPlugins.noOpLoaderSwap()) {
             @Override
             protected void prepareToInitializeTask() {
             }

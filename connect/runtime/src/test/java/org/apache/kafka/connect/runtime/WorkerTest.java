@@ -63,6 +63,7 @@ import org.apache.kafka.connect.runtime.isolation.LoaderSwap;
 import org.apache.kafka.connect.runtime.isolation.PluginClassLoader;
 import org.apache.kafka.connect.runtime.isolation.Plugins;
 import org.apache.kafka.connect.runtime.isolation.Plugins.ClassLoaderUsage;
+import org.apache.kafka.connect.runtime.isolation.TestPlugins;
 import org.apache.kafka.connect.runtime.rest.RestServer;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorOffsets;
 import org.apache.kafka.connect.runtime.rest.entities.ConnectorStateInfo;
@@ -805,11 +806,11 @@ public class WorkerTest {
 
         // Each time we check the task metrics, the worker will call the herder
         when(herder.taskStatus(TASK_ID)).thenReturn(
-                new ConnectorStateInfo.TaskState(0, "RUNNING", "worker", "msg"),
-                new ConnectorStateInfo.TaskState(0, "PAUSED", "worker", "msg"),
-                new ConnectorStateInfo.TaskState(0, "FAILED", "worker", "msg"),
-                new ConnectorStateInfo.TaskState(0, "DESTROYED", "worker", "msg"),
-                new ConnectorStateInfo.TaskState(0, "UNASSIGNED", "worker", "msg")
+                new ConnectorStateInfo.TaskState(0, "RUNNING", "worker", "msg", null),
+                new ConnectorStateInfo.TaskState(0, "PAUSED", "worker", "msg", null),
+                new ConnectorStateInfo.TaskState(0, "FAILED", "worker", "msg", null),
+                new ConnectorStateInfo.TaskState(0, "DESTROYED", "worker", "msg", null),
+                new ConnectorStateInfo.TaskState(0, "UNASSIGNED", "worker", "msg", null)
         );
 
         worker = new Worker(WORKER_ID,
@@ -3072,6 +3073,7 @@ public class WorkerTest {
         when(plugins.pluginLoader(connectorClass.getName(), range)).thenReturn(pluginLoader);
         when(plugins.connectorClass(connectorClass.getName(), range)).thenReturn((Class) connectorClass);
         when(plugins.newTask(taskClass)).thenReturn(task);
+        when(plugins.safeLoaderSwapper()).thenReturn(TestPlugins.noOpLoaderSwap());
         when(task.version()).thenReturn(range == null ? "unknown" : range.toString());
     }
 
@@ -3087,7 +3089,7 @@ public class WorkerTest {
         verify(plugins).pluginLoader(connectorClass.getName(), range);
         verify(plugins).connectorClass(connectorClass.getName(), range);
         verify(plugins).newTask(taskClass);
-        verify(task).version();
+        verify(task, times(2)).version();
     }
 
     private void mockExecutorRealSubmit(Class<? extends Runnable> runnableClass) {
