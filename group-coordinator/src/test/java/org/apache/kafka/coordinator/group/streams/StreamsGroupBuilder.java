@@ -85,7 +85,7 @@ public class StreamsGroupBuilder {
 
         // Add group epoch record.
         records.add(
-            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(groupId, groupEpoch));
+            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(groupId, groupEpoch, 0));
 
         // Add target assignment records.
         targetAssignments.forEach((memberId, assignment) ->

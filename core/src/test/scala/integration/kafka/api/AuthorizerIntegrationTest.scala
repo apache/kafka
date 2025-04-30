@@ -37,7 +37,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData.JoinGroupRequestProt
 import org.apache.kafka.common.message.LeaveGroupRequestData.MemberIdentity
 import org.apache.kafka.common.message.ListOffsetsRequestData.{ListOffsetsPartition, ListOffsetsTopic}
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.{OffsetForLeaderPartition, OffsetForLeaderTopic, OffsetForLeaderTopicCollection}
-import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, ConsumerGroupDescribeRequestData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteTopicsRequestData, DescribeClusterRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, DescribeProducersRequestData, DescribeTransactionsRequestData, FetchResponseData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, ListTransactionsRequestData, MetadataRequestData, OffsetCommitRequestData, ProduceRequestData, SyncGroupRequestData, WriteTxnMarkersRequestData}
+import org.apache.kafka.common.message.{AddOffsetsToTxnRequestData, AlterPartitionReassignmentsRequestData, AlterReplicaLogDirsRequestData, ConsumerGroupDescribeRequestData, ConsumerGroupHeartbeatRequestData, ConsumerGroupHeartbeatResponseData, CreateAclsRequestData, CreatePartitionsRequestData, CreateTopicsRequestData, DeleteAclsRequestData, DeleteGroupsRequestData, DeleteRecordsRequestData, DeleteTopicsRequestData, DescribeClusterRequestData, DescribeConfigsRequestData, DescribeGroupsRequestData, DescribeLogDirsRequestData, DescribeProducersRequestData, DescribeTransactionsRequestData, FetchResponseData, FindCoordinatorRequestData, HeartbeatRequestData, IncrementalAlterConfigsRequestData, JoinGroupRequestData, ListPartitionReassignmentsRequestData, ListTransactionsRequestData, MetadataRequestData, OffsetCommitRequestData, OffsetFetchRequestData, ProduceRequestData, SyncGroupRequestData, WriteTxnMarkersRequestData}
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.record.{MemoryRecords, RecordBatch, SimpleRecord}
@@ -95,9 +95,12 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   val requestKeyToError = (topicNames: Map[Uuid, String], version: Short) => Map[ApiKeys, Nothing => Errors](
     ApiKeys.METADATA -> ((resp: requests.MetadataResponse) => resp.errors.asScala.find(_._1 == topic).getOrElse(("test", Errors.NONE))._2),
     ApiKeys.PRODUCE -> ((resp: requests.ProduceResponse) => {
+      val topicId = topicNames.find { case (_, topicName) => topicName == topic}
+        .map { case (topicId, _) => topicId }
+        .getOrElse(Uuid.ZERO_UUID)
       Errors.forCode(
         resp.data
-          .responses.find(topic)
+          .responses.find("", topicId) // version is always >= 13 no need to use topic name
           .partitionResponses.asScala.find(_.index == part).get
           .errorCode
       )
@@ -259,11 +262,11 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     new requests.MetadataRequest.Builder(List(topic).asJava, allowAutoTopicCreation).build()
   }
 
-  private def createProduceRequest =
+  private def createProduceRequestWithId(id: Uuid) = {
     requests.ProduceRequest.builder(new ProduceRequestData()
       .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
         Collections.singletonList(new ProduceRequestData.TopicProduceData()
-          .setName(tp.topic).setPartitionData(Collections.singletonList(
+          .setTopicId(id).setPartitionData(Collections.singletonList(
           new ProduceRequestData.PartitionProduceData()
             .setIndex(tp.partition)
             .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test".getBytes))))))
@@ -271,6 +274,9 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
       .setAcks(1.toShort)
       .setTimeoutMs(5000))
       .build()
+  }
+
+  private def createProduceRequest = createProduceRequestWithId(getTopicIds().getOrElse(tp.topic, Uuid.ZERO_UUID))
 
   private def createFetchRequest = {
     val partitionMap = new util.LinkedHashMap[TopicPartition, requests.FetchRequest.PartitionData]
@@ -318,15 +324,53 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
   }
 
   private def createOffsetFetchRequest: OffsetFetchRequest = {
-    new requests.OffsetFetchRequest.Builder(group, false, List(tp).asJava, false).build()
+    new OffsetFetchRequest.Builder(
+      new OffsetFetchRequestData()
+        .setRequireStable(false)
+        .setGroups(List(
+          new OffsetFetchRequestData.OffsetFetchRequestGroup()
+            .setGroupId(group)
+            .setTopics(List(
+              new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName(tp.topic)
+                .setPartitionIndexes(List[Integer](tp.partition).asJava)
+            ).asJava)
+        ).asJava),
+      false
+    ).build()
   }
 
   private def createOffsetFetchRequestAllPartitions: OffsetFetchRequest = {
-    new requests.OffsetFetchRequest.Builder(group, false, null, false).build()
+    new OffsetFetchRequest.Builder(
+      new OffsetFetchRequestData()
+        .setRequireStable(false)
+        .setGroups(List(
+          new OffsetFetchRequestData.OffsetFetchRequestGroup()
+            .setGroupId(group)
+            .setTopics(null)
+        ).asJava),
+      false
+    ).build()
   }
 
   private def createOffsetFetchRequest(groupToPartitionMap: util.Map[String, util.List[TopicPartition]]): OffsetFetchRequest = {
-    new requests.OffsetFetchRequest.Builder(groupToPartitionMap, false, false).build()
+    new OffsetFetchRequest.Builder(
+      new OffsetFetchRequestData()
+        .setGroups(groupToPartitionMap.asScala.map { case (groupId, partitions) =>
+          new OffsetFetchRequestData.OffsetFetchRequestGroup()
+            .setGroupId(groupId)
+            .setTopics(
+              if (partitions == null)
+                null
+              else
+                partitions.asScala.groupBy(_.topic).map { case (topic, partitions) =>
+                  new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                    .setName(topic)
+                    .setPartitionIndexes(partitions.map(_.partition).map(Int.box).asJava)
+                }.toList.asJava)
+        }.toList.asJava),
+      false
+    ).build()
   }
 
   private def createFindCoordinatorRequest = {
@@ -696,7 +740,7 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     val topicNames = Map(id -> "topic")
     val requestKeyToRequest = mutable.LinkedHashMap[ApiKeys, AbstractRequest](
       ApiKeys.METADATA -> createMetadataRequest(allowAutoTopicCreation = false),
-      ApiKeys.PRODUCE -> createProduceRequest,
+      ApiKeys.PRODUCE -> createProduceRequestWithId(id),
       ApiKeys.FETCH -> createFetchRequestWithUnknownTopic(id, ApiKeys.FETCH.latestVersion()),
       ApiKeys.LIST_OFFSETS -> createListOffsetsRequest,
       ApiKeys.OFFSET_COMMIT -> createOffsetCommitRequest,

@@ -505,7 +505,7 @@ class AlterPartitionManagerTest {
       null,
       // Response is serialized and deserialized to ensure that its does
       // not contain ignorable fields used by other versions.
-      AlterPartitionResponse.parse(MessageUtil.toByteBufferAccessor(response.data, version).buffer(), version)
+      AlterPartitionResponse.parse(MessageUtil.toByteBufferAccessor(response.data, version), version)
     )
   }
 
