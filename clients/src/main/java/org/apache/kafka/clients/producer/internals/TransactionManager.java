@@ -1484,7 +1484,7 @@ public class TransactionManager {
 
                 // If this is a 2PC-enabled transaction with keepPreparedTxn=true, transition directly
                 // to PREPARING_TRANSACTION
-                if (enable2PC && builder.data.keepPreparedTxn() && !isEpochBump) {
+                if (enable2PC && builder.data.keepPreparedTxn()) {
                     transitionTo(State.PREPARING_TRANSACTION);
                 } else {
                     transitionTo(State.READY);
