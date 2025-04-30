@@ -102,6 +102,7 @@
     </subpackage>
     <subpackage name="util">
       <allow pkg="org.apache.kafka.storage.log.metrics" />
+      <allow pkg="org.apache.kafka.storage.internals.epoch" />
     </subpackage>
   </subpackage>
 
