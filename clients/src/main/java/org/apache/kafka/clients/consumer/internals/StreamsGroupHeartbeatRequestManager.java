@@ -74,13 +74,13 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         // Fields of StreamsGroupHeartbeatRequest sent in the most recent request
         static class LastSentFields {
 
-            private StreamsRebalanceData.Assignment assignment = StreamsRebalanceData.Assignment.EMPTY;
+            private StreamsRebalanceData.Assignment assignment = null;
 
             LastSentFields() {
             }
 
             void reset() {
-                assignment = StreamsRebalanceData.Assignment.EMPTY;
+                assignment = null;
             }
         }
 
@@ -237,6 +237,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                     repartitionTopicInfo.topicConfigs().add(new StreamsGroupHeartbeatRequestData.KeyValue().setKey(k).setValue(v))
                 );
                 repartitionTopicsInfo.add(repartitionTopicInfo);
+                repartitionTopicInfo.topicConfigs().sort(Comparator.comparing(StreamsGroupHeartbeatRequestData.KeyValue::key));
             }
             repartitionTopicsInfo.sort(Comparator.comparing(StreamsGroupHeartbeatRequestData.TopicInfo::name));
             return repartitionTopicsInfo;
@@ -251,6 +252,7 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
                 changelogTopic.getValue().topicConfigs().forEach((k, v) ->
                     changelogTopicInfo.topicConfigs().add(new StreamsGroupHeartbeatRequestData.KeyValue().setKey(k).setValue(v))
                 );
+                changelogTopicInfo.topicConfigs().sort(Comparator.comparing(StreamsGroupHeartbeatRequestData.KeyValue::key));
                 changelogTopicsInfo.add(changelogTopicInfo);
             }
             changelogTopicsInfo.sort(Comparator.comparing(StreamsGroupHeartbeatRequestData.TopicInfo::name));
@@ -402,6 +404,10 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         return EMPTY;
     }
 
+    public StreamsMembershipManager membershipManager() {
+        return membershipManager;
+    }
+
     /**
      * Returns the delay for which the application thread can safely wait before it should be responsive
      * to results from the request managers. For example, the subscription state can change when heartbeats
@@ -423,6 +429,17 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
             return 0L;
         }
         return Math.min(pollTimer.remainingMs() / 2, heartbeatRequestState.timeToNextHeartbeatMs(currentTimeMs));
+    }
+
+    public void resetPollTimer(final long pollMs) {
+        pollTimer.update(pollMs);
+        if (pollTimer.isExpired()) {
+            logger.warn("Time between subsequent calls to poll() was longer than the configured " +
+                    "max.poll.interval.ms, exceeded approximately by {} ms. Member {} will rejoin the group now.",
+                pollTimer.isExpiredBy(), membershipManager.memberId());
+            membershipManager.maybeRejoinStaleMember();
+        }
+        pollTimer.reset(maxPollIntervalMs);
     }
 
     /**
@@ -504,11 +521,14 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         }
 
         List<StreamsGroupHeartbeatResponseData.Status> statuses = data.status();
-        if (statuses != null && !statuses.isEmpty()) {
-            String statusDetails = statuses.stream()
-                .map(status -> "(" + status.statusCode() + ") " + status.statusDetail())
-                .collect(Collectors.joining(", "));
-            logger.warn("Membership is in the following statuses: {}.", statusDetails);
+        if (statuses != null) {
+            streamsRebalanceData.setStatuses(statuses);
+            if (!statuses.isEmpty()) {
+                String statusDetails = statuses.stream()
+                    .map(status -> "(" + status.statusCode() + ") " + status.statusDetail())
+                    .collect(Collectors.joining(", "));
+                logger.warn("Membership is in the following statuses: {}", statusDetails);
+            }
         }
 
         membershipManager.onHeartbeatSuccess(response);
@@ -654,16 +674,24 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         membershipManager.transitionToFatal();
     }
 
-    private static Map<StreamsRebalanceData.HostInfo, List<TopicPartition>> convertHostInfoMap(final StreamsGroupHeartbeatResponseData data) {
-        Map<StreamsRebalanceData.HostInfo, List<TopicPartition>> partitionsByHost = new HashMap<>();
+    private static Map<StreamsRebalanceData.HostInfo, StreamsRebalanceData.EndpointPartitions> convertHostInfoMap(
+            final StreamsGroupHeartbeatResponseData data) {
+        Map<StreamsRebalanceData.HostInfo, StreamsRebalanceData.EndpointPartitions> partitionsByHost = new HashMap<>();
         data.partitionsByUserEndpoint().forEach(endpoint -> {
-            List<TopicPartition> topicPartitions = endpoint.partitions().stream()
-                .flatMap(partition ->
-                    partition.partitions().stream().map(partitionId -> new TopicPartition(partition.topic(), partitionId)))
-                .collect(Collectors.toList());
+            List<TopicPartition> activeTopicPartitions = getTopicPartitionList(endpoint.activePartitions());
+            List<TopicPartition> standbyTopicPartitions = getTopicPartitionList(endpoint.standbyPartitions());
             StreamsGroupHeartbeatResponseData.Endpoint userEndpoint = endpoint.userEndpoint();
-            partitionsByHost.put(new StreamsRebalanceData.HostInfo(userEndpoint.host(), userEndpoint.port()), topicPartitions);
+            StreamsRebalanceData.EndpointPartitions endpointPartitions = new StreamsRebalanceData.EndpointPartitions(activeTopicPartitions, standbyTopicPartitions);
+            partitionsByHost.put(new StreamsRebalanceData.HostInfo(userEndpoint.host(), userEndpoint.port()), endpointPartitions);
         });
         return partitionsByHost;
     }
+
+    static List<TopicPartition> getTopicPartitionList(List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions) {
+        return topicPartitions.stream()
+                .flatMap(partition ->
+                        partition.partitions().stream().map(partitionId -> new TopicPartition(partition.topic(), partitionId)))
+                .collect(Collectors.toList());
+    }
+
 }

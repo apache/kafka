@@ -1041,7 +1041,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
       configs.get(topicResource1).get(TopicConfig.RETENTION_MS_CONFIG).value)
 
     val maxMessageBytes2 = configs.get(topicResource2).get(TopicConfig.MAX_MESSAGE_BYTES_CONFIG)
-    assertEquals(LogConfig.DEFAULT_MAX_MESSAGE_BYTES.toString, maxMessageBytes2.value)
+    assertEquals(ServerLogConfigs.MAX_MESSAGE_BYTES_DEFAULT.toString, maxMessageBytes2.value)
     assertEquals(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageBytes2.name)
     assertTrue(maxMessageBytes2.isDefault)
     assertFalse(maxMessageBytes2.isSensitive)
@@ -1565,16 +1565,13 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   }
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
-  @MethodSource(Array("getTestGroupProtocolParametersClassicGroupProtocolOnly"))
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testDeleteRecordsAfterCorruptRecords(groupProtocol: String): Unit = {
     val config = new Properties()
     config.put(TopicConfig.SEGMENT_BYTES_CONFIG, "200")
     createTopic(topic, numPartitions = 1, replicationFactor = 1, config)
 
     client = createAdminClient
-
-    val consumer = createConsumer()
-    subscribeAndWaitForAssignment(topic, consumer)
 
     val producer = createProducer()
     def sendRecords(begin: Int, end: Int) = {
@@ -1608,7 +1605,10 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     newContent.flip()
     Files.write(logFilePath, newContent.array(), StandardOpenOption.TRUNCATE_EXISTING)
 
-    consumer.seekToBeginning(Collections.singletonList(topicPartition))
+    val overrideConfig = new Properties
+    overrideConfig.setProperty("auto.offset.reset", "earliest")
+    val consumer = createConsumer(configOverrides = overrideConfig)
+    consumer.subscribe(Seq(topic).asJava)
     assertEquals("Encountered corrupt message when fetching offset 0 for topic-partition topic-0",
       assertThrows(classOf[KafkaException], () => consumer.poll(JDuration.ofMillis(DEFAULT_MAX_WAIT_MS))).getMessage)
 
@@ -3467,7 +3467,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     assertEquals(2, configs.size)
 
     assertEquals(LogConfig.DEFAULT_MIN_CLEANABLE_DIRTY_RATIO.toString, configs.get(topic1Resource).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
-    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(topic1Resource).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
+    assertEquals(ServerLogConfigs.COMPRESSION_TYPE_DEFAULT, configs.get(topic1Resource).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
     assertEquals("0.9", configs.get(topic2Resource).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
 
     // Check invalid use of append/subtract operation types
@@ -4120,12 +4120,12 @@ object PlaintextAdminIntegrationTest {
 
     assertEquals(LogConfig.DEFAULT_MIN_CLEANABLE_DIRTY_RATIO.toString,
       configs.get(topicResource1).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
-    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE,
+    assertEquals(ServerLogConfigs.COMPRESSION_TYPE_DEFAULT,
       configs.get(topicResource1).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
 
     assertEquals("snappy", configs.get(topicResource2).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
 
-    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(ServerConfigs.COMPRESSION_TYPE_CONFIG).value)
+    assertEquals(ServerLogConfigs.COMPRESSION_TYPE_DEFAULT, configs.get(brokerResource).get(ServerConfigs.COMPRESSION_TYPE_CONFIG).value)
 
     // Alter configs with validateOnly = true: first and third are invalid, second is valid
     alterConfigs.put(topicResource1, util.Arrays.asList(
@@ -4149,11 +4149,11 @@ object PlaintextAdminIntegrationTest {
 
     assertEquals(LogConfig.DEFAULT_MIN_CLEANABLE_DIRTY_RATIO.toString,
       configs.get(topicResource1).get(TopicConfig.MIN_CLEANABLE_DIRTY_RATIO_CONFIG).value)
-    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE,
+    assertEquals(ServerLogConfigs.COMPRESSION_TYPE_DEFAULT,
       configs.get(topicResource1).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
 
     assertEquals("snappy", configs.get(topicResource2).get(TopicConfig.COMPRESSION_TYPE_CONFIG).value)
 
-    assertEquals(LogConfig.DEFAULT_COMPRESSION_TYPE, configs.get(brokerResource).get(ServerConfigs.COMPRESSION_TYPE_CONFIG).value)
+    assertEquals(ServerLogConfigs.COMPRESSION_TYPE_DEFAULT, configs.get(brokerResource).get(ServerConfigs.COMPRESSION_TYPE_CONFIG).value)
   }
 }

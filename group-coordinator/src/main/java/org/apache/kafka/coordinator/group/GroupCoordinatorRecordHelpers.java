@@ -176,18 +176,21 @@ public class GroupCoordinatorRecordHelpers {
      *
      * @param groupId       The consumer group id.
      * @param newGroupEpoch The consumer group epoch.
+     * @param metadataHash  The consumer group metadata hash.
      * @return The record.
      */
     public static CoordinatorRecord newConsumerGroupEpochRecord(
         String groupId,
-        int newGroupEpoch
+        int newGroupEpoch,
+        long metadataHash
     ) {
         return CoordinatorRecord.record(
             new ConsumerGroupMetadataKey()
                 .setGroupId(groupId),
             new ApiMessageAndVersion(
                 new ConsumerGroupMetadataValue()
-                    .setEpoch(newGroupEpoch),
+                    .setEpoch(newGroupEpoch)
+                    .setMetadataHash(metadataHash),
                 (short) 0
             )
         );
@@ -647,18 +650,21 @@ public class GroupCoordinatorRecordHelpers {
      *
      * @param groupId       The group id.
      * @param newGroupEpoch The group epoch.
+     * @param metadataHash  The group metadata hash.
      * @return The record.
      */
     public static CoordinatorRecord newShareGroupEpochRecord(
         String groupId,
-        int newGroupEpoch
+        int newGroupEpoch,
+        long metadataHash
     ) {
         return CoordinatorRecord.record(
             new ShareGroupMetadataKey()
                 .setGroupId(groupId),
             new ApiMessageAndVersion(
                 new ShareGroupMetadataValue()
-                    .setEpoch(newGroupEpoch),
+                    .setEpoch(newGroupEpoch)
+                    .setMetadataHash(metadataHash),
                 (short) 0
             )
         );
@@ -815,6 +821,21 @@ public class GroupCoordinatorRecordHelpers {
     }
 
     /**
+     * Creates a ShareGroupStatePartitionMetadata tombstone.
+     *
+     * @param groupId   The share group id.
+     * @return The record.
+     */
+    public static CoordinatorRecord newShareGroupStatePartitionMetadataTombstoneRecord(
+        String groupId
+    ) {
+        return CoordinatorRecord.tombstone(
+            new ShareGroupStatePartitionMetadataKey()
+                .setGroupId(groupId)
+        );
+    }
+
+    /**
      * Creates a ShareGroupStatePartitionMetadata record.
      *
      * @param groupId   The share group id.
@@ -824,9 +845,17 @@ public class GroupCoordinatorRecordHelpers {
      */
     public static CoordinatorRecord newShareGroupStatePartitionMetadataRecord(
         String groupId,
+        Map<Uuid, Map.Entry<String, Set<Integer>>> initializingTopics,
         Map<Uuid, Map.Entry<String, Set<Integer>>> initializedTopics,
         Map<Uuid, String> deletingTopics
     ) {
+        List<ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo> initializingTopicPartitionInfo = initializingTopics.entrySet().stream()
+            .map(entry -> new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
+                .setTopicId(entry.getKey())
+                .setTopicName(entry.getValue().getKey())
+                .setPartitions(entry.getValue().getValue().stream().toList()))
+            .toList();
+
         List<ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo> initializedTopicPartitionInfo = initializedTopics.entrySet().stream()
             .map(entry -> new ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo()
                 .setTopicId(entry.getKey())
@@ -845,6 +874,7 @@ public class GroupCoordinatorRecordHelpers {
                 .setGroupId(groupId),
             new ApiMessageAndVersion(
                 new ShareGroupStatePartitionMetadataValue()
+                    .setInitializingTopics(initializingTopicPartitionInfo)
                     .setInitializedTopics(initializedTopicPartitionInfo)
                     .setDeletingTopics(deletingTopicsInfo),
                 (short) 0

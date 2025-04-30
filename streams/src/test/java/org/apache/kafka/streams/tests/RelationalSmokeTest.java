@@ -311,7 +311,7 @@ public class RelationalSmokeTest extends SmokeTestUtil {
             final long dataStartTime = System.currentTimeMillis() - timeSpan;
             final long dataEndTime = System.currentTimeMillis();
 
-            // Explicitly create a seed so we can we can log.
+            // Explicitly create a seed so we can log.
             // If we are debugging a failed run, we can deterministically produce the same dataset
             // by plugging in the seed from that run.
             final long seed = new Random().nextLong();
@@ -368,7 +368,7 @@ public class RelationalSmokeTest extends SmokeTestUtil {
          * data distribution: Zipfian and Normal, while also being efficient to generate.
          */
         private static Iterator<Integer> zipfNormal(final Random random, final int keySpace) {
-            return new Iterator<Integer>() {
+            return new Iterator<>() {
                 @Override
                 public boolean hasNext() {
                     return true;
@@ -829,13 +829,13 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                 pass,
                 report,
                 "Expected 1 article, got " + consumedArticles.size(),
-                consumedArticles.size() > 0
+                !consumedArticles.isEmpty()
             );
             assertThat(
                 pass,
                 report,
                 "Expected 1 comment, got " + consumedComments.size(),
-                consumedComments.size() > 0
+                !consumedComments.isEmpty()
             );
 
             assertThat(

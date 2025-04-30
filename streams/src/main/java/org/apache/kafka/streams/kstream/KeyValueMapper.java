@@ -44,6 +44,7 @@ import org.apache.kafka.streams.KeyValue;
  * @see KTable#groupBy(KeyValueMapper, Grouped)
  * @see KTable#toStream(KeyValueMapper)
  */
+@FunctionalInterface
 public interface KeyValueMapper<K, V, VR> {
 
     /**

@@ -32,7 +32,8 @@ import org.apache.kafka.common.network.{ConnectionMode, ListenerName}
 import org.apache.kafka.common.serialization.{ByteArrayDeserializer, ByteArraySerializer, Deserializer, Serializer}
 import org.apache.kafka.coordinator.group.GroupCoordinatorConfig
 import org.apache.kafka.network.SocketServerConfigs
-import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs, ServerConfigs}
+import org.apache.kafka.raft.MetadataLogConfig
+import org.apache.kafka.server.config.{KRaftConfigs, ReplicationConfigs}
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 
 import scala.collection.mutable
@@ -72,9 +73,8 @@ abstract class IntegrationTestHarness extends KafkaServerTestHarness {
     modifyConfigs(cfgs)
     if (isShareGroupTest()) {
       cfgs.foreach(_.setProperty(GroupCoordinatorConfig.GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG, "classic,consumer,share"))
-      cfgs.foreach(_.setProperty(ServerConfigs.UNSTABLE_API_VERSIONS_ENABLE_CONFIG, "true"))
     }
-    cfgs.foreach(_.setProperty(KRaftConfigs.METADATA_LOG_DIR_CONFIG, TestUtils.tempDir().getAbsolutePath))
+    cfgs.foreach(_.setProperty(MetadataLogConfig.METADATA_LOG_DIR_CONFIG, TestUtils.tempDir().getAbsolutePath))
     insertControllerListenersIfNeeded(cfgs)
     cfgs.map(KafkaConfig.fromProps)
   }

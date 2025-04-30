@@ -41,7 +41,7 @@ import static org.mockito.Mockito.verify;
 
 class ReadOnlyTaskTest {
 
-    private final List<String> readOnlyMethods = new LinkedList<String>() {
+    private final List<String> readOnlyMethods = new LinkedList<>() {
         {
             add("needsInitializationOrRestoration");
             add("inputPartitions");
@@ -56,7 +56,7 @@ class ReadOnlyTaskTest {
         }
     };
 
-    private final List<String> objectMethods = new LinkedList<String>() {
+    private final List<String> objectMethods = new LinkedList<>() {
         {
             add("wait");
             add("equals");

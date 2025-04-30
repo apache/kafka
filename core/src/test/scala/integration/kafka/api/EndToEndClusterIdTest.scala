@@ -116,9 +116,9 @@ class EndToEndClusterIdTest extends KafkaServerTestHarness {
     createTopic(topic, 2, serverCount)
   }
 
-  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedQuorumAndGroupProtocolNames)
-  @MethodSource(Array("getTestQuorumAndGroupProtocolParametersAll"))
-  def testEndToEnd(quorum: String, groupProtocol: String): Unit = {
+  @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
+  @MethodSource(Array("getTestGroupProtocolParametersAll"))
+  def testEndToEnd(groupProtocol: String): Unit = {
     val appendStr = "mock"
     MockConsumerInterceptor.resetCounters()
     MockProducerInterceptor.resetCounters()

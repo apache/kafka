@@ -108,7 +108,7 @@ public class AlterConsumerGroupOffsetsHandler extends AdminApiHandler.Batched<Co
             .setGroupId(groupId.idValue)
             .setTopics(new ArrayList<>(offsetData.values()));
 
-        return new OffsetCommitRequest.Builder(data);
+        return OffsetCommitRequest.Builder.forTopicNames(data);
     }
 
     @Override

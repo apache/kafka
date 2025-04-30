@@ -19,11 +19,10 @@ package org.apache.kafka.common.requests;
 
 import org.apache.kafka.common.message.GetTelemetrySubscriptionsResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Map;
 
 public class GetTelemetrySubscriptionsResponse extends AbstractResponse {
@@ -42,7 +41,7 @@ public class GetTelemetrySubscriptionsResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        HashMap<Errors, Integer> counts = new HashMap<>();
+        Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
         updateErrorCounts(counts, Errors.forCode(data.errorCode()));
         return counts;
     }
@@ -65,8 +64,8 @@ public class GetTelemetrySubscriptionsResponse extends AbstractResponse {
         return Errors.forCode(data.errorCode());
     }
 
-    public static GetTelemetrySubscriptionsResponse parse(ByteBuffer buffer, short version) {
+    public static GetTelemetrySubscriptionsResponse parse(Readable readable, short version) {
         return new GetTelemetrySubscriptionsResponse(new GetTelemetrySubscriptionsResponseData(
-                new ByteBufferAccessor(buffer), version));
+                readable, version));
     }
 }
