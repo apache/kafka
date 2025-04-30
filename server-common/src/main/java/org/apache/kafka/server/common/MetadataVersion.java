@@ -127,7 +127,15 @@ public enum MetadataVersion {
     // *** SHARE GROUPS BECOME PRODUCTION-READY IN THE FUTURE. ITS DEFINITION ALLOWS A SHARE   ***
     // *** GROUPS FEATURE TO BE DEFINED IN 4.1 BUT TURNED OFF BY DEFAULT, ABLE TO BE TURNED ON ***
     // *** DYNAMICALLY TO TRY OUT THE PREVIEW CAPABILITY.                                      ***
-    IBP_4_2_IV0(28, "4.2", "IV0", false);
+    IBP_4_2_IV0(28, "4.2", "IV0", false),
+
+    // Enables "streams" groups by default for new clusters (KIP-1071).
+    //
+    // *** THIS IS A PLACEHOLDER UNSTABLE VERSION WHICH IS USED TO DEFINE THE POINT AT WHICH     ***
+    // *** STREAMS GROUPS BECOME PRODUCTION-READY IN THE FUTURE. ITS DEFINITION ALLOWS A STREAMS ***
+    // *** GROUPS FEATURE TO BE DEFINED IN 4.1 BUT TURNED OFF BY DEFAULT, ABLE TO BE TURNED ON   ***
+    // *** DYNAMICALLY TO TRY OUT THE EARLY ACCESS CAPABILITY.                                   ***
+    IBP_4_2_IV1(29, "4.2", "IV1", false);
 
     // NOTES when adding a new version:
     //   Update the default version in @ClusterTest annotation to point to the latest version

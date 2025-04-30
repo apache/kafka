@@ -57,7 +57,7 @@ public class ReadOnlyStoreTest {
             new StringDeserializer(),
             "storeTopic",
             "readOnlyProcessor",
-            () -> new Processor<Integer, String, Void, Void>() {
+            () -> new Processor<>() {
                 KeyValueStore<Integer, String> store;
 
                 @Override
