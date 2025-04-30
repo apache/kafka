@@ -85,7 +85,7 @@ public class ConsumerAssignmentPoller extends ShutdownableThread {
         if (partitionsToAssign.isEmpty()) {
             consumer.subscribe(topicsToSubscribe, rebalanceListener);
         } else {
-            consumer.assign(new ArrayList<>(partitionsToAssign));
+            consumer.assign(List.copyOf(partitionsToAssign));
         }
     }
 
@@ -95,11 +95,11 @@ public class ConsumerAssignmentPoller extends ShutdownableThread {
 
     /**
      * Subscribe consumer to a new set of topics.
-     * Since this method most likely be called from a different thread, this function
-     * just "schedules" the subscription change, and actual call to consumer.subscribe is done
+     * Since this method is most likely to be called from a different thread, this function
+     * just "schedules" the subscription change, and actual call to {@link org.apache.kafka.clients.consumer.Consumer#subscribe(Collection)} is done
      * in the doWork() method
      * <p>
-     * This method does not allow to change subscription until doWork processes the previous call
+     * This method does not allow changing the subscription until doWork processes the previous call
      * to this method. This is just to avoid race conditions and enough functionality for testing purposes
      *
      * @param newTopicsToSubscribe new topics to subscribe to
