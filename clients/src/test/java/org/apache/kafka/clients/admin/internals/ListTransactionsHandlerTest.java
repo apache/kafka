@@ -117,9 +117,8 @@ public class ListTransactionsHandlerTest {
     public void testBuildRequestWithEmptyFilteredTransactionalIdPattern() {
         int brokerId = 1;
         BrokerKey brokerKey = new BrokerKey(OptionalInt.of(brokerId));
-        String filteredTransactionalIdPattern = "";
         ListTransactionsOptions options = new ListTransactionsOptions()
-            .filterOnTransactionalIdPattern(filteredTransactionalIdPattern);
+            .filterOnTransactionalIdPattern("");
         ListTransactionsHandler handler = new ListTransactionsHandler(options, logContext);
         ListTransactionsRequest request = handler.buildBatchedRequest(brokerId, Set.of(brokerKey)).build();
         assertNull(request.data().transactionalIdPattern());
