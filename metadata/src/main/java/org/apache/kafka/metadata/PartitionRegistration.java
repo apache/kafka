@@ -165,20 +165,8 @@ public class PartitionRegistration {
     public final int leaderEpoch;
     public final int partitionEpoch;
 
-    public static boolean electionWasClean(PartitionRegistration prev, PartitionRegistration next) {
-        int newLeader = next.leader;
-        // take current all replicas as ISR if prev is null (new created partition), so we won't treat it as unclean election.
-        int[] prevIsr = prev != null ? prev.isr : next.replicas;
-        int[] prevElr = prev != null ? prev.elr : new int[]{};
-        int[] prevReplicas = prev != null ? prev.replicas : next.replicas;
-        boolean isReassignment = !Arrays.equals(prevReplicas, next.replicas);
-        // A reassignment can change the partition replicas, which also means it can change the preferred leader.
-        // When all the replicas required in the reassignment task is added to ISR, the reassignment will be completed.
-        // However, if the new preferred leader is the last one added to ISR, it will be also elected in the same
-        // partition change. In this case, the new leader will not be in the previous ISR.
-        // During a real unclean leader election, the reassignment will not complete.
-        return newLeader == NO_LEADER || Replicas.contains(prevIsr, newLeader) || Replicas.contains(prevElr, newLeader) ||
-            isReassignment && Replicas.contains(next.isr, newLeader);
+    public static boolean electionWasClean(int newLeader, int[] isr, int[] elr) {
+        return newLeader == NO_LEADER || Replicas.contains(isr, newLeader) || Replicas.contains(elr, newLeader);
     }
 
     public static boolean electionFromElr(int newLeader, int[] elr) {
@@ -363,7 +351,7 @@ public class PartitionRegistration {
     }
 
     public void maybeLogPartitionChange(Logger log, String description, PartitionRegistration prev) {
-        if (!electionWasClean(prev, this)) {
+        if (!electionWasClean(leader, prev.isr, prev.elr)) {
             log.info("UNCLEAN partition change for {}: {}", description, diff(prev));
         } else if (log.isDebugEnabled()) {
             log.debug("partition change for {}: {}", description, diff(prev));
