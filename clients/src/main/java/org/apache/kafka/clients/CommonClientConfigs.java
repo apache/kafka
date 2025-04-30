@@ -192,7 +192,7 @@ public class CommonClientConfigs {
                                                           + "is considered failed and the group will rebalance in order to reassign the partitions to another member. "
                                                           + "For consumers using a non-null <code>group.instance.id</code> which reach this timeout, partitions will not be immediately reassigned. "
                                                           + "Instead, the consumer will stop sending heartbeats and partitions will be reassigned "
-                                                          + "after expiration of the session timeout (defined by <code>session.timeout.ms</code> if using the Classic rebalance protocol, or by <code>group.consumer.session.timeout.ms</code> if using the Consumer protocol). "
+                                                          + "after expiration of the session timeout (defined by the client config <code>session.timeout.ms</code> if using the Classic rebalance protocol, or by the broker config <code>group.consumer.session.timeout.ms</code> if using the Consumer protocol). "
                                                           + "This mirrors the behavior of a static consumer which has shutdown.";
 
     public static final String REBALANCE_TIMEOUT_MS_CONFIG = "rebalance.timeout.ms";
