@@ -523,7 +523,7 @@ public final class AssignmentTestUtils {
     static <V> Matcher<ClientState> hasProperty(final String propertyName,
                                                 final Function<ClientState, V> propertyExtractor,
                                                 final V propertyValue) {
-        return new BaseMatcher<ClientState>() {
+        return new BaseMatcher<>() {
             @Override
             public void describeTo(final Description description) {
                 description.appendText(propertyName).appendText(":").appendValue(propertyValue);
