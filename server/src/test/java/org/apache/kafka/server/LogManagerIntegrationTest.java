@@ -37,6 +37,7 @@ import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.storage.internals.checkpoint.PartitionMetadataFile;
 import org.apache.kafka.test.TestUtils;
 
+import java.io.File;
 import java.io.IOException;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -55,6 +56,70 @@ public class LogManagerIntegrationTest {
 
     public LogManagerIntegrationTest(ClusterInstance cluster) {
         this.cluster = cluster;
+    }
+
+    @ClusterTest(types = {Type.KRAFT}, brokers = 3)
+    public void testIOExceptionOnLogSegmentCloseResultsInRecovery() throws IOException, InterruptedException, ExecutionException {
+        try (Admin admin = cluster.admin()) {
+            admin.createTopics(List.of(new NewTopic("foo", 1, (short) 3))).all().get();
+        }
+        cluster.waitForTopic("foo", 1);
+
+        // Produce some data into the topic
+        Map<String, Object> producerConfigs = Map.of(
+                ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers(),
+                ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName(),
+                ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG, StringSerializer.class.getName()
+        );
+
+        try (Producer<String, String> producer = new KafkaProducer<>(producerConfigs)) {
+            producer.send(new ProducerRecord<>("foo", 0, null, "bar")).get();
+            producer.flush();
+        }
+
+        File timeIndexFile = cluster.brokers().get(0).logManager()
+                .getLog(new TopicPartition("foo", 0), false).get()
+                .activeSegment()
+                .timeIndexFile();
+
+        // Set read only so that we throw an IOException on shutdown
+        assertTrue(timeIndexFile.exists());
+        assertTrue(timeIndexFile.setReadOnly());
+
+        cluster.brokers().get(0).shutdown();
+        try (Admin admin = cluster.admin()) {
+            TestUtils.waitForCondition(() -> {
+                List<TopicPartitionInfo> partitionInfos = admin.describeTopics(List.of("foo"))
+                        .topicNameValues().get("foo").get().partitions();
+                return partitionInfos.get(0).isr().size() == 2;
+            }, "isr size is not shrink to 2");
+        }
+
+        // Ensure we have a corrupt index on broker shutdown
+        long maxIndexSize = cluster.brokers().get(0).config().logIndexSizeMaxBytes();
+        long expectedIndexSize = 12 * (maxIndexSize / 12);
+        assertEquals(expectedIndexSize, timeIndexFile.length());
+
+        // Allow write permissions before startup
+        assertTrue(timeIndexFile.setWritable(true));
+
+        cluster.brokers().get(0).startup();
+        // make sure there is no error during load logs
+        assertTrue(cluster.firstFatalException().isEmpty());
+        try (Admin admin = cluster.admin()) {
+            TestUtils.waitForCondition(() -> {
+                List<TopicPartitionInfo> partitionInfos = admin.describeTopics(List.of("foo"))
+                        .topicNameValues().get("foo").get().partitions();
+                return partitionInfos.get(0).isr().size() == 3;
+            }, "isr size is not expand to 3");
+        }
+
+        // Ensure that sanity check does not fail
+        cluster.brokers().get(0).logManager()
+                .getLog(new TopicPartition("foo", 0), false).get()
+                .activeSegment()
+                .timeIndex()
+                .sanityCheck();
     }
 
     @ClusterTest(types = {Type.KRAFT, Type.CO_KRAFT}, brokers = 3)
