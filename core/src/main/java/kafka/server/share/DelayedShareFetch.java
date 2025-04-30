@@ -22,6 +22,7 @@ import kafka.server.QuotaFactory;
 import kafka.server.ReplicaManager;
 
 import org.apache.kafka.common.TopicIdPartition;
+import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.errors.KafkaStorageException;
 import org.apache.kafka.common.errors.NotLeaderOrFollowerException;
 import org.apache.kafka.common.errors.UnknownTopicOrPartitionException;
@@ -55,7 +56,6 @@ import java.util.LinkedHashMap;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -95,6 +95,7 @@ public class DelayedShareFetch extends DelayedOperation {
      * Metric for the rate of expired delayed fetch requests.
      */
     private final Meter expiredRequestMeter;
+    private final Uuid fetchId;
     // Tracks the start time to acquire any share partition for a fetch request.
     private long acquireStartTimeMs;
     private LinkedHashMap<TopicIdPartition, Long> partitionsAcquired;
@@ -128,7 +129,8 @@ public class DelayedShareFetch extends DelayedOperation {
             PartitionMaxBytesStrategy.type(PartitionMaxBytesStrategy.StrategyType.UNIFORM),
             shareGroupMetrics,
             time,
-            Optional.empty()
+            Optional.empty(),
+            Uuid.randomUuid()
         );
     }
 
@@ -153,7 +155,8 @@ public class DelayedShareFetch extends DelayedOperation {
         PartitionMaxBytesStrategy partitionMaxBytesStrategy,
         ShareGroupMetrics shareGroupMetrics,
         Time time,
-        Optional<RemoteFetch> remoteFetchOpt
+        Optional<RemoteFetch> remoteFetchOpt,
+        Uuid fetchId
     ) {
         super(shareFetch.fetchParams().maxWaitMs, Optional.empty());
         this.shareFetch = shareFetch;
@@ -168,6 +171,7 @@ public class DelayedShareFetch extends DelayedOperation {
         this.acquireStartTimeMs = time.hiResClockMs();
         this.remoteFetchOpt = remoteFetchOpt;
         this.remoteStorageFetchException = Optional.empty();
+        this.fetchId = fetchId;
         // Register metrics for DelayedShareFetch.
         KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.server", "DelayedShareFetchMetrics");
         this.expiredRequestMeter = metricsGroup.newMeter(EXPIRES_PER_SEC, "requests", TimeUnit.SECONDS);
@@ -345,20 +349,20 @@ public class DelayedShareFetch extends DelayedOperation {
         sharePartitionsForAcquire.forEach((topicIdPartition, sharePartition) -> {
             // Add the share partition to the list of partitions to be fetched only if we can
             // acquire the fetch lock on it.
-            if (sharePartition.maybeAcquireFetchLock(this)) {
+            if (sharePartition.maybeAcquireFetchLock(fetchId)) {
                 try {
                     // If the share partition is already at capacity, we should not attempt to fetch.
                     if (sharePartition.canAcquireRecords()) {
                         topicPartitionData.put(topicIdPartition, sharePartition.nextFetchOffset());
                     } else {
-                        sharePartition.releaseFetchLock(this);
+                        sharePartition.releaseFetchLock(fetchId);
                         log.trace("Record lock partition limit exceeded for SharePartition {}, " +
                             "cannot acquire more records", sharePartition);
                     }
                 } catch (Exception e) {
                     log.error("Error checking condition for SharePartition: {}", sharePartition, e);
                     // Release the lock, if error occurred.
-                    sharePartition.releaseFetchLock(this);
+                    sharePartition.releaseFetchLock(fetchId);
                 }
             }
         });
@@ -570,7 +574,7 @@ public class DelayedShareFetch extends DelayedOperation {
     void releasePartitionLocks(Set<TopicIdPartition> topicIdPartitions) {
         topicIdPartitions.forEach(tp -> {
             SharePartition sharePartition = sharePartitions.get(tp);
-            sharePartition.releaseFetchLock(this);
+            sharePartition.releaseFetchLock(fetchId);
         });
     }
 
@@ -849,21 +853,6 @@ public class DelayedShareFetch extends DelayedOperation {
             releasePartitionLocksAndAddToActionQueue(partitionsAcquired.keySet());
         }
         return completedByMe;
-    }
-
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
-        DelayedShareFetch that = (DelayedShareFetch) o;
-        return shareFetch.equals(that.shareFetch) && replicaManager.equals(that.replicaManager) &&
-            exceptionHandler.equals(that.exceptionHandler) && sharePartitions.equals(that.sharePartitions) &&
-            shareGroupMetrics.equals(that.shareGroupMetrics) && time.equals(that.time);
-    }
-
-    @Override
-    public int hashCode() {
-        return Objects.hash(shareFetch, replicaManager, exceptionHandler, sharePartitions, shareGroupMetrics, time);
     }
 
     public record RemoteFetch(

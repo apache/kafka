@@ -1605,14 +1605,14 @@ public class SharePartitionTest {
             .withSharePartitionMetrics(sharePartitionMetrics)
             .build();
 
-        DelayedShareFetch delayedShareFetch = mock(DelayedShareFetch.class);
+        Uuid fetchId = mock(Uuid.class);
 
         sharePartition.maybeInitialize();
-        assertTrue(sharePartition.maybeAcquireFetchLock(delayedShareFetch));
+        assertTrue(sharePartition.maybeAcquireFetchLock(fetchId));
         // Lock cannot be acquired again, as already acquired.
-        assertFalse(sharePartition.maybeAcquireFetchLock(delayedShareFetch));
+        assertFalse(sharePartition.maybeAcquireFetchLock(fetchId));
         // Release the lock.
-        sharePartition.releaseFetchLock(delayedShareFetch);
+        sharePartition.releaseFetchLock(fetchId);
 
         assertEquals(1, sharePartitionMetrics.fetchLockTimeMs().count());
         assertEquals(10, sharePartitionMetrics.fetchLockTimeMs().sum());
@@ -1621,9 +1621,9 @@ public class SharePartitionTest {
         assertEquals(100, sharePartitionMetrics.fetchLockRatio().mean());
 
         // Lock can be acquired again.
-        assertTrue(sharePartition.maybeAcquireFetchLock(delayedShareFetch));
+        assertTrue(sharePartition.maybeAcquireFetchLock(fetchId));
         // Release lock to update metrics and verify.
-        sharePartition.releaseFetchLock(delayedShareFetch);
+        sharePartition.releaseFetchLock(fetchId);
 
         assertEquals(2, sharePartitionMetrics.fetchLockTimeMs().count());
         assertEquals(40, sharePartitionMetrics.fetchLockTimeMs().sum());
@@ -1651,15 +1651,15 @@ public class SharePartitionTest {
             .thenReturn(80L) // for time when lock is released
             .thenReturn(160L); // to update lock idle duration while acquiring lock again.
 
-        DelayedShareFetch delayedShareFetch = mock(DelayedShareFetch.class);
-        assertTrue(sharePartition.maybeAcquireFetchLock(delayedShareFetch));
-        sharePartition.releaseFetchLock(delayedShareFetch);
+        Uuid fetchId = mock(Uuid.class);
+        assertTrue(sharePartition.maybeAcquireFetchLock(fetchId));
+        sharePartition.releaseFetchLock(fetchId);
         // Acquired time is 70 but last lock acquisition time was still 0, as it's the first request
         // when last acquisition time was recorded. The last acquisition time should be updated to 80.
         assertEquals(2, sharePartitionMetrics.fetchLockRatio().count());
         assertEquals(100, sharePartitionMetrics.fetchLockRatio().mean());
 
-        assertTrue(sharePartition.maybeAcquireFetchLock(delayedShareFetch));
+        assertTrue(sharePartition.maybeAcquireFetchLock(fetchId));
         // Update metric again with 0 as acquire time and 80 as idle duration ms.
         sharePartition.recordFetchLockRatioMetric(0);
         assertEquals(3, sharePartitionMetrics.fetchLockRatio().count());
@@ -7072,24 +7072,23 @@ public class SharePartitionTest {
     }
 
     @Test
-    public void testFetchLockReleasedByDifferentDelayedShareFetch() {
+    public void testFetchLockReleasedByDifferentId() {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withState(SharePartitionState.ACTIVE)
             .build();
-
-        DelayedShareFetch delayedShareFetch1 = mock(DelayedShareFetch.class);
-        DelayedShareFetch delayedShareFetch2 = mock(DelayedShareFetch.class);
+        Uuid fetchId1 = mock(Uuid.class);
+        Uuid fetchId2 = mock(Uuid.class);
 
         // Initially, fetch lock is not acquired.
         assertFalse(sharePartition.fetchLock());
-        // delayedShareFetch1 acquires the fetch lock.
-        assertTrue(sharePartition.maybeAcquireFetchLock(delayedShareFetch1));
-        // If we release fetch lock by delayedShareFetch2, it won't work.
-        sharePartition.releaseFetchLock(delayedShareFetch2);
+        // fetchId1 acquires the fetch lock.
+        assertTrue(sharePartition.maybeAcquireFetchLock(fetchId1));
+        // If we release fetch lock by fetchId2, it won't work.
+        sharePartition.releaseFetchLock(fetchId2);
         assertTrue(sharePartition.fetchLock()); // Fetch lock hasn't been released.
 
-        // If we release fetch lock by delayedShareFetch1, it will work correctly.
-        sharePartition.releaseFetchLock(delayedShareFetch1);
+        // If we release fetch lock by fetchId1, it will work correctly.
+        sharePartition.releaseFetchLock(fetchId1);
         assertFalse(sharePartition.fetchLock()); // Fetch lock has been released.
     }
 
