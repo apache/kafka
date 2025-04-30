@@ -21,6 +21,7 @@ import org.apache.kafka.clients.consumer.internals.OffsetAndTimestampInternal;
 import org.apache.kafka.common.TopicPartition;
 
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.Map;
 
 /**
@@ -46,12 +47,13 @@ public class ListOffsetsEvent extends CompletableApplicationEvent<Map<TopicParti
     /**
      * Build result representing that no offsets were found as part of the current event.
      *
-     * @return empty map
+     * @return Map containing all the partitions the event was trying to get offsets for, and
+     * null {@link OffsetAndTimestamp} as value
      */
     public <T> Map<TopicPartition, T> emptyResults() {
-        // It is used to align with classic consumer. When the timeout == 0, the classic consumer will return an empty map.
-        // Therefore, the AsyncKafkaConsumer needs to be consistent with it.
-        return Map.of();
+        Map<TopicPartition, T> result = new HashMap<>();
+        timestampsToSearch.keySet().forEach(tp -> result.put(tp, null));
+        return result;
     }
 
     public Map<TopicPartition, Long> timestampsToSearch() {

@@ -14,6 +14,7 @@ package kafka.api
 
 import kafka.api.BaseConsumerTest.{DeserializerImpl, SerializerImpl}
 
+import java.lang.{Long => JLong}
 import java.time.Duration
 import java.util
 import java.util.Arrays.asList
@@ -876,7 +877,7 @@ class PlaintextConsumerTest extends BaseConsumerTest {
 
   @ParameterizedTest(name = TestInfoUtils.TestWithParameterizedGroupProtocolNames)
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
-  def testBeginningAndEndOffsetsWhenTimeoutZero(groupProtocol: String): Unit = {
+  def testOffsetRelatedWhenTimeoutZero(groupProtocol: String): Unit = {
     val consumer = createConsumer()
     val result1 = consumer.beginningOffsets(util.List.of(tp), Duration.ZERO)
     assertNotNull(result1)
@@ -885,5 +886,10 @@ class PlaintextConsumerTest extends BaseConsumerTest {
     val result2 = consumer.endOffsets(util.List.of(tp), Duration.ZERO)
     assertNotNull(result2)
     assertEquals(0, result2.size())
+
+    val result3 = consumer.offsetsForTimes(Map[TopicPartition, JLong]((tp, 0)).asJava, Duration.ZERO)
+    assertNotNull(result3)
+    assertEquals(1, result3.size())
+    assertNull(result3.get(tp))
   }
 }

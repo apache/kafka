@@ -1306,7 +1306,10 @@ public class AsyncKafkaConsumer<K, V> implements ConsumerDelegate<K, V> {
             // and throw timeout exception if it cannot complete in time.
             if (timeout.isZero()) {
                 applicationEventHandler.add(listOffsetsEvent);
-                return listOffsetsEvent.emptyResults();
+                // It is used to align with classic consumer.
+                // When the "timeout == 0", the classic consumer will return an empty map.
+                // Therefore, the AsyncKafkaConsumer needs to be consistent with it.
+                return new HashMap<>();
             }
 
             Map<TopicPartition, OffsetAndTimestampInternal> offsetAndTimestampMap;
