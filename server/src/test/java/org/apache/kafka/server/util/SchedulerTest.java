@@ -16,7 +16,10 @@
  */
 package org.apache.kafka.server.util;
 
+import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig;
+import org.apache.kafka.storage.internals.epoch.LeaderEpochFileCache;
+import org.apache.kafka.storage.internals.log.LoadedLogOffsets;
 import org.apache.kafka.storage.internals.log.LocalLog;
 import org.apache.kafka.storage.internals.log.LogConfig;
 import org.apache.kafka.storage.internals.log.LogDirFailureChannel;
@@ -33,6 +36,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
+import java.io.File;
 import java.io.IOException;
 import java.util.List;
 import java.util.Optional;
@@ -40,9 +44,9 @@ import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.Executors;
+import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.Consumer;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -50,17 +54,15 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 public class SchedulerTest {
 
-    private KafkaScheduler scheduler;
-    private MockTime mockTime;
-    private AtomicInteger counter1;
-    private AtomicInteger counter2;
+    private final KafkaScheduler scheduler = new KafkaScheduler(1);
+    private final MockTime mockTime = new MockTime();
+    private final AtomicInteger counter1 = new AtomicInteger(0);
+    private final AtomicInteger counter2 = new AtomicInteger(0);
 
     @BeforeEach
     void setup() {
-        scheduler = new KafkaScheduler(1);
-        mockTime = new MockTime();
-        counter1 = new AtomicInteger(0);
-        counter2 = new AtomicInteger(0);
+        counter1.set(0);
+        counter2.set(0);
         scheduler.startup();
     }
 
@@ -145,22 +147,22 @@ public class SchedulerTest {
 
     @Test
     void testUnscheduleProducerTask() throws IOException {
-        var tmpDir = TestUtils.tempDirectory();
-        var logDir = TestUtils.randomPartitionLogDir(tmpDir);
-        var logConfig = new LogConfig(new Properties());
-        var brokerTopicStats = new BrokerTopicStats();
-        var maxTransactionTimeoutMs = 5 * 60 * 1000;
-        var maxProducerIdExpirationMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT;
-        var producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT;
-        var topicPartition = UnifiedLog.parseTopicPartitionName(logDir);
-        var logDirFailureChannel = new LogDirFailureChannel(10);
-        var segments = new LogSegments(topicPartition);
-        var leaderEpochCache = UnifiedLog.createLeaderEpochCache(logDir, topicPartition,
+        File tmpDir = TestUtils.tempDirectory();
+        File logDir = TestUtils.randomPartitionLogDir(tmpDir);
+        LogConfig logConfig = new LogConfig(new Properties());
+        BrokerTopicStats brokerTopicStats = new BrokerTopicStats();
+        int maxTransactionTimeoutMs = 5 * 60 * 1000;
+        int maxProducerIdExpirationMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT;
+        int producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT;
+        TopicPartition topicPartition = UnifiedLog.parseTopicPartitionName(logDir);
+        LogDirFailureChannel logDirFailureChannel = new LogDirFailureChannel(10);
+        LogSegments segments = new LogSegments(topicPartition);
+        LeaderEpochFileCache leaderEpochCache = UnifiedLog.createLeaderEpochCache(logDir, topicPartition,
                 logDirFailureChannel, Optional.empty(), mockTime.scheduler);
-        var producerStateManagerConfig = new ProducerStateManagerConfig(maxProducerIdExpirationMs, false);
-        var producerStateManager = new ProducerStateManager(topicPartition, logDir,
+        ProducerStateManagerConfig producerStateManagerConfig = new ProducerStateManagerConfig(maxProducerIdExpirationMs, false);
+        ProducerStateManager producerStateManager = new ProducerStateManager(topicPartition, logDir,
                 maxTransactionTimeoutMs, producerStateManagerConfig, mockTime);
-        var offsets = new LogLoader(
+        LoadedLogOffsets offsets = new LogLoader(
                 logDir,
                 topicPartition,
                 logConfig,
@@ -174,9 +176,9 @@ public class SchedulerTest {
                 leaderEpochCache,
                 producerStateManager,
                 new ConcurrentHashMap<>(), false).load();
-        var localLog = new LocalLog(logDir, logConfig, segments, offsets.recoveryPoint,
+        LocalLog localLog = new LocalLog(logDir, logConfig, segments, offsets.recoveryPoint,
                 offsets.nextOffsetMetadata, scheduler, mockTime, topicPartition, logDirFailureChannel);
-        var log = new UnifiedLog(offsets.logStartOffset,
+        UnifiedLog log = new UnifiedLog(offsets.logStartOffset,
                 localLog,
                 brokerTopicStats,
                 producerIdExpirationCheckIntervalMs,
@@ -193,37 +195,33 @@ public class SchedulerTest {
     /**
      * Verify that scheduler lock is not held when invoking task method, allowing new tasks to be scheduled
      * when another is being executed. This is required to avoid deadlocks when:
-     *   a) Thread1 executes a task which attempts to acquire LockA
-     *   b) Thread2 holding LockA attempts to schedule a new task
+     * <ul>
+     *     <li>Thread1 executes a task which attempts to acquire LockA</li>
+     *     <li>Thread2 holding LockA attempts to schedule a new task</li>
+     * </ul>
      */
     @Timeout(15)
     @Test
     void testMockSchedulerLocking() throws InterruptedException {
-        var initLatch = new CountDownLatch(1);
-        var completionLatch = new CountDownLatch(2);
-        var taskLatches = List.of(new CountDownLatch(1), new CountDownLatch(1));
-        Consumer<CountDownLatch> scheduledTask = taskLatch -> {
+        CountDownLatch initLatch = new CountDownLatch(1);
+        CountDownLatch completionLatch = new CountDownLatch(2);
+        List<CountDownLatch> taskLatches = List.of(new CountDownLatch(1), new CountDownLatch(1));
+        InterruptedConsumer<CountDownLatch> scheduledTask = taskLatch -> {
             initLatch.countDown();
-            try {
-                assertTrue(taskLatch.await(30, TimeUnit.SECONDS), "Timed out waiting for latch");
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new RuntimeException(e);
-            }
+            assertTrue(taskLatch.await(30, TimeUnit.SECONDS), "Timed out waiting for latch");
             completionLatch.countDown();
         };
-        mockTime.scheduler.scheduleOnce("test1", () -> scheduledTask.accept(taskLatches.get(0)), 1);
-        var tickExecutor = Executors.newSingleThreadScheduledExecutor();
+        mockTime.scheduler.scheduleOnce("test1", interruptedRunnableWrapper(() -> scheduledTask.accept(taskLatches.get(0))), 1);
+        ScheduledExecutorService tickExecutor = Executors.newSingleThreadScheduledExecutor();
         try {
             tickExecutor.scheduleWithFixedDelay(() -> mockTime.sleep(1), 0, 1, TimeUnit.MILLISECONDS);
 
             // wait for first task to execute and then schedule the next task while the first one is running
             assertTrue(initLatch.await(10, TimeUnit.SECONDS));
-            mockTime.scheduler.scheduleOnce("test2", () -> scheduledTask.accept(taskLatches.get(1)), 1);
+            mockTime.scheduler.scheduleOnce("test2", interruptedRunnableWrapper(() -> scheduledTask.accept(taskLatches.get(1))), 1);
 
             taskLatches.forEach(CountDownLatch::countDown);
             assertTrue(completionLatch.await(10, TimeUnit.SECONDS), "Tasks did not complete");
-
         } finally {
             tickExecutor.shutdownNow();
         }
@@ -231,16 +229,9 @@ public class SchedulerTest {
 
     @Test
     void testPendingTaskSize() throws InterruptedException {
-        var latch1 = new CountDownLatch(1);
-        var latch2 = new CountDownLatch(2);
-        Runnable task1 = () -> {
-            try {
-                latch1.await();
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-        };
-        scheduler.scheduleOnce("task1", task1, 0);
+        CountDownLatch latch1 = new CountDownLatch(1);
+        CountDownLatch latch2 = new CountDownLatch(2);
+        scheduler.scheduleOnce("task1", interruptedRunnableWrapper(latch1::await), 0);
         scheduler.scheduleOnce("task2", latch2::countDown, 5);
         scheduler.scheduleOnce("task3", latch2::countDown, 5);
         TestUtils.waitForCondition(() -> scheduler.pendingTaskSize() <= 2, "Scheduled task was not executed");
@@ -249,5 +240,26 @@ public class SchedulerTest {
         TestUtils.waitForCondition(() -> scheduler.pendingTaskSize() == 0, "Scheduled task was not executed");
         scheduler.shutdown();
         assertEquals(0, scheduler.pendingTaskSize());
+    }
+
+    @FunctionalInterface
+    private interface InterruptedConsumer<T> {
+        void accept(T t) throws InterruptedException;
+    }
+
+    @FunctionalInterface
+    private interface InterruptedRunnable {
+        void run() throws InterruptedException;
+    }
+
+    private static Runnable interruptedRunnableWrapper(InterruptedRunnable runnable) {
+        return () -> {
+            try {
+                runnable.run();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new RuntimeException(e);
+            }
+        };
     }
 }
