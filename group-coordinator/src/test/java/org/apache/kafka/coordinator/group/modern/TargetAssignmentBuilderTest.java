@@ -25,12 +25,13 @@ import org.apache.kafka.coordinator.group.api.assignor.PartitionAssignor;
 import org.apache.kafka.coordinator.group.api.assignor.SubscriptionType;
 import org.apache.kafka.coordinator.group.modern.consumer.ConsumerGroupMember;
 import org.apache.kafka.coordinator.group.modern.consumer.ResolvedRegularExpression;
-import org.apache.kafka.image.TopicsImage;
+import org.apache.kafka.image.MetadataImage;
 
 import org.junit.jupiter.api.Test;
 
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -57,13 +58,13 @@ public class TargetAssignmentBuilderTest {
         private final int groupEpoch;
         private final PartitionAssignor assignor = mock(PartitionAssignor.class);
         private final Map<String, ConsumerGroupMember> members = new HashMap<>();
-        private final Map<String, TopicMetadata> subscriptionMetadata = new HashMap<>();
+        private final Set<Uuid> subscriptionTopicIdSet = new HashSet<>();
         private final Map<String, ConsumerGroupMember> updatedMembers = new HashMap<>();
         private final Map<String, Assignment> targetAssignment = new HashMap<>();
         private final Map<String, MemberAssignment> memberAssignments = new HashMap<>();
         private final Map<String, String> staticMembers = new HashMap<>();
         private final Map<String, ResolvedRegularExpression> resolvedRegularExpressions = new HashMap<>();
-        private MetadataImageBuilder topicsImageBuilder = new MetadataImageBuilder();
+        private MetadataImageBuilder metadataImageBuilder = new MetadataImageBuilder();
 
         public TargetAssignmentBuilderTestContext(
             String groupId,
@@ -123,12 +124,8 @@ public class TargetAssignmentBuilderTest {
             int numPartitions
         ) {
             Uuid topicId = Uuid.randomUuid();
-            subscriptionMetadata.put(topicName, new TopicMetadata(
-                topicId,
-                topicName,
-                numPartitions
-            ));
-            topicsImageBuilder = topicsImageBuilder.addTopic(topicId, topicName, numPartitions);
+            subscriptionTopicIdSet.add(topicId);
+            metadataImageBuilder = metadataImageBuilder.addTopic(topicId, topicName, numPartitions);
 
             return topicId;
         }
@@ -218,8 +215,8 @@ public class TargetAssignmentBuilderTest {
         }
 
         public TargetAssignmentBuilder.TargetAssignmentResult build() {
-            TopicsImage topicsImage = topicsImageBuilder.build().topics();
-            TopicIds.TopicResolver topicResolver = new TopicIds.CachedTopicResolver(topicsImage);
+            MetadataImage metadataImage = metadataImageBuilder.build();
+            TopicIds.TopicResolver topicResolver = new TopicIds.CachedTopicResolver(metadataImage.topics());
             // Prepare expected member specs.
             Map<String, MemberSubscriptionAndAssignmentImpl> memberSubscriptions = new HashMap<>();
 
@@ -256,13 +253,8 @@ public class TargetAssignmentBuilderTest {
                 }
             });
 
-            // Prepare the expected topic metadata.
-            Map<Uuid, TopicMetadata> topicMetadataMap = new HashMap<>();
-            subscriptionMetadata.forEach((topicName, topicMetadata) ->
-                topicMetadataMap.put(topicMetadata.id(), topicMetadata));
-
             // Prepare the expected subscription topic metadata.
-            SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(topicMetadataMap);
+            SubscribedTopicDescriberImpl subscribedTopicMetadata = new SubscribedTopicDescriberImpl(subscriptionTopicIdSet, metadataImage);
             SubscriptionType subscriptionType = HOMOGENEOUS;
 
             // Prepare the member assignments per topic partition.
@@ -286,11 +278,11 @@ public class TargetAssignmentBuilderTest {
                 new TargetAssignmentBuilder.ConsumerTargetAssignmentBuilder(groupId, groupEpoch, assignor)
                     .withMembers(members)
                     .withStaticMembers(staticMembers)
-                    .withSubscriptionMetadata(subscriptionMetadata)
+                    .withSubscriptionTopicIdSet(subscriptionTopicIdSet)
                     .withSubscriptionType(subscriptionType)
                     .withTargetAssignment(targetAssignment)
                     .withInvertedTargetAssignment(invertedTargetAssignment)
-                    .withTopicsImage(topicsImage)
+                    .withMetadataImage(metadataImage)
                     .withResolvedRegularExpressions(resolvedRegularExpressions);
 
             // Add the updated members or delete the deleted members.
