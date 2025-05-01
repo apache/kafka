@@ -60,9 +60,9 @@ public class UtilsTest {
             dos.writeUTF(FOO_TOPIC_NAME); // topic name
             dos.writeInt(FOO_NUM_PARTITIONS); // number of partitions
             dos.writeInt(0); // partition 0
-            dos.writeUTF("0:rack0,1:rack1"); // rack of partition 0
+            dos.writeUTF("5:rack0,5:rack1"); // rack of partition 0
             dos.writeInt(1); // partition 1
-            dos.writeUTF("0:rack1,1:rack2"); // rack of partition 1
+            dos.writeUTF("5:rack1,5:rack2"); // rack of partition 1
             dos.flush();
             ByteBuffer topicBytes = bbos.buffer().flip();
             assertEquals(LZ4_HASH_INSTANCE.hash(topicBytes, 0), result);
@@ -80,9 +80,9 @@ public class UtilsTest {
             dos.writeUTF(FOO_TOPIC_NAME); // topic name
             dos.writeInt(FOO_NUM_PARTITIONS); // number of partitions
             dos.writeInt(0); // partition 0
-            dos.writeUTF("0:rack0,1:rack1"); // rack of partition 0
+            dos.writeUTF("5:rack0,5:rack1"); // rack of partition 0
             dos.writeInt(1); // partition 1
-            dos.writeUTF("0:rack1,1:rack2"); // rack of partition 1
+            dos.writeUTF("5:rack1,5:rack2"); // rack of partition 1
             dos.flush();
             ByteBuffer topicBytes = bbos.buffer().flip();
             assertNotEquals(LZ4_HASH_INSTANCE.hash(topicBytes, 0), result);
@@ -101,9 +101,9 @@ public class UtilsTest {
             dos.writeInt(FOO_NUM_PARTITIONS); // number of partitions
             // different partition order
             dos.writeInt(1); // partition 1
-            dos.writeUTF("0:rack1,1:rack2"); // rack of partition 1
+            dos.writeUTF("5:rack1,5:rack2"); // rack of partition 1
             dos.writeInt(0); // partition 0
-            dos.writeUTF("0:rack0,1:rack1"); // rack of partition 0
+            dos.writeUTF("5:rack0,5:rack1"); // rack of partition 0
             dos.flush();
             ByteBuffer topicBytes = bbos.buffer().flip();
             assertNotEquals(LZ4_HASH_INSTANCE.hash(topicBytes, 0), result);
@@ -121,9 +121,9 @@ public class UtilsTest {
             dos.writeUTF(FOO_TOPIC_NAME); // topic name
             dos.writeInt(FOO_NUM_PARTITIONS); // number of partitions
             dos.writeInt(0); // partition 0
-            dos.writeUTF("0:rack1,1:rack0"); // different rack order of partition 0
+            dos.writeUTF("5:rack1,5:rack0"); // different rack order of partition 0
             dos.writeInt(1); // partition 1
-            dos.writeUTF("0:rack1,1:rack2"); // rack of partition 1
+            dos.writeUTF("5:rack1,5:rack2"); // rack of partition 1
             dos.flush();
             ByteBuffer topicBytes = bbos.buffer().flip();
             assertNotEquals(LZ4_HASH_INSTANCE.hash(topicBytes, 0), result);

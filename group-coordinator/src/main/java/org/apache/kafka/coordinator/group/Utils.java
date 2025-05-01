@@ -57,7 +57,6 @@ import java.util.OptionalLong;
 import java.util.Set;
 import java.util.function.LongFunction;
 import java.util.stream.Collectors;
-import java.util.stream.IntStream;
 
 public class Utils {
     private Utils() {}
@@ -346,6 +345,13 @@ public class Utils {
 
     /**
      * Computes the hash of the topics in a group.
+     * <p>
+     * The computed hash value is stored as part of the metadata hash in the *GroupMetadataValue.
+     * <p>
+     * The hashing process involves the following steps:
+     * 1. Sort the topic hashes by topic name.
+     * 2. Convert each long hash value into a byte array.
+     * 3. Combine the sorted byte arrays to produce a final hash for the group.
      *
      * @param topicHashes The map of topic hashes. Key is topic name and value is the topic hash.
      * @return The hash of the group.
@@ -384,6 +390,19 @@ public class Utils {
 
     /**
      * Computes the hash of the topic id, name, number of partitions, and partition racks by XXHash64.
+     * <p>
+     * The computed hash value for the topic is utilized in conjunction with the {@link #computeGroupHash(Map)}
+     * method and is stored as part of the metadata hash in the *GroupMetadataValue.
+     * It is important to note that if the hash algorithm is changed, the magic byte must be updated to reflect the
+     * new hash version.
+     * <p>
+     * The hashing process involves the following steps:
+     * 1. Write a magic byte to denote the version of the hash function.
+     * 2. Write the hash code of the topic ID.
+     * 3. Write the UTF-8 encoded topic name.
+     * 4. Write the number of partitions associated with the topic.
+     * 5. For each partition, write the partition ID and a sorted list of rack identifiers.
+     *    - Rack identifiers are formatted as "length1:value1,length2:value2" to prevent issues with simple separators.
      *
      * @param topicImage   The topic image.
      * @param clusterImage The cluster image.
@@ -407,12 +426,11 @@ public class Utils {
                     .sorted()
                     .toList();
 
-                String racks = IntStream.range(0, sortedRacksList.size())
-                    // The rack string combination cannot use simple separator like ",", because there is no limitation for rack character.
-                    // If using simple separator like "," it may hit edge case like ",," and ",,," / ",,," and ",,".
-                    // Add index before the rack string to avoid the edge case.
-                    .mapToObj(idx -> idx + ":" + sortedRacksList.get(idx)) // Format: "index:value"
-                    .collect(Collectors.joining(",")); // Separator between "index:value" pairs
+                // The rack string combination cannot use simple separator like ",", because there is no limitation for rack character.
+                // If using simple separator like "," it may hit edge case like ",," and ",,," / ",,," and ",,".
+                // Add length before the rack string to avoid the edge case.
+                String racks = sortedRacksList.stream().map(s -> s.length() + ":" + s) // Format: "length:value"
+                    .collect(Collectors.joining(",")); // Separator between "length:value" pairs
                 dos.writeUTF(racks); // sorted racks
             }
             dos.flush();
