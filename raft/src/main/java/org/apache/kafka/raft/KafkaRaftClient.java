@@ -878,8 +878,9 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         Optional<ReplicaKey> voterKey = RaftUtil.voteRequestVoterKey(request, partitionRequest);
         if (!isValidVoterKey(voterKey)) {
             logger.info(
-                "A replica sent a voter key ({}) in the VOTE request that doesn't match the " +
+                "A replica {} sent a voter key ({}) in the VOTE request that doesn't match the " +
                 "local key ({}, {}); rejecting the vote",
+                replicaId,
                 voterKey,
                 nodeId,
                 nodeDirectoryId

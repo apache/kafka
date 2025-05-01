@@ -19,6 +19,8 @@ package org.apache.kafka.tools.consumer.group;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.AbstractOptions;
 import org.apache.kafka.clients.admin.Admin;
+import org.apache.kafka.clients.admin.DeleteShareGroupOffsetsOptions;
+import org.apache.kafka.clients.admin.DeleteShareGroupOffsetsResult;
 import org.apache.kafka.clients.admin.DeleteShareGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeShareGroupsOptions;
 import org.apache.kafka.clients.admin.GroupListing;
@@ -33,6 +35,7 @@ import org.apache.kafka.common.GroupType;
 import org.apache.kafka.common.KafkaFuture;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.errors.GroupNotEmptyException;
+import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
 
@@ -89,7 +92,7 @@ public class ShareGroupCommand {
             } else if (opts.options.has(opts.resetOffsetsOpt)) {
                 throw new UnsupportedOperationException("--reset-offsets option is not yet implemented");
             } else if (opts.options.has(opts.deleteOffsetsOpt)) {
-                throw new UnsupportedOperationException("--delete-offsets option is not yet implemented");
+                shareGroupService.deleteOffsets();
             }
         } catch (IllegalArgumentException e) {
             CommandLineUtils.printUsageAndExit(opts.parser, e.getMessage());
@@ -283,6 +286,85 @@ public class ShareGroupCommand {
             failed.putAll(success);
 
             return failed;
+        }
+
+        void deleteOffsets() {
+            String groupId = opts.options.valueOf(opts.groupOpt);
+            List<String> topics = opts.options.valuesOf(opts.topicOpt);
+
+            Entry<Throwable, Map<String, Throwable>> res = sendDeleteShareGroupOffsetsRequest(groupId, new HashSet<>(topics));
+
+            Throwable topLevelResult = res.getKey();
+            Map<String, Throwable> topicLevelResult = res.getValue();
+
+            if (topLevelResult != null) {
+                Errors topLevelError = Errors.forException(topLevelResult);
+                switch (topLevelError) {
+                    case INVALID_GROUP_ID:
+                    case GROUP_ID_NOT_FOUND:
+                    case GROUP_AUTHORIZATION_FAILED:
+                    case NON_EMPTY_GROUP:
+                        printError(topLevelResult.getMessage(), Optional.empty());
+                        break;
+                    case TOPIC_AUTHORIZATION_FAILED:
+                    case UNKNOWN_TOPIC_OR_PARTITION:
+                        // These are expected topic-level errors which will be reported in the topic-level results
+                        break;
+                    default:
+                        printError("Encounter some unknown error: " + topLevelResult, Optional.empty());
+                }
+            }
+
+            if (topicLevelResult != null && !topicLevelResult.isEmpty()) {
+                int maxTopicLen = 15;
+                for (String topic : topicLevelResult.keySet()) {
+                    maxTopicLen = Math.max(maxTopicLen, topic.length());
+                }
+
+                String format = "%n%" + (-maxTopicLen) + "s %s";
+
+                System.out.printf(format, "TOPIC", "STATUS");
+                topicLevelResult.entrySet().stream()
+                    .sorted(Entry.comparingByKey())
+                    .forEach(e -> {
+                        String topic = e.getKey();
+                        Throwable error = e.getValue();
+                        System.out.printf(format,
+                            topic,
+                            error != null ? "Error: " + error.getMessage() : "Successful"
+                        );
+                    });
+            }
+
+            System.out.println();
+        }
+
+        Entry<Throwable, Map<String, Throwable>> sendDeleteShareGroupOffsetsRequest(String groupId, Set<String> topics) {
+            Map<String, Throwable> topicLevelResult = new HashMap<>();
+
+            DeleteShareGroupOffsetsResult deleteResult = adminClient.deleteShareGroupOffsets(
+                groupId,
+                new HashSet<>(topics),
+                withTimeoutMs(new DeleteShareGroupOffsetsOptions()));
+
+            Throwable topLevelException = null;
+
+            try {
+                deleteResult.all().get();
+            } catch (ExecutionException | InterruptedException e) {
+                topLevelException = e.getCause();
+            }
+
+            topics.forEach(topic -> {
+                try {
+                    deleteResult.topicResult(topic).get();
+                    topicLevelResult.put(topic, null);
+                } catch (ExecutionException | InterruptedException e) {
+                    topicLevelResult.put(topic, e.getCause());
+                }
+            });
+
+            return new SimpleImmutableEntry<>(topLevelException, topicLevelResult);
         }
 
         private <T extends AbstractOptions<T>> T withTimeoutMs(T options) {
