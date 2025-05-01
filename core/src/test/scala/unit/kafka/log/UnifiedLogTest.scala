@@ -52,10 +52,11 @@ import org.junit.jupiter.params.provider.{EnumSource, ValueSource}
 import org.mockito.ArgumentMatchers
 import org.mockito.ArgumentMatchers.{any, anyLong}
 import org.mockito.Mockito.{doAnswer, doThrow, spy}
+
 import net.jqwik.api.AfterFailureMode
 import net.jqwik.api.ForAll
 import net.jqwik.api.Property
-import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
+import org.apache.kafka.server.config.KRaftConfigs
 
 import java.io._
 import java.nio.ByteBuffer
@@ -682,7 +683,7 @@ class UnifiedLogTest {
     val msgPerSeg = 10
     val segmentSize = msgPerSeg * setSize  // each segment will be 10 messages
     // create a log
-    val logConfig = LogTestUtils.createLogConfig(internalSegmentBytes = segmentSize)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = segmentSize)
     val log = createLog(logDir, logConfig)
     assertEquals(1, log.numberOfSegments, "There should be exactly 1 segment.")
 
@@ -709,7 +710,7 @@ class UnifiedLogTest {
   def testInitializationOfProducerSnapshotsUpgradePath(): Unit = {
     // simulate the upgrade path by creating a new log with several segments, deleting the
     // snapshot files, and then reloading the log
-    val logConfig = LogTestUtils.createLogConfig(internalSegmentBytes = 64 * 10)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 64 * 10)
     var log = createLog(logDir, logConfig)
     assertEquals(OptionalLong.empty(), log.oldestProducerSnapshotOffset)
 
@@ -1123,7 +1124,7 @@ class UnifiedLogTest {
   @Test
   def testProducerIdMapTruncateFullyAndStartAt(): Unit = {
     val records = TestUtils.singletonRecords("foo".getBytes)
-    val logConfig = LogTestUtils.createLogConfig(internalSegmentBytes = records.sizeInBytes, retentionBytes = records.sizeInBytes * 2)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = records.sizeInBytes, retentionBytes = records.sizeInBytes * 2)
     val log = createLog(logDir, logConfig)
     log.appendAsLeader(records, 0)
     log.takeProducerSnapshot()
@@ -1146,7 +1147,7 @@ class UnifiedLogTest {
   def testProducerIdExpirationOnSegmentDeletion(): Unit = {
     val pid1 = 1L
     val records = TestUtils.records(Seq(new SimpleRecord("foo".getBytes)), producerId = pid1, producerEpoch = 0, sequence = 0)
-    val logConfig = LogTestUtils.createLogConfig(internalSegmentBytes = records.sizeInBytes, retentionBytes = records.sizeInBytes * 2)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = records.sizeInBytes, retentionBytes = records.sizeInBytes * 2)
     val log = createLog(logDir, logConfig)
     log.appendAsLeader(records, 0)
     log.takeProducerSnapshot()
@@ -1199,7 +1200,7 @@ class UnifiedLogTest {
   @Test
   def testProducerSnapshotAfterSegmentRollOnAppend(): Unit = {
     val producerId = 1L
-    val logConfig = LogTestUtils.createLogConfig(internalSegmentBytes = 1024)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 1024)
     val log = createLog(logDir, logConfig)
 
     log.appendAsLeader(TestUtils.records(Seq(new SimpleRecord(mockTime.milliseconds(), new Array[Byte](512))),
@@ -1588,7 +1589,7 @@ class UnifiedLogTest {
     val msgPerSeg = 10
     val segmentSize = msgPerSeg * (setSize - 1) // each segment will be 10 messages
     // create a log
-    val logConfig = LogTestUtils.createLogConfig(internalSegmentBytes = segmentSize)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = segmentSize)
     val log = createLog(logDir, logConfig)
     assertEquals(1, log.numberOfSegments, "There should be exactly 1 segment.")
 
@@ -1889,7 +1890,7 @@ class UnifiedLogTest {
     val messageSet = MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("You".getBytes), new SimpleRecord("bethe".getBytes))
     // append messages to log
     val configSegmentSize = messageSet.sizeInBytes - 1
-    val logConfig = LogTestUtils.createLogConfig(internalSegmentBytes = configSegmentSize)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = configSegmentSize)
     val log = createLog(logDir, logConfig)
 
     assertThrows(classOf[RecordBatchTooLargeException], () => log.appendAsLeader(messageSet, 0))
@@ -2478,7 +2479,7 @@ class UnifiedLogTest {
     val setSize = TestUtils.singletonRecords(value = "test".getBytes, timestamp = mockTime.milliseconds).sizeInBytes
     val msgPerSeg = 10
     val segmentSize = msgPerSeg * setSize  // each segment will be 10 messages
-    val logConfig = LogTestUtils.createLogConfig(internalSegmentBytes = segmentSize, indexIntervalBytes = setSize - 1)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = segmentSize, indexIntervalBytes = setSize - 1)
     val log = createLog(logDir, logConfig)
     assertEquals(1, log.numberOfSegments, "There should be exactly 1 segment.")
 
@@ -2733,7 +2734,7 @@ class UnifiedLogTest {
   @Test
   def testLeaderEpochCacheCreatedAfterMessageFormatUpgrade(): Unit = {
     val logProps = new Properties()
-    logProps.put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, "1000")
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, "1000")
     logProps.put(TopicConfig.INDEX_INTERVAL_BYTES_CONFIG, "1")
     logProps.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, "65536")
     val logConfig = new LogConfig(logProps)
@@ -2893,7 +2894,7 @@ class UnifiedLogTest {
   @Test
   def testLogDeletionAfterDeleteRecords(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes)
-    val logConfig = LogTestUtils.createLogConfig(internalSegmentBytes = createRecords.sizeInBytes * 5)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5)
     val log = createLog(logDir, logConfig)
 
     for (_ <- 0 until 15)
@@ -2923,7 +2924,7 @@ class UnifiedLogTest {
   @Test
   def shouldDeleteSizeBasedSegments(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes)
-    val logConfig = LogTestUtils.createLogConfig(internalSegmentBytes = createRecords.sizeInBytes * 5, retentionBytes = createRecords.sizeInBytes * 10)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionBytes = createRecords.sizeInBytes * 10)
     val log = createLog(logDir, logConfig)
 
     // append some messages to create some segments
@@ -2938,7 +2939,7 @@ class UnifiedLogTest {
   @Test
   def shouldNotDeleteSizeBasedSegmentsWhenUnderRetentionSize(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes)
-    val logConfig = LogTestUtils.createLogConfig(internalSegmentBytes = createRecords.sizeInBytes * 5, retentionBytes = createRecords.sizeInBytes * 15)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionBytes = createRecords.sizeInBytes * 15)
     val log = createLog(logDir, logConfig)
 
     // append some messages to create some segments
@@ -2968,7 +2969,7 @@ class UnifiedLogTest {
   @Test
   def shouldNotDeleteTimeBasedSegmentsWhenNoneReadyToBeDeleted(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes, timestamp = mockTime.milliseconds)
-    val logConfig = LogTestUtils.createLogConfig(internalSegmentBytes = createRecords.sizeInBytes * 5, retentionMs = 10000000)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionMs = 10000000)
     val log = createLog(logDir, logConfig)
 
     // append some messages to create some segments
@@ -3018,7 +3019,7 @@ class UnifiedLogTest {
   def shouldDeleteStartOffsetBreachedSegmentsWhenPolicyDoesNotIncludeDelete(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes, key = "test".getBytes, timestamp = 10L)
     val recordsPerSegment = 5
-    val logConfig = LogTestUtils.createLogConfig(internalSegmentBytes = createRecords.sizeInBytes * recordsPerSegment, retentionMs = 10000, cleanupPolicy = "compact")
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * recordsPerSegment, retentionMs = 10000, cleanupPolicy = "compact")
     val log = createLog(logDir, logConfig, brokerTopicStats)
 
     // append some messages to create some segments
@@ -3090,7 +3091,7 @@ class UnifiedLogTest {
   @Test
   def shouldTruncateLeaderEpochsWhenDeletingSegments(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes)
-    val logConfig = LogTestUtils.createLogConfig(internalSegmentBytes = createRecords.sizeInBytes * 5, retentionBytes = createRecords.sizeInBytes * 10)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionBytes = createRecords.sizeInBytes * 10)
     val log = createLog(logDir, logConfig)
     val cache = epochCache(log)
 
@@ -3115,7 +3116,7 @@ class UnifiedLogTest {
   @Test
   def shouldUpdateOffsetForLeaderEpochsWhenDeletingSegments(): Unit = {
     def createRecords = TestUtils.singletonRecords("test".getBytes)
-    val logConfig = LogTestUtils.createLogConfig(internalSegmentBytes = createRecords.sizeInBytes * 5, retentionBytes = createRecords.sizeInBytes * 10)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = createRecords.sizeInBytes * 5, retentionBytes = createRecords.sizeInBytes * 10)
     val log = createLog(logDir, logConfig)
     val cache = epochCache(log)
 
@@ -3144,7 +3145,7 @@ class UnifiedLogTest {
         baseOffset = startOffset, partitionLeaderEpoch = epoch)
     }
 
-    val logConfig = LogTestUtils.createLogConfig(internalSegmentBytes = 10 * createRecords(0, 0).sizeInBytes)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = 10 * createRecords(0, 0).sizeInBytes)
     val log = createLog(logDir, logConfig)
     val cache = epochCache(log)
 
@@ -3668,7 +3669,7 @@ class UnifiedLogTest {
       new SimpleRecord("b".getBytes),
       new SimpleRecord("c".getBytes))
 
-    val logConfig = LogTestUtils.createLogConfig(internalSegmentBytes = records.sizeInBytes)
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = records.sizeInBytes)
     val log = createLog(logDir, logConfig)
 
     val firstAppendInfo = log.appendAsLeader(records, 0)
@@ -3709,7 +3710,7 @@ class UnifiedLogTest {
   @Test
   def testSegmentDeletionWithHighWatermarkInitialization(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(
-      internalSegmentBytes = 512,
+      segmentBytes = 512,
       segmentIndexBytes = 1000,
       retentionMs = 999
     )
@@ -3733,7 +3734,7 @@ class UnifiedLogTest {
   @Test
   def testCannotDeleteSegmentsAtOrAboveHighWatermark(): Unit = {
     val logConfig = LogTestUtils.createLogConfig(
-      internalSegmentBytes = 512,
+      segmentBytes = 512,
       segmentIndexBytes = 1000,
       retentionMs = 999
     )
@@ -4404,7 +4405,7 @@ class UnifiedLogTest {
   def testRetentionOnLocalLogDeletionWhenRemoteLogCopyEnabledAndDefaultLocalRetentionBytes(): Unit = {
     def createRecords = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds(), "a".getBytes)))
     val segmentBytes = createRecords.sizeInBytes()
-    val retentionBytesConfig = LogTestUtils.createLogConfig(internalSegmentBytes = segmentBytes, retentionBytes = 1,
+    val retentionBytesConfig = LogTestUtils.createLogConfig(segmentBytes = segmentBytes, retentionBytes = 1,
       fileDeleteDelayMs = 0, remoteLogStorageEnable = true)
     val log = createLog(logDir, retentionBytesConfig, remoteStorageSystemEnable = true)
 
@@ -4427,7 +4428,7 @@ class UnifiedLogTest {
   def testRetentionOnLocalLogDeletionWhenRemoteLogCopyEnabledAndDefaultLocalRetentionMs(): Unit = {
     def createRecords = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds(), "a".getBytes)))
     val segmentBytes = createRecords.sizeInBytes()
-    val retentionBytesConfig = LogTestUtils.createLogConfig(internalSegmentBytes = segmentBytes, retentionMs = 1000,
+    val retentionBytesConfig = LogTestUtils.createLogConfig(segmentBytes = segmentBytes, retentionMs = 1000,
       fileDeleteDelayMs = 0, remoteLogStorageEnable = true)
     val log = createLog(logDir, retentionBytesConfig, remoteStorageSystemEnable = true)
 
@@ -4452,7 +4453,7 @@ class UnifiedLogTest {
   def testRetentionOnLocalLogDeletionWhenRemoteLogCopyDisabled(): Unit = {
     def createRecords = TestUtils.records(List(new SimpleRecord(mockTime.milliseconds(), "a".getBytes)))
     val segmentBytes = createRecords.sizeInBytes()
-    val logConfig = LogTestUtils.createLogConfig(internalSegmentBytes = segmentBytes, localRetentionBytes = 1, retentionBytes = segmentBytes * 5,
+    val logConfig = LogTestUtils.createLogConfig(segmentBytes = segmentBytes, localRetentionBytes = 1, retentionBytes = segmentBytes * 5,
           fileDeleteDelayMs = 0, remoteLogStorageEnable = true)
     val log = createLog(logDir, logConfig, remoteStorageSystemEnable = true)
 
@@ -4479,7 +4480,7 @@ class UnifiedLogTest {
     assertEquals(2, log.localLogStartOffset())
 
     // add remoteCopyDisabled = true
-    val copyDisabledLogConfig = LogTestUtils.createLogConfig(internalSegmentBytes = segmentBytes, localRetentionBytes = 1, retentionBytes = segmentBytes * 5,
+    val copyDisabledLogConfig = LogTestUtils.createLogConfig(segmentBytes = segmentBytes, localRetentionBytes = 1, retentionBytes = segmentBytes * 5,
       fileDeleteDelayMs = 0, remoteLogStorageEnable = true, remoteLogCopyDisable = true)
     log.updateConfig(copyDisabledLogConfig)
 

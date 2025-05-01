@@ -545,7 +545,8 @@ class DumpLogSegmentsTest {
       time,
       time.scheduler,
       new MetadataLogConfig(
-        1024 * 1024,
+        100 * 1024,
+        100 * 1024,
         10 * 1000,
         100 * 1024,
         60 * 1000,

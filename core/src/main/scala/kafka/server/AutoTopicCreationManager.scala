@@ -59,7 +59,7 @@ class DefaultAutoTopicCreationManager(
   channelManager: NodeToControllerChannelManager,
   groupCoordinator: GroupCoordinator,
   txnCoordinator: TransactionCoordinator,
-  shareCoordinator: ShareCoordinator
+  shareCoordinator: Option[ShareCoordinator]
 ) extends AutoTopicCreationManager with Logging {
 
   private val inflightTopics = Collections.newSetFromMap(new ConcurrentHashMap[String, java.lang.Boolean]())
@@ -198,11 +198,15 @@ class DefaultAutoTopicCreationManager(
           .setConfigs(convertToTopicConfigCollections(
             txnCoordinator.transactionTopicConfigs))
       case SHARE_GROUP_STATE_TOPIC_NAME =>
+        val props = shareCoordinator match {
+          case Some(coordinator) => coordinator.shareGroupStateTopicConfigs()
+          case None => new Properties()
+        }
         new CreatableTopic()
           .setName(topic)
           .setNumPartitions(config.shareCoordinatorConfig.shareCoordinatorStateTopicNumPartitions())
           .setReplicationFactor(config.shareCoordinatorConfig.shareCoordinatorStateTopicReplicationFactor())
-          .setConfigs(convertToTopicConfigCollections(shareCoordinator.shareGroupStateTopicConfigs()))
+          .setConfigs(convertToTopicConfigCollections(props))
       case topicName =>
         new CreatableTopic()
           .setName(topicName)

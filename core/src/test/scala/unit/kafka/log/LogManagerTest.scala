@@ -43,7 +43,7 @@ import java.util.{Collections, Optional, OptionalLong, Properties}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.{FileLock, KafkaScheduler, MockTime, Scheduler}
-import org.apache.kafka.storage.internals.log.{CleanerConfig, FetchDataInfo, LogConfig, LogDirFailureChannel, LogMetricNames, LogOffsetsListener, LogStartOffsetIncrementReason, ProducerStateManagerConfig, RemoteIndexCache, UnifiedLog, LogManager => JLogManager}
+import org.apache.kafka.storage.internals.log.{CleanerConfig, FetchDataInfo, LogConfig, LogDirFailureChannel, LogMetricNames, LogManager => JLogManager, LogOffsetsListener, LogStartOffsetIncrementReason, ProducerStateManagerConfig, RemoteIndexCache, UnifiedLog}
 import org.apache.kafka.storage.internals.checkpoint.{CleanShutdownFileHandler, OffsetCheckpointFile}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.function.Executable
@@ -60,9 +60,10 @@ class LogManagerTest {
   val maxRollInterval = 100
   val maxLogAgeMs: Int = 10 * 60 * 1000
   val logProps = new Properties()
+  logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 1024: java.lang.Integer)
   logProps.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 4096: java.lang.Integer)
   logProps.put(TopicConfig.RETENTION_MS_CONFIG, maxLogAgeMs: java.lang.Integer)
-  val logConfig = new LogConfig(logProps, 1024)
+  val logConfig = new LogConfig(logProps)
   var logDir: File = _
   var logManager: LogManager = _
   val name = "kafka"
@@ -390,17 +391,11 @@ class LogManagerTest {
     logManager.shutdown()
     val segmentBytes = 10 * setSize
     val properties = new Properties()
+    properties.put(TopicConfig.SEGMENT_BYTES_CONFIG, segmentBytes.toString)
     properties.put(TopicConfig.RETENTION_BYTES_CONFIG, (5L * 10L * setSize + 10L).toString)
     val configRepository = MockConfigRepository.forTopic(name, properties)
 
-    logManager = TestUtils.createLogManager(
-      defaultConfig = new LogConfig(logProps, segmentBytes),
-      configRepository = configRepository,
-      logDirs = Seq(this.logDir),
-      time = this.time,
-      recoveryThreadsPerDataDir = 1,
-      initialTaskDelayMs = initialTaskDelayMs
-    )
+    logManager = createLogManager(configRepository = configRepository)
     logManager.startup(Set.empty)
 
     // create a log
@@ -454,14 +449,7 @@ class LogManagerTest {
     logManager.shutdown()
     val configRepository = MockConfigRepository.forTopic(name, TopicConfig.CLEANUP_POLICY_CONFIG, policy)
 
-    logManager = TestUtils.createLogManager(
-      defaultConfig = new LogConfig(logProps, 1024),
-      configRepository = configRepository,
-      logDirs = Seq(this.logDir),
-      time = this.time,
-      recoveryThreadsPerDataDir = 1,
-      initialTaskDelayMs = initialTaskDelayMs
-    )
+    logManager = createLogManager(configRepository = configRepository)
     val log = logManager.getOrCreateLog(new TopicPartition(name, 0), topicId = Optional.empty)
     var offset = 0L
     for (_ <- 0 until 200) {

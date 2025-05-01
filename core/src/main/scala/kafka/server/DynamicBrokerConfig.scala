@@ -705,7 +705,7 @@ class DynamicLogConfig(logManager: LogManager) extends BrokerReconfigurable with
   override def reconfigure(oldConfig: KafkaConfig, newConfig: KafkaConfig): Unit = {
     val newBrokerDefaults = new util.HashMap[String, Object](newConfig.extractLogConfigMap)
 
-    logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults, newConfig.internalSegmentSize()))
+    logManager.reconfigureDefaultLogConfig(new LogConfig(newBrokerDefaults))
 
     updateLogsConfig(newBrokerDefaults.asScala)
   }

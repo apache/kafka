@@ -87,10 +87,6 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
 
   @BeforeEach
   override def setUp(testInfo: TestInfo): Unit = {
-    if (testInfo.getTestMethod.get.getName ==  "testDeleteRecordsAfterCorruptRecords") {
-      this.serverConfig.put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, "1100")
-      this.controllerConfig.put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, "1100")
-    }
     super.setUp(testInfo)
     Configurator.reconfigure();
     brokerLoggerConfigResource = new ConfigResource(
@@ -1572,6 +1568,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
   @MethodSource(Array("getTestGroupProtocolParametersAll"))
   def testDeleteRecordsAfterCorruptRecords(groupProtocol: String): Unit = {
     val config = new Properties()
+    config.put(TopicConfig.SEGMENT_BYTES_CONFIG, "200")
     createTopic(topic, numPartitions = 1, replicationFactor = 1, config)
 
     client = createAdminClient
@@ -1579,8 +1576,7 @@ class PlaintextAdminIntegrationTest extends BaseAdminIntegrationTest {
     val producer = createProducer()
     def sendRecords(begin: Int, end: Int) = {
       val futures = (begin until end).map( i => {
-        val data : Array[Byte] = Array.fill(25)(i.toByte)
-        val record = new ProducerRecord(topic, partition, data, data)
+        val record = new ProducerRecord(topic, partition, s"$i".getBytes, s"$i".getBytes)
         producer.send(record)
       })
       futures.foreach(_.get)

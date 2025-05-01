@@ -97,7 +97,7 @@ public class GetOffsetShellTest {
         Map<String, String> rlsConfigs = new HashMap<>();
         rlsConfigs.put(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true");
         rlsConfigs.put(TopicConfig.LOCAL_LOG_RETENTION_BYTES_CONFIG, "1");
-        rlsConfigs.put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, "100");
+        rlsConfigs.put(TopicConfig.SEGMENT_BYTES_CONFIG, "100");
         setupTopics(this::getRemoteLogStorageEnabledTopicName, rlsConfigs);
         sendProducerRecords(this::getRemoteLogStorageEnabledTopicName);
     }

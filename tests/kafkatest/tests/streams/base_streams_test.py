@@ -47,7 +47,6 @@ class BaseStreamsTest(Test):
 
     def setUp(self):
         self.kafka.start()
-        self.kafka.run_features_command("upgrade", "streams.version", 1)
 
     def get_consumer(self, client_id, topic, num_messages):
         return VerifiableConsumer(self.test_context,

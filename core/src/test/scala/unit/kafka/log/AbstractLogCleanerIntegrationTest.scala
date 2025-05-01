@@ -67,9 +67,11 @@ abstract class AbstractLogCleanerIntegrationTest {
                           minCleanableDirtyRatio: Float = defaultMinCleanableDirtyRatio,
                           minCompactionLagMs: Long = defaultMinCompactionLagMS,
                           deleteDelay: Int = defaultDeleteDelay,
+                          segmentSize: Int = defaultSegmentSize,
                           maxCompactionLagMs: Long = defaultMaxCompactionLagMs): Properties = {
     val props = new Properties()
     props.put(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, maxMessageSize: java.lang.Integer)
+    props.put(TopicConfig.SEGMENT_BYTES_CONFIG, segmentSize: java.lang.Integer)
     props.put(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG, 100*1024: java.lang.Integer)
     props.put(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, deleteDelay: java.lang.Integer)
     props.put(TopicConfig.CLEANUP_POLICY_CONFIG, TopicConfig.CLEANUP_POLICY_COMPACT)
@@ -87,7 +89,7 @@ abstract class AbstractLogCleanerIntegrationTest {
                   maxMessageSize: Int = defaultMaxMessageSize,
                   minCompactionLagMs: Long = defaultMinCompactionLagMS,
                   deleteDelay: Int = defaultDeleteDelay,
-                  internalSegmentSize: Int = defaultSegmentSize,
+                  segmentSize: Int = defaultSegmentSize,
                   maxCompactionLagMs: Long = defaultMaxCompactionLagMs,
                   cleanerIoBufferSize: Option[Int] = None,
                   propertyOverrides: Properties = new Properties()): LogCleaner = {
@@ -102,7 +104,8 @@ abstract class AbstractLogCleanerIntegrationTest {
         minCleanableDirtyRatio = minCleanableDirtyRatio,
         minCompactionLagMs = minCompactionLagMs,
         deleteDelay = deleteDelay,
-        maxCompactionLagMs = maxCompactionLagMs), internalSegmentSize)
+        segmentSize = segmentSize,
+        maxCompactionLagMs = maxCompactionLagMs))
       val log = UnifiedLog.create(
         dir,
         logConfig,

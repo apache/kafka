@@ -63,9 +63,8 @@ public abstract class AbstractHeartbeatRequestManager<R extends AbstractResponse
     protected final Logger logger;
 
     /**
-     * Max time allowed between invocations of poll, defined in the {@link ConsumerConfig#MAX_POLL_INTERVAL_MS_CONFIG} config.
-     * This is sent to the coordinator in the first heartbeat to join a group, to be used as rebalance timeout.
-     * Also, the consumer will proactively rejoin the group on a call to poll if this time has expired.
+     * Time that the group coordinator will wait on member to revoke its partitions. This is provided by the group
+     * coordinator in the heartbeat
      */
     protected final int maxPollIntervalMs;
 

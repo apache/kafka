@@ -33,11 +33,9 @@ import org.apache.kafka.common.utils.ProducerIdAndEpoch
 import org.apache.kafka.controller.ControllerRequestContextUtil.ANONYMOUS_CONTEXT
 import org.junit.jupiter.api.Assertions.{assertEquals, fail}
 
-import java.net.Socket
 import java.util.{Comparator, Properties}
 import java.util.stream.Collectors
 import scala.collection.Seq
-import scala.collection.mutable.ListBuffer
 import scala.jdk.CollectionConverters._
 import scala.reflect.ClassTag
 
@@ -47,8 +45,6 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   private def controllerServers(): Seq[ControllerServer] = cluster.controllers().values().asScala.toSeq
 
   protected var producer: KafkaProducer[String, String] = _
-
-  protected var openSockets: ListBuffer[Socket] = ListBuffer[Socket]()
 
   protected def createOffsetsTopic(): Unit = {
     val admin = cluster.admin()
@@ -142,14 +138,6 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
   protected def initProducer(): Unit = {
     producer = TestUtils.createProducer(cluster.bootstrapServers(),
       keySerializer = new StringSerializer, valueSerializer = new StringSerializer)
-  }
-
-  protected def closeSockets(): Unit = {
-    while (openSockets.nonEmpty) {
-      val socket = openSockets.head
-      socket.close()
-      openSockets.remove(0)
-    }
   }
 
   protected def closeProducer(): Unit = {
@@ -932,23 +920,6 @@ class GroupCoordinatorBaseRequestTest(cluster: ClusterInstance) {
       brokerSocketServer(destination),
       cluster.clientListener()
     )
-  }
-
-  protected def connectAndReceiveWithoutClosingSocket[T <: AbstractResponse](
-    request: AbstractRequest,
-    destination: Int
-  )(implicit classTag: ClassTag[T]): T = {
-    val socket = IntegrationTestUtils.connect(brokerSocketServer(destination), cluster.clientListener())
-    openSockets += socket
-    IntegrationTestUtils.sendAndReceive[T](request, socket)
-  }
-
-  protected def connectAndReceiveWithoutClosingSocket[T <: AbstractResponse](
-    request: AbstractRequest
-  )(implicit classTag: ClassTag[T]): T = {
-    val socket = IntegrationTestUtils.connect(cluster.anyBrokerSocketServer(), cluster.clientListener())
-    openSockets += socket
-    IntegrationTestUtils.sendAndReceive[T](request, socket)
   }
 
   private def brokerSocketServer(brokerId: Int): SocketServer = {

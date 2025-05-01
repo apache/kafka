@@ -99,7 +99,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
   @ValueSource(strings = Array("kraft"))
   def testDynamicTopicConfigChange(quorum: String): Unit = {
     val tp = new TopicPartition("test", 0)
-    val oldSegmentSize = 2 * 1024 * 1024
+    val oldSegmentSize = 1000
     val logProps = new Properties()
     logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, oldSegmentSize.toString)
     createTopic(tp.topic, 1, 1, logProps)
@@ -109,7 +109,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       assertEquals(oldSegmentSize, logOpt.get.config.segmentSize)
     }
 
-    val newSegmentSize = 4 * 1024 * 1024
+    val newSegmentSize = 2000
     val admin = createAdminClient()
     try {
       val resource = new ConfigResource(ConfigResource.Type.TOPIC, tp.topic())

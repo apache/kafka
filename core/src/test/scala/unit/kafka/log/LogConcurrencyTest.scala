@@ -20,10 +20,10 @@ package kafka.log
 import java.util.{Optional, Properties}
 import java.util.concurrent.{Callable, Executors}
 import kafka.utils.TestUtils
+import org.apache.kafka.common.config.TopicConfig
 import org.apache.kafka.common.record.SimpleRecord
 import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
-import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.KafkaScheduler
 import org.apache.kafka.storage.internals.log.{LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, UnifiedLog}
@@ -60,7 +60,7 @@ class LogConcurrencyTest {
   @Test
   def testUncommittedDataNotConsumedFrequentSegmentRolls(): Unit = {
     val logProps = new Properties()
-    logProps.put(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, 237: Integer)
+    logProps.put(TopicConfig.SEGMENT_BYTES_CONFIG, 237: Integer)
     val logConfig = new LogConfig(logProps)
     testUncommittedDataNotConsumed(createLog(logConfig))
   }

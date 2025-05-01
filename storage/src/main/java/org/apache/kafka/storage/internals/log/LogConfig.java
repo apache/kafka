@@ -26,6 +26,7 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.config.TopicConfig;
 import org.apache.kafka.common.errors.InvalidConfigurationException;
 import org.apache.kafka.common.record.CompressionType;
+import org.apache.kafka.common.record.LegacyRecord;
 import org.apache.kafka.common.record.TimestampType;
 import org.apache.kafka.common.utils.ConfigUtils;
 import org.apache.kafka.common.utils.Utils;
@@ -185,13 +186,12 @@ public class LogConfig extends AbstractConfig {
             .define(ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_DOC)
             .define(ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, CLASS, null, LOW, ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_DOC)
             .define(ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_CONFIG, LONG, ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_DEFAULT, atLeast(1), LOW, ServerLogConfigs.LOG_DIR_FAILURE_TIMEOUT_MS_DOC)
-            .defineInternal(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, LONG, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT, atLeast(0), LOW, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DOC)
-            .defineInternal(ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_CONFIG, INT, null, null, MEDIUM, ServerLogConfigs.INTERNAL_LOG_SEGMENT_BYTES_DOC);
+            .defineInternal(ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_CONFIG, LONG, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DEFAULT, atLeast(0), LOW, ServerLogConfigs.LOG_INITIAL_TASK_DELAY_MS_DOC);
 
     private static final LogConfigDef CONFIG = new LogConfigDef();
     static {
         CONFIG.
-                define(TopicConfig.SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(1024 * 1024), MEDIUM,
+                define(TopicConfig.SEGMENT_BYTES_CONFIG, INT, DEFAULT_SEGMENT_BYTES, atLeast(LegacyRecord.RECORD_OVERHEAD_V0), MEDIUM,
                         TopicConfig.SEGMENT_BYTES_DOC)
                 .define(TopicConfig.SEGMENT_MS_CONFIG, LONG, DEFAULT_SEGMENT_MS, atLeast(1), MEDIUM, TopicConfig.SEGMENT_MS_DOC)
                 .define(TopicConfig.SEGMENT_JITTER_MS_CONFIG, LONG, DEFAULT_SEGMENT_JITTER_MS, atLeast(0), MEDIUM,
@@ -262,8 +262,7 @@ public class LogConfig extends AbstractConfig {
      * Important note: Any configuration parameter that is passed along from KafkaConfig to LogConfig
      * should also be in `KafkaConfig#extractLogConfigMap`.
      */
-    private final int segmentSize;
-    public final Integer internalSegmentSize;
+    public final int segmentSize;
     public final long segmentMs;
     public final long segmentJitterMs;
     public final int maxIndexSize;
@@ -297,25 +296,16 @@ public class LogConfig extends AbstractConfig {
     private final Map<?, ?> props;
 
     public LogConfig(Map<?, ?> props) {
-        this(props, Set.of(), null);
-    }
-
-    public LogConfig(Map<?, ?> props, Set<String> overriddenConfigs) {
-        this(props, overriddenConfigs, null);
-    }
-
-    public LogConfig(Map<?, ?> props, Integer internalSegmentSize) {
-        this(props, Set.of(), internalSegmentSize);
+        this(props, Set.of());
     }
 
     @SuppressWarnings({"this-escape"})
-    public LogConfig(Map<?, ?> props, Set<String> overriddenConfigs, Integer internalSegmentSize) {
+    public LogConfig(Map<?, ?> props, Set<String> overriddenConfigs) {
         super(CONFIG, props, false);
         this.props = Collections.unmodifiableMap(props);
         this.overriddenConfigs = Collections.unmodifiableSet(overriddenConfigs);
 
         this.segmentSize = getInt(TopicConfig.SEGMENT_BYTES_CONFIG);
-        this.internalSegmentSize = internalSegmentSize;
         this.segmentMs = getLong(TopicConfig.SEGMENT_MS_CONFIG);
         this.segmentJitterMs = getLong(TopicConfig.SEGMENT_JITTER_MS_CONFIG);
         this.maxIndexSize = getInt(TopicConfig.SEGMENT_INDEX_BYTES_CONFIG);
@@ -377,11 +367,6 @@ public class LogConfig extends AbstractConfig {
         }
     }
 
-    public int segmentSize() {
-        if (internalSegmentSize != null) return internalSegmentSize;
-        return segmentSize;
-    }
-
     // Exposed as a method so it can be mocked
     public int maxMessageSize() {
         return maxMessageSize;
@@ -403,7 +388,7 @@ public class LogConfig extends AbstractConfig {
 
     public int initFileSize() {
         if (preallocate)
-            return segmentSize();
+            return segmentSize;
         else
             return 0;
     }
@@ -437,19 +422,15 @@ public class LogConfig extends AbstractConfig {
         return ConfigUtils.configMapToRedactedString(overriddenTopicProps, CONFIG);
     }
 
-    public static LogConfig fromProps(Map<?, ?> defaults, Properties overrides, Integer internalLogSegmentSize) {
-        Properties props = new Properties();
-        props.putAll(defaults);
-        props.putAll(overrides);
-        Set<String> overriddenKeys = overrides.keySet().stream().map(k -> (String) k).collect(Collectors.toSet());
-        return new LogConfig(props, overriddenKeys, internalLogSegmentSize);
-    }
-
     /**
      * Create a log config instance using the given properties and defaults
      */
     public static LogConfig fromProps(Map<?, ?> defaults, Properties overrides) {
-        return fromProps(defaults, overrides, null);
+        Properties props = new Properties();
+        props.putAll(defaults);
+        props.putAll(overrides);
+        Set<String> overriddenKeys = overrides.keySet().stream().map(k -> (String) k).collect(Collectors.toSet());
+        return new LogConfig(props, overriddenKeys);
     }
 
     // Visible for testing, return a copy since it's a mutable global variable
@@ -647,7 +628,7 @@ public class LogConfig extends AbstractConfig {
     @Override
     public String toString() {
         return "LogConfig{" +
-                "segmentSize=" + segmentSize() +
+                "segmentSize=" + segmentSize +
                 ", segmentMs=" + segmentMs +
                 ", segmentJitterMs=" + segmentJitterMs +
                 ", maxIndexSize=" + maxIndexSize +
