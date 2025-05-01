@@ -635,6 +635,7 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                                            final String application,
                                            final String id,
                                            final String processingGuarantee,
+                                           final String groupProtocol,
                                            final String stateDir) {
             final Properties properties =
                 mkProperties(
@@ -644,7 +645,8 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                         mkEntry(StreamsConfig.CLIENT_ID_CONFIG, id),
                         mkEntry(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, processingGuarantee),
                         mkEntry(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest"),
-                        mkEntry(StreamsConfig.STATE_DIR_CONFIG, stateDir)
+                        mkEntry(StreamsConfig.STATE_DIR_CONFIG, stateDir),
+                        mkEntry(StreamsConfig.GROUP_PROTOCOL_CONFIG, groupProtocol)
                     )
                 );
             properties.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
@@ -656,9 +658,10 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                                              final String application,
                                              final String id,
                                              final String processingGuarantee,
+                                             final String groupProtocol,
                                              final String stateDir) throws InterruptedException {
             final KafkaStreams kafkaStreams =
-                new KafkaStreams(getTopology(), getConfig(broker, application, id, processingGuarantee, stateDir));
+                new KafkaStreams(getTopology(), getConfig(broker, application, id, processingGuarantee, groupProtocol, stateDir));
             final CountDownLatch startUpLatch = new CountDownLatch(1);
             kafkaStreams.setStateListener((newState, oldState) -> {
                 if (oldState == KafkaStreams.State.REBALANCING && newState == KafkaStreams.State.RUNNING) {
@@ -989,8 +992,9 @@ public class RelationalSmokeTest extends SmokeTestUtil {
                 case "application": {
                     final String nodeId = args[2];
                     final String processingGuarantee = args[3];
-                    final String stateDir = args[4];
-                    App.startSync(kafka, UUID.randomUUID().toString(), nodeId, processingGuarantee, stateDir);
+                    final String groupProtocol = args[4];
+                    final String stateDir = args[5];
+                    App.startSync(kafka, UUID.randomUUID().toString(), nodeId, processingGuarantee, groupProtocol, stateDir);
                     break;
                 }
                 default:
