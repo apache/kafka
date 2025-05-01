@@ -62,7 +62,7 @@ import org.apache.kafka.coordinator.share.ShareCoordinator
 import org.apache.kafka.metadata.{ConfigRepository, MetadataCache}
 import org.apache.kafka.server.{ApiVersionManager, ClientMetricsManager, DelegationTokenManager, ProcessRole}
 import org.apache.kafka.server.authorizer._
-import org.apache.kafka.server.common.{GroupVersion, RequestLocal, StreamsVersion, TransactionVersion}
+import org.apache.kafka.server.common.{GroupVersion, RequestLocal, ShareVersion, StreamsVersion, TransactionVersion}
 import org.apache.kafka.server.config.DelegationTokenManagerConfigs
 import org.apache.kafka.server.share.context.ShareFetchContext
 import org.apache.kafka.server.share.{ErroneousAndValidPartitionData, SharePartitionKey}
@@ -91,7 +91,7 @@ class KafkaApis(val requestChannel: RequestChannel,
                 val replicaManager: ReplicaManager,
                 val groupCoordinator: GroupCoordinator,
                 val txnCoordinator: TransactionCoordinator,
-                val shareCoordinator: Option[ShareCoordinator],
+                val shareCoordinator: ShareCoordinator,
                 val autoTopicCreationManager: AutoTopicCreationManager,
                 val brokerId: Int,
                 val config: KafkaConfig,
@@ -1185,9 +1185,6 @@ class KafkaApis(val requestChannel: RequestChannel,
     else {
       if (keyType == CoordinatorType.SHARE.id) {
         authHelper.authorizeClusterOperation(request, CLUSTER_ACTION)
-        if (shareCoordinator.isEmpty) {
-          return (Errors.INVALID_REQUEST, Node.noNode)
-        }
         try {
           SharePartitionKey.validate(key)
         } catch {
@@ -1205,7 +1202,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
         case CoordinatorType.SHARE =>
           // We know that shareCoordinator is defined at this stage.
-          (shareCoordinator.get.partitionFor(SharePartitionKey.getInstance(key)), SHARE_GROUP_STATE_TOPIC_NAME)
+          (shareCoordinator.partitionFor(SharePartitionKey.getInstance(key)), SHARE_GROUP_STATE_TOPIC_NAME)
       }
 
       val topicMetadata = metadataCache.getTopicMetadata(Set(internalTopicName).asJava, request.context.listenerName, false, false).asScala
@@ -3404,21 +3401,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       return CompletableFuture.completedFuture[Unit](())
     }
 
-    shareCoordinator match {
-      case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        initializeShareGroupStateRequest.getErrorResponse(requestThrottleMs,
-          new ApiException("Share coordinator is not enabled.")))
-        CompletableFuture.completedFuture[Unit](())
-
-      case Some(coordinator) => coordinator.initializeState(request.context, initializeShareGroupStateRequest.data)
-        .handle[Unit] { (response, exception) =>
-          if (exception != null) {
-            requestHelper.sendMaybeThrottle(request, initializeShareGroupStateRequest.getErrorResponse(exception))
-          } else {
-            requestHelper.sendMaybeThrottle(request, new InitializeShareGroupStateResponse(response))
-          }
+    shareCoordinator.initializeState(request.context, initializeShareGroupStateRequest.data)
+      .handle[Unit] { (response, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, initializeShareGroupStateRequest.getErrorResponse(exception))
+        } else {
+          requestHelper.sendMaybeThrottle(request, new InitializeShareGroupStateResponse(response))
         }
-    }
+      }
   }
 
   def handleReadShareGroupStateRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
@@ -3433,20 +3423,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       return CompletableFuture.completedFuture[Unit](())
     }
 
-    shareCoordinator match {
-      case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        readShareGroupStateRequest.getErrorResponse(requestThrottleMs,
-          new ApiException("Share coordinator is not enabled.")))
-        CompletableFuture.completedFuture[Unit](())
-      case Some(coordinator) => coordinator.readState(request.context, readShareGroupStateRequest.data)
-        .handle[Unit] { (response, exception) =>
-          if (exception != null) {
-            requestHelper.sendMaybeThrottle(request, readShareGroupStateRequest.getErrorResponse(exception))
-          } else {
-            requestHelper.sendMaybeThrottle(request, new ReadShareGroupStateResponse(response))
-          }
+    shareCoordinator.readState(request.context, readShareGroupStateRequest.data)
+      .handle[Unit] { (response, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, readShareGroupStateRequest.getErrorResponse(exception))
+        } else {
+          requestHelper.sendMaybeThrottle(request, new ReadShareGroupStateResponse(response))
         }
-    }
+      }
   }
 
   def handleWriteShareGroupStateRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
@@ -3461,20 +3445,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       return CompletableFuture.completedFuture[Unit](())
     }
 
-    shareCoordinator match {
-      case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        writeShareGroupStateRequest.getErrorResponse(requestThrottleMs,
-          new ApiException("Share coordinator is not enabled.")))
-        CompletableFuture.completedFuture[Unit](())
-      case Some(coordinator) => coordinator.writeState(request.context, writeShareGroupStateRequest.data)
-        .handle[Unit] { (response, exception) =>
-          if (exception != null) {
-            requestHelper.sendMaybeThrottle(request, writeShareGroupStateRequest.getErrorResponse(exception))
-          } else {
-            requestHelper.sendMaybeThrottle(request, new WriteShareGroupStateResponse(response))
-          }
+    shareCoordinator.writeState(request.context, writeShareGroupStateRequest.data)
+      .handle[Unit] { (response, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, writeShareGroupStateRequest.getErrorResponse(exception))
+        } else {
+          requestHelper.sendMaybeThrottle(request, new WriteShareGroupStateResponse(response))
         }
-    }
+      }
   }
 
   def handleDeleteShareGroupStateRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
@@ -3489,21 +3467,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       return CompletableFuture.completedFuture[Unit](())
     }
 
-    shareCoordinator match {
-      case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        deleteShareGroupStateRequest.getErrorResponse(requestThrottleMs,
-          new ApiException("Share coordinator is not enabled.")))
-        CompletableFuture.completedFuture[Unit](())
-
-      case Some(coordinator) => coordinator.deleteState(request.context, deleteShareGroupStateRequest.data)
-        .handle[Unit] { (response, exception) =>
-          if (exception != null) {
-            requestHelper.sendMaybeThrottle(request, deleteShareGroupStateRequest.getErrorResponse(exception))
-          } else {
-            requestHelper.sendMaybeThrottle(request, new DeleteShareGroupStateResponse(response))
-          }
+    shareCoordinator.deleteState(request.context, deleteShareGroupStateRequest.data)
+      .handle[Unit] { (response, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, deleteShareGroupStateRequest.getErrorResponse(exception))
+        } else {
+          requestHelper.sendMaybeThrottle(request, new DeleteShareGroupStateResponse(response))
         }
-    }
+      }
   }
 
   def handleReadShareGroupStateSummaryRequest(request: RequestChannel.Request): CompletableFuture[Unit] = {
@@ -3518,20 +3489,14 @@ class KafkaApis(val requestChannel: RequestChannel,
       return CompletableFuture.completedFuture[Unit](())
     }
 
-    shareCoordinator match {
-      case None => requestHelper.sendResponseMaybeThrottle(request, requestThrottleMs =>
-        readShareGroupStateSummaryRequest.getErrorResponse(requestThrottleMs,
-          new ApiException("Share coordinator is not enabled.")))
-        CompletableFuture.completedFuture[Unit](())
-      case Some(coordinator) => coordinator.readStateSummary(request.context, readShareGroupStateSummaryRequest.data)
-        .handle[Unit] { (response, exception) =>
-          if (exception != null) {
-            requestHelper.sendMaybeThrottle(request, readShareGroupStateSummaryRequest.getErrorResponse(exception))
-          } else {
-            requestHelper.sendMaybeThrottle(request, new ReadShareGroupStateSummaryResponse(response))
-          }
+    shareCoordinator.readStateSummary(request.context, readShareGroupStateSummaryRequest.data)
+      .handle[Unit] { (response, exception) =>
+        if (exception != null) {
+          requestHelper.sendMaybeThrottle(request, readShareGroupStateSummaryRequest.getErrorResponse(exception))
+        } else {
+          requestHelper.sendMaybeThrottle(request, new ReadShareGroupStateSummaryResponse(response))
         }
-    }
+      }
   }
 
   def handleDescribeShareGroupOffsetsRequest(request: RequestChannel.Request): Unit = {
@@ -3964,8 +3929,12 @@ class KafkaApis(val requestChannel: RequestChannel,
       .setCurrentLeader(partitionData.currentLeader)
   }
 
+  private def shareVersion(): ShareVersion = {
+    ShareVersion.fromFeatureLevel(metadataCache.features.finalizedFeatures.getOrDefault(ShareVersion.FEATURE_NAME, 0.toShort))
+  }
+
   private def isShareGroupProtocolEnabled: Boolean = {
-    config.shareGroupConfig.isShareGroupEnabled
+    config.shareGroupConfig.isShareGroupEnabled || shareVersion().supportsShareGroups
   }
 
   private def updateRecordConversionStats(request: RequestChannel.Request,
