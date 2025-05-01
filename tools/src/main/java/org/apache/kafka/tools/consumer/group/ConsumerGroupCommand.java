@@ -778,7 +778,7 @@ public class ConsumerGroupCommand {
             Map<TopicPartition, Throwable> partitionLevelResult = res.getValue();
 
             if (topLevelResult == null) {
-                System.out.println("Request succeed for deleting offsets with topic " + String.join(", ", topics) + " group " + groupId);
+                System.out.println("Request succeeded for deleting offsets from group " + groupId + ".");
             } else {
                 Errors topLevelError = Errors.forException(topLevelResult);
                 switch (topLevelError) {
