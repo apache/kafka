@@ -2497,7 +2497,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     val filteredProducerIds = listTransactionsRequest.data.producerIdFilters.asScala.map(Long.unbox).toSet
     val filteredStates = listTransactionsRequest.data.stateFilters.asScala.toSet
     val durationFilter = listTransactionsRequest.data.durationFilter()
-    val response = txnCoordinator.handleListTransactions(filteredProducerIds, filteredStates, durationFilter)
+    val transactionalIdPatternFilter = listTransactionsRequest.data.transactionalIdPattern
+    val response = txnCoordinator.handleListTransactions(
+      filteredProducerIds,
+      filteredStates,
+      durationFilter,
+      transactionalIdPatternFilter
+    )
 
     // The response should contain only transactionalIds that the principal
     // has `Describe` permission to access.
