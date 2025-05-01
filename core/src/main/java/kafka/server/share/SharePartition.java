@@ -329,6 +329,12 @@ public class SharePartition {
     private final OffsetMetadata fetchOffsetMetadata;
 
     /**
+     * The delayed share fetch key is used to track the delayed share fetch requests that are waiting
+     * for the respective share partition.
+     */
+    private final DelayedShareFetchKey delayedShareFetchKey;
+
+    /**
      * The state epoch is used to track the version of the state of the share partition.
      */
     private int stateEpoch;
@@ -414,6 +420,7 @@ public class SharePartition {
         this.replicaManager = replicaManager;
         this.groupConfigManager = groupConfigManager;
         this.fetchOffsetMetadata = new OffsetMetadata();
+        this.delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition);
         this.listener = listener;
         this.sharePartitionMetrics = sharePartitionMetrics;
         this.registerGaugeMetrics();
@@ -551,6 +558,9 @@ public class SharePartition {
                 }
                 // Release the lock.
                 lock.writeLock().unlock();
+                // Avoid triggering the listener for waiting share fetch requests in purgatory as the
+                // share partition manager keeps track of same and will trigger the listener for the
+                // respective share partition.
                 // Complete the future.
                 if (isFailed) {
                     future.completeExceptionally(throwable);
@@ -2048,6 +2058,10 @@ public class SharePartition {
         }
 
         writeShareGroupState(stateBatches).whenComplete((result, exception) -> {
+            // There can be a pending delayed share fetch requests for the share partition which are waiting
+            // on the startOffset to move ahead, hence track if the state is updated in the cache. If
+            // yes, then notify the delayed share fetch purgatory to complete the pending requests.
+            boolean cacheStateUpdated = false;
             lock.writeLock().lock();
             try {
                 if (exception != null) {
@@ -2066,27 +2080,31 @@ public class SharePartition {
                     state.cancelAndClearAcquisitionLockTimeoutTask();
                 });
                 // Update the cached state and start and end offsets after acknowledging/releasing the acquired records.
-                maybeUpdateCachedStateAndOffsets();
+                cacheStateUpdated  = maybeUpdateCachedStateAndOffsets();
                 future.complete(null);
             } finally {
                 lock.writeLock().unlock();
+                // Maybe complete the delayed share fetch request if the state has been changed in cache
+                // which might have moved start offset ahead. Hence, the pending delayed share fetch
+                // request can be completed. The call should be made outside the lock to avoid deadlock.
+                maybeCompleteDelayedShareFetchRequest(cacheStateUpdated);
             }
         });
     }
 
-    private void maybeUpdateCachedStateAndOffsets() {
+    private boolean maybeUpdateCachedStateAndOffsets() {
         lock.writeLock().lock();
         try {
             if (!canMoveStartOffset()) {
-                return;
+                return false;
             }
 
             // This will help to find the next position for the startOffset.
             // The new position of startOffset will be lastOffsetAcknowledged + 1
             long lastOffsetAcknowledged = findLastOffsetAcknowledged();
-            // If lastOffsetAcknowledged is -1, this means we cannot move out startOffset ahead
+            // If lastOffsetAcknowledged is -1, this means we cannot move startOffset ahead
             if (lastOffsetAcknowledged == -1) {
-                return;
+                return false;
             }
 
             // This is true if all records in the cachedState have been acknowledged (either Accept or Reject).
@@ -2097,7 +2115,7 @@ public class SharePartition {
                 endOffset = lastCachedOffset + 1;
                 cachedState.clear();
                 // Nothing further to do.
-                return;
+                return true;
             }
 
             /*
@@ -2144,6 +2162,7 @@ public class SharePartition {
             if (lastKeyToRemove != -1) {
                 cachedState.subMap(firstKeyToRemove, true, lastKeyToRemove, true).clear();
             }
+            return true;
         } finally {
             lock.writeLock().unlock();
         }
@@ -2405,13 +2424,10 @@ public class SharePartition {
             lock.writeLock().unlock();
         }
 
+        // If we have an acquisition lock timeout for a share-partition, then we should check if
+        // there is a pending share fetch request for the share-partition and complete it.
         // Skip null check for stateBatches, it should always be initialized if reached here.
-        if (!stateBatches.isEmpty()) {
-            // If we have an acquisition lock timeout for a share-partition, then we should check if
-            // there is a pending share fetch request for the share-partition and complete it.
-            DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
-            replicaManager.completeDelayedShareFetchRequest(delayedShareFetchKey);
-        }
+        maybeCompleteDelayedShareFetchRequest(!stateBatches.isEmpty());
     }
 
     private void releaseAcquisitionLockOnTimeoutForCompleteBatch(InFlightBatch inFlightBatch,
@@ -2483,6 +2499,12 @@ public class SharePartition {
             if (updateResult.state != RecordState.ARCHIVED) {
                 findNextFetchOffset.set(true);
             }
+        }
+    }
+
+    private void maybeCompleteDelayedShareFetchRequest(boolean shouldComplete) {
+        if (shouldComplete) {
+            replicaManager.completeDelayedShareFetchRequest(delayedShareFetchKey);
         }
     }
 
