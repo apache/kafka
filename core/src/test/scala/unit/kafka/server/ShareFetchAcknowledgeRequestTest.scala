@@ -1999,8 +1999,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       ),
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
-          new ClusterConfigProperty(key = "group.share.enable", value = "true"),
           new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
           new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
           new ClusterConfigProperty(key = "group.share.persister.class.name", value = "org.apache.kafka.server.share.persister.DefaultStatePersister"),
@@ -2075,8 +2073,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
     Array(
       new ClusterTest(
         serverProperties = Array(
-          new ClusterConfigProperty(key = "group.coordinator.rebalance.protocols", value = "classic,consumer,share"),
-          new ClusterConfigProperty(key = "group.share.enable", value = "true"),
           new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
           new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
         )

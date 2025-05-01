@@ -662,7 +662,6 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   @ClusterTest(
     types = Array(Type.KRAFT),
     serverProperties = Array(
-      new ClusterConfigProperty(key = "group.share.enable", value = "true"),
       new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
       new ClusterConfigProperty(key = "group.share.heartbeat.interval.ms", value = "500"),
