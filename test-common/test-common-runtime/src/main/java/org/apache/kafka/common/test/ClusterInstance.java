@@ -199,7 +199,6 @@ public interface ClusterInstance {
         Map<String, Object> props = new HashMap<>(configs);
         props.putIfAbsent(ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
         props.putIfAbsent(ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG, ByteArrayDeserializer.class.getName());
-        props.putIfAbsent(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         props.putIfAbsent(ConsumerConfig.GROUP_ID_CONFIG, "group_" + TestUtils.randomString(5));
         props.putIfAbsent(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers());
         return new KafkaShareConsumer<>(setClientSaslConfig(props));
@@ -264,7 +263,11 @@ public interface ClusterInstance {
 
     void start();
 
+    boolean started();
+
     void stop();
+
+    boolean stopped();
 
     void shutdownBroker(int brokerId);
 
@@ -275,10 +278,14 @@ public interface ClusterInstance {
     default void waitTopicDeletion(String topic) throws InterruptedException {
         waitForTopic(topic, 0);
     }
-    
+
     default void createTopic(String topicName, int partitions, short replicas) throws InterruptedException {
+        createTopic(topicName, partitions, replicas, Map.of());
+    }
+
+    default void createTopic(String topicName, int partitions, short replicas, Map<String, String> props) throws InterruptedException {
         try (Admin admin = admin()) {
-            admin.createTopics(Collections.singletonList(new NewTopic(topicName, partitions, replicas)));
+            admin.createTopics(List.of(new NewTopic(topicName, partitions, replicas).configs(props)));
             waitForTopic(topicName, partitions);
         }
     }
@@ -291,7 +298,7 @@ public interface ClusterInstance {
         TestUtils.waitForCondition(
             () -> brokers.stream().allMatch(broker -> partitions == 0 ?
                 broker.metadataCache().numPartitions(topic).isEmpty() :
-                broker.metadataCache().numPartitions(topic).contains(partitions)
+                broker.metadataCache().numPartitions(topic).filter(p -> p == partitions).isPresent()
         ), 60000L, topic + " metadata not propagated after 60000 ms");
 
         for (ControllerServer controller : controllers().values()) {
@@ -304,7 +311,7 @@ public interface ClusterInstance {
         if (partitions == 0) {
             List<TopicPartition> topicPartitions = IntStream.range(0, 1)
                 .mapToObj(partition -> new TopicPartition(topic, partition))
-                .collect(Collectors.toList());
+                .toList();
 
             // Ensure that the topic-partition has been deleted from all brokers' replica managers
             TestUtils.waitForCondition(() -> brokers.stream().allMatch(broker ->
@@ -354,11 +361,11 @@ public interface ClusterInstance {
     default List<Authorizer> authorizers() {
         List<Authorizer> authorizers = new ArrayList<>();
         authorizers.addAll(brokers().values().stream()
-                .filter(server -> server.authorizer().isDefined())
-                .map(server -> server.authorizer().get()).collect(Collectors.toList()));
+                .filter(server -> server.authorizerPlugin().isDefined())
+                .map(server -> server.authorizerPlugin().get().get()).toList());
         authorizers.addAll(controllers().values().stream()
-                .filter(server -> server.authorizer().isDefined())
-                .map(server -> server.authorizer().get()).collect(Collectors.toList()));
+                .filter(server -> server.authorizerPlugin().isDefined())
+                .map(server -> server.authorizerPlugin().get().get()).toList());
         return authorizers;
     }
 

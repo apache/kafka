@@ -18,7 +18,6 @@
 package org.apache.kafka.server.share.persister;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.stream.Collectors;
@@ -53,7 +52,7 @@ public class NoOpStatePersister implements Persister {
         for (TopicData<PartitionIdLeaderEpochData> topicData : reqData.topicsData()) {
             resultArgs.add(new TopicData<>(topicData.topicId(), topicData.partitions().stream().
                 map(partitionIdData -> PartitionFactory.newPartitionAllData(
-                    partitionIdData.partition(), PartitionFactory.DEFAULT_STATE_EPOCH, PartitionFactory.UNINITIALIZED_START_OFFSET, PartitionFactory.DEFAULT_ERROR_CODE, PartitionFactory.DEFAULT_ERR_MESSAGE, Collections.emptyList()))
+                    partitionIdData.partition(), PartitionFactory.DEFAULT_STATE_EPOCH, PartitionFactory.UNINITIALIZED_START_OFFSET, PartitionFactory.DEFAULT_ERROR_CODE, PartitionFactory.DEFAULT_ERR_MESSAGE, List.of()))
                 .collect(Collectors.toList())));
         }
         return CompletableFuture.completedFuture(new ReadShareGroupStateResult.Builder().setTopicsData(resultArgs).build());

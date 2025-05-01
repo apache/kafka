@@ -23,7 +23,6 @@ import kafka.server.BrokerBlockingSender;
 import kafka.server.FailedPartitions;
 import kafka.server.InitialFetchState;
 import kafka.server.KafkaConfig;
-import kafka.server.MetadataCache;
 import kafka.server.OffsetTruncationState;
 import kafka.server.QuotaFactory;
 import kafka.server.RemoteLeaderEndPoint;
@@ -32,7 +31,7 @@ import kafka.server.ReplicaManager;
 import kafka.server.ReplicaQuota;
 import kafka.server.builders.LogManagerBuilder;
 import kafka.server.builders.ReplicaManagerBuilder;
-import kafka.utils.Pool;
+import kafka.server.metadata.KRaftMetadataCache;
 import kafka.utils.TestUtils;
 
 import org.apache.kafka.clients.FetchSessionHandler;
@@ -89,6 +88,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Optional;
 import java.util.Properties;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
@@ -107,7 +108,7 @@ import static org.apache.kafka.server.common.KRaftVersion.KRAFT_VERSION_1;
 @OutputTimeUnit(TimeUnit.NANOSECONDS)
 public class ReplicaFetcherThreadBenchmark {
     private final KafkaScheduler scheduler = new KafkaScheduler(1, true, "scheduler");
-    private final Pool<TopicPartition, Partition> pool = new Pool<>(Option.empty());
+    private final ConcurrentMap<TopicPartition, Partition> pool = new ConcurrentHashMap<>();
     private final Metrics metrics = new Metrics();
     private final Option<Uuid> topicId = Option.apply(Uuid.randomUuid());
     @Param({"100", "500", "1000", "5000"})
@@ -155,7 +156,7 @@ public class ReplicaFetcherThreadBenchmark {
             setLogManager(logManager).
             setQuotaManagers(Mockito.mock(QuotaFactory.QuotaManagers.class)).
             setBrokerTopicStats(brokerTopicStats).
-            setMetadataCache(MetadataCache.kRaftMetadataCache(config.nodeId(), () -> KRAFT_VERSION_1)).
+            setMetadataCache(new KRaftMetadataCache(config.nodeId(), () -> KRAFT_VERSION_1)).
             setLogDirFailureChannel(new LogDirFailureChannel(logDirs.size())).
             setAlterPartitionManager(TestUtils.createAlterIsrManager()).
             build();
@@ -246,13 +247,12 @@ public class ReplicaFetcherThreadBenchmark {
 
 
     static class ReplicaFetcherBenchThread extends ReplicaFetcherThread {
-        private final Pool<TopicPartition, Partition> pool;
+        private final ConcurrentMap<TopicPartition, Partition> pool;
 
         ReplicaFetcherBenchThread(KafkaConfig config,
                                   ReplicaManager replicaManager,
                                   ReplicaQuota replicaQuota,
-                                  Pool<TopicPartition,
-                                  Partition> partitions) {
+                                  ConcurrentMap<TopicPartition, Partition> partitions) {
             super("name",
                     new RemoteLeaderEndPoint(
                             String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3),
@@ -270,7 +270,7 @@ public class ReplicaFetcherThreadBenchmark {
                             config,
                             replicaManager,
                             replicaQuota,
-                            () -> MetadataVersion.MINIMUM_KRAFT_VERSION,
+                            () -> MetadataVersion.MINIMUM_VERSION,
                             () -> -1L
                     ) {
                         @Override
@@ -302,16 +302,15 @@ public class ReplicaFetcherThreadBenchmark {
                     new FailedPartitions(),
                     replicaManager,
                     replicaQuota,
-                    String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3),
-                    () -> MetadataVersion.MINIMUM_KRAFT_VERSION
+                    String.format("[ReplicaFetcher replicaId=%d, leaderId=%d, fetcherId=%d", config.brokerId(), 3, 3)
             );
 
             pool = partitions;
         }
 
         @Override
-        public Option<Object> latestEpoch(TopicPartition topicPartition) {
-            return Option.apply(0);
+        public Optional<Integer> latestEpoch(TopicPartition topicPartition) {
+            return Optional.of(0);
         }
 
         @Override
@@ -330,13 +329,17 @@ public class ReplicaFetcherThreadBenchmark {
         }
 
         @Override
-        public Option<OffsetAndEpoch> endOffsetForEpoch(TopicPartition topicPartition, int epoch) {
-            return Option.apply(new OffsetAndEpoch(0, 0));
+        public Optional<OffsetAndEpoch> endOffsetForEpoch(TopicPartition topicPartition, int epoch) {
+            return Optional.of(new OffsetAndEpoch(0, 0));
         }
 
         @Override
-        public Option<LogAppendInfo> processPartitionData(TopicPartition topicPartition, long fetchOffset,
-                                                          FetchResponseData.PartitionData partitionData) {
+        public Option<LogAppendInfo> processPartitionData(
+            TopicPartition topicPartition,
+            long fetchOffset,
+            int partitionLeaderEpoch,
+            FetchResponseData.PartitionData partitionData
+        ) {
             return Option.empty();
         }
     }

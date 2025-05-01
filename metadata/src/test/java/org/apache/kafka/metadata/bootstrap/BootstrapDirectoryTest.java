@@ -29,7 +29,6 @@ import org.junit.jupiter.api.Timeout;
 
 import java.io.File;
 import java.util.List;
-import java.util.Optional;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
@@ -74,25 +73,7 @@ public class BootstrapDirectoryTest {
         try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
             assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.latestProduction(),
                     "the default bootstrap"),
-                new BootstrapDirectory(testDirectory.path(), Optional.empty()).read());
-        }
-    }
-
-    @Test
-    public void testReadFromConfigurationWithAncientVersion() throws Exception {
-        try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
-            assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.MINIMUM_BOOTSTRAP_VERSION,
-                    "the minimum version bootstrap with metadata.version 3.3-IV0"),
-                new BootstrapDirectory(testDirectory.path(), Optional.of("3.0")).read());
-        }
-    }
-
-    @Test
-    public void testReadFromConfiguration() throws Exception {
-        try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
-            assertEquals(BootstrapMetadata.fromVersion(MetadataVersion.IBP_3_3_IV2,
-                    "the configured bootstrap with metadata.version 3.3-IV2"),
-                new BootstrapDirectory(testDirectory.path(), Optional.of("3.3-IV2")).read());
+                new BootstrapDirectory(testDirectory.path()).read());
         }
     }
 
@@ -100,13 +81,13 @@ public class BootstrapDirectoryTest {
     public void testMissingDirectory() {
         assertEquals("No such directory as ./non/existent/directory",
             assertThrows(RuntimeException.class, () ->
-                new BootstrapDirectory("./non/existent/directory", Optional.empty()).read()).getMessage());
+                new BootstrapDirectory("./non/existent/directory").read()).getMessage());
     }
 
     @Test
     public void testReadFromConfigurationFile() throws Exception {
         try (BootstrapTestDirectory testDirectory = new BootstrapTestDirectory().createDirectory()) {
-            BootstrapDirectory directory = new BootstrapDirectory(testDirectory.path(), Optional.of("3.0-IV0"));
+            BootstrapDirectory directory = new BootstrapDirectory(testDirectory.path());
             BootstrapMetadata metadata = BootstrapMetadata.fromRecords(SAMPLE_RECORDS1,
                     "the binary bootstrap metadata file: " + testDirectory.binaryBootstrapPath());
             directory.writeBinaryFile(metadata);

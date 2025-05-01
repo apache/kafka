@@ -29,7 +29,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -94,13 +93,19 @@ public class FeaturesImageTest {
         DELTA2 = new FeaturesDelta(IMAGE2);
         RecordTestUtils.replayAll(DELTA2, DELTA2_RECORDS);
 
-        Map<String, Short> map3 = Collections.singletonMap("bar", (short) 1);
+        Map<String, Short> map3 = Map.of("bar", (short) 1);
         IMAGE3 = new FeaturesImage(map3, MetadataVersion.latestTesting());
     }
 
     @Test
     public void testEmptyImageRoundTrip() {
-        testToImage(FeaturesImage.EMPTY);
+        var image = FeaturesImage.EMPTY;
+        var metadataVersion = MetadataVersion.MINIMUM_VERSION;
+        RecordListWriter writer = new RecordListWriter();
+        image.write(writer, new ImageWriterOptions.Builder(metadataVersion).build());
+        // A metadata version is required for writing, so the expected image is not actually empty
+        var expectedImage = new FeaturesImage(Map.of(), metadataVersion);
+        testToImage(expectedImage, writer.records());
     }
 
     @Test
@@ -154,18 +159,17 @@ public class FeaturesImageTest {
 
     private static List<ApiMessageAndVersion> getImageRecords(FeaturesImage image) {
         RecordListWriter writer = new RecordListWriter();
-        image.write(writer, new ImageWriterOptions.Builder().setMetadataVersion(image.metadataVersion()).build());
+        image.write(writer, new ImageWriterOptions.Builder(image.metadataVersionOrThrow()).build());
         return writer.records();
     }
 
     @Test
     public void testEmpty() {
         assertTrue(FeaturesImage.EMPTY.isEmpty());
-        assertFalse(new FeaturesImage(Collections.singletonMap("foo", (short) 1),
-            FeaturesImage.EMPTY.metadataVersion()).isEmpty());
+        assertFalse(new FeaturesImage(Map.of("foo", (short) 1),
+            MetadataVersion.MINIMUM_VERSION).isEmpty());
         assertFalse(new FeaturesImage(FeaturesImage.EMPTY.finalizedVersions(),
-            MetadataVersion.IBP_3_3_IV0).isEmpty());
-        assertTrue(new FeaturesImage(FeaturesImage.EMPTY.finalizedVersions(), FeaturesImage.EMPTY.metadataVersion()).isEmpty());
+            MetadataVersion.MINIMUM_VERSION).isEmpty());
     }
 
     @Test

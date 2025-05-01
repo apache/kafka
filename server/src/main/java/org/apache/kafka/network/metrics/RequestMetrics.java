@@ -24,8 +24,7 @@ import org.apache.kafka.server.metrics.KafkaMetricsGroup;
 import com.yammer.metrics.core.Histogram;
 import com.yammer.metrics.core.Meter;
 
-import java.util.Collections;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.Objects;
@@ -83,11 +82,11 @@ public class RequestMetrics {
     private final Map<String, String> tags;
     private final ConcurrentMap<Short, Meter> requestRateInternal = new ConcurrentHashMap<>();
     private final ConcurrentMap<DeprecatedRequestRateKey, Meter> deprecatedRequestRateInternal = new ConcurrentHashMap<>();
-    private final Map<Errors, ErrorMeter> errorMeters = new HashMap<>();
+    private final Map<Errors, ErrorMeter> errorMeters = new EnumMap<>(Errors.class);
 
     public RequestMetrics(String name) {
         this.name = name;
-        tags = Collections.singletonMap("request", name);
+        tags = Map.of("request", name);
         // time a request spent in a request queue
         requestQueueTimeHist = metricsGroup.newHistogram(REQUEST_QUEUE_TIME_MS, true, tags);
         // time a request takes to be processed at the local broker

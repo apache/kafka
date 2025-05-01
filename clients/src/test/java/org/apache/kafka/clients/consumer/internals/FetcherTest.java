@@ -2881,11 +2881,11 @@ public class FetcherTest {
                                 field.setAccessible(true);
                                 LinkedHashMap<?, ?> sessionPartitions =
                                         (LinkedHashMap<?, ?>) field.get(handler);
-                                for (Map.Entry<?, ?> entry : sessionPartitions.entrySet()) {
-                                    // If `sessionPartitions` are modified on another thread, Thread.yield will increase the
-                                    // possibility of ConcurrentModificationException if appropriate synchronization is not used.
-                                    Thread.yield();
-                                }
+                                // If `sessionPartitions` are modified on another thread, Thread.yield will increase the
+                                // possibility of ConcurrentModificationException if appropriate synchronization is not used.
+                                sessionPartitions.forEach(
+                                    (key, value) -> Thread.yield()
+                                );
                             } catch (Exception e) {
                                 throw new RuntimeException(e);
                             }
@@ -3662,9 +3662,8 @@ public class FetcherTest {
         LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> responseData = fetchResponse.responseData(topicNames, version);
         assertEquals(topicNames.size(), responseData.size());
         responseData.forEach((topicPartition, partitionData) -> assertEquals(records, partitionData.records()));
-        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> nonResponseData = fetchResponse.responseData(emptyMap(), version);
-        assertEquals(emptyMap().size(), nonResponseData.size());
-        nonResponseData.forEach((topicPartition, partitionData) -> assertEquals(MemoryRecords.EMPTY, partitionData.records()));
+        LinkedHashMap<TopicPartition, FetchResponseData.PartitionData> nonResponseData = fetchResponse.responseData(Map.of(), version);
+        assertTrue(nonResponseData.isEmpty());
     }
 
     private OffsetsForLeaderEpochResponse prepareOffsetsForLeaderEpochResponse(

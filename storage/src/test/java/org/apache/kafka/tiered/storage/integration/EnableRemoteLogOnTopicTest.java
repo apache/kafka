@@ -21,8 +21,6 @@ import org.apache.kafka.tiered.storage.TieredStorageTestBuilder;
 import org.apache.kafka.tiered.storage.TieredStorageTestHarness;
 import org.apache.kafka.tiered.storage.specs.KeyValueSpec;
 
-import java.util.Arrays;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
 
@@ -48,8 +46,8 @@ public final class EnableRemoteLogOnTopicTest extends TieredStorageTestHarness {
         final Integer maxBatchCountPerSegment = 1;
         final boolean enableRemoteLogStorage = false;
         final Map<Integer, List<Integer>> assignment = mkMap(
-                mkEntry(p0, Arrays.asList(broker0, broker1)),
-                mkEntry(p1, Arrays.asList(broker1, broker0))
+                mkEntry(p0, List.of(broker0, broker1)),
+                mkEntry(p1, List.of(broker1, broker0))
         );
 
         builder
@@ -65,8 +63,8 @@ public final class EnableRemoteLogOnTopicTest extends TieredStorageTestHarness {
                         new KeyValueSpec("k2", "v2"))
                 // enable remote log storage
                 .updateTopicConfig(topicA,
-                        Collections.singletonMap(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"),
-                        Collections.emptyList())
+                        Map.of(TopicConfig.REMOTE_LOG_STORAGE_ENABLE_CONFIG, "true"),
+                        List.of())
                 // produce some more records to partition 0
                 // Note that the segment 0-2 gets offloaded for p0, but we cannot expect those events deterministically
                 // because the rlm-task-thread runs in background and this framework doesn't support it.

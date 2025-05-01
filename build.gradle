@@ -14,8 +14,6 @@
 // limitations under the License.
 
 import org.ajoberstar.grgit.Grgit
-import org.gradle.api.JavaVersion
-
 import java.nio.charset.StandardCharsets
 
 buildscript {
@@ -41,7 +39,7 @@ plugins {
 
   id "com.github.spotbugs" version '6.0.25' apply false
   id 'org.scoverage' version '8.0.3' apply false
-  id 'io.github.goooler.shadow' version '8.1.3' apply false
+  id 'com.gradleup.shadow' version '8.3.6' apply false
   id 'com.diffplug.spotless' version "6.25.0"
 }
 
@@ -82,9 +80,6 @@ ext {
   userMaxTestRetries = project.hasProperty('maxTestRetries') ? maxTestRetries.toInteger() : 0
   userMaxTestRetryFailures = project.hasProperty('maxTestRetryFailures') ? maxTestRetryFailures.toInteger() : 0
 
-  userMaxQuarantineTestRetries = project.hasProperty('maxQuarantineTestRetries') ? maxQuarantineTestRetries.toInteger() : 0
-  userMaxQuarantineTestRetryFailures = project.hasProperty('maxQuarantineTestRetryFailures') ? maxQuarantineTestRetryFailures.toInteger() : 0
-
   skipSigning = project.hasProperty('skipSigning') && skipSigning.toBoolean()
   shouldSign = !skipSigning && !version.endsWith("SNAPSHOT")
 
@@ -105,7 +100,7 @@ ext {
     throw new GradleException("Unexpected value for keepAliveMode property. Expected one of $keepAliveValues, but received: $userKeepAliveModeString")
   }
 
-  // Used by :test and :quarantinedTest tasks
+  // Used by :test task
   isGithubActions = System.getenv('GITHUB_ACTIONS') != null
 
   // See README.md for details on this option and the reasoning for the default
@@ -131,7 +126,6 @@ ext {
     if (name in ["compileTestJava", "compileTestScala"]) {
       options.compilerArgs << "-parameters"
     } else if (name in ["compileJava", "compileScala"]) {
-      options.compilerArgs << "-Xlint:-rawtypes"
       options.compilerArgs << "-Xlint:all"
       options.compilerArgs << "-Xlint:-serial"
       options.compilerArgs << "-Xlint:-try"
@@ -279,8 +273,8 @@ if (repo != null) {
     excludes.addAll([
         '**/.git/**',
         '**/build/**',
+        '.github/pull_request_template.md',
         'CONTRIBUTING.md',
-        'PULL_REQUEST_TEMPLATE.md',
         'gradlew',
         'gradlew.bat',
         'gradle/wrapper/gradle-wrapper.properties',
@@ -368,17 +362,13 @@ subprojects {
           if (!shouldPublishWithShadow) {
             from components.java
           } else {
-            apply plugin: 'io.github.goooler.shadow'
-            project.shadow.component(mavenJava)
+            apply plugin: 'com.gradleup.shadow'
+            from components.shadow
 
             // Fix for avoiding inclusion of runtime dependencies marked as 'shadow' in MANIFEST Class-Path.
-            // https://github.com/johnrengelman/shadow/issues/324
-            afterEvaluate {
+            // https://github.com/GradleUp/shadow/issues/324
               pom.withXml { xml ->
-                if (xml.asNode().get('dependencies') == null) {
-                  xml.asNode().appendNode('dependencies')
-                }
-                def dependenciesNode = xml.asNode().get('dependencies').get(0)
+                def dependenciesNode = xml.asNode().get('dependencies') ?: xml.asNode().appendNode('dependencies')
                 project.configurations.shadowed.allDependencies.each {
                   def dependencyNode = dependenciesNode.appendNode('dependency')
                   dependencyNode.appendNode('groupId', it.group)
@@ -387,7 +377,6 @@ subprojects {
                   dependencyNode.appendNode('scope', 'runtime')
                 }
               }
-            }
           }
 
           afterEvaluate {
@@ -497,7 +486,7 @@ subprojects {
   def testsToExclude = ['**/*Suite.class']
 
 
-  // These two tasks will copy JUnit XML files out of the sub-project's build directory and into
+  // This task will copy JUnit XML files out of the sub-project's build directory and into
   // a top-level build/junit-xml directory. This is necessary to avoid reporting on tests which
   // were not run, but instead were restored via FROM-CACHE. See KAFKA-17479 for more details.
   def copyTestXml = tasks.register('copyTestXml') {
@@ -505,37 +494,20 @@ subprojects {
     onlyIf("Project '${project.name}:test' has sources") { ! test.state.noSource }
     onlyIf("Task '${project.name}:test' did work") { test.state.didWork }
 
+    ext {
+      output = project.findProperty("kafka.test.xml.output.dir")
+    }
+
     // Never cache this task
     outputs.cacheIf { false }
     outputs.upToDateWhen { false }
 
     doLast {
       def moduleDirPath = projectToJUnitXmlPath(project)
-      def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}/test").get().asFile
+      def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}/${output}").get().asFile
       println "Copy JUnit XML for ${project.name} to $dest"
       ant.copy(todir: "$dest") {
 	ant.fileset(dir: "${test.reports.junitXml.entryPoint}") {
-	  ant.include(name: "**/*.xml")
-	}
-      }
-    }
-  }
-
-  def copyQuarantinedTestXml = tasks.register('copyQuarantinedTestXml') {
-    onlyIf("Environment GITHUB_ACTIONS is set") { isGithubActions }
-    onlyIf("Project '${project.name}:quarantinedTest' has sources") { ! quarantinedTest.state.noSource }
-    onlyIf("Task '${project.name}:quarantinedTest' did work") { quarantinedTest.state.didWork }
-
-    // Never cache this task
-    outputs.cacheIf { false }
-    outputs.upToDateWhen { false }
-
-    doLast {
-      def moduleDirPath = projectToJUnitXmlPath(project)
-      def dest = rootProject.layout.buildDirectory.dir("junit-xml/${moduleDirPath}/quarantinedTest").get().asFile
-      println "Copy JUnit XML for ${project.name} to $dest"
-      ant.copy(todir: "$dest") {
-	ant.fileset(dir: "${quarantinedTest.reports.junitXml.entryPoint}") {
 	  ant.include(name: "**/*.xml")
 	}
       }
@@ -546,13 +518,15 @@ subprojects {
     maxParallelForks = maxTestForks
     ignoreFailures = userIgnoreFailures
 
-    maxHeapSize = defaultMaxHeapSize
+    maxHeapSize = "3g"
     jvmArgs = defaultJvmArgs
 
     // KAFKA-17433 Used by deflake.yml github action to repeat individual tests
     systemProperty("kafka.cluster.test.repeat", project.findProperty("kafka.cluster.test.repeat"))
     systemProperty("kafka.test.catalog.file", project.findProperty("kafka.test.catalog.file"))
-    systemProperty("kafka.test.run.quarantined", "false")
+    systemProperty("kafka.test.run.new", project.findProperty("kafka.test.run.new"))
+    systemProperty("kafka.test.run.flaky", project.findProperty("kafka.test.run.flaky"))
+    systemProperty("kafka.test.verbose", project.findProperty("kafka.test.verbose"))
 
     testLogging {
       events = userTestLoggingEvents ?: testLoggingEvents
@@ -566,7 +540,6 @@ subprojects {
 
     useJUnitPlatform {
       includeEngines 'junit-jupiter'
-      excludeTags 'flaky'
     }
 
     develocity {
@@ -577,45 +550,6 @@ subprojects {
     }
     
     finalizedBy("copyTestXml")
-  }
-
-  task quarantinedTest(type: Test, dependsOn: compileJava) {
-    // Disable caching and up-to-date for this task. We always want quarantined tests
-    // to run and never want to cache their results.
-    outputs.upToDateWhen { false }
-    outputs.cacheIf { false }
-
-    maxParallelForks = maxTestForks
-    ignoreFailures = userIgnoreFailures
-
-    maxHeapSize = defaultMaxHeapSize
-    jvmArgs = defaultJvmArgs
-
-    // KAFKA-17433 Used by deflake.yml github action to repeat individual tests
-    systemProperty("kafka.cluster.test.repeat", project.findProperty("kafka.cluster.test.repeat"))
-    systemProperty("kafka.test.catalog.file", project.findProperty("kafka.test.catalog.file"))
-    systemProperty("kafka.test.run.quarantined", "true")
-
-    testLogging {
-      events = userTestLoggingEvents ?: testLoggingEvents
-      showStandardStreams = userShowStandardStreams ?: testShowStandardStreams
-      exceptionFormat = testExceptionFormat
-      displayGranularity = 0
-    }
-    logTestStdout.rehydrate(delegate, owner, this)()
-
-    useJUnitPlatform {
-      includeEngines 'junit-jupiter'
-    }
-
-    develocity {
-      testRetry {
-        maxRetries = userMaxQuarantineTestRetries
-        maxFailures = userMaxQuarantineTestRetryFailures
-      }
-    }
-
-    finalizedBy("copyQuarantinedTestXml")
   }
 
   task integrationTest(type: Test, dependsOn: compileJava) {
@@ -964,6 +898,7 @@ project(':server') {
     implementation project(':transaction-coordinator')
     implementation project(':raft')
     implementation project(':share-coordinator')
+    implementation project(':storage:storage-api')
     implementation libs.jacksonDatabind
     implementation libs.metrics
     implementation libs.slf4jApi
@@ -973,6 +908,9 @@ project(':server') {
     testImplementation libs.mockitoCore
     testImplementation libs.junitJupiter
     testImplementation testLog4j2Libs
+    testImplementation project(':test-common:test-common-internal-api')
+    testImplementation project(':test-common:test-common-runtime')
+    testImplementation project(':storage:storage-api').sourceSets.test.output
 
     testRuntimeOnly runtimeTestLibs
   }
@@ -1072,7 +1010,6 @@ project(':core') {
     implementation libs.argparse4j
     implementation libs.commonsValidator
     implementation libs.jacksonDatabind
-    implementation libs.jacksonModuleScala
     implementation libs.jacksonDataformatCsv
     implementation libs.jacksonJDK8Datatypes
     implementation libs.jacksonDatabindYaml
@@ -1097,6 +1034,7 @@ project(':core') {
     testImplementation project(':test-common:test-common-util')
     testImplementation libs.bcpkix
     testImplementation libs.mockitoCore
+    testImplementation libs.jqwik
     testImplementation(libs.apacheda) {
       exclude group: 'xml-apis', module: 'xml-apis'
       // `mina-core` is a transitive dependency for `apacheds` and `apacheda`.
@@ -1134,7 +1072,6 @@ project(':core') {
     from (configurations.runtimeClasspath) {
       exclude('kafka-clients*')
     }
-    from (configurations.releaseOnly)
     into "${layout.buildDirectory.get().asFile.path}/dependant-libs-${versions.scala}"
     duplicatesStrategy 'exclude'
   }
@@ -1291,10 +1228,17 @@ project(':core') {
     )
   }
 
+  test {
+    useJUnitPlatform {
+      includeEngines 'jqwik', 'junit-jupiter'
+    }
+  }
+
   tasks.create(name: "copyDependantTestLibs", type: Copy) {
     from (configurations.testRuntimeClasspath) {
       include('*.jar')
     }
+    from (configurations.releaseOnly)
     into "${layout.buildDirectory.get().asFile.path}/dependant-testlibs"
     //By default gradle does not handle test dependencies between the sub-projects
     //This line is to include clients project test jar to dependant-testlibs
@@ -1354,6 +1298,7 @@ project(':metadata') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':raft').sourceSets.test.output
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':test-common:test-common-util')
 
     testRuntimeOnly runtimeTestLibs
 
@@ -1584,14 +1529,15 @@ project(':test-common:test-common-runtime') {
   }
 
   dependencies {
-    implementation project(':test-common:test-common-internal-api')
-    implementation project(':clients')
-    implementation project(':core')
-    implementation project(':group-coordinator')
-    implementation project(':metadata')
-    implementation project(':raft')
+    api project(':core')
+    api project(':clients')
+
     implementation project(':server')
     implementation project(':server-common')
+    implementation project(':group-coordinator')
+    implementation project(':test-common:test-common-internal-api')
+    implementation project(':metadata')
+    implementation project(':raft')
     implementation project(':storage')
 
     implementation libs.junitPlatformLanucher
@@ -1812,11 +1758,11 @@ project(':generator') {
     implementation libs.jacksonJDK8Datatypes
     implementation libs.jacksonJakartarsJsonProvider
 
-    implementation 'org.eclipse.jgit:org.eclipse.jgit:6.4.0.202211300538-r'
+    implementation 'org.eclipse.jgit:org.eclipse.jgit:7.2.0.202503040940-r'
     // SSH support for JGit based on Apache MINA sshd
-    implementation 'org.eclipse.jgit:org.eclipse.jgit.ssh.apache:6.4.0.202211300538-r'
+    implementation 'org.eclipse.jgit:org.eclipse.jgit.ssh.apache:7.2.0.202503040940-r'
     // GPG support for JGit based on BouncyCastle (commit signing)
-    implementation 'org.eclipse.jgit:org.eclipse.jgit.gpg.bc:6.4.0.202211300538-r'
+    implementation 'org.eclipse.jgit:org.eclipse.jgit.gpg.bc:7.2.0.202503040940-r'
 
     testImplementation libs.junitJupiter
 
@@ -1862,6 +1808,7 @@ project(':clients') {
     testImplementation libs.jacksonJakartarsJsonProvider
     testImplementation libs.jose4j
     testImplementation libs.junitJupiter
+    testImplementation libs.jqwik
     testImplementation libs.spotbugs
     testImplementation libs.mockitoCore
     testImplementation libs.mockitoJunitJupiter // supports MockitoExtension
@@ -1874,6 +1821,10 @@ project(':clients') {
     testRuntimeOnly runtimeTestLibs
 
     generator project(':generator')
+  }
+
+  tasks.withType(GenerateModuleMetadata) {
+    enabled = false
   }
 
   task createVersionFile() {
@@ -1910,7 +1861,7 @@ project(':clients') {
     // dependencies excluded from the final jar, since they are declared as runtime dependencies
     dependencies {
       project.configurations.shadowed.allDependencies.each {
-        exclude(dependency(it.group + ':' + it.name))
+        exclude(dependency(it))
       }
       // exclude proto files from the jar
       exclude "**/opentelemetry/proto/**/*.proto"
@@ -2011,6 +1962,37 @@ project(':clients') {
     include "**/org/apache/kafka/server/telemetry/*"
   }
 }
+
+project(':clients:clients-integration-tests') {
+  base {
+    archivesName = "kafka-clients-integration-tests"
+  }
+
+  dependencies {
+    testImplementation libs.slf4jApi
+    testImplementation project(':test-common:test-common-internal-api')
+    testImplementation project(':test-common:test-common-runtime')
+    testImplementation project(':metadata')
+    testImplementation project(':server')
+    testImplementation project(':storage')
+    testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':clients').sourceSets.test.output
+    implementation project(':server-common')
+    testImplementation project(':metadata')
+    implementation project(':group-coordinator')
+    implementation project(':transaction-coordinator')
+
+    testImplementation libs.junitJupiter
+    testImplementation libs.junitPlatformSuiteEngine
+
+    testRuntimeOnly runtimeTestLibs
+  }
+
+  checkstyle {
+    configProperties = checkstyleConfigProperties("import-control-clients-integration-tests.xml")
+  }
+}
+
 
 project(':raft') {
   base {
@@ -2244,6 +2226,7 @@ project(':storage') {
   }
 
   dependencies {
+    implementation project(':metadata')
     implementation project(':storage:storage-api')
     implementation project(':server-common')
     implementation project(':clients')
@@ -2258,11 +2241,14 @@ project(':storage') {
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':core')
     testImplementation project(':core').sourceSets.test.output
+    testImplementation project(':storage:storage-api').sourceSets.test.output
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
+    testImplementation project(':test-common:test-common-util')
     testImplementation project(':server')
     testImplementation project(':server-common')
     testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':transaction-coordinator')
     testImplementation libs.hamcrest
     testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter
@@ -2429,6 +2415,7 @@ project(':tools') {
     implementation project(':group-coordinator')
     implementation project(':coordinator-common')
     implementation project(':share-coordinator')
+    implementation project(':raft')
     implementation libs.argparse4j
     implementation libs.jacksonDatabind
     implementation libs.jacksonDataformatCsv
@@ -2753,6 +2740,7 @@ project(':streams') {
             ':streams:upgrade-system-tests-37:test',
             ':streams:upgrade-system-tests-38:test',
             ':streams:upgrade-system-tests-39:test',
+            ':streams:upgrade-system-tests-40:test',
             ':streams:examples:test'
     ]
   )
@@ -3267,9 +3255,24 @@ project(':streams:upgrade-system-tests-39') {
   }
 }
 
+project(':streams:upgrade-system-tests-40') {
+  base {
+    archivesName = "kafka-streams-upgrade-system-tests-40"
+  }
+
+  dependencies {
+    testImplementation libs.kafkaStreams_40
+    testRuntimeOnly libs.junitJupiter
+  }
+
+  systemTestLibs {
+    dependsOn testJar
+  }
+}
+
 project(':jmh-benchmarks') {
 
-  apply plugin: 'io.github.goooler.shadow'
+  apply plugin: 'com.gradleup.shadow'
 
   shadowJar {
     archiveBaseName = 'kafka-jmh-benchmarks'
@@ -3333,7 +3336,7 @@ project(':jmh-benchmarks') {
       if (System.getProperty("jmhArgs")) {
           args System.getProperty("jmhArgs").split(' ')
       }
-      args = [shadowJar.archivePath, *args]
+      args = [shadowJar.archiveFile.get().asFile, *args]
     }
   }
 
@@ -3735,7 +3738,7 @@ project(':connect:mirror') {
     testImplementation project(':core')
     testImplementation project(':test-common:test-common-runtime')
     testImplementation project(':server')
-    testImplementation project(':server-common').sourceSets.test.output
+    testImplementation project(':server-common')
 
 
     testRuntimeOnly project(':connect:runtime')

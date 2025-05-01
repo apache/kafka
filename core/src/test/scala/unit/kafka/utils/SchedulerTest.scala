@@ -19,11 +19,10 @@ package kafka.utils
 import java.util.{Optional, Properties}
 import java.util.concurrent.atomic._
 import java.util.concurrent.{ConcurrentHashMap, CountDownLatch, Executors, TimeUnit}
-import kafka.log.UnifiedLog
 import kafka.utils.TestUtils.retry
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.util.{KafkaScheduler, MockTime}
-import org.apache.kafka.storage.internals.log.{LocalLog, LogConfig, LogDirFailureChannel, LogLoader, LogSegments, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog => JUnifiedLog}
+import org.apache.kafka.storage.internals.log.{LocalLog, LogConfig, LogDirFailureChannel, LogLoader, LogOffsetsListener, LogSegments, ProducerStateManager, ProducerStateManagerConfig, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, Timeout}
@@ -135,13 +134,14 @@ class SchedulerTest {
     val maxTransactionTimeoutMs = 5 * 60 * 1000
     val maxProducerIdExpirationMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT
     val producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT
-    val topicPartition = JUnifiedLog.parseTopicPartitionName(logDir)
+    val topicPartition = UnifiedLog.parseTopicPartitionName(logDir)
     val logDirFailureChannel = new LogDirFailureChannel(10)
     val segments = new LogSegments(topicPartition)
-    val leaderEpochCache = JUnifiedLog.createLeaderEpochCache(
+    val leaderEpochCache = UnifiedLog.createLeaderEpochCache(
       logDir, topicPartition, logDirFailureChannel, Optional.empty, mockTime.scheduler)
+    val producerStateManagerConfig = new ProducerStateManagerConfig(maxProducerIdExpirationMs, false)
     val producerStateManager = new ProducerStateManager(topicPartition, logDir,
-      maxTransactionTimeoutMs, new ProducerStateManagerConfig(maxProducerIdExpirationMs, false), mockTime)
+      maxTransactionTimeoutMs, producerStateManagerConfig, mockTime)
     val offsets = new LogLoader(
       logDir,
       topicPartition,
@@ -160,11 +160,15 @@ class SchedulerTest {
     ).load()
     val localLog = new LocalLog(logDir, logConfig, segments, offsets.recoveryPoint,
       offsets.nextOffsetMetadata, scheduler, mockTime, topicPartition, logDirFailureChannel)
-    val log = new UnifiedLog(logStartOffset = offsets.logStartOffset,
-      localLog = localLog,
-      brokerTopicStats, producerIdExpirationCheckIntervalMs,
-      leaderEpochCache, producerStateManager,
-      _topicId = None)
+    val log = new UnifiedLog(offsets.logStartOffset,
+      localLog,
+      brokerTopicStats,
+      producerIdExpirationCheckIntervalMs,
+      leaderEpochCache,
+      producerStateManager,
+      Optional.empty,
+      false,
+      LogOffsetsListener.NO_OP_OFFSETS_LISTENER)
     assertTrue(scheduler.taskRunning(log.producerExpireCheck))
     log.close()
     assertFalse(scheduler.taskRunning(log.producerExpireCheck))
@@ -202,5 +206,29 @@ class SchedulerTest {
     } finally {
       tickExecutor.shutdownNow()
     }
+  }
+
+  @Test
+  def testPendingTaskSize(): Unit = {
+    val latch1 = new CountDownLatch(1)
+    val latch2 = new CountDownLatch(2)
+    val task1 = new Runnable {
+      override def run(): Unit = {
+        latch1.await()
+      }
+    }
+    scheduler.scheduleOnce("task1", task1, 0)
+    scheduler.scheduleOnce("task2", () => latch2.countDown(), 5)
+    scheduler.scheduleOnce("task3", () => latch2.countDown(), 5)
+    retry(30000) {
+      assertEquals(2, scheduler.pendingTaskSize())
+    }
+    latch1.countDown()
+    latch2.await()
+    retry(30000) {
+      assertEquals(0, scheduler.pendingTaskSize())
+    }
+    scheduler.shutdown()
+    assertEquals(0, scheduler.pendingTaskSize())
   }
 }

@@ -17,13 +17,12 @@
 
 package kafka.server.share;
 
-import kafka.server.MetadataCache;
-
 import org.apache.kafka.common.Node;
 import org.apache.kafka.common.message.MetadataResponseData;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.requests.MetadataResponse;
+import org.apache.kafka.metadata.MetadataCache;
 import org.apache.kafka.server.share.SharePartitionKey;
 import org.apache.kafka.server.share.persister.ShareCoordinatorMetadataCacheHelper;
 
@@ -36,9 +35,6 @@ import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.Function;
-
-import scala.jdk.javaapi.CollectionConverters;
-import scala.jdk.javaapi.OptionConverters;
 
 public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinatorMetadataCacheHelper {
     private final MetadataCache metadataCache;
@@ -73,13 +69,11 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
                 Set<String> topicSet = new HashSet<>();
                 topicSet.add(internalTopicName);
 
-                List<MetadataResponseData.MetadataResponseTopic> topicMetadata = CollectionConverters.asJava(
-                    metadataCache.getTopicMetadata(
-                        CollectionConverters.asScala(topicSet),
-                        interBrokerListenerName,
-                        false,
-                        false
-                    )
+                List<MetadataResponseData.MetadataResponseTopic> topicMetadata = metadataCache.getTopicMetadata(
+                    topicSet,
+                    interBrokerListenerName,
+                    false,
+                    false
                 );
 
                 if (topicMetadata == null || topicMetadata.isEmpty() || topicMetadata.get(0).errorCode() != Errors.NONE.code()) {
@@ -92,7 +86,7 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
                         .findFirst();
 
                     if (response.isPresent()) {
-                        return OptionConverters.toJava(metadataCache.getAliveBrokerNode(response.get().leaderId(), interBrokerListenerName))
+                        return metadataCache.getAliveBrokerNode(response.get().leaderId(), interBrokerListenerName)
                             .orElse(Node.noNode());
                     } else {
                         return Node.noNode();
@@ -108,7 +102,7 @@ public class ShareCoordinatorMetadataCacheHelperImpl implements ShareCoordinator
     @Override
     public List<Node> getClusterNodes() {
         try {
-            return CollectionConverters.asJava(metadataCache.getAliveBrokerNodes(interBrokerListenerName).toSeq());
+            return metadataCache.getAliveBrokerNodes(interBrokerListenerName);
         } catch (Exception e) {
             log.warn("Exception while getting cluster nodes", e);
         }

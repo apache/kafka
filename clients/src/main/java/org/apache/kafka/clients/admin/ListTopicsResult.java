@@ -18,7 +18,6 @@
 package org.apache.kafka.clients.admin;
 
 import org.apache.kafka.common.KafkaFuture;
-import org.apache.kafka.common.annotation.InterfaceStability;
 
 import java.util.Collection;
 import java.util.Map;
@@ -26,10 +25,7 @@ import java.util.Set;
 
 /**
  * The result of the {@link Admin#listTopics()} call.
- *
- * The API of this class is evolving, see {@link Admin} for details.
  */
-@InterfaceStability.Evolving
 public class ListTopicsResult {
     final KafkaFuture<Map<String, TopicListing>> future;
 

@@ -13,11 +13,12 @@
  **/
 package kafka.server.metadata
 
-import kafka.server.{KafkaConfig, MetadataCache}
+import kafka.server.KafkaConfig
 import kafka.server.QuotaFactory.QuotaManagers
 import kafka.utils.Logging
 import org.apache.kafka.image.{MetadataDelta, MetadataImage}
 import org.apache.kafka.image.loader.LoaderManifest
+import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.fault.FaultHandler
 
 /**
@@ -49,10 +50,10 @@ class DynamicTopicClusterQuotaPublisher (
     newImage: MetadataImage,
   ): Unit = {
     try {
-      quotaManagers.clientQuotaCallback().ifPresent(clientQuotaCallback => {
+      quotaManagers.clientQuotaCallbackPlugin().ifPresent(plugin => {
         if (delta.topicsDelta() != null || delta.clusterDelta() != null) {
           val cluster = MetadataCache.toCluster(clusterId, newImage)
-          if (clientQuotaCallback.updateClusterMetadata(cluster)) {
+          if (plugin.get().updateClusterMetadata(cluster)) {
             quotaManagers.fetch.updateQuotaMetricConfigs()
             quotaManagers.produce.updateQuotaMetricConfigs()
             quotaManagers.request.updateQuotaMetricConfigs()

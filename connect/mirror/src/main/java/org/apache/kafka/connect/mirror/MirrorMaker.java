@@ -52,10 +52,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.io.File;
-import java.io.UnsupportedEncodingException;
+import java.net.InetAddress;
+import java.net.URI;
 import java.net.URLEncoder;
+import java.net.UnknownHostException;
 import java.nio.charset.StandardCharsets;
-import java.util.Arrays;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -63,6 +64,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import java.util.Set;
+import java.util.UUID;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -109,7 +111,7 @@ public class MirrorMaker {
     private CountDownLatch stopLatch;
     private final AtomicBoolean shutdown = new AtomicBoolean(false);
     private final ShutdownHook shutdownHook;
-    private final String advertisedUrl;
+    private final URI advertisedUrl;
     private final Time time;
     private final MirrorMakerConfig config;
     private final Set<String> clusters;
@@ -130,11 +132,11 @@ public class MirrorMaker {
             this.restClient = new RestClient(config);
             internalServer = new MirrorRestServer(config.originals(), restClient);
             internalServer.initializeServer();
-            this.advertisedUrl = internalServer.advertisedUrl().toString();
+            this.advertisedUrl = internalServer.advertisedUrl();
         } else {
             internalServer = null;
             restClient = null;
-            this.advertisedUrl = "NOTUSED";
+            this.advertisedUrl = URI.create("NOTUSED");
         }
         this.config = config;
         if (clusters != null && !clusters.isEmpty()) {
@@ -232,15 +234,10 @@ public class MirrorMaker {
     private void addHerder(SourceAndTarget sourceAndTarget) {
         log.info("creating herder for " + sourceAndTarget.toString());
         Map<String, String> workerProps = config.workerConfig(sourceAndTarget);
-        List<String> restNamespace;
-        try {
-            String encodedSource = encodePath(sourceAndTarget.source());
-            String encodedTarget = encodePath(sourceAndTarget.target());
-            restNamespace = Arrays.asList(encodedSource, encodedTarget);
-        } catch (UnsupportedEncodingException e) {
-            throw new RuntimeException("Unable to create encoded URL paths for source and target using UTF-8", e);
-        }
-        String workerId = sourceAndTarget.toString();
+        String encodedSource = encodePath(sourceAndTarget.source());
+        String encodedTarget = encodePath(sourceAndTarget.target());
+        List<String> restNamespace = List.of(encodedSource, encodedTarget);
+        String workerId = generateWorkerId(sourceAndTarget);
         Plugins plugins = new Plugins(workerProps);
         plugins.compareAndSwapWithDelegatingLoader();
         DistributedConfig distributedConfig = new DistributedConfig(workerProps);
@@ -273,13 +270,13 @@ public class MirrorMaker {
         // tracking the various shared admin objects in this class.
         Herder herder = new MirrorHerder(config, sourceAndTarget, distributedConfig, time, worker,
                 kafkaClusterId, statusBackingStore, configBackingStore,
-                advertisedUrl, restClient, clientConfigOverridePolicy,
+                advertisedUrl.toString(), restClient, clientConfigOverridePolicy,
                 restNamespace, sharedAdmin);
         herders.put(sourceAndTarget, herder);
     }
 
-    private static String encodePath(String rawPath) throws UnsupportedEncodingException {
-        return URLEncoder.encode(rawPath, StandardCharsets.UTF_8.name())
+    private static String encodePath(String rawPath) {
+        return URLEncoder.encode(rawPath, StandardCharsets.UTF_8)
                 // Java's out-of-the-box URL encoder encodes spaces (' ') as pluses ('+'),
                 // and pluses as '%2B'
                 // But Jetty doesn't decode pluses at all and leaves them as-are in decoded
@@ -289,6 +286,18 @@ public class MirrorMaker {
                 // Jetty will reverse this transformation when evaluating the path parameters
                 // and will return decoded strings with all special characters as they were.
                 .replaceAll("\\+", "%20");
+    }
+
+    private String generateWorkerId(SourceAndTarget sourceAndTarget) {
+        if (config.enableInternalRest()) {
+            return advertisedUrl.getHost() + ":" + advertisedUrl.getPort() + "/" + sourceAndTarget.toString();
+        }
+        try {
+            //UUID to make sure it is unique even if multiple workers running on the same host
+            return InetAddress.getLocalHost().getCanonicalHostName() + "/" + sourceAndTarget.toString() + "/" + UUID.randomUUID();
+        } catch (UnknownHostException e) {
+            return sourceAndTarget.toString() + "/" + UUID.randomUUID();
+        }
     }
 
     private class ShutdownHook extends Thread {

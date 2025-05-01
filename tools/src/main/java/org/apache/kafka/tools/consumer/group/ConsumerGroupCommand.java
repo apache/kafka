@@ -21,17 +21,17 @@ import org.apache.kafka.clients.admin.AbstractOptions;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ConsumerGroupDescription;
-import org.apache.kafka.clients.admin.ConsumerGroupListing;
 import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.DeleteConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.DeleteConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeConsumerGroupsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
+import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
-import org.apache.kafka.clients.admin.ListConsumerGroupsOptions;
-import org.apache.kafka.clients.admin.ListConsumerGroupsResult;
+import org.apache.kafka.clients.admin.ListGroupsOptions;
+import org.apache.kafka.clients.admin.ListGroupsResult;
 import org.apache.kafka.clients.admin.ListOffsetsOptions;
 import org.apache.kafka.clients.admin.ListOffsetsResult.ListOffsetsResultInfo;
 import org.apache.kafka.clients.admin.MemberDescription;
@@ -241,7 +241,7 @@ public class ConsumerGroupCommand {
             if (includeType || includeState) {
                 Set<GroupType> types = typeValues();
                 Set<GroupState> states = stateValues();
-                List<ConsumerGroupListing> listings = listConsumerGroupsWithFilters(types, states);
+                List<GroupListing> listings = listConsumerGroupsWithFilters(types, states);
 
                 printGroupInfo(listings, includeType, includeState);
             } else {
@@ -263,17 +263,17 @@ public class ConsumerGroupCommand {
                 : consumerGroupTypesFromString(typeValue);
         }
 
-        private void printGroupInfo(List<ConsumerGroupListing> groups, boolean includeType, boolean includeState) {
-            Function<ConsumerGroupListing, String> groupId = ConsumerGroupListing::groupId;
-            Function<ConsumerGroupListing, String> groupType = groupListing -> groupListing.type().orElse(GroupType.UNKNOWN).toString();
-            Function<ConsumerGroupListing, String> groupState = groupListing -> groupListing.groupState().orElse(GroupState.UNKNOWN).toString();
+        private void printGroupInfo(List<GroupListing> groups, boolean includeType, boolean includeState) {
+            Function<GroupListing, String> groupId = GroupListing::groupId;
+            Function<GroupListing, String> groupType = groupListing -> groupListing.type().orElse(GroupType.UNKNOWN).toString();
+            Function<GroupListing, String> groupState = groupListing -> groupListing.groupState().orElse(GroupState.UNKNOWN).toString();
 
             OptionalInt maybeMax = groups.stream().mapToInt(groupListing -> Math.max(15, groupId.apply(groupListing).length())).max();
             int maxGroupLen = maybeMax.orElse(15) + 10;
             String format = "%-" + maxGroupLen + "s";
             List<String> header = new ArrayList<>();
             header.add("GROUP");
-            List<Function<ConsumerGroupListing, String>> extractors = new ArrayList<>();
+            List<Function<GroupListing, String>> extractors = new ArrayList<>();
             extractors.add(groupId);
 
             if (includeType) {
@@ -290,7 +290,7 @@ public class ConsumerGroupCommand {
 
             System.out.printf(format + "%n", header.toArray(new Object[0]));
 
-            for (ConsumerGroupListing groupListing : groups) {
+            for (GroupListing groupListing : groups) {
                 Object[] info = extractors.stream().map(extractor -> extractor.apply(groupListing)).toArray(Object[]::new);
                 System.out.printf(format + "%n", info);
             }
@@ -298,20 +298,20 @@ public class ConsumerGroupCommand {
 
         List<String> listConsumerGroups() {
             try {
-                ListConsumerGroupsResult result = adminClient.listConsumerGroups(withTimeoutMs(new ListConsumerGroupsOptions()));
-                Collection<ConsumerGroupListing> listings = result.all().get();
-                return listings.stream().map(ConsumerGroupListing::groupId).collect(Collectors.toList());
+                ListGroupsResult result = adminClient.listGroups(withTimeoutMs(ListGroupsOptions.forConsumerGroups()));
+                Collection<GroupListing> listings = result.all().get();
+                return listings.stream().map(GroupListing::groupId).collect(Collectors.toList());
             } catch (InterruptedException | ExecutionException e) {
                 throw new RuntimeException(e);
             }
         }
 
-        List<ConsumerGroupListing> listConsumerGroupsWithFilters(Set<GroupType> types, Set<GroupState> states) throws ExecutionException, InterruptedException {
-            ListConsumerGroupsOptions listConsumerGroupsOptions = withTimeoutMs(new ListConsumerGroupsOptions());
-            listConsumerGroupsOptions
+        List<GroupListing> listConsumerGroupsWithFilters(Set<GroupType> types, Set<GroupState> states) throws ExecutionException, InterruptedException {
+            ListGroupsOptions listGroupsOptions = withTimeoutMs(ListGroupsOptions.forConsumerGroups());
+            listGroupsOptions
                 .inGroupStates(states)
                 .withTypes(types);
-            ListConsumerGroupsResult result = adminClient.listConsumerGroups(listConsumerGroupsOptions);
+            ListGroupsResult result = adminClient.listGroups(listGroupsOptions);
             return new ArrayList<>(result.all().get());
         }
 
@@ -531,8 +531,8 @@ public class ConsumerGroupCommand {
                 return topicPartitions
                     .stream()
                     .map(TopicPartition::partition)
-                    .map(Object::toString)
                     .sorted()
+                    .map(Object::toString)
                     .collect(Collectors.joining(",", topicName + ":", ""));
             }).sorted().collect(Collectors.joining(";"));
         }

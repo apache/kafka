@@ -97,7 +97,7 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         /**
          * The resolved regular expressions.
          */
-        private Map<String, ResolvedRegularExpression> resolvedRegularExpressions = Collections.emptyMap();
+        private Map<String, ResolvedRegularExpression> resolvedRegularExpressions = Map.of();
 
         public ConsumerTargetAssignmentBuilder(
             String groupId,
@@ -248,12 +248,12 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
     /**
      * The members in the group.
      */
-    private Map<String, T> members = Collections.emptyMap();
+    private Map<String, T> members = Map.of();
 
     /**
      * The subscription metadata.
      */
-    private Map<String, TopicMetadata> subscriptionMetadata = Collections.emptyMap();
+    private Map<String, TopicMetadata> subscriptionMetadata = Map.of();
 
     /**
      * The subscription type of the consumer group.
@@ -263,13 +263,13 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
     /**
      * The existing target assignment.
      */
-    private Map<String, Assignment> targetAssignment = Collections.emptyMap();
+    private Map<String, Assignment> targetAssignment = Map.of();
 
     /**
      * Reverse lookup map representing topic partitions with
      * their current member assignments.
      */
-    private Map<Uuid, Map<Integer, String>> invertedTargetAssignment = Collections.emptyMap();
+    private Map<Uuid, Map<Integer, String>> invertedTargetAssignment = Map.of();
 
     /**
      * The topics image.
@@ -286,6 +286,11 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
      * The static members in the group.
      */
     private Map<String, String> staticMembers = new HashMap<>();
+
+    /**
+     * Topic partition assignable map.
+     */
+    private Map<Uuid, Set<Integer>> topicAssignablePartitionsMap = new HashMap<>();
 
     /**
      * Constructs the object.
@@ -395,6 +400,13 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
         return self();
     }
 
+    public U withTopicAssignablePartitionsMap(
+        Map<Uuid, Set<Integer>> topicAssignablePartitionsMap
+    ) {
+        this.topicAssignablePartitionsMap = topicAssignablePartitionsMap;
+        return self();
+    }
+
     /**
      * Adds or updates a member. This is useful when the updated member is
      * not yet materialized in memory.
@@ -483,11 +495,10 @@ public abstract class TargetAssignmentBuilder<T extends ModernGroupMember, U ext
                 subscriptionType,
                 invertedTargetAssignment
             ),
-            new SubscribedTopicDescriberImpl(topicMetadataMap)
+            new SubscribedTopicDescriberImpl(topicMetadataMap, topicAssignablePartitionsMap)
         );
 
-        // Compute delta from previous to new target assignment and create the
-        // relevant records.
+        // Compute delta from previous to new target assignment and create the relevant records.
         List<CoordinatorRecord> records = new ArrayList<>();
 
         for (String memberId : memberSpecs.keySet()) {

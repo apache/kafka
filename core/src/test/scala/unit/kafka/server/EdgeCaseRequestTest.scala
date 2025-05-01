@@ -28,12 +28,12 @@ import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.message.ProduceRequestData
 import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.types.Type
-import org.apache.kafka.common.protocol.{ApiKeys, Errors}
+import org.apache.kafka.common.protocol.{ApiKeys, ByteBufferAccessor, Errors}
 import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceResponse, ResponseHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.ByteUtils
-import org.apache.kafka.common.{TopicPartition, requests}
+import org.apache.kafka.common.{TopicPartition, Uuid, requests}
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.params.ParameterizedTest
@@ -129,10 +129,12 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     val version = ApiKeys.PRODUCE.latestVersion: Short
     val (serializedBytes, responseHeaderVersion) = {
       val headerBytes = requestHeaderBytes(ApiKeys.PRODUCE.id, version, "", correlationId)
+      val topicId = getTopicIds().getOrElse(topicPartition.topic(), Uuid.ZERO_UUID)
       val request = requests.ProduceRequest.builder(new ProduceRequestData()
         .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
           Collections.singletonList(new ProduceRequestData.TopicProduceData()
-            .setName(topicPartition.topic()).setPartitionData(Collections.singletonList(
+            .setTopicId(topicId)
+            .setPartitionData(Collections.singletonList(
             new ProduceRequestData.PartitionProduceData()
               .setIndex(topicPartition.partition())
               .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("message".getBytes))))))
@@ -141,7 +143,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
         .setTimeoutMs(10000)
         .setTransactionalId(null))
         .build()
-      val bodyBytes = request.serialize
+      val bodyBytes = request.serialize.buffer
       val byteBuffer = ByteBuffer.allocate(headerBytes.length + bodyBytes.remaining())
       byteBuffer.put(headerBytes)
       byteBuffer.put(bodyBytes)
@@ -152,7 +154,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
 
     val responseBuffer = ByteBuffer.wrap(response)
     val responseHeader = ResponseHeader.parse(responseBuffer, responseHeaderVersion)
-    val produceResponse = ProduceResponse.parse(responseBuffer, version)
+    val produceResponse = ProduceResponse.parse(new ByteBufferAccessor(responseBuffer), version)
 
     assertEquals(0, responseBuffer.remaining, "The response should parse completely")
     assertEquals(correlationId, responseHeader.correlationId, "The correlationId should match request")

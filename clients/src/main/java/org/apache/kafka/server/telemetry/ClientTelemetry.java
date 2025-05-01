@@ -17,14 +17,12 @@
 
 package org.apache.kafka.server.telemetry;
 
-import org.apache.kafka.common.annotation.InterfaceStability;
 import org.apache.kafka.common.metrics.MetricsReporter;
 
 /**
  * A {@link MetricsReporter} may implement this interface to indicate support for collecting client
  * telemetry on the server side.
  */
-@InterfaceStability.Evolving
 public interface ClientTelemetry {
 
     /**

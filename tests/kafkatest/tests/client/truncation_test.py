@@ -27,7 +27,9 @@ class TruncationTest(VerifiableConsumerTest):
     TOPICS = {
         TOPIC: {
             'partitions': NUM_PARTITIONS,
-            'replication-factor': 2
+            'replication-factor': 2,
+            'configs': {"min.insync.replicas": 1,
+                        "unclean.leader.election.enable": True}
         }
     }
     GROUP_ID = "truncation-test"
@@ -51,8 +53,8 @@ class TruncationTest(VerifiableConsumerTest):
         return consumer
 
     @cluster(num_nodes=7)
-    @matrix(metadata_quorum=quorum.all_non_upgrade, use_new_coordinator=[True])
-    def test_offset_truncate(self, metadata_quorum, use_new_coordinator):
+    @matrix(metadata_quorum=quorum.all_non_upgrade)
+    def test_offset_truncate(self, metadata_quorum):
         """
         Verify correct consumer behavior when the brokers are consecutively restarted.
 
@@ -80,6 +82,9 @@ class TruncationTest(VerifiableConsumerTest):
         isr = self.kafka.isr_idx_list(self.TOPIC, 0)
         node1 = self.kafka.get_node(isr[0])
         self.kafka.stop_node(node1)
+        wait_until(lambda: len(self.kafka.isr_idx_list(self.TOPIC, 0)) == 1,
+                   timeout_sec=30,
+                   err_msg="The ISR update taking too long")
         self.logger.info("Reduced ISR to one node, consumer is at %s", consumer.current_position(tp))
 
         # Ensure remaining ISR member has a little bit of data
@@ -112,7 +117,10 @@ class TruncationTest(VerifiableConsumerTest):
 
         pre_truncation_pos = consumer.current_position(tp)
 
-        self.kafka.set_unclean_leader_election(self.TOPIC)
+        wait_until(lambda: len(self.kafka.isr_idx_list(self.TOPIC, 0)) == 1,
+           timeout_sec=30,
+           err_msg="The unclean leader election takes too long")
+
         self.logger.info("New unclean leader, consumer is at %s", consumer.current_position(tp))
 
         # Wait for truncation to be detected

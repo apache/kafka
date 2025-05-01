@@ -24,8 +24,6 @@ import java.util.Locale;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
-import static java.util.Arrays.asList;
-
 public enum BrokerCompressionType {
     UNCOMPRESSED("uncompressed"),
     ZSTD("zstd"),
@@ -34,7 +32,7 @@ public enum BrokerCompressionType {
     GZIP("gzip"),
     PRODUCER("producer");
 
-    private static final List<BrokerCompressionType> VALUES = asList(values());
+    private static final List<BrokerCompressionType> VALUES = List.of(values());
 
     public final String name;
 

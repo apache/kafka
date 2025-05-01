@@ -31,6 +31,7 @@ import org.apache.kafka.coordinator.group.generated.ConsumerGroupPartitionMetada
 import org.apache.kafka.coordinator.group.generated.ConsumerGroupTargetAssignmentMemberValue;
 import org.apache.kafka.coordinator.group.generated.GroupMetadataValue;
 import org.apache.kafka.coordinator.group.generated.ShareGroupPartitionMetadataValue;
+import org.apache.kafka.coordinator.group.generated.ShareGroupStatePartitionMetadataValue;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 
 import org.opentest4j.AssertionFailedError;
@@ -41,7 +42,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
-import java.util.stream.Collectors;
 
 import static org.junit.jupiter.api.AssertionFailureBuilder.assertionFailure;
 import static org.junit.jupiter.api.Assertions.assertEquals;
@@ -61,7 +61,8 @@ public class Assertions {
         ConsumerGroupPartitionMetadataValue.class, Assertions::assertConsumerGroupPartitionMetadataValue,
         GroupMetadataValue.class, Assertions::assertGroupMetadataValue,
         ConsumerGroupTargetAssignmentMemberValue.class, Assertions::assertConsumerGroupTargetAssignmentMemberValue,
-        ShareGroupPartitionMetadataValue.class, Assertions::assertShareGroupPartitionMetadataValue
+        ShareGroupPartitionMetadataValue.class, Assertions::assertShareGroupPartitionMetadataValue,
+        ShareGroupStatePartitionMetadataValue.class, Assertions::assertShareGroupStatePartitionMetadataValue
     );
 
     public static void assertResponseEquals(
@@ -115,12 +116,12 @@ public class Assertions {
                     slice
                         .stream()
                         .sorted(Comparator.comparing(Object::toString))
-                        .collect(Collectors.toList()),
+                        .toList(),
                     actualRecords
                         .subList(j, j + slice.size())
                         .stream()
                         .sorted(Comparator.comparing(Object::toString))
-                        .collect(Collectors.toList())
+                        .toList()
                 );
 
                 j += slice.size();
@@ -278,6 +279,33 @@ public class Assertions {
                 topic.partitionMetadata().sort(Comparator.comparing(ShareGroupPartitionMetadataValue.PartitionMetadata::partition));
                 topic.partitionMetadata().forEach(partition -> partition.racks().sort(String::compareTo));
             });
+        };
+
+        normalize.accept(expected);
+        normalize.accept(actual);
+
+        assertEquals(expected, actual);
+    }
+
+    private static void assertShareGroupStatePartitionMetadataValue(
+        ApiMessage exp,
+        ApiMessage act
+    ) {
+        ShareGroupStatePartitionMetadataValue expected = (ShareGroupStatePartitionMetadataValue) exp.duplicate();
+        ShareGroupStatePartitionMetadataValue actual = (ShareGroupStatePartitionMetadataValue) act.duplicate();
+
+        Consumer<ShareGroupStatePartitionMetadataValue> normalize = message -> {
+            message.initializedTopics().sort(Comparator.comparing(ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo::topicId));
+            message.initializedTopics().forEach(topic -> {
+                topic.partitions().sort(Comparator.naturalOrder());
+            });
+
+            message.initializingTopics().sort(Comparator.comparing(ShareGroupStatePartitionMetadataValue.TopicPartitionsInfo::topicId));
+            message.initializingTopics().forEach(topic -> {
+                topic.partitions().sort(Comparator.naturalOrder());
+            });
+
+            message.deletingTopics().sort(Comparator.comparing(ShareGroupStatePartitionMetadataValue.TopicInfo::topicId));
         };
 
         normalize.accept(expected);

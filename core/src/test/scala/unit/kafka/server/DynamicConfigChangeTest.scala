@@ -18,8 +18,6 @@ package kafka.server
 
 import kafka.cluster.Partition
 import kafka.integration.KafkaServerTestHarness
-import kafka.log.UnifiedLog
-import kafka.log.remote.RemoteLogManager
 import kafka.utils.TestUtils.random
 import kafka.utils._
 import org.apache.kafka.clients.CommonClientConfigs
@@ -34,8 +32,11 @@ import org.apache.kafka.common.quota.{ClientQuotaAlteration, ClientQuotaEntity}
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.coordinator.group.GroupConfig
+import org.apache.kafka.metadata.MetadataCache
 import org.apache.kafka.server.config.{QuotaConfig, ServerLogConfigs}
-import org.apache.kafka.storage.internals.log.LogConfig
+import org.apache.kafka.server.log.remote.TopicPartitionLog
+import org.apache.kafka.server.log.remote.storage.RemoteLogManager
+import org.apache.kafka.storage.internals.log.{LogConfig, UnifiedLog}
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{Test, Timeout}
@@ -321,7 +322,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       val resource = new ConfigResource(ConfigResource.Type.TOPIC, "")
       val op = new AlterConfigOp(new ConfigEntry(TopicConfig.FLUSH_MESSAGES_INTERVAL_CONFIG, "200000"), OpType.SET)
       val future = admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all
-      assertFutureThrows(future, classOf[InvalidRequestException])
+      assertFutureThrows(classOf[InvalidRequestException], future)
     } finally {
       admin.close()
     }
@@ -472,7 +473,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
       val resource = new ConfigResource(ConfigResource.Type.GROUP, "")
       val op = new AlterConfigOp(new ConfigEntry(GroupConfig.CONSUMER_SESSION_TIMEOUT_MS_CONFIG, "200000"), OpType.SET)
       val future = admin.incrementalAlterConfigs(Map(resource -> List(op).asJavaCollection).asJava).all
-      assertFutureThrows(future, classOf[InvalidRequestException])
+      assertFutureThrows(classOf[InvalidRequestException], future)
     } finally {
       admin.close()
     }
@@ -518,9 +519,9 @@ class DynamicConfigChangeUnitTest {
   @Test
   def shouldParseRegardlessOfWhitespaceAroundValues(): Unit = {
     def parse(configHandler: TopicConfigHandler, value: String): Seq[Int] = {
-      configHandler.parseThrottledPartitions(
-        CoreUtils.propsWith(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, value),
-        102, QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG)
+      val props = new Properties()
+      props.put(QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG, value)
+      configHandler.parseThrottledPartitions(props, 102, QuotaConfig.LEADER_REPLICATION_THROTTLED_REPLICAS_CONFIG)
     }
     val configHandler: TopicConfigHandler = new TopicConfigHandler(null, null, null)
     assertEquals(ReplicationQuotaManager.ALL_REPLICAS.asScala.map(_.toInt).toSeq, parse(configHandler, "* "))
@@ -574,8 +575,8 @@ class DynamicConfigChangeUnitTest {
     when(replicaManager.onlinePartition(tp1)).thenReturn(Some(partition1))
     when(log1.config).thenReturn(new LogConfig(Collections.emptyMap()))
 
-    val leaderPartitionsArg: ArgumentCaptor[util.Set[Partition]] = ArgumentCaptor.forClass(classOf[util.Set[Partition]])
-    val followerPartitionsArg: ArgumentCaptor[util.Set[Partition]] = ArgumentCaptor.forClass(classOf[util.Set[Partition]])
+    val leaderPartitionsArg: ArgumentCaptor[util.Set[TopicPartitionLog]] = ArgumentCaptor.forClass(classOf[util.Set[TopicPartitionLog]])
+    val followerPartitionsArg: ArgumentCaptor[util.Set[TopicPartitionLog]] = ArgumentCaptor.forClass(classOf[util.Set[TopicPartitionLog]])
     doNothing().when(rlm).onLeadershipChange(leaderPartitionsArg.capture(), followerPartitionsArg.capture(), any())
 
     val isRemoteLogEnabledBeforeUpdate = false

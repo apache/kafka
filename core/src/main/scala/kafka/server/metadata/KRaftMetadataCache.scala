@@ -17,9 +17,7 @@
 
 package kafka.server.metadata
 
-import kafka.server.MetadataCache
 import kafka.utils.Logging
-import org.apache.kafka.admin.BrokerMetadata
 import org.apache.kafka.common._
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.errors.InvalidTopicException
@@ -31,15 +29,15 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.MetadataResponse
 import org.apache.kafka.image.MetadataImage
-import org.apache.kafka.metadata.{BrokerRegistration, LeaderAndIsr, PartitionRegistration, Replicas}
+import org.apache.kafka.metadata.{BrokerRegistration, LeaderAndIsr, MetadataCache, PartitionRegistration, Replicas}
 import org.apache.kafka.server.common.{FinalizedFeatures, KRaftVersion, MetadataVersion}
 
 import java.util
 import java.util.concurrent.ThreadLocalRandom
-import java.util.function.Supplier
-import java.util.{Collections, Properties}
+import java.util.function.{Predicate, Supplier}
+import java.util.stream.Collectors
+import java.util.Properties
 import scala.collection.mutable.ListBuffer
-import scala.collection.{Map, Seq, Set, mutable}
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOptional
 import scala.util.control.Breaks._
@@ -239,27 +237,29 @@ class KRaftMetadataCache(
   }
 
   // errorUnavailableEndpoints exists to support v0 MetadataResponses
-  override def getTopicMetadata(topics: Set[String],
+  override def getTopicMetadata(topics: util.Set[String],
                                 listenerName: ListenerName,
                                 errorUnavailableEndpoints: Boolean = false,
-                                errorUnavailableListeners: Boolean = false): Seq[MetadataResponseTopic] = {
+                                errorUnavailableListeners: Boolean = false): util.List[MetadataResponseTopic] = {
     val image = _currentImage
-    topics.toSeq.flatMap { topic =>
-      getPartitionMetadata(image, topic, listenerName, errorUnavailableEndpoints, errorUnavailableListeners).map { partitionMetadata =>
-        new MetadataResponseTopic()
-          .setErrorCode(Errors.NONE.code)
-          .setName(topic)
-          .setTopicId(Option(image.topics().getTopic(topic).id()).getOrElse(Uuid.ZERO_UUID))
-          .setIsInternal(Topic.isInternal(topic))
-          .setPartitions(partitionMetadata.toBuffer.asJava)
+    topics.stream().flatMap(topic =>
+      getPartitionMetadata(image, topic, listenerName, errorUnavailableEndpoints, errorUnavailableListeners) match {
+        case Some(partitionMetadata) =>
+          util.stream.Stream.of(new MetadataResponseTopic()
+            .setErrorCode(Errors.NONE.code)
+            .setName(topic)
+            .setTopicId(Option(image.topics().getTopic(topic).id()).getOrElse(Uuid.ZERO_UUID))
+            .setIsInternal(Topic.isInternal(topic))
+            .setPartitions(partitionMetadata.toBuffer.asJava))
+        case None => util.stream.Stream.empty()
       }
-    }
+    ).collect(Collectors.toList())
   }
 
   override def describeTopicResponse(
-    topics: Iterator[String],
+    topics: util.Iterator[String],
     listenerName: ListenerName,
-    topicPartitionStartIndex: String => Int,
+    topicPartitionStartIndex: util.function.Function[String, Integer],
     maximumNumberOfPartitions: Int,
     ignoreTopicsWithExceptions: Boolean
   ): DescribeTopicPartitionsResponseData = {
@@ -267,7 +267,7 @@ class KRaftMetadataCache(
     var remaining = maximumNumberOfPartitions
     val result = new DescribeTopicPartitionsResponseData()
     breakable {
-      topics.foreach { topicName =>
+      topics.forEachRemaining { topicName =>
         if (remaining > 0) {
           val (partitionResponse, nextPartition) =
             getPartitionMetadataForDescribeTopicResponse(
@@ -320,18 +320,13 @@ class KRaftMetadataCache(
     result
   }
 
-  override def getAllTopics(): Set[String] = _currentImage.topics().topicsByName().keySet().asScala
+  override def getAllTopics(): util.Set[String] = _currentImage.topics().topicsByName().keySet()
 
-  override def getTopicPartitions(topicName: String): Set[TopicPartition] = {
-    Option(_currentImage.topics().getTopic(topicName)) match {
-      case None => Set.empty
-      case Some(topic) => topic.partitions().keySet().asScala.map(new TopicPartition(topicName, _))
-    }
-  }
+  override def getTopicId(topicName: String): Uuid = util.Optional.ofNullable(_currentImage.topics.topicsByName.get(topicName))
+    .map(_.id)
+    .orElse(Uuid.ZERO_UUID)
 
-  override def getTopicId(topicName: String): Uuid = _currentImage.topics().topicsByName().asScala.get(topicName).map(_.id()).getOrElse(Uuid.ZERO_UUID)
-
-  override def getTopicName(topicId: Uuid): Option[String] = _currentImage.topics().topicsById.asScala.get(topicId).map(_.name())
+  override def getTopicName(topicId: Uuid): util.Optional[String] = util.Optional.ofNullable(_currentImage.topics().topicsById().get(topicId)).map(t => t.name)
 
   override def hasAliveBroker(brokerId: Int): Boolean = {
     Option(_currentImage.cluster.broker(brokerId)).count(!_.fenced()) == 1
@@ -345,68 +340,59 @@ class KRaftMetadataCache(
     Option(_currentImage.cluster.broker(brokerId)).count(_.inControlledShutdown) == 1
   }
 
-  override def getAliveBrokers(): Iterable[BrokerMetadata] = getAliveBrokers(_currentImage)
-
-  private def getAliveBrokers(image: MetadataImage): Iterable[BrokerMetadata] = {
-    image.cluster().brokers().values().asScala.filterNot(_.fenced()).
-      map(b => new BrokerMetadata(b.id, b.rack))
+  override def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): util.Optional[Node] = {
+    util.Optional.ofNullable(_currentImage.cluster().broker(brokerId))
+      .filter(Predicate.not(_.fenced))
+      .flatMap(broker => broker.node(listenerName.value))
   }
 
-  override def getAliveBrokerNode(brokerId: Int, listenerName: ListenerName): Option[Node] = {
-    Option(_currentImage.cluster().broker(brokerId)).filterNot(_.fenced()).
-      flatMap(_.node(listenerName.value()).toScala)
+  override def getAliveBrokerNodes(listenerName: ListenerName): util.List[Node] = {
+    _currentImage.cluster.brokers.values.stream
+      .filter(Predicate.not(_.fenced))
+      .flatMap(broker => broker.node(listenerName.value).stream)
+      .collect(Collectors.toList())
   }
 
-  override def getAliveBrokerNodes(listenerName: ListenerName): Seq[Node] = {
-    _currentImage.cluster().brokers().values().asScala.filterNot(_.fenced()).
-      flatMap(_.node(listenerName.value()).toScala).toSeq
+  override def getBrokerNodes(listenerName: ListenerName): util.List[Node] = {
+    _currentImage.cluster.brokers.values.stream
+      .flatMap(broker => broker.node(listenerName.value).stream)
+      .collect(Collectors.toList())
   }
 
-  override def getBrokerNodes(listenerName: ListenerName): Seq[Node] = {
-    _currentImage.cluster().brokers().values().asScala.flatMap(_.node(listenerName.value()).toScala).toSeq
-  }
-
-  override def getLeaderAndIsr(topicName: String, partitionId: Int): Option[LeaderAndIsr] = {
-    Option(_currentImage.topics().getTopic(topicName)).
-      flatMap(topic => Option(topic.partitions().get(partitionId))).
-      flatMap(partition => Some(new LeaderAndIsr(partition.leader, partition.leaderEpoch,
+  override def getLeaderAndIsr(topicName: String, partitionId: Int): util.Optional[LeaderAndIsr] = {
+    util.Optional.ofNullable(_currentImage.topics().getTopic(topicName)).
+      flatMap(topic => util.Optional.ofNullable(topic.partitions().get(partitionId))).
+      flatMap(partition => util.Optional.ofNullable(new LeaderAndIsr(partition.leader, partition.leaderEpoch,
         util.Arrays.asList(partition.isr.map(i => i: java.lang.Integer): _*), partition.leaderRecoveryState, partition.partitionEpoch)))
   }
 
-  override def numPartitions(topicName: String): Option[Int] = {
-    Option(_currentImage.topics().getTopic(topicName)).
+  override def numPartitions(topicName: String): util.Optional[Integer] = {
+    util.Optional.ofNullable(_currentImage.topics().getTopic(topicName)).
       map(topic => topic.partitions().size())
   }
 
-  override def topicNamesToIds(): util.Map[String, Uuid] = _currentImage.topics.topicNameToIdView()
-
   override def topicIdsToNames(): util.Map[Uuid, String] = _currentImage.topics.topicIdToNameView()
-
-  override def topicIdInfo(): (util.Map[String, Uuid], util.Map[Uuid, String]) = {
-    val image = _currentImage
-    (image.topics.topicNameToIdView(), image.topics.topicIdToNameView())
-  }
 
   // if the leader is not known, return None;
   // if the leader is known and corresponding node is available, return Some(node)
   // if the leader is known but corresponding node with the listener name is not available, return Some(NO_NODE)
-  override def getPartitionLeaderEndpoint(topicName: String, partitionId: Int, listenerName: ListenerName): Option[Node] = {
+  override def getPartitionLeaderEndpoint(topicName: String, partitionId: Int, listenerName: ListenerName): util.Optional[Node] = {
     val image = _currentImage
     Option(image.topics().getTopic(topicName)) match {
-      case None => None
+      case None => util.Optional.empty()
       case Some(topic) => Option(topic.partitions().get(partitionId)) match {
-        case None => None
+        case None => util.Optional.empty()
         case Some(partition) => Option(image.cluster().broker(partition.leader)) match {
-          case None => Some(Node.noNode)
-          case Some(broker) => Some(broker.node(listenerName.value()).orElse(Node.noNode()))
+          case None => util.Optional.of(Node.noNode)
+          case Some(broker) => util.Optional.of(broker.node(listenerName.value()).orElse(Node.noNode()))
         }
       }
     }
   }
 
-  override def getPartitionReplicaEndpoints(tp: TopicPartition, listenerName: ListenerName): Map[Int, Node] = {
+  override def getPartitionReplicaEndpoints(tp: TopicPartition, listenerName: ListenerName): util.Map[Integer, Node] = {
     val image = _currentImage
-    val result = new mutable.HashMap[Int, Node]()
+    val result = new util.HashMap[Integer, Node]()
     Option(image.topics().getTopic(tp.topic())).foreach { topic =>
       Option(topic.partitions().get(tp.partition())).foreach { partition =>
         partition.replicas.foreach { replicaId =>
@@ -423,65 +409,25 @@ class KRaftMetadataCache(
     result
   }
 
-  override def getRandomAliveBrokerId: Option[Int] = {
+  override def getRandomAliveBrokerId: util.Optional[Integer] = {
     getRandomAliveBroker(_currentImage)
   }
 
-  private def getRandomAliveBroker(image: MetadataImage): Option[Int] = {
-    val aliveBrokers = getAliveBrokers(image).toList
+  private def getRandomAliveBroker(image: MetadataImage): util.Optional[Integer] = {
+    val aliveBrokers = image.cluster().brokers().values().stream()
+      .filter(Predicate.not(_.fenced))
+      .map(_.id()).toList
     if (aliveBrokers.isEmpty) {
-      None
+      util.Optional.empty()
     } else {
-      Some(aliveBrokers(ThreadLocalRandom.current().nextInt(aliveBrokers.size)).id)
+      util.Optional.of(aliveBrokers.get(ThreadLocalRandom.current().nextInt(aliveBrokers.size)))
     }
   }
 
-  override def getAliveBrokerEpoch(brokerId: Int): Option[Long] = {
-    Option(_currentImage.cluster().broker(brokerId)).filterNot(_.fenced()).
-      map(brokerRegistration => brokerRegistration.epoch())
-  }
-
-  override def getClusterMetadata(clusterId: String, listenerName: ListenerName): Cluster = {
-    val image = _currentImage
-    val nodes = new util.HashMap[Integer, Node]
-    image.cluster().brokers().values().forEach { broker =>
-      if (!broker.fenced()) {
-        broker.node(listenerName.value()).toScala.foreach { node =>
-          nodes.put(broker.id(), node)
-        }
-      }
-    }
-
-    def node(id: Int): Node = {
-      Option(nodes.get(id)).getOrElse(Node.noNode())
-    }
-
-    val partitionInfos = new util.ArrayList[PartitionInfo]
-    val internalTopics = new util.HashSet[String]
-
-    image.topics().topicsByName().values().forEach { topic =>
-      topic.partitions().forEach { (key, value) =>
-        val partitionId = key
-        val partition = value
-        partitionInfos.add(new PartitionInfo(topic.name(),
-          partitionId,
-          node(partition.leader),
-          partition.replicas.map(replica => node(replica)),
-          partition.isr.map(replica => node(replica)),
-          getOfflineReplicas(image, partition, listenerName).asScala.
-            map(replica => node(replica)).toArray))
-        if (Topic.isInternal(topic.name())) {
-          internalTopics.add(topic.name())
-        }
-      }
-    }
-    val controllerNode = node(getRandomAliveBroker(image).getOrElse(-1))
-    // Note: the constructor of Cluster does not allow us to reference unregistered nodes.
-    // So, for example, if partition foo-0 has replicas [1, 2] but broker 2 is not
-    // registered, we pass its replicas as [1, -1]. This doesn't make a lot of sense, but
-    // we are duplicating the behavior of ZkMetadataCache, for now.
-    new Cluster(clusterId, nodes.values(),
-      partitionInfos, Collections.emptySet(), internalTopics, controllerNode)
+  override def getAliveBrokerEpoch(brokerId: Int): util.Optional[java.lang.Long] = {
+    util.Optional.ofNullable(_currentImage.cluster().broker(brokerId))
+      .filter(Predicate.not(_.fenced))
+      .map(brokerRegistration => brokerRegistration.epoch())
   }
 
   override def contains(topicName: String): Boolean =
@@ -513,7 +459,7 @@ class KRaftMetadataCache(
     _currentImage.scram().describe(request)
   }
 
-  override def metadataVersion(): MetadataVersion = _currentImage.features().metadataVersion()
+  override def metadataVersion(): MetadataVersion = _currentImage.features().metadataVersionOrThrow()
 
   override def features(): FinalizedFeatures = {
     val image = _currentImage
@@ -522,7 +468,8 @@ class KRaftMetadataCache(
     if (kraftVersionLevel > 0) {
       finalizedFeatures.put(KRaftVersion.FEATURE_NAME, kraftVersionLevel)
     }
-    new FinalizedFeatures(image.features().metadataVersion(),
+    new FinalizedFeatures(
+      image.features().metadataVersionOrThrow(),
       finalizedFeatures,
       image.highestOffsetAndEpoch().offset)
   }

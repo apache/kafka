@@ -18,8 +18,10 @@ package org.apache.kafka.coordinator.group.streams;
 
 import org.apache.kafka.coordinator.common.runtime.CoordinatorRecord;
 import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue;
+import org.apache.kafka.coordinator.group.generated.StreamsGroupTopologyValue.Subtopology;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -83,7 +85,7 @@ public class StreamsGroupBuilder {
 
         // Add group epoch record.
         records.add(
-            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(groupId, groupEpoch));
+            StreamsCoordinatorRecordHelpers.newStreamsGroupEpochRecord(groupId, groupEpoch, 0));
 
         // Add target assignment records.
         targetAssignments.forEach((memberId, assignment) ->
@@ -97,7 +99,7 @@ public class StreamsGroupBuilder {
                 groupId,
                     new StreamsGroupTopologyValue()
                         .setEpoch(topology.topologyEpoch())
-                        .setSubtopologies(topology.subtopologies().values().stream().sorted().toList()))
+                        .setSubtopologies(topology.subtopologies().values().stream().sorted(Comparator.comparing(Subtopology::subtopologyId)).toList()))
             );
         }
 

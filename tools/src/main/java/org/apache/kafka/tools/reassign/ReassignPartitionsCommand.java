@@ -16,10 +16,10 @@
  */
 package org.apache.kafka.tools.reassign;
 
-import org.apache.kafka.admin.BrokerMetadata;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AdminClientConfig;
 import org.apache.kafka.clients.admin.AlterConfigOp;
+import org.apache.kafka.clients.admin.AlterPartitionReassignmentsOptions;
 import org.apache.kafka.clients.admin.ConfigEntry;
 import org.apache.kafka.clients.admin.DescribeReplicaLogDirsResult;
 import org.apache.kafka.clients.admin.NewPartitionReassignment;
@@ -182,7 +182,8 @@ public class ReassignPartitionsCommand {
                 opts.options.valueOf(opts.interBrokerThrottleOpt),
                 opts.options.valueOf(opts.replicaAlterLogDirsThrottleOpt),
                 opts.options.valueOf(opts.timeoutOpt),
-                Time.SYSTEM);
+                Time.SYSTEM,
+                opts.options.has(opts.disallowReplicationFactorChangeOpt));
         } else if (opts.options.has(opts.cancelOpt)) {
             cancelAssignment(adminClient,
                 Utils.readFileAsString(opts.options.valueOf(opts.reassignmentJsonFileOpt)),
@@ -567,8 +568,8 @@ public class ReassignPartitionsCommand {
         List<String> topicsToReassign = t0.getValue();
 
         Map<TopicPartition, List<Integer>> currentAssignments = getReplicaAssignmentForTopics(adminClient, topicsToReassign);
-        List<BrokerMetadata> brokerMetadatas = getBrokerMetadata(adminClient, brokersToReassign, enableRackAwareness);
-        Map<TopicPartition, List<Integer>> proposedAssignments = calculateAssignment(currentAssignments, brokerMetadatas);
+        List<UsableBroker> usableBrokers = getBrokerMetadata(adminClient, brokersToReassign, enableRackAwareness);
+        Map<TopicPartition, List<Integer>> proposedAssignments = calculateAssignment(currentAssignments, usableBrokers);
         System.out.printf("Current partition replica assignment%n%s%n%n",
             formatAsReassignmentJson(currentAssignments, Collections.emptyMap()));
         System.out.printf("Proposed partition reassignment configuration%n%s%n",
@@ -580,12 +581,12 @@ public class ReassignPartitionsCommand {
      * Calculate the new partition assignments to suggest in --generate.
      *
      * @param currentAssignment  The current partition assignments.
-     * @param brokerMetadatas    The rack information for each broker.
+     * @param usableBrokers      The rack information for each broker.
      *
      * @return                   A map from partitions to the proposed assignments for each.
      */
     private static Map<TopicPartition, List<Integer>> calculateAssignment(Map<TopicPartition, List<Integer>> currentAssignment,
-                                                                          List<BrokerMetadata> brokerMetadatas) {
+                                                                          List<UsableBroker> usableBrokers) {
         Map<String, List<Entry<TopicPartition, List<Integer>>>> groupedByTopic = new HashMap<>();
         for (Entry<TopicPartition, List<Integer>> e : currentAssignment.entrySet())
             groupedByTopic.computeIfAbsent(e.getKey().topic(), k -> new ArrayList<>()).add(e);
@@ -599,11 +600,7 @@ public class ReassignPartitionsCommand {
                     new ClusterDescriber() {
                         @Override
                         public Iterator<UsableBroker> usableBrokers() {
-                            return brokerMetadatas.stream().map(brokerMetadata -> new UsableBroker(
-                                    brokerMetadata.id,
-                                    brokerMetadata.rack,
-                                    false
-                            )).iterator();
+                            return usableBrokers.iterator();
                         }
 
                         @Override
@@ -699,16 +696,16 @@ public class ReassignPartitionsCommand {
      * @return                    The metadata for each broker that was found.
      *                            Brokers that were not found will be omitted.
      */
-    static List<BrokerMetadata> getBrokerMetadata(Admin adminClient, List<Integer> brokers, boolean enableRackAwareness) throws ExecutionException, InterruptedException {
+    static List<UsableBroker> getBrokerMetadata(Admin adminClient, List<Integer> brokers, boolean enableRackAwareness) throws ExecutionException, InterruptedException {
         Set<Integer> brokerSet = new HashSet<>(brokers);
-        List<BrokerMetadata> results = adminClient.describeCluster().nodes().get().stream()
+        List<UsableBroker> results = adminClient.describeCluster().nodes().get().stream()
             .filter(node -> brokerSet.contains(node.id()))
             .map(node -> (enableRackAwareness && node.rack() != null)
-                ? new BrokerMetadata(node.id(), Optional.of(node.rack()))
-                : new BrokerMetadata(node.id(), Optional.empty())
+                ? new UsableBroker(node.id(), Optional.of(node.rack()), false)
+                : new UsableBroker(node.id(), Optional.empty(), false)
             ).collect(Collectors.toList());
 
-        long numRackless = results.stream().filter(m -> m.rack.isEmpty()).count();
+        long numRackless = results.stream().filter(m -> m.rack().isEmpty()).count();
         if (enableRackAwareness && numRackless != 0 && numRackless != results.size()) {
             throw new AdminOperationException("Not all brokers have rack information. Add " +
                 "--disable-rack-aware in command line to make replica assignment without rack " +
@@ -761,7 +758,8 @@ public class ReassignPartitionsCommand {
                                   Long interBrokerThrottle,
                                   Long logDirThrottle,
                                   Long timeoutMs,
-                                  Time time
+                                  Time time,
+                                  boolean disallowReplicationFactorChange
     ) throws ExecutionException, InterruptedException, JsonProcessingException, TerseException {
         Entry<Map<TopicPartition, List<Integer>>, Map<TopicPartitionReplica, String>> t0 = parseExecuteAssignmentArgs(reassignmentJson);
 
@@ -796,7 +794,7 @@ public class ReassignPartitionsCommand {
         }
 
         // Execute the partition reassignments.
-        Map<TopicPartition, Throwable> errors = alterPartitionReassignments(adminClient, proposedParts);
+        Map<TopicPartition, Throwable> errors = alterPartitionReassignments(adminClient, proposedParts, disallowReplicationFactorChange);
         if (!errors.isEmpty()) {
             throw new TerseException(
                 String.format("Error reassigning partition(s):%n%s",
@@ -941,15 +939,19 @@ public class ReassignPartitionsCommand {
     /**
      * Execute the given partition reassignments.
      *
-     * @param adminClient       The admin client object to use.
-     * @param reassignments     A map from topic names to target replica assignments.
-     * @return                  A map from partition objects to error strings.
+     * @param adminClient                        The admin client object to use.
+     * @param reassignments                      A map from topic names to target replica assignments.
+     * @param disallowReplicationFactorChange    Disallow replication factor change or not.
+     * @return                                   A map from partition objects to error strings.
      */
     static Map<TopicPartition, Throwable> alterPartitionReassignments(Admin adminClient,
-                                                                      Map<TopicPartition, List<Integer>> reassignments) throws InterruptedException {
+                                                                      Map<TopicPartition, List<Integer>> reassignments,
+                                                                      boolean disallowReplicationFactorChange) throws InterruptedException {
         Map<TopicPartition, Optional<NewPartitionReassignment>> args = new HashMap<>();
         reassignments.forEach((part, replicas) -> args.put(part, Optional.of(new NewPartitionReassignment(replicas))));
-        Map<TopicPartition, KafkaFuture<Void>> results = adminClient.alterPartitionReassignments(args).values();
+        AlterPartitionReassignmentsOptions options = new AlterPartitionReassignmentsOptions();
+        options.allowReplicationFactorChange(!disallowReplicationFactorChange);
+        Map<TopicPartition, KafkaFuture<Void>> results = adminClient.alterPartitionReassignments(args, options).values();
         Map<TopicPartition, Throwable> errors = new HashMap<>();
         for (Entry<TopicPartition, KafkaFuture<Void>> e :  results.entrySet()) {
             try {
@@ -1464,7 +1466,7 @@ public class ReassignPartitionsCommand {
         ));
         requiredArgs.put(opts.listOpt, Collections.emptyList());
 
-        CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, requiredArgs.get(action).toArray(new OptionSpec[0]));
+        CommandLineUtils.checkRequiredArgs(opts.parser, opts.options, requiredArgs.get(action).toArray(new OptionSpec<?>[0]));
 
         Map<OptionSpec<?>, List<OptionSpec<?>>> permittedArgs = new HashMap<>();
 
@@ -1485,7 +1487,8 @@ public class ReassignPartitionsCommand {
             opts.commandConfigOpt,
             opts.interBrokerThrottleOpt,
             opts.replicaAlterLogDirsThrottleOpt,
-            opts.timeoutOpt
+            opts.timeoutOpt,
+            opts.disallowReplicationFactorChangeOpt
         ));
         permittedArgs.put(opts.cancelOpt, Arrays.asList(
             isBootstrapServer ? opts.bootstrapServerOpt : opts.bootstrapControllerOpt,

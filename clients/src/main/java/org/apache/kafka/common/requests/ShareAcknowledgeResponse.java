@@ -21,12 +21,11 @@ import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.message.ShareAcknowledgeResponseData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.HashMap;
+import java.util.EnumMap;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -64,7 +63,7 @@ public class ShareAcknowledgeResponse extends AbstractResponse {
 
     @Override
     public Map<Errors, Integer> errorCounts() {
-        HashMap<Errors, Integer> counts = new HashMap<>();
+        Map<Errors, Integer> counts = new EnumMap<>(Errors.class);
         updateErrorCounts(counts, Errors.forCode(data.errorCode()));
         data.responses().forEach(
                 topic -> topic.partitions().forEach(
@@ -84,9 +83,9 @@ public class ShareAcknowledgeResponse extends AbstractResponse {
         data.setThrottleTimeMs(throttleTimeMs);
     }
 
-    public static ShareAcknowledgeResponse parse(ByteBuffer buffer, short version) {
+    public static ShareAcknowledgeResponse parse(Readable readable, short version) {
         return new ShareAcknowledgeResponse(
-                new ShareAcknowledgeResponseData(new ByteBufferAccessor(buffer), version)
+                new ShareAcknowledgeResponseData(readable, version)
         );
     }
 

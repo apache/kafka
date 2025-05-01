@@ -29,6 +29,7 @@
     <allow pkg="org.junit" />
     <allow pkg="org.hamcrest" />
     <allow pkg="org.mockito" />
+    <allow pkg="org.opentest4j" />
     <allow pkg="java.security" />
     <allow pkg="javax.net.ssl" />
     <allow pkg="javax.security" />
@@ -49,7 +50,11 @@
 
 
     <subpackage name="server">
+        <allow pkg="com.yammer.metrics.core" />
         <allow pkg="org.apache.kafka.common" />
+        <allow pkg="org.apache.kafka.server.metrics" />
+        <allow pkg="org.apache.kafka.server.util.timer" />
+        <allow pkg="org.apache.kafka.storage.internals.log" />
 
         <subpackage name="log">
             <allow pkg="com.fasterxml.jackson" />
@@ -70,8 +75,12 @@
                 </subpackage>
                 <subpackage name="storage">
                     <allow pkg="com.yammer.metrics.core" />
-                    <allow pkg="org.apache.kafka.server.metrics" />
                     <allow pkg="org.apache.kafka.common.test" />
+                    <allow pkg="org.apache.kafka.server.metrics" />
+                    <allow pkg="org.apache.kafka.server.purgatory" />
+                    <allow pkg="org.apache.kafka.server.quota" />
+                    <allow pkg="org.apache.kafka.server.storage.log" />
+                    <allow pkg="org.apache.kafka.server.util" />
                 </subpackage>
             </subpackage>
         </subpackage>
@@ -80,9 +89,13 @@
     <subpackage name="storage.internals">
         <allow pkg="kafka.server"/>
         <allow pkg="kafka.log"/>
+        <allow pkg="kafka.utils"/>
         <allow pkg="com.fasterxml.jackson" />
         <allow pkg="com.yammer.metrics.core" />
         <allow pkg="org.apache.kafka.common" />
+        <allow pkg="org.apache.kafka.config" />
+        <allow pkg="org.apache.kafka.image" />
+        <allow pkg="org.apache.kafka.metadata" />
         <allow pkg="org.apache.kafka.server"/>
         <allow pkg="org.apache.kafka.storage.internals"/>
         <allow pkg="org.apache.kafka.storage.log.metrics"/>

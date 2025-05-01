@@ -166,7 +166,6 @@ public class Plugins {
         );
     }
 
-    @SuppressWarnings("unchecked")
     protected static <U> Class<? extends U> pluginClass(
             DelegatingClassLoader loader,
             String classOrAlias,
@@ -549,7 +548,7 @@ public class Plugins {
     }
 
     private HeaderConverter newHeaderConverter(AbstractConfig config, String classPropertyName, String versionPropertyName, ClassLoaderUsage classLoaderUsage) {
-        if (!config.originals().containsKey(classPropertyName) && classLoaderUsage == ClassLoaderUsage.CURRENT_CLASSLOADER) {
+        if (config.getClass(classPropertyName) == null && classLoaderUsage == ClassLoaderUsage.CURRENT_CLASSLOADER) {
             // This configuration does not define the Header Converter via the specified property name
             return null;
         }
@@ -602,7 +601,7 @@ public class Plugins {
                 // if the config specifies the class name, use it, otherwise use the default which we can get from config.getClass
                 String classOrAlias = config.originalsStrings().get(classPropertyName);
                 if (classOrAlias == null) {
-                    classOrAlias = config.getClass(classPropertyName).getName();
+                    classOrAlias = config.getClass(classPropertyName) == null ? null : config.getClass(classPropertyName).getName();
                 }
                 try {
                     klass = pluginClass(delegatingLoader, classOrAlias, basePluginClass, range);

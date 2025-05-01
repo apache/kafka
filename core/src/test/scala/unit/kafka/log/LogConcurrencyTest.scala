@@ -17,7 +17,7 @@
 
 package kafka.log
 
-import java.util.Properties
+import java.util.{Optional, Properties}
 import java.util.concurrent.{Callable, Executors}
 import kafka.utils.TestUtils
 import org.apache.kafka.common.config.TopicConfig
@@ -26,7 +26,7 @@ import org.apache.kafka.common.utils.{Time, Utils}
 import org.apache.kafka.coordinator.transaction.TransactionLogConfig
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.KafkaScheduler
-import org.apache.kafka.storage.internals.log.{LogConfig, LogDirFailureChannel, ProducerStateManagerConfig}
+import org.apache.kafka.storage.internals.log.{LogConfig, LogDirFailureChannel, ProducerStateManagerConfig, UnifiedLog}
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, Test}
@@ -92,12 +92,7 @@ class LogConcurrencyTest {
     override def call(): Unit = {
       var fetchOffset = 0L
       while (log.highWatermark < lastOffset) {
-        val readInfo = log.read(
-          startOffset = fetchOffset,
-          maxLength = 1,
-          isolation = FetchIsolation.HIGH_WATERMARK,
-          minOneMessage = true
-        )
+        val readInfo = log.read(fetchOffset, 1, FetchIsolation.HIGH_WATERMARK, true)
         readInfo.records.batches().forEach { batch =>
           consumedBatches += FetchedBatch(batch.baseOffset, batch.partitionLeaderEpoch)
           fetchOffset = batch.lastOffset + 1
@@ -126,9 +121,14 @@ class LogConcurrencyTest {
               log.appendAsLeader(TestUtils.records(records), leaderEpoch)
               log.maybeIncrementHighWatermark(logEndOffsetMetadata)
             } else {
-              log.appendAsFollower(TestUtils.records(records,
-                baseOffset = logEndOffset,
-                partitionLeaderEpoch = leaderEpoch))
+              log.appendAsFollower(
+                TestUtils.records(
+                  records,
+                  baseOffset = logEndOffset,
+                  partitionLeaderEpoch = leaderEpoch
+                ),
+                Int.MaxValue
+              )
               log.updateHighWatermark(logEndOffset)
             }
 
@@ -145,18 +145,20 @@ class LogConcurrencyTest {
   }
 
   private def createLog(config: LogConfig = new LogConfig(new Properties())): UnifiedLog = {
-    UnifiedLog(dir = logDir,
-      config = config,
-      logStartOffset = 0L,
-      recoveryPoint = 0L,
-      scheduler = scheduler,
-      brokerTopicStats = brokerTopicStats,
-      time = Time.SYSTEM,
-      maxTransactionTimeoutMs = 5 * 60 * 1000,
-      producerStateManagerConfig = new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
-      producerIdExpirationCheckIntervalMs = TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
-      logDirFailureChannel = new LogDirFailureChannel(10),
-      topicId = None
+    UnifiedLog.create(
+      logDir,
+      config,
+      0L,
+      0L,
+      scheduler,
+      brokerTopicStats,
+      Time.SYSTEM,
+      5 * 60 * 1000,
+      new ProducerStateManagerConfig(TransactionLogConfig.PRODUCER_ID_EXPIRATION_MS_DEFAULT, false),
+      TransactionLogConfig.PRODUCER_ID_EXPIRATION_CHECK_INTERVAL_MS_DEFAULT,
+      new LogDirFailureChannel(10),
+      true,
+      Optional.empty
     )
   }
 
