@@ -181,7 +181,7 @@ public final class RaftClientTestContext {
         private Endpoints localListeners = Endpoints.empty();
         private boolean isStartingVotersStatic = false;
 
-        private boolean autoJoinEnabled = false;
+        private boolean autoJoin = false;
 
         public Builder(int localId, Set<Integer> staticVoters) {
             this(OptionalInt.of(localId), staticVoters);
@@ -377,8 +377,8 @@ public final class RaftClientTestContext {
             return this;
         }
 
-        Builder withAutoJoinEnabled(boolean autoJoinEnabled) {
-            this.autoJoinEnabled = autoJoinEnabled;
+        Builder withAutoJoin(boolean autoJoin) {
+            this.autoJoin = autoJoin;
             return this;
         }
 
@@ -417,7 +417,7 @@ public final class RaftClientTestContext {
             configMap.put(QuorumConfig.QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG, ELECTION_BACKOFF_MAX_MS);
             configMap.put(QuorumConfig.QUORUM_FETCH_TIMEOUT_MS_CONFIG, FETCH_TIMEOUT_MS);
             configMap.put(QuorumConfig.QUORUM_LINGER_MS_CONFIG, appendLingerMs);
-            configMap.put(QuorumConfig.QUORUM_AUTO_JOIN_ENABLE, autoJoinEnabled);
+            configMap.put(QuorumConfig.QUORUM_AUTO_JOIN_ENABLE, autoJoin);
             QuorumConfig quorumConfig = new QuorumConfig(new AbstractConfig(QuorumConfig.CONFIG_DEF, configMap));
 
             List<InetSocketAddress> computedBootstrapServers = bootstrapServers.orElseGet(() -> {

@@ -101,10 +101,8 @@ public class QuorumConfig {
     public static final int DEFAULT_QUORUM_RETRY_BACKOFF_MS = 20;
 
     public static final String QUORUM_AUTO_JOIN_ENABLE = QUORUM_PREFIX + "auto.join.enable";
-    public static final String QUORUM_AUTO_JOIN_ENABLE_DOC = "If set to true, controllers will remove the entry " +
-        "in the voters set that matches its replica id but does not match its directory id if it exists by sending " +
-        "the RemoveVoter RPC. When no old entry for the controller exists in the voter set, it will then add itself " +
-        "by sending a AddVoter RPC to the leader.";
+    public static final String QUORUM_AUTO_JOIN_ENABLE_DOC = "Controls whether a KRaft controller should automatically " +
+        "join the cluster metadata partition for its cluster id.";
     public static final boolean DEFAULT_QUORUM_AUTO_JOIN_ENABLE = false;
 
     public static final ConfigDef CONFIG_DEF =  new ConfigDef()
@@ -126,7 +124,7 @@ public class QuorumConfig {
     private final int electionBackoffMaxMs;
     private final int fetchTimeoutMs;
     private final int appendLingerMs;
-    private final boolean autoJoinEnable;
+    private final boolean autoJoin;
 
     public QuorumConfig(AbstractConfig abstractConfig) {
         this.voters = abstractConfig.getList(QUORUM_VOTERS_CONFIG);
@@ -137,7 +135,7 @@ public class QuorumConfig {
         this.electionBackoffMaxMs = abstractConfig.getInt(QUORUM_ELECTION_BACKOFF_MAX_MS_CONFIG);
         this.fetchTimeoutMs = abstractConfig.getInt(QUORUM_FETCH_TIMEOUT_MS_CONFIG);
         this.appendLingerMs = abstractConfig.getInt(QUORUM_LINGER_MS_CONFIG);
-        this.autoJoinEnable = abstractConfig.getBoolean(QUORUM_AUTO_JOIN_ENABLE);
+        this.autoJoin = abstractConfig.getBoolean(QUORUM_AUTO_JOIN_ENABLE);
     }
 
     public List<String> voters() {
@@ -172,8 +170,8 @@ public class QuorumConfig {
         return appendLingerMs;
     }
 
-    public boolean autoJoinEnable() {
-        return autoJoinEnable;
+    public boolean autoJoin() {
+        return autoJoin;
     }
 
     private static Integer parseVoterId(String idString) {

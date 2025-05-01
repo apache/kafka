@@ -2292,7 +2292,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return true;
         } else if (error == Errors.REQUEST_TIMED_OUT) {
             FollowerState follower = quorum.followerStateOrThrow();
-            follower.resetAddRemoveVoterPeriod(currentTimeMs);
+            follower.resetUpdateVoterPeriod(currentTimeMs);
             return true;
         } else {
             return handleUnexpectedError(error, responseMetadata);
@@ -2354,7 +2354,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
             return true;
         } else if (error == Errors.REQUEST_TIMED_OUT) {
             FollowerState follower = quorum.followerStateOrThrow();
-            follower.resetAddRemoveVoterPeriod(currentTimeMs);
+            follower.resetUpdateVoterPeriod(currentTimeMs);
             return true;
         } else {
             return handleUnexpectedError(error, responseMetadata);
@@ -3321,34 +3321,35 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
         if (state.hasFetchTimeoutExpired(currentTimeMs)) {
             return maybeSendFetchToAnyBootstrap(currentTimeMs);
         } else if (partitionState.lastKraftVersion().isReconfigSupported() && followersAlwaysFlush &&
-            quorumConfig.autoJoinEnable() && state.hasAddRemoveVoterPeriodExpired(currentTimeMs)) {
-            var voters = partitionState.lastVoterSet();
+            quorumConfig.autoJoin() && state.hasUpdateVoterPeriodExpired(currentTimeMs)) {
+            /* `followersAlwaysFlush` is true when the config `process.roles` contains "controller".
+             * We require both `followersAlwaysFlush` and `autoJoin` to be true because
+             * brokers should not be able to add themselves as a KRaft voter.
+             */
             var localReplicaKey = quorum.localReplicaKeyOrThrow();
-            final boolean resetAddRemoveVoterTimer;
+            final boolean resetUpdateVoterTimer;
             final long backoffMs;
-
-            Optional<ReplicaKey> oldVoter = voters.getOldVoterForReplicaKey(localReplicaKey);
-            if (oldVoter.isPresent()) {
-                var sendResult = maybeSendRemoveVoterRequest(state, currentTimeMs, oldVoter.get());
-                resetAddRemoveVoterTimer = sendResult.requestSent();
-                backoffMs = sendResult.timeToWaitMs();
-            } else if (voters.doesNotContainReplicaId(localReplicaKey)) {
-                var sendResult = maybeSendAddVoterRequest(state, currentTimeMs);
-                resetAddRemoveVoterTimer = sendResult.requestSent();
-                backoffMs = sendResult.timeToWaitMs();
+            var voters = partitionState.lastVoterSet();
+            RequestSendResult sendResult;
+            if (voters.voterIds().contains(localReplicaKey.id())) {
+                /* Replica id is in the voter set but replica is not voter. Remove old voter.
+                 * Local replica is not in the voter set because the replica is an observer.
+                 */
+                var oldVoter = voters.voterKeys().stream().filter(replicaKey -> replicaKey.id() == localReplicaKey.id()).findFirst().get();
+                sendResult = maybeSendRemoveVoterRequest(state, currentTimeMs, oldVoter);
             } else {
-                // Reset the add/remove voter timer since there was no need to add or remove a voter
-                resetAddRemoveVoterTimer = true;
-                backoffMs = maybeSendFetchToBestNode(state, currentTimeMs);
+                sendResult = maybeSendAddVoterRequest(state, currentTimeMs);
             }
-            if (resetAddRemoveVoterTimer) {
-                state.resetAddRemoveVoterPeriod(currentTimeMs);
+            resetUpdateVoterTimer = sendResult.requestSent();
+            backoffMs = sendResult.timeToWaitMs();
+            if (resetUpdateVoterTimer) {
+                state.resetUpdateVoterPeriod(currentTimeMs);
             }
             return Math.min(
                 backoffMs,
                 Math.min(
                     state.remainingFetchTimeMs(currentTimeMs),
-                    state.remainingAddRemoveVoterPeriodMs(currentTimeMs)
+                    state.remainingUpdateVoterPeriodMs(currentTimeMs)
                 )
             );
         } else {

@@ -19,6 +19,7 @@ package org.apache.kafka.raft;
 import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.record.MemoryRecords;
+
 import org.junit.jupiter.api.Test;
 
 import java.util.Optional;
@@ -44,7 +45,7 @@ public class KafkaRaftClientAutoJoinTest {
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withElectedLeader(epoch, leader.id())
-            .withAutoJoinEnabled(true)
+            .withAutoJoin(true)
             .withAlwaysFlush(true)
             .build();
 
@@ -78,7 +79,7 @@ public class KafkaRaftClientAutoJoinTest {
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withElectedLeader(epoch, leader.id())
-            .withAutoJoinEnabled(true)
+            .withAutoJoin(true)
             .withAlwaysFlush(true)
             .build();
 
@@ -112,7 +113,7 @@ public class KafkaRaftClientAutoJoinTest {
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withElectedLeader(epoch, leader.id())
-            .withAutoJoinEnabled(true)
+            .withAutoJoin(true)
             .withAlwaysFlush(false)
             .build();
 
@@ -139,7 +140,7 @@ public class KafkaRaftClientAutoJoinTest {
             .withKip853Rpc(true)
             .withBootstrapSnapshot(Optional.of(voters))
             .withElectedLeader(epoch, leader.id())
-            .withAutoJoinEnabled(false)
+            .withAutoJoin(false)
             .withAlwaysFlush(true)
             .build();
 
@@ -163,7 +164,7 @@ public class KafkaRaftClientAutoJoinTest {
         var context = new RaftClientTestContext.Builder(observer.id(), Set.of(leader.id(), follower.id()))
             .withKip853Rpc(false)
             .withElectedLeader(epoch, leader.id())
-            .withAutoJoinEnabled(true)
+            .withAutoJoin(true)
             .withAlwaysFlush(true)
             .build();
 
