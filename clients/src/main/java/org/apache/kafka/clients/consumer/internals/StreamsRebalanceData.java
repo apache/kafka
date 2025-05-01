@@ -19,6 +19,7 @@ package org.apache.kafka.clients.consumer.internals;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.message.StreamsGroupHeartbeatResponseData;
 
+import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Comparator;
@@ -118,6 +119,31 @@ public class StreamsRebalanceData {
                 '}';
         }
 
+    }
+    public static class EndpointPartitions {
+        private final List<TopicPartition> activePartitions;
+        private final List<TopicPartition> standbyPartitions;
+
+        public EndpointPartitions(final List<TopicPartition> activePartitions,
+                                  final List<TopicPartition> standbyPartitions) {
+            this.activePartitions = activePartitions;
+            this.standbyPartitions = standbyPartitions;
+        }
+
+        public List<TopicPartition> activePartitions() {
+            return new ArrayList<>(activePartitions);
+        }
+
+        public List<TopicPartition> standbyPartitions() {
+            return new ArrayList<>(standbyPartitions);
+        }
+        @Override
+        public String toString() {
+            return "EndpointPartitions {"
+                    + "activePartitions=" + activePartitions
+                    + ", standbyPartitions=" + standbyPartitions
+                    + '}';
+        }
     }
 
     public static class Assignment {
@@ -297,7 +323,7 @@ public class StreamsRebalanceData {
 
     private final AtomicReference<Assignment> reconciledAssignment = new AtomicReference<>(Assignment.EMPTY);
 
-    private final AtomicReference<Map<HostInfo, List<TopicPartition>>> partitionsByHost = new AtomicReference<>(Collections.emptyMap());
+    private final AtomicReference<Map<HostInfo, EndpointPartitions>> partitionsByHost = new AtomicReference<>(Collections.emptyMap());
 
     private final AtomicBoolean shutdownRequested = new AtomicBoolean(false);
 
@@ -341,11 +367,11 @@ public class StreamsRebalanceData {
         return reconciledAssignment.get();
     }
 
-    public void setPartitionsByHost(final Map<HostInfo, List<TopicPartition>> partitionsByHost) {
+    public void setPartitionsByHost(final Map<HostInfo, EndpointPartitions> partitionsByHost) {
         this.partitionsByHost.set(partitionsByHost);
     }
 
-    public Map<HostInfo, List<TopicPartition>> partitionsByHost() {
+    public Map<HostInfo, EndpointPartitions> partitionsByHost() {
         return partitionsByHost.get();
     }
 

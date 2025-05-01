@@ -126,7 +126,7 @@ class BrokerServer(
 
   var transactionCoordinator: TransactionCoordinator = _
 
-  var shareCoordinator: Option[ShareCoordinator] = None
+  var shareCoordinator: ShareCoordinator = _
 
   var clientToControllerChannelManager: NodeToControllerChannelManager = _
 
@@ -259,7 +259,13 @@ class BrokerServer(
         Optional.of(clientMetricsManager)
       )
 
-      val connectionDisconnectListeners = Seq(clientMetricsManager.connectionDisconnectListener())
+      val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(config.shareGroupConfig.shareGroupMaxShareSessions())
+
+      val connectionDisconnectListeners = Seq(
+        clientMetricsManager.connectionDisconnectListener(),
+        shareFetchSessionCache.connectionDisconnectListener()
+      )
+
       // Create and start the socket server acceptor threads so that the bound port is known.
       // Delay starting processors until the end of the initialization sequence to ensure
       // that credentials have been loaded before processing authentications.
@@ -274,7 +280,7 @@ class BrokerServer(
       clientQuotaMetadataManager = new ClientQuotaMetadataManager(quotaManagers, socketServer.connectionQuotas)
 
       val listenerInfo = ListenerInfo.create(Optional.of(config.interBrokerListenerName.value()),
-          config.effectiveAdvertisedBrokerListeners.map(_.toPublic()).asJava).
+          config.effectiveAdvertisedBrokerListeners.asJava).
             withWildcardHostnamesResolved().
             withEphemeralPortsCorrected(name => socketServer.boundPort(new ListenerName(name)))
 
@@ -425,8 +431,6 @@ class BrokerServer(
           shardNum
         ))
       val fetchManager = new FetchManager(Time.SYSTEM, new FetchSessionCache(fetchSessionCacheShards))
-
-      val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(config.shareGroupConfig.shareGroupMaxShareSessions())
 
       sharePartitionManager = new SharePartitionManager(
         replicaManager,
@@ -629,41 +633,35 @@ class BrokerServer(
       .build()
   }
 
-  private def createShareCoordinator(): Option[ShareCoordinator] = {
-    if (config.shareGroupConfig.isShareGroupEnabled &&
-      config.shareGroupConfig.shareGroupPersisterClassName().nonEmpty) {
-      val time = Time.SYSTEM
-      val timer = new SystemTimerReaper(
-        "share-coordinator-reaper",
-        new SystemTimer("share-coordinator")
-      )
+  private def createShareCoordinator(): ShareCoordinator = {
+    val time = Time.SYSTEM
+    val timer = new SystemTimerReaper(
+      "share-coordinator-reaper",
+      new SystemTimer("share-coordinator")
+    )
 
-      val serde = new ShareCoordinatorRecordSerde
-      val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
-        time,
-        replicaManager,
-        serde,
-        config.shareCoordinatorConfig.shareCoordinatorLoadBufferSize()
-      )
-      val writer = new CoordinatorPartitionWriter(
-        replicaManager
-      )
-      Some(new ShareCoordinatorService.Builder(config.brokerId, config.shareCoordinatorConfig)
-        .withTimer(timer)
-        .withTime(time)
-        .withLoader(loader)
-        .withWriter(writer)
-        .withCoordinatorRuntimeMetrics(new ShareCoordinatorRuntimeMetrics(metrics))
-        .withCoordinatorMetrics(new ShareCoordinatorMetrics(metrics))
-        .build())
-    } else {
-      None
-    }
+    val serde = new ShareCoordinatorRecordSerde
+    val loader = new CoordinatorLoaderImpl[CoordinatorRecord](
+      time,
+      replicaManager,
+      serde,
+      config.shareCoordinatorConfig.shareCoordinatorLoadBufferSize()
+    )
+    val writer = new CoordinatorPartitionWriter(
+      replicaManager
+    )
+    new ShareCoordinatorService.Builder(config.brokerId, config.shareCoordinatorConfig)
+      .withTimer(timer)
+      .withTime(time)
+      .withLoader(loader)
+      .withWriter(writer)
+      .withCoordinatorRuntimeMetrics(new ShareCoordinatorRuntimeMetrics(metrics))
+      .withCoordinatorMetrics(new ShareCoordinatorMetrics(metrics))
+      .build()
   }
 
   private def createShareStatePersister(): Persister = {
-    if (config.shareGroupConfig.isShareGroupEnabled &&
-      config.shareGroupConfig.shareGroupPersisterClassName.nonEmpty) {
+    if (config.shareGroupConfig.shareGroupPersisterClassName.nonEmpty) {
       val klass = Utils.loadClass(config.shareGroupConfig.shareGroupPersisterClassName, classOf[Object]).asInstanceOf[Class[Persister]]
 
       if (klass.getName.equals(classOf[DefaultStatePersister].getName)) {
@@ -671,7 +669,7 @@ class BrokerServer(
           .newInstance(
             new PersisterStateManager(
               NetworkUtils.buildNetworkClient("Persister", config, metrics, Time.SYSTEM, new LogContext(s"[Persister broker=${config.brokerId}]")),
-              new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.get.partitionFor(key), config.interBrokerListenerName),
+              new ShareCoordinatorMetadataCacheHelperImpl(metadataCache, key => shareCoordinator.partitionFor(key), config.interBrokerListenerName),
               Time.SYSTEM,
               new SystemTimerReaper(
                 "persister-state-manager-reaper",
@@ -782,8 +780,8 @@ class BrokerServer(
         CoreUtils.swallow(groupConfigManager.close(), this)
       if (groupCoordinator != null)
         CoreUtils.swallow(groupCoordinator.shutdown(), this)
-      if (shareCoordinator.isDefined)
-        CoreUtils.swallow(shareCoordinator.get.shutdown(), this)
+      if (shareCoordinator != null)
+        CoreUtils.swallow(shareCoordinator.shutdown(), this)
 
       if (assignmentsManager != null)
         CoreUtils.swallow(assignmentsManager.close(), this)
