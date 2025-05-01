@@ -39,7 +39,6 @@ import java.util.Collection;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Objects;
-import java.util.Optional;
 import java.util.concurrent.BlockingQueue;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
@@ -154,16 +153,12 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
         lastPollTimeMs = currentTimeMs;
 
         final long pollWaitTimeMs = requestManagers.entries().stream()
-                .filter(Optional::isPresent)
-                .map(Optional::get)
                 .map(rm -> rm.poll(currentTimeMs))
                 .map(networkClientDelegate::addAll)
                 .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
 
         cachedMaximumTimeToWait = requestManagers.entries().stream()
-                .filter(Optional::isPresent)
-                .map(Optional::get)
                 .map(rm -> rm.maximumTimeToWait(currentTimeMs))
                 .reduce(Long.MAX_VALUE, Math::min);
 
@@ -233,13 +228,11 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
      * </ol>
      */
     // Visible for testing
-    static void runAtClose(final Collection<Optional<? extends RequestManager>> requestManagers,
+    static void runAtClose(final Collection<RequestManager> requestManagers,
                            final NetworkClientDelegate networkClientDelegate,
                            final long currentTimeMs) {
         // These are the optional outgoing requests at the
         requestManagers.stream()
-                .filter(Optional::isPresent)
-                .map(Optional::get)
                 .map(rm -> rm.pollOnClose(currentTimeMs))
                 .forEach(networkClientDelegate::addAll);
     }
