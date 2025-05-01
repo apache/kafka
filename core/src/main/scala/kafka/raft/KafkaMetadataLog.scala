@@ -588,7 +588,10 @@ object KafkaMetadataLog extends Logging {
     val props = new Properties()
     props.setProperty(TopicConfig.MAX_MESSAGE_BYTES_CONFIG, config.maxBatchSizeInBytes.toString)
     props.setProperty(TopicConfig.SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
-    props.setProperty(TopicConfig.SEGMENT_MS_CONFIG, config.logSegmentMillis.toString)
+    if (config.internalLogSegmentBytes != null)
+      props.setProperty(LogConfig.INTERNAL_SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
+    else
+      props.setProperty(TopicConfig.SEGMENT_BYTES_CONFIG, config.logSegmentBytes.toString)
     props.setProperty(TopicConfig.FILE_DELETE_DELAY_MS_CONFIG, ServerLogConfigs.LOG_DELETE_DELAY_MS_DEFAULT.toString)
 
     // Disable time and byte retention when deleting segments
@@ -597,11 +600,7 @@ object KafkaMetadataLog extends Logging {
     LogConfig.validate(props)
     val defaultLogConfig = new LogConfig(props)
 
-    if (config.logSegmentBytes < config.logSegmentMinBytes) {
-      throw new InvalidConfigurationException(
-        s"Cannot set ${MetadataLogConfig.METADATA_LOG_SEGMENT_BYTES_CONFIG} below ${config.logSegmentMinBytes}: ${config.logSegmentBytes}"
-      )
-    } else if (defaultLogConfig.retentionMs >= 0) {
+    if (defaultLogConfig.retentionMs >= 0) {
       throw new InvalidConfigurationException(
         s"Cannot set ${TopicConfig.RETENTION_MS_CONFIG} above -1: ${defaultLogConfig.retentionMs}."
       )
@@ -636,12 +635,6 @@ object KafkaMetadataLog extends Logging {
       config,
       nodeId
     )
-
-    // Print a warning if users have overridden the internal config
-    if (config.logSegmentMinBytes != KafkaRaftClient.MAX_BATCH_SIZE_BYTES) {
-      metadataLog.error(s"Overriding ${MetadataLogConfig.METADATA_LOG_SEGMENT_MIN_BYTES_CONFIG} is only supported for testing. Setting " +
-        s"this value too low may lead to an inability to write batches of metadata records.")
-    }
 
     // When recovering, truncate fully if the latest snapshot is after the log end offset. This can happen to a follower
     // when the follower crashes after downloading a snapshot from the leader but before it could truncate the log fully.
