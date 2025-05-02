@@ -2419,7 +2419,8 @@ public class UnifiedLog implements AutoCloseable {
         List<Long> offsetsToSnapshot = new ArrayList<>();
         segments.lastSegment().ifPresent(lastSegment -> {
             long lastSegmentBaseOffset = lastSegment.baseOffset();
-            segments.lowerSegment(lastSegmentBaseOffset).map(LogSegment::baseOffset).ifPresent(offsetsToSnapshot::add);
+            Optional<Long> nextLatestSegmentBaseOffset = segments.lowerSegment(lastSegmentBaseOffset).map(LogSegment::baseOffset);
+            nextLatestSegmentBaseOffset.ifPresent(offsetsToSnapshot::add);
             offsetsToSnapshot.add(lastSegmentBaseOffset);
         });
         offsetsToSnapshot.add(lastOffset);
