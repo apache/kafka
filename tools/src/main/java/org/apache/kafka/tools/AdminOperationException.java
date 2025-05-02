@@ -15,14 +15,14 @@
  * limitations under the License.
  */
 
-package org.apache.kafka.server.common;
+package org.apache.kafka.tools;
 
-public class AdminCommandFailedException extends RuntimeException {
-    public AdminCommandFailedException(String message) {
+public class AdminOperationException extends RuntimeException {
+    public AdminOperationException(String message) {
         super(message);
     }
 
-    public AdminCommandFailedException(String message, Throwable cause) {
-        super(message, cause);
+    public AdminOperationException(Throwable cause) {
+        super(cause.getMessage(), cause);
     }
 }
