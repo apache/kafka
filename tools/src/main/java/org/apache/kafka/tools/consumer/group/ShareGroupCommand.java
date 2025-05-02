@@ -44,6 +44,7 @@ import java.util.AbstractMap.SimpleImmutableEntry;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Collection;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashSet;
@@ -426,7 +427,12 @@ public class ShareGroupCommand {
 
         private void printOffsets(TreeMap<String, Entry<ShareGroupDescription, Collection<SharePartitionOffsetInformation>>> offsets, boolean verbose) {
             offsets.forEach((groupId, tuple) -> {
-                Collection<SharePartitionOffsetInformation> offsetsInfo = tuple.getValue();
+                Collection<SharePartitionOffsetInformation> offsetsInfo = tuple.getValue().stream()
+                    .sorted(Comparator
+                        .comparing((SharePartitionOffsetInformation info) -> info.topic)
+                        .thenComparingInt(info -> info.partition))
+                    .toList();
+
                 String fmt = printOffsetFormat(groupId, offsetsInfo, verbose);
 
                 if (verbose) {
@@ -496,7 +502,10 @@ public class ShareGroupCommand {
             descriptions.forEach((groupId, description) -> {
                 int groupLen = Math.max(15, groupId.length());
                 int maxConsumerIdLen = 15, maxHostLen = 15, maxClientIdLen = 15;
-                Collection<ShareMemberDescription> members = description.members();
+                Collection<ShareMemberDescription> members = description.members()
+                    .stream()
+                    .sorted(Comparator.comparing(ShareMemberDescription::consumerId))
+                    .toList();
                 if (maybePrintEmptyGroupState(groupId, description.groupState(), description.members().size())) {
                     for (ShareMemberDescription member : members) {
                         maxConsumerIdLen = Math.max(maxConsumerIdLen, member.consumerId().length());
