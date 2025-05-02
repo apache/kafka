@@ -250,16 +250,18 @@ public class DelayedShareFetch extends DelayedOperation {
                 // updated in a different tryComplete thread.
                 responseData = combineLogReadResponse(topicPartitionData, localPartitionsAlreadyFetched);
 
-            updateFetchOffsetMetadataForRemoteFetchPartitions(topicPartitionData, responseData);
+            resetFetchOffsetMetadataForRemoteFetchPartitions(topicPartitionData, responseData);
 
             List<ShareFetchPartitionData> shareFetchPartitionDataList = new ArrayList<>();
-            responseData.forEach((topicIdPartition, logReadResult) ->
-                shareFetchPartitionDataList.add(new ShareFetchPartitionData(
-                    topicIdPartition,
-                    topicPartitionData.get(topicIdPartition),
-                    logReadResult.toFetchPartitionData(false)
-                ))
-            );
+            responseData.forEach((topicIdPartition, logReadResult) -> {
+                if (logReadResult.info().delayedRemoteStorageFetch.isEmpty()) {
+                    shareFetchPartitionDataList.add(new ShareFetchPartitionData(
+                        topicIdPartition,
+                        topicPartitionData.get(topicIdPartition),
+                        logReadResult.toFetchPartitionData(false)
+                    ));
+                }
+            });
 
             shareFetch.maybeComplete(ShareFetchUtils.processFetchResponse(
                 shareFetch,
@@ -278,7 +280,7 @@ public class DelayedShareFetch extends DelayedOperation {
 
     /**
      * This function updates the cached fetch offset metadata to null corresponding to the share partition's fetch offset.
-     * This is required in the case when a topic partition that has local log fetch during tryComplete changes to remote
+     * This is required in the case when a topic partition that has local log fetch during tryComplete, but changes to remote
      * storage fetch in onComplete. In this situation, if the cached fetchOffsetMetadata got updated in tryComplete, then
      * we will enter a state where each share fetch request for this topic partition from client will use the cached
      * fetchOffsetMetadata in tryComplete and return an empty response to the client from onComplete.
@@ -287,7 +289,7 @@ public class DelayedShareFetch extends DelayedOperation {
      * @param topicPartitionData - Map containing the fetch offset for the topic partitions.
      * @param replicaManagerReadResponse - Map containing the readFromLog response from replicaManager for the topic partitions.
      */
-    private void updateFetchOffsetMetadataForRemoteFetchPartitions(
+    private void resetFetchOffsetMetadataForRemoteFetchPartitions(
         LinkedHashMap<TopicIdPartition, Long> topicPartitionData,
         LinkedHashMap<TopicIdPartition, LogReadResult> replicaManagerReadResponse
     ) {
@@ -823,6 +825,7 @@ public class DelayedShareFetch extends DelayedOperation {
                     LinkedHashMap<TopicIdPartition, LogReadResult> responseData = readFromLog(
                         acquiredNonRemoteFetchTopicPartitionData,
                         partitionMaxBytesStrategy.maxBytes(shareFetch.fetchParams().maxBytes - readableBytes, acquiredNonRemoteFetchTopicPartitionData.keySet(), acquiredNonRemoteFetchTopicPartitionData.size()));
+                    resetFetchOffsetMetadataForRemoteFetchPartitions(acquiredNonRemoteFetchTopicPartitionData, responseData);
                     for (Map.Entry<TopicIdPartition, LogReadResult> entry : responseData.entrySet()) {
                         if (entry.getValue().info().delayedRemoteStorageFetch.isEmpty()) {
                             shareFetchPartitionData.add(
