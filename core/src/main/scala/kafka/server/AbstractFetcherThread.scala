@@ -619,7 +619,7 @@ abstract class AbstractFetcherThread(name: String,
       if (endOffsetForEpochOpt.isPresent) {
         val offsetAndEpoch = endOffsetForEpochOpt.get
         val followerEndOffset = offsetAndEpoch.offset
-        val followerEpoch = offsetAndEpoch.leaderEpoch
+        val followerEpoch = offsetAndEpoch.epoch()
         if (followerEpoch != leaderEpochOffset.leaderEpoch) {
           // the follower does not know about the epoch that leader replied with
           // we truncate to the end offset of the largest epoch that is smaller than the
