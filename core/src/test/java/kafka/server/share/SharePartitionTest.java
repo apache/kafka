@@ -7083,12 +7083,8 @@ public class SharePartitionTest {
         assertNull(sharePartition.fetchLock());
         // fetchId1 acquires the fetch lock.
         assertTrue(sharePartition.maybeAcquireFetchLock(fetchId1));
-        // If we release fetch lock by fetchId2, it won't work.
+        // If we release fetch lock by fetchId2, it will work.
         sharePartition.releaseFetchLock(fetchId2);
-        assertEquals(fetchId1, sharePartition.fetchLock()); // Fetch lock hasn't been released.
-
-        // If we release fetch lock by fetchId1, it will work correctly.
-        sharePartition.releaseFetchLock(fetchId1);
         assertNull(sharePartition.fetchLock()); // Fetch lock has been released.
     }
 

@@ -1361,12 +1361,15 @@ public class SharePartition {
             // Update fetch lock ratio metric.
             recordFetchLockRatioMetric(acquiredDurationMs);
             fetchLockReleasedTimeMs = currentTime;
-            fetchLock.set(null);
         } else {
-            // This code should not be reached unless we are in error-prone scenarios.
-            log.warn("Instance {} does not hold the fetch lock, yet trying to release it for share partition {}-{}",
+            // This code should not be reached unless we are in error-prone scenarios. Since we are releasing the fetch
+            // lock for multiple share partitions at different places in DelayedShareFetch (due to tackling remote
+            // storage fetch and local log fetch from a single purgatory), in order to safeguard ourselves from bad code,
+            // we are logging when an instance that does not hold the fetch lock tries to release it.
+            log.info("Instance {} does not hold the fetch lock, yet trying to release it for share partition {}-{}",
                 fetchId, groupId, topicIdPartition);
         }
+        fetchLock.set(null);
     }
 
     /**
