@@ -541,7 +541,7 @@ public class PlaintextConsumerPollTest {
                 return commitCallback.isComplete;
             }, 10000, "Failed to observe commit callback before timeout"
         );
-        assertTrue(commitCallback.error.isEmpty());
+        assertEquals(Optional.empty(), commitCallback.error);
     }
 
     /**

@@ -48,13 +48,6 @@ public class ConsumerAssignmentPoller extends ShutdownableThread {
 
     public ConsumerAssignmentPoller(
         Consumer<byte[], byte[]> consumer,
-        Set<TopicPartition> partitionsToAssign
-    ) {
-        this(consumer, List.of(), partitionsToAssign, null);
-    }
-
-    public ConsumerAssignmentPoller(
-        Consumer<byte[], byte[]> consumer,
         List<String> topicsToSubscribe,
         Set<TopicPartition> partitionsToAssign,
         ConsumerRebalanceListener userRebalanceListener
@@ -113,10 +106,6 @@ public class ConsumerAssignmentPoller extends ShutdownableThread {
         subscriptionChanged = true;
     }
 
-    public boolean isSubscribeRequestProcessed() {
-        return !subscriptionChanged;
-    }
-
     @Override
     public boolean initiateShutdown() {
         boolean res = super.initiateShutdown();
@@ -138,13 +127,5 @@ public class ConsumerAssignmentPoller extends ShutdownableThread {
             thrownException = e;
             throw e;
         }
-    }
-
-    public Throwable getThrownException() {
-        return thrownException;
-    }
-
-    public int getReceivedMessages() {
-        return receivedMessages;
     }
 }
