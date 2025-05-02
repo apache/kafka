@@ -154,13 +154,17 @@ public class ConsumerNetworkThread extends KafkaThread implements Closeable {
 
         final long pollWaitTimeMs = requestManagers.entries().stream()
                 .map(rm -> rm.poll(currentTimeMs))
-                .map(networkClientDelegate::addAll)
-                .reduce(MAX_POLL_TIMEOUT_MS, Math::min);
+                .mapToLong(networkClientDelegate::addAll)
+                .filter(ms -> ms <= MAX_POLL_TIMEOUT_MS)
+                .min()
+                .orElse(MAX_POLL_TIMEOUT_MS);
+
         networkClientDelegate.poll(pollWaitTimeMs, currentTimeMs);
 
         cachedMaximumTimeToWait = requestManagers.entries().stream()
-                .map(rm -> rm.maximumTimeToWait(currentTimeMs))
-                .reduce(Long.MAX_VALUE, Math::min);
+                .mapToLong(rm -> rm.maximumTimeToWait(currentTimeMs))
+                .min()
+                .orElse(Long.MAX_VALUE);
 
         reapExpiredApplicationEvents(currentTimeMs);
         List<CompletableEvent<?>> uncompletedEvents = applicationEventReaper.uncompletedEvents();

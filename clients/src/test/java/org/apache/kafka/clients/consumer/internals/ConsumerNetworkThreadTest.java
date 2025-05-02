@@ -36,7 +36,6 @@ import org.junit.jupiter.params.provider.ValueSource;
 
 import java.time.Duration;
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.concurrent.BlockingQueue;
@@ -177,7 +176,7 @@ public class ConsumerNetworkThreadTest {
         // Initial value before runOnce has been called
         assertEquals(ConsumerNetworkThread.MAX_POLL_TIMEOUT_MS, consumerNetworkThread.maximumTimeToWait());
 
-        when(requestManagers.entries()).thenReturn(Collections.singletonList(heartbeatRequestManager));
+        when(requestManagers.entries()).thenReturn(List.of(heartbeatRequestManager));
         when(heartbeatRequestManager.maximumTimeToWait(time.milliseconds())).thenReturn((long) defaultHeartbeatIntervalMs);
 
         consumerNetworkThread.runOnce();

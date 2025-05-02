@@ -87,17 +87,17 @@ public class RequestManagers implements Closeable {
         this.streamsMembershipManager = streamsMembershipManager;
         this.shareMembershipManager = Optional.empty();
 
-        List<RequestManager> list = new ArrayList<>();
-        coordinatorRequestManager.ifPresent(list::add);
-        commitRequestManager.ifPresent(list::add);
-        heartbeatRequestManager.ifPresent(list::add);
-        membershipManager.ifPresent(list::add);
-        streamsGroupHeartbeatRequestManager.ifPresent(list::add);
-        streamsMembershipManager.ifPresent(list::add);
-        list.add(offsetsRequestManager);
-        list.add(topicMetadataRequestManager);
-        list.add(fetchRequestManager);
-        entries = Collections.unmodifiableList(list);
+        entries = listOf(
+            coordinatorRequestManager,
+            commitRequestManager,
+            heartbeatRequestManager,
+            membershipManager,
+            streamsGroupHeartbeatRequestManager,
+            streamsMembershipManager,
+            offsetsRequestManager,
+            topicMetadataRequestManager,
+            fetchRequestManager
+        );
     }
 
     public RequestManagers(LogContext logContext,
@@ -119,12 +119,49 @@ public class RequestManagers implements Closeable {
         this.topicMetadataRequestManager = null;
         this.fetchRequestManager = null;
 
+        entries = listOf(
+            coordinatorRequestManager,
+            shareHeartbeatRequestManager,
+            shareMembershipManager,
+            shareConsumeRequestManager
+        );
+    }
+
+    /**
+     * Utility method to make constructing the list of {@link RequestManager}s in {@link #entries} more readable.
+     * Due to typing, we have to accept plain old Java objects and determine if they're valid at runtime.
+     *
+     * @param requestManagers Instances of {@link Optional} containing a {@link RequestManager} or a
+     *                        {@link RequestManager} directly
+     */
+    static List<RequestManager> listOf(Object... requestManagers) {
         List<RequestManager> list = new ArrayList<>();
-        coordinatorRequestManager.ifPresent(list::add);
-        shareHeartbeatRequestManager.ifPresent(list::add);
-        shareMembershipManager.ifPresent(list::add);
-        list.add(shareConsumeRequestManager);
-        entries = Collections.unmodifiableList(list);
+
+        for (Object obj : requestManagers) {
+            if (obj instanceof Optional) {
+                Optional<?> opt = ((Optional<?>) obj);
+
+                if (opt.isEmpty())
+                    continue;
+
+                // Get the underlying object (hopefully a RequestManager) to add to the list.
+                obj = opt.get();
+            }
+
+            if (!(obj instanceof RequestManager)) {
+                String message = String.format(
+                    "Objects passed to listOf() must be %s or %s, not %s",
+                    Optional.class.getName(),
+                    RequestManager.class.getName(),
+                    obj != null ? obj.getClass().getName() : null
+                );
+                throw new IllegalArgumentException(message);
+            }
+
+            list.add((RequestManager) obj);
+        }
+
+        return Collections.unmodifiableList(list);
     }
 
     public List<RequestManager> entries() {
