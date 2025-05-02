@@ -7080,16 +7080,16 @@ public class SharePartitionTest {
         Uuid fetchId2 = mock(Uuid.class);
 
         // Initially, fetch lock is not acquired.
-        assertFalse(sharePartition.fetchLock());
+        assertNull(sharePartition.fetchLock());
         // fetchId1 acquires the fetch lock.
         assertTrue(sharePartition.maybeAcquireFetchLock(fetchId1));
         // If we release fetch lock by fetchId2, it won't work.
         sharePartition.releaseFetchLock(fetchId2);
-        assertTrue(sharePartition.fetchLock()); // Fetch lock hasn't been released.
+        assertEquals(fetchId1, sharePartition.fetchLock()); // Fetch lock hasn't been released.
 
         // If we release fetch lock by fetchId1, it will work correctly.
         sharePartition.releaseFetchLock(fetchId1);
-        assertFalse(sharePartition.fetchLock()); // Fetch lock has been released.
+        assertNull(sharePartition.fetchLock()); // Fetch lock has been released.
     }
 
     /**

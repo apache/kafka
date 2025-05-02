@@ -81,6 +81,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentSkipListMap;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.concurrent.locks.ReadWriteLock;
 import java.util.concurrent.locks.ReentrantReadWriteLock;
 
@@ -234,9 +235,10 @@ public class SharePartition {
 
     /**
      * The lock to ensure that the same share partition does not enter a fetch queue
-     * while another one is being fetched within the queue.
+     * while another one is being fetched within the queue. The DelayedShareFetch instance uuid that acquires the fetch
+     * lock is utilized for ensuring the above.
      */
-    private final AtomicBoolean fetchLock;
+    private final AtomicReference<Uuid> fetchLock;
 
     /**
      * The max in-flight messages is used to limit the number of records that can be in-flight at any
@@ -349,11 +351,6 @@ public class SharePartition {
      */
     private final ReplicaManager replicaManager;
 
-    /**
-     * The DelayedShareFetch instance uuid that acquires the fetch lock.
-     */
-    private Uuid fetchLockAcquiredBy;
-
     SharePartition(
         String groupId,
         TopicIdPartition topicIdPartition,
@@ -399,7 +396,7 @@ public class SharePartition {
         this.cachedState = new ConcurrentSkipListMap<>();
         this.lock = new ReentrantReadWriteLock();
         this.findNextFetchOffset = new AtomicBoolean(false);
-        this.fetchLock = new AtomicBoolean(false);
+        this.fetchLock = new AtomicReference<>(null);
         this.defaultRecordLockDurationMs = defaultRecordLockDurationMs;
         this.timer = timer;
         this.time = time;
@@ -1339,12 +1336,11 @@ public class SharePartition {
         if (stateNotActive()) {
             return false;
         }
-        boolean acquired = fetchLock.compareAndSet(false, true);
+        boolean acquired = fetchLock.compareAndSet(null, fetchId);
         if (acquired) {
             long currentTime = time.hiResClockMs();
             fetchLockAcquiredTimeMs = currentTime;
             fetchLockIdleDurationMs = fetchLockReleasedTimeMs != 0 ? currentTime - fetchLockReleasedTimeMs : 0;
-            fetchLockAcquiredBy = fetchId;
         }
         return acquired;
     }
@@ -1357,7 +1353,7 @@ public class SharePartition {
     void releaseFetchLock(Uuid fetchId) {
         // Register the metric for the duration the fetch lock was held. Do not register the metric
         // if the fetch lock was not acquired.
-        if (fetchLock.get() && fetchId.equals(fetchLockAcquiredBy)) {
+        if (fetchLock.get().equals(fetchId)) {
             long currentTime = time.hiResClockMs();
             long acquiredDurationMs = currentTime - fetchLockAcquiredTimeMs;
             // Update the metric for the fetch lock time.
@@ -1365,7 +1361,7 @@ public class SharePartition {
             // Update fetch lock ratio metric.
             recordFetchLockRatioMetric(acquiredDurationMs);
             fetchLockReleasedTimeMs = currentTime;
-            fetchLock.set(false);
+            fetchLock.set(null);
         } else {
             // This code should not be reached unless we are in error-prone scenarios.
             log.warn("Instance {} does not hold the fetch lock, yet trying to release it for share partition {}-{}",
@@ -2747,7 +2743,7 @@ public class SharePartition {
     }
 
     // Visible for testing.
-    boolean fetchLock() {
+    Uuid fetchLock() {
         return fetchLock.get();
     }
 
