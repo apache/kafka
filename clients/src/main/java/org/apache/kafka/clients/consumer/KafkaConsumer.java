@@ -1613,7 +1613,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @see #seekToBeginning(Collection)
      *
      * @param partitions the partitions to get the earliest offsets.
-     * @return The earliest available offsets for the given partitions
+     * @return The earliest available offsets for the given partitions, and it will return empty map if the offsets
+     *         cannot be retrieved within the timeout
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
@@ -1634,7 +1635,8 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param partitions the partitions to get the earliest offsets
      * @param timeout The maximum amount of time to await retrieval of the beginning offsets
      *
-     * @return The earliest available offsets for the given partitions
+     * @return The earliest available offsets for the given partitions, and it will return empty map if the offsets
+     *         cannot be retrieved within the timeout
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
@@ -1658,7 +1660,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @see #seekToEnd(Collection)
      *
      * @param partitions the partitions to get the end offsets.
-     * @return The end offsets for the given partitions.
+     * @return The end offsets for the given partitions, and it will return empty map if the offsets cannot be retrieved within the timeout
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws org.apache.kafka.common.errors.TimeoutException if the offset metadata could not be fetched before
@@ -1684,7 +1686,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      * @param partitions the partitions to get the end offsets.
      * @param timeout The maximum amount of time to await retrieval of the end offsets
      *
-     * @return The end offsets for the given partitions.
+     * @return The end offsets for the given partitions, and it will return empty map if the offsets cannot be retrieved within the timeout
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws org.apache.kafka.common.errors.TimeoutException if the offsets could not be fetched before
