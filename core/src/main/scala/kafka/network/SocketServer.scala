@@ -965,7 +965,12 @@ private[kafka] class Processor(
             tryUnmuteChannel(channelId)
 
           case response: SendResponse =>
-            sendResponse(response, response.responseSend)
+            try 
+              sendResponse(response, response.responseSend)
+            finally {
+              if (response.request.header.apiKey().forwardable) 
+                response.request.releaseBuffer()
+            }
           case response: CloseConnectionResponse =>
             updateRequestMetrics(response)
             trace("Closing socket connection actively according to the response code.")
