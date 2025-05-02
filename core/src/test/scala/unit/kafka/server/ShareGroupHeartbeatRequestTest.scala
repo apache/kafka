@@ -590,6 +590,80 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
     serverProperties = Array(
       new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+      new ClusterConfigProperty(key = "group.share.max.size", value = "2")
+    ))
+  def testShareGroupMaxSizeConfigExceeded(): Unit = {
+    val groupId: String = "group"
+    val memberId1 = Uuid.randomUuid()
+    val memberId2 = Uuid.randomUuid()
+    val memberId3 = Uuid.randomUuid()
+
+    val admin = cluster.admin()
+
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      // Heartbeat request to join the group by the first member (memberId1).
+      var shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
+        new ShareGroupHeartbeatRequestData()
+          .setGroupId(groupId)
+          .setMemberId(memberId1.toString)
+          .setMemberEpoch(0)
+          .setSubscribedTopicNames(List("foo").asJava)
+      ).build()
+
+      // Send the request until receiving a successful response. There is a delay
+      // here because the group coordinator is loaded in the background.
+      var shareGroupHeartbeatResponse: ShareGroupHeartbeatResponse = null
+      TestUtils.waitUntilTrue(() => {
+        shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
+        shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
+      }, msg = s"Could not join the group successfully. Last response $shareGroupHeartbeatResponse.")
+
+      // Heartbeat request to join the group by the second member (memberId2).
+      shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
+        new ShareGroupHeartbeatRequestData()
+          .setGroupId(groupId)
+          .setMemberId(memberId2.toString)
+          .setMemberEpoch(0)
+          .setSubscribedTopicNames(List("foo").asJava)
+      ).build()
+
+      // Send the request until receiving a successful response
+      TestUtils.waitUntilTrue(() => {
+        shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
+        shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
+      }, msg = s"Could not join the group successfully. Last response $shareGroupHeartbeatResponse.")
+
+      // Heartbeat request to join the group by the third member (memberId3).
+      shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
+        new ShareGroupHeartbeatRequestData()
+          .setGroupId(groupId)
+          .setMemberId(memberId3.toString)
+          .setMemberEpoch(0)
+          .setSubscribedTopicNames(List("foo").asJava)
+      ).build()
+
+      shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
+      // Since the group.share.max.size config is set to 2, a third member cannot join the same group.
+      assertEquals(shareGroupHeartbeatResponse.data.errorCode, Errors.GROUP_MAX_SIZE_REACHED.code)
+
+    } finally {
+      admin.close()
+    }
+  }
+
+  @ClusterTest(
+    types = Array(Type.KRAFT),
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
       new ClusterConfigProperty(key = "group.share.heartbeat.interval.ms", value = "500"),
       new ClusterConfigProperty(key = "group.share.min.heartbeat.interval.ms", value = "500"),
       new ClusterConfigProperty(key = "group.share.session.timeout.ms", value = "501"),
