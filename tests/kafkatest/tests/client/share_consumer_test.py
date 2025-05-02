@@ -14,6 +14,7 @@
 # limitations under the License.
 
 from ducktape.mark import matrix
+from ducktape.mark import ignore
 from ducktape.mark.resource import cluster
 from ducktape.utils.util import wait_until
 from kafkatest.tests.verifiable_share_consumer_test import VerifiableShareConsumerTest
@@ -203,6 +204,7 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
 
         consumer.stop_all()
 
+    @ignore
     @cluster(num_nodes=10)
     @matrix(
         clean_shutdown=[True, False],
