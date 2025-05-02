@@ -231,16 +231,23 @@ class KafkaRequestHandlerTest {
     })
   }
 
-  def makeRequest(time: Time, metrics: RequestChannelMetrics): RequestChannel.Request = {
+  def makeRequest(
+    time: Time, 
+    metrics: RequestChannelMetrics,
+    apiKeys: ApiKeys = ApiKeys.API_VERSIONS,
+    version: Short = 0,
+    buffer: ByteBuffer = ByteBuffer.allocate(0),
+    memoryPool: MemoryPool = mock(classOf[MemoryPool])
+  ): RequestChannel.Request = {
     // Make unsupported API versions request to avoid having to parse a real request
     val requestHeader = mock(classOf[RequestHeader])
-    when(requestHeader.apiKey()).thenReturn(ApiKeys.API_VERSIONS)
-    when(requestHeader.apiVersion()).thenReturn(0.toShort)
+    when(requestHeader.apiKey()).thenReturn(apiKeys)
+    when(requestHeader.apiVersion()).thenReturn(version)
 
     val context = new RequestContext(requestHeader, "0", mock(classOf[InetAddress]), new KafkaPrincipal("", ""),
       new ListenerName(""), SecurityProtocol.PLAINTEXT, mock(classOf[ClientInformation]), false)
     new RequestChannel.Request(0, context, time.nanoseconds(),
-      mock(classOf[MemoryPool]), ByteBuffer.allocate(0), metrics)
+      memoryPool, buffer, metrics)
   }
 
   def setupBrokerTopicMetrics(systemRemoteStorageEnabled: Boolean = true): BrokerTopicMetrics = {
@@ -698,5 +705,33 @@ class KafkaRequestHandlerTest {
 
     // cleanup
     brokerTopicStats.close()
+  }
+
+  @Test
+  def testRequestBufferRelease(): Unit = {
+    val time = new MockTime()
+    val metrics = new RequestChannelMetrics(Collections.emptySet[ApiKeys])
+    val requestChannel = new RequestChannel(10, time, metrics)
+    val apiHandler = mock(classOf[ApiRequestHandler])
+    val memoryPool = mock(classOf[MemoryPool])
+    val buffer = ByteBuffer.allocate(1024)
+
+    val handler = new KafkaRequestHandler(0, 0, mock(classOf[Meter]), new AtomicInteger(1), requestChannel, apiHandler, time)
+
+    val request = makeRequest(time, metrics, ApiKeys.PRODUCE, 3, buffer, memoryPool)
+    requestChannel.sendRequest(request)
+
+    val shutdownThread = new Thread(() => {
+      try {
+        Thread.sleep(1000)
+        requestChannel.sendShutdownRequest()
+      } catch {
+        case _: InterruptedException =>
+      }
+    })
+
+    shutdownThread.start()
+    handler.run()
+    verify(memoryPool, times(1)).release(buffer)
   }
 }

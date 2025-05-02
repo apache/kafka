@@ -148,6 +148,8 @@ class KafkaRequestHandler(
             if (originalRequest.callbackRequestCompleteTimeNanos.isEmpty)
               originalRequest.callbackRequestCompleteTimeNanos = Some(time.nanoseconds())
             threadCurrentRequest.remove()
+            if (!originalRequest.header.apiKey().forwardable)
+              originalRequest.releaseBuffer()
           }
 
         case request: RequestChannel.Request =>
@@ -163,9 +165,8 @@ class KafkaRequestHandler(
             case e: Throwable => error("Exception when handling request", e)
           } finally {
             threadCurrentRequest.remove()
-            if (!request.header.apiKey().forwardable) {
+            if (!request.header.apiKey().forwardable)
               request.releaseBuffer()
-            }
           }
 
         case RequestChannel.WakeupRequest => 
