@@ -2494,8 +2494,7 @@ public class KafkaAdminClient extends AdminClient {
                     DescribeClusterResponse response = (DescribeClusterResponse) abstractResponse;
                     Errors error = Errors.forCode(response.data().errorCode());
                     if (error != Errors.NONE) {
-                        ApiError apiError = new ApiError(error, response.data().errorMessage());
-                        handleFailure(apiError.exception());
+                        handleFailure(error.exception(response.data().errorMessage()));
                         return;
                     }
 
