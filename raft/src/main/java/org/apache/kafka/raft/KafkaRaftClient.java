@@ -3409,8 +3409,7 @@ public final class KafkaRaftClient<T> implements RaftClient<T> {
     private AddRaftVoterRequestData buildAddVoterRequest() {
         return RaftUtil.addVoterRequest(
             clusterId,
-            // TODO: What to set the AddVoterRequest timeout to?
-            10000,
+            quorumConfig.requestTimeoutMs(),
             quorum.localReplicaKeyOrThrow(),
             localListeners
         );
