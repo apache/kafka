@@ -4487,7 +4487,7 @@ public class KafkaAdminClient extends AdminClient {
                  * Be sure to do this after the NOT_CONTROLLER error check above
                  * so that all errors are consistent in that case.
                  */
-                userIllegalAlterationExceptions.entrySet().stream().forEach(entry ->
+                userIllegalAlterationExceptions.entrySet().forEach(entry ->
                     futures.get(entry.getKey()).completeExceptionally(entry.getValue())
                 );
                 response.data().results().forEach(result -> {
