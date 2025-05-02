@@ -43,6 +43,8 @@ import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.server.storage.log.FetchIsolation
 import org.apache.kafka.server.util.Scheduler
 import org.apache.kafka.storage.internals.log.AppendOrigin
+import com.google.re2j.{Pattern, PatternSyntaxException}
+import org.apache.kafka.common.errors.InvalidRegularExpression
 
 import scala.jdk.CollectionConverters._
 import scala.collection.mutable
@@ -316,7 +318,8 @@ class TransactionStateManager(brokerId: Int,
   def listTransactionStates(
     filterProducerIds: Set[Long],
     filterStateNames: Set[String],
-    filterDurationMs: Long
+    filterDurationMs: Long,
+    filterTransactionalIdPattern: String
   ): ListTransactionsResponseData = {
     inReadLock(stateLock) {
       val response = new ListTransactionsResponseData()
@@ -332,7 +335,7 @@ class TransactionStateManager(brokerId: Int,
         }
 
         val now : Long = time.milliseconds()
-        def shouldInclude(txnMetadata: TransactionMetadata): Boolean = {
+        def shouldInclude(txnMetadata: TransactionMetadata, pattern: Pattern): Boolean = {
           if (txnMetadata.state == Dead) {
             // We filter the `Dead` state since it is a transient state which
             // indicates that the transactionalId and its metadata are in the
@@ -344,16 +347,27 @@ class TransactionStateManager(brokerId: Int,
             false
           } else if (filterDurationMs >= 0 && (now - txnMetadata.txnStartTimestamp) <= filterDurationMs) {
             false
+          } else if (pattern != null) {
+            pattern.matcher(txnMetadata.transactionalId).matches()
           } else {
             true
           }
         }
 
         val states = new java.util.ArrayList[ListTransactionsResponseData.TransactionState]
+        val pattern = if (filterTransactionalIdPattern != null && filterTransactionalIdPattern.nonEmpty) {
+          try {
+            Pattern.compile(filterTransactionalIdPattern)
+          }
+          catch {
+            case e: PatternSyntaxException =>
+              throw new InvalidRegularExpression(String.format("Transaction ID pattern `%s` is not a valid regular expression: %s.", filterTransactionalIdPattern, e.getMessage))
+          }
+        } else null
         transactionMetadataCache.foreachEntry { (_, cache) =>
           cache.metadataPerTransactionalId.forEach { (_, txnMetadata) =>
             txnMetadata.inLock {
-              if (shouldInclude(txnMetadata)) {
+              if (shouldInclude(txnMetadata, pattern)) {
                 states.add(new ListTransactionsResponseData.TransactionState()
                   .setTransactionalId(txnMetadata.transactionalId)
                   .setProducerId(txnMetadata.producerId)

@@ -42,6 +42,7 @@ import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.protocol.ApiKeys;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 
 import java.net.InetSocketAddress;
 import java.util.Collection;

@@ -56,8 +56,6 @@ import org.apache.kafka.common.test.api.ClusterTest;
 import org.apache.kafka.common.test.api.Type;
 import org.apache.kafka.common.utils.Exit;
 import org.apache.kafka.metadata.LeaderAndIsr;
-import org.apache.kafka.server.common.AdminCommandFailedException;
-import org.apache.kafka.server.common.AdminOperationException;
 import org.apache.kafka.test.TestUtils;
 
 import org.junit.jupiter.api.Assertions;
