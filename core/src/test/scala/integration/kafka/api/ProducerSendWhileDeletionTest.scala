@@ -157,6 +157,6 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
   }
 
   private def topicMetadata(admin: Admin, topic: String): TopicDescription = {
-    admin.describeTopics(util.Collections.singletonList(topic)).allTopicNames().get().get(topic)
+    admin.describeTopics(util.List.of(topic)).allTopicNames().get().get(topic)
   }
 }
