@@ -351,18 +351,20 @@ public class DelayedShareFetch extends DelayedOperation {
             // acquire the fetch lock on it.
             if (sharePartition.maybeAcquireFetchLock(fetchId)) {
                 try {
+                    log.trace("Fetch lock for share partition {} has been acquired by {}", sharePartition, fetchId);
                     // If the share partition is already at capacity, we should not attempt to fetch.
                     if (sharePartition.canAcquireRecords()) {
                         topicPartitionData.put(topicIdPartition, sharePartition.nextFetchOffset());
                     } else {
                         sharePartition.releaseFetchLock(fetchId);
                         log.trace("Record lock partition limit exceeded for SharePartition {}, " +
-                            "cannot acquire more records", sharePartition);
+                            "cannot acquire more records. Releasing the fetch lock by {}", sharePartition, fetchId);
                     }
                 } catch (Exception e) {
                     log.error("Error checking condition for SharePartition: {}", sharePartition, e);
                     // Release the lock, if error occurred.
                     sharePartition.releaseFetchLock(fetchId);
+                    log.trace("Fetch lock for share partition {} is being released by {}", sharePartition, fetchId);
                 }
             }
         });
@@ -575,6 +577,7 @@ public class DelayedShareFetch extends DelayedOperation {
         topicIdPartitions.forEach(tp -> {
             SharePartition sharePartition = sharePartitions.get(tp);
             sharePartition.releaseFetchLock(fetchId);
+            log.trace("Fetch lock for share partition {} is being released by {}", sharePartition, fetchId);
         });
     }
 
