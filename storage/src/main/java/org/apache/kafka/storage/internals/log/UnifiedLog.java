@@ -2417,13 +2417,11 @@ public class UnifiedLog implements AutoCloseable {
                                             boolean reloadFromCleanShutdown,
                                             String logPrefix) throws IOException {
         List<Long> offsetsToSnapshot = new ArrayList<>();
-        if (segments.lastSegment().isPresent()) {
-            long lastSegmentBaseOffset = segments.lastSegment().get().baseOffset();
-            Optional<LogSegment> lowerSegment = segments.lowerSegment(lastSegmentBaseOffset);
-            Optional<Long> nextLatestSegmentBaseOffset = lowerSegment.map(LogSegment::baseOffset);
+        segments.lastSegment().ifPresent(lastSegment -> {
+            long lastSegmentBaseOffset = lastSegment.baseOffset();
+            segments.lowerSegment(lastSegmentBaseOffset).map(LogSegment::baseOffset).ifPresent(offsetsToSnapshot::add);
             offsetsToSnapshot.add(lastSegmentBaseOffset);
-            nextLatestSegmentBaseOffset.ifPresent(offsetsToSnapshot::add);
-        }
+        });
         offsetsToSnapshot.add(lastOffset);
 
         LOG.info("{}Loading producer state till offset {}", logPrefix, lastOffset);
