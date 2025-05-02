@@ -31,9 +31,11 @@ import org.junit.jupiter.params.provider.MethodSource;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import static org.apache.kafka.test.TestUtils.requiredConsumerConfig;
@@ -125,28 +127,35 @@ public class RequestManagersTest {
     }
 
     /**
-     * Test that the runtime checks in {@link RequestManagers#listOf(Object...)} work as expected.
+     * Test that the runtime checks in {@link RequestManagers#ENTRIES_MAPPER} work as expected.
      */
     @ParameterizedTest
     @MethodSource("testListOfSource")
-    public void testListOf(int expectedSize, Object[] listOfArguments) {
-        List<RequestManager> requestManagers = RequestManagers.listOf(listOfArguments);
+    public void testListOf(int expectedSize, List<Object> listOfArguments) {
+        List<RequestManager> requestManagers = listOfArguments.stream()
+            .map(RequestManagers.ENTRIES_MAPPER)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toUnmodifiableList());
+
         assertEquals(expectedSize, requestManagers.size());
     }
 
     /**
-     * Test that the runtime checks in {@link RequestManagers#listOf(Object...)} work as expected.
+     * Test that the runtime checks in {@link RequestManagers#ENTRIES_MAPPER} work as expected.
      */
     @ParameterizedTest
     @MethodSource("testListOfChecksSource")
-    public void testListOfChecks(String unexpectedClass, Object[] listOfArguments) {
-        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> RequestManagers.listOf(listOfArguments));
+    public void testListOfChecks(Class<?> unexpectedClass, List<Object> listOfArguments) {
+        IllegalArgumentException e = assertThrows(IllegalArgumentException.class, () -> listOfArguments.stream()
+            .map(RequestManagers.ENTRIES_MAPPER)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toUnmodifiableList()));
 
         String expectedMessage = String.format(
             "Objects passed to listOf() must be %s or %s, not %s",
             Optional.class.getName(),
             RequestManager.class.getName(),
-            unexpectedClass
+            unexpectedClass.getName()
         );
 
         assertEquals(expectedMessage, e.getMessage());
@@ -154,32 +163,16 @@ public class RequestManagersTest {
 
     private static Stream<Arguments> testListOfSource() {
         return Stream.of(
-            arguments(1, mock(RequestManager.class)),
-            arguments(2, Optional.empty(), mock(RequestManager.class), Optional.of(mock(RequestManager.class))),
-            arguments(0, Optional.empty())
+            Arguments.of(0, List.of(Optional.empty())),
+            Arguments.of(1, List.of(mock(RequestManager.class))),
+            Arguments.of(2, List.of(Optional.empty(), mock(RequestManager.class), Optional.of(mock(RequestManager.class))))
         );
-    }
-
-    /**
-     * This exists to make {@link #testListOfSource()} a little easier to read.
-     */
-    private static Arguments arguments(int expectedSize, Object... listOfArguments) {
-        return Arguments.of(expectedSize, listOfArguments);
     }
 
     private static Stream<Arguments> testListOfChecksSource() {
         return Stream.of(
-            arguments(String.class.getName(), "Whoops! A String!"),
-            arguments("null", (Object) null),
-            arguments(Integer.class.getName(), Optional.of(1999))
+            Arguments.of(String.class, List.of("Whoops! A String!")),
+            Arguments.of(Integer.class, List.of(Optional.of(1999)))
         );
-    }
-
-
-    /**
-     * This exists to make {@link #testListOfChecksSource()} a little easier to read.
-     */
-    private static Arguments arguments(String message, Object... listOfArguments) {
-        return Arguments.of(message, listOfArguments);
     }
 }

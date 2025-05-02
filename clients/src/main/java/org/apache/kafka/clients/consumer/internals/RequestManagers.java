@@ -30,12 +30,14 @@ import org.apache.kafka.common.utils.Time;
 import org.slf4j.Logger;
 
 import java.io.Closeable;
-import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 import java.util.Optional;
+import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
 
 import static java.util.Objects.requireNonNull;
 import static org.apache.kafka.common.utils.Utils.closeQuietly;
@@ -46,6 +48,39 @@ import static org.apache.kafka.common.utils.Utils.closeQuietly;
  * the {@link #entries()} method.
  */
 public class RequestManagers implements Closeable {
+
+    /**
+     * Utility function to make constructing the list of {@link RequestManager}s in the constructors more readable.
+     * Due to typing, we have to accept plain old Java objects and determine if they're valid at runtime.
+     *
+     * <p/>
+     *
+     * The function flattens instances of {@link Optional} containing a {@link RequestManager} or returns null if
+     * the optional is empty.
+     */
+    static Function<Object, RequestManager> ENTRIES_MAPPER = obj -> {
+        if (obj instanceof Optional) {
+            Optional<?> opt = ((Optional<?>) obj);
+
+            if (opt.isEmpty())
+                return null;
+
+            // Get the underlying object (hopefully a RequestManager) to add to the list.
+            obj = opt.get();
+        }
+
+        if (obj instanceof RequestManager) {
+            return (RequestManager) obj;
+        } else {
+            String message = String.format(
+                "Objects passed to listOf() must be %s or %s, not %s",
+                Optional.class.getName(),
+                RequestManager.class.getName(),
+                obj != null ? obj.getClass().getName() : null
+            );
+            throw new IllegalArgumentException(message);
+        }
+    };
 
     private final Logger log;
     public final Optional<CoordinatorRequestManager> coordinatorRequestManager;
@@ -87,7 +122,7 @@ public class RequestManagers implements Closeable {
         this.streamsMembershipManager = streamsMembershipManager;
         this.shareMembershipManager = Optional.empty();
 
-        entries = listOf(
+        entries = Stream.of(
             coordinatorRequestManager,
             commitRequestManager,
             heartbeatRequestManager,
@@ -97,7 +132,10 @@ public class RequestManagers implements Closeable {
             offsetsRequestManager,
             topicMetadataRequestManager,
             fetchRequestManager
-        );
+        )
+            .map(ENTRIES_MAPPER)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toUnmodifiableList());
     }
 
     public RequestManagers(LogContext logContext,
@@ -119,49 +157,15 @@ public class RequestManagers implements Closeable {
         this.topicMetadataRequestManager = null;
         this.fetchRequestManager = null;
 
-        entries = listOf(
+        entries = Stream.of(
             coordinatorRequestManager,
             shareHeartbeatRequestManager,
             shareMembershipManager,
             shareConsumeRequestManager
-        );
-    }
-
-    /**
-     * Utility method to make constructing the list of {@link RequestManager}s in {@link #entries} more readable.
-     * Due to typing, we have to accept plain old Java objects and determine if they're valid at runtime.
-     *
-     * @param requestManagers Instances of {@link Optional} containing a {@link RequestManager} or a
-     *                        {@link RequestManager} directly
-     */
-    static List<RequestManager> listOf(Object... requestManagers) {
-        List<RequestManager> list = new ArrayList<>();
-
-        for (Object obj : requestManagers) {
-            if (obj instanceof Optional) {
-                Optional<?> opt = ((Optional<?>) obj);
-
-                if (opt.isEmpty())
-                    continue;
-
-                // Get the underlying object (hopefully a RequestManager) to add to the list.
-                obj = opt.get();
-            }
-
-            if (!(obj instanceof RequestManager)) {
-                String message = String.format(
-                    "Objects passed to listOf() must be %s or %s, not %s",
-                    Optional.class.getName(),
-                    RequestManager.class.getName(),
-                    obj != null ? obj.getClass().getName() : null
-                );
-                throw new IllegalArgumentException(message);
-            }
-
-            list.add((RequestManager) obj);
-        }
-
-        return Collections.unmodifiableList(list);
+        )
+            .map(ENTRIES_MAPPER)
+            .filter(Objects::nonNull)
+            .collect(Collectors.toUnmodifiableList());
     }
 
     public List<RequestManager> entries() {
