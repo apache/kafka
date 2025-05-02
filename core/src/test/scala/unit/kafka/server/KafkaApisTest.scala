@@ -4188,7 +4188,7 @@ class KafkaApisTest extends Logging {
       ).asJava)
     )
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
       new ShareSessionContext(new ShareRequestMetadata(memberId, shareSessionEpoch), util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)))
     )
@@ -4257,10 +4257,11 @@ class KafkaApisTest extends Logging {
     cachedSharePartitions.mustAdd(new CachedSharePartition(
       new TopicIdPartition(topicId, partitionIndex, topicName), false))
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenThrow(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenThrow(
       Errors.INVALID_REQUEST.exception()
-    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1),
-      new ShareSession(new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2)))
+    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1), new ShareSession(
+      new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2
+    )))
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
@@ -4351,7 +4352,7 @@ class KafkaApisTest extends Logging {
       ).asJava)
     )
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
       new ShareSessionContext(new ShareRequestMetadata(memberId, 0), util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
@@ -4436,7 +4437,7 @@ class KafkaApisTest extends Logging {
       FutureUtils.failedFuture[util.Map[TopicIdPartition, ShareFetchResponseData.PartitionData]](Errors.UNKNOWN_SERVER_ERROR.exception())
     )
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
       new ShareSessionContext(new ShareRequestMetadata(memberId, 0), util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
@@ -4501,9 +4502,10 @@ class KafkaApisTest extends Logging {
     cachedSharePartitions.mustAdd(new CachedSharePartition(
       new TopicIdPartition(topicId, partitionIndex, topicName), false))
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any()))
-      .thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1),
-        new ShareSession(new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2)))
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any()))
+      .thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1), new ShareSession(
+        new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2))
+      )
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
@@ -4559,9 +4561,10 @@ class KafkaApisTest extends Logging {
     cachedSharePartitions.mustAdd(new CachedSharePartition(
       new TopicIdPartition(topicId, partitionIndex, topicName), false))
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any()))
-      .thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1),
-        new ShareSession(new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2)))
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any()))
+      .thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1), new ShareSession(
+        new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2))
+      )
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
@@ -4615,7 +4618,7 @@ class KafkaApisTest extends Logging {
       ).asJava)
     )
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
       new ShareSessionContext(new ShareRequestMetadata(memberId, 0), util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
@@ -4679,7 +4682,7 @@ class KafkaApisTest extends Logging {
       ).asJava)
     )
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
       new ShareSessionContext(new ShareRequestMetadata(memberId, 0), util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
@@ -4765,7 +4768,7 @@ class KafkaApisTest extends Logging {
       ).asJava)
     )
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
       new ShareSessionContext(new ShareRequestMetadata(memberId, 0), util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
@@ -4900,14 +4903,14 @@ class KafkaApisTest extends Logging {
       new TopicIdPartition(topicId, partitionIndex, topicName), false)
     )
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
       new ShareSessionContext(new ShareRequestMetadata(memberId, 0), util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
-    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1),
-      new ShareSession(new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2))
-    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 2),
-      new ShareSession(new ShareSessionKey(groupId, memberId), cachedSharePartitions, 3))
+    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1), new ShareSession(
+      new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2))
+    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 2), new ShareSession(
+      new ShareSessionKey(groupId, memberId), cachedSharePartitions, 3))
     )
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
@@ -5162,17 +5165,17 @@ class KafkaApisTest extends Logging {
       new TopicIdPartition(topicId4, 0, topicName4), false
     ))
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
       new ShareSessionContext(new ShareRequestMetadata(memberId, 0), util.List.of(
         new TopicIdPartition(topicId1, new TopicPartition(topicName1, 0)),
         new TopicIdPartition(topicId1, new TopicPartition(topicName1, 1)),
         new TopicIdPartition(topicId2, new TopicPartition(topicName2, 0)),
         new TopicIdPartition(topicId2, new TopicPartition(topicName2, 1))
       ))
-    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1),
-      new ShareSession(new ShareSessionKey(groupId, memberId), cachedSharePartitions1, 2))
-    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 2),
-      new ShareSession(new ShareSessionKey(groupId, memberId), cachedSharePartitions2, 3))
+    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1), new ShareSession(
+      new ShareSessionKey(groupId, memberId), cachedSharePartitions1, 2))
+    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 2), new ShareSession(
+      new ShareSessionKey(groupId, memberId), cachedSharePartitions2, 3))
     ).thenReturn(new FinalContext())
 
     when(sharePartitionManager.releaseSession(any(), any())).thenReturn(
@@ -6127,12 +6130,13 @@ class KafkaApisTest extends Logging {
       new TopicIdPartition(topicId, 0, topicName), false
     ))
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
       new ShareSessionContext(new ShareRequestMetadata(memberId, 0), util.List.of(
         new TopicIdPartition(topicId, partitionIndex, topicName)
       ))
-    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1),
-      new ShareSession(new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2)))
+    ).thenReturn(new ShareSessionContext(new ShareRequestMetadata(memberId, 1), new ShareSession(
+      new ShareSessionKey(groupId, memberId), cachedSharePartitions, 2))
+    )
 
     when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
       any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
@@ -6329,7 +6333,7 @@ class KafkaApisTest extends Logging {
       ).asJava)
     )
 
-    when(sharePartitionManager.newContext(any(), any(), any(), any(), any())).thenReturn(
+    when(sharePartitionManager.newContext(any(), any(), any(), any(), any(), any())).thenReturn(
       new FinalContext()
     )
 
@@ -9651,7 +9655,7 @@ class KafkaApisTest extends Logging {
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
       any[Long])).thenReturn(0)
 
-    when(txnCoordinator.handleListTransactions(Set.empty[Long], Set.empty[String], -1L))
+    when(txnCoordinator.handleListTransactions(Set.empty[Long], Set.empty[String], -1L, null))
       .thenReturn(new ListTransactionsResponseData()
         .setErrorCode(Errors.COORDINATOR_LOAD_IN_PROGRESS.code))
     kafkaApis = createKafkaApis()
@@ -9665,7 +9669,7 @@ class KafkaApisTest extends Logging {
   @Test
   def testListTransactionsAuthorization(): Unit = {
     val authorizer: Authorizer = mock(classOf[Authorizer])
-    val data = new ListTransactionsRequestData()
+    val data = new ListTransactionsRequestData().setTransactionalIdPattern("my.*")
     val listTransactionsRequest = new ListTransactionsRequest.Builder(data).build()
     val request = buildRequest(listTransactionsRequest)
     when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
@@ -9673,15 +9677,15 @@ class KafkaApisTest extends Logging {
 
     val transactionStates = new util.ArrayList[ListTransactionsResponseData.TransactionState]()
     transactionStates.add(new ListTransactionsResponseData.TransactionState()
-      .setTransactionalId("foo")
+      .setTransactionalId("myFoo")
       .setProducerId(12345L)
       .setTransactionState("Ongoing"))
     transactionStates.add(new ListTransactionsResponseData.TransactionState()
-      .setTransactionalId("bar")
+      .setTransactionalId("myBar")
       .setProducerId(98765)
       .setTransactionState("PrepareAbort"))
 
-    when(txnCoordinator.handleListTransactions(Set.empty[Long], Set.empty[String], -1L))
+    when(txnCoordinator.handleListTransactions(Set.empty[Long], Set.empty[String], -1L, "my.*"))
       .thenReturn(new ListTransactionsResponseData()
         .setErrorCode(Errors.NONE.code)
         .setTransactionStates(transactionStates))
@@ -9692,10 +9696,10 @@ class KafkaApisTest extends Logging {
       Collections.singletonList(action)
     }
 
-    when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(buildExpectedActions("foo"))))
+    when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(buildExpectedActions("myFoo"))))
       .thenReturn(Seq(AuthorizationResult.ALLOWED).asJava)
 
-    when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(buildExpectedActions("bar"))))
+    when(authorizer.authorize(any[RequestContext], ArgumentMatchers.eq(buildExpectedActions("myBar"))))
       .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
     kafkaApis = createKafkaApis(authorizer = Some(authorizer))
     kafkaApis.handleListTransactionsRequest(request)
@@ -9703,7 +9707,7 @@ class KafkaApisTest extends Logging {
     val response = verifyNoThrottling[ListTransactionsResponse](request)
     assertEquals(1, response.data.transactionStates.size())
     val transactionState = response.data.transactionStates.get(0)
-    assertEquals("foo", transactionState.transactionalId)
+    assertEquals("myFoo", transactionState.transactionalId)
     assertEquals(12345L, transactionState.producerId)
     assertEquals("Ongoing", transactionState.transactionState)
   }

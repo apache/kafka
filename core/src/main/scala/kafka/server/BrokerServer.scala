@@ -259,7 +259,13 @@ class BrokerServer(
         Optional.of(clientMetricsManager)
       )
 
-      val connectionDisconnectListeners = Seq(clientMetricsManager.connectionDisconnectListener())
+      val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(config.shareGroupConfig.shareGroupMaxShareSessions())
+
+      val connectionDisconnectListeners = Seq(
+        clientMetricsManager.connectionDisconnectListener(),
+        shareFetchSessionCache.connectionDisconnectListener()
+      )
+
       // Create and start the socket server acceptor threads so that the bound port is known.
       // Delay starting processors until the end of the initialization sequence to ensure
       // that credentials have been loaded before processing authentications.
@@ -425,8 +431,6 @@ class BrokerServer(
           shardNum
         ))
       val fetchManager = new FetchManager(Time.SYSTEM, new FetchSessionCache(fetchSessionCacheShards))
-
-      val shareFetchSessionCache : ShareSessionCache = new ShareSessionCache(config.shareGroupConfig.shareGroupMaxShareSessions())
 
       sharePartitionManager = new SharePartitionManager(
         replicaManager,
