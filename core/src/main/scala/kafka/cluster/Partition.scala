@@ -1730,7 +1730,7 @@ class Partition(val topicPartition: TopicPartition,
             case Some(epochAndOffset) => new EpochEndOffset()
               .setPartition(partitionId)
               .setErrorCode(Errors.NONE.code)
-              .setLeaderEpoch(epochAndOffset.leaderEpoch)
+              .setLeaderEpoch(epochAndOffset.epoch())
               .setEndOffset(epochAndOffset.offset)
             case None => new EpochEndOffset()
               .setPartition(partitionId)

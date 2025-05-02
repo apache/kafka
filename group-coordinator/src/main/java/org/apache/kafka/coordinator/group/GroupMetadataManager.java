@@ -158,6 +158,7 @@ import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
+import org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManager;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
 import org.apache.kafka.coordinator.group.streams.topics.TopicConfigurationException;
 import org.apache.kafka.image.MetadataDelta;
@@ -1982,7 +1983,8 @@ public class GroupMetadataManager {
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
-            .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId));
+            .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId))
+            .setPartitionsByUserEndpoint(maybeBuildEndpointToPartitions(group));
 
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
@@ -2091,6 +2093,25 @@ public class GroupMetadataManager {
                 .setSubtopologyId(entry.getKey())
                 .setPartitions(entry.getValue().stream().sorted().toList()))
             .collect(Collectors.toList());
+    }
+
+    private List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> maybeBuildEndpointToPartitions(StreamsGroup group) {
+        List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList = new ArrayList<>();
+        final Map<String, StreamsGroupMember> members = group.members();
+        for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {
+            final String memberIdForAssignment = entry.getKey();
+            final Optional<StreamsGroupMemberMetadataValue.Endpoint> endpointOptional = members.get(memberIdForAssignment).userEndpoint();
+            StreamsGroupMember groupMember = entry.getValue();
+            if (endpointOptional.isPresent()) {
+                final StreamsGroupMemberMetadataValue.Endpoint endpoint = endpointOptional.get();
+                final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
+                responseEndpoint.setHost(endpoint.host());
+                responseEndpoint.setPort(endpoint.port());
+                StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = EndpointToPartitionsManager.endpointToPartitions(groupMember, responseEndpoint, group);
+                endpointToPartitionsList.add(endpointToPartitions);
+            }
+        }
+        return endpointToPartitionsList.isEmpty() ? null : endpointToPartitionsList;
     }
 
     /**
