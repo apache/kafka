@@ -25,6 +25,7 @@ import kafka.server.ReplicaManager
 import kafka.utils.TestUtils
 import org.apache.kafka.common.{TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.common.compress.Compression
+import org.apache.kafka.common.errors.InvalidRegularExpression
 import org.apache.kafka.common.internals.Topic.TRANSACTION_STATE_TOPIC_NAME
 import org.apache.kafka.common.metrics.{JmxReporter, KafkaMetricsContext, Metrics}
 import org.apache.kafka.common.protocol.{Errors, MessageUtil}
@@ -567,7 +568,8 @@ class TransactionStateManagerTest {
     val listResponse = transactionManager.listTransactionStates(
       filterProducerIds = Set.empty,
       filterStateNames = Set.empty,
-      -1L
+      -1L,
+      null
     )
     assertEquals(Errors.COORDINATOR_LOAD_IN_PROGRESS, Errors.forCode(listResponse.errorCode))
   }
@@ -591,15 +593,18 @@ class TransactionStateManagerTest {
 
     putTransaction(transactionalId = "t0", producerId = 0, state = Ongoing)
     putTransaction(transactionalId = "t1", producerId = 1, state = Ongoing)
+    putTransaction(transactionalId = "my-special-0", producerId = 0, state = Ongoing)
     // update time to create transactions with various durations
     time.sleep(1000)
     putTransaction(transactionalId = "t2", producerId = 2, state = PrepareCommit)
     putTransaction(transactionalId = "t3", producerId = 3, state = PrepareAbort)
+    putTransaction(transactionalId = "your-special-1", producerId = 0, state = PrepareAbort)
     time.sleep(1000)
     putTransaction(transactionalId = "t4", producerId = 4, state = CompleteCommit)
     putTransaction(transactionalId = "t5", producerId = 5, state = CompleteAbort)
     putTransaction(transactionalId = "t6", producerId = 6, state = CompleteAbort)
     putTransaction(transactionalId = "t7", producerId = 7, state = PrepareEpochFence)
+    putTransaction(transactionalId = "their-special-2", producerId = 7, state = CompleteAbort)
     time.sleep(1000)
     // Note that `Dead` transactions are never returned. This is a transient state
     // which is used when the transaction state is in the process of being deleted
@@ -610,21 +615,22 @@ class TransactionStateManagerTest {
       expectedTransactionalIds: Set[String],
       filterProducerIds: Set[Long] = Set.empty,
       filterStates: Set[String] = Set.empty,
-      filterDuration: Long = -1L
+      filterDuration: Long = -1L,
+      filteredTransactionalIdPattern: String = null
     ): Unit = {
-      val listResponse = transactionManager.listTransactionStates(filterProducerIds, filterStates, filterDuration)
+      val listResponse = transactionManager.listTransactionStates(filterProducerIds, filterStates, filterDuration, filteredTransactionalIdPattern)
       assertEquals(Errors.NONE, Errors.forCode(listResponse.errorCode))
       assertEquals(expectedTransactionalIds, listResponse.transactionStates.asScala.map(_.transactionalId).toSet)
       val expectedUnknownStates = filterStates.filter(state => TransactionState.fromName(state).isEmpty)
       assertEquals(expectedUnknownStates, listResponse.unknownStateFilters.asScala.toSet)
     }
-    assertListTransactions(Set("t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7"))
-    assertListTransactions(Set("t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7"), filterDuration = 0L)
-    assertListTransactions(Set("t0", "t1", "t2", "t3"), filterDuration = 1000L)
-    assertListTransactions(Set("t0", "t1"), filterDuration = 2000L)
+    assertListTransactions(Set("t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "my-special-0", "your-special-1", "their-special-2"))
+    assertListTransactions(Set("t0", "t1", "t2", "t3", "t4", "t5", "t6", "t7", "my-special-0", "your-special-1", "their-special-2"), filterDuration = 0L)
+    assertListTransactions(Set("t0", "t1", "t2", "t3", "my-special-0", "your-special-1"), filterDuration = 1000L)
+    assertListTransactions(Set("t0", "t1", "my-special-0"), filterDuration = 2000L)
     assertListTransactions(Set(), filterDuration = 3000L)
-    assertListTransactions(Set("t0", "t1"), filterStates = Set("Ongoing"))
-    assertListTransactions(Set("t0", "t1"), filterStates = Set("Ongoing", "UnknownState"))
+    assertListTransactions(Set("t0", "t1", "my-special-0"), filterStates = Set("Ongoing"))
+    assertListTransactions(Set("t0", "t1", "my-special-0"), filterStates = Set("Ongoing", "UnknownState"))
     assertListTransactions(Set("t2", "t4"), filterStates = Set("PrepareCommit", "CompleteCommit"))
     assertListTransactions(Set(), filterStates = Set("UnknownState"))
     assertListTransactions(Set("t5"), filterProducerIds = Set(5L))
@@ -634,6 +640,15 @@ class TransactionStateManagerTest {
     assertListTransactions(Set(), filterProducerIds = Set(3L, 6L), filterStates = Set("UnknownState"))
     assertListTransactions(Set(), filterProducerIds = Set(10L), filterStates = Set("CompleteCommit"))
     assertListTransactions(Set(), filterStates = Set("Dead"))
+    assertListTransactions(Set("my-special-0", "your-special-1", "their-special-2"), filteredTransactionalIdPattern = ".*special-.*")
+    assertListTransactions(Set(), filteredTransactionalIdPattern = "nothing")
+    assertListTransactions(Set("my-special-0", "your-special-1"), filterDuration = 1000L, filteredTransactionalIdPattern = ".*special-.*")
+    assertListTransactions(Set("their-special-2"), filterProducerIds = Set(7L), filterStates = Set("CompleteCommit", "CompleteAbort"), filteredTransactionalIdPattern = ".*special-.*")
+  }
+
+  @Test
+  def testListTransactionsFilteringWithInvalidPattern(): Unit = {
+    assertThrows(classOf[InvalidRegularExpression], () => transactionManager.listTransactionStates(Set.empty, Set.empty, -1L, "(ab(cd"))
   }
 
   @Test
@@ -931,7 +946,7 @@ class TransactionStateManagerTest {
   }
 
   private def listExpirableTransactionalIds(): Set[String] = {
-    val activeTransactionalIds = transactionManager.listTransactionStates(Set.empty, Set.empty, -1L)
+    val activeTransactionalIds = transactionManager.listTransactionStates(Set.empty, Set.empty, -1L, null)
       .transactionStates
       .asScala
       .map(_.transactionalId)
