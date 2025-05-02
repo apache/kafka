@@ -18,9 +18,9 @@
 package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtValidator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 import org.apache.kafka.common.utils.Utils;
 

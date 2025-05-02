@@ -24,14 +24,14 @@ import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
 import org.apache.kafka.common.security.auth.SaslExtensions;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
-
 import org.apache.kafka.common.utils.Utils;
+
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 

@@ -18,8 +18,8 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.config.ConfigException;
-
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginModule;
+
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;

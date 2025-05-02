@@ -19,15 +19,15 @@ package org.apache.kafka.common.security.oauthbearer;
 
 import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.security.auth.AuthenticateCallbackHandler;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.CloseableVerificationKeyResolver;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.JaasOptionsUtils;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.RefreshingHttpsJwksVerificationKeyResolver;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.ValidateException;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.VerificationKeyResolverFactory;
-
 import org.apache.kafka.common.utils.Utils;
+
 import org.jose4j.jws.JsonWebSignature;
 import org.jose4j.jwx.JsonWebStructure;
 import org.jose4j.lang.UnresolvableKeyException;

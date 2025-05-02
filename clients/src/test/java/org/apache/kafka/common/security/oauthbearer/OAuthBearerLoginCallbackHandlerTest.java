@@ -22,11 +22,11 @@ import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.FileJwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 import org.apache.kafka.common.utils.Utils;
 
