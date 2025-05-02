@@ -291,7 +291,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     private CompletableFuture<Void> performRecordPruning(TopicPartition tp) {
-        // This future will always be completed normally, exception or not.
         CompletableFuture<Void> fut = new CompletableFuture<>();
 
         runtime.scheduleWriteOperation(
@@ -326,7 +325,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
                 writer.deleteRecords(tp, off)
                     .whenComplete((res, exp) -> {
                         if (exp != null) {
-                            log.debug("Exception while deleting records in {} till offset {}.", tp, off, exp);
+                            log.error("Exception while deleting records in {} till offset {}.", tp, off, exp);
                             fut.completeExceptionally(exp);
                             return;
                         }
