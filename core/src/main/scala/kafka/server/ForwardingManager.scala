@@ -134,7 +134,7 @@ class ForwardingManagerImpl(
     class ForwardingResponseHandler extends ControllerRequestCompletionHandler {
       override def onComplete(clientResponse: ClientResponse): Unit = {
 
-        forwardingManagerMetrics.queueLength.getAndDecrement()
+        forwardingManagerMetrics.decrementQueueLength()
         forwardingManagerMetrics.remoteTimeMsHist.record(clientResponse.requestLatencyMs())
         forwardingManagerMetrics.queueTimeMsHist.record(clientResponse.receivedTimeMs() - clientResponse.requestLatencyMs() - requestCreationTimeMs)
 
@@ -175,14 +175,14 @@ class ForwardingManagerImpl(
 
       override def onTimeout(): Unit = {
         debug(s"Forwarding of the request ${requestToString()} failed due to timeout exception")
-        forwardingManagerMetrics.queueLength.getAndDecrement()
+        forwardingManagerMetrics.decrementQueueLength()
         forwardingManagerMetrics.queueTimeMsHist.record(channelManager.getTimeoutMs)
         val response = requestBody.getErrorResponse(new TimeoutException())
         responseCallback(Option(response))
       }
     }
 
-    forwardingManagerMetrics.queueLength.getAndIncrement()
+    forwardingManagerMetrics.incrementQueueLength()
     channelManager.sendRequest(envelopeRequest, new ForwardingResponseHandler)
   }
 

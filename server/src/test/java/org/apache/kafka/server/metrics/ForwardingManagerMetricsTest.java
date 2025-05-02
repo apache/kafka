@@ -85,9 +85,9 @@ class ForwardingManagerMetricsTest {
     void testQueueLength() {
         try (Metrics metrics = new Metrics();
              ForwardingManagerMetrics forwardingManagerMetrics = new ForwardingManagerMetrics(metrics, 1000)) {
-            KafkaMetric queueLength = metrics.metrics().get(forwardingManagerMetrics.queueLengthName);
+            KafkaMetric queueLength = metrics.metrics().get(forwardingManagerMetrics.queueLengthName());
             assertEquals(0, (Integer) queueLength.metricValue());
-            forwardingManagerMetrics.queueLength.getAndIncrement();
+            forwardingManagerMetrics.incrementQueueLength();
             assertEquals(1, (Integer) queueLength.metricValue());
         }
     }

@@ -18,7 +18,6 @@ package org.apache.kafka.server.metrics;
 
 import org.apache.kafka.common.MetricName;
 import org.apache.kafka.common.metrics.Gauge;
-import org.apache.kafka.common.metrics.MetricConfig;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
 import org.apache.kafka.common.metrics.stats.Percentile;
@@ -26,7 +25,6 @@ import org.apache.kafka.common.metrics.stats.Percentiles;
 import org.apache.kafka.common.metrics.stats.Percentiles.BucketSizing;
 
 import java.util.concurrent.atomic.AtomicInteger;
-import java.util.function.LongFunction;
 
 public final class ForwardingManagerMetrics implements AutoCloseable {
 
@@ -48,8 +46,8 @@ public final class ForwardingManagerMetrics implements AutoCloseable {
      */
     private final LatencyHistogram remoteTimeMsHist;
 
-    public final MetricName queueLengthName;
-    public final AtomicInteger queueLength = new AtomicInteger(0);
+    private final MetricName queueLengthName;
+    private final AtomicInteger queueLength = new AtomicInteger(0);
 
     public ForwardingManagerMetrics(Metrics metrics, long timeoutMs) {
         this.metrics = metrics;
@@ -62,7 +60,7 @@ public final class ForwardingManagerMetrics implements AutoCloseable {
             METRIC_GROUP_NAME,
             "The current number of RPCs that are waiting in the broker's forwarding manager queue, waiting to be sent to the controller."
         );
-        metrics.addMetric(queueLengthName, new FuncGauge<>(now -> queueLength.get()));
+        metrics.addMetric(queueLengthName, (Gauge<Integer>) (config, now) -> queueLength.get());
     }
 
     @Override
@@ -78,6 +76,18 @@ public final class ForwardingManagerMetrics implements AutoCloseable {
 
     public LatencyHistogram remoteTimeMsHist() {
         return remoteTimeMsHist;
+    }
+
+    public MetricName queueLengthName() {
+        return queueLengthName;
+    }
+
+    public void incrementQueueLength() {
+        queueLength.getAndIncrement();
+    }
+
+    public void decrementQueueLength() {
+        queueLength.getAndDecrement();
     }
 
     public static final class LatencyHistogram implements AutoCloseable {
@@ -113,13 +123,6 @@ public final class ForwardingManagerMetrics implements AutoCloseable {
 
         public void record(long latencyMs) {
             sensor.record(latencyMs);
-        }
-    }
-
-    private record FuncGauge<T>(LongFunction<T> func) implements Gauge<T> {
-        @Override
-        public T value(MetricConfig config, long now) {
-            return func.apply(now);
         }
     }
 }
