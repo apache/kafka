@@ -31,6 +31,7 @@ import org.jose4j.keys.resolvers.VerificationKeyResolver;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Set;
@@ -38,7 +39,7 @@ import java.util.Set;
 import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
 
 /**
- * ValidatorAccessTokenValidator is an implementation of {@link AccessTokenValidator} that is used
+ * {@code BrokerJwtValidator} is an implementation of {@link JwtValidator} that is used
  * by the broker to perform more extensive validation of the JWT access token that is received
  * from the client, but ultimately from posting the client credentials to the OAuth/OIDC provider's
  * token endpoint.
@@ -62,9 +63,9 @@ import static org.jose4j.jwa.AlgorithmConstraints.DISALLOW_NONE;
  * </ol>
  */
 
-public class ValidatorAccessTokenValidator implements AccessTokenValidator {
+public class BrokerJwtValidator implements JwtValidator {
 
-    private static final Logger log = LoggerFactory.getLogger(ValidatorAccessTokenValidator.class);
+    private static final Logger log = LoggerFactory.getLogger(BrokerJwtValidator.class);
 
     private final JwtConsumer jwtConsumer;
 
@@ -73,7 +74,7 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
     private final String subClaimName;
 
     /**
-     * Creates a new ValidatorAccessTokenValidator that will be used by the broker for more
+     * Creates a new {@code BrokerJwtValidator} that will be used by the broker for more
      * thorough validation of the JWT.
      *
      * @param clockSkew               The optional value (in seconds) to allow for differences
@@ -112,12 +113,12 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
      * @see VerificationKeyResolver
      */
 
-    public ValidatorAccessTokenValidator(Integer clockSkew,
-        Set<String> expectedAudiences,
-        String expectedIssuer,
-        VerificationKeyResolver verificationKeyResolver,
-        String scopeClaimName,
-        String subClaimName) {
+    public BrokerJwtValidator(Integer clockSkew,
+                              Set<String> expectedAudiences,
+                              String expectedIssuer,
+                              VerificationKeyResolver verificationKeyResolver,
+                              String scopeClaimName,
+                              String subClaimName) {
         final JwtConsumerBuilder jwtConsumerBuilder = new JwtConsumerBuilder();
 
         if (clockSkew != null)
@@ -188,6 +189,16 @@ public class ValidatorAccessTokenValidator implements AccessTokenValidator {
             expiration,
             sub,
             issuedAt);
+    }
+
+    @Override
+    public void init() throws IOException {
+        // Do nothing...
+    }
+
+    @Override
+    public void close() throws IOException {
+        // Do nothing...
     }
 
     private <T> T getClaim(ClaimSupplier<T> supplier, String claimName) throws ValidateException {

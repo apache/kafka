@@ -21,11 +21,12 @@ import org.apache.kafka.common.config.ConfigException;
 import org.apache.kafka.common.security.auth.SaslExtensionsCallback;
 import org.apache.kafka.common.security.oauthbearer.internals.OAuthBearerClientInitialResponse;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenBuilder;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidator;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.AccessTokenValidatorFactory;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.FileTokenRetriever;
-import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpAccessTokenRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.JwtValidator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.DefaultJwtValidator;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.FileJwtRetriever;
+import org.apache.kafka.common.security.oauthbearer.internals.secured.HttpJwtRetriever;
 import org.apache.kafka.common.security.oauthbearer.internals.secured.OAuthBearerTest;
 import org.apache.kafka.common.utils.Utils;
 
@@ -70,9 +71,9 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
             .jwk(createRsaJwk())
             .alg(AlgorithmIdentifiers.RSA_USING_SHA256);
         String accessToken = builder.build();
-        AccessTokenRetriever accessTokenRetriever = () -> accessToken;
+        JwtRetriever jwtRetriever = () -> accessToken;
 
-        OAuthBearerLoginCallbackHandler handler = createHandler(accessTokenRetriever, configs);
+        OAuthBearerLoginCallbackHandler handler = createHandler(jwtRetriever, configs);
 
         try {
             OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
@@ -144,9 +145,9 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
     public void testInvalidCallbackGeneratesUnsupportedCallbackException() {
         Map<String, ?> configs = getSaslConfigs();
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
-        AccessTokenRetriever accessTokenRetriever = () -> "foo";
-        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs);
-        handler.init(accessTokenRetriever, accessTokenValidator);
+        JwtRetriever jwtRetriever = () -> "foo";
+        JwtValidator jwtValidator = new DefaultJwtValidator(configs, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM);
+        handler.init(jwtRetriever, jwtValidator);
 
         try {
             Callback unsupportedCallback = new Callback() { };
@@ -166,11 +167,11 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
 
     @Test
     public void testMissingAccessToken() {
-        AccessTokenRetriever accessTokenRetriever = () -> {
+        JwtRetriever jwtRetriever = () -> {
             throw new IOException("The token endpoint response access_token value must be non-null");
         };
         Map<String, ?> configs = getSaslConfigs();
-        OAuthBearerLoginCallbackHandler handler = createHandler(accessTokenRetriever, configs);
+        OAuthBearerLoginCallbackHandler handler = createHandler(jwtRetriever, configs);
 
         try {
             OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
@@ -196,7 +197,7 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         File accessTokenFile = createTempFile(tmpDir, "access-token-", ".json", withNewline);
 
         Map<String, ?> configs = getSaslConfigs();
-        OAuthBearerLoginCallbackHandler handler = createHandler(new FileTokenRetriever(accessTokenFile.toPath()), configs);
+        OAuthBearerLoginCallbackHandler handler = createHandler(new FileJwtRetriever(accessTokenFile.toPath()), configs);
         OAuthBearerTokenCallback callback = new OAuthBearerTokenCallback();
         try {
             handler.handle(new Callback[]{callback});
@@ -226,7 +227,8 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         Map<String, ?> configs = getSaslConfigs(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL, accessTokenFile.toURI().toString());
         Map<String, Object> jaasConfigs = Collections.emptyMap();
         configureHandler(handler, configs, jaasConfigs);
-        assertInstanceOf(FileTokenRetriever.class, handler.getAccessTokenRetriever());
+        DefaultJwtRetriever defaultJwtRetriever = assertInstanceOf(DefaultJwtRetriever.class, handler.jwtRetriever());
+        assertInstanceOf(FileJwtRetriever.class, defaultJwtRetriever.delegate());
     }
 
     @Test
@@ -238,7 +240,8 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         jaasConfigs.put(CLIENT_ID_CONFIG, "an ID");
         jaasConfigs.put(CLIENT_SECRET_CONFIG, "a secret");
         configureHandler(handler, configs, jaasConfigs);
-        assertInstanceOf(HttpAccessTokenRetriever.class, handler.getAccessTokenRetriever());
+        DefaultJwtRetriever defaultJwtRetriever = assertInstanceOf(DefaultJwtRetriever.class, handler.jwtRetriever());
+        assertInstanceOf(HttpJwtRetriever.class, defaultJwtRetriever.delegate());
     }
 
     private void testInvalidAccessToken(String accessToken, String expectedMessageSubstring) throws Exception {
@@ -268,10 +271,10 @@ public class OAuthBearerLoginCallbackHandlerTest extends OAuthBearerTest {
         return String.format("%s.%s.%s", header, payload, signature);
     }
 
-    private OAuthBearerLoginCallbackHandler createHandler(AccessTokenRetriever accessTokenRetriever, Map<String, ?> configs) {
+    private OAuthBearerLoginCallbackHandler createHandler(JwtRetriever jwtRetriever, Map<String, ?> configs) {
         OAuthBearerLoginCallbackHandler handler = new OAuthBearerLoginCallbackHandler();
-        AccessTokenValidator accessTokenValidator = AccessTokenValidatorFactory.create(configs);
-        handler.init(accessTokenRetriever, accessTokenValidator);
+        JwtValidator jwtValidator = new DefaultJwtValidator(configs, OAuthBearerLoginModule.OAUTHBEARER_MECHANISM);
+        handler.init(jwtRetriever, jwtValidator);
         return handler;
     }
 

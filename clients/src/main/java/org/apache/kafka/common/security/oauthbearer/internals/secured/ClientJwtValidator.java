@@ -24,6 +24,7 @@ import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBea
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
+import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
@@ -33,7 +34,7 @@ import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARE
 import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME;
 
 /**
- * LoginAccessTokenValidator is an implementation of {@link AccessTokenValidator} that is used
+ * {@code ClientJwtValidator} is an implementation of {@link JwtValidator} that is used
  * by the client to perform some rudimentary validation of the JWT access token that is received
  * as part of the response from posting the client credentials to the OAuth/OIDC provider's
  * token endpoint.
@@ -50,9 +51,9 @@ import static org.apache.kafka.common.config.SaslConfigs.DEFAULT_SASL_OAUTHBEARE
  * </ol>
  */
 
-public class LoginAccessTokenValidator implements AccessTokenValidator {
+public class ClientJwtValidator implements JwtValidator {
 
-    private static final Logger log = LoggerFactory.getLogger(LoginAccessTokenValidator.class);
+    private static final Logger log = LoggerFactory.getLogger(ClientJwtValidator.class);
 
     public static final String EXPIRATION_CLAIM_NAME = "exp";
 
@@ -63,14 +64,14 @@ public class LoginAccessTokenValidator implements AccessTokenValidator {
     private final String subClaimName;
 
     /**
-     * Creates a new LoginAccessTokenValidator that will be used by the client for lightweight
+     * Creates a new {@code ClientJwtValidator} that will be used by the client for lightweight
      * validation of the JWT.
      *
      * @param scopeClaimName Name of the scope claim to use; must be non-<code>null</code>
      * @param subClaimName   Name of the subject claim to use; must be non-<code>null</code>
      */
 
-    public LoginAccessTokenValidator(String scopeClaimName, String subClaimName) {
+    public ClientJwtValidator(String scopeClaimName, String subClaimName) {
         this.scopeClaimName = ClaimValidationUtils.validateClaimNameOverride(DEFAULT_SASL_OAUTHBEARER_SCOPE_CLAIM_NAME, scopeClaimName);
         this.subClaimName = ClaimValidationUtils.validateClaimNameOverride(DEFAULT_SASL_OAUTHBEARER_SUB_CLAIM_NAME, subClaimName);
     }
@@ -121,6 +122,16 @@ public class LoginAccessTokenValidator implements AccessTokenValidator {
             expiration,
             subject,
             issuedAt);
+    }
+
+    @Override
+    public void init() throws IOException {
+        // Do nothing...
+    }
+
+    @Override
+    public void close() throws IOException {
+        // Do nothing...
     }
 
     private Object getClaim(Map<String, Object> payload, String claimName) {

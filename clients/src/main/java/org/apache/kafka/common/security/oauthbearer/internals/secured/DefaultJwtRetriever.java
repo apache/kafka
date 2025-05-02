@@ -18,10 +18,13 @@
 package org.apache.kafka.common.security.oauthbearer.internals.secured;
 
 import org.apache.kafka.common.config.SaslConfigs;
+import org.apache.kafka.common.utils.Utils;
 
+import java.io.IOException;
 import java.net.URL;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Objects;
 
 import javax.net.ssl.SSLSocketFactory;
 
@@ -36,32 +39,27 @@ import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallb
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.CLIENT_SECRET_CONFIG;
 import static org.apache.kafka.common.security.oauthbearer.OAuthBearerLoginCallbackHandler.SCOPE_CONFIG;
 
-public class AccessTokenRetrieverFactory  {
+public class DefaultJwtRetriever implements JwtRetriever {
 
-    /**
-     * Create an {@link AccessTokenRetriever} from the given SASL and JAAS configuration.
-     *
-     * <b>Note</b>: the returned <code>AccessTokenRetriever</code> is <em>not</em> initialized
-     * here and must be done by the caller prior to use.
-     *
-     * @param configs    SASL configuration
-     * @param jaasConfig JAAS configuration
-     *
-     * @return Non-<code>null</code> {@link AccessTokenRetriever}
-     */
+    private final Map<String, ?> configs;
+    private final String saslMechanism;
+    private final Map<String, Object> jaasConfig;
 
-    public static AccessTokenRetriever create(Map<String, ?> configs, Map<String, Object> jaasConfig) {
-        return create(configs, null, jaasConfig);
+    private JwtRetriever delegate;
+
+    public DefaultJwtRetriever(Map<String, ?> configs, String saslMechanism, Map<String, Object> jaasConfig) {
+        this.configs = configs;
+        this.saslMechanism = saslMechanism;
+        this.jaasConfig = jaasConfig;
     }
 
-    public static AccessTokenRetriever create(Map<String, ?> configs,
-        String saslMechanism,
-        Map<String, Object> jaasConfig) {
+    @Override
+    public void init() throws IOException {
         ConfigurationUtils cu = new ConfigurationUtils(configs, saslMechanism);
         URL tokenEndpointUrl = cu.validateUrl(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL);
 
         if (tokenEndpointUrl.getProtocol().toLowerCase(Locale.ROOT).equals("file")) {
-            return new FileTokenRetriever(cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL));
+            delegate = new FileJwtRetriever(cu.validateFile(SASL_OAUTHBEARER_TOKEN_ENDPOINT_URL));
         } else {
             JaasOptionsUtils jou = new JaasOptionsUtils(jaasConfig);
             String clientId = jou.validateString(CLIENT_ID_CONFIG);
@@ -75,7 +73,7 @@ public class AccessTokenRetrieverFactory  {
 
             boolean urlencodeHeader = validateUrlencodeHeader(cu);
 
-            return new HttpAccessTokenRetriever(clientId,
+            delegate = new HttpJwtRetriever(clientId,
                 clientSecret,
                 scope,
                 sslSocketFactory,
@@ -86,6 +84,18 @@ public class AccessTokenRetrieverFactory  {
                 cu.validateInteger(SASL_LOGIN_READ_TIMEOUT_MS, false),
                 urlencodeHeader);
         }
+
+        delegate.init();
+    }
+
+    @Override
+    public String retrieve() throws IOException {
+        return Objects.requireNonNull(delegate).retrieve();
+    }
+
+    @Override
+    public void close() throws IOException {
+        Utils.closeQuietly(delegate, "delegate");
     }
 
     /**
@@ -96,7 +106,7 @@ public class AccessTokenRetrieverFactory  {
      * <p/>
      *
      * This utility method ensures that we have a non-{@code null} value to use in the
-     * {@link HttpAccessTokenRetriever} constructor.
+     * {@link HttpJwtRetriever} constructor.
      */
     static boolean validateUrlencodeHeader(ConfigurationUtils configurationUtils) {
         Boolean urlencodeHeader = configurationUtils.validateBoolean(SASL_OAUTHBEARER_HEADER_URLENCODE, false);
@@ -107,4 +117,7 @@ public class AccessTokenRetrieverFactory  {
             return DEFAULT_SASL_OAUTHBEARER_HEADER_URLENCODE;
     }
 
+    public JwtRetriever delegate() {
+        return delegate;
+    }
 }
