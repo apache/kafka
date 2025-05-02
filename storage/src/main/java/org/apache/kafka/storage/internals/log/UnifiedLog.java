@@ -2417,7 +2417,7 @@ public class UnifiedLog implements AutoCloseable {
                                             boolean reloadFromCleanShutdown,
                                             String logPrefix) throws IOException {
         List<Long> offsetsToSnapshot = new ArrayList<>();
-        if (segments.nonEmpty()) {
+        if (segments.lastSegment().isPresent()) {
             long lastSegmentBaseOffset = segments.lastSegment().get().baseOffset();
             Optional<LogSegment> lowerSegment = segments.lowerSegment(lastSegmentBaseOffset);
             Optional<Long> nextLatestSegmentBaseOffset = lowerSegment.map(LogSegment::baseOffset);
