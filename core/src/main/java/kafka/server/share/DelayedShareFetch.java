@@ -250,6 +250,8 @@ public class DelayedShareFetch extends DelayedOperation {
                 // updated in a different tryComplete thread.
                 responseData = combineLogReadResponse(topicPartitionData, localPartitionsAlreadyFetched);
 
+            updateFetchOffsetMetadataForRemoteFetchPartitions(topicPartitionData, responseData);
+
             List<ShareFetchPartitionData> shareFetchPartitionDataList = new ArrayList<>();
             responseData.forEach((topicIdPartition, logReadResult) ->
                 shareFetchPartitionDataList.add(new ShareFetchPartitionData(
@@ -272,6 +274,32 @@ public class DelayedShareFetch extends DelayedOperation {
         } finally {
             releasePartitionLocksAndAddToActionQueue(topicPartitionData.keySet());
         }
+    }
+
+    /**
+     * This function updates the cached fetch offset metadata to null corresponding to the share partition's fetch offset.
+     * This is required in the case when a topic partition that has local log fetch during tryComplete changes to remote
+     * storage fetch in onComplete. In this situation, if the cached fetchOffsetMetadata got updated in tryComplete, then
+     * we will enter a state where each share fetch request for this topic partition from client will use the cached
+     * fetchOffsetMetadata in tryComplete and return an empty response to the client from onComplete.
+     * Hence, we require to set offsetMetadata to null for this fetch offset, which would cause tryComplete to update
+     * fetchOffsetMetadata and thereby we will identify this partition for remote storage fetch.
+     * @param topicPartitionData - Map containing the fetch offset for the topic partitions.
+     * @param replicaManagerReadResponse - Map containing the readFromLog response from replicaManager for the topic partitions.
+     */
+    private void updateFetchOffsetMetadataForRemoteFetchPartitions(
+        LinkedHashMap<TopicIdPartition, Long> topicPartitionData,
+        LinkedHashMap<TopicIdPartition, LogReadResult> replicaManagerReadResponse
+    ) {
+        replicaManagerReadResponse.forEach((topicIdPartition, logReadResult) -> {
+            if (logReadResult.info().delayedRemoteStorageFetch.isPresent()) {
+                SharePartition sharePartition = sharePartitions.get(topicIdPartition);
+                sharePartition.updateFetchOffsetMetadata(
+                    topicPartitionData.get(topicIdPartition),
+                    null
+                );
+            }
+        });
     }
 
     /**
@@ -671,7 +699,7 @@ public class DelayedShareFetch extends DelayedOperation {
      * Case a: The partition is in an offline log directory on this broker
      * Case b: This broker does not know the partition it tries to fetch
      * Case c: This broker is no longer the leader of the partition it tries to fetch
-     * Case d: The remote storage read request completed (succeeded or failed)
+     * Case d: All remote storage read requests completed
      * @return boolean representing whether the remote fetch is completed or not.
      */
     private boolean maybeCompletePendingRemoteFetch() {

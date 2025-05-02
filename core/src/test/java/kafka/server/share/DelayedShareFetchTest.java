@@ -1309,7 +1309,7 @@ public class DelayedShareFetchTest {
         assertEquals(Set.of(tp1, tp2), future.join().keySet());
         // Exception occurred and was handled.
         Mockito.verify(exceptionHandler, times(2)).accept(any(), any());
-        // Verify the locks are released for both local and remote read topic partitions tp0, tp1 and tp2 because of exception occurrence.
+        // Verify the locks are released for all local and remote read topic partitions tp0, tp1 and tp2 because of exception occurrence.
         Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(Set.of(tp0));
         Mockito.verify(delayedShareFetch, times(1)).releasePartitionLocks(Set.of(tp1, tp2));
         Mockito.verify(delayedShareFetch, times(1)).onComplete();
