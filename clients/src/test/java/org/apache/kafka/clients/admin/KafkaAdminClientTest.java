@@ -2292,7 +2292,7 @@ public class KafkaAdminClientTest {
 
     private static DescribeLogDirsResponse prepareEmptyDescribeLogDirsResponse(Optional<Errors> error) {
         DescribeLogDirsResponseData data = new DescribeLogDirsResponseData();
-        if (error.isPresent()) data.setErrorCode(error.get().code());
+        error.ifPresent(e -> data.setErrorCode(e.code()));
         return new DescribeLogDirsResponse(data);
     }
 

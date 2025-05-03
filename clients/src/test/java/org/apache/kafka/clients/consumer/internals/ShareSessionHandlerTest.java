@@ -155,9 +155,8 @@ public class ShareSessionHandlerTest {
         Uuid memberId = Uuid.randomUuid();
         ShareSessionHandler handler = new ShareSessionHandler(LOG_CONTEXT, 1, memberId);
 
-        Map<String, Uuid> topicIds = new HashMap<>();
         Map<Uuid, String> topicNames = new HashMap<>();
-        Uuid fooId = addTopicId(topicIds, topicNames, "foo");
+        Uuid fooId = addTopicId(topicNames, "foo");
         TopicIdPartition foo0 = new TopicIdPartition(fooId, 0, "foo");
         TopicIdPartition foo1 = new TopicIdPartition(fooId, 1, "foo");
         handler.addPartitionToFetch(foo0, null);
@@ -177,7 +176,7 @@ public class ShareSessionHandlerTest {
         handler.handleResponse(resp, ApiKeys.SHARE_FETCH.latestVersion(true));
 
         // Test a fetch request which adds one partition
-        Uuid barId = addTopicId(topicIds, topicNames, "bar");
+        Uuid barId = addTopicId(topicNames, "bar");
         TopicIdPartition bar0 = new TopicIdPartition(barId, 0, "bar");
         handler.addPartitionToFetch(foo0, null);
         handler.addPartitionToFetch(foo1, null);
@@ -222,10 +221,9 @@ public class ShareSessionHandlerTest {
         Uuid memberId = Uuid.randomUuid();
         ShareSessionHandler handler = new ShareSessionHandler(LOG_CONTEXT, 1, memberId);
 
-        Map<String, Uuid> topicIds = new HashMap<>();
         Map<Uuid, String> topicNames = new HashMap<>();
-        Uuid fooId = addTopicId(topicIds, topicNames, "foo");
-        Uuid barId = addTopicId(topicIds, topicNames, "bar");
+        Uuid fooId = addTopicId(topicNames, "foo");
+        Uuid barId = addTopicId(topicNames, "bar");
         TopicIdPartition foo0 = new TopicIdPartition(fooId, 0, "foo");
         TopicIdPartition foo1 = new TopicIdPartition(fooId, 1, "foo");
         TopicIdPartition bar0 = new TopicIdPartition(barId, 0, "bar");
@@ -289,9 +287,8 @@ public class ShareSessionHandlerTest {
         Uuid memberId = Uuid.randomUuid();
         ShareSessionHandler handler = new ShareSessionHandler(LOG_CONTEXT, 1, memberId);
 
-        Map<String, Uuid> topicIds = new HashMap<>();
         Map<Uuid, String> topicNames = new HashMap<>();
-        Uuid topicId1 = addTopicId(topicIds, topicNames, "foo");
+        Uuid topicId1 = addTopicId(topicNames, "foo");
         TopicIdPartition tp = new TopicIdPartition(topicId1, 0, "foo");
         handler.addPartitionToFetch(tp, null);
         ShareFetchRequestData requestData1 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
@@ -309,7 +306,7 @@ public class ShareSessionHandlerTest {
         handler.handleResponse(resp, ApiKeys.SHARE_FETCH.latestVersion(true));
 
         // Try to add a new topic ID
-        Uuid topicId2 = addTopicId(topicIds, topicNames, "foo");
+        Uuid topicId2 = addTopicId(topicNames, "foo");
         TopicIdPartition tp2 = new TopicIdPartition(topicId2, 0, "foo");
         // Use the same data besides the topic ID
         handler.addPartitionToFetch(tp2, null);
@@ -334,9 +331,8 @@ public class ShareSessionHandlerTest {
         ShareSessionHandler handler = new ShareSessionHandler(LOG_CONTEXT, 1, memberId);
 
         // We want to test when all topics are removed from the session
-        Map<String, Uuid> topicIds = new HashMap<>();
         Map<Uuid, String> topicNames = new HashMap<>();
-        Uuid topicId = addTopicId(topicIds, topicNames, "foo");
+        Uuid topicId = addTopicId(topicNames, "foo");
         TopicIdPartition foo0 = new TopicIdPartition(topicId, 0, "foo");
         handler.addPartitionToFetch(foo0, null);
         ShareFetchRequestData requestData1 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
@@ -369,9 +365,8 @@ public class ShareSessionHandlerTest {
         ShareSessionHandler handler = new ShareSessionHandler(LOG_CONTEXT, 1, memberId);
 
         // We want to test when all topics are removed from the session
-        Map<String, Uuid> topicIds = new HashMap<>();
         Map<Uuid, String> topicNames = new HashMap<>();
-        Uuid topicId = addTopicId(topicIds, topicNames, "foo");
+        Uuid topicId = addTopicId(topicNames, "foo");
         TopicIdPartition foo0 = new TopicIdPartition(topicId, 0, "foo");
         handler.addPartitionToFetch(foo0, null);
         ShareFetchRequestData requestData1 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
@@ -402,9 +397,8 @@ public class ShareSessionHandlerTest {
         Uuid memberId = Uuid.randomUuid();
         ShareSessionHandler handler = new ShareSessionHandler(LOG_CONTEXT, 1, memberId);
 
-        Map<String, Uuid> topicIds = new HashMap<>();
         Map<Uuid, String> topicNames = new HashMap<>();
-        Uuid topicId = addTopicId(topicIds, topicNames, "foo");
+        Uuid topicId = addTopicId(topicNames, "foo");
         handler.addPartitionToFetch(new TopicIdPartition(topicId, 0, "foo"), null);
         ShareFetchRequestData requestData1 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
         assertMapsEqual(reqMap(new TopicIdPartition(topicId, 0, "foo")),
@@ -428,7 +422,7 @@ public class ShareSessionHandlerTest {
         handler.handleResponse(resp2, ApiKeys.SHARE_FETCH.latestVersion(true));
 
         // After the topic is removed, add a recreated topic with a new ID
-        Uuid topicId2 = addTopicId(topicIds, topicNames, "foo");
+        Uuid topicId2 = addTopicId(topicNames, "foo");
         handler.addPartitionToFetch(new TopicIdPartition(topicId2, 0, "foo"), null);
         ShareFetchRequestData requestData3 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
 
@@ -443,9 +437,8 @@ public class ShareSessionHandlerTest {
         Uuid memberId = Uuid.randomUuid();
         ShareSessionHandler handler = new ShareSessionHandler(LOG_CONTEXT, 1, memberId);
 
-        Map<String, Uuid> topicIds = new HashMap<>();
         Map<Uuid, String> topicNames = new HashMap<>();
-        Uuid fooId = addTopicId(topicIds, topicNames, "foo");
+        Uuid fooId = addTopicId(topicNames, "foo");
         TopicIdPartition foo0 = new TopicIdPartition(fooId, 0, "foo");
 
         Acknowledgements acknowledgements = Acknowledgements.empty();
@@ -470,9 +463,7 @@ public class ShareSessionHandlerTest {
         assertEquals(memberId.toString(), requestData.memberId());
     }
 
-    private Uuid addTopicId(Map<String, Uuid> topicIds, Map<Uuid, String> topicNames, String name) {
-        // If the same topic name is added more than once, the latest mapping will be in the
-        // topicIds, but all mappings will be in topicNames. This is needed in the replace tests.
+    private Uuid addTopicId(Map<Uuid, String> topicNames, String name) {
         Uuid id = Uuid.randomUuid();
         topicNames.put(id, name);
         return id;

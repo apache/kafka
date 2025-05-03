@@ -570,17 +570,6 @@ public class TestUtils {
         return toBuffer(records.toSend());
     }
 
-    public static Set<TopicPartition> generateRandomTopicPartitions(int numTopic, int numPartitionPerTopic) {
-        Set<TopicPartition> tps = new HashSet<>();
-        for (int i = 0; i < numTopic; i++) {
-            String topic = randomString(32);
-            for (int j = 0; j < numPartitionPerTopic; j++) {
-                tps.add(new TopicPartition(topic, j));
-            }
-        }
-        return tps;
-    }
-
     /**
      * Assert that a future raises an expected exception cause type.
      * This method will wait for the future to complete or timeout(15000 milliseconds).
