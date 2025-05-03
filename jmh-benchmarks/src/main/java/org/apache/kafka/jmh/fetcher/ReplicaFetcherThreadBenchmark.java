@@ -94,8 +94,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 
 import scala.Option;
-import scala.collection.Iterator;
-import scala.collection.Map;
 import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.server.common.KRaftVersion.KRAFT_VERSION_1;
@@ -279,11 +277,9 @@ public class ReplicaFetcherThreadBenchmark {
                         }
 
                         @Override
-                        public Map<TopicPartition, EpochEndOffset> fetchEpochEndOffsets(Map<TopicPartition, OffsetForLeaderPartition> partitions) {
-                            scala.collection.mutable.Map<TopicPartition, EpochEndOffset> endOffsets = new scala.collection.mutable.HashMap<>();
-                            Iterator<TopicPartition> iterator = partitions.keys().iterator();
-                            while (iterator.hasNext()) {
-                                TopicPartition tp = iterator.next();
+                        public java.util.Map<TopicPartition, EpochEndOffset> fetchEpochEndOffsets(java.util.Map<TopicPartition, OffsetForLeaderPartition> partitions) {
+                            java.util.Map<TopicPartition, EpochEndOffset> endOffsets = new java.util.HashMap<>();
+                            for (TopicPartition tp : partitions.keySet()) {
                                 endOffsets.put(tp, new EpochEndOffset()
                                         .setPartition(tp.partition())
                                         .setErrorCode(Errors.NONE.code())
@@ -294,8 +290,8 @@ public class ReplicaFetcherThreadBenchmark {
                         }
 
                         @Override
-                        public Map<TopicPartition, FetchResponseData.PartitionData> fetch(FetchRequest.Builder fetchRequest) {
-                            return new scala.collection.mutable.HashMap<>();
+                        public java.util.Map<TopicPartition, FetchResponseData.PartitionData> fetch(FetchRequest.Builder fetchRequest) {
+                            return new java.util.HashMap<>();
                         }
                     },
                     config,
