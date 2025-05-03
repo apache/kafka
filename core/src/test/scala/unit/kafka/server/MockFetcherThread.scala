@@ -22,6 +22,7 @@ import org.apache.kafka.common.requests.OffsetsForLeaderEpochResponse.UNDEFINED_
 import org.apache.kafka.common.requests.FetchResponse
 import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.common.OffsetAndEpoch
+import org.apache.kafka.server.ReplicaState
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.storage.internals.log.LogAppendInfo
 import org.apache.kafka.storage.log.metrics.BrokerTopicStats
@@ -178,8 +179,8 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
 
   def verifyLastFetchedEpoch(partition: TopicPartition, expectedEpoch: Option[Int]): Unit = {
     if (leader.isTruncationOnFetchSupported) {
-      assertEquals(Some(Fetching), fetchState(partition).map(_.state))
-      assertEquals(expectedEpoch, fetchState(partition).map(_.lastFetchedEpoch.get()))
+      assertEquals(Some(ReplicaState.Fetching.getInstance()), fetchState(partition).map(_.getState))
+      assertEquals(expectedEpoch, fetchState(partition).map(_.getLastFetchedEpoch.get()))
     }
   }
 }

@@ -22,6 +22,7 @@ import org.apache.kafka.common.message.FetchResponseData
 import org.apache.kafka.common.protocol.ApiKeys
 import org.apache.kafka.common.record._
 import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.server.{PartitionFetchState, ReplicaState}
 import org.junit.jupiter.api.Assertions._
 import kafka.server.FetcherThreadTestUtils.{initialFetchState, mkBatch}
 import org.junit.jupiter.params.ParameterizedTest
@@ -67,8 +68,8 @@ class TierStateMachineTest {
     fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
 
     assertEquals(3L, replicaState.logEndOffset)
-    val expectedState = if (truncateOnFetch) Option(Fetching) else Option(Truncating)
-    assertEquals(expectedState, fetcher.fetchState(partition).map(_.state))
+    val expectedState = if (truncateOnFetch) Option(ReplicaState.Fetching.getInstance()) else Option(ReplicaState.Truncating.getInstance())
+    assertEquals(expectedState, fetcher.fetchState(partition).map(_.getState))
 
     fetcher.doWork()
     // verify that the offset moved to tiered store error triggered and respective states are truncated to expected.
@@ -128,8 +129,8 @@ class TierStateMachineTest {
     fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
 
     assertEquals(3L, replicaState.logEndOffset)
-    val expectedState = if (truncateOnFetch) Option(Fetching) else Option(Truncating)
-    assertEquals(expectedState, fetcher.fetchState(partition).map(_.state))
+    val expectedState = if (truncateOnFetch) Option(ReplicaState.Fetching.getInstance()) else Option(ReplicaState.Truncating.getInstance())
+    assertEquals(expectedState, fetcher.fetchState(partition).map(_.getState))
 
     fetcher.doWork()
     // Verify that the out of range error is triggered and the fetch offset is reset to the global log start offset.
@@ -162,9 +163,11 @@ class TierStateMachineTest {
     var isErrorHandled = false
     val mockLeaderEndpoint = new MockLeaderEndPoint(truncateOnFetch = truncateOnFetch, version = version)
     val mockTierStateMachine = new MockTierStateMachine(mockLeaderEndpoint) {
-      override def start(topicPartition: TopicPartition, currentFetchState: PartitionFetchState, fetchPartitionData: FetchResponseData.PartitionData): PartitionFetchState = {
+      override def start(topicPartition: TopicPartition,
+                         currentFetchState: PartitionFetchState,
+                         fetchPartitionData: FetchResponseData.PartitionData): PartitionFetchState = {
         isErrorHandled = true
-        throw new FencedLeaderEpochException(s"Epoch ${currentFetchState.currentLeaderEpoch} is fenced")
+        throw new FencedLeaderEpochException(s"Epoch ${currentFetchState.getCurrentLeaderEpoch} is fenced")
       }
     }
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, failedPartitions = failedPartitions)
