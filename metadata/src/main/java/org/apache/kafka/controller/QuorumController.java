@@ -111,12 +111,12 @@ import org.apache.kafka.queue.KafkaEventQueue;
 import org.apache.kafka.raft.Batch;
 import org.apache.kafka.raft.BatchReader;
 import org.apache.kafka.raft.LeaderAndEpoch;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.RaftClient;
 import org.apache.kafka.server.authorizer.AclCreateResult;
 import org.apache.kafka.server.authorizer.AclDeleteResult;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.common.KRaftVersion;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.fault.FaultHandler;
 import org.apache.kafka.server.fault.FaultHandlerException;
 import org.apache.kafka.server.policy.AlterConfigPolicy;
@@ -1519,6 +1519,7 @@ public final class QuorumController implements Controller {
             setQuorumFeatures(quorumFeatures).
             setSnapshotRegistry(snapshotRegistry).
             setClusterFeatureSupportDescriber(clusterSupportDescriber).
+            setKRaftVersionAccessor(new RaftClientKRaftVersionAccessor(raftClient)).
             build();
         this.clusterControl = new ClusterControlManager.Builder().
             setLogContext(logContext).
@@ -2041,7 +2042,7 @@ public final class QuorumController implements Controller {
                 upgradeTypes.put(featureName, FeatureUpdate.UpgradeType.fromCode(featureUpdate.upgradeType()));
                 updates.put(featureName, featureUpdate.maxVersionLevel());
             });
-            return configurationControl.updateFeatures(updates, upgradeTypes, request.validateOnly());
+            return configurationControl.updateFeatures(updates, upgradeTypes, request.validateOnly(), curClaimEpoch);
         }).thenApply(result -> {
             UpdateFeaturesResponseData responseData = new UpdateFeaturesResponseData();
 

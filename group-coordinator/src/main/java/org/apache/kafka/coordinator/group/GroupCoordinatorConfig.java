@@ -60,10 +60,11 @@ public class GroupCoordinatorConfig {
     ///
     public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_CONFIG = "group.coordinator.rebalance.protocols";
     public static final String GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DOC = "The list of enabled rebalance protocols." +
-            "The " + Group.GroupType.SHARE + " and " + Group.GroupType.STREAMS + " rebalance protocols are in early access and therefore must not be used in production.";
+            "The " + Group.GroupType.STREAMS + " rebalance protocol is in early access and therefore must not be used in production.";
     public static final List<String> GROUP_COORDINATOR_REBALANCE_PROTOCOLS_DEFAULT = List.of(
         Group.GroupType.CLASSIC.toString(),
-        Group.GroupType.CONSUMER.toString());
+        Group.GroupType.CONSUMER.toString(),
+        Group.GroupType.STREAMS.toString());
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_CONFIG = "group.coordinator.append.linger.ms";
     public static final String GROUP_COORDINATOR_APPEND_LINGER_MS_DOC = "The duration in milliseconds that the coordinator will " +
         "wait for writes to accumulate before flushing them to disk. Increasing this value improves write efficiency and batch size, " +

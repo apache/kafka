@@ -521,11 +521,14 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         }
 
         List<StreamsGroupHeartbeatResponseData.Status> statuses = data.status();
-        if (statuses != null && !statuses.isEmpty()) {
-            String statusDetails = statuses.stream()
-                .map(status -> "(" + status.statusCode() + ") " + status.statusDetail())
-                .collect(Collectors.joining(", "));
-            logger.warn("Membership is in the following statuses: {}", statusDetails);
+        if (statuses != null) {
+            streamsRebalanceData.setStatuses(statuses);
+            if (!statuses.isEmpty()) {
+                String statusDetails = statuses.stream()
+                    .map(status -> "(" + status.statusCode() + ") " + status.statusDetail())
+                    .collect(Collectors.joining(", "));
+                logger.warn("Membership is in the following statuses: {}", statusDetails);
+            }
         }
 
         membershipManager.onHeartbeatSuccess(response);
@@ -671,16 +674,24 @@ public class StreamsGroupHeartbeatRequestManager implements RequestManager {
         membershipManager.transitionToFatal();
     }
 
-    private static Map<StreamsRebalanceData.HostInfo, List<TopicPartition>> convertHostInfoMap(final StreamsGroupHeartbeatResponseData data) {
-        Map<StreamsRebalanceData.HostInfo, List<TopicPartition>> partitionsByHost = new HashMap<>();
+    private static Map<StreamsRebalanceData.HostInfo, StreamsRebalanceData.EndpointPartitions> convertHostInfoMap(
+            final StreamsGroupHeartbeatResponseData data) {
+        Map<StreamsRebalanceData.HostInfo, StreamsRebalanceData.EndpointPartitions> partitionsByHost = new HashMap<>();
         data.partitionsByUserEndpoint().forEach(endpoint -> {
-            List<TopicPartition> topicPartitions = endpoint.partitions().stream()
-                .flatMap(partition ->
-                    partition.partitions().stream().map(partitionId -> new TopicPartition(partition.topic(), partitionId)))
-                .collect(Collectors.toList());
+            List<TopicPartition> activeTopicPartitions = getTopicPartitionList(endpoint.activePartitions());
+            List<TopicPartition> standbyTopicPartitions = getTopicPartitionList(endpoint.standbyPartitions());
             StreamsGroupHeartbeatResponseData.Endpoint userEndpoint = endpoint.userEndpoint();
-            partitionsByHost.put(new StreamsRebalanceData.HostInfo(userEndpoint.host(), userEndpoint.port()), topicPartitions);
+            StreamsRebalanceData.EndpointPartitions endpointPartitions = new StreamsRebalanceData.EndpointPartitions(activeTopicPartitions, standbyTopicPartitions);
+            partitionsByHost.put(new StreamsRebalanceData.HostInfo(userEndpoint.host(), userEndpoint.port()), endpointPartitions);
         });
         return partitionsByHost;
     }
+
+    static List<TopicPartition> getTopicPartitionList(List<StreamsGroupHeartbeatResponseData.TopicPartition> topicPartitions) {
+        return topicPartitions.stream()
+                .flatMap(partition ->
+                        partition.partitions().stream().map(partitionId -> new TopicPartition(partition.topic(), partitionId)))
+                .collect(Collectors.toList());
+    }
+
 }

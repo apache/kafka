@@ -208,11 +208,11 @@ public class TransactionsCommandTest {
         }
 
         Map<Integer, Collection<TransactionListing>> transactions = new HashMap<>();
-        transactions.put(0, asList(
+        transactions.put(0, List.of(
             new TransactionListing("foo", 12345L, TransactionState.ONGOING),
             new TransactionListing("bar", 98765L, TransactionState.PREPARE_ABORT)
         ));
-        transactions.put(1, singletonList(
+        transactions.put(1, List.of(
             new TransactionListing("baz", 13579L, TransactionState.COMPLETE_COMMIT)
         ));
 
@@ -332,6 +332,42 @@ public class TransactionsCommandTest {
             "bar-0"
         );
         assertEquals(expectedRow, table.get(1));
+    }
+
+    @Test
+    public void testListTransactionsWithTransactionalIdPattern() throws Exception {
+        String[] args = new String[] {
+            "--bootstrap-server",
+            "localhost:9092",
+            "list",
+            "--transactional-id-pattern",
+            "ba.*"
+        };
+
+        Map<Integer, Collection<TransactionListing>> transactions = new HashMap<>();
+        transactions.put(0, List.of(
+            new TransactionListing("bar", 98765L, TransactionState.PREPARE_ABORT)
+        ));
+        transactions.put(1, List.of(
+            new TransactionListing("baz", 13579L, TransactionState.COMPLETE_COMMIT)
+        ));
+
+        expectListTransactions(new ListTransactionsOptions().filterOnTransactionalIdPattern("ba.*"), transactions);
+
+        execute(args);
+        assertNormalExit();
+
+        List<List<String>> table = readOutputAsTable();
+        assertEquals(3, table.size());
+
+        // Assert expected headers
+        List<String> expectedHeaders = TransactionsCommand.ListTransactionsCommand.HEADERS;
+        assertEquals(expectedHeaders, table.get(0));
+        Set<List<String>> expectedRows = Set.of(
+            List.of("bar", "0", "98765", "PrepareAbort"),
+            List.of("baz", "1", "13579", "CompleteCommit")
+        );
+        assertEquals(expectedRows, new HashSet<>(table.subList(1, table.size())));
     }
 
     @Test

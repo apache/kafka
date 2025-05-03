@@ -14,15 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.raft.internals;
 
-package org.apache.kafka.server.common;
-
-public class AdminCommandFailedException extends RuntimeException {
-    public AdminCommandFailedException(String message) {
-        super(message);
-    }
-
-    public AdminCommandFailedException(String message, Throwable cause) {
-        super(message, cause);
+/**
+ * Type to capture the atempt to send a request.
+ *
+ * @param requestSent true if the request was sent
+ * @param timeToWaitMs the amount of time to wait in milliseconds before attempting to resend the
+ *                     request.
+ */
+public record RequestSendResult(boolean requestSent, long timeToWaitMs) {
+    public static RequestSendResult of(boolean requestSent, long timeToWaitMs) {
+        return new RequestSendResult(requestSent, timeToWaitMs);
     }
 }

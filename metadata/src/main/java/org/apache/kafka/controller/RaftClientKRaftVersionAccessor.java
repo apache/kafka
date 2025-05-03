@@ -14,14 +14,24 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft;
 
-public record OffsetAndEpoch(long offset, int epoch) implements Comparable<OffsetAndEpoch> {
+package org.apache.kafka.controller;
 
-    @Override
-    public int compareTo(OffsetAndEpoch o) {
-        if (epoch == o.epoch)
-            return Long.compare(offset, o.offset);
-        return Integer.compare(epoch, o.epoch);
+import org.apache.kafka.raft.RaftClient;
+import org.apache.kafka.server.common.KRaftVersion;
+
+public final class RaftClientKRaftVersionAccessor implements KRaftVersionAccessor {
+    private final RaftClient<?> raftClient;
+
+    public RaftClientKRaftVersionAccessor(RaftClient<?> raftClient) {
+        this.raftClient = raftClient;
+    }
+
+    public KRaftVersion kraftVersion() {
+        return raftClient.kraftVersion();
+    }
+
+    public void upgradeKRaftVersion(int epoch, KRaftVersion version, boolean validateOnly) {
+        raftClient.upgradeKRaftVersion(epoch, version, validateOnly);
     }
 }

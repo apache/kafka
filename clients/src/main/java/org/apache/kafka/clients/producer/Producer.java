@@ -42,7 +42,14 @@ public interface Producer<K, V> extends Closeable {
     /**
      * See {@link KafkaProducer#initTransactions()}
      */
-    void initTransactions();
+    default void initTransactions() {
+        initTransactions(false);
+    }
+
+    /**
+     * See {@link KafkaProducer#initTransactions(boolean)}
+     */
+    void initTransactions(boolean keepPreparedTxn);
 
     /**
      * See {@link KafkaProducer#beginTransaction()}

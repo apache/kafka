@@ -22,11 +22,10 @@ import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntityDa
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData.EntryData;
 import org.apache.kafka.common.message.DescribeClientQuotasResponseData.ValueData;
 import org.apache.kafka.common.protocol.ApiKeys;
-import org.apache.kafka.common.protocol.ByteBufferAccessor;
 import org.apache.kafka.common.protocol.Errors;
+import org.apache.kafka.common.protocol.Readable;
 import org.apache.kafka.common.quota.ClientQuotaEntity;
 
-import java.nio.ByteBuffer;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -85,8 +84,8 @@ public class DescribeClientQuotasResponse extends AbstractResponse {
         return errorCounts(Errors.forCode(data.errorCode()));
     }
 
-    public static DescribeClientQuotasResponse parse(ByteBuffer buffer, short version) {
-        return new DescribeClientQuotasResponse(new DescribeClientQuotasResponseData(new ByteBufferAccessor(buffer), version));
+    public static DescribeClientQuotasResponse parse(Readable readable, short version) {
+        return new DescribeClientQuotasResponse(new DescribeClientQuotasResponseData(readable, version));
     }
 
     public static DescribeClientQuotasResponse fromQuotaEntities(Map<ClientQuotaEntity, Map<String, Double>> entities,
