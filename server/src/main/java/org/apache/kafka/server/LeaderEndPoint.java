@@ -22,8 +22,6 @@ import org.apache.kafka.common.message.FetchResponseData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData.OffsetForLeaderPartition;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData.EpochEndOffset;
 import org.apache.kafka.common.requests.FetchRequest;
-import org.apache.kafka.server.AbstractFetcherThread.PartitionFetchState;
-import org.apache.kafka.server.AbstractFetcherThread.ReplicaFetch;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.network.BrokerEndPoint;
 
@@ -112,5 +110,5 @@ public interface LeaderEndPoint {
      *
      * @return A ResultWithPartitions, used to create the fetchRequest for fetch.
      */
-    AbstractFetcherThread.ResultWithPartitions<Optional<ReplicaFetch>> buildFetch(Map<TopicPartition, PartitionFetchState> partitions);
+    ResultWithPartitions<Optional<ReplicaFetch>> buildFetch(Map<TopicPartition, PartitionFetchState> partitions);
 }

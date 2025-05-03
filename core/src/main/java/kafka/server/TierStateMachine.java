@@ -26,6 +26,9 @@ import org.apache.kafka.common.message.OffsetForLeaderEpochRequestData;
 import org.apache.kafka.common.message.OffsetForLeaderEpochResponseData;
 import org.apache.kafka.common.protocol.Errors;
 import org.apache.kafka.common.utils.Utils;
+import org.apache.kafka.server.LeaderEndPoint;
+import org.apache.kafka.server.PartitionFetchState;
+import org.apache.kafka.server.ReplicaState;
 import org.apache.kafka.server.common.CheckpointFile;
 import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.log.remote.storage.RemoteLogManager;
@@ -54,9 +57,6 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
-
-import scala.Option;
-import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.storage.internals.log.LogStartOffsetIncrementReason.LeaderOffsetIncremented;
 
@@ -95,8 +95,8 @@ public class TierStateMachine {
     PartitionFetchState start(TopicPartition topicPartition,
                               PartitionFetchState currentFetchState,
                               PartitionData fetchPartitionData) throws Exception {
-        OffsetAndEpoch epochAndLeaderLocalStartOffset = leader.fetchEarliestLocalOffset(topicPartition, currentFetchState.currentLeaderEpoch());
-        int epoch = epochAndLeaderLocalStartOffset.epoch();
+        OffsetAndEpoch epochAndLeaderLocalStartOffset = leader.fetchEarliestLocalOffset(topicPartition, currentFetchState.getCurrentLeaderEpoch());
+        int epoch = epochAndLeaderLocalStartOffset.leaderEpoch();
         long leaderLocalStartOffset = epochAndLeaderLocalStartOffset.offset();
 
         long offsetToFetch;
@@ -111,20 +111,20 @@ public class TierStateMachine {
         }
 
         try {
-            offsetToFetch = buildRemoteLogAuxState(topicPartition, currentFetchState.currentLeaderEpoch(), leaderLocalStartOffset, epoch, fetchPartitionData.logStartOffset(), unifiedLog);
+            offsetToFetch = buildRemoteLogAuxState(topicPartition, currentFetchState.getCurrentLeaderEpoch(), leaderLocalStartOffset, epoch, fetchPartitionData.logStartOffset(), unifiedLog);
         } catch (RemoteStorageException e) {
             replicaMgr.brokerTopicStats().topicStats(topicPartition.topic()).failedBuildRemoteLogAuxStateRate().mark();
             replicaMgr.brokerTopicStats().allTopicsStats().failedBuildRemoteLogAuxStateRate().mark();
             throw e;
         }
 
-        OffsetAndEpoch fetchLatestOffsetResult = leader.fetchLatestOffset(topicPartition, currentFetchState.currentLeaderEpoch());
+        OffsetAndEpoch fetchLatestOffsetResult = leader.fetchLatestOffset(topicPartition, currentFetchState.getCurrentLeaderEpoch());
         long leaderEndOffset = fetchLatestOffsetResult.offset();
 
         long initialLag = leaderEndOffset - offsetToFetch;
 
-        return PartitionFetchState.apply(currentFetchState.topicId(), offsetToFetch, Option.apply(initialLag), currentFetchState.currentLeaderEpoch(),
-                Fetching$.MODULE$, unifiedLog.latestEpoch());
+        return PartitionFetchState.create(currentFetchState.getTopicId(), offsetToFetch, Optional.of(initialLag), currentFetchState.getCurrentLeaderEpoch(),
+                ReplicaState.Fetching.getInstance(), unifiedLog.latestEpoch());
 
     }
 
@@ -136,12 +136,13 @@ public class TierStateMachine {
         // Find the end-offset for the epoch earlier to the given epoch from the leader
         Map<TopicPartition, OffsetForLeaderEpochRequestData.OffsetForLeaderPartition> partitionsWithEpochs = new HashMap<>();
         partitionsWithEpochs.put(partition, new OffsetForLeaderEpochRequestData.OffsetForLeaderPartition().setPartition(partition.partition()).setCurrentLeaderEpoch(currentLeaderEpoch).setLeaderEpoch(previousEpoch));
-        Option<OffsetForLeaderEpochResponseData.EpochEndOffset> maybeEpochEndOffset = leader.fetchEpochEndOffsets(CollectionConverters.asScala(partitionsWithEpochs)).get(partition);
-        if (maybeEpochEndOffset.isEmpty()) {
+        Map<TopicPartition, OffsetForLeaderEpochResponseData.EpochEndOffset> endOffsets = leader.fetchEpochEndOffsets(partitionsWithEpochs);
+        OffsetForLeaderEpochResponseData.EpochEndOffset epochEndOffset = endOffsets.get(partition);
+
+        if (epochEndOffset == null) {
             throw new KafkaException("No response received for partition: " + partition);
         }
 
-        OffsetForLeaderEpochResponseData.EpochEndOffset epochEndOffset = maybeEpochEndOffset.get();
         if (epochEndOffset.errorCode() != Errors.NONE.code()) {
             throw Errors.forCode(epochEndOffset.errorCode()).exception();
         }

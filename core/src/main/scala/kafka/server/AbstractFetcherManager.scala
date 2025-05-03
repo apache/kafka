@@ -22,9 +22,11 @@ import org.apache.kafka.common.{TopicPartition, Uuid}
 import org.apache.kafka.common.utils.Utils
 import org.apache.kafka.server.metrics.KafkaMetricsGroup
 import org.apache.kafka.server.network.BrokerEndPoint
+import org.apache.kafka.server.PartitionFetchState
 
 import scala.collection.{Map, Set, mutable}
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters._
 
 abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: String, clientId: String, numFetchers: Int)
   extends Logging {
@@ -69,9 +71,9 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
         if (id.fetcherId >= newSize)
           thread.shutdown()
         partitionStates.foreachEntry { (topicPartition, currentFetchState) =>
-            val initialFetchState = InitialFetchState(currentFetchState.topicId, thread.leader.brokerEndPoint(),
-              currentLeaderEpoch = currentFetchState.currentLeaderEpoch,
-              initOffset = currentFetchState.fetchOffset)
+            val initialFetchState = InitialFetchState(currentFetchState.getTopicId.toScala, thread.leader.brokerEndPoint(),
+              currentLeaderEpoch = currentFetchState.getCurrentLeaderEpoch,
+              initOffset = currentFetchState.getFetchOffset)
             allRemovedPartitionsMap += topicPartition -> initialFetchState
         }
       }
