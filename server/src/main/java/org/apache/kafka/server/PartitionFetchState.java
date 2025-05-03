@@ -42,18 +42,22 @@ public class PartitionFetchState {
 
 
     public static PartitionFetchState create(Optional<Uuid> topicId,
-                                                                   long offset,
-                                                                   Optional<Long> lag,
-                                                                   int currentLeaderEpoch,
-                                                                   ReplicaState state,
-                                                                   Optional<Integer> lastFetchedEpoch) {
+                                             long offset,
+                                             Optional<Long> lag,
+                                             int currentLeaderEpoch,
+                                             ReplicaState state,
+                                             Optional<Integer> lastFetchedEpoch) {
         return new PartitionFetchState(topicId, offset, lag, currentLeaderEpoch,
                 Optional.empty(), state, lastFetchedEpoch);
     }
 
-    public PartitionFetchState(Optional<Uuid> topicId, long fetchOffset, Optional<Long> lag,
-                               int currentLeaderEpoch, Optional<Long> delay,
-                               ReplicaState state, Optional<Integer> lastFetchedEpoch) {
+    public PartitionFetchState(Optional<Uuid> topicId,
+                               long fetchOffset,
+                               Optional<Long> lag,
+                               int currentLeaderEpoch,
+                               Optional<Long> delay,
+                               ReplicaState state,
+                               Optional<Integer> lastFetchedEpoch) {
         this.topicId = topicId;
         this.fetchOffset = fetchOffset;
         this.lag = lag;
@@ -120,7 +124,7 @@ public class PartitionFetchState {
                 ", lastFetchedEpoch=" + lastFetchedEpoch +
                 ", state=" + state +
                 ", lag=" + lag +
-                ", delay=" + (delay.isPresent() ? delay.get() : 0) + "ms)";
+                ", delay=" + delay.orElse(0L) + "ms)";
     }
 
     public PartitionFetchState updateTopicId(Optional<Uuid> newTopicId) {

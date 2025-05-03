@@ -1088,7 +1088,7 @@ class ReplicaAlterLogDirsThreadTest {
     val fetchRequestOpt = result.getResult
     val partitionsWithError = result.getPartitionsWithError
     assertTrue(fetchRequestOpt.isPresent)
-    val fetchRequest = fetchRequestOpt.get.getFetchRequest
+    val fetchRequest = fetchRequestOpt.get.fetchRequest
     assertFalse(fetchRequest.fetchData.isEmpty)
     assertTrue(partitionsWithError.isEmpty)
     val request = fetchRequest.build()
@@ -1149,9 +1149,9 @@ class ReplicaAlterLogDirsThreadTest {
 
     assertTrue(fetchRequestOpt1.isPresent)
     val fetchRequest = fetchRequestOpt1.get
-    assertFalse(fetchRequest.getFetchRequest.fetchData.isEmpty)
+    assertFalse(fetchRequest.fetchRequest.fetchData.isEmpty)
     assertTrue(partitionsWithError1.isEmpty)
-    val fetchInfos = fetchRequest.getFetchRequest.build().fetchData(topicNames.asJava).asScala.toSeq
+    val fetchInfos = fetchRequest.fetchRequest.build().fetchData(topicNames.asJava).asScala.toSeq
     assertEquals(1, fetchInfos.length)
     assertEquals(t1p0, fetchInfos.head._1.topicPartition, "Expected fetch request for non-truncating partition")
     assertEquals(150, fetchInfos.head._2.fetchOffset)
@@ -1168,9 +1168,9 @@ class ReplicaAlterLogDirsThreadTest {
 
     assertTrue(fetchRequest2Opt.isPresent)
     val fetchRequest2 = fetchRequest2Opt.get
-    assertFalse(fetchRequest2.getFetchRequest.fetchData().isEmpty)
+    assertFalse(fetchRequest2.fetchRequest.fetchData().isEmpty)
     assertTrue(partitionsWithError2.isEmpty())
-    val fetchInfos2 = fetchRequest2.getFetchRequest.build().fetchData(topicNames.asJava).asScala.toSeq
+    val fetchInfos2 = fetchRequest2.fetchRequest.build().fetchData(topicNames.asJava).asScala.toSeq
     assertEquals(1, fetchInfos2.length)
     assertEquals(t1p0, fetchInfos2.head._1.topicPartition, "Expected fetch request for non-delayed partition")
     assertEquals(140, fetchInfos2.head._2.fetchOffset)

@@ -631,7 +631,7 @@ class ReplicaFetcherThreadTest {
     val fetchRequestOpt = result.getResult
 
     assertTrue(fetchRequestOpt.isPresent)
-    val fetchRequestBuilder = fetchRequestOpt.get.getFetchRequest
+    val fetchRequestBuilder = fetchRequestOpt.get.fetchRequest
 
     val partitionDataMap = partitionMap.map { case (tp, state) =>
       (tp, new FetchRequest.PartitionData(state.getTopicId.get, state.getFetchOffset, 0L,
@@ -665,7 +665,7 @@ class ReplicaFetcherThreadTest {
     }
 
     assertTrue(fetchRequestOpt2.isPresent)
-    val fetchRequestBuilder2 = fetchRequestOpt2.get.getFetchRequest
+    val fetchRequestBuilder2 = fetchRequestOpt2.get.fetchRequest
     assertEquals(partitionDataMap2.asJava, fetchRequestBuilder2.fetchData())
     assertEquals(Collections.singletonList(tid2p1), fetchRequestBuilder2.replaced())
     assertEquals(Collections.singletonList(tid1p0), fetchRequestBuilder2.removed())

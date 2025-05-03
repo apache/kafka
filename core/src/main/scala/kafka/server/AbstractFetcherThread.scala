@@ -136,7 +136,7 @@ abstract class AbstractFetcherThread(name: String,
 
     if (fetchRequestOpt.isPresent) {
       val replicaFetch = fetchRequestOpt.get()
-      processFetchRequest(replicaFetch.getPartitionData, replicaFetch.getFetchRequest)
+      processFetchRequest(replicaFetch.partitionData, replicaFetch.fetchRequest)
     }
   }
 
