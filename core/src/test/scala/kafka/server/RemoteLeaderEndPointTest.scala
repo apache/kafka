@@ -17,7 +17,6 @@
 
 package kafka.server
 
-import kafka.server.AbstractFetcherThread.ResultWithPartitions
 import kafka.server.epoch.util.MockBlockingSender
 import kafka.utils.TestUtils
 import org.apache.kafka.clients.FetchSessionHandler
@@ -32,6 +31,7 @@ import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.server.common.{MetadataVersion, OffsetAndEpoch}
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.server.util.MockTime
+import org.apache.kafka.server.{LeaderEndPoint, PartitionFetchState, ReplicaState}
 import org.apache.kafka.storage.internals.log.UnifiedLog
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{BeforeEach, Test}
@@ -40,6 +40,7 @@ import org.mockito.Mockito.{mock, when}
 
 import java.util
 import java.util.Optional
+import java.util.{Map => JMap}
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 
@@ -99,8 +100,8 @@ class RemoteLeaderEndPointTest {
               .setLeaderEpoch(0)
               .setEndOffset(logEndOffset))
         blockingSend.setOffsetsForNextResponse(expected.asJava)
-        val result = endPoint.fetchEpochEndOffsets(Map(
-            topicPartition -> new OffsetForLeaderPartition()
+        val result = endPoint.fetchEpochEndOffsets(JMap.of(
+            topicPartition, new OffsetForLeaderPartition()
               .setPartition(topicPartition.partition)
               .setLeaderEpoch(currentLeaderEpoch)))
 
@@ -132,17 +133,17 @@ class RemoteLeaderEndPointTest {
         val topicId1 = Uuid.randomUuid()
         val log = mock(classOf[UnifiedLog])
         val partitionMap = Map(
-            tp -> PartitionFetchState(Some(topicId1), 150, None, 0, None, state = Fetching, lastFetchedEpoch = Optional.empty))
+            tp -> new PartitionFetchState(Optional.of(topicId1), 150, Optional.empty(), 0, Optional.empty(), ReplicaState.Fetching.getInstance(), Optional.empty))
         when(replicaManager.localLogOrException(tp)).thenReturn(log)
         when(log.logStartOffset).thenReturn(1)
 
-        val ResultWithPartitions(fetchRequestOpt, partitionsWithError) = endPoint.buildFetch(partitionMap)
-        assertTrue(partitionsWithError.isEmpty)
-        assertEquals(if (version < 15) -1L else 1L, fetchRequestOpt.get.fetchRequest.build(version).replicaEpoch)
+        val result1 = endPoint.buildFetch(partitionMap.asJava)
+        assertTrue(result1.getPartitionsWithError.isEmpty)
+        assertEquals(if (version < 15) -1L else 1L, result1.getResult.get.getFetchRequest.build(version).replicaEpoch)
 
         currentBrokerEpoch = 2L
-        val ResultWithPartitions(newFetchRequestOpt, newPartitionsWithError) = endPoint.buildFetch(partitionMap)
-        assertTrue(newPartitionsWithError.isEmpty)
-        assertEquals(if (version < 15) -1L else 2L, newFetchRequestOpt.get.fetchRequest.build(version).replicaEpoch)
+        val result2 = endPoint.buildFetch(partitionMap.asJava)
+        assertTrue(result2.getPartitionsWithError.isEmpty)
+        assertEquals(if (version < 15) -1L else 2L, result2.getResult.get.getFetchRequest.build(version).replicaEpoch)
     }
 }
