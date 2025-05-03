@@ -96,7 +96,7 @@ public class TierStateMachine {
                               PartitionFetchState currentFetchState,
                               PartitionData fetchPartitionData) throws Exception {
         OffsetAndEpoch epochAndLeaderLocalStartOffset = leader.fetchEarliestLocalOffset(topicPartition, currentFetchState.getCurrentLeaderEpoch());
-        int epoch = epochAndLeaderLocalStartOffset.leaderEpoch();
+        int epoch = epochAndLeaderLocalStartOffset.epoch();
         long leaderLocalStartOffset = epochAndLeaderLocalStartOffset.offset();
 
         long offsetToFetch;
