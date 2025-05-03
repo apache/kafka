@@ -490,7 +490,7 @@ public class KafkaStreams implements AutoCloseable {
             closeToError();
         }
         final StreamThread deadThread = (StreamThread) Thread.currentThread();
-        deadThread.shutdown();
+        deadThread.shutdown(true);
         addStreamThread();
         if (throwable instanceof RuntimeException) {
             throw (RuntimeException) throwable;
@@ -1119,7 +1119,7 @@ public class KafkaStreams implements AutoCloseable {
                     return Optional.of(streamThread.getName());
                 } else {
                     log.warn("Terminating the new thread because the Kafka Streams client is in state {}", state);
-                    streamThread.shutdown();
+                    streamThread.shutdown(true);
                     threads.remove(streamThread);
                     final long cacheSizePerThread = cacheSizePerThread(numLiveStreamThreads());
                     log.info("Resizing thread cache due to terminating added thread, new cache size per thread is {}", cacheSizePerThread);
@@ -1181,7 +1181,7 @@ public class KafkaStreams implements AutoCloseable {
                     if (streamThread.isThreadAlive() && (callingThreadIsNotCurrentStreamThread || numLiveStreamThreads() == 1)) {
                         log.info("Removing StreamThread {}", streamThread.getName());
                         streamThread.requestLeaveGroupDuringShutdown();
-                        streamThread.shutdown();
+                        streamThread.shutdown(true);
                         if (!streamThread.getName().equals(Thread.currentThread().getName())) {
                             final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
                             if (remainingTimeMs <= 0 || !streamThread.waitOnThreadState(StreamThread.State.DEAD, remainingTimeMs)) {
@@ -1202,9 +1202,6 @@ public class KafkaStreams implements AutoCloseable {
                         final long cacheSizePerThread = cacheSizePerThread(numLiveStreamThreads());
                         log.info("Resizing thread cache due to thread removal, new cache size per thread is {}", cacheSizePerThread);
                         resizeThreadCache(cacheSizePerThread);
-                        if (streamThread.groupInstanceID().isPresent() && callingThreadIsNotCurrentStreamThread) {
-                            streamThread.closeConsumer(true);
-                        }
                         final long remainingTimeMs = timeoutMs - (time.milliseconds() - startMs);
                         if (remainingTimeMs <= 0) {
                             throw new TimeoutException("Thread " + streamThread.getName() + " did not stop in the allotted time");

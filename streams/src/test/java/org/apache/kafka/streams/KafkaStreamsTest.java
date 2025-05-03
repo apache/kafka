@@ -789,7 +789,7 @@ public class KafkaStreamsTest {
         prepareThreadLock(streamThreadTwo);
         try (final KafkaStreams streams = new KafkaStreams(getBuilderWithSource().build(), props, supplier, time)) {
             streams.start();
-            streamThreadOne.shutdown();
+            streamThreadOne.shutdown(true);
             final Set<ThreadMetadata> threads = streams.metadataForLocalThreads();
             assertThat(threads.size(), equalTo(1));
             assertThat(threads, hasItem(streamThreadTwo.threadMetadata()));

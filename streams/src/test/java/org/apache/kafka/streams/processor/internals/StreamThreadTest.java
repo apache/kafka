@@ -244,7 +244,7 @@ public class StreamThreadTest {
             if (thread.state() != State.CREATED) {
                 thread.taskManager().shutdown(false);
             }
-            thread.shutdown();
+            thread.shutdown(true);
             thread = null;
         }
         final Set<Thread> t = Collections.unmodifiableSet(Thread.getAllStackTraces().keySet());
@@ -406,7 +406,7 @@ public class StreamThreadTest {
         assertEquals(4, stateListener.numChanges);
         assertEquals(StreamThread.State.PARTITIONS_ASSIGNED, stateListener.oldState);
 
-        thread.shutdown();
+        thread.shutdown(true);
         assertSame(StreamThread.State.PENDING_SHUTDOWN, thread.state());
     }
 
@@ -424,13 +424,13 @@ public class StreamThreadTest {
             10 * 1000,
             "Thread never started.");
 
-        thread.shutdown();
+        thread.shutdown(true);
         TestUtils.waitForCondition(
             () -> thread.state() == StreamThread.State.DEAD,
             10 * 1000,
             "Thread never shut down.");
 
-        thread.shutdown();
+        thread.shutdown(true);
         assertEquals(thread.state(), StreamThread.State.DEAD);
     }
 
@@ -776,7 +776,7 @@ public class StreamThreadTest {
             10 * 1000,
             "Thread never started.");
 
-        thread.shutdown();
+        thread.shutdown(true);
         TestUtils.waitForCondition(
             () -> thread.state() == StreamThread.State.DEAD,
             10 * 1000,
@@ -844,7 +844,7 @@ public class StreamThreadTest {
             () -> { }
         );
 
-        thread.shutdown();
+        thread.shutdown(true);
 
         // Validate that the scheduled rebalance wasn't reset then set to MAX_VALUE so we
         // don't trigger one before we can shut down, since the rebalance must be ended
@@ -1352,7 +1352,7 @@ public class StreamThreadTest {
                 10 * 1000,
                 "Thread never started.");
 
-        thread.shutdown();
+        thread.shutdown(true);
 
         // even if thread is no longer running, it should still be polling
         // as long as the rebalance is still ongoing
@@ -1388,7 +1388,7 @@ public class StreamThreadTest {
         thread.setStateListener(
             (t, newState, oldState) -> {
                 if (oldState == StreamThread.State.CREATED && newState == StreamThread.State.STARTING) {
-                    thread.shutdown();
+                    thread.shutdown(true);
                 }
             });
         thread.run();
@@ -1486,7 +1486,7 @@ public class StreamThreadTest {
         topologyMetadata.buildAndRewriteTopology();
         thread = buildStreamThread(consumer, taskManager, config, topologyMetadata)
             .updateThreadMetadata(adminClientId(CLIENT_ID));
-        thread.shutdown();
+        thread.shutdown(true);
 
         verify(taskManager).shutdown(true);
     }
@@ -1504,7 +1504,7 @@ public class StreamThreadTest {
         topologyMetadata.buildAndRewriteTopology();
         thread = buildStreamThread(consumer, taskManager, config, topologyMetadata)
             .updateThreadMetadata(adminClientId(CLIENT_ID));
-        thread.shutdown();
+        thread.shutdown(true);
         // Execute the run method. Verification of the mock will check that shutdown was only done once
         thread.run();
 

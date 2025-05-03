@@ -1780,10 +1780,6 @@ public class StreamThread extends Thread implements ProcessingThread {
         return Math.max(now - previous, 0);
     }
 
-    public void shutdown() {
-        shutdown(false);
-    }
-
     /**
      * Shutdown this stream thread.
      * <p>
@@ -1840,6 +1836,7 @@ public class StreamThread extends Thread implements ProcessingThread {
             log.error("Failed to close consumer due to the following error:", e);
         }
         try {
+            // restore consumer isn't part of a consumer group so we use REMAIN_IN_GROUP to skip any leaveGroup checks
             restoreConsumer.close(CloseOptions.groupMembershipOperation(REMAIN_IN_GROUP));
         } catch (final Throwable e) {
             log.error("Failed to close restore consumer due to the following error:", e);
@@ -2022,12 +2019,6 @@ public class StreamThread extends Thread implements ProcessingThread {
         }
 
         return result;
-    }
-
-    public void closeConsumer(final boolean leaveGroup) {
-        final GroupMembershipOperation operation = leaveGroup ? LEAVE_GROUP : REMAIN_IN_GROUP;
-        final CloseOptions closeOptions = CloseOptions.groupMembershipOperation(operation);
-        mainConsumer.close(closeOptions);
     }
 
     // the following are for testing only
