@@ -67,9 +67,7 @@ public class PartitionFetchState {
         this.lastFetchedEpoch = lastFetchedEpoch;
 
         // Initialize dueMs (equivalent to private val dueMs)
-        this.dueMs = delay.isPresent() ?
-                Optional.of(delay.get() + Time.SYSTEM.milliseconds()) :
-                Optional.empty();
+        this.dueMs = delay.map(aLong -> aLong + Time.SYSTEM.milliseconds());
     }
 
     public boolean isReadyForFetch() {
