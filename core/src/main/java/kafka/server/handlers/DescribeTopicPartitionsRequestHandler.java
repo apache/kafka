@@ -69,20 +69,20 @@ public class DescribeTopicPartitionsRequestHandler {
      * @return A DescribeTopicPartitionsResponseData containing metadata for the requested topic partitions.
      */
     public DescribeTopicPartitionsResponseData handleDescribeTopicPartitionsRequest(RequestChannel.Request abstractRequest) {
-        DescribeTopicPartitionsRequestData requestData = getRequestData(abstractRequest);
+        final DescribeTopicPartitionsRequestData requestData = getRequestData(abstractRequest);
 
         // Get topics to describe based on request data (all topics or specific ones)
-        Set<String> topicsToDescribe = getTopicsToDescribe(requestData);
+        final Set<String> topicsToDescribe = getTopicsToDescribe(requestData);
 
         // Validate cursor if provided in the request
         validateCursor(requestData.cursor(), topicsToDescribe);
 
         // Handle topics that are unauthorized for the Describe operation
-        Set<DescribeTopicPartitionsResponseTopic> unauthorizedForDescribeTopicMetadata = new HashSet<>();
-        Stream<String> authorizedTopicsStream = filterAuthorizedTopics(abstractRequest, topicsToDescribe, unauthorizedForDescribeTopicMetadata, requestData.topics().isEmpty());
+        final Set<DescribeTopicPartitionsResponseTopic> unauthorizedForDescribeTopicMetadata = new HashSet<>();
+        final Stream<String> authorizedTopicsStream = filterAuthorizedTopics(abstractRequest, topicsToDescribe, unauthorizedForDescribeTopicMetadata, requestData.topics().isEmpty());
 
         // Construct the response for authorized topics
-        DescribeTopicPartitionsResponseData response = buildResponse(authorizedTopicsStream, abstractRequest, requestData);
+        final DescribeTopicPartitionsResponseData response = buildResponse(authorizedTopicsStream, abstractRequest, requestData);
 
         // Add unauthorized topics to the response to avoid disclosing their existence
         response.topics().addAll(unauthorizedForDescribeTopicMetadata);
