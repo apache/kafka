@@ -119,7 +119,8 @@ public class DescribeTopicPartitionsRequestHandler {
     private Set<String> getTopicsToDescribe(DescribeTopicPartitionsRequestData requestData) {
         Set<String> topics = new HashSet<>();
         boolean fetchAllTopics = requestData.topics().isEmpty();
-        String cursorTopicName = requestData.cursor() != null ? requestData.cursor().topicName() : "";
+        DescribeTopicPartitionsRequestData.Cursor cursor = request.cursor();
+        String cursorTopicName = requestData.cursor() != null ? cursor.topicName() : "";
 
         // If no topics are specified, fetch all topics that come after the cursor topic
         if (fetchAllTopics) {
@@ -137,7 +138,7 @@ public class DescribeTopicPartitionsRequestHandler {
                 }
             });
 
-            if (requestData.cursor() != null && !topics.contains(requestData.cursor().topicName())) {
+            if (cursor != null && !topics.contains(cursor.topicName())) {
                 // The topic in cursor must be included in the topic list if provided.
                 throw new InvalidRequestException("DescribeTopicPartitionsRequest topic list should contain " +
                         "the cursor topic: " + cursor.topicName());
