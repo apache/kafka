@@ -113,7 +113,7 @@ public class MonitorablePluginsIntegrationTest {
 
         @Override
         public void withPluginMetrics(PluginMetrics metrics) {
-            MetricName name = metrics.metricName("name", "description", Map.of());
+            MetricName name = metrics.metricName("name", "description", new LinkedHashMap<>());
             metrics.addMetric(name, (Measurable) (config, now) -> 123);
         }
     }
@@ -124,7 +124,7 @@ public class MonitorablePluginsIntegrationTest {
 
         @Override
         public void withPluginMetrics(PluginMetrics metrics) {
-            MetricName name = metrics.metricName("name", "description", Map.of());
+            MetricName name = metrics.metricName("name", "description", new LinkedHashMap<>());
             metrics.addMetric(name, (Measurable) (config, now) -> 123);
         }
     }
@@ -135,7 +135,7 @@ public class MonitorablePluginsIntegrationTest {
 
         @Override
         public void withPluginMetrics(PluginMetrics metrics) {
-            MetricName name = metrics.metricName("name", "description", Map.of());
+            MetricName name = metrics.metricName("name", "description", new LinkedHashMap<>());
             metrics.addMetric(name, (Measurable) (config, now) -> 123);
         }
     }
