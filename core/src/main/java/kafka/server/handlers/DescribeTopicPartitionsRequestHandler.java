@@ -206,9 +206,10 @@ public class DescribeTopicPartitionsRequestHandler {
          * @param requestData The request data containing the cursor and partition limits.
          * @return The constructed response data with metadata for the authorized topics.
          */
-        private DescribeTopicPartitionsResponseData buildResponse
-        (Stream < String > authorizedTopicsStream, RequestChannel.Request
-        abstractRequest, DescribeTopicPartitionsRequestData requestData){
+        private DescribeTopicPartitionsResponseData buildResponse (
+                Stream < String > authorizedTopicsStream,
+                RequestChannel.Request abstractRequest,
+                DescribeTopicPartitionsRequestData requestData){
             return metadataCache.describeTopicResponse(
                     authorizedTopicsStream.iterator(),
                     abstractRequest.context().listenerName,
