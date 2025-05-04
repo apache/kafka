@@ -39,8 +39,6 @@ class DescribeLogDirsRequestTest extends BaseRequestTest {
   val tp0 = new TopicPartition(topic, 0)
   val tp1 = new TopicPartition(topic, 1)
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testDescribeLogDirsRequest(quorum: String): Unit = {
     val onlineDir = new File(brokers.head.config.logDirs.head).getAbsolutePath
     val offlineDir = new File(brokers.head.config.logDirs.tail.head).getAbsolutePath

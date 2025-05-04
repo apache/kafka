@@ -79,8 +79,6 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
   private val user3 = "user3@user3.com"
   private val unknownUser = "unknownUser"
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testAlterNothing(quorum: String): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
@@ -92,8 +90,6 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     assertEquals(0, results.size)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testAlterSameThingTwice(quorum: String): Unit = {
     val deletion1 = new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user1).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)
     val deletion2 = new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user2).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)
@@ -133,8 +129,6 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     })
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testAlterEmptyUser(quorum: String): Unit = {
     val deletionEmpty = new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName("").setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)
     val upsertionEmpty = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName("").setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)
@@ -162,8 +156,6 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     })
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testAlterUnknownMechanism(quorum: String): Unit = {
     val deletionUnknown1 = new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user1).setMechanism(ScramMechanism.UNKNOWN.`type`)
     val deletionValid1 = new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user1).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)
@@ -190,8 +182,6 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     results.asScala.foreach(result => assertEquals("Unknown SCRAM mechanism", result.errorMessage))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testAlterTooFewIterations(quorum: String): Unit = {
     val upsertionTooFewIterations = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName(user1)
       .setMechanism(ScramMechanism.SCRAM_SHA_256.`type`).setIterations(1)
@@ -207,8 +197,6 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     assertEquals("Too few iterations", results.get(0).errorMessage)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testAlterTooManyIterations(quorum: String): Unit = {
     val upsertionTooFewIterations = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName(user1)
       .setMechanism(ScramMechanism.SCRAM_SHA_256.`type`).setIterations(Integer.MAX_VALUE)
@@ -224,8 +212,6 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     assertEquals("Too many iterations", results.get(0).errorMessage)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testDeleteSomethingThatDoesNotExist(quorum: String): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
@@ -238,8 +224,6 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
     checkAllErrorsAlteringCredentials(results, Errors.RESOURCE_NOT_FOUND, "when deleting a non-existing credential")
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testAlterAndDescribe(quorum: String): Unit = {
     // create a bunch of credentials
     val request1_0 = new AlterUserScramCredentialsRequest.Builder(
@@ -381,8 +365,6 @@ class AlterUserScramCredentialsRequestTest extends BaseRequestTest {
   /*
    * Test that SCRAM alter command on KRaft cluster with IBP version less that IBP_3_5 fails
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft-IBP_3_4"))
   def testMetadataVersionTooLow(quorum: String): Unit = {
     val upsertionMetadataVersionTooLow = new AlterUserScramCredentialsRequestData.ScramCredentialUpsertion().setName(user1)
       .setMechanism(ScramMechanism.SCRAM_SHA_256.`type`).setIterations(8192)

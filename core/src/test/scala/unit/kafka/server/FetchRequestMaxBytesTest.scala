@@ -104,8 +104,6 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
    * Note that when a single batch is larger than FetchMaxBytes, it will be
    * returned in full even if this is larger than FetchMaxBytes.  See KIP-74.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testConsumeMultipleRecords(quorum: String): Unit = {
     createTopics()
 

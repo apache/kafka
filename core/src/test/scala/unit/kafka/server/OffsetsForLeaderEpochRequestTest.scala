@@ -33,8 +33,6 @@ import scala.jdk.CollectionConverters._
 
 class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testOffsetsForLeaderEpochErrorCodes(quorum: String): Unit = {
     val topic = "topic"
     val partition = new TopicPartition(topic, 0)
@@ -57,8 +55,6 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
     assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, request)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testCurrentEpochValidation(quorum: String): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)

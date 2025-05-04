@@ -47,8 +47,6 @@ class ProduceRequestTest extends BaseRequestTest {
 
   val metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testSimpleProduceRequest(quorum: String): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
 
@@ -163,8 +161,6 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals("One or more records have been rejected due to invalid timestamp", partitionProduceResponse.errorMessage)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testProduceToNonReplica(quorum: String): Unit = {
     val topic = "topic"
     val partition = 0
@@ -212,8 +208,6 @@ class ProduceRequestTest extends BaseRequestTest {
     }.getOrElse(throw new AssertionError(s"No leader elected for topic $topic"))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testCorruptLz4ProduceRequest(quorum: String): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
     val topicId = getTopicIds().get("topic").get
@@ -247,8 +241,6 @@ class ProduceRequestTest extends BaseRequestTest {
     assertTrue(TestUtils.meterCount(s"${BrokerTopicMetrics.INVALID_MESSAGE_CRC_RECORDS_PER_SEC}") > 0)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testZSTDProduceRequest(quorum: String): Unit = {
     val topic = "topic"
     val partition = 0

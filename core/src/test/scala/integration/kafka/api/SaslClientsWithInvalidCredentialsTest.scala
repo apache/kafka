@@ -111,8 +111,6 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     verifyWithRetry(sendOneRecord(producer2))()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testTransactionalProducerWithAuthenticationFailure(quorum: String): Unit = {
     val txProducer = createTransactionalProducer()
     verifyAuthenticationException(txProducer.initTransactions())
@@ -157,8 +155,6 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     verifyWithRetry(consumer.poll(Duration.ofMillis(1000)))(_.count == 1)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testKafkaAdminClientWithAuthenticationFailure(quorum: String): Unit = {
     val props = JaasTestUtils.adminClientSecurityConfigs(securityProtocol, OptionConverters.toJava(trustStoreFile), OptionConverters.toJava(clientSaslProperties))
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())

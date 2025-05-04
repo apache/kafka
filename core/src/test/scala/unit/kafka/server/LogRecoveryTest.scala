@@ -104,8 +104,6 @@ class LogRecoveryTest extends QuorumTestHarness {
     super.tearDown()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testHWCheckpointNoFailuresSingleLogSegment(quorum: String): Unit = {
     val numMessages = 2L
     sendMessages(numMessages.toInt)
@@ -122,8 +120,6 @@ class LogRecoveryTest extends QuorumTestHarness {
     assertEquals(numMessages, followerHW)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testHWCheckpointWithFailuresSingleLogSegment(quorum: String): Unit = {
     var leader = getLeaderIdForPartition(servers, topicPartition)
 
@@ -183,8 +179,6 @@ class LogRecoveryTest extends QuorumTestHarness {
     assertEquals(hw, hwFile2.read().getOrDefault(topicPartition, 0L))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testHWCheckpointNoFailuresMultipleLogSegments(quorum: String): Unit = {
     sendMessages(20)
     val hw = 20L
@@ -200,8 +194,6 @@ class LogRecoveryTest extends QuorumTestHarness {
     assertEquals(hw, followerHW)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testHWCheckpointWithFailuresMultipleLogSegments(quorum: String): Unit = {
     var leader = getLeaderIdForPartition(servers, topicPartition)
 

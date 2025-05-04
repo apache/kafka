@@ -35,8 +35,6 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.fail;
 
 public class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
-    @ParameterizedTest
-    @ValueSource(strings = {"kraft"})
     public void testDescribeGroupCliWithGroupDescribe(String quorum) throws Exception {
         addAndVerifyAcls(CollectionConverters.asScala(Collections.singleton(new AccessControlEntry(ClientPrincipal().toString(), "*", DESCRIBE, ALLOW))).toSet(), groupResource());
 

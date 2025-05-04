@@ -110,8 +110,6 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, errors.get(nonExistentTopic))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testOneSuccessOneErrorInBatchedRequest(quorum: String): Unit = {
     val tp0 = new TopicPartition(topic1, 0)
     val transactionalId1 = "foobar"
@@ -149,8 +147,6 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     assertEquals(expectedErrors, errors)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testVerifyOnly(quorum: String): Unit = {
     val tp0 = new TopicPartition(topic1, 0)
 

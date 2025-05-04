@@ -55,8 +55,6 @@ class DelegationTokenRequestsWithDisableTokenFeatureTest extends BaseRequestTest
     config
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testDelegationTokenRequests(quorum: String): Unit = {
     adminClient = Admin.create(createAdminConfig)
 

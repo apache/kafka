@@ -65,8 +65,6 @@ class AddPartitionsTest extends BaseRequestTest {
     admin = createAdminClient()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testWrongReplicaCount(quorum: String): Unit = {
     assertEquals(classOf[InvalidReplicaAssignmentException], assertThrows(classOf[ExecutionException], () => {
         admin.createPartitions(Collections.singletonMap(topic1,
@@ -78,8 +76,6 @@ class AddPartitionsTest extends BaseRequestTest {
    * Test that when we supply a manual partition assignment to createTopics, it must be 0-based
    * and consecutive.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testMissingPartitionsInCreateTopics(quorum: String): Unit = {
     val topic6Placements = new util.HashMap[Integer, util.List[Integer]]
     topic6Placements.put(1, asList(0, 1))
@@ -104,8 +100,6 @@ class AddPartitionsTest extends BaseRequestTest {
    * Test that when we supply a manual partition assignment to createPartitions, it must contain
    * enough partitions.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testMissingPartitionsInCreatePartitions(quorum: String): Unit = {
     val cause = assertThrows(classOf[ExecutionException], () =>
       admin.createPartitions(Collections.singletonMap(topic1,
@@ -115,8 +109,6 @@ class AddPartitionsTest extends BaseRequestTest {
       "were specified."), "Unexpected error message: " + cause.getMessage)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testIncrementPartitions(quorum: String): Unit = {
     admin.createPartitions(Collections.singletonMap(topic1, NewPartitions.increaseTo(3))).all().get()
 
@@ -144,8 +136,6 @@ class AddPartitionsTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testManualAssignmentOfReplicas(quorum: String): Unit = {
     // Add 2 partitions
     admin.createPartitions(Collections.singletonMap(topic2, NewPartitions.increaseTo(3,
@@ -173,8 +163,6 @@ class AddPartitionsTest extends BaseRequestTest {
     assertEquals(Set(0, 1), replicas.asScala.toSet)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testReplicaPlacementAllServers(quorum: String): Unit = {
     admin.createPartitions(Collections.singletonMap(topic3, NewPartitions.increaseTo(7))).all().get()
 
@@ -201,8 +189,6 @@ class AddPartitionsTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testReplicaPlacementPartialServers(quorum: String): Unit = {
     admin.createPartitions(Collections.singletonMap(topic2, NewPartitions.increaseTo(3))).all().get()
 

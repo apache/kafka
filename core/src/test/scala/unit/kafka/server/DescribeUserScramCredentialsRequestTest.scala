@@ -48,8 +48,6 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
     super.setUp(testInfo)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testDescribeNothing(quorum: String): Unit = {
     val request = new DescribeUserScramCredentialsRequest.Builder(
       new DescribeUserScramCredentialsRequestData()).build()
@@ -60,8 +58,6 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
     assertEquals(0, response.data.results.size, "Expected no credentials when describing everything and there are no credentials")
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testDescribeWithNull(quorum: String): Unit = {
     val request = new DescribeUserScramCredentialsRequest.Builder(
       new DescribeUserScramCredentialsRequestData().setUsers(null)).build()
@@ -82,8 +78,6 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
     assertEquals(Errors.NONE.code, error, "Did not expect controller error when routed to non-controller")
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testDescribeSameUserTwice(quorum: String): Unit = {
     val user = "user1"
     val userName = new UserName().setName(user)
@@ -98,8 +92,6 @@ class DescribeUserScramCredentialsRequestTest extends BaseRequestTest {
     assertEquals(s"Cannot describe SCRAM credentials for the same user twice in a single request: $user", result.errorMessage)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testUnknownUser(quorum: String): Unit = {
     val unknownUser = "unknownUser"
     val request = new DescribeUserScramCredentialsRequest.Builder(

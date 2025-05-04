@@ -92,8 +92,6 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
    * Tests that Kerberos replay error `Request is a replay (34)` is not handled as an authentication exception
    * since replay detection used to detect DoS attacks may occasionally reject valid concurrent requests.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testRequestIsAReplay(quorum: String): Unit = {
     val successfulAuthsPerThread = 10
     val futures = (0 until numThreads).map(_ => executor.submit(new Runnable {
@@ -110,8 +108,6 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
    * are able to connect after the second re-login. Verifies that logout is performed only once
    * since duplicate logouts without successful login results in NPE from Java 9 onwards.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testLoginFailure(quorum: String): Unit = {
     val selector = createSelectorWithRelogin()
     try {
@@ -134,8 +130,6 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
    * is performed when credentials are unavailable between logout and login, we handle it as a
    * transient error and not an authentication failure so that clients may retry.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testReLogin(quorum: String): Unit = {
     val selector = createSelectorWithRelogin()
     try {
@@ -166,8 +160,6 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
    * Tests that Kerberos error `Server not found in Kerberos database (7)` is handled
    * as a fatal authentication failure.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testServerNotFoundInKerberosDatabase(quorum: String): Unit = {
     val jaasConfig = clientConfig.getProperty(SaslConfigs.SASL_JAAS_CONFIG)
     val invalidServiceConfig = jaasConfig.replace("serviceName=\"kafka\"", "serviceName=\"invalid-service\"")

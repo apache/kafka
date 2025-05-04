@@ -134,8 +134,6 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     producer.close()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testCleanShutdownAfterFailedStartup(quorum: String): Unit = {
     propsToChangeUponRestart.setProperty(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG, "1000")
     shutdownBroker()
@@ -143,8 +141,6 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     verifyCleanShutdownAfterFailedStartup[CancellationException]
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testNoCleanShutdownAfterFailedStartupDueToCorruptLogs(quorum: String): Unit = {
     createTopic(topic)
     shutdownBroker()
@@ -174,8 +170,6 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testShutdownWithKRaftControllerUnavailable(quorum: String): Unit = {
     shutdownKRaftController()
     killBroker(0, Duration.ofSeconds(1))
@@ -220,8 +214,6 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       .count(isNonDaemonKafkaThread))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testConsecutiveShutdown(quorum: String): Unit = {
     shutdownBroker()
     brokers.head.shutdown()

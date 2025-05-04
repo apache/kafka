@@ -43,8 +43,6 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testListOffsetsErrorCodes(quorum: String): Unit = {
     val targetTimes = List(new ListOffsetsTopic()
       .setName(topic)
@@ -108,8 +106,6 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     assertResponseError(error, brokerId, request)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testCurrentEpochValidation(quorum: String): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)
@@ -168,8 +164,6 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     (partitionData.offset, partitionData.leaderEpoch, partitionData.errorCode())
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testResponseIncludesLeaderEpoch(quorum: String): Unit = {
     val partitionToLeader = createTopic(numPartitions = 1, replicationFactor = 3)
     val firstLeaderId = partitionToLeader(partition.partition)
@@ -209,8 +203,6 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     assertEquals((9L, firstLeaderEpoch, Errors.NONE.code), fetchOffsetAndEpochWithError(secondLeaderId, ListOffsetsRequest.MAX_TIMESTAMP, -1))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testResponseDefaultOffsetAndLeaderEpochForAllVersions(quorum: String): Unit = {
     val partitionToLeader = createTopic(numPartitions = 1, replicationFactor = 3)
     val firstLeaderId = partitionToLeader(partition.partition)

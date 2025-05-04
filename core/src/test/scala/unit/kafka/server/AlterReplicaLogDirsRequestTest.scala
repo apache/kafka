@@ -52,8 +52,6 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
       .find(p => p.partitionIndex == tp.partition).get.errorCode)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testAlterReplicaLogDirsRequest(quorum: String): Unit = {
     val partitionNum = 5
 
@@ -88,8 +86,6 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     }
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testAlterReplicaLogDirsRequestErrorCode(quorum: String): Unit = {
     val offlineDir = new File(brokers.head.config.logDirs.tail.head).getAbsolutePath
     val validDir1 = new File(brokers.head.config.logDirs(1)).getAbsolutePath
@@ -127,8 +123,6 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     assertEquals(Errors.KAFKA_STORAGE_ERROR, findErrorForPartition(alterReplicaDirResponse3, new TopicPartition(topic, 2)))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testAlterReplicaLogDirsRequestWithRetention(quorum: String): Unit = {
     val partitionNum = 1
 

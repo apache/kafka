@@ -65,8 +65,6 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
     config
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testDelegationTokenRequests(quorum: String): Unit = {
     adminClient = Admin.create(createAdminConfig)
 

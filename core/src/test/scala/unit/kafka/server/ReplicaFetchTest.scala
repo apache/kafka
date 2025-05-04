@@ -39,8 +39,6 @@ class ReplicaFetchTest extends IntegrationTestHarness {
 
   override def brokerCount: Int = 2
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testReplicaFetcherThread(quorum: String): Unit = {
     val partition = 0
     val testMessageList1 = List("test1", "test2", "test3", "test4")

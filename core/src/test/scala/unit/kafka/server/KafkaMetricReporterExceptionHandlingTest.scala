@@ -63,8 +63,6 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
     super.tearDown()
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testBothReportersAreInvoked(quorum: String): Unit = {
     val port = anySocketServer.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
     val socket = new Socket("localhost", port)

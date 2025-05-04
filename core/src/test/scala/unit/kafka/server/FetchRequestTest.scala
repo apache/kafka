@@ -41,8 +41,6 @@ import scala.util.Random
   */
 class FetchRequestTest extends BaseFetchRequestTest {
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testBrokerRespectsPartitionsOrderAndSizeLimits(quorum: String): Unit = {
     initProducer()
 
@@ -144,8 +142,6 @@ class FetchRequestTest extends BaseFetchRequestTest {
     evaluateResponse4(fetchResponse4V12, 12)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testFetchRequestV4WithReadCommitted(quorum: String): Unit = {
     initProducer()
     val maxPartitionBytes = 200
@@ -163,8 +159,6 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertTrue(records(partitionData).map(_.sizeInBytes).sum > 0)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testFetchRequestToNonReplica(quorum: String): Unit = {
     val topic = "topic"
     val partition = 0
@@ -194,14 +188,10 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code, oldPartitionData.errorCode)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testLastFetchedEpochValidation(quorum: String): Unit = {
     checkLastFetchedEpochValidation(ApiKeys.FETCH.latestVersion())
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testLastFetchedEpochValidationV12(quorum: String): Unit = {
     checkLastFetchedEpochValidation(12)
   }
@@ -249,14 +239,10 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(firstEpochEndOffset, divergingEpoch.endOffset)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testCurrentEpochValidation(quorum: String): Unit = {
     checkCurrentEpochValidation(ApiKeys.FETCH.latestVersion())
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testCurrentEpochValidationV12(quorum: String): Unit = {
     checkCurrentEpochValidation(12)
   }
@@ -299,14 +285,10 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertResponseErrorForEpoch(Errors.FENCED_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch - 1))
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testEpochValidationWithinFetchSession(quorum: String): Unit = {
     checkEpochValidationWithinFetchSession(ApiKeys.FETCH.latestVersion())
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testEpochValidationWithinFetchSessionV12(quorum: String): Unit = {
     checkEpochValidationWithinFetchSession(12)
   }
@@ -367,8 +349,6 @@ class FetchRequestTest extends BaseFetchRequestTest {
    * those partitions are returned in all incremental fetch requests.
    * This tests using FetchRequests that don't use topic IDs
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testCreateIncrementalFetchWithPartitionsInErrorV12(quorum: String): Unit = {
     def createConsumerFetchRequest(topicPartitions: Seq[TopicPartition],
                            metadata: JFetchMetadata,
@@ -430,8 +410,6 @@ class FetchRequestTest extends BaseFetchRequestTest {
   /**
    * Test that when a Fetch Request receives an unknown topic ID, it returns a top level error.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testFetchWithPartitionsWithIdError(quorum: String): Unit = {
     def createConsumerFetchRequest(fetchData: util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData],
                            metadata: JFetchMetadata,
@@ -475,8 +453,6 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(Errors.UNKNOWN_TOPIC_ID.code, responseData1.get(bar0).errorCode)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testZStdCompressedTopic(quorum: String): Unit = {
     // ZSTD compressed topic
     val topicConfig = Map(TopicConfig.COMPRESSION_TYPE_CONFIG -> BrokerCompressionType.ZSTD.name)
@@ -523,8 +499,6 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(3, records(data2).size)
   }
 
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testZStdCompressedRecords(quorum: String): Unit = {
     // Producer compressed topic
     val topicConfig = Map(TopicConfig.COMPRESSION_TYPE_CONFIG -> BrokerCompressionType.PRODUCER.name)

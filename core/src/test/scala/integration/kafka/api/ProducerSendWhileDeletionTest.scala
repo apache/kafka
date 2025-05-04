@@ -50,8 +50,6 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
    * Producer will attempt to send messages to the partition specified in each record, and should
    * succeed as long as the partition is included in the metadata.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testSendWithTopicDeletionMidWay(quorum: String): Unit = {
     val numRecords = 10
     val topic = "topic"
@@ -91,8 +89,6 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
    * Producer will attempt to send messages to the partition specified in each record, and should
    * succeed as long as the metadata has been updated with new topic id.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testSendWithRecreatedTopic(quorum: String): Unit = {
     val numRecords = 10
     val topic = "topic"
@@ -125,8 +121,6 @@ class ProducerSendWhileDeletionTest extends IntegrationTestHarness {
    * Producer will attempt to send messages to the partition specified in each record, and should
    * succeed as long as the metadata cache on the leader includes the partition topic id.
    */
-  @ParameterizedTest
-  @ValueSource(strings = Array("kraft"))
   def testSendWithTopicReassignmentIsMidWay(quorum: String): Unit = {
     val numRecords = 10
     val topic = "topic"
