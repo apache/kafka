@@ -127,7 +127,7 @@ public class DescribeTopicPartitionsRequestHandler {
                 }
             });
 
-            if (cursor != null && !topics.contains(cursor.topicName())) {
+            if (requestData.cursor() != null && !topics.contains(requestData.cursor().topicName())) {
                 // The topic in cursor must be included in the topic list if provided.
                 throw new InvalidRequestException("DescribeTopicPartitionsRequest topic list should contain the cursor topic: " + cursor.topicName());
         }
