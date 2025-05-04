@@ -2355,6 +2355,65 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
+  def shouldReturnUnauthorizationForNonExistingTopicInProduceResponse(): Unit = {
+    val topic = "topic"
+    val topicId = Uuid.fromString("d2Gg8tgzJa2JYK2eTHUapg")
+    val tp = new TopicIdPartition(topicId, 0, topic)
+
+    val authorizer: Authorizer = mock(classOf[Authorizer])
+    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
+      .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
+    for (version <- ApiKeys.PRODUCE.oldestVersion to ApiKeys.PRODUCE.latestVersion) {
+
+      reset(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
+
+      val produceData = new ProduceRequestData.TopicProduceData()
+        .setPartitionData(Collections.singletonList(
+          new ProduceRequestData.PartitionProduceData()
+            .setIndex(tp.partition)
+            .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test".getBytes)))))
+
+      if (version >= 13 ) {
+        produceData.setTopicId(topicId)
+      } else {
+        produceData.setName(tp.topic)
+      }
+
+      val produceRequest = ProduceRequest.builder(new ProduceRequestData()
+          .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+            Collections.singletonList(produceData)
+              .iterator))
+          .setAcks(1.toShort)
+          .setTimeoutMs(5000))
+        .build(version.toShort)
+      val request = buildRequest(produceRequest)
+
+      when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
+        any[Long])).thenReturn(0)
+      when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
+        any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
+      val kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+      try {
+        kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
+
+        val response = verifyNoThrottling[ProduceResponse](request)
+
+        assertEquals(1, response.data.responses.size)
+        val topicProduceResponse = response.data.responses.asScala.head
+        assertEquals(1, topicProduceResponse.partitionResponses.size)
+        val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
+        if (version >= 13 ) {
+          assertEquals(Errors.UNKNOWN_TOPIC_ID, Errors.forCode(partitionProduceResponse.errorCode))
+        } else {
+          assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, Errors.forCode(partitionProduceResponse.errorCode))
+        }
+      } finally {
+        kafkaApis.close()
+      }
+    }
+  }
+
+  @Test
   def shouldReplaceProducerFencedWithInvalidProducerEpochInProduceResponse(): Unit = {
     val topic = "topic"
     val topicId = Uuid.fromString("d2Gg8tgzJa2JYK2eTHUapg")
