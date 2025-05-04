@@ -579,7 +579,7 @@ class ReplicaAlterLogDirsThreadTest {
         .setLeaderEpoch(leaderEpochT1p0),
       t1p1 -> new OffsetForLeaderPartition()
         .setPartition(t1p1.partition)
-        .setLeaderEpoch(leaderEpochT1p1)).asJava)
+        .setLeaderEpoch(leaderEpochT1p1)).asJava).asScala
 
     val expected = Map(
       t1p0 -> new EpochEndOffset()
@@ -641,7 +641,7 @@ class ReplicaAlterLogDirsThreadTest {
         .setLeaderEpoch(leaderEpoch),
       t1p1 -> new OffsetForLeaderPartition()
         .setPartition(t1p1.partition)
-        .setLeaderEpoch(leaderEpoch)).asJava)
+        .setLeaderEpoch(leaderEpoch)).asJava).asScala
 
     val expected = Map(
       t1p0 -> new EpochEndOffset()
