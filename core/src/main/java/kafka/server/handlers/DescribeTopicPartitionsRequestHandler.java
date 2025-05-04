@@ -156,8 +156,7 @@ public class DescribeTopicPartitionsRequestHandler {
             if (cursor != null) {
                 // Validate that the partition index in the cursor is valid
                 if (cursor.partitionIndex() < 0) {
-                    throw new InvalidRequestException("DescribeTopicPartitionsRequest cursor partition " +
-                            "must be valid: " + cursor);
+                    throw new InvalidRequestException("DescribeTopicPartitionsRequest cursor partition must be valid: " + cursor);
                 }
 
                 // Ensure the cursor topic is included in the list of topics
