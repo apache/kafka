@@ -132,17 +132,17 @@ class RemoteLeaderEndPointTest {
         val tp = new TopicPartition("topic1", 0)
         val topicId1 = Uuid.randomUuid()
         val log = mock(classOf[UnifiedLog])
-        val partitionMap = Map(
-            tp -> new PartitionFetchState(Optional.of(topicId1), 150, Optional.empty(), 0, Optional.empty(), ReplicaState.FETCHING, Optional.empty))
+        val partitionMap = java.util.Map.of(
+            tp, new PartitionFetchState(Optional.of(topicId1), 150, Optional.empty(), 0, Optional.empty(), ReplicaState.FETCHING, Optional.empty))
         when(replicaManager.localLogOrException(tp)).thenReturn(log)
         when(log.logStartOffset).thenReturn(1)
 
-        val result1 = endPoint.buildFetch(partitionMap.asJava)
+        val result1 = endPoint.buildFetch(partitionMap)
         assertTrue(result1.partitionsWithError.isEmpty)
         assertEquals(if (version < 15) -1L else 1L, result1.result.get.fetchRequest.build(version).replicaEpoch)
 
         currentBrokerEpoch = 2L
-        val result2 = endPoint.buildFetch(partitionMap.asJava)
+        val result2 = endPoint.buildFetch(partitionMap)
         assertTrue(result2.partitionsWithError.isEmpty)
         assertEquals(if (version < 15) -1L else 2L, result2.result.get.fetchRequest.build(version).replicaEpoch)
     }
