@@ -163,8 +163,7 @@ public class DescribeTopicPartitionsRequestHandler {
 
                 // Ensure the cursor topic is included in the list of topics
                 if (!topicsToDescribe.contains(cursor.topicName())) {
-                    throw new InvalidRequestException("DescribeTopicPartitionsRequest topic list should contain the " +
-                            "cursor topic: " + cursor.topicName());
+                    throw new InvalidRequestException("DescribeTopicPartitionsRequest topic list should contain the cursor topic: " + cursor.topicName());
                 }
             }
         }
