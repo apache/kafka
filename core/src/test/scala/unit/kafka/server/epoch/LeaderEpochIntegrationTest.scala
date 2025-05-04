@@ -36,8 +36,6 @@ import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.test.{TestUtils => JTestUtils}
 import org.junit.jupiter.api.AfterEach
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
 import scala.collection.mutable.ListBuffer
 import scala.collection.{Map, Seq}

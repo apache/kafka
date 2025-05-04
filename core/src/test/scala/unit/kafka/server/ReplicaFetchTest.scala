@@ -24,8 +24,6 @@ import kafka.api.IntegrationTestHarness
 import org.apache.kafka.clients.producer.ProducerRecord
 import org.apache.kafka.common.TopicPartition
 import org.apache.kafka.common.serialization.StringSerializer
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
 class ReplicaFetchTest extends IntegrationTestHarness {
   val topic1 = "foo"

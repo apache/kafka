@@ -28,8 +28,6 @@ import org.apache.kafka.security.authorizer.AclEntry
 import org.apache.kafka.server.config.{ServerConfigs, ReplicationConfigs}
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
 import java.lang.{Byte => JByte}
 import java.util.Properties

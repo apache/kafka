@@ -26,8 +26,6 @@ import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.kafka.server.config.DelegationTokenManagerConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
 import java.util
 import scala.concurrent.ExecutionException

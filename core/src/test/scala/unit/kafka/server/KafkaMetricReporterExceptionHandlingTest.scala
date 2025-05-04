@@ -25,8 +25,6 @@ import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
 import java.net.Socket
 import java.util.concurrent.atomic.AtomicInteger

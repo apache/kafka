@@ -21,9 +21,6 @@ import kafka.api.AbstractAuthorizerIntegrationTest;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 
-import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.ValueSource;
-
 import java.util.Collections;
 import java.util.concurrent.ExecutionException;
 

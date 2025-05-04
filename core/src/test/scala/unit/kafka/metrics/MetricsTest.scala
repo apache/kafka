@@ -38,7 +38,7 @@ import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, L
 import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
 import org.junit.jupiter.api.Timeout
 import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.{MethodSource, ValueSource}
+import org.junit.jupiter.params.provider.MethodSource
 
 @Timeout(120)
 class MetricsTest extends KafkaServerTestHarness with Logging {

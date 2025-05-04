@@ -25,8 +25,6 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, DeleteRecordsResponse}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
 import java.util.Collections
 import java.util.concurrent.TimeUnit

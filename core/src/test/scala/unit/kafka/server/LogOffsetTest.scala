@@ -27,8 +27,6 @@ import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.apache.kafka.storage.internals.log.{LogStartOffsetIncrementReason, OffsetResultHolder, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.Timeout
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
 import java.io.File
 import java.util.{Optional, Properties, Random}

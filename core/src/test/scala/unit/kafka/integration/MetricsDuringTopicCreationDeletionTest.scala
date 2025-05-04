@@ -26,8 +26,6 @@ import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import com.yammer.metrics.core.Gauge
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
 class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with Logging {
 

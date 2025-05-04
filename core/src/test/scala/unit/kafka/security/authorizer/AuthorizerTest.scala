@@ -41,8 +41,6 @@ import org.apache.kafka.server.authorizer._
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
 import org.junit.jupiter.api.Test
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
 import java.net.InetAddress
 import java.util
@@ -52,7 +50,6 @@ import scala.jdk.CollectionConverters._
 class AuthorizerTest extends QuorumTestHarness with BaseAuthorizerTest {
 
   private final val PLAINTEXT = new Endpoint("PLAINTEXT", SecurityProtocol.PLAINTEXT, "127.0.0.1", 9020)
-  private final val KRAFT = "kraft"
 
   private val allowReadAcl = new AccessControlEntry(WILDCARD_PRINCIPAL_STRING, WILDCARD_HOST, READ, ALLOW)
   private val allowWriteAcl = new AccessControlEntry(WILDCARD_PRINCIPAL_STRING, WILDCARD_HOST, WRITE, ALLOW)

@@ -27,8 +27,6 @@ import org.apache.kafka.server.config.ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS
 import org.apache.kafka.server.policy.CreateTopicPolicy
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
 import org.junit.jupiter.api.TestInfo
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 

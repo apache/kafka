@@ -23,8 +23,6 @@ import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuild
 import org.apache.kafka.clients.admin.AdminClientConfig
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 import org.apache.kafka.common.errors.TopicAuthorizationException
 
 // This test case uses a separate listener for client and inter-broker communication, from

@@ -27,8 +27,6 @@ import org.apache.kafka.common.requests.{AlterReplicaLogDirsRequest, AlterReplic
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.storage.internals.log.LogFileUtils
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
 import java.util.Properties
 import scala.jdk.CollectionConverters._

@@ -36,8 +36,6 @@ import org.apache.kafka.server.common.MetadataVersion
 import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.{BeforeEach, TestInfo}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
 import java.util.Properties
 import scala.jdk.CollectionConverters._

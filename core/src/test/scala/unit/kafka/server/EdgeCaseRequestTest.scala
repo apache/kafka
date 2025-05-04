@@ -36,8 +36,6 @@ import org.apache.kafka.common.utils.ByteUtils
 import org.apache.kafka.common.{TopicPartition, Uuid, requests}
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
 import scala.jdk.CollectionConverters._
 

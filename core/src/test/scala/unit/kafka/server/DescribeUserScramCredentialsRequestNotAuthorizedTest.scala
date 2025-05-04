@@ -24,8 +24,6 @@ import org.apache.kafka.common.requests.{DescribeUserScramCredentialsRequest, De
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.params.ParameterizedTest
-import org.junit.jupiter.params.provider.ValueSource
 
 import java.util.Properties
 
