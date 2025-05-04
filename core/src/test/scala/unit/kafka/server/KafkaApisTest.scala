@@ -2381,7 +2381,7 @@ class KafkaApisTest extends Logging {
 
       val produceRequest = ProduceRequest.builder(new ProduceRequestData()
           .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
-            Collections.singletonList(produceData)
+            util.List.of(produceData)
               .iterator))
           .setAcks(1.toShort)
           .setTimeoutMs(5000))
