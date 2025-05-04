@@ -57,9 +57,9 @@ public class DescribeTopicPartitionsRequestHandler {
      * @param config        The Kafka configuration.
      */
     public DescribeTopicPartitionsRequestHandler(
-            MetadataCache metadataCache,
-            AuthHelper authHelper,
-            KafkaConfig config) {
+            final MetadataCache metadataCache,
+            final AuthHelper authHelper,
+            final KafkaConfig config) {
         this.metadataCache = metadataCache;
         this.authHelper = authHelper;
         this.config = config;
@@ -130,7 +130,6 @@ public class DescribeTopicPartitionsRequestHandler {
                 }
             });
         } else {
-            // Add the requested topics to the set, ensuring they come after the cursor topic
             requestData.topics().forEach(topic -> {
                 String topicName = topic.name();
                 if (topicName.compareTo(cursorTopicName) >= 0) {
@@ -180,10 +179,10 @@ public class DescribeTopicPartitionsRequestHandler {
                 RequestChannel.Request abstractRequest,
                 Set < String > topicsToDescribe,
                 Set < DescribeTopicPartitionsResponseTopic > unauthorizedForDescribeTopicMetadata,
-                boolean fetchAllTopics){
+        boolean fetchAllTopics){
             return topicsToDescribe.stream().sorted().filter(topicName -> {
                 // Check authorization for each topic
-                boolean isAuthorized = authHelper.authorize(abstractRequest.context(),
+                final boolean isAuthorized = authHelper.authorize(abstractRequest.context(),
                         DESCRIBE, TOPIC, topicName, true, true, 1
                 );
                 if (!fetchAllTopics && !isAuthorized) {
@@ -205,9 +204,9 @@ public class DescribeTopicPartitionsRequestHandler {
          * @return The constructed response data with metadata for the authorized topics.
          */
         private DescribeTopicPartitionsResponseData buildResponse (
-                Stream < String > authorizedTopicsStream,
-                RequestChannel.Request abstractRequest,
-                DescribeTopicPartitionsRequestData requestData){
+        final Stream<String> authorizedTopicsStream,
+        final RequestChannel.Request abstractRequest,
+        final DescribeTopicPartitionsRequestData requestData){
             return metadataCache.describeTopicResponse(
                     authorizedTopicsStream.iterator(),
                     abstractRequest.context().listenerName,
@@ -230,12 +229,11 @@ public class DescribeTopicPartitionsRequestHandler {
          * @return A DescribeTopicPartitionsResponseTopic object with the specified metadata.
          */
         private DescribeTopicPartitionsResponseTopic describeTopicPartitionsResponseTopic (
-                Errors error,
-                String topic,
-                Uuid topicId,
-                Boolean isInternal,
-                List < DescribeTopicPartitionsResponsePartition > partitionData
-    ){
+        final Errors error,
+        final String topic,
+        final Uuid topicId,
+        final Boolean isInternal,
+        final List<DescribeTopicPartitionsResponsePartition> partitionData){
             return new DescribeTopicPartitionsResponseTopic()
                     .setErrorCode(error.code())
                     .setName(topic)
