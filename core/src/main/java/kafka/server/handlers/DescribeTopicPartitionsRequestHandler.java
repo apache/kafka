@@ -211,7 +211,12 @@ public class DescribeTopicPartitionsRequestHandler {
      * @return A DescribeTopicPartitionsResponseTopic object with the specified metadata.
      */
     private DescribeTopicPartitionsResponseTopic describeTopicPartitionsResponseTopic(
-            Errors error, String topic, Uuid topicId, Boolean isInternal, List<DescribeTopicPartitionsResponsePartition> partitionData) {
+            Errors error,
+            String topic,
+            Uuid topicId,
+            Boolean isInternal,
+            List<DescribeTopicPartitionsResponsePartition> partitionData
+    ) {
         return new DescribeTopicPartitionsResponseTopic()
                 .setErrorCode(error.code())
                 .setName(topic)
