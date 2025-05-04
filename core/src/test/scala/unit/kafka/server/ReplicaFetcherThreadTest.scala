@@ -163,13 +163,13 @@ class ReplicaFetcherThreadTest {
       mockBlockingSend
     )
 
-    val result = thread.leader.fetchEpochEndOffsets(Map(
-      t1p0 -> new OffsetForLeaderPartition()
+    val result = thread.leader.fetchEpochEndOffsets(java.util.Map.of(
+      t1p0, new OffsetForLeaderPartition()
         .setPartition(t1p0.partition)
         .setLeaderEpoch(0),
-      t1p1 -> new OffsetForLeaderPartition()
+      t1p1, new OffsetForLeaderPartition()
         .setPartition(t1p1.partition)
-        .setLeaderEpoch(0)).asJava).asScala
+        .setLeaderEpoch(0))).asScala
 
     val expected = Map(
       t1p0 -> newOffsetForLeaderPartitionResult(t1p0, Errors.UNKNOWN_SERVER_ERROR, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET),
@@ -211,9 +211,9 @@ class ReplicaFetcherThreadTest {
     stub(partition, replicaManager, log)
 
     //Define the offsets for the OffsetsForLeaderEpochResponse
-    val offsets = Map(
-      t1p0 -> newOffsetForLeaderPartitionResult(t1p0, leaderEpoch, 1),
-      t1p1 -> newOffsetForLeaderPartitionResult(t1p1, leaderEpoch, 1)).asJava
+    val offsets = java.util.Map.of(
+      t1p0, newOffsetForLeaderPartitionResult(t1p0, leaderEpoch, 1),
+      t1p1, newOffsetForLeaderPartitionResult(t1p1, leaderEpoch, 1))
 
     //Create the fetcher thread
     val mockNetwork = new MockBlockingSender(offsets, brokerEndPoint, Time.SYSTEM)
