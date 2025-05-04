@@ -140,8 +140,7 @@ public class DescribeTopicPartitionsRequestHandler {
 
             if (cursor != null && !topics.contains(cursor.topicName())) {
                 // The topic in cursor must be included in the topic list if provided.
-                throw new InvalidRequestException("DescribeTopicPartitionsRequest topic list should contain " +
-                        "the cursor topic: " + cursor.topicName());
+                throw new InvalidRequestException("DescribeTopicPartitionsRequest topic list should contain the cursor topic: " + cursor.topicName());
             }
             return topics;
         }
