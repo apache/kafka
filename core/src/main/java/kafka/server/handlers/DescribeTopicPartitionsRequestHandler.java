@@ -180,8 +180,7 @@ public class DescribeTopicPartitionsRequestHandler {
                 RequestChannel.Request abstractRequest,
                 Set < String > topicsToDescribe,
                 Set < DescribeTopicPartitionsResponseTopic > unauthorizedForDescribeTopicMetadata,
-        boolean fetchAllTopics)
-        {
+                boolean fetchAllTopics){
             return topicsToDescribe.stream().sorted().filter(topicName -> {
                 // Check authorization for each topic
                 boolean isAuthorized = authHelper.authorize(abstractRequest.context(),
