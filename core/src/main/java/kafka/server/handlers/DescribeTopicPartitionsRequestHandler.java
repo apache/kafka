@@ -78,14 +78,14 @@ public class DescribeTopicPartitionsRequestHandler {
         validateCursor(requestData.cursor(), topicsToDescribe);
 
         // Handle topics that are unauthorized for the Describe operation
-        Set<DescribeTopicPartitionsResponseTopic> unauthorizedTopics = new HashSet<>();
-        Stream<String> authorizedTopicsStream = filterAuthorizedTopics(abstractRequest, topicsToDescribe, unauthorizedTopics, requestData.topics().isEmpty());
+        Set<DescribeTopicPartitionsResponseTopic> unauthorizedForDescribeTopicMetadata = new HashSet<>();
+        Stream<String> authorizedTopicsStream = filterAuthorizedTopics(abstractRequest, topicsToDescribe, unauthorizedForDescribeTopicMetadata, requestData.topics().isEmpty());
 
         // Construct the response for authorized topics
         DescribeTopicPartitionsResponseData response = buildResponse(authorizedTopicsStream, abstractRequest, requestData);
 
         // Add unauthorized topics to the response to avoid disclosing their existence
-        response.topics().addAll(unauthorizedTopics);
+        response.topics().addAll(unauthorizedForDescribeTopicMetadata);
         return response;
     }
 
@@ -161,18 +161,18 @@ public class DescribeTopicPartitionsRequestHandler {
      *
      * @param abstractRequest The incoming request.
      * @param topicsToDescribe The list of topics to filter.
-     * @param unauthorizedTopics A set to store topics that the requestor is unauthorized to describe.
+     * @param unauthorizedForDescribeTopicMetadata A set to store topics that the requestor is unauthorized to describe.
      * @param fetchAllTopics A flag indicating whether to fetch all topics or only specified ones.
      * @return A stream of authorized topic names.
      */
     private Stream<String> filterAuthorizedTopics(RequestChannel.Request abstractRequest, Set<String> topicsToDescribe,
-                                                  Set<DescribeTopicPartitionsResponseTopic> unauthorizedTopics, boolean fetchAllTopics) {
+                                                  Set<DescribeTopicPartitionsResponseTopic> unauthorizedForDescribeTopicMetadata, boolean fetchAllTopics) {
         return topicsToDescribe.stream().sorted().filter(topicName -> {
             // Check authorization for each topic
             boolean isAuthorized = authHelper.authorize(abstractRequest.context(), DESCRIBE, TOPIC, topicName, true, true, 1);
             if (!fetchAllTopics && !isAuthorized) {
                 // If unauthorized, add the topic to the unauthorized list with an empty UUID
-                unauthorizedTopics.add(describeTopicPartitionsResponseTopic(
+                unauthorizedForDescribeTopicMetadata.add(describeTopicPartitionsResponseTopic(
                         Errors.TOPIC_AUTHORIZATION_FAILED, topicName, Uuid.ZERO_UUID, false, List.of())
                 );
             }
