@@ -169,7 +169,7 @@ class ReplicaFetcherThreadTest {
         .setLeaderEpoch(0),
       t1p1 -> new OffsetForLeaderPartition()
         .setPartition(t1p1.partition)
-        .setLeaderEpoch(0)).asJava)
+        .setLeaderEpoch(0)).asJava).asScala
 
     val expected = Map(
       t1p0 -> newOffsetForLeaderPartitionResult(t1p0, Errors.UNKNOWN_SERVER_ERROR, UNDEFINED_EPOCH, UNDEFINED_EPOCH_OFFSET),
