@@ -215,9 +215,8 @@ public class DescribeTopicPartitionsRequestHandler {
         return metadataCache.describeTopicResponse(
                 authorizedTopicsStream.iterator(),
                 abstractRequest.context().listenerName,
-                topicName -> topicName.equals(requestData.cursor() != null
-                        ? requestData.cursor().topicName() : "") ? requestData.cursor().partitionIndex() : 0,
-                Math.max(Math.min(config.maxRequestPartitionSizeLimit(), requestData.responsePartitionLimit()), 1),
+                (String topicName) -> topicName.equals(cursorTopicName) ? cursor.partitionIndex() : 0,
+                Math.max(Math.min(config.maxRequestPartitionSizeLimit(), request.responsePartitionLimit()), 1),
                 requestData.topics().isEmpty()
         );
     }
