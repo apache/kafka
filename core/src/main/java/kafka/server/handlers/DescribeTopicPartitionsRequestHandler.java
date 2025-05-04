@@ -75,7 +75,8 @@ public class DescribeTopicPartitionsRequestHandler {
         final DescribeTopicPartitionsRequestData requestData = getRequestData(abstractRequest);
 
         // Get topics to describe based on request data (all topics or specific ones)
-        final Set<String> topicsToDescribe = getTopicsToDescribe(requestData);
+        final String cursorTopicName = requestData.cursor() != null ? cursor.topicName() : "";
+        final Set<String> topicsToDescribe = getTopicsToDescribe(requestData, cursorTopicName);
 
         // Validate cursor if provided in the request
         validateCursor(requestData.cursor(), topicsToDescribe);
@@ -115,11 +116,13 @@ public class DescribeTopicPartitionsRequestHandler {
      * @param requestData The request data containing the list of topics.
      * @return A set of topics to describe.
      */
-    private Set<String> getTopicsToDescribe(final DescribeTopicPartitionsRequestData requestData) {
+    private Set<String> getTopicsToDescribe(
+            final DescribeTopicPartitionsRequestData requestData,
+            final String cursorTopicName
+    ) {
         final Set<String> topics = new HashSet<>();
         final boolean fetchAllTopics = requestData.topics().isEmpty();
         final DescribeTopicPartitionsRequestData.Cursor cursor = request.cursor();
-        final String cursorTopicName = requestData.cursor() != null ? cursor.topicName() : "";
 
         // If no topics are specified, fetch all topics that come after the cursor topic
         if (fetchAllTopics) {
