@@ -277,20 +277,18 @@ public interface Consumer<K, V> extends Closeable {
     void close();
 
     /**
-     * This method has been deprecated since Kafka 4.0 and should use {@link Consumer#close(CloseOptions)} instead.
-     *
      * @see KafkaConsumer#close(Duration)
      */
     @Deprecated
     void close(Duration timeout);
 
     /**
-     * @see KafkaConsumer#wakeup()
-     */
-    void wakeup();
-
-    /**
      * @see KafkaConsumer#close(CloseOptions)
      */
     void close(final CloseOptions option);
+
+    /**
+     * @see KafkaConsumer#wakeup()
+     */
+    void wakeup();
 }

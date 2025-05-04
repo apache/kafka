@@ -395,10 +395,10 @@ public class MetadataQuorumCommand {
         Map<String, Endpoint> listeners = new HashMap<>();
         SocketServerConfigs.listenerListToEndPoints(
             props.getOrDefault(SocketServerConfigs.LISTENERS_CONFIG, "").toString(),
-            __ -> SecurityProtocol.PLAINTEXT).forEach(e -> listeners.put(e.listenerName().get(), e));
+            __ -> SecurityProtocol.PLAINTEXT).forEach(e -> listeners.put(e.listener(), e));
         SocketServerConfigs.listenerListToEndPoints(
             props.getOrDefault(SocketServerConfigs.ADVERTISED_LISTENERS_CONFIG, "").toString(),
-            __ -> SecurityProtocol.PLAINTEXT).forEach(e -> listeners.put(e.listenerName().get(), e));
+            __ -> SecurityProtocol.PLAINTEXT).forEach(e -> listeners.put(e.listener(), e));
         if (!props.containsKey(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG)) {
             throw new TerseException(KRaftConfigs.CONTROLLER_LISTENER_NAMES_CONFIG +
                 " was not found. Is this a valid controller configuration file?");
@@ -412,7 +412,7 @@ public class MetadataQuorumCommand {
                 throw new TerseException("Cannot find information about controller listener name: " +
                     listenerName);
             }
-            results.add(new RaftVoterEndpoint(endpoint.listenerName().get(),
+            results.add(new RaftVoterEndpoint(endpoint.listener(),
                     endpoint.host() == null ? "localhost" : endpoint.host(),
                     endpoint.port()));
         }
@@ -443,7 +443,7 @@ public class MetadataQuorumCommand {
         output.append(" and endpoints: ");
         String prefix = "";
         for (RaftVoterEndpoint endpoint : endpoints) {
-            output.append(prefix).append(endpoint.name()).append("://");
+            output.append(prefix).append(endpoint.listener()).append("://");
             if (endpoint.host().contains(":")) {
                 output.append("[");
             }

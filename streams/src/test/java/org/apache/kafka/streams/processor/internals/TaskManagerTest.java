@@ -1678,7 +1678,7 @@ public class TaskManagerTest {
         );
 
         assertEquals(exception, thrown);
-        assertEquals(statefulTask.id(), thrown.taskId().get());
+        assertEquals(statefulTask.id(), thrown.taskId().orElseThrow());
     }
 
     @Test
@@ -2149,7 +2149,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldCloseActiveTasksWhenHandlingLostTasks() throws Exception {
+    public void shouldCloseActiveTasksWhenHandlingLostTasks() {
         final StateMachineTask task00 = new StateMachineTask(taskId00, taskId00Partitions, true, stateManager);
         final StateMachineTask task01 = new StateMachineTask(taskId01, taskId01Partitions, false, stateManager);
 
