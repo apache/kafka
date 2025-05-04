@@ -40,6 +40,7 @@ import java.util.concurrent.atomic.AtomicInteger
 import scala.collection.mutable.ArrayBuffer
 import scala.collection.{Map, Set}
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters._
 
 class AbstractFetcherThreadTest {
 
@@ -1140,7 +1141,7 @@ class AbstractFetcherThreadTest {
 
     def verifyFetchState(fetchState: Option[PartitionFetchState], expectedTopicId: Option[Uuid]): Unit = {
       assertTrue(fetchState.isDefined)
-      assertEquals(expectedTopicId, fetchState.get.getTopicId)
+      assertEquals(expectedTopicId, fetchState.get.getTopicId.toScala)
     }
 
     verifyFetchState(fetcher.fetchState(partition), None)
