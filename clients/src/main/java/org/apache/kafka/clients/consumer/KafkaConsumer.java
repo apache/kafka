@@ -1591,7 +1591,7 @@ public class KafkaConsumer<K, V> implements Consumer<K, V> {
      *
      * @return a mapping from partition to the timestamp and offset of the first message with timestamp greater
      *         than or equal to the target timestamp. If the timestamp and offset for a specific partition cannot be found within 
-     *         the default timeout, and no corresponding message exists, the entry in the returned map will be {@code null}
+     *         timeout, and no corresponding message exists, the entry in the returned map will be {@code null}
      * @throws org.apache.kafka.common.errors.AuthenticationException if authentication fails. See the exception for more details
      * @throws org.apache.kafka.common.errors.AuthorizationException if not authorized to the topic(s). See the exception for more details
      * @throws IllegalArgumentException if the target timestamp is negative
