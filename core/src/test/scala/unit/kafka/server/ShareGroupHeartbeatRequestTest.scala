@@ -16,15 +16,15 @@
  */
 package kafka.server
 
-import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterTest, ClusterTestDefaults, Type}
+import org.apache.kafka.common.test.api.{ClusterConfigProperty, ClusterFeature, ClusterTest, ClusterTestDefaults, Type}
 import kafka.utils.TestUtils
-import kafka.utils.TestUtils.waitForAllPartitionsMetadata
 import org.apache.kafka.clients.admin.{Admin, NewPartitions}
-import org.apache.kafka.common.{TopicPartition, Uuid}
+import org.apache.kafka.common.Uuid
 import org.apache.kafka.common.message.{ShareGroupHeartbeatRequestData, ShareGroupHeartbeatResponseData}
 import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{ShareGroupHeartbeatRequest, ShareGroupHeartbeatResponse}
 import org.apache.kafka.common.test.ClusterInstance
+import org.apache.kafka.server.common.Feature
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNotEquals, assertNotNull, assertNull, assertTrue}
 import org.junit.jupiter.api.Timeout
 
@@ -38,7 +38,9 @@ import scala.jdk.CollectionConverters._
 class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
   @ClusterTest(
-    types = Array(Type.KRAFT)
+    features = Array(
+      new ClusterFeature(feature = Feature.SHARE_VERSION, version = 0)
+    )
   )
   def testShareGroupHeartbeatIsInAccessibleWhenConfigsDisabled(): Unit = {
     val shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
@@ -51,9 +53,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   }
 
   @ClusterTest(
-    types = Array(Type.KRAFT),
     serverProperties = Array(
-      new ClusterConfigProperty(key = "group.share.enable", value = "true"),
       new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
     ))
@@ -143,9 +143,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   }
 
   @ClusterTest(
-    types = Array(Type.KRAFT),
     serverProperties = Array(
-      new ClusterConfigProperty(key = "group.share.enable", value = "true"),
       new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
     ))
@@ -299,9 +297,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   }
 
   @ClusterTest(
-    types = Array(Type.KRAFT),
     serverProperties = Array(
-      new ClusterConfigProperty(key = "group.share.enable", value = "true"),
       new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
     ))
@@ -410,9 +406,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   }
 
   @ClusterTest(
-    types = Array(Type.KRAFT),
     serverProperties = Array(
-      new ClusterConfigProperty(key = "group.share.enable", value = "true"),
       new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
     ))
@@ -524,7 +518,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
       // Verify the response.
       assertEquals(5, shareGroupHeartbeatResponse.data.memberEpoch)
       // Increasing the partitions of topic bar which is already being consumed in the share group.
-      increasePartitions(admin, "bar", 6, Seq.empty)
+      increasePartitions(admin, "bar", 6)
 
       expectedAssignment = new ShareGroupHeartbeatResponseData.Assignment()
         .setTopicPartitions(List(
@@ -593,9 +587,81 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   }
 
   @ClusterTest(
+    serverProperties = Array(
+      new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
+      new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
+      new ClusterConfigProperty(key = "group.share.max.size", value = "2")
+    ))
+  def testShareGroupMaxSizeConfigExceeded(): Unit = {
+    val groupId: String = "group"
+    val memberId1 = Uuid.randomUuid()
+    val memberId2 = Uuid.randomUuid()
+    val memberId3 = Uuid.randomUuid()
+
+    val admin = cluster.admin()
+
+    // Creates the __consumer_offsets topics because it won't be created automatically
+    // in this test because it does not use FindCoordinator API.
+    try {
+      TestUtils.createOffsetsTopicWithAdmin(
+        admin = admin,
+        brokers = cluster.brokers.values().asScala.toSeq,
+        controllers = cluster.controllers().values().asScala.toSeq
+      )
+
+      // Heartbeat request to join the group by the first member (memberId1).
+      var shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
+        new ShareGroupHeartbeatRequestData()
+          .setGroupId(groupId)
+          .setMemberId(memberId1.toString)
+          .setMemberEpoch(0)
+          .setSubscribedTopicNames(List("foo").asJava)
+      ).build()
+
+      // Send the request until receiving a successful response. There is a delay
+      // here because the group coordinator is loaded in the background.
+      var shareGroupHeartbeatResponse: ShareGroupHeartbeatResponse = null
+      TestUtils.waitUntilTrue(() => {
+        shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
+        shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
+      }, msg = s"Could not join the group successfully. Last response $shareGroupHeartbeatResponse.")
+
+      // Heartbeat request to join the group by the second member (memberId2).
+      shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
+        new ShareGroupHeartbeatRequestData()
+          .setGroupId(groupId)
+          .setMemberId(memberId2.toString)
+          .setMemberEpoch(0)
+          .setSubscribedTopicNames(List("foo").asJava)
+      ).build()
+
+      // Send the request until receiving a successful response
+      TestUtils.waitUntilTrue(() => {
+        shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
+        shareGroupHeartbeatResponse.data.errorCode == Errors.NONE.code
+      }, msg = s"Could not join the group successfully. Last response $shareGroupHeartbeatResponse.")
+
+      // Heartbeat request to join the group by the third member (memberId3).
+      shareGroupHeartbeatRequest = new ShareGroupHeartbeatRequest.Builder(
+        new ShareGroupHeartbeatRequestData()
+          .setGroupId(groupId)
+          .setMemberId(memberId3.toString)
+          .setMemberEpoch(0)
+          .setSubscribedTopicNames(List("foo").asJava)
+      ).build()
+
+      shareGroupHeartbeatResponse = connectAndReceive(shareGroupHeartbeatRequest)
+      // Since the group.share.max.size config is set to 2, a third member cannot join the same group.
+      assertEquals(shareGroupHeartbeatResponse.data.errorCode, Errors.GROUP_MAX_SIZE_REACHED.code)
+
+    } finally {
+      admin.close()
+    }
+  }
+
+  @ClusterTest(
     types = Array(Type.KRAFT),
     serverProperties = Array(
-      new ClusterConfigProperty(key = "group.share.enable", value = "true"),
       new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1"),
       new ClusterConfigProperty(key = "group.share.heartbeat.interval.ms", value = "500"),
@@ -774,9 +840,7 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
   }
 
   @ClusterTest(
-    types = Array(Type.KRAFT),
     serverProperties = Array(
-      new ClusterConfigProperty(key = "group.share.enable", value = "true"),
       new ClusterConfigProperty(key = "offsets.topic.num.partitions", value = "1"),
       new ClusterConfigProperty(key = "offsets.topic.replication.factor", value = "1")
     ))
@@ -876,20 +940,9 @@ class ShareGroupHeartbeatRequestTest(cluster: ClusterInstance) {
 
   private def increasePartitions[B <: KafkaBroker](admin: Admin,
                                                    topic: String,
-                                                   totalPartitionCount: Int,
-                                                   brokersToValidate: Seq[B]
+                                                   totalPartitionCount: Int
                                                   ): Unit = {
     val newPartitionSet: Map[String, NewPartitions] = Map.apply(topic -> NewPartitions.increaseTo(totalPartitionCount))
     admin.createPartitions(newPartitionSet.asJava)
-
-    if (brokersToValidate.nonEmpty) {
-      // wait until we've propagated all partitions metadata to all brokers
-      val allPartitionsMetadata = waitForAllPartitionsMetadata(brokersToValidate, topic, totalPartitionCount)
-      (0 until totalPartitionCount - 1).foreach(i => {
-        allPartitionsMetadata.get(new TopicPartition(topic, i)).foreach { partitionMetadata =>
-          assertEquals(totalPartitionCount, partitionMetadata.isr.size)
-        }
-      })
-    }
   }
 }

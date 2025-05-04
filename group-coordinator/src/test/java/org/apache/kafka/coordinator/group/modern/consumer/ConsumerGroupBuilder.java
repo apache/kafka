@@ -108,7 +108,7 @@ public class ConsumerGroupBuilder {
         }
 
         // Add group epoch record.
-        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, groupEpoch));
+        records.add(GroupCoordinatorRecordHelpers.newConsumerGroupEpochRecord(groupId, groupEpoch, 0));
 
         // Add target assignment records.
         assignments.forEach((memberId, assignment) ->
