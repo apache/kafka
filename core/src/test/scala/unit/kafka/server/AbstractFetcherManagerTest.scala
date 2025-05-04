@@ -41,6 +41,7 @@ import org.mockito.Mockito.{mock, verify, when}
 import java.util.Optional
 import scala.collection.{Map, Set, mutable}
 import scala.jdk.CollectionConverters._
+import scala.jdk.OptionConverters._
 
 class AbstractFetcherManagerTest {
 
@@ -205,7 +206,7 @@ class AbstractFetcherManagerTest {
 
     def verifyFetchState(fetchState: Option[PartitionFetchState], expectedTopicId: Option[Uuid]): Unit = {
       assertTrue(fetchState.isDefined)
-      assertEquals(expectedTopicId, fetchState.get.getTopicId)
+      assertEquals(expectedTopicId, fetchState.get.getTopicId.toScala)
     }
 
     fetcherManager.addFetcherForPartitions(Map(tp1 -> initialFetchState1, tp2 -> initialFetchState2))
