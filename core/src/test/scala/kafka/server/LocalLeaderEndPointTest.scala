@@ -163,7 +163,7 @@ class LocalLeaderEndPointTest extends Logging {
       topicPartition, new OffsetForLeaderPartition()
         .setPartition(topicPartition.partition)
         .setLeaderEpoch(0))
-    )
+    ).asScala
 
     var expected = Map(
       topicPartition -> new EpochEndOffset()
@@ -187,7 +187,7 @@ class LocalLeaderEndPointTest extends Logging {
       topicPartition, new OffsetForLeaderPartition()
         .setPartition(topicPartition.partition)
         .setLeaderEpoch(2)
-    ))
+    )).asScala
 
     expected = Map(
       topicPartition -> new EpochEndOffset()
@@ -204,7 +204,7 @@ class LocalLeaderEndPointTest extends Logging {
       topicPartition, new OffsetForLeaderPartition()
         .setPartition(topicPartition.partition)
         .setLeaderEpoch(1)
-    ))
+    )).asScala
 
     expected = Map(
       topicPartition -> new EpochEndOffset()
@@ -220,7 +220,7 @@ class LocalLeaderEndPointTest extends Logging {
       topicPartition, new OffsetForLeaderPartition()
         .setPartition(topicPartition.partition)
         .setLeaderEpoch(5)
-    ))
+    )).asScala
 
     expected = Map(
       topicPartition -> new EpochEndOffset()
