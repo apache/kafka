@@ -103,7 +103,7 @@ class RemoteLeaderEndPointTest {
         val result = endPoint.fetchEpochEndOffsets(JMap.of(
             topicPartition, new OffsetForLeaderPartition()
               .setPartition(topicPartition.partition)
-              .setLeaderEpoch(currentLeaderEpoch)))
+              .setLeaderEpoch(currentLeaderEpoch))).asScala
 
         assertEquals(expected, result)
     }
