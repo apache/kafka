@@ -179,7 +179,7 @@ class MockFetcherThread(val mockLeader: MockLeaderEndPoint,
 
   def verifyLastFetchedEpoch(partition: TopicPartition, expectedEpoch: Option[Int]): Unit = {
     if (leader.isTruncationOnFetchSupported) {
-      assertEquals(Some(ReplicaState.Fetching.getInstance()), fetchState(partition).map(_.getState))
+      assertEquals(Some(ReplicaState.FETCHING), fetchState(partition).map(_.getState))
       assertEquals(expectedEpoch, fetchState(partition).map(_.getLastFetchedEpoch.get()))
     }
   }

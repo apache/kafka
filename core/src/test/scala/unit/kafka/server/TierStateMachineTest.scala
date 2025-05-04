@@ -68,7 +68,7 @@ class TierStateMachineTest {
     fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
 
     assertEquals(3L, replicaState.logEndOffset)
-    val expectedState = if (truncateOnFetch) Option(ReplicaState.Fetching.getInstance()) else Option(ReplicaState.Truncating.getInstance())
+    val expectedState = if (truncateOnFetch) Option(ReplicaState.FETCHING) else Option(ReplicaState.TRUNCATING)
     assertEquals(expectedState, fetcher.fetchState(partition).map(_.getState))
 
     fetcher.doWork()
@@ -129,7 +129,7 @@ class TierStateMachineTest {
     fetcher.mockLeader.setReplicaPartitionStateCallback(fetcher.replicaPartitionState)
 
     assertEquals(3L, replicaState.logEndOffset)
-    val expectedState = if (truncateOnFetch) Option(ReplicaState.Fetching.getInstance()) else Option(ReplicaState.Truncating.getInstance())
+    val expectedState = if (truncateOnFetch) Option(ReplicaState.FETCHING) else Option(ReplicaState.TRUNCATING)
     assertEquals(expectedState, fetcher.fetchState(partition).map(_.getState))
 
     fetcher.doWork()

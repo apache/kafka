@@ -417,7 +417,7 @@ abstract class AbstractFetcherThread(name: String,
                             if (logAppendInfo.lastLeaderEpoch.isPresent) logAppendInfo.lastLeaderEpoch else currentFetchState.getLastFetchedEpoch
                           // Update partitionStates only if there is no exception during processPartitionData
                           val newFetchState = PartitionFetchState.create(currentFetchState.getTopicId, nextOffset, Optional.of(lag),
-                            currentFetchState.getCurrentLeaderEpoch, ReplicaState.Fetching.getInstance(), lastFetchedEpoch)
+                            currentFetchState.getCurrentLeaderEpoch, ReplicaState.FETCHING, lastFetchedEpoch)
                           partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
                           if (validBytes > 0) fetcherStats.byteRate.mark(validBytes)
                         }
@@ -511,7 +511,7 @@ abstract class AbstractFetcherThread(name: String,
     try {
       Option(partitionStates.stateValue(topicPartition)).foreach { state =>
         val newState = new PartitionFetchState(state.getTopicId, math.min(truncationOffset, state.getFetchOffset),
-          state.getLag, state.getCurrentLeaderEpoch, state.getDelay, ReplicaState.Truncating.getInstance(),
+          state.getLag, state.getCurrentLeaderEpoch, state.getDelay, ReplicaState.TRUNCATING,
           Optional.empty())
         partitionStates.updateAndMoveToEnd(topicPartition, newState)
         partitionMapCond.signalAll()
@@ -542,12 +542,12 @@ abstract class AbstractFetcherThread(name: String,
       // With old message format, `latestEpoch` will be empty and we use Truncating state
       // to truncate to high watermark.
       val lastFetchedEpoch = latestEpoch(tp)
-      val state = if (lastFetchedEpoch.isPresent) ReplicaState.Fetching.getInstance() else ReplicaState.Truncating.getInstance()
+      val state = if (lastFetchedEpoch.isPresent) ReplicaState.FETCHING else ReplicaState.TRUNCATING
       PartitionFetchState.create(initialFetchState.topicId.toJava, initialFetchState.initOffset, Optional.empty(), initialFetchState.currentLeaderEpoch,
         state, lastFetchedEpoch)
     } else {
       PartitionFetchState.create(initialFetchState.topicId.toJava, initialFetchState.initOffset, Optional.empty(), initialFetchState.currentLeaderEpoch,
-        ReplicaState.Truncating.getInstance(), Optional.empty())
+        ReplicaState.TRUNCATING, Optional.empty())
     }
   }
 
@@ -594,9 +594,9 @@ abstract class AbstractFetcherThread(name: String,
           case Some(offsetTruncationState) =>
             val lastFetchedEpoch = latestEpoch(topicPartition)
             val state = if (leader.isTruncationOnFetchSupported || offsetTruncationState.truncationCompleted)
-              ReplicaState.Fetching.getInstance()
+              ReplicaState.FETCHING
             else
-              ReplicaState.Truncating.getInstance()
+              ReplicaState.TRUNCATING
             new PartitionFetchState(currentFetchState.getTopicId, offsetTruncationState.offset, currentFetchState.getLag,
               currentFetchState.getCurrentLeaderEpoch, currentFetchState.getDelay, state, lastFetchedEpoch)
           case None => currentFetchState
@@ -707,7 +707,7 @@ abstract class AbstractFetcherThread(name: String,
 
       fetcherLagStats.getAndMaybePut(topicPartition).lag = 0
       PartitionFetchState.create(topicId.toJava, leaderEndOffset, Optional.of(0L), currentLeaderEpoch,
-        ReplicaState.Fetching.getInstance(), latestEpoch(topicPartition))
+        ReplicaState.FETCHING, latestEpoch(topicPartition))
     } else {
       /**
        * If the leader's log end offset is greater than the follower's log end offset, there are two possibilities:
@@ -747,7 +747,7 @@ abstract class AbstractFetcherThread(name: String,
       val initialLag = leaderEndOffset - offsetToFetch
       fetcherLagStats.getAndMaybePut(topicPartition).lag = initialLag
       PartitionFetchState.create(topicId.toJava, offsetToFetch, Optional.of(initialLag), currentLeaderEpoch,
-        ReplicaState.Fetching.getInstance(), latestEpoch(topicPartition))
+        ReplicaState.FETCHING, latestEpoch(topicPartition))
     }
   }
 

@@ -78,7 +78,7 @@ class AbstractFetcherManagerTest {
     when(fetcher.addPartitions(Map(tp -> initialFetchState)))
       .thenReturn(Set(tp))
     when(fetcher.fetchState(tp))
-      .thenReturn(Some(new PartitionFetchState(Optional.of(topicId), fetchOffset, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.Truncating.getInstance, Optional.empty)))
+      .thenReturn(Some(new PartitionFetchState(Optional.of(topicId), fetchOffset, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.TRUNCATING, Optional.empty)))
       .thenReturn(None)
     when(fetcher.removePartitions(Set(tp))).thenReturn(Map.empty[TopicPartition, PartitionFetchState])
 
@@ -190,11 +190,11 @@ class AbstractFetcherManagerTest {
       .thenReturn(Set(tp2))
 
     when(fetcher.fetchState(tp1))
-      .thenReturn(Some(new PartitionFetchState(Optional.empty, fetchOffset, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.Truncating.getInstance, Optional.empty)))
-      .thenReturn(Some(new PartitionFetchState(Optional.of(topicId1), fetchOffset, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.Truncating.getInstance, Optional.empty)))
+      .thenReturn(Some(new PartitionFetchState(Optional.empty, fetchOffset, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.TRUNCATING, Optional.empty)))
+      .thenReturn(Some(new PartitionFetchState(Optional.of(topicId1), fetchOffset, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.TRUNCATING, Optional.empty)))
     when(fetcher.fetchState(tp2))
-      .thenReturn(Some(new PartitionFetchState(Optional.empty, fetchOffset, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.Truncating.getInstance,  Optional.empty)))
-      .thenReturn(Some(new PartitionFetchState(Optional.of(topicId2), fetchOffset, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.Truncating.getInstance, Optional.empty)))
+      .thenReturn(Some(new PartitionFetchState(Optional.empty, fetchOffset, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.TRUNCATING,  Optional.empty)))
+      .thenReturn(Some(new PartitionFetchState(Optional.of(topicId2), fetchOffset, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.TRUNCATING, Optional.empty)))
 
     val topicIds = Map(tp1.topic -> Some(topicId1), tp2.topic -> Some(topicId2))
 

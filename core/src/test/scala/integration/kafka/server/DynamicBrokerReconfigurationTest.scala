@@ -936,7 +936,7 @@ class DynamicBrokerReconfigurationTest extends QuorumTestHarness with SaslSetup 
         assertEquals(replicaFetcherManager.getFetcherId(tp), fetcherThreads.head._1.fetcherId)
         val thread = fetcherThreads.head._2
         assertEquals(Some(truncationOffset), thread.fetchState(tp).map(_.getFetchOffset))
-        assertEquals(Some(ReplicaState.Truncating.getInstance), thread.fetchState(tp).map(_.getState))
+        assertEquals(Some(ReplicaState.TRUNCATING), thread.fetchState(tp).map(_.getState))
       }
     }
   }

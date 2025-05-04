@@ -71,7 +71,7 @@ public class PartitionFetchState {
     }
 
     public boolean isReadyForFetch() {
-        return state == ReplicaState.Fetching.getInstance() && !isDelayed();
+        return state == ReplicaState.FETCHING && !isDelayed();
     }
 
     public boolean isReplicaInSync() {
@@ -79,7 +79,7 @@ public class PartitionFetchState {
     }
 
     public boolean isTruncating() {
-        return state == ReplicaState.Truncating.getInstance() && !isDelayed();
+        return state == ReplicaState.TRUNCATING && !isDelayed();
     }
 
     public boolean isDelayed() {

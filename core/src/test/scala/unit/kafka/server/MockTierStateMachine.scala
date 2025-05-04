@@ -37,7 +37,7 @@ class MockTierStateMachine(leader: LeaderEndPoint) extends TierStateMachine(lead
     val initialLag = leaderEndOffset - offsetToFetch
     fetcher.truncateFullyAndStartAt(topicPartition, offsetToFetch)
     new PartitionFetchState(currentFetchState.getTopicId, offsetToFetch, Optional.of(initialLag),
-      currentFetchState.getCurrentLeaderEpoch, Optional.empty(), ReplicaState.Fetching.getInstance(),
+      currentFetchState.getCurrentLeaderEpoch, Optional.empty(), ReplicaState.FETCHING,
       Optional.of(currentFetchState.getCurrentLeaderEpoch)
     )
   }

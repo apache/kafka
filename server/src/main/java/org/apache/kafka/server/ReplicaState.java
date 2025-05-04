@@ -21,43 +21,18 @@ package org.apache.kafka.server;
 /**
  * Represents the state of a replica.
  */
-public abstract class ReplicaState {
-    // Private constructor to prevent outside instantiation
-    private ReplicaState() {}
-
-    /**
-     * Singleton instance for the Truncating state.
-     */
-    public static class Truncating extends ReplicaState {
-        private static final Truncating INSTANCE = new Truncating();
-
-        private Truncating() {}
-
-        public static Truncating getInstance() {
-            return INSTANCE;
-        }
-
+public enum ReplicaState {
+    TRUNCATING {
         @Override
         public String toString() {
             return "Truncating";
         }
-    }
+    },
 
-    /**
-     * Singleton instance for the Fetching state.
-     */
-    public static class Fetching extends ReplicaState {
-        private static final Fetching INSTANCE = new Fetching();
-
-        private Fetching() {}
-
-        public static Fetching getInstance() {
-            return INSTANCE;
-        }
-
+    FETCHING {
         @Override
         public String toString() {
             return "Fetching";
         }
-    }
+    };
 }
