@@ -62,7 +62,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     super.tearDown()
   }
 
-  def shouldAddCurrentLeaderEpochToMessagesAsTheyAreWrittenToLeader(quorum: String): Unit = {
+  def shouldAddCurrentLeaderEpochToMessagesAsTheyAreWrittenToLeader(): Unit = {
     brokers ++= (0 to 1).map { id => createBroker(fromProps(createBrokerConfig(id))) }
 
     // Given two topics with replication of a single partition
@@ -93,7 +93,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     waitUntilTrue(() => messagesHaveLeaderEpoch(brokers(0), expectedLeaderEpoch, 4), "Leader epoch should be 1")
   }
 
-  def shouldSendLeaderEpochRequestAndGetAResponse(quorum: String): Unit = {
+  def shouldSendLeaderEpochRequestAndGetAResponse(): Unit = {
 
     //3 brokers, put partition on 100/101 and then pretend to be 102
     brokers ++= (100 to 102).map { id => createBroker(fromProps(createBrokerConfig(id))) }
@@ -139,7 +139,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     fetcher1.close()
   }
 
-  def shouldIncreaseLeaderEpochBetweenLeaderRestarts(quorum: String): Unit = {
+  def shouldIncreaseLeaderEpochBetweenLeaderRestarts(): Unit = {
     //Setup: we are only interested in the single partition on broker 101
     brokers += createBroker(fromProps(createBrokerConfig(100)))
     assertEquals(controllerServer.config.nodeId, waitUntilQuorumLeaderElected(controllerServer))

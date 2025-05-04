@@ -61,7 +61,7 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
     super.tearDown()
   }
 
-  def testBothReportersAreInvoked(quorum: String): Unit = {
+  def testBothReportersAreInvoked(): Unit = {
     val port = anySocketServer.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
     val socket = new Socket("localhost", port)
     socket.setSoTimeout(10000)

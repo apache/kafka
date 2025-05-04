@@ -29,7 +29,7 @@ import scala.jdk.CollectionConverters._
 
 class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
 
-  def testValidCreateTopicsRequests(quorum: String): Unit = {
+  def testValidCreateTopicsRequests(): Unit = {
     // Generated assignments
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic1"))))
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic2", replicationFactor = 3))))
@@ -57,7 +57,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
       topicReq("topic14", replicationFactor = -1, numPartitions = 2))))
   }
 
-  def testErrorCreateTopicsRequests(quorum: String): Unit = {
+  def testErrorCreateTopicsRequests(): Unit = {
     val existingTopic = "existing-topic"
     createTopic(existingTopic)
     // Basic
@@ -93,7 +93,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     validateTopicExists("partial-none")
   }
 
-  def testInvalidCreateTopicsRequests(quorum: String): Unit = {
+  def testInvalidCreateTopicsRequests(): Unit = {
     // Partitions/ReplicationFactor and ReplicaAssignment
     validateErrorCreateTopicsRequests(topicsReq(Seq(
       topicReq("bad-args-topic", numPartitions = 10, replicationFactor = 3,
@@ -106,7 +106,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
       Map("bad-args-topic" -> error(Errors.INVALID_REQUEST)), checkErrorMessage = false)
   }
 
-  def testCreateTopicsRequestVersions(quorum: String): Unit = {
+  def testCreateTopicsRequestVersions(): Unit = {
     for (version <- ApiKeys.CREATE_TOPICS.oldestVersion to ApiKeys.CREATE_TOPICS.latestVersion) {
       val topic = s"topic_$version"
       val data = new CreateTopicsRequestData()
@@ -143,7 +143,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     }
   }
 
-  def testCreateClusterMetadataTopic(quorum: String): Unit = {
+  def testCreateClusterMetadataTopic(): Unit = {
     validateErrorCreateTopicsRequests(
       topicsReq(Seq(topicReq(Topic.CLUSTER_METADATA_TOPIC_NAME))),
       Map(Topic.CLUSTER_METADATA_TOPIC_NAME ->

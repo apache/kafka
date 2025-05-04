@@ -76,7 +76,7 @@ class KafkaMetricsReporterTest extends QuorumTestHarness {
     broker.startup()
   }
 
-  def testMetricsContextNamespacePresent(quorum: String): Unit = {
+  def testMetricsContextNamespacePresent(): Unit = {
     assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.CLUSTERID.get())
     assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.NODEID.get())
     assertNotNull(KafkaMetricsReporterTest.MockMetricsReporter.JMXPREFIX.get())

@@ -92,14 +92,14 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
     createScramAdminClient(kafkaClientSaslMechanism, tokenRequesterPrincipal.getName, tokenRequesterPassword)
   }
 
-  def testCreateTokenForOtherUserFails(quorum: String): Unit = {
+  def testCreateTokenForOtherUserFails(): Unit = {
     val thrown = assertThrows(classOf[ExecutionException], () => {
       createDelegationTokens(() => new CreateDelegationTokenOptions().owner(otherClientPrincipal), assert = false)
     })
     assertTrue(thrown.getMessage.contains("Delegation Token authorization failed"))
   }
 
-  def testDescribeTokenForOtherUserFails(quorum: String): Unit = {
+  def testDescribeTokenForOtherUserFails(): Unit = {
     Using.resource(createScramAdminClient(kafkaClientSaslMechanism, describeTokenFailPrincipal.getName, describeTokenFailPassword)) { describeTokenFailAdminClient =>
       Using.resource(createScramAdminClient(kafkaClientSaslMechanism, otherClientPrincipal.getName, otherClientPassword)) { otherClientAdminClient =>
         otherClientAdminClient.createDelegationToken().delegationToken().get()
@@ -111,7 +111,7 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
     }
   }
 
-  def testDescribeTokenForOtherUserPasses(quorum: String): Unit = {
+  def testDescribeTokenForOtherUserPasses(): Unit = {
     val adminClient = createTokenRequesterAdminClient()
     try {
       val tokens = adminClient.describeDelegationToken(

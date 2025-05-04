@@ -134,14 +134,14 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     producer.close()
   }
 
-  def testCleanShutdownAfterFailedStartup(quorum: String): Unit = {
+  def testCleanShutdownAfterFailedStartup(): Unit = {
     propsToChangeUponRestart.setProperty(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG, "1000")
     shutdownBroker()
     shutdownKRaftController()
     verifyCleanShutdownAfterFailedStartup[CancellationException]
   }
 
-  def testNoCleanShutdownAfterFailedStartupDueToCorruptLogs(quorum: String): Unit = {
+  def testNoCleanShutdownAfterFailedStartupDueToCorruptLogs(): Unit = {
     createTopic(topic)
     shutdownBroker()
     config.logDirs.foreach { dirName =>
@@ -170,7 +170,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     }
   }
 
-  def testShutdownWithKRaftControllerUnavailable(quorum: String): Unit = {
+  def testShutdownWithKRaftControllerUnavailable(): Unit = {
     shutdownKRaftController()
     killBroker(0, Duration.ofSeconds(1))
     CoreUtils.delete(broker.config.logDirs)
@@ -214,7 +214,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       .count(isNonDaemonKafkaThread))
   }
 
-  def testConsecutiveShutdown(quorum: String): Unit = {
+  def testConsecutiveShutdown(): Unit = {
     shutdownBroker()
     brokers.head.shutdown()
   }

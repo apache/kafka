@@ -37,7 +37,7 @@ class DescribeUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTe
     properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[DescribeCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName)
   }
 
-  def testDescribeNotAuthorized(quorum: String): Unit = {
+  def testDescribeNotAuthorized(): Unit = {
     val request = new DescribeUserScramCredentialsRequest.Builder(
       new DescribeUserScramCredentialsRequestData()).build()
     val response = sendDescribeUserScramCredentialsRequest(request)

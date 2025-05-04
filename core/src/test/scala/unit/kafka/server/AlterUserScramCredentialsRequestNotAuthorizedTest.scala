@@ -52,7 +52,7 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
   private val user1 = "user1"
   private val user2 = "user2"
 
-  def testAlterNothingNotAuthorized(quorum: String): Unit = {
+  def testAlterNothingNotAuthorized(): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
         .setDeletions(new util.ArrayList[AlterUserScramCredentialsRequestData.ScramCredentialDeletion])
@@ -63,7 +63,7 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
     assertEquals(0, results.size)
   }
 
-  def testAlterSomethingNotAuthorized(quorum: String): Unit = {
+  def testAlterSomethingNotAuthorized(): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
         .setDeletions(util.Arrays.asList(new AlterUserScramCredentialsRequestData.ScramCredentialDeletion().setName(user1).setMechanism(ScramMechanism.SCRAM_SHA_256.`type`)))

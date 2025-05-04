@@ -116,7 +116,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     }
   }
 
-  def testProduceRequestWithNullClientId(quorum: String): Unit = {
+  def testProduceRequestWithNullClientId(): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)
     val correlationId = -1
@@ -162,19 +162,19 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse.errorCode), "There should be no error")
   }
 
-  def testHeaderOnlyRequest(quorum: String): Unit = {
+  def testHeaderOnlyRequest(): Unit = {
     verifyDisconnect(requestHeaderBytes(ApiKeys.PRODUCE.id, 1))
   }
 
-  def testInvalidApiKeyRequest(quorum: String): Unit = {
+  def testInvalidApiKeyRequest(): Unit = {
     verifyDisconnect(requestHeaderBytes(-1, 0))
   }
 
-  def testInvalidApiVersionRequest(quorum: String): Unit = {
+  def testInvalidApiVersionRequest(): Unit = {
     verifyDisconnect(requestHeaderBytes(ApiKeys.PRODUCE.id, -1))
   }
 
-  def testMalformedHeaderRequest(quorum: String): Unit = {
+  def testMalformedHeaderRequest(): Unit = {
     val serializedBytes = {
       // Only send apiKey and apiVersion
       val buffer = ByteBuffer.allocate(

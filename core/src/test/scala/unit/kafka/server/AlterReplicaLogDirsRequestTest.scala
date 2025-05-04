@@ -50,7 +50,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
       .find(p => p.partitionIndex == tp.partition).get.errorCode)
   }
 
-  def testAlterReplicaLogDirsRequest(quorum: String): Unit = {
+  def testAlterReplicaLogDirsRequest(): Unit = {
     val partitionNum = 5
 
     // Alter replica dir before topic creation
@@ -84,7 +84,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     }
   }
 
-  def testAlterReplicaLogDirsRequestErrorCode(quorum: String): Unit = {
+  def testAlterReplicaLogDirsRequestErrorCode(): Unit = {
     val offlineDir = new File(brokers.head.config.logDirs.tail.head).getAbsolutePath
     val validDir1 = new File(brokers.head.config.logDirs(1)).getAbsolutePath
     val validDir2 = new File(brokers.head.config.logDirs(2)).getAbsolutePath
@@ -121,7 +121,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     assertEquals(Errors.KAFKA_STORAGE_ERROR, findErrorForPartition(alterReplicaDirResponse3, new TopicPartition(topic, 2)))
   }
 
-  def testAlterReplicaLogDirsRequestWithRetention(quorum: String): Unit = {
+  def testAlterReplicaLogDirsRequestWithRetention(): Unit = {
     val partitionNum = 1
 
     // Alter replica dir before topic creation

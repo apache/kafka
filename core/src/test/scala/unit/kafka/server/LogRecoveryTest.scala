@@ -102,7 +102,7 @@ class LogRecoveryTest extends QuorumTestHarness {
     super.tearDown()
   }
 
-  def testHWCheckpointNoFailuresSingleLogSegment(quorum: String): Unit = {
+  def testHWCheckpointNoFailuresSingleLogSegment(): Unit = {
     val numMessages = 2L
     sendMessages(numMessages.toInt)
 
@@ -118,7 +118,7 @@ class LogRecoveryTest extends QuorumTestHarness {
     assertEquals(numMessages, followerHW)
   }
 
-  def testHWCheckpointWithFailuresSingleLogSegment(quorum: String): Unit = {
+  def testHWCheckpointWithFailuresSingleLogSegment(): Unit = {
     var leader = getLeaderIdForPartition(servers, topicPartition)
 
     assertEquals(0L, hwFile1.read().getOrDefault(topicPartition, 0L))
@@ -177,7 +177,7 @@ class LogRecoveryTest extends QuorumTestHarness {
     assertEquals(hw, hwFile2.read().getOrDefault(topicPartition, 0L))
   }
 
-  def testHWCheckpointNoFailuresMultipleLogSegments(quorum: String): Unit = {
+  def testHWCheckpointNoFailuresMultipleLogSegments(): Unit = {
     sendMessages(20)
     val hw = 20L
     // give some time for follower 1 to record leader HW of 600
@@ -192,7 +192,7 @@ class LogRecoveryTest extends QuorumTestHarness {
     assertEquals(hw, followerHW)
   }
 
-  def testHWCheckpointWithFailuresMultipleLogSegments(quorum: String): Unit = {
+  def testHWCheckpointWithFailuresMultipleLogSegments(): Unit = {
     var leader = getLeaderIdForPartition(servers, topicPartition)
 
     sendMessages(2)

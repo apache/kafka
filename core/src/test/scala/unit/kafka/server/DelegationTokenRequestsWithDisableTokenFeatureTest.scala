@@ -53,7 +53,7 @@ class DelegationTokenRequestsWithDisableTokenFeatureTest extends BaseRequestTest
     config
   }
 
-  def testDelegationTokenRequests(quorum: String): Unit = {
+  def testDelegationTokenRequests(): Unit = {
     adminClient = Admin.create(createAdminConfig)
 
     val createResult = adminClient.createDelegationToken()

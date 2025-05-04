@@ -41,7 +41,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     }
   }
 
-  def testListOffsetsErrorCodes(quorum: String): Unit = {
+  def testListOffsetsErrorCodes(): Unit = {
     val targetTimes = List(new ListOffsetsTopic()
       .setName(topic)
       .setPartitions(List(new ListOffsetsPartition()
@@ -104,7 +104,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     assertResponseError(error, brokerId, request)
   }
 
-  def testCurrentEpochValidation(quorum: String): Unit = {
+  def testCurrentEpochValidation(): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)
     val partitionToLeader = createTopic(numPartitions = 1, replicationFactor = 3)
@@ -162,7 +162,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     (partitionData.offset, partitionData.leaderEpoch, partitionData.errorCode())
   }
 
-  def testResponseIncludesLeaderEpoch(quorum: String): Unit = {
+  def testResponseIncludesLeaderEpoch(): Unit = {
     val partitionToLeader = createTopic(numPartitions = 1, replicationFactor = 3)
     val firstLeaderId = partitionToLeader(partition.partition)
 
@@ -201,7 +201,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     assertEquals((9L, firstLeaderEpoch, Errors.NONE.code), fetchOffsetAndEpochWithError(secondLeaderId, ListOffsetsRequest.MAX_TIMESTAMP, -1))
   }
 
-  def testResponseDefaultOffsetAndLeaderEpochForAllVersions(quorum: String): Unit = {
+  def testResponseDefaultOffsetAndLeaderEpochForAllVersions(): Unit = {
     val partitionToLeader = createTopic(numPartitions = 1, replicationFactor = 3)
     val firstLeaderId = partitionToLeader(partition.partition)
 

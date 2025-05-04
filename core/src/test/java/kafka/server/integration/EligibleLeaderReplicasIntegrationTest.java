@@ -50,6 +50,7 @@ import org.apache.kafka.storage.internals.checkpoint.CleanShutdownFileHandler;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 
 import java.io.File;
@@ -135,7 +136,8 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
         if (adminClient != null) adminClient.close();
     }
 
-    public void testHighWatermarkShouldNotAdvanceIfUnderMinIsr(String quorum) throws ExecutionException, InterruptedException {
+    @Test
+    public void testHighWatermarkShouldNotAdvanceIfUnderMinIsr() throws ExecutionException, InterruptedException {
         adminClient.createTopics(
             List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
         TestUtils.waitForPartitionMetadata(brokers(), testTopicName, 0, 1000);
@@ -220,7 +222,8 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
         );
     }
 
-    public void testElrMemberCanBeElected(String quorum) throws ExecutionException, InterruptedException {
+    @Test
+    public void testElrMemberCanBeElected() throws ExecutionException, InterruptedException {
         adminClient.createTopics(
             List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
         TestUtils.waitForPartitionMetadata(brokers(), testTopicName, 0, 1000);
@@ -294,7 +297,8 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
         }
     }
 
-    public void testElrMemberShouldBeKickOutWhenUncleanShutdown(String quorum) throws ExecutionException, InterruptedException {
+    @Test
+    public void testElrMemberShouldBeKickOutWhenUncleanShutdown() throws ExecutionException, InterruptedException {
         adminClient.createTopics(
             List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
         TestUtils.waitForPartitionMetadata(brokers(), testTopicName, 0, 1000);
@@ -353,7 +357,8 @@ public class EligibleLeaderReplicasIntegrationTest extends KafkaServerTestHarnes
     /*
         This test is only valid for KIP-966 part 1. When the unclean recovery is implemented, it should be removed.
      */
-    public void testLastKnownLeaderShouldBeElectedIfEmptyElr(String quorum) throws ExecutionException, InterruptedException {
+    @Test
+    public void testLastKnownLeaderShouldBeElectedIfEmptyElr() throws ExecutionException, InterruptedException {
         adminClient.createTopics(
             List.of(new NewTopic(testTopicName, 1, (short) 4))).all().get();
         TestUtils.waitForPartitionMetadata(brokers(), testTopicName, 0, 1000);

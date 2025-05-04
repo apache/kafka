@@ -59,7 +59,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     List(KafkaConfig.fromProps(cfg))
   }
 
-  def testConfigChange(quorum: String): Unit = {
+  def testConfigChange(): Unit = {
     val oldVal: java.lang.Long = 100000L
     val newVal: java.lang.Long = 200000L
     val tp = new TopicPartition("test", 0)
@@ -91,7 +91,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
-  def testDynamicTopicConfigChange(quorum: String): Unit = {
+  def testDynamicTopicConfigChange(): Unit = {
     val tp = new TopicPartition("test", 0)
     val oldSegmentSize = 1000
     val logProps = new Properties()
@@ -174,45 +174,45 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
-  def testClientIdQuotaConfigChange(quorum: String): Unit = {
+  def testClientIdQuotaConfigChange(): Unit = {
     val m = new util.HashMap[String, String]
     m.put(CLIENT_ID, "testClient")
     testQuotaConfigChange(new ClientQuotaEntity(m), KafkaPrincipal.ANONYMOUS, "testClient")
   }
 
-  def testUserQuotaConfigChange(quorum: String): Unit = {
+  def testUserQuotaConfigChange(): Unit = {
     val m = new util.HashMap[String, String]
     m.put(USER, "ANONYMOUS")
     testQuotaConfigChange(new ClientQuotaEntity(m), KafkaPrincipal.ANONYMOUS, "testClient")
   }
 
-  def testUserClientIdQuotaChange(quorum: String): Unit = {
+  def testUserClientIdQuotaChange(): Unit = {
     val m = new util.HashMap[String, String]
     m.put(USER, "ANONYMOUS")
     m.put(CLIENT_ID, "testClient")
     testQuotaConfigChange(new ClientQuotaEntity(m), KafkaPrincipal.ANONYMOUS, "testClient")
   }
 
-  def testDefaultClientIdQuotaConfigChange(quorum: String): Unit = {
+  def testDefaultClientIdQuotaConfigChange(): Unit = {
     val m = new util.HashMap[String, String]
     m.put(CLIENT_ID, null)
     testQuotaConfigChange(new ClientQuotaEntity(m), KafkaPrincipal.ANONYMOUS, "testClient")
   }
 
-  def testDefaultUserQuotaConfigChange(quorum: String): Unit = {
+  def testDefaultUserQuotaConfigChange(): Unit = {
     val m = new util.HashMap[String, String]
     m.put(USER, null)
     testQuotaConfigChange(new ClientQuotaEntity(m), KafkaPrincipal.ANONYMOUS, "testClient")
   }
 
-  def testDefaultUserClientIdQuotaConfigChange(quorum: String): Unit = {
+  def testDefaultUserClientIdQuotaConfigChange(): Unit = {
     val m = new util.HashMap[String, String]
     m.put(USER, null)
     m.put(CLIENT_ID, null)
     testQuotaConfigChange(new ClientQuotaEntity(m), KafkaPrincipal.ANONYMOUS, "testClient")
   }
 
-  def testIpQuotaInitialization(quorum: String): Unit = {
+  def testIpQuotaInitialization(): Unit = {
     val broker = brokers.head
     val admin = createAdminClient()
     try {
@@ -232,7 +232,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
-  def testIpQuotaConfigChange(quorum: String): Unit = {
+  def testIpQuotaConfigChange(): Unit = {
     val admin = createAdminClient()
     try {
       val alterations = util.Arrays.asList(
@@ -274,7 +274,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
 
   private def tempTopic() : String = "testTopic" + random.nextInt(1000000)
 
-  def testConfigChangeOnNonExistingTopicWithAdminClient(quorum: String): Unit = {
+  def testConfigChangeOnNonExistingTopicWithAdminClient(): Unit = {
     val topic = tempTopic()
     val admin = createAdminClient()
     try {
@@ -290,7 +290,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
-  def testIncrementalAlterDefaultTopicConfig(quorum: String): Unit = {
+  def testIncrementalAlterDefaultTopicConfig(): Unit = {
     val admin = createAdminClient()
     try {
       val resource = new ConfigResource(ConfigResource.Type.TOPIC, "")
@@ -320,7 +320,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
-  def testBrokerIdConfigChangeAndDelete(quorum: String): Unit = {
+  def testBrokerIdConfigChangeAndDelete(): Unit = {
     val newValue: Long = 100000L
     val brokerId: String = this.brokers.head.config.brokerId.toString
     setBrokerConfigs(brokerId, newValue)
@@ -342,7 +342,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
-  def testDefaultBrokerIdConfigChangeAndDelete(quorum: String): Unit = {
+  def testDefaultBrokerIdConfigChangeAndDelete(): Unit = {
     val newValue: Long = 100000L
     val brokerId: String = ""
     setBrokerConfigs(brokerId, newValue)
@@ -363,7 +363,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
-  def testDefaultAndBrokerIdConfigChange(quorum: String): Unit = {
+  def testDefaultAndBrokerIdConfigChange(): Unit = {
     val newValue: Long = 100000L
     val brokerId: String = this.brokers.head.config.brokerId.toString
     setBrokerConfigs(brokerId, newValue)
@@ -379,7 +379,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     }
   }
 
-  def testDynamicGroupConfigChange(quorum: String): Unit = {
+  def testDynamicGroupConfigChange(): Unit = {
     val newSessionTimeoutMs = 50000
     val consumerGroupId = "group-foo"
     val admin = createAdminClient()
@@ -404,7 +404,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     assertEquals(newSessionTimeoutMs, groupConfig.consumerSessionTimeoutMs())
   }
 
-  def testDynamicShareGroupConfigChange(quorum: String): Unit = {
+  def testDynamicShareGroupConfigChange(): Unit = {
     val newRecordLockDurationMs = 50000
     val shareGroupId = "group-foo"
     val admin = createAdminClient()
@@ -429,7 +429,7 @@ class DynamicConfigChangeTest extends KafkaServerTestHarness {
     assertEquals(newRecordLockDurationMs, groupConfig.shareRecordLockDurationMs)
   }
 
-  def testIncrementalAlterDefaultGroupConfig(quorum: String): Unit = {
+  def testIncrementalAlterDefaultGroupConfig(): Unit = {
     val admin = createAdminClient()
     try {
       val resource = new ConfigResource(ConfigResource.Type.GROUP, "")

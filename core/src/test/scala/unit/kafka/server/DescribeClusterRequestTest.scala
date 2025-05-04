@@ -46,11 +46,11 @@ class DescribeClusterRequestTest extends BaseRequestTest {
     doSetup(testInfo, createOffsetsTopic = false)
   }
 
-  def testDescribeClusterRequestIncludingClusterAuthorizedOperations(quorum: String): Unit = {
+  def testDescribeClusterRequestIncludingClusterAuthorizedOperations(): Unit = {
     testDescribeClusterRequest(true)
   }
 
-  def testDescribeClusterRequestExcludingClusterAuthorizedOperations(quorum: String): Unit = {
+  def testDescribeClusterRequestExcludingClusterAuthorizedOperations(): Unit = {
     testDescribeClusterRequest(false)
   }
 

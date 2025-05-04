@@ -65,11 +65,11 @@ class ReplicationQuotasTest extends QuorumTestHarness {
     super.tearDown()
   }
 
-  def shouldBootstrapTwoBrokersWithLeaderThrottle(quorum: String): Unit = {
+  def shouldBootstrapTwoBrokersWithLeaderThrottle(): Unit = {
     shouldMatchQuotaReplicatingThroughAnAsymmetricTopology(true)
   }
 
-  def shouldBootstrapTwoBrokersWithFollowerThrottle(quorum: String): Unit = {
+  def shouldBootstrapTwoBrokersWithFollowerThrottle(): Unit = {
     shouldMatchQuotaReplicatingThroughAnAsymmetricTopology(false)
   }
 
@@ -188,7 +188,7 @@ class ReplicationQuotasTest extends QuorumTestHarness {
 
   def tp(partition: Int): TopicPartition = new TopicPartition(topic, partition)
 
-  def shouldThrottleOldSegments(quorum: String): Unit = {
+  def shouldThrottleOldSegments(): Unit = {
     /**
       * Simple test which ensures throttled replication works when the dataset spans many segments
       */

@@ -86,7 +86,7 @@ class PlaintextEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     superuserClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers(interBrokerListenerName))
   }
 
-  def testListenerName(quorum: String): Unit = {
+  def testListenerName(): Unit = {
     // To check the client listener name, establish a session on the server by sending any request eg sendRecords
     val producer = createProducer()
     assertThrows(classOf[TopicAuthorizationException], () => sendRecords(producer, numRecords = 1, tp))

@@ -64,7 +64,7 @@ class DynamicNumNetworkThreadsTest extends BaseRequestTest {
       .count(listener == _.tags().get("listener"))
   }
 
-  def testDynamicNumNetworkThreads(quorum: String): Unit = {
+  def testDynamicNumNetworkThreads(): Unit = {
     // Increase the base network thread count
     val newBaseNetworkThreadsCount = SocketServerConfigs.NUM_NETWORK_THREADS_DEFAULT + 1
     var props = new Properties

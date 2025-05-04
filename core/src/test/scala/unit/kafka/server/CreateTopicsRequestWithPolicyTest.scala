@@ -44,7 +44,7 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
     Seq(properties)
   }
 
-  def testValidCreateTopicsRequests(quorum: String): Unit = {
+  def testValidCreateTopicsRequests(): Unit = {
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic1",
       numPartitions = 5))))
 
@@ -61,7 +61,7 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
       assignment = Map(0 -> List(1, 0), 1 -> List(0, 1))))))
   }
 
-  def testErrorCreateTopicsRequests(quorum: String): Unit = {
+  def testErrorCreateTopicsRequests(): Unit = {
     val existingTopic = "existing-topic"
     createTopic(existingTopic, 5)
 

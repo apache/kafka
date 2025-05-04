@@ -102,7 +102,7 @@ class FetchRequestMaxBytesTest extends BaseRequestTest {
    * Note that when a single batch is larger than FetchMaxBytes, it will be
    * returned in full even if this is larger than FetchMaxBytes.  See KIP-74.
    */
-  def testConsumeMultipleRecords(quorum: String): Unit = {
+  def testConsumeMultipleRecords(): Unit = {
     createTopics()
 
     expectNextRecords(IndexedSeq(messages(0), messages(1)), 0)

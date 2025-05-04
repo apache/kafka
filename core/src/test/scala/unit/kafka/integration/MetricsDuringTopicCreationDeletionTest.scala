@@ -67,7 +67,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
   /*
    * checking all metrics we care in a single test is faster though it would be more elegant to have 3 @Test methods
    */
-  def testMetricsDuringTopicCreateDelete(quorum: String): Unit = {
+  def testMetricsDuringTopicCreateDelete(): Unit = {
 
     // For UnderReplicatedPartitions, because of https://issues.apache.org/jira/browse/KAFKA-4605
     // we can't access the metrics value of each server. So instead we directly invoke the method

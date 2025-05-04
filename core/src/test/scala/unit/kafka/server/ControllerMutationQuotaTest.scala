@@ -124,7 +124,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     waitUserQuota(ThrottledPrincipal.getName, ControllerMutationRate)
   }
 
-  def testSetUnsetQuota(quorum: String): Unit = {
+  def testSetUnsetQuota(): Unit = {
     val rate = 1.5
     val principal = new KafkaPrincipal(KafkaPrincipal.USER_TYPE, "User")
     // Default Value
@@ -139,7 +139,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     waitUserQuota(principal.getName, Long.MaxValue)
   }
 
-  def testQuotaMetric(quorum: String): Unit = {
+  def testQuotaMetric(): Unit = {
     asPrincipal(ThrottledPrincipal) {
       // Metric is lazily created
       assertTrue(quotaMetric(principal.getName).isEmpty)
@@ -160,7 +160,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  def testStrictCreateTopicsRequest(quorum: String): Unit = {
+  def testStrictCreateTopicsRequest(): Unit = {
     asPrincipal(ThrottledPrincipal) {
       // Create two topics worth of 30 partitions each. As we use a strict quota, we
       // expect one to be created and one to be rejected.
@@ -182,7 +182,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  def testPermissiveCreateTopicsRequest(quorum: String): Unit = {
+  def testPermissiveCreateTopicsRequest(): Unit = {
     asPrincipal(ThrottledPrincipal) {
       // Create two topics worth of 30 partitions each. As we use a permissive quota, we
       // expect both topics to be created.
@@ -194,7 +194,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  def testUnboundedCreateTopicsRequest(quorum: String): Unit = {
+  def testUnboundedCreateTopicsRequest(): Unit = {
     asPrincipal(UnboundedPrincipal) {
       // Create two topics worth of 30 partitions each. As we use an user without quota, we
       // expect both topics to be created. The throttle time should be equal to 0.
@@ -204,7 +204,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  def testStrictDeleteTopicsRequest(quorum: String): Unit = {
+  def testStrictDeleteTopicsRequest(): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWith30Partitions, StrictCreateTopicsRequestVersion)
     }
@@ -230,7 +230,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  def testPermissiveDeleteTopicsRequest(quorum: String): Unit = {
+  def testPermissiveDeleteTopicsRequest(): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWith30Partitions, StrictCreateTopicsRequestVersion)
     }
@@ -246,7 +246,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  def testUnboundedDeleteTopicsRequest(quorum: String): Unit = {
+  def testUnboundedDeleteTopicsRequest(): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWith30Partitions, StrictCreateTopicsRequestVersion)
 
@@ -258,7 +258,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  def testStrictCreatePartitionsRequest(quorum: String): Unit = {
+  def testStrictCreatePartitionsRequest(): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWithOnePartition, StrictCreatePartitionsRequestVersion)
     }
@@ -284,7 +284,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  def testPermissiveCreatePartitionsRequest(quorum: String): Unit = {
+  def testPermissiveCreatePartitionsRequest(): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWithOnePartition, StrictCreatePartitionsRequestVersion)
     }
@@ -300,7 +300,7 @@ class ControllerMutationQuotaTest extends BaseRequestTest {
     }
   }
 
-  def testUnboundedCreatePartitionsRequest(quorum: String): Unit = {
+  def testUnboundedCreatePartitionsRequest(): Unit = {
     asPrincipal(UnboundedPrincipal) {
       createTopics(TopicsWithOnePartition, StrictCreatePartitionsRequestVersion)
 

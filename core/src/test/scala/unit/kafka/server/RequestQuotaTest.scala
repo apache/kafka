@@ -131,24 +131,24 @@ class RequestQuotaTest extends BaseRequestTest {
     finally super.tearDown()
   }
 
-  def testResponseThrottleTime(quorum: String): Unit = {
+  def testResponseThrottleTime(): Unit = {
     for (apiKey <- clientActions ++ clusterActionsWithThrottleForBroker)
       submitTest(apiKey, () => checkRequestThrottleTime(apiKey))
 
     waitAndCheckResults()
   }
 
-  def testResponseThrottleTimeWhenBothProduceAndRequestQuotasViolated(quorum: String): Unit = {
+  def testResponseThrottleTimeWhenBothProduceAndRequestQuotasViolated(): Unit = {
     submitTest(ApiKeys.PRODUCE, () => checkSmallQuotaProducerRequestThrottleTime())
     waitAndCheckResults()
   }
 
-  def testResponseThrottleTimeWhenBothFetchAndRequestQuotasViolated(quorum: String): Unit = {
+  def testResponseThrottleTimeWhenBothFetchAndRequestQuotasViolated(): Unit = {
     submitTest(ApiKeys.FETCH, () => checkSmallQuotaConsumerRequestThrottleTime())
     waitAndCheckResults()
   }
 
-  def testUnthrottledClient(quorum: String): Unit = {
+  def testUnthrottledClient(): Unit = {
     for (apiKey <- clientActions) {
       submitTest(apiKey, () => checkUnthrottledClient(apiKey))
     }
@@ -156,7 +156,7 @@ class RequestQuotaTest extends BaseRequestTest {
     waitAndCheckResults()
   }
 
-  def testExemptRequestTime(quorum: String): Unit = {
+  def testExemptRequestTime(): Unit = {
     // Exclude `DESCRIBE_QUORUM`, maybe it shouldn't be a cluster action
     val actions = clusterActions -- clusterActionsWithThrottleForBroker -- RequestQuotaTest.Envelope -- RequestQuotaTest.ShareGroupState - ApiKeys.DESCRIBE_QUORUM
     for (apiKey <- actions) {
@@ -166,7 +166,7 @@ class RequestQuotaTest extends BaseRequestTest {
     waitAndCheckResults()
   }
 
-  def testUnauthorizedThrottle(quorum: String): Unit = {
+  def testUnauthorizedThrottle(): Unit = {
     RequestQuotaTest.principal = RequestQuotaTest.UnauthorizedPrincipal
 
     val apiKeys = ApiKeys.brokerApis

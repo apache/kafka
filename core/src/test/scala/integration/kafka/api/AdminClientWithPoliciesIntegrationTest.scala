@@ -77,7 +77,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     props.put(ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, classOf[Policy])
   }
 
-  def testValidAlterConfigs(quorum: String): Unit = {
+  def testValidAlterConfigs(): Unit = {
     client = Admin.create(createConfig)
     // Create topics
     val topic1 = "describe-alter-configs-topic-1"
@@ -96,12 +96,12 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     PlaintextAdminIntegrationTest.checkValidAlterConfigs(client, this, topicResource1, topicResource2, maxMessageBytes, retentionMs)
   }
 
-  def testInvalidAlterConfigs(quorum: String): Unit = {
+  def testInvalidAlterConfigs(): Unit = {
     client = Admin.create(createConfig)
     PlaintextAdminIntegrationTest.checkInvalidAlterConfigs(this, client)
   }
 
-  def testInvalidAlterConfigsDueToPolicy(quorum: String): Unit = {
+  def testInvalidAlterConfigsDueToPolicy(): Unit = {
     client = Admin.create(createConfig)
 
     // Create topics

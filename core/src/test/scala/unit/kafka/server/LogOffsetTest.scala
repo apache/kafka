@@ -45,7 +45,7 @@ class LogOffsetTest extends BaseRequestTest {
     props.put("log.retention.check.interval.ms", (5 * 1000 * 60).toString)
   }
 
-  def testGetOffsetsForUnknownTopic(quorum: String): Unit = {
+  def testGetOffsetsForUnknownTopic(): Unit = {
     val topicPartition = new TopicPartition("foo", 0)
     val request = ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
       .setTargetTimes(buildTargetTimes(topicPartition, ListOffsetsRequest.LATEST_TIMESTAMP).asJava).build(1)
@@ -54,7 +54,7 @@ class LogOffsetTest extends BaseRequestTest {
   }
 
   @deprecated("ListOffsetsRequest V0", since = "")
-  def testGetOffsetsAfterDeleteRecords(quorum: String): Unit = {
+  def testGetOffsetsAfterDeleteRecords(): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
     val log = createTopicAndGetLog(topic, topicPartition)
@@ -78,7 +78,7 @@ class LogOffsetTest extends BaseRequestTest {
     assertEquals(20L, consumerOffset)
   }
 
-  def testFetchOffsetByTimestampForMaxTimestampAfterTruncate(quorum: String): Unit = {
+  def testFetchOffsetByTimestampForMaxTimestampAfterTruncate(): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
     val log = createTopicAndGetLog(topic, topicPartition)
@@ -98,7 +98,7 @@ class LogOffsetTest extends BaseRequestTest {
     assertEquals(Optional.empty, log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP, Optional.empty).timestampAndOffsetOpt)
   }
 
-  def testFetchOffsetByTimestampForMaxTimestampWithUnorderedTimestamps(quorum: String): Unit = {
+  def testFetchOffsetByTimestampForMaxTimestampWithUnorderedTimestamps(): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
     val log = createTopicAndGetLog(topic, topicPartition)
@@ -115,7 +115,7 @@ class LogOffsetTest extends BaseRequestTest {
     assertEquals(6L, maxTimestampOffset.get.timestamp)
   }
 
-  def testGetOffsetsBeforeLatestTime(quorum: String): Unit = {
+  def testGetOffsetsBeforeLatestTime(): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
     val log = createTopicAndGetLog(topic, topicPartition)
@@ -146,7 +146,7 @@ class LogOffsetTest extends BaseRequestTest {
     assertFalse(FetchResponse.recordsOrFail(fetchResponse.responseData(topicNames, ApiKeys.FETCH.latestVersion).get(topicPartition)).batches.iterator.hasNext)
   }
 
-  def testEmptyLogsGetOffsets(quorum: String): Unit = {
+  def testEmptyLogsGetOffsets(): Unit = {
     val random = new Random
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, random.nextInt(10))
@@ -168,7 +168,7 @@ class LogOffsetTest extends BaseRequestTest {
     assertFalse(offsetChanged)
   }
 
-  def testFetchOffsetByTimestampForMaxTimestampWithEmptyLog(quorum: String): Unit = {
+  def testFetchOffsetByTimestampForMaxTimestampWithEmptyLog(): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
     val log = createTopicAndGetLog(topic, topicPartition)
@@ -179,7 +179,7 @@ class LogOffsetTest extends BaseRequestTest {
     assertEquals(new OffsetResultHolder(Optional.empty[FileRecords.TimestampAndOffset]()), log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP, Optional.empty))
   }
 
-  def testGetOffsetsBeforeEarliestTime(quorum: String): Unit = {
+  def testGetOffsetsBeforeEarliestTime(): Unit = {
     val random = new Random
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, random.nextInt(3))

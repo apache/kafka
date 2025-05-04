@@ -110,7 +110,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, errors.get(nonExistentTopic))
   }
 
-  def testOneSuccessOneErrorInBatchedRequest(quorum: String): Unit = {
+  def testOneSuccessOneErrorInBatchedRequest(): Unit = {
     val tp0 = new TopicPartition(topic1, 0)
     val transactionalId1 = "foobar"
     val transactionalId2 = "barfoo" // "barfoo" maps to the same transaction coordinator
@@ -147,7 +147,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     assertEquals(expectedErrors, errors)
   }
 
-  def testVerifyOnly(quorum: String): Unit = {
+  def testVerifyOnly(): Unit = {
     val tp0 = new TopicPartition(topic1, 0)
 
     val transactionalId = "foobar"

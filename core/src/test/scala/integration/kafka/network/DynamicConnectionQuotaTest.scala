@@ -82,7 +82,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
   @Flaky("KAFKA-17999")
-  def testDynamicConnectionQuota(quorum: String): Unit = {
+  def testDynamicConnectionQuota(): Unit = {
     val maxConnectionsPerIP = 5
 
     def connectAndVerify(): Unit = {
@@ -108,7 +108,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     verifyMaxConnections(maxConnectionsPerIPOverride, connectAndVerify)
   }
 
-  def testDynamicListenerConnectionQuota(quorum: String): Unit = {
+  def testDynamicListenerConnectionQuota(): Unit = {
     val initialConnectionCount = connectionCount
 
     def connectAndVerify(): Unit = {
@@ -179,7 +179,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
 
-  def testDynamicListenerConnectionCreationRateQuota(quorum: String): Unit = {
+  def testDynamicListenerConnectionCreationRateQuota(): Unit = {
     // Create another listener. PLAINTEXT is an inter-broker listener
     // keep default limits
     val newListenerNames = Seq("PLAINTEXT", "EXTERNAL")
@@ -239,7 +239,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     waitForConnectionCount(initialConnectionCount)
   }
 
-  def testDynamicIpConnectionRateQuota(quorum: String): Unit = {
+  def testDynamicIpConnectionRateQuota(): Unit = {
     val connRateLimit = 10
     val initialConnectionCount = connectionCount
     // before setting connection rate to 10, verify we can do at least double that by default (no limit)

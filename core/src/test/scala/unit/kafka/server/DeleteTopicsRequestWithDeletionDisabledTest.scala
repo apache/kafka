@@ -46,7 +46,7 @@ class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
     props.map(KafkaConfig.fromProps)
   }
 
-  def testDeleteRecordsRequest(quorum: String): Unit = {
+  def testDeleteRecordsRequest(): Unit = {
     val topic = "topic-1"
     val request = new DeleteTopicsRequest.Builder(
         new DeleteTopicsRequestData()

@@ -63,7 +63,7 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
     config
   }
 
-  def testDelegationTokenRequests(quorum: String): Unit = {
+  def testDelegationTokenRequests(): Unit = {
     adminClient = Admin.create(createAdminConfig)
 
     // create token1 with renewer1

@@ -34,7 +34,7 @@ class DeleteRecordsRequestTest extends BaseRequestTest {
   private val TIMEOUT_MS = 1000
   private val MESSAGES_PRODUCED_PER_PARTITION = 10
 
-  def testDeleteRecordsHappyCase(quorum: String): Unit = {
+  def testDeleteRecordsHappyCase(): Unit = {
     val (topicPartition: TopicPartition, leaderId: Int) = createTopicAndSendRecords
 
     // Create the DeleteRecord request requesting deletion of offset which is not present
@@ -57,7 +57,7 @@ class DeleteRecordsRequestTest extends BaseRequestTest {
     validateLogStartOffsetForTopic(topicPartition, offsetToDelete)
   }
 
-  def testErrorWhenDeletingRecordsWithInvalidOffset(quorum: String): Unit = {
+  def testErrorWhenDeletingRecordsWithInvalidOffset(): Unit = {
     val (topicPartition: TopicPartition, leaderId: Int) = createTopicAndSendRecords
 
     // Create the DeleteRecord request requesting deletion of offset which is not present
@@ -80,7 +80,7 @@ class DeleteRecordsRequestTest extends BaseRequestTest {
     validateLogStartOffsetForTopic(topicPartition, 0)
   }
 
-  def testErrorWhenDeletingRecordsWithInvalidTopic(quorum: String): Unit = {
+  def testErrorWhenDeletingRecordsWithInvalidTopic(): Unit = {
     val invalidTopicPartition = new TopicPartition("invalid-topic", 0)
     // Create the DeleteRecord request requesting deletion of offset which is not present
     val offsetToDelete = 1
