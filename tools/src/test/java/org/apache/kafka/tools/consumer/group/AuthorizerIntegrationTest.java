@@ -21,10 +21,11 @@ import kafka.api.AbstractAuthorizerIntegrationTest;
 import org.apache.kafka.common.acl.AccessControlEntry;
 import org.apache.kafka.common.errors.GroupIdNotFoundException;
 
+import org.junit.jupiter.api.Test;
+
 import java.util.Collections;
 import java.util.concurrent.ExecutionException;
 
-import org.junit.jupiter.api.Test;
 import scala.jdk.javaapi.CollectionConverters;
 
 import static org.apache.kafka.common.acl.AclOperation.DESCRIBE;
