@@ -138,12 +138,12 @@ class RemoteLeaderEndPointTest {
         when(log.logStartOffset).thenReturn(1)
 
         val result1 = endPoint.buildFetch(partitionMap.asJava)
-        assertTrue(result1.getPartitionsWithError.isEmpty)
-        assertEquals(if (version < 15) -1L else 1L, result1.getResult.get.fetchRequest.build(version).replicaEpoch)
+        assertTrue(result1.partitionsWithError.isEmpty)
+        assertEquals(if (version < 15) -1L else 1L, result1.result.get.fetchRequest.build(version).replicaEpoch)
 
         currentBrokerEpoch = 2L
         val result2 = endPoint.buildFetch(partitionMap.asJava)
-        assertTrue(result2.getPartitionsWithError.isEmpty)
-        assertEquals(if (version < 15) -1L else 2L, result2.getResult.get.fetchRequest.build(version).replicaEpoch)
+        assertTrue(result2.partitionsWithError.isEmpty)
+        assertEquals(if (version < 15) -1L else 2L, result2.result.get.fetchRequest.build(version).replicaEpoch)
     }
 }

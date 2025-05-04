@@ -628,7 +628,7 @@ class ReplicaFetcherThreadTest {
         t2p1 -> new PartitionFetchState(Optional.of(topicId2), 160, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.Fetching.getInstance, Optional.empty))
 
     val result = thread.leader.buildFetch(partitionMap.asJava)
-    val fetchRequestOpt = result.getResult
+    val fetchRequestOpt = result.result
 
     assertTrue(fetchRequestOpt.isPresent)
     val fetchRequestBuilder = fetchRequestOpt.get.fetchRequest
@@ -656,7 +656,7 @@ class ReplicaFetcherThreadTest {
       t1p1 -> new PartitionFetchState(Optional.of(topicId1), 155, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.Fetching.getInstance, Optional.empty),
       t2p1 -> new PartitionFetchState(Optional.of(newTopicId), 160, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.Fetching.getInstance, Optional.empty))
     val result2 = thread.leader.buildFetch(partitionMap2.asJava)
-    val fetchRequestOpt2 = result2.getResult
+    val fetchRequestOpt2 = result2.result
 
     // Since t1p1 didn't change, we drop that one
     val partitionDataMap2 = partitionMap2.drop(1).map { case (tp, state) =>

@@ -21,20 +21,7 @@ import org.apache.kafka.common.TopicPartition;
 
 import java.util.Set;
 
-public class ResultWithPartitions<R> {
-    private final R result;
-    private final Set<TopicPartition> partitionsWithError;
-
-    public ResultWithPartitions(R result, Set<TopicPartition> partitionsWithError) {
-        this.result = result;
-        this.partitionsWithError = partitionsWithError;
-    }
-
-    public R getResult() {
-        return result;
-    }
-
-    public Set<TopicPartition> getPartitionsWithError() {
-        return partitionsWithError;
-    }
-}
+public record ResultWithPartitions<R>(
+        R result,
+        Set<TopicPartition> partitionsWithError
+) { }

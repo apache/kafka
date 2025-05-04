@@ -22,21 +22,7 @@ import org.apache.kafka.common.requests.FetchRequest;
 
 import java.util.Map;
 
-public class ReplicaFetch {
-    private final Map<TopicPartition, FetchRequest.PartitionData> partitionData;
-    private final FetchRequest.Builder fetchRequest;
-
-    public ReplicaFetch(Map<TopicPartition, FetchRequest.PartitionData> partitionData,
-                        FetchRequest.Builder fetchRequest) {
-        this.partitionData = partitionData;
-        this.fetchRequest = fetchRequest;
-    }
-
-    public Map<TopicPartition, FetchRequest.PartitionData> getPartitionData() {
-        return partitionData;
-    }
-
-    public FetchRequest.Builder getFetchRequest() {
-        return fetchRequest;
-    }
-}
+public record ReplicaFetch(
+        Map<TopicPartition, FetchRequest.PartitionData> partitionData,
+        FetchRequest.Builder fetchRequest
+) { }

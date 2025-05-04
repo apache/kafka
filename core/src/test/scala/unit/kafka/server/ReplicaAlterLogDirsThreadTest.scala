@@ -1085,8 +1085,8 @@ class ReplicaAlterLogDirsThreadTest {
     val result = thread.leader.buildFetch(Map(
       t1p0 -> new PartitionFetchState(Optional.of(topicId), 150, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.Fetching.getInstance, Optional.empty),
       t1p1 -> new PartitionFetchState(Optional.of(topicId), 160, Optional.empty, leaderEpoch, Optional.empty, ReplicaState.Fetching.getInstance, Optional.empty)).asJava)
-    val fetchRequestOpt = result.getResult
-    val partitionsWithError = result.getPartitionsWithError
+    val fetchRequestOpt = result.result
+    val partitionsWithError = result.partitionsWithError
     assertTrue(fetchRequestOpt.isPresent)
     val fetchRequest = fetchRequestOpt.get.fetchRequest
     assertFalse(fetchRequest.fetchData.isEmpty)
@@ -1144,8 +1144,8 @@ class ReplicaAlterLogDirsThreadTest {
       t1p1 -> new PartitionFetchState(Optional.of(topicId), 160, Optional.empty(), leaderEpoch, Optional.empty(),
         ReplicaState.Truncating.getInstance(), Optional.empty())
     ).asJava)
-    val fetchRequestOpt1 = result1.getResult()
-    val partitionsWithError1 = result1.getPartitionsWithError()
+    val fetchRequestOpt1 = result1.result
+    val partitionsWithError1 = result1.partitionsWithError
 
     assertTrue(fetchRequestOpt1.isPresent)
     val fetchRequest = fetchRequestOpt1.get
@@ -1163,8 +1163,8 @@ class ReplicaAlterLogDirsThreadTest {
       t1p1 -> new PartitionFetchState(Optional.of(topicId), 160, Optional.empty(), leaderEpoch, Optional.of(5000L),
         ReplicaState.Fetching.getInstance(), Optional.empty())
     ).asJava)
-    val fetchRequest2Opt = result2.getResult()
-    val partitionsWithError2 = result2.getPartitionsWithError()
+    val fetchRequest2Opt = result2.result
+    val partitionsWithError2 = result2.partitionsWithError
 
     assertTrue(fetchRequest2Opt.isPresent)
     val fetchRequest2 = fetchRequest2Opt.get
@@ -1182,8 +1182,8 @@ class ReplicaAlterLogDirsThreadTest {
       t1p1 -> new PartitionFetchState(Optional.of(topicId), 160, Optional.empty(), leaderEpoch, Optional.of(5000L),
         ReplicaState.Fetching.getInstance(), Optional.empty())
     ).asJava)
-    val fetchRequest3Opt = result3.getResult()
-    val partitionsWithError3 = result3.getPartitionsWithError()
+    val fetchRequest3Opt = result3.result
+    val partitionsWithError3 = result3.partitionsWithError
     assertTrue(fetchRequest3Opt.isEmpty, "Expected no fetch requests since all partitions are delayed")
     assertTrue(partitionsWithError3.isEmpty())
   }

@@ -121,8 +121,8 @@ abstract class AbstractFetcherThread(name: String,
   private def maybeFetch(): Unit = {
     val fetchRequestOpt = inLock(partitionMapLock) {
       val result = leader.buildFetch(partitionStates.partitionStateMap)
-      val fetchRequestOpt = result.getResult
-      val partitionsWithError = result.getPartitionsWithError
+      val fetchRequestOpt = result.result
+      val partitionsWithError = result.partitionsWithError
 
       handlePartitionsWithErrors(partitionsWithError.asScala, "maybeFetch")
 
@@ -158,14 +158,17 @@ abstract class AbstractFetcherThread(name: String,
 
     partitionStates.partitionStateMap.forEach { (tp, state) =>
       if (state.isTruncating) {
-        latestEpoch(tp).toScala match {
-          case Some(epoch) =>
-            partitionsWithEpochs += tp -> new EpochData()
-              .setPartition(tp.partition)
-              .setCurrentLeaderEpoch(state.getCurrentLeaderEpoch)
-              .setLeaderEpoch(epoch)
-          case _ =>
-            partitionsWithoutEpochs += tp
+        val latestEpochOpt = latestEpoch(tp)
+
+        if (latestEpochOpt.isPresent) {
+          val epoch = latestEpochOpt.get()
+
+          partitionsWithEpochs += tp -> new EpochData()
+            .setPartition(tp.partition)
+            .setCurrentLeaderEpoch(state.getCurrentLeaderEpoch)
+            .setLeaderEpoch(epoch)
+        } else {
+          partitionsWithoutEpochs += tp
         }
       }
     }
@@ -242,8 +245,8 @@ abstract class AbstractFetcherThread(name: String,
       }
 
       val result = maybeTruncateToEpochEndOffsets(epochEndOffsets.toMap, latestEpochsForPartitions)
-      val fetchOffsets = result.getResult
-      val partitionsWithError = result.getPartitionsWithError
+      val fetchOffsets = result.result
+      val partitionsWithError = result.partitionsWithError
       val scalaPartitionsWithError: Iterable[TopicPartition] = {
         val list = new java.util.ArrayList[TopicPartition]()
         partitionsWithError.forEach(tp => list.add(tp))
@@ -258,8 +261,8 @@ abstract class AbstractFetcherThread(name: String,
   protected[server] def truncateOnFetchResponse(epochEndOffsets: Map[TopicPartition, EpochEndOffset]): Unit = {
     inLock(partitionMapLock) {
       val result = maybeTruncateToEpochEndOffsets(epochEndOffsets, Map.empty)
-      val fetchOffsets = result.getResult
-      val partitionsWithError = result.getPartitionsWithError.asScala
+      val fetchOffsets = result.result
+      val partitionsWithError = result.partitionsWithError.asScala
       handlePartitionsWithErrors(partitionsWithError, "truncateOnFetchResponse")
       updateFetchOffsetAndMaybeMarkTruncationComplete(fetchOffsets)
     }
