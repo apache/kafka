@@ -428,7 +428,7 @@ class KafkaApis(val requestChannel: RequestChannel,
       if (!authorizedTopics.contains(topicIdPartition.topic))
         unauthorizedTopicResponses += topicIdPartition -> new PartitionResponse(Errors.TOPIC_AUTHORIZATION_FAILED)
       else if (!metadataCache.contains(topicIdPartition.topicPartition))
-        nonExistingTopicResponses += new TopicIdPartition(topicIdPartition.topicId(), topicIdPartition.topicPartition()) -> new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION)
+        nonExistingTopicResponses += topicIdPartition -> new PartitionResponse(Errors.UNKNOWN_TOPIC_OR_PARTITION)
       else
         try {
           ProduceRequest.validateRecords(request.header.apiVersion, memoryRecords)
