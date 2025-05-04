@@ -72,7 +72,7 @@ public class DescribeTopicPartitionsRequestHandler {
      * @return A DescribeTopicPartitionsResponseData containing metadata for the requested topic partitions.
      */
     public DescribeTopicPartitionsResponseData handleDescribeTopicPartitionsRequest(
-            RequestChannel.Request abstractRequest) {
+            final RequestChannel.Request abstractRequest) {
         final DescribeTopicPartitionsRequestData requestData = getRequestData(abstractRequest);
 
         // Get topics to describe based on request data (all topics or specific ones)
@@ -105,7 +105,7 @@ public class DescribeTopicPartitionsRequestHandler {
      * @param abstractRequest The incoming request.
      * @return The request data for the DescribeTopicPartitionsRequest.
      */
-    private DescribeTopicPartitionsRequestData getRequestData(RequestChannel.Request abstractRequest) {
+    private DescribeTopicPartitionsRequestData getRequestData(final RequestChannel.Request abstractRequest) {
         return ((DescribeTopicPartitionsRequest) abstractRequest.loggableRequest()).data();
     }
 
@@ -116,7 +116,7 @@ public class DescribeTopicPartitionsRequestHandler {
      * @param requestData The request data containing the list of topics.
      * @return A set of topics to describe.
      */
-    private Set<String> getTopicsToDescribe(DescribeTopicPartitionsRequestData requestData) {
+    private Set<String> getTopicsToDescribe(final DescribeTopicPartitionsRequestData requestData) {
         Set<String> topics = new HashSet<>();
         boolean fetchAllTopics = requestData.topics().isEmpty();
         DescribeTopicPartitionsRequestData.Cursor cursor = request.cursor();
@@ -151,7 +151,10 @@ public class DescribeTopicPartitionsRequestHandler {
          * @param cursor The cursor for pagination, if provided in the request.
          * @param topicsToDescribe The list of topics that the requestor is authorized to describe.
          */
-        private void validateCursor (DescribeTopicPartitionsRequestData.Cursor cursor, Set < String > topicsToDescribe){
+        private void validateCursor (
+                final DescribeTopicPartitionsRequestData.Cursor cursor,
+                final Set<String> topicsToDescribe
+        ){
             if (cursor != null) {
                 // Validate that the partition index in the cursor is valid
                 if (cursor.partitionIndex() < 0) {
@@ -176,10 +179,11 @@ public class DescribeTopicPartitionsRequestHandler {
          * @return A stream of authorized topic names.
          */
         private Stream<String> filterAuthorizedTopics (
-                RequestChannel.Request abstractRequest,
-                Set < String > topicsToDescribe,
-                Set < DescribeTopicPartitionsResponseTopic > unauthorizedForDescribeTopicMetadata,
-        boolean fetchAllTopics){
+        final RequestChannel.Request abstractRequest,
+        final Set<String> topicsToDescribe,
+        final Set<DescribeTopicPartitionsResponseTopic> unauthorizedForDescribeTopicMetadata,
+        final boolean fetchAllTopics
+        ){
             return topicsToDescribe.stream().sorted().filter(topicName -> {
                 // Check authorization for each topic
                 final boolean isAuthorized = authHelper.authorize(abstractRequest.context(),
@@ -206,7 +210,8 @@ public class DescribeTopicPartitionsRequestHandler {
         private DescribeTopicPartitionsResponseData buildResponse (
         final Stream<String> authorizedTopicsStream,
         final RequestChannel.Request abstractRequest,
-        final DescribeTopicPartitionsRequestData requestData){
+        final DescribeTopicPartitionsRequestData requestData
+        ){
             return metadataCache.describeTopicResponse(
                     authorizedTopicsStream.iterator(),
                     abstractRequest.context().listenerName,
@@ -233,7 +238,8 @@ public class DescribeTopicPartitionsRequestHandler {
         final String topic,
         final Uuid topicId,
         final Boolean isInternal,
-        final List<DescribeTopicPartitionsResponsePartition> partitionData){
+        final List<DescribeTopicPartitionsResponsePartition> partitionData
+        ){
             return new DescribeTopicPartitionsResponseTopic()
                     .setErrorCode(error.code())
                     .setName(topic)
