@@ -42,7 +42,6 @@ import java.io.DataOutputStream;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.HashMap;
@@ -50,7 +49,6 @@ import java.util.HashSet;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.Optional;
 import java.util.OptionalInt;
 import java.util.OptionalLong;
@@ -372,18 +370,21 @@ public class Utils {
 
         // Combine the sorted topic hashes.
         byte[] resultBytes = new byte[8];
-        topicHashes.entrySet()
-            .stream()
-            .sorted(Map.Entry.comparingByKey()) // sort by topic name
-            .map(Map.Entry::getValue)
-            .map(longToBytes::apply)
-            .forEach(nextBytes -> {
-                // Combine ordered hashes. This is taken from guava Hashing#combineOrdered.
-                // https://github.com/google/guava/blob/bdf2a9d05342fca852645278d474082905e09d94/guava/src/com/google/common/hash/Hashing.java#L689-L712
-                for (int i = 0; i < nextBytes.length; i++) {
-                    resultBytes[i] = (byte) (resultBytes[i] * 37 ^ nextBytes[i]);
-                }
-            });
+
+        // Sort entries by topic name
+        List<Map.Entry<String, Long>> sortedEntries = new ArrayList<>(topicHashes.entrySet());
+        sortedEntries.sort(Map.Entry.comparingByKey());
+
+        for (Map.Entry<String, Long> entry : sortedEntries) {
+            Long value = entry.getValue();
+            byte[] nextBytes = longToBytes.apply(value);
+
+            // Combine ordered hashes. This is taken from guava Hashing#combineOrdered.
+            // https://github.com/google/guava/blob/bdf2a9d05342fca852645278d474082905e09d94/guava/src/com/google/common/hash/Hashing.java#L689-L712
+            for (int i = 0; i < nextBytes.length; i++) {
+                resultBytes[i] = (byte) (resultBytes[i] * 37 ^ nextBytes[i]);
+            }
+        }
 
         return LZ4_HASH_INSTANCE.hash(resultBytes, 0, resultBytes.length, 0);
     }
@@ -402,7 +403,7 @@ public class Utils {
      * 3. Write the UTF-8 encoded topic name.
      * 4. Write the number of partitions associated with the topic.
      * 5. For each partition, write the partition ID and a sorted list of rack identifiers.
-     *    - Rack identifiers are formatted as "length1:value1,length2:value2" to prevent issues with simple separators.
+     *    - Rack identifiers are formatted as "<length1><value1><length2><value2>" to prevent issues with simple separators.
      *
      * @param topicImage   The topic image.
      * @param clusterImage The cluster image.
@@ -417,21 +418,24 @@ public class Utils {
             dos.writeInt(topicImage.partitions().size()); // number of partitions
             for (int i = 0; i < topicImage.partitions().size(); i++) {
                 dos.writeInt(i); // partition id
-                List<String> sortedRacksList = Arrays.stream(topicImage.partitions().get(i).replicas)
-                    .mapToObj(clusterImage::broker)
-                    .filter(Objects::nonNull)
-                    .map(BrokerRegistration::rack)
-                    .filter(Optional::isPresent)
-                    .map(Optional::get)
-                    .sorted()
-                    .toList();
-
                 // The rack string combination cannot use simple separator like ",", because there is no limitation for rack character.
                 // If using simple separator like "," it may hit edge case like ",," and ",,," / ",,," and ",,".
                 // Add length before the rack string to avoid the edge case.
-                String racks = sortedRacksList.stream().map(s -> s.length() + ":" + s) // Format: "length:value"
-                    .collect(Collectors.joining(",")); // Separator between "length:value" pairs
-                dos.writeUTF(racks); // sorted racks
+                List<String> racks = new ArrayList<>();
+                for (int replicaId : topicImage.partitions().get(i).replicas) {
+                    BrokerRegistration broker = clusterImage.broker(replicaId);
+                    if (broker != null) {
+                        Optional<String> rackOptional = broker.rack();
+                        rackOptional.ifPresent(racks::add);
+                    }
+                }
+
+                Collections.sort(racks);
+                for (String rack : racks) {
+                    // Format: "<length><value>"
+                    dos.writeInt(rack.length());
+                    dos.writeUTF(rack);
+                }
             }
             dos.flush();
             ByteBuffer topicBytes = bbos.buffer().flip();
