@@ -2368,7 +2368,7 @@ class KafkaApisTest extends Logging {
       reset(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
 
       val produceData = new ProduceRequestData.TopicProduceData()
-        .setPartitionData(Collections.singletonList(
+        .setPartitionData(util.List.of(
           new ProduceRequestData.PartitionProduceData()
             .setIndex(tp.partition)
             .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test".getBytes)))))
