@@ -213,7 +213,8 @@ public class DescribeTopicPartitionsRequestHandler {
     private DescribeTopicPartitionsResponseData buildResponse(
             final Stream<String> authorizedTopicsStream,
             final RequestChannel.Request abstractRequest,
-            final DescribeTopicPartitionsRequestData requestData
+            final DescribeTopicPartitionsRequestData requestData,
+            final String cursorTopicName
     ) {
         return metadataCache.describeTopicResponse(
                 authorizedTopicsStream.iterator(),
