@@ -416,7 +416,7 @@ abstract class AbstractFetcherThread(name: String,
                           val lastFetchedEpoch =
                             if (logAppendInfo.lastLeaderEpoch.isPresent) logAppendInfo.lastLeaderEpoch else currentFetchState.lastFetchedEpoch
                           // Update partitionStates only if there is no exception during processPartitionData
-                          val newFetchState = PartitionFetchState.create(currentFetchState.topicId, nextOffset, Optional.of(lag),
+                          val newFetchState = new PartitionFetchState(currentFetchState.topicId, nextOffset, Optional.of(lag),
                             currentFetchState.currentLeaderEpoch, ReplicaState.FETCHING, lastFetchedEpoch)
                           partitionStates.updateAndMoveToEnd(topicPartition, newFetchState)
                           if (validBytes > 0) fetcherStats.byteRate.mark(validBytes)
@@ -543,10 +543,10 @@ abstract class AbstractFetcherThread(name: String,
       // to truncate to high watermark.
       val lastFetchedEpoch = latestEpoch(tp)
       val state = if (lastFetchedEpoch.isPresent) ReplicaState.FETCHING else ReplicaState.TRUNCATING
-      PartitionFetchState.create(initialFetchState.topicId.toJava, initialFetchState.initOffset, Optional.empty(), initialFetchState.currentLeaderEpoch,
+      new PartitionFetchState(initialFetchState.topicId.toJava, initialFetchState.initOffset, Optional.empty(), initialFetchState.currentLeaderEpoch,
         state, lastFetchedEpoch)
     } else {
-      PartitionFetchState.create(initialFetchState.topicId.toJava, initialFetchState.initOffset, Optional.empty(), initialFetchState.currentLeaderEpoch,
+      new PartitionFetchState(initialFetchState.topicId.toJava, initialFetchState.initOffset, Optional.empty(), initialFetchState.currentLeaderEpoch,
         ReplicaState.TRUNCATING, Optional.empty())
     }
   }
@@ -706,7 +706,7 @@ abstract class AbstractFetcherThread(name: String,
       truncate(topicPartition, OffsetTruncationState(leaderEndOffset, truncationCompleted = true))
 
       fetcherLagStats.getAndMaybePut(topicPartition).lag = 0
-      PartitionFetchState.create(topicId.toJava, leaderEndOffset, Optional.of(0L), currentLeaderEpoch,
+      new PartitionFetchState(topicId.toJava, leaderEndOffset, Optional.of(0L), currentLeaderEpoch,
         ReplicaState.FETCHING, latestEpoch(topicPartition))
     } else {
       /**
@@ -746,7 +746,7 @@ abstract class AbstractFetcherThread(name: String,
 
       val initialLag = leaderEndOffset - offsetToFetch
       fetcherLagStats.getAndMaybePut(topicPartition).lag = initialLag
-      PartitionFetchState.create(topicId.toJava, offsetToFetch, Optional.of(initialLag), currentLeaderEpoch,
+      new PartitionFetchState(topicId.toJava, offsetToFetch, Optional.of(initialLag), currentLeaderEpoch,
         ReplicaState.FETCHING, latestEpoch(topicPartition))
     }
   }

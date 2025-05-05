@@ -41,13 +41,13 @@ public class PartitionFetchState {
     private final Optional<Long> dueMs;
 
 
-    public static PartitionFetchState create(Optional<Uuid> topicId,
-                                             long offset,
-                                             Optional<Long> lag,
-                                             int currentLeaderEpoch,
-                                             ReplicaState state,
-                                             Optional<Integer> lastFetchedEpoch) {
-        return new PartitionFetchState(topicId, offset, lag, currentLeaderEpoch,
+    public PartitionFetchState(Optional<Uuid> topicId,
+                               long fetchOffset,
+                               Optional<Long> lag,
+                               int currentLeaderEpoch,
+                               ReplicaState state,
+                               Optional<Integer> lastFetchedEpoch) {
+        this(topicId, fetchOffset, lag, currentLeaderEpoch,
                 Optional.empty(), state, lastFetchedEpoch);
     }
 
