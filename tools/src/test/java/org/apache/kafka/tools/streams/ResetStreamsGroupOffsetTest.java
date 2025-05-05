@@ -73,6 +73,8 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 public class ResetStreamsGroupOffsetTest {
     private static final String TOPIC_PREFIX = "foo-";
     private static final String APP_ID_PREFIX = "streams-group-command-test";
+    private static final Properties STREAMS_CONFIG = new Properties();
+    private static final int RECORD_TOTAL = 10;
     public static EmbeddedKafkaCluster cluster;
     private static String bootstrapServers;
     private static Admin adminClient;
@@ -87,20 +89,22 @@ public class ResetStreamsGroupOffsetTest {
         bootstrapServers = cluster.bootstrapServers();
         adminClient = cluster.createAdminClient();
 
+        createStreamsConfig(bootstrapServers);
+    }
+
+    private static void createStreamsConfig(String bootstrapServers) {
         STREAMS_CONFIG.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
         STREAMS_CONFIG.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_KEY_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         STREAMS_CONFIG.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         STREAMS_CONFIG.put(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.name().toLowerCase(Locale.getDefault()));
+        STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
     }
 
     @AfterAll
     public static void closeCluster() {
         cluster.stop();
     }
-
-    private static final Properties STREAMS_CONFIG = new Properties();
-    private static final int RECORD_TOTAL = 10;
 
     @Test
     public void testResetWithUnrecognizedOption() {
@@ -512,7 +516,6 @@ public class ResetStreamsGroupOffsetTest {
      */
     private void produceConsumeShutdown(String appId, String topic1, String topic2, long numOfCommittedMessages) throws Exception {
         STREAMS_CONFIG.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
-        STREAMS_CONFIG.put(StreamsConfig.PROCESSING_GUARANTEE_CONFIG, StreamsConfig.EXACTLY_ONCE_V2);
 
         cluster.createTopic(topic1, 2);
         cluster.createTopic(topic2, 2);
