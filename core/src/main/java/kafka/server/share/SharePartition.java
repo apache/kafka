@@ -1353,8 +1353,8 @@ public class SharePartition {
     void releaseFetchLock(Uuid fetchId) {
         // Register the metric for the duration the fetch lock was held. Do not register the metric
         // if the fetch lock was not acquired.
-        if (fetchLock.get().equals(fetchId)) {
-            long currentTime = time.hiResClockMs();
+        long currentTime = time.hiResClockMs();
+        if (fetchLock.compareAndSet(fetchId, null)) {
             long acquiredDurationMs = currentTime - fetchLockAcquiredTimeMs;
             // Update the metric for the fetch lock time.
             sharePartitionMetrics.recordFetchLockTimeMs(acquiredDurationMs);
@@ -1368,8 +1368,9 @@ public class SharePartition {
             // we are logging when an instance that does not hold the fetch lock tries to release it.
             log.info("Instance {} does not hold the fetch lock, yet trying to release it for share partition {}-{}",
                 fetchId, groupId, topicIdPartition);
+            fetchLock.set(null);
         }
-        fetchLock.set(null);
+
     }
 
     /**
