@@ -705,11 +705,11 @@ class TransactionMetadataTest {
   def testTransactionStateIdAndNameMapping(): Unit = {
     for (state <- TransactionState.ALL_STATES.asScala) {
       assertEquals(state, TransactionState.fromId(state.id))
-      assertEquals(Optional.of(state), TransactionState.fromName(state.getName))
+      assertEquals(Optional.of(state), TransactionState.fromName(state.stateName))
 
       if (state != TransactionState.DEAD) {
-        val clientTransactionState = org.apache.kafka.clients.admin.TransactionState.parse(state.getName)
-        assertEquals(state.getName, clientTransactionState.toString)
+        val clientTransactionState = org.apache.kafka.clients.admin.TransactionState.parse(state.stateName)
+        assertEquals(state.stateName, clientTransactionState.toString)
         assertNotEquals(org.apache.kafka.clients.admin.TransactionState.UNKNOWN, clientTransactionState)
       }
     }

@@ -17,7 +17,6 @@
 package org.apache.kafka.coordinator.transaction;
 
 import java.util.Arrays;
-import java.util.Collections;
 import java.util.EnumSet;
 import java.util.Map;
 import java.util.Optional;
@@ -37,7 +36,7 @@ public enum TransactionState {
      *             received AddOffsetsToTxnRequest => Ongoing
      *             received EndTxnRequest with abort and TransactionV2 enabled => PrepareAbort
      */
-    EMPTY((byte) 0, "Empty", true),
+    EMPTY((byte) 0, org.apache.kafka.clients.admin.TransactionState.EMPTY.toString(), true),
     /**
      * Transaction has started and ongoing
      * <p>
@@ -46,12 +45,12 @@ public enum TransactionState {
      *             received AddPartitionsToTxnRequest => Ongoing
      *             received AddOffsetsToTxnRequest => Ongoing
      */
-    ONGOING((byte) 1, "Ongoing", false),
+    ONGOING((byte) 1, org.apache.kafka.clients.admin.TransactionState.ONGOING.toString(), false),
     /**
      * Group is preparing to commit
      * transition: received acks from all partitions => CompleteCommit
      */
-    PREPARE_COMMIT((byte) 2, "PrepareCommit", false),
+    PREPARE_COMMIT((byte) 2, org.apache.kafka.clients.admin.TransactionState.PREPARE_COMMIT.toString(), false),
     /**
      * Group is preparing to abort
      * <p>
@@ -60,19 +59,19 @@ public enum TransactionState {
      * Note, In transaction v2, we allow Empty, CompleteCommit, CompleteAbort to transition to PrepareAbort. because the
      * client may not know the txn state on the server side, it needs to send endTxn request when uncertain.
      */
-    PREPARE_ABORT((byte) 3, "PrepareAbort", false),
+    PREPARE_ABORT((byte) 3, org.apache.kafka.clients.admin.TransactionState.PREPARE_ABORT.toString(), false),
     /**
      * Group has completed commit
      * <p>
      * Will soon be removed from the ongoing transaction cache
      */
-    COMPLETE_COMMIT((byte) 4, "CompleteCommit", true),
+    COMPLETE_COMMIT((byte) 4, org.apache.kafka.clients.admin.TransactionState.COMPLETE_COMMIT.toString(), true),
     /**
      * Group has completed abort
      * <p>
      * Will soon be removed from the ongoing transaction cache
      */
-    COMPLETE_ABORT((byte) 5, "CompleteAbort", true),
+    COMPLETE_ABORT((byte) 5, org.apache.kafka.clients.admin.TransactionState.COMPLETE_ABORT.toString(), true),
     /**
      * TransactionalId has expired and is about to be removed from the transaction cache
      */
@@ -80,40 +79,35 @@ public enum TransactionState {
     /**
      * We are in the middle of bumping the epoch and fencing out older producers.
      */
-    PREPARE_EPOCH_FENCE((byte) 7, "PrepareEpochFence", false);
+    PREPARE_EPOCH_FENCE((byte) 7, org.apache.kafka.clients.admin.TransactionState.PREPARE_EPOCH_FENCE.toString(), false);
 
     private static final Map<String, TransactionState> NAME_TO_ENUM = Arrays.stream(values())
-        .collect(Collectors.toMap(TransactionState::getName, Function.identity()));
+        .collect(Collectors.toUnmodifiableMap(TransactionState::stateName, Function.identity()));
 
     private static final Map<Byte, TransactionState> ID_TO_ENUM = Arrays.stream(values())
-        .collect(Collectors.toMap(TransactionState::id, Function.identity()));
+        .collect(Collectors.toUnmodifiableMap(TransactionState::id, Function.identity()));
 
-    public static final Set<TransactionState> ALL_STATES = Collections.unmodifiableSet(EnumSet.allOf(TransactionState.class));
+    public static final Set<TransactionState> ALL_STATES = Set.copyOf(EnumSet.allOf(TransactionState.class));
 
     private final byte id;
     private final String stateName;
-    // Defer initialization to static block
-    private Set<TransactionState> validPreviousStates;
+    public static final Map<TransactionState, Set<TransactionState>> VALID_PREVIOUS_STATES = Map.of(
+        EMPTY, Set.copyOf(EnumSet.of(EMPTY, COMPLETE_COMMIT, COMPLETE_ABORT)),
+        ONGOING, Set.copyOf(EnumSet.of(ONGOING, EMPTY, COMPLETE_COMMIT, COMPLETE_ABORT)),
+        PREPARE_COMMIT, Set.copyOf(EnumSet.of(ONGOING)),
+        PREPARE_ABORT, Set.copyOf(EnumSet.of(ONGOING, PREPARE_EPOCH_FENCE, EMPTY, COMPLETE_COMMIT, COMPLETE_ABORT)),
+        COMPLETE_COMMIT, Set.copyOf(EnumSet.of(PREPARE_COMMIT)),
+        COMPLETE_ABORT, Set.copyOf(EnumSet.of(PREPARE_ABORT)),
+        DEAD, Set.copyOf(EnumSet.of(EMPTY, COMPLETE_ABORT, COMPLETE_COMMIT)),
+        PREPARE_EPOCH_FENCE, Set.copyOf(EnumSet.of(ONGOING))
+    );
+
     private final boolean expirationAllowed;
-
-    // Static block to initialize validPreviousStates after all constants are defined
-    static {
-        EMPTY.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(EMPTY, COMPLETE_COMMIT, COMPLETE_ABORT));
-        ONGOING.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(ONGOING, EMPTY, COMPLETE_COMMIT, COMPLETE_ABORT));
-        PREPARE_COMMIT.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(ONGOING));
-        PREPARE_ABORT.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(ONGOING, PREPARE_EPOCH_FENCE, EMPTY, COMPLETE_COMMIT, COMPLETE_ABORT));
-        COMPLETE_COMMIT.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(PREPARE_COMMIT));
-        COMPLETE_ABORT.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(PREPARE_ABORT));
-        DEAD.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(EMPTY, COMPLETE_ABORT, COMPLETE_COMMIT));
-        PREPARE_EPOCH_FENCE.validPreviousStates = Collections.unmodifiableSet(EnumSet.of(ONGOING));
-    }
-
 
     TransactionState(byte id, String name, boolean expirationAllowed) {
         this.id = id;
         this.stateName = name;
         this.expirationAllowed = expirationAllowed;
-        // validPreviousStates is initialized in the static block
     }
 
     /**
@@ -127,7 +121,7 @@ public enum TransactionState {
      * Get the name of this state. This is exposed through the `DescribeTransactions` API.
      * @return The state name string.
      */
-    public String getName() {
+    public String stateName() {
         return stateName;
     }
 
@@ -135,7 +129,7 @@ public enum TransactionState {
      * @return The set of states from which it is valid to transition into this state.
      */
     public Set<TransactionState> validPreviousStates() {
-        return validPreviousStates == null ? Set.of() : validPreviousStates;
+        return VALID_PREVIOUS_STATES.getOrDefault(this, Set.of());
     }
 
     /**

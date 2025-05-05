@@ -345,7 +345,7 @@ class TransactionCoordinator(txnConfig: TransactionConfig,
                 .setErrorCode(Errors.NONE.code)
                 .setProducerId(txnMetadata.producerId)
                 .setProducerEpoch(txnMetadata.producerEpoch)
-                .setTransactionState(txnMetadata.state.getName)
+                .setTransactionState(txnMetadata.state.stateName)
                 .setTransactionTimeoutMs(txnMetadata.txnTimeoutMs)
                 .setTransactionStartTimeMs(txnMetadata.txnStartTimestamp)
             }
