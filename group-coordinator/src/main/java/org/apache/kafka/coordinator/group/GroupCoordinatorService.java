@@ -1185,7 +1185,9 @@ public class GroupCoordinatorService implements GroupCoordinator {
             topicPartitionFor(groupId),
             Duration.ofMillis(config.offsetCommitTimeoutMs()),
             coordinator -> coordinator.alterShareGroupOffsets(groupId, request)
-        ).thenCompose(result -> persisterInitialize(result.getValue(), result.getKey())).exceptionally(exception -> handleOperationException(
+        ).thenCompose(result ->
+            persisterInitialize(result.getValue(), result.getKey())
+        ).exceptionally(exception -> handleOperationException(
             "share-group-alter",
             request,
             exception,

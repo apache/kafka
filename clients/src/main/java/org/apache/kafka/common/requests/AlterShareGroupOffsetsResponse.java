@@ -97,11 +97,10 @@ public class AlterShareGroupOffsetsResponse extends AbstractResponse {
         public Builder merge(AlterShareGroupOffsetsResponseData data) {
             data.responses().forEach(topic -> {
                 AlterShareGroupOffsetsResponseTopic newTopic = getOrCreateTopic(topic.topicName());
-                topic.partitions().forEach(partition -> {
-                    newTopic.partitions().add(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                topic.partitions().forEach(partition -> newTopic.partitions().add(
+                    new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
                         .setPartitionIndex(partition.partitionIndex())
-                        .setErrorCode(partition.errorCode()));
-                });
+                        .setErrorCode(partition.errorCode())));
             });
             return this;
 
