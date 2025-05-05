@@ -8242,7 +8242,6 @@ public class GroupMetadataManager {
         ).toList();
     }
 
-
     /**
      * Validates the DeleteGroups request.
      *

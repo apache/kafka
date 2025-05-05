@@ -674,9 +674,28 @@ public class GroupCoordinatorService implements GroupCoordinator {
             InitializeShareGroupStateParameters request,
             AlterShareGroupOffsetsResponseData response
     ) {
-        persister.initializeState(request);
-        //TODO handle response;
-        return CompletableFuture.completedFuture(response);
+        return persister.initializeState(request)
+            .handle((result, exp) -> {
+                if (exp == null) {
+                    return response;
+                }
+                // build new AlterShareGroupOffsetsResponseData for error response
+                AlterShareGroupOffsetsResponseData data = new AlterShareGroupOffsetsResponseData();
+                GroupTopicPartitionData<PartitionStateData> gtp = request.groupTopicPartitionData();
+                log.error("Unable to initialize share group state for {}, {} while altering share group offsets", gtp.groupId(), gtp.topicsData(), exp);
+                Errors error = Errors.forException(exp);
+                gtp.topicsData().forEach(topicData -> {
+                    data.responses().add(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponseTopic()
+                        .setTopicName(topicData.topicId().toString())
+                        .setPartitions(new ArrayList<>(topicData.partitions().size())));
+                    topicData.partitions().forEach(partition -> data.responses().get(data.responses().size() - 1)
+                        .partitions().add(new AlterShareGroupOffsetsResponseData.AlterShareGroupOffsetsResponsePartition()
+                            .setPartitionIndex(partition.partition())
+                            .setErrorCode(error.code())));
+                });
+                // don't uninitialize share group state here, as we regard this alter share group offsets request failed.
+                return data;
+            });
     }
 
     // Visibility for testing
