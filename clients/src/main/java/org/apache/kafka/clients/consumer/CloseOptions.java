@@ -47,21 +47,16 @@ public class CloseOptions {
      * Specifies the group membership operation upon shutdown.
      * By default, {@code GroupMembershipOperation.DEFAULT} will be applied, which follows the consumer's default behavior.
      */
-    protected GroupMembershipOperation operation = GroupMembershipOperation.DEFAULT;
+    private GroupMembershipOperation operation = GroupMembershipOperation.DEFAULT;
 
     /**
      * Specifies the maximum amount of time to wait for the close process to complete.
      * This allows users to define a custom timeout for gracefully stopping the consumer.
      * If no value is set, the default timeout {@link ConsumerUtils#DEFAULT_CLOSE_TIMEOUT_MS} will be applied.
      */
-    protected Optional<Duration> timeout = Optional.empty();
+    private Optional<Duration> timeout = Optional.empty();
 
     private CloseOptions() {
-    }
-
-    protected CloseOptions(final CloseOptions option) {
-        this.operation = option.operation;
-        this.timeout = option.timeout;
     }
 
     /**
@@ -71,9 +66,7 @@ public class CloseOptions {
      * @return a new {@code CloseOptions} instance with the specified timeout.
      */
     public static CloseOptions timeout(final Duration timeout) {
-        CloseOptions option = new CloseOptions();
-        option.timeout = Optional.ofNullable(timeout);
-        return option;
+        return new CloseOptions().withTimeout(timeout);
     }
 
     /**
@@ -84,10 +77,7 @@ public class CloseOptions {
      * @return a new {@code CloseOptions} instance with the specified group membership operation.
      */
     public static CloseOptions groupMembershipOperation(final GroupMembershipOperation operation) {
-        Objects.requireNonNull(operation, "operation should not be null");
-        CloseOptions option = new CloseOptions();
-        option.operation = operation;
-        return option;
+        return new CloseOptions().withGroupMembershipOperation(operation);
     }
 
     /**
@@ -108,8 +98,7 @@ public class CloseOptions {
      * @return this {@code CloseOptions} instance.
      */
     public CloseOptions withGroupMembershipOperation(final GroupMembershipOperation operation) {
-        Objects.requireNonNull(operation, "operation should not be null");
-        this.operation = operation;
+        this.operation = Objects.requireNonNull(operation, "operation should not be null");
         return this;
     }
 
