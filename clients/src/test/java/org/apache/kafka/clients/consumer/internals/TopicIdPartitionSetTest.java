@@ -18,8 +18,9 @@
 package org.apache.kafka.clients.consumer.internals;
 
 import org.apache.kafka.common.TopicIdPartition;
-import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.Uuid;
+
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
@@ -29,9 +30,9 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.assertEquals;
 
 public class TopicIdPartitionSetTest {
 
