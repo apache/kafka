@@ -31,6 +31,7 @@ import java.io.Closeable;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
@@ -88,7 +89,8 @@ public class MetricsDuringTopicCreationDeletionTest {
                 }
 
                 try {
-                    Thread.sleep(100); // Avoid busy loop
+                    // Avoid busy loop
+                    TimeUnit.MILLISECONDS.sleep(100);
                 } catch (InterruptedException ignored) {
 
                 }
@@ -119,14 +121,14 @@ public class MetricsDuringTopicCreationDeletionTest {
     private void createAndDeleteTopics() {
         for (int i = 1; i <= CREATE_DELETE_ITERATIONS && running; i++) {
             for (String topic : topics) {
-                if (!running) break;
+                if (!running) return;
                 try {
                     clusterInstance.createTopic(topic, PARTITION_NUM, REPLICATION_FACTOR);
                 } catch (Exception ignored) { }
             }
 
             for (String topic : topics) {
-                if (!running) break;
+                if (!running) return;
                 try {
                     clusterInstance.deleteTopic(topic);
                 } catch (Exception ignored) { }
