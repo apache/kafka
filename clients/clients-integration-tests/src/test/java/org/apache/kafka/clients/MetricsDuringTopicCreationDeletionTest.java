@@ -65,7 +65,7 @@ public class MetricsDuringTopicCreationDeletionTest {
             @ClusterConfigProperty(key = "log.segment.delete.delay.ms", value = "1000"),
             @ClusterConfigProperty(key = ServerLogConfigs.AUTO_CREATE_TOPICS_ENABLE_CONFIG, value = "false"),
             // speed up the test for UnderReplicatedPartitions, which relies on the ISR expiry thread to execute concurrently with topic creation
-            // But the replica.lag.time.max.ms value still need to consider the slow Jenkins testing environment
+            // But the replica.lag.time.max.ms value still need to consider the slow testing environment
             @ClusterConfigProperty(key = ReplicationConfigs.REPLICA_LAG_TIME_MAX_MS_CONFIG, value = "4000")
         }
     )
