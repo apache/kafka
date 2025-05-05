@@ -39,7 +39,7 @@ public class MetricsDuringTopicCreationDeletionTest {
     private static final String TOPIC_NAME_PREFIX = "topic";
     private static final int TOPIC_NUM = 2;
     private static final int CREATE_DELETE_ITERATIONS = 3;
-    private static final int REPLICATION_FACTOR = 1;
+    private static final short REPLICATION_FACTOR = 1;
     private static final int PARTITION_NUM = 3;
 
     private final ClusterInstance clusterInstance;
@@ -121,19 +121,15 @@ public class MetricsDuringTopicCreationDeletionTest {
             for (String topic : topics) {
                 if (!running) break;
                 try {
-                    clusterInstance.createTopic(topic, PARTITION_NUM, (short) REPLICATION_FACTOR);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+                    clusterInstance.createTopic(topic, PARTITION_NUM, REPLICATION_FACTOR);
+                } catch (Exception ignored) { }
             }
 
             for (String topic : topics) {
                 if (!running) break;
                 try {
                     clusterInstance.deleteTopic(topic);
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
+                } catch (Exception ignored) { }
             }
         }
     }
