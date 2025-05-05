@@ -2478,18 +2478,10 @@ public class StreamThreadTest {
             "K2".getBytes(),
             "V2".getBytes()));
 
-        if (stateUpdaterEnabled) {
-            TestUtils.waitForCondition(
-                () -> mockRestoreConsumer.assignment().isEmpty(),
-                "Never get the assignment");
-        } else {
-            TestUtils.waitForCondition(
-                () -> {
-                    mockRestoreConsumer.assign(changelogPartitionSet);
-                    return mockRestoreConsumer.position(changelogPartition) == 2L;
-                },
-                "Never finished restore");
-        }
+        TestUtils.waitForCondition(
+            () -> mockRestoreConsumer.assignment().isEmpty(),
+            "Never get the assignment");
+
     }
 
     @ParameterizedTest
@@ -3414,7 +3406,7 @@ public class StreamThreadTest {
     @ParameterizedTest
     @MethodSource("data")        
     public void shouldReturnErrorIfProducerInstanceIdNotInitialized(final boolean stateUpdaterEnabled, final boolean processingThreadsEnabled) {
-        thread = createStreamThread("clientId", stateUpdaterEnabled, processingThreadsEnabled);
+        thread = createStreamThread("clientId", processingThreadsEnabled);
         thread.setState(State.STARTING);
 
         final Map<String, KafkaFuture<Uuid>> producerFutures = thread.clientInstanceIds(Duration.ZERO);
@@ -3773,7 +3765,7 @@ public class StreamThreadTest {
         );
         final Runnable shutdownErrorHook = mock(Runnable.class);
 
-        final Properties props = configProps(false, false, false);
+        final Properties props = configProps(false, false);
         final StreamsMetadataState streamsMetadataState = new StreamsMetadataState(
                 new TopologyMetadata(internalTopologyBuilder, new StreamsConfig(props)),
                 StreamsMetadataState.UNKNOWN_HOST,
