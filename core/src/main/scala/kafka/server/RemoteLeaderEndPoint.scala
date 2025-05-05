@@ -182,15 +182,15 @@ class RemoteLeaderEndPoint(logPrefix: String,
         try {
           val logStartOffset = replicaManager.localLogOrException(topicPartition).logStartOffset
           val lastFetchedEpoch = if (isTruncationOnFetchSupported)
-            fetchState.getLastFetchedEpoch()
+            fetchState.lastFetchedEpoch()
           else
             Optional.empty[Integer]
           builder.add(topicPartition, new FetchRequest.PartitionData(
-            fetchState.getTopicId().orElse(Uuid.ZERO_UUID),
-            fetchState.getFetchOffset(),
+            fetchState.topicId().orElse(Uuid.ZERO_UUID),
+            fetchState.fetchOffset(),
             logStartOffset,
             fetchSize,
-            Optional.of(fetchState.getCurrentLeaderEpoch()),
+            Optional.of(fetchState.currentLeaderEpoch()),
             lastFetchedEpoch))
         } catch {
           case _: KafkaStorageException =>

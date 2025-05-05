@@ -206,7 +206,7 @@ class AbstractFetcherManagerTest {
 
     def verifyFetchState(fetchState: Option[PartitionFetchState], expectedTopicId: Option[Uuid]): Unit = {
       assertTrue(fetchState.isDefined)
-      assertEquals(expectedTopicId, fetchState.get.getTopicId.toScala)
+      assertEquals(expectedTopicId, fetchState.get.topicId.toScala)
     }
 
     fetcherManager.addFetcherForPartitions(Map(tp1 -> initialFetchState1, tp2 -> initialFetchState2))

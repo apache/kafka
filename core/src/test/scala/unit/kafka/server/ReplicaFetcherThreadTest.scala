@@ -309,7 +309,7 @@ class ReplicaFetcherThreadTest {
     thread.doWork()
     assertEquals(0, mockNetwork.epochFetchCount)
     assertEquals(1, mockNetwork.fetchCount)
-    partitions.foreach { tp => assertEquals(ReplicaState.FETCHING, thread.fetchState(tp).get.getState) }
+    partitions.foreach { tp => assertEquals(ReplicaState.FETCHING, thread.fetchState(tp).get.state) }
 
     def partitionData(partition: Int, divergingEpoch: FetchResponseData.EpochEndOffset): FetchResponseData.PartitionData = {
       new FetchResponseData.PartitionData()
@@ -334,7 +334,7 @@ class ReplicaFetcherThreadTest {
       "Expected " + t1p0 + " to truncate to offset 140 (truncation offsets: " + truncateToCapture.getAllValues + ")")
     assertTrue(truncateToCapture.getAllValues.asScala.contains(141),
       "Expected " + t1p1 + " to truncate to offset 141 (truncation offsets: " + truncateToCapture.getAllValues + ")")
-    partitions.foreach { tp => assertEquals(ReplicaState.FETCHING, thread.fetchState(tp).get.getState) }
+    partitions.foreach { tp => assertEquals(ReplicaState.FETCHING, thread.fetchState(tp).get.state) }
 
     // Loop 3 should truncate because of diverging epoch. Offset truncation is not complete
     // because divergent epoch is not known to follower. We truncate and stay in Fetching state.
@@ -349,7 +349,7 @@ class ReplicaFetcherThreadTest {
     verify(partition, times(4)).truncateTo(truncateToCapture.capture(), anyBoolean())
     assertTrue(truncateToCapture.getAllValues.asScala.contains(129),
       "Expected to truncate to offset 129 (truncation offsets: " + truncateToCapture.getAllValues + ")")
-    partitions.foreach { tp => assertEquals(ReplicaState.FETCHING, thread.fetchState(tp).get.getState) }
+    partitions.foreach { tp => assertEquals(ReplicaState.FETCHING, thread.fetchState(tp).get.state) }
 
     // Loop 4 should truncate because of diverging epoch. Offset truncation is not complete
     // because divergent epoch is not known to follower. Last fetched epoch cannot be determined
@@ -366,7 +366,7 @@ class ReplicaFetcherThreadTest {
     verify(partition, times(6)).truncateTo(truncateToCapture.capture(), anyBoolean())
     assertTrue(truncateToCapture.getAllValues.asScala.contains(119),
       "Expected to truncate to offset 119 (truncation offsets: " + truncateToCapture.getAllValues + ")")
-    partitions.foreach { tp => assertEquals(ReplicaState.FETCHING, thread.fetchState(tp).get.getState) }
+    partitions.foreach { tp => assertEquals(ReplicaState.FETCHING, thread.fetchState(tp).get.state) }
   }
 
   @Test
@@ -523,7 +523,7 @@ class ReplicaFetcherThreadTest {
 
     // Lag is initialized to None when the partition fetch
     // state is created.
-    assertEquals(None, thread.fetchState(t1p0).flatMap(_.getLag.toScala))
+    assertEquals(None, thread.fetchState(t1p0).flatMap(_.lag.toScala))
 
     // Prepare the fetch response data.
     mockNetwork.setFetchPartitionDataForNextResponse(Map(
@@ -541,8 +541,8 @@ class ReplicaFetcherThreadTest {
     assertEquals(1, mockNetwork.fetchCount)
 
     // Lag is set to Some(0).
-    assertEquals(Some(0), thread.fetchState(t1p0).flatMap(_.getLag.toScala))
-    assertEquals(Optional.of(lastFetchedEpoch), thread.fetchState(t1p0).toJava.flatMap(_.getLastFetchedEpoch))
+    assertEquals(Some(0), thread.fetchState(t1p0).flatMap(_.lag.toScala))
+    assertEquals(Optional.of(lastFetchedEpoch), thread.fetchState(t1p0).toJava.flatMap(_.lastFetchedEpoch))
   }
 
   @Test
@@ -634,8 +634,8 @@ class ReplicaFetcherThreadTest {
     val fetchRequestBuilder = fetchRequestOpt.get.fetchRequest
 
     val partitionDataMap = partitionMap.map { case (tp, state) =>
-      (tp, new FetchRequest.PartitionData(state.getTopicId.get, state.getFetchOffset, 0L,
-        config.replicaFetchMaxBytes, Optional.of(state.getCurrentLeaderEpoch), Optional.empty()))
+      (tp, new FetchRequest.PartitionData(state.topicId.get, state.fetchOffset, 0L,
+        config.replicaFetchMaxBytes, Optional.of(state.currentLeaderEpoch), Optional.empty()))
     }
 
     assertEquals(partitionDataMap.asJava, fetchRequestBuilder.fetchData())
@@ -660,8 +660,8 @@ class ReplicaFetcherThreadTest {
 
     // Since t1p1 didn't change, we drop that one
     val partitionDataMap2 = partitionMap2.drop(1).map { case (tp, state) =>
-      (tp, new FetchRequest.PartitionData(state.getTopicId.get, state.getFetchOffset, 0L,
-        config.replicaFetchMaxBytes, Optional.of(state.getCurrentLeaderEpoch), Optional.empty()))
+      (tp, new FetchRequest.PartitionData(state.topicId.get, state.fetchOffset, 0L,
+        config.replicaFetchMaxBytes, Optional.of(state.currentLeaderEpoch), Optional.empty()))
     }
 
     assertTrue(fetchRequestOpt2.isPresent)

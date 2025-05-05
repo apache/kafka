@@ -163,7 +163,7 @@ class ReplicaAlterLogDirsThreadTest {
 
     // Next we update the epoch and assert that we can continue
     thread.addPartitions(Map(t1p0 -> initialFetchState(fetchOffset = 0L, leaderEpoch)))
-    assertEquals(Some(leaderEpoch), thread.fetchState(t1p0).map(_.getCurrentLeaderEpoch))
+    assertEquals(Some(leaderEpoch), thread.fetchState(t1p0).map(_.currentLeaderEpoch))
     assertEquals(1, thread.partitionCount)
 
     val requestData = new FetchRequest.PartitionData(topicId, 0L, 0L,

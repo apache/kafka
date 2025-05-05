@@ -71,9 +71,9 @@ abstract class AbstractFetcherManager[T <: AbstractFetcherThread](val name: Stri
         if (id.fetcherId >= newSize)
           thread.shutdown()
         partitionStates.foreachEntry { (topicPartition, currentFetchState) =>
-            val initialFetchState = InitialFetchState(currentFetchState.getTopicId.toScala, thread.leader.brokerEndPoint(),
-              currentLeaderEpoch = currentFetchState.getCurrentLeaderEpoch,
-              initOffset = currentFetchState.getFetchOffset)
+            val initialFetchState = InitialFetchState(currentFetchState.topicId.toScala, thread.leader.brokerEndPoint(),
+              currentLeaderEpoch = currentFetchState.currentLeaderEpoch,
+              initOffset = currentFetchState.fetchOffset)
             allRemovedPartitionsMap += topicPartition -> initialFetchState
         }
       }

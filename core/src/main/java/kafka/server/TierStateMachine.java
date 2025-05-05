@@ -95,7 +95,7 @@ public class TierStateMachine {
     PartitionFetchState start(TopicPartition topicPartition,
                               PartitionFetchState currentFetchState,
                               PartitionData fetchPartitionData) throws Exception {
-        OffsetAndEpoch epochAndLeaderLocalStartOffset = leader.fetchEarliestLocalOffset(topicPartition, currentFetchState.getCurrentLeaderEpoch());
+        OffsetAndEpoch epochAndLeaderLocalStartOffset = leader.fetchEarliestLocalOffset(topicPartition, currentFetchState.currentLeaderEpoch());
         int epoch = epochAndLeaderLocalStartOffset.epoch();
         long leaderLocalStartOffset = epochAndLeaderLocalStartOffset.offset();
 
@@ -111,19 +111,19 @@ public class TierStateMachine {
         }
 
         try {
-            offsetToFetch = buildRemoteLogAuxState(topicPartition, currentFetchState.getCurrentLeaderEpoch(), leaderLocalStartOffset, epoch, fetchPartitionData.logStartOffset(), unifiedLog);
+            offsetToFetch = buildRemoteLogAuxState(topicPartition, currentFetchState.currentLeaderEpoch(), leaderLocalStartOffset, epoch, fetchPartitionData.logStartOffset(), unifiedLog);
         } catch (RemoteStorageException e) {
             replicaMgr.brokerTopicStats().topicStats(topicPartition.topic()).failedBuildRemoteLogAuxStateRate().mark();
             replicaMgr.brokerTopicStats().allTopicsStats().failedBuildRemoteLogAuxStateRate().mark();
             throw e;
         }
 
-        OffsetAndEpoch fetchLatestOffsetResult = leader.fetchLatestOffset(topicPartition, currentFetchState.getCurrentLeaderEpoch());
+        OffsetAndEpoch fetchLatestOffsetResult = leader.fetchLatestOffset(topicPartition, currentFetchState.currentLeaderEpoch());
         long leaderEndOffset = fetchLatestOffsetResult.offset();
 
         long initialLag = leaderEndOffset - offsetToFetch;
 
-        return PartitionFetchState.create(currentFetchState.getTopicId(), offsetToFetch, Optional.of(initialLag), currentFetchState.getCurrentLeaderEpoch(),
+        return PartitionFetchState.create(currentFetchState.topicId(), offsetToFetch, Optional.of(initialLag), currentFetchState.currentLeaderEpoch(),
                 ReplicaState.FETCHING, unifiedLog.latestEpoch());
 
     }

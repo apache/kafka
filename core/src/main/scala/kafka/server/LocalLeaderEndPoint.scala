@@ -194,7 +194,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     val nextPartitionOpt = nextReadyPartition(partitions.asScala.toMap)
     nextPartitionOpt.foreach { case (tp, fetchState) =>
       inProgressPartition = Option(tp)
-      info(s"Beginning/resuming copy of partition $tp from offset ${fetchState.getFetchOffset}. " +
+      info(s"Beginning/resuming copy of partition $tp from offset ${fetchState.fetchOffset}. " +
         s"Including this partition, there are ${partitions.size} remaining partitions to copy by this thread.")
       return Optional.of((tp, fetchState))
     }
@@ -208,12 +208,12 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     try {
       val logStartOffset = replicaManager.futureLocalLogOrException(topicPartition).logStartOffset
       val lastFetchedEpoch = if (isTruncationOnFetchSupported)
-        fetchState.getLastFetchedEpoch
+        fetchState.lastFetchedEpoch
       else
         Optional.empty[Integer]
-      val topicId = fetchState.getTopicId.orElse(Uuid.ZERO_UUID)
-      requestMap.put(topicPartition, new FetchRequest.PartitionData(topicId, fetchState.getFetchOffset, logStartOffset,
-        fetchSize, Optional.of(fetchState.getCurrentLeaderEpoch), lastFetchedEpoch))
+      val topicId = fetchState.topicId.orElse(Uuid.ZERO_UUID)
+      requestMap.put(topicPartition, new FetchRequest.PartitionData(topicId, fetchState.fetchOffset, logStartOffset,
+        fetchSize, Optional.of(fetchState.currentLeaderEpoch), lastFetchedEpoch))
     } catch {
       case e: KafkaStorageException =>
         debug(s"Failed to build fetch for $topicPartition", e)
@@ -223,7 +223,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     val fetchRequestOpt: Optional[ReplicaFetch] = if (requestMap.isEmpty) {
       Optional.empty[ReplicaFetch]()
     } else {
-      val version: Short = if (fetchState.getTopicId.isEmpty)
+      val version: Short = if (fetchState.topicId.isEmpty)
         12
       else
         ApiKeys.FETCH.latestVersion

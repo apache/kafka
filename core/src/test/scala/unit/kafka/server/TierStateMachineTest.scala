@@ -69,7 +69,7 @@ class TierStateMachineTest {
 
     assertEquals(3L, replicaState.logEndOffset)
     val expectedState = if (truncateOnFetch) Option(ReplicaState.FETCHING) else Option(ReplicaState.TRUNCATING)
-    assertEquals(expectedState, fetcher.fetchState(partition).map(_.getState))
+    assertEquals(expectedState, fetcher.fetchState(partition).map(_.state))
 
     fetcher.doWork()
     // verify that the offset moved to tiered store error triggered and respective states are truncated to expected.
@@ -130,7 +130,7 @@ class TierStateMachineTest {
 
     assertEquals(3L, replicaState.logEndOffset)
     val expectedState = if (truncateOnFetch) Option(ReplicaState.FETCHING) else Option(ReplicaState.TRUNCATING)
-    assertEquals(expectedState, fetcher.fetchState(partition).map(_.getState))
+    assertEquals(expectedState, fetcher.fetchState(partition).map(_.state))
 
     fetcher.doWork()
     // Verify that the out of range error is triggered and the fetch offset is reset to the global log start offset.
@@ -167,7 +167,7 @@ class TierStateMachineTest {
                          currentFetchState: PartitionFetchState,
                          fetchPartitionData: FetchResponseData.PartitionData): PartitionFetchState = {
         isErrorHandled = true
-        throw new FencedLeaderEpochException(s"Epoch ${currentFetchState.getCurrentLeaderEpoch} is fenced")
+        throw new FencedLeaderEpochException(s"Epoch ${currentFetchState.currentLeaderEpoch} is fenced")
       }
     }
     val fetcher = new MockFetcherThread(mockLeaderEndpoint, mockTierStateMachine, failedPartitions = failedPartitions)

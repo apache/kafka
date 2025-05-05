@@ -334,7 +334,7 @@ class ReplicaManagerTest {
 
       // this method should use hw of future log to create log dir fetcher. Otherwise, it causes offset mismatch error
       rm.maybeAddLogDirFetchers(Set(partition), new LazyOffsetCheckpoints(rm.highWatermarkCheckpoints.asJava), _ => None)
-      rm.replicaAlterLogDirsManager.fetcherThreadMap.values.foreach(t => t.fetchState(new TopicPartition(topic, 0)).foreach(s => assertEquals(0L, s.getFetchOffset)))
+      rm.replicaAlterLogDirsManager.fetcherThreadMap.values.foreach(t => t.fetchState(new TopicPartition(topic, 0)).foreach(s => assertEquals(0L, s.fetchOffset)))
       // make sure alter log dir thread has processed the data
       rm.replicaAlterLogDirsManager.fetcherThreadMap.values.foreach(t => t.doWork())
       assertEquals(Set.empty, rm.replicaAlterLogDirsManager.failedPartitions.partitions())
@@ -413,7 +413,7 @@ class ReplicaManagerTest {
       } else {
         verify(spyLogManager, times(1)).abortAndPauseCleaning(any[TopicPartition])
       }
-      rm.replicaAlterLogDirsManager.fetcherThreadMap.values.foreach(t => t.fetchState(new TopicPartition(topic, 0)).foreach(s => assertEquals(0L, s.getFetchOffset)))
+      rm.replicaAlterLogDirsManager.fetcherThreadMap.values.foreach(t => t.fetchState(new TopicPartition(topic, 0)).foreach(s => assertEquals(0L, s.fetchOffset)))
     } finally {
       rm.shutdown(checkpointHW = false)
     }
@@ -5737,7 +5737,7 @@ class ReplicaManagerTest {
                                                           expectedTopicId: Option[Uuid]): Unit = {
     val fetchState = manager.getFetcher(tp).flatMap(_.fetchState(tp))
     assertTrue(fetchState.isDefined)
-    assertEquals(expectedTopicId, fetchState.get.getTopicId)
+    assertEquals(expectedTopicId, fetchState.get.topicId)
   }
 
   @Test

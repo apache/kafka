@@ -155,12 +155,12 @@ class MockLeaderEndPoint(sourceBroker: BrokerEndPoint = new BrokerEndPoint(1, "l
       if (state.isReadyForFetch) {
         val replicaState = replicaPartitionStateCallback(partition).getOrElse(throw new IllegalArgumentException(s"Unknown partition $partition"))
         val lastFetchedEpoch = if (isTruncationOnFetchSupported)
-          state.getLastFetchedEpoch
+          state.lastFetchedEpoch
         else
           Optional.empty[Integer]
         fetchData.put(partition,
-          new FetchRequest.PartitionData(state.getTopicId.orElse(Uuid.ZERO_UUID), state.getFetchOffset, replicaState.logStartOffset,
-            1024 * 1024, Optional.of[Integer](state.getCurrentLeaderEpoch), lastFetchedEpoch))
+          new FetchRequest.PartitionData(state.topicId.orElse(Uuid.ZERO_UUID), state.fetchOffset, replicaState.logStartOffset,
+            1024 * 1024, Optional.of[Integer](state.currentLeaderEpoch), lastFetchedEpoch))
       }
     }
     val fetchRequest = FetchRequest.Builder.forReplica(version, replicaId, 1, 0, 1, fetchData.asJava)

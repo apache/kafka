@@ -86,31 +86,31 @@ public class PartitionFetchState {
         return dueMs.isPresent() && dueMs.get() > Time.SYSTEM.milliseconds();
     }
 
-    public Optional<Uuid> getTopicId() {
+    public Optional<Uuid> topicId() {
         return topicId;
     }
 
-    public long getFetchOffset() {
+    public long fetchOffset() {
         return fetchOffset;
     }
 
-    public Optional<Long> getLag() {
+    public Optional<Long> lag() {
         return lag;
     }
 
-    public int getCurrentLeaderEpoch() {
+    public int currentLeaderEpoch() {
         return currentLeaderEpoch;
     }
 
-    public Optional<Long> getDelay() {
+    public Optional<Long> delay() {
         return delay;
     }
 
-    public ReplicaState getState() {
+    public ReplicaState state() {
         return state;
     }
 
-    public Optional<Integer> getLastFetchedEpoch() {
+    public Optional<Integer> lastFetchedEpoch() {
         return lastFetchedEpoch;
     }
 
