@@ -30,10 +30,10 @@ public class VersionedPluginBuilder {
 
     public enum VersionedTestPlugin {
 
-        SINK_CONNECTOR("sampling-connector", "test.plugins.VersionedSamplingSinkConnector"),
-        SOURCE_CONNECTOR("versioned-source-connector", "test.plugins.VersionedSamplingSourceConnector"),
-        CONVERTER("sampling-converter", "test.plugins.VersionedSamplingConverter"),
-        HEADER_CONVERTER("sampling-header-converter", "test.plugins.VersionedSamplingHeaderConverter"),
+        SINK_CONNECTOR("versioned-sink-connector", "test.plugins.VersionedSinkConnector"),
+        SOURCE_CONNECTOR("versioned-source-connector", "test.plugins.VersionedSourceConnector"),
+        CONVERTER("versioned-converter", "test.plugins.VersionedConverter"),
+        HEADER_CONVERTER("versioned-header-converter", "test.plugins.VersionedHeaderConverter"),
         TRANSFORMATION("versioned-transformation", "test.plugins.VersionedTransformation"),
         PREDICATE("versioned-predicate", "test.plugins.VersionedPredicate");
 
