@@ -3771,17 +3771,6 @@ public class KafkaAdminClient extends AdminClient {
         return new ListConsumerGroupOffsetsResult(future.all());
     }
 
-//    @Override
-//    public ListStreamsGroupOffsetsResult listStreamsGroupOffsets(Map<String, ListStreamsGroupOffsetsSpec> groupSpecs,
-//                                                                 ListStreamsGroupOffsetsOptions options) {
-//        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, OffsetAndMetadata>> future =
-//            ListStteamsGroupOffsetsHandler.newFuture(groupSpecs.keySet());
-//        ListConsumerGroupOffsetsHandler handler =
-//            new ListConsumerGroupOffsetsHandler(groupSpecs, options.requireStable(), logContext);
-//        invokeDriver(handler, future, options.timeoutMs);
-//        return new ListConsumerGroupOffsetsResult(future.all());
-//    }
-
     @Override
     public ListStreamsGroupOffsetsResult listStreamsGroupOffsets(Map<String, ListStreamsGroupOffsetsSpec> groupSpecs,
                                                                    ListStreamsGroupOffsetsOptions options) {
@@ -3790,14 +3779,7 @@ public class KafkaAdminClient extends AdminClient {
                 Map.Entry::getKey,
                 entry -> new ListConsumerGroupOffsetsSpec().topicPartitions(entry.getValue().topicPartitions())
             ));
-//        Map<String, ListConsumerGroupOffsetsSpec> consumerGroupSpecs = new HashMap<>();
-//        for (Map.Entry<String, ListStreamsGroupOffsetsSpec> entry : groupSpecs.entrySet()) {
-//            ListConsumerGroupOffsetsSpec spec = new ListConsumerGroupOffsetsSpec();
-//            spec.topicPartitions(entry.getValue().topicPartitions());
-//            consumerGroupSpecs.put(entry.getKey(), spec);
-//        }
-        ListConsumerGroupOffsetsResult res = listConsumerGroupOffsets(consumerGroupSpecs, new ListConsumerGroupOffsetsOptions());
-        return new ListStreamsGroupOffsetsResult(res);
+        return new ListStreamsGroupOffsetsResult(listConsumerGroupOffsets(consumerGroupSpecs, new ListConsumerGroupOffsetsOptions()));
     }
 
     @Override
