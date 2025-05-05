@@ -784,7 +784,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * 2. Checks the requested topics are presented in the metadataImage
      * 3. Checks the requested share partitions are initialized for the group
      *
-     * groupId - The group ID
+     * @param groupId - The group ID
      * @param alterShareGroupOffsetsRequestData - The request data for AlterShareGroupOffsetsRequestData
      * the final response {@link AlterShareGroupOffsetsResponseData} for the AlterShareGroupOffsetsRequest
      */

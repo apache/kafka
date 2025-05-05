@@ -3768,7 +3768,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
       })
 
-      AlterShareGroupOffsetsRequestData data = new AlterShareGroupOffsetsRequestData()
+      val data = new AlterShareGroupOffsetsRequestData()
         .setGroupId(groupId)
         .setTopics(authorizedTopicPartitions)
       groupCoordinator.alterShareGroupOffsets(
