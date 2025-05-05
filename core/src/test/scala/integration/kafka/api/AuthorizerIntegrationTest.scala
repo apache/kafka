@@ -924,6 +924,33 @@ class AuthorizerIntegrationTest extends AbstractAuthorizerIntegrationTest {
     sendRequests(requestKeyToRequest, false, topicNames)
   }
 
+  @Test
+  def testAuthorizationWithTopicNotExistingForProduceReqeustVersionLessThan13(): Unit = {
+    for (version <- ApiKeys.PRODUCE.oldestVersion to 12) {
+      val request = requests.ProduceRequest.builder(new ProduceRequestData()
+          .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+            util.List.of(new ProduceRequestData.TopicProduceData()
+                .setName(tp.topic())
+                .setPartitionData(util.List.of(
+                  new ProduceRequestData.PartitionProduceData()
+                    .setIndex(tp.partition)
+                    .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test".getBytes))))))
+              .iterator))
+          .setAcks(1.toShort)
+          .setTimeoutMs(5000))
+        .build(version.toShort)
+      val response = connectAndReceive[AbstractResponse](request, listenerName = listenerName)
+      val errorCode = response.asInstanceOf[ProduceResponse]
+        .data()
+        .responses()
+        .find(topic, Uuid.ZERO_UUID)
+        .partitionResponses.asScala.find(_.index == part).get
+        .errorCode
+
+      assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED.code(), errorCode, s"unexpected error for produce request version $version")
+    }
+  }
+
   @ParameterizedTest
   @CsvSource(value = Array("false", "true"))
   def testTopicIdAuthorization(withTopicExisting: Boolean): Unit = {
