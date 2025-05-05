@@ -72,6 +72,8 @@ import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.ScheduledExecutorService;
+import java.util.concurrent.TimeUnit;
 import java.util.function.BiConsumer;
 import java.util.function.Consumer;
 
@@ -144,6 +146,12 @@ public class SharePartitionManager implements AutoCloseable {
      */
     private final BrokerTopicStats brokerTopicStats;
 
+    /**
+     * The scheduler is used to delay the response for a share fetch request which tries to initiate a new share session
+     * when the share session cache is full
+     */
+    private final ScheduledExecutorService sessionCacheFullResponseScheduler;
+
     public SharePartitionManager(
         ReplicaManager replicaManager,
         Time time,
@@ -153,7 +161,8 @@ public class SharePartitionManager implements AutoCloseable {
         int maxInFlightMessages,
         Persister persister,
         GroupConfigManager groupConfigManager,
-        BrokerTopicStats brokerTopicStats
+        BrokerTopicStats brokerTopicStats,
+        ScheduledExecutorService sessionCacheFullResponseScheduler
     ) {
         this(replicaManager,
             time,
@@ -165,7 +174,8 @@ public class SharePartitionManager implements AutoCloseable {
             persister,
             groupConfigManager,
             new ShareGroupMetrics(time),
-            brokerTopicStats
+            brokerTopicStats,
+            sessionCacheFullResponseScheduler
         );
     }
 
@@ -180,7 +190,8 @@ public class SharePartitionManager implements AutoCloseable {
         Persister persister,
         GroupConfigManager groupConfigManager,
         ShareGroupMetrics shareGroupMetrics,
-        BrokerTopicStats brokerTopicStats
+        BrokerTopicStats brokerTopicStats,
+        ScheduledExecutorService sessionCacheFullResponseScheduler
     ) {
         this(replicaManager,
             time,
@@ -194,7 +205,8 @@ public class SharePartitionManager implements AutoCloseable {
             persister,
             groupConfigManager,
             shareGroupMetrics,
-            brokerTopicStats
+            brokerTopicStats,
+            sessionCacheFullResponseScheduler
         );
     }
 
@@ -211,7 +223,8 @@ public class SharePartitionManager implements AutoCloseable {
             Persister persister,
             GroupConfigManager groupConfigManager,
             ShareGroupMetrics shareGroupMetrics,
-            BrokerTopicStats brokerTopicStats
+            BrokerTopicStats brokerTopicStats,
+            ScheduledExecutorService sessionCacheFullResponseScheduler
     ) {
         this.replicaManager = replicaManager;
         this.time = time;
@@ -225,6 +238,7 @@ public class SharePartitionManager implements AutoCloseable {
         this.groupConfigManager = groupConfigManager;
         this.shareGroupMetrics = shareGroupMetrics;
         this.brokerTopicStats = brokerTopicStats;
+        this.sessionCacheFullResponseScheduler = sessionCacheFullResponseScheduler;
     }
 
     /**
@@ -459,7 +473,7 @@ public class SharePartitionManager implements AutoCloseable {
                     cachedSharePartitions, clientConnectionId);
                 if (responseShareSessionKey == null) {
                     log.error("Could not create a share session for group {} member {}", groupId, reqMetadata.memberId());
-                    throw Errors.SHARE_SESSION_NOT_FOUND.exception();
+                    throw Errors.SHARE_SESSION_LIMIT_REACHED.exception();
                 }
 
                 context = new ShareSessionContext(reqMetadata, shareFetchData);
@@ -528,6 +542,22 @@ public class SharePartitionManager implements AutoCloseable {
                 shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
             }
         }
+    }
+
+    /**
+     * The createDelayedErrorFuture method is used to create a future that completes exceptionally after a certain time delay.
+     * This is used when a new share session initialization is requested, but the share session cache is full. An error response
+     * is sent back to the client after a delay of maxWaitMs.
+     *
+     * @param maxWaitMs The maxWaitMs in the share fetch request.
+     * @param t The error to be returned to the user.
+     *
+     * @return A completable future that completes exceptionally after a delay of maxWaitMs.
+     */
+    public CompletableFuture<Void> createDelayedErrorFuture(long maxWaitMs, Throwable t) {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+        sessionCacheFullResponseScheduler.schedule(() -> future.completeExceptionally(t), maxWaitMs, TimeUnit.MILLISECONDS);
+        return future;
     }
 
     /**

@@ -63,7 +63,7 @@ import java.util
 import java.util.Optional
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.locks.{Condition, ReentrantLock}
-import java.util.concurrent.{CompletableFuture, ExecutionException, TimeUnit, TimeoutException}
+import java.util.concurrent.{CompletableFuture, ExecutionException, Executors, ScheduledExecutorService, TimeUnit, TimeoutException}
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
 import scala.jdk.OptionConverters.RichOption
@@ -163,6 +163,8 @@ class BrokerServer(
   var sharePartitionManager: SharePartitionManager = _
 
   var persister: Persister = _
+
+  var sessionCacheFullResponseScheduler: ScheduledExecutorService = _
 
   private def maybeChangeStatus(from: ProcessStatus, to: ProcessStatus): Boolean = {
     lock.lock()
@@ -432,6 +434,8 @@ class BrokerServer(
         ))
       val fetchManager = new FetchManager(Time.SYSTEM, new FetchSessionCache(fetchSessionCacheShards))
 
+      sessionCacheFullResponseScheduler = Executors.newSingleThreadScheduledExecutor
+
       sharePartitionManager = new SharePartitionManager(
         replicaManager,
         time,
@@ -441,7 +445,8 @@ class BrokerServer(
         config.shareGroupConfig.shareGroupPartitionMaxRecordLocks,
         persister,
         groupConfigManager,
-        brokerTopicStats
+        brokerTopicStats,
+        sessionCacheFullResponseScheduler
       )
 
       dataPlaneRequestProcessor = new KafkaApis(
@@ -818,6 +823,9 @@ class BrokerServer(
 
       if (persister != null)
         CoreUtils.swallow(persister.stop(), this)
+
+      if (sessionCacheFullResponseScheduler != null)
+        CoreUtils.swallow(sessionCacheFullResponseScheduler.shutdown(), this)
 
       isShuttingDown.set(false)
 
