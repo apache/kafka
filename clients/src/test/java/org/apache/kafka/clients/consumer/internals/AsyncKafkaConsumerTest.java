@@ -993,9 +993,8 @@ public class AsyncKafkaConsumerTest {
         TopicPartition tp = new TopicPartition("topic1", 0);
         Map<TopicPartition, Long> result =
                 assertDoesNotThrow(() -> consumer.beginningOffsets(Collections.singletonList(tp), Duration.ZERO));
-        // The result should be {tp=null}
-        assertTrue(result.containsKey(tp));
-        assertNull(result.get(tp));
+        assertNotNull(result);
+        assertEquals(0, result.size());
         verify(applicationEventHandler).add(ArgumentMatchers.isA(ListOffsetsEvent.class));
     }
 
