@@ -110,15 +110,12 @@ public class SmokeTestDriverIntegrationTest {
     // (1) 10 min timeout, (2) 30 tries of polling without getting any data
     @ParameterizedTest
     @CsvSource({
-        "false, false, true",
-        "true, false, true",
-        "false, false, false",
-        "true, false, false",
-        "true, true, true",
-        "true, true, false"
+        "false, true",
+        "false, false",
+        "true, true",
+        "true, false"
     })
     public void shouldWorkWithRebalance(
-        final boolean stateUpdaterEnabled,
         final boolean processingThreadsEnabled,
         final boolean streamsProtocolEnabled
     ) throws InterruptedException {
@@ -142,7 +139,6 @@ public class SmokeTestDriverIntegrationTest {
         final Properties props = new Properties();
         props.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers);
         props.put(StreamsConfig.APPLICATION_ID_CONFIG, safeUniqueTestName(testInfo));
-        props.put(InternalConfig.STATE_UPDATER_ENABLED, stateUpdaterEnabled);
         props.put(InternalConfig.PROCESSING_THREADS_ENABLED, processingThreadsEnabled);
         // decrease the session timeout so that we can trigger the rebalance soon after old client left closed
         props.put(ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG, 10000);

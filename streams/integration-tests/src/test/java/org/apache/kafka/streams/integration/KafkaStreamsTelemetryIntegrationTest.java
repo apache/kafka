@@ -66,8 +66,6 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestInfo;
 import org.junit.jupiter.api.Timeout;
 import org.junit.jupiter.params.ParameterizedTest;
-import org.junit.jupiter.params.provider.Arguments;
-import org.junit.jupiter.params.provider.MethodSource;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -83,7 +81,6 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Properties;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Stream;
 
 import static org.apache.kafka.streams.utils.TestUtils.safeUniqueTestName;
 import static org.apache.kafka.test.TestUtils.waitForCondition;
@@ -159,7 +156,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @ParameterizedTest
     @ValueSource(strings = {"INFO", "DEBUG", "TRACE"})
     public void shouldPushGlobalThreadMetricsToBroker(final String recordingLevel) throws Exception {
-        streamsApplicationProperties = props(null);
+        streamsApplicationProperties = props();
         streamsApplicationProperties.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel);
         final Topology topology = simpleTopology(true);
         subscribeForStreamsMetrics();
@@ -198,7 +195,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @ValueSource(strings = {"INFO", "DEBUG", "TRACE"})
     public void shouldPushMetricsToBroker(final String recordingLevel) throws Exception {
         // End-to-end test validating metrics pushed to broker
-        streamsApplicationProperties  = props(null);
+        streamsApplicationProperties  = props();
         streamsApplicationProperties.put(StreamsConfig.METRICS_RECORDING_LEVEL_CONFIG, recordingLevel);
         final Topology topology = simpleTopology(false);
         subscribeForStreamsMetrics();
@@ -259,10 +256,10 @@ public class KafkaStreamsTelemetryIntegrationTest {
     }
 
     @ParameterizedTest
-    @MethodSource("singleAndMultiTaskParameters")
+    @ValueSource(strings = {"simple", "complex"})
     public void shouldPassMetrics(final String topologyType) throws Exception {
         // Streams metrics should get passed to Admin and Consumer
-        streamsApplicationProperties = props(null);
+        streamsApplicationProperties = props();
         final Topology topology = topologyType.equals("simple") ? simpleTopology(false) : complexTopology();
        
         try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
@@ -291,12 +288,12 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @Test
     public void shouldPassCorrectMetricsDynamicInstances() throws Exception {
         // Correct streams metrics should get passed with dynamic membership
-        streamsApplicationProperties = props(null);
+        streamsApplicationProperties = props();
         streamsApplicationProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks1");
         streamsApplicationProperties.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks1");
 
 
-        streamsSecondApplicationProperties = props(null);
+        streamsSecondApplicationProperties = props();
         streamsSecondApplicationProperties.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId).getPath() + "-ks2");
         streamsSecondApplicationProperties.put(StreamsConfig.CLIENT_ID_CONFIG, appId + "-ks2");
         
@@ -390,7 +387,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
     @Test
     public void passedMetricsShouldNotLeakIntoClientMetrics() throws Exception {
         // Streams metrics should not be visible in client metrics
-        streamsApplicationProperties = props(null);
+        streamsApplicationProperties = props();
         final Topology topology =  complexTopology();
 
         try (final KafkaStreams streams = new KafkaStreams(topology, streamsApplicationProperties)) {
@@ -426,12 +423,7 @@ public class KafkaStreamsTelemetryIntegrationTest {
                 .toList();
     }
 
-    private static Stream<Arguments> singleAndMultiTaskParameters() {
-        return Stream.of(Arguments.of("simple"),
-                Arguments.of("complex"));
-    }
-
-    private Properties props(final Properties extraProperties) {
+    private Properties props() {
         final Properties streamsConfiguration = new Properties();
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
         streamsConfiguration.put(StreamsConfig.BOOTSTRAP_SERVERS_CONFIG, cluster.bootstrapServers());
@@ -441,10 +433,6 @@ public class KafkaStreamsTelemetryIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.StringSerde.class);
         streamsConfiguration.put(StreamsConfig.DEFAULT_CLIENT_SUPPLIER_CONFIG, TestClientSupplier.class);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-
-        if (extraProperties != null) {
-            streamsConfiguration.putAll(extraProperties);
-        }
 
         return streamsConfiguration;
     }

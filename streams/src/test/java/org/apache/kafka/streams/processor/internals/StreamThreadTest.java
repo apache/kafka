@@ -3546,7 +3546,7 @@ public class StreamThreadTest {
 
     @Test
     public void testNamedTopologyWithStreamsProtocol() {
-        final Properties props = configProps(false, false, false);
+        final Properties props = configProps(false, false);
         props.setProperty(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.toString());
         final StreamsConfig config = new StreamsConfig(props);
         final InternalTopologyBuilder topologyBuilder = new InternalTopologyBuilder(
@@ -3597,7 +3597,7 @@ public class StreamThreadTest {
 
     @Test
     public void testStreamsRebalanceDataWithClassicProtocol() {
-        final Properties props = configProps(false, false, false);
+        final Properties props = configProps(false, false);
         props.setProperty(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.toString());
         thread = createStreamThread(CLIENT_ID, new StreamsConfig(props));
         assertTrue(thread.streamsRebalanceData().isEmpty());
@@ -3605,7 +3605,7 @@ public class StreamThreadTest {
 
     @Test
     public void testStreamsRebalanceDataWithExtraCopartition() {
-        final Properties props = configProps(false, false, false);
+        final Properties props = configProps(false, false);
         props.setProperty(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.toString());
 
         internalTopologyBuilder.addSource(null, "source1", null, null, null, topic1);
@@ -3656,7 +3656,7 @@ public class StreamThreadTest {
 
     @Test
     public void testStreamsRebalanceDataWithStreamsProtocol() {
-        final Properties props = configProps(false, false, false);
+        final Properties props = configProps(false, false);
         props.setProperty(StreamsConfig.GROUP_PROTOCOL_CONFIG, GroupProtocol.STREAMS.toString());
         props.setProperty(StreamsConfig.APPLICATION_SERVER_CONFIG, "localhost:1234");
         props.setProperty(StreamsConfig.REPLICATION_FACTOR_CONFIG, "1");
@@ -3764,7 +3764,7 @@ public class StreamThreadTest {
         );
         final Runnable shutdownErrorHook = mock(Runnable.class);
 
-        final Properties props = configProps(false, false, false);
+        final Properties props = configProps(false, false);
         final StreamsConfig config = new StreamsConfig(props);
         thread = new StreamThread(
             new MockTime(1),
@@ -3817,7 +3817,7 @@ public class StreamThreadTest {
             Map.of()
         );
 
-        final Properties props = configProps(false, false, false);
+        final Properties props = configProps(false, false);
         final Runnable shutdownErrorHook = mock(Runnable.class);
         final StreamsConfig config = new StreamsConfig(props);
         thread = new StreamThread(

@@ -144,6 +144,12 @@ public class RestoreIntegrationTest {
     }
 
     private Properties props(final Properties extraProperties) {
+        final Properties streamsConfiguration = props();
+        streamsConfiguration.putAll(extraProperties);
+        return streamsConfiguration;
+    }
+
+    private Properties props() {
         final Properties streamsConfiguration = new Properties();
 
         streamsConfiguration.put(StreamsConfig.APPLICATION_ID_CONFIG, appId);
@@ -154,10 +160,6 @@ public class RestoreIntegrationTest {
         streamsConfiguration.put(StreamsConfig.DEFAULT_VALUE_SERDE_CLASS_CONFIG, Serdes.IntegerSerde.class);
         streamsConfiguration.put(StreamsConfig.COMMIT_INTERVAL_MS_CONFIG, 1000L);
         streamsConfiguration.put(ConsumerConfig.AUTO_OFFSET_RESET_CONFIG, "earliest");
-
-        if (extraProperties != null) {
-            streamsConfiguration.putAll(extraProperties);
-        }
 
         streamsConfigurations.add(streamsConfiguration);
 
@@ -244,7 +246,7 @@ public class RestoreIntegrationTest {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final Topology topology = new Topology();
 
-        final Properties props = props(null);
+        final Properties props = props();
 
         // restoring from 1000 to 4000 (committed), and then process from 4000 to 5000 on each of the two partitions
         final int offsetLimitDelta = 1000;
@@ -299,7 +301,7 @@ public class RestoreIntegrationTest {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Properties props = props(null);
+        final Properties props = props();
         props.put(StreamsConfig.TOPOLOGY_OPTIMIZATION_CONFIG, StreamsConfig.OPTIMIZE);
 
         // restoring from 1000 to 4000 (committed), and then process from 4000 to 5000 on each of the two partitions
@@ -352,7 +354,7 @@ public class RestoreIntegrationTest {
         final AtomicInteger numReceived = new AtomicInteger(0);
         final StreamsBuilder builder = new StreamsBuilder();
 
-        final Properties props = props(null);
+        final Properties props = props();
 
         // restoring from 1000 to 5000, and then process from 5000 to 10000 on each of the two partitions
         final int offsetCheckpointed = 1000;
@@ -408,7 +410,7 @@ public class RestoreIntegrationTest {
             );
 
         final CountDownLatch startupLatch = new CountDownLatch(1);
-        kafkaStreams = new KafkaStreams(builder.build(), props(null));
+        kafkaStreams = new KafkaStreams(builder.build(), props());
         kafkaStreams.setStateListener((newState, oldState) -> {
             if (newState == KafkaStreams.State.RUNNING && oldState == KafkaStreams.State.REBALANCING) {
                 startupLatch.countDown();
@@ -449,7 +451,7 @@ public class RestoreIntegrationTest {
 
         final Topology topology = streamsBuilder.build();
 
-        kafkaStreams = new KafkaStreams(topology, props(null));
+        kafkaStreams = new KafkaStreams(topology, props());
 
         final CountDownLatch latch = new CountDownLatch(1);
         kafkaStreams.setStateListener((newState, oldState) -> {
@@ -473,13 +475,13 @@ public class RestoreIntegrationTest {
         );
         createStateForRestoration(inputStream, 0);
 
-        final Properties props1 = props(null);
+        final Properties props1 = props();
         props1.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         props1.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-1").getPath());
         purgeLocalStreamsState(props1);
         final KafkaStreams streams1 = new KafkaStreams(builder.build(), props1);
 
-        final Properties props2 = props(null);
+        final Properties props2 = props();
         props2.put(StreamsConfig.NUM_STANDBY_REPLICAS_CONFIG, 1);
         props2.put(StreamsConfig.STATE_DIR_CONFIG, TestUtils.tempDirectory(appId + "-2").getPath());
         purgeLocalStreamsState(props2);

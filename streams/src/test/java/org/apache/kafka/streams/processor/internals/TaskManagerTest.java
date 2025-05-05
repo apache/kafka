@@ -933,7 +933,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldAddRecycledStandbyTasksFromActiveToPendingTasksToInitWithStateUpdater() {
+    public void shouldAddRecycledStandbyTasksFromActiveToPendingTasksToInit() {
         final StreamTask activeTaskToRecycle = statefulTask(taskId01, taskId01ChangelogPartitions)
             .withInputPartitions(taskId01Partitions)
             .inState(State.RUNNING).build();
@@ -956,7 +956,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldThrowDuringAssignmentIfStandbyTaskToRecycleIsFoundInTasksRegistryWithStateUpdater() {
+    public void shouldThrowDuringAssignmentIfStandbyTaskToRecycleIsFoundInTasksRegistry() {
         final StandbyTask standbyTaskToRecycle = standbyTask(taskId03, taskId03ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId03Partitions).build();
@@ -978,7 +978,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldAssignActiveTaskInTasksRegistryToBeClosedCleanlyWithStateUpdater() {
+    public void shouldAssignActiveTaskInTasksRegistryToBeClosedCleanly() {
         final StreamTask activeTaskToClose = statefulTask(taskId03, taskId03ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId03Partitions).build();
@@ -996,7 +996,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldThrowDuringAssignmentIfStandbyTaskToCloseIsFoundInTasksRegistryWithStateUpdater() {
+    public void shouldThrowDuringAssignmentIfStandbyTaskToCloseIsFoundInTasksRegistry() {
         final StandbyTask standbyTaskToClose = standbyTask(taskId03, taskId03ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId03Partitions).build();
@@ -1015,7 +1015,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldAssignActiveTaskInTasksRegistryToUpdateInputPartitionsWithStateUpdater() {
+    public void shouldAssignActiveTaskInTasksRegistryToUpdateInputPartitions() {
         final StreamTask activeTaskToUpdateInputPartitions = statefulTask(taskId03, taskId03ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId03Partitions).build();
@@ -1036,7 +1036,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldResumeActiveRunningTaskInTasksRegistryWithStateUpdater() {
+    public void shouldResumeActiveRunningTaskInTasksRegistry() {
         final StreamTask activeTaskToResume = statefulTask(taskId03, taskId03ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId03Partitions).build();
@@ -1075,7 +1075,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldThrowDuringAssignmentIfStandbyTaskToUpdateInputPartitionsIsFoundInTasksRegistryWithStateUpdater() {
+    public void shouldThrowDuringAssignmentIfStandbyTaskToUpdateInputPartitionsIsFoundInTasksRegistry() {
         final StandbyTask standbyTaskToUpdateInputPartitions = standbyTask(taskId02, taskId02ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId02Partitions).build();
@@ -1098,7 +1098,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldAssignMultipleTasksInTasksRegistryWithStateUpdater() {
+    public void shouldAssignMultipleTasksInTasksRegistry() {
         final StreamTask activeTaskToClose = statefulTask(taskId03, taskId03ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId03Partitions).build();
@@ -1216,7 +1216,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldRethrowRuntimeExceptionInInitTaskWithStateUpdater() {
+    public void shouldRethrowRuntimeExceptionInInitTask() {
         final StreamTask task00 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .withInputPartitions(taskId00Partitions)
             .inState(State.CREATED).build();
@@ -1581,7 +1581,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldReturnCorrectBooleanWhenTryingToCompleteRestorationWithStateUpdater() {
+    public void shouldReturnCorrectBooleanWhenTryingToCompleteRestoration() {
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE);
         when(stateUpdater.restoresActiveTasks()).thenReturn(false);
         assertTrue(taskManager.checkStateUpdater(time.milliseconds(), noOpResetter));
@@ -1696,7 +1696,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldNotPauseReadyTasksWithStateUpdaterOnRebalanceComplete() {
+    public void shouldNotPauseReadyTasksOnRebalanceComplete() {
         final StreamTask statefulTask0 = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId00Partitions).build();
@@ -1713,29 +1713,6 @@ public class TaskManagerTest {
 
     @Test
     public void shouldReleaseLockForUnassignedTasksAfterRebalance() throws Exception {
-        expectLockObtainedFor(taskId00, taskId01, taskId02);
-        expectDirectoryNotEmpty(taskId00, taskId01, taskId02);
-
-        makeTaskFolders(
-            taskId00.toString(),  // active task
-            taskId01.toString(),  // standby task
-            taskId02.toString()   // unassigned but able to lock
-        );
-        taskManager.handleRebalanceStart(singleton("topic"));
-
-        assertThat(taskManager.lockedTaskDirectories(), is(Set.of(taskId00, taskId01, taskId02)));
-
-        handleAssignment(taskId00Assignment, taskId01Assignment, emptyMap());
-
-        taskManager.handleRebalanceComplete();
-        assertThat(taskManager.lockedTaskDirectories(), is(Set.of(taskId00, taskId01)));
-
-        verify(stateDirectory).unlock(taskId02);
-        verify(consumer).pause(assignment);
-    }
-
-    @Test
-    public void shouldReleaseLockForUnassignedTasksAfterRebalanceWithStateUpdater() throws Exception {
         final StreamTask runningStatefulTask = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RUNNING)
             .withInputPartitions(taskId00Partitions).build();
@@ -1793,7 +1770,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldComputeOffsetSumForRestoringActiveTaskWithStateUpdater() throws Exception {
+    public void shouldComputeOffsetSumForRestoringActiveTask() throws Exception {
         final StreamTask restoringStatefulTask = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RESTORING).build();
         final long changelogOffset = 42L;
@@ -1811,7 +1788,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldComputeOffsetSumForRestoringStandbyTaskWithStateUpdater() throws Exception {
+    public void shouldComputeOffsetSumForRestoringStandbyTask() throws Exception {
         final StandbyTask restoringStandbyTask = standbyTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RUNNING).build();
         final long changelogOffset = 42L;
@@ -1829,7 +1806,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldComputeOffsetSumForRunningStatefulTaskAndRestoringTaskWithStateUpdater() {
+    public void shouldComputeOffsetSumForRunningStatefulTaskAndRestoringTask() {
         final StreamTask runningStatefulTask = statefulTask(taskId00, taskId00ChangelogPartitions)
             .inState(State.RUNNING).build();
         final StreamTask restoringStatefulTask = statefulTask(taskId01, taskId01ChangelogPartitions)
@@ -2287,7 +2264,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldNotCommitNonCorruptedRestoringActiveTasksAndNotCommitRunningStandbyTasksWithStateUpdater() {
+    public void shouldNotCommitNonCorruptedRestoringActiveTasksAndNotCommitRunningStandbyTasks() {
         final StreamTask activeRestoringTask = statefulTask(taskId00, taskId00ChangelogPartitions)
             .withInputPartitions(taskId00Partitions)
             .inState(State.RESTORING).build();
@@ -4608,55 +4585,6 @@ public class TaskManagerTest {
 
     @Test
     public void shouldRecycleStartupTasksFromStateDirectoryAsActive() {
-        final StandbyTask startupTask = standbyTask(taskId00, taskId00ChangelogPartitions).build();
-        final StreamTask activeTask = statefulTask(taskId00, taskId00ChangelogPartitions).build();
-        when(activeTaskCreator.createActiveTaskFromStandby(eq(startupTask), eq(taskId00Partitions), any()))
-            .thenReturn(activeTask);
-
-        when(stateDirectory.hasStartupTasks()).thenReturn(true, false);
-        when(stateDirectory.removeStartupTask(taskId00)).thenReturn(startupTask, (Task) null);
-
-        taskManager.handleAssignment(taskId00Assignment, Collections.emptyMap());
-
-        // ensure we recycled our existing startup Standby into an Active task
-        verify(activeTaskCreator).createActiveTaskFromStandby(eq(startupTask), eq(taskId00Partitions), any());
-
-        // ensure we didn't construct any new Tasks
-        verify(activeTaskCreator).createTasks(any(), eq(Collections.emptyMap()));
-        verify(standbyTaskCreator).createTasks(Collections.emptyMap());
-        verifyNoMoreInteractions(activeTaskCreator);
-        verifyNoMoreInteractions(standbyTaskCreator);
-
-        // verify the recycled task is now being used as an assigned Active
-        assertEquals(Collections.singletonMap(taskId00, activeTask), taskManager.activeTaskMap());
-        assertEquals(Collections.emptyMap(), taskManager.standbyTaskMap());
-    }
-
-    @Test
-    public void shouldUseStartupTasksFromStateDirectoryAsStandby() {
-        final StandbyTask startupTask = standbyTask(taskId00, taskId00ChangelogPartitions).build();
-
-        when(stateDirectory.hasStartupTasks()).thenReturn(true, true, false);
-        when(stateDirectory.removeStartupTask(taskId00)).thenReturn(startupTask, (Task) null);
-
-        taskManager.handleAssignment(Collections.emptyMap(), taskId00Assignment);
-
-        // ensure we used our existing startup Task directly as a Standby
-        verify(startupTask).resume();
-
-        // ensure we didn't construct any new Tasks, or recycle an existing Task; we only used the one we already have
-        verify(activeTaskCreator).createTasks(any(), eq(Collections.emptyMap()));
-        verify(standbyTaskCreator).createTasks(Collections.emptyMap());
-        verifyNoMoreInteractions(activeTaskCreator);
-        verifyNoMoreInteractions(standbyTaskCreator);
-
-        // verify the startup Standby is now being used as an assigned Standby
-        assertEquals(Collections.emptyMap(), taskManager.activeTaskMap());
-        assertEquals(Collections.singletonMap(taskId00, startupTask), taskManager.standbyTaskMap());
-    }
-
-    @Test
-    public void shouldRecycleStartupTasksFromStateDirectoryAsActiveWithStateUpdater() {
         final Tasks taskRegistry = new Tasks(new LogContext());
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, taskRegistry, true);
         final StandbyTask startupTask = standbyTask(taskId00, taskId00ChangelogPartitions).build();
@@ -4694,7 +4622,7 @@ public class TaskManagerTest {
     }
 
     @Test
-    public void shouldUseStartupTasksFromStateDirectoryAsStandbyWithStateUpdater() {
+    public void shouldUseStartupTasksFromStateDirectoryAsStandby() {
         final Tasks taskRegistry = new Tasks(new LogContext());
         final TaskManager taskManager = setUpTaskManager(ProcessingMode.AT_LEAST_ONCE, taskRegistry, true);
         final StandbyTask startupTask = standbyTask(taskId00, taskId00ChangelogPartitions).build();
