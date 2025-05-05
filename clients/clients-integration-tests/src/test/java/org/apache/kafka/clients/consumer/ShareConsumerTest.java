@@ -1809,8 +1809,7 @@ public class ShareConsumerTest {
         // Set the auto offset reset to 3 hours before current time
         // so the consumer should consume all messages (3 records)
         alterShareAutoOffsetReset("group2", "by_duration:PT3H");
-        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group2");
-             Producer<byte[], byte[]> producer = createProducer()) {
+        try (ShareConsumer<byte[], byte[]> shareConsumer = createShareConsumer("group2")) {
 
             shareConsumer.subscribe(Set.of(tp.topic()));
             List<ConsumerRecord<byte[], byte[]>> records = consumeRecords(shareConsumer, 3);
