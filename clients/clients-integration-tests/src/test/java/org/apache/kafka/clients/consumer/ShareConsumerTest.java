@@ -2105,7 +2105,8 @@ public class ShareConsumerTest {
         // all messages which can be read are read, some would be redelivered
         TestUtils.waitForCondition(complexCons1::isDone, 45_000L, () -> "did not close!");
 
-        assertTrue(prodState.count().get() < complexCons1.recordsRead());
+        assertTrue(prodState.count().get() < complexCons1.recordsRead(),
+            String.format("Producer (%d) and share consumer (%d) record count mismatch.", prodState.count().get(), complexCons1.recordsRead()));
 
         shutdownExecutorService(service);
 
