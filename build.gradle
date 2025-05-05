@@ -2233,6 +2233,7 @@ project(':storage') {
     implementation project(':clients')
     implementation(libs.caffeine) {
       exclude group: 'org.checkerframework', module: 'checker-qual'
+      exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
     }
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind
