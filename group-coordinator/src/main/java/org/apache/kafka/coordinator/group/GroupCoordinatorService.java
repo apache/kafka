@@ -671,8 +671,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
     }
 
     CompletableFuture<AlterShareGroupOffsetsResponseData> persisterInitialize(
-            InitializeShareGroupStateParameters request,
-            AlterShareGroupOffsetsResponseData response
+        InitializeShareGroupStateParameters request,
+        AlterShareGroupOffsetsResponseData response
     ) {
         return persister.initializeState(request)
             .handle((result, exp) -> {
