@@ -507,7 +507,7 @@ public class MockAdminClient extends AdminClient {
         return topicDescriptions;
     }
 
-    public synchronized Map<Uuid, KafkaFuture<TopicDescription>>  handleDescribeTopicsUsingIds(Collection<Uuid> topicIds) {
+    public synchronized Map<Uuid, KafkaFuture<TopicDescription>> handleDescribeTopicsUsingIds(Collection<Uuid> topicIds) {
 
         Map<Uuid, KafkaFuture<TopicDescription>> topicDescriptions = new HashMap<>();
 
