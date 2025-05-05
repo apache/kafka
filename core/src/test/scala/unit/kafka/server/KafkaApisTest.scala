@@ -2355,20 +2355,20 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def shouldReturnUnauthorizationForNonExistingTopicInProduceResponse(): Unit = {
+  def shouldReplaceProducerFencedWithInvalidProducerEpochInProduceResponse(): Unit = {
     val topic = "topic"
     val topicId = Uuid.fromString("d2Gg8tgzJa2JYK2eTHUapg")
-    val tp = new TopicIdPartition(topicId, 0, topic)
+    val tp = new TopicIdPartition(topicId, 0, "topic")
+    addTopicToMetadataCache(topic, numPartitions = 2, topicId = topicId)
 
-    val authorizer: Authorizer = mock(classOf[Authorizer])
-    when(authorizer.authorize(any[RequestContext], any[util.List[Action]]))
-      .thenReturn(Seq(AuthorizationResult.DENIED).asJava)
     for (version <- ApiKeys.PRODUCE.oldestVersion to ApiKeys.PRODUCE.latestVersion) {
 
       reset(replicaManager, clientQuotaManager, clientRequestQuotaManager, requestChannel, txnCoordinator)
 
+      val responseCallback: ArgumentCaptor[Map[TopicIdPartition, PartitionResponse] => Unit] = ArgumentCaptor.forClass(classOf[Map[TopicIdPartition, PartitionResponse] => Unit])
+
       val produceData = new ProduceRequestData.TopicProduceData()
-        .setPartitionData(util.List.of(
+        .setPartitionData(Collections.singletonList(
           new ProduceRequestData.PartitionProduceData()
             .setIndex(tp.partition)
             .setRecords(MemoryRecords.withRecords(Compression.NONE, new SimpleRecord("test".getBytes)))))
@@ -2380,19 +2380,30 @@ class KafkaApisTest extends Logging {
       }
 
       val produceRequest = ProduceRequest.builder(new ProduceRequestData()
-          .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
-            util.List.of(produceData)
-              .iterator))
-          .setAcks(1.toShort)
-          .setTimeoutMs(5000))
+        .setTopicData(new ProduceRequestData.TopicProduceDataCollection(
+          Collections.singletonList(produceData)
+            .iterator))
+        .setAcks(1.toShort)
+        .setTimeoutMs(5000))
         .build(version.toShort)
       val request = buildRequest(produceRequest)
+
+      when(replicaManager.handleProduceAppend(anyLong,
+        anyShort,
+        ArgumentMatchers.eq(false),
+        any(),
+        any(),
+        responseCallback.capture(),
+        any(),
+        any(),
+        any()
+      )).thenAnswer(_ => responseCallback.getValue.apply(Map(tp -> new PartitionResponse(Errors.INVALID_PRODUCER_EPOCH))))
 
       when(clientRequestQuotaManager.maybeRecordAndGetThrottleTimeMs(any[RequestChannel.Request](),
         any[Long])).thenReturn(0)
       when(clientQuotaManager.maybeRecordAndGetThrottleTimeMs(
         any[RequestChannel.Request](), anyDouble, anyLong)).thenReturn(0)
-      val kafkaApis = createKafkaApis(authorizer = Some(authorizer))
+      val kafkaApis = createKafkaApis()
       try {
         kafkaApis.handleProduceRequest(request, RequestLocal.withThreadConfinedCaching)
 
@@ -2402,11 +2413,7 @@ class KafkaApisTest extends Logging {
         val topicProduceResponse = response.data.responses.asScala.head
         assertEquals(1, topicProduceResponse.partitionResponses.size)
         val partitionProduceResponse = topicProduceResponse.partitionResponses.asScala.head
-        if (version >= 13 ) {
-          assertEquals(Errors.UNKNOWN_TOPIC_ID, Errors.forCode(partitionProduceResponse.errorCode))
-        } else {
-          assertEquals(Errors.TOPIC_AUTHORIZATION_FAILED, Errors.forCode(partitionProduceResponse.errorCode))
-        }
+        assertEquals(Errors.INVALID_PRODUCER_EPOCH, Errors.forCode(partitionProduceResponse.errorCode))
       } finally {
         kafkaApis.close()
       }
