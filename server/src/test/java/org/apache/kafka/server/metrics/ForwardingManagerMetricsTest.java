@@ -69,8 +69,8 @@ class ForwardingManagerMetricsTest {
     void testQueueTimeMs() {
         try (Metrics metrics = new Metrics();
              ForwardingManagerMetrics forwardingManagerMetrics = new ForwardingManagerMetrics(metrics, 1000)) {
-            KafkaMetric queueTimeMsP99 = metrics.metrics().get(forwardingManagerMetrics.queueTimeMsHist().latencyP99Name);
-            KafkaMetric queueTimeMsP999 = metrics.metrics().get(forwardingManagerMetrics.queueTimeMsHist().latencyP999Name);
+            KafkaMetric queueTimeMsP99 = metrics.metrics().get(forwardingManagerMetrics.queueTimeMsHist().latencyP99Name());
+            KafkaMetric queueTimeMsP999 = metrics.metrics().get(forwardingManagerMetrics.queueTimeMsHist().latencyP999Name());
             assertEquals(Double.NaN, (Double) queueTimeMsP99.metricValue());
             assertEquals(Double.NaN, (Double) queueTimeMsP999.metricValue());
             for (int i = 0; i < 1000; i++) {
@@ -96,8 +96,8 @@ class ForwardingManagerMetricsTest {
     void testRemoteTimeMs() {
         try (Metrics metrics = new Metrics();
              ForwardingManagerMetrics forwardingManagerMetrics = new ForwardingManagerMetrics(metrics, 1000)) {
-            KafkaMetric remoteTimeMsP99 = metrics.metrics().get(forwardingManagerMetrics.remoteTimeMsHist().latencyP99Name);
-            KafkaMetric remoteTimeMsP999 = metrics.metrics().get(forwardingManagerMetrics.remoteTimeMsHist().latencyP999Name);
+            KafkaMetric remoteTimeMsP99 = metrics.metrics().get(forwardingManagerMetrics.remoteTimeMsHist().latencyP99Name());
+            KafkaMetric remoteTimeMsP999 = metrics.metrics().get(forwardingManagerMetrics.remoteTimeMsHist().latencyP999Name());
             assertEquals(Double.NaN, (Double) remoteTimeMsP99.metricValue());
             assertEquals(Double.NaN, (Double) remoteTimeMsP999.metricValue());
             for (int i = 0; i < 1000; i++) {
@@ -113,8 +113,8 @@ class ForwardingManagerMetricsTest {
         long timeoutMs = 500;
         try (Metrics metrics = new Metrics();
              ForwardingManagerMetrics forwardingManagerMetrics = new ForwardingManagerMetrics(metrics, timeoutMs)) {
-            KafkaMetric queueTimeMsP99 = metrics.metrics().get(forwardingManagerMetrics.queueTimeMsHist().latencyP99Name);
-            KafkaMetric queueTimeMsP999 = metrics.metrics().get(forwardingManagerMetrics.queueTimeMsHist().latencyP999Name);
+            KafkaMetric queueTimeMsP99 = metrics.metrics().get(forwardingManagerMetrics.queueTimeMsHist().latencyP99Name());
+            KafkaMetric queueTimeMsP999 = metrics.metrics().get(forwardingManagerMetrics.queueTimeMsHist().latencyP999Name());
             assertEquals(Double.NaN, (Double) queueTimeMsP99.metricValue());
             assertEquals(Double.NaN, (Double) queueTimeMsP999.metricValue());
             for (int i = 0; i < 100; i++) {

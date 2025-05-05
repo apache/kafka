@@ -91,14 +91,14 @@ public final class ForwardingManagerMetrics implements AutoCloseable {
     }
 
     public static final class LatencyHistogram implements AutoCloseable {
+        private static final int SIZE_IN_BYTES = 4000;
         private final Metrics metrics;
         private final String name;
         private final Sensor sensor;
-        public final MetricName latencyP99Name;
-        public final MetricName latencyP999Name;
+        private final MetricName latencyP99Name;
+        private final MetricName latencyP999Name;
 
-
-        public LatencyHistogram(Metrics metrics, String name, String group, long maxLatency) {
+        private LatencyHistogram(Metrics metrics, String name, String group, long maxLatency) {
             this.metrics = metrics;
             this.name = name;
             this.sensor = metrics.sensor(name);
@@ -106,7 +106,7 @@ public final class ForwardingManagerMetrics implements AutoCloseable {
             this.latencyP999Name = metrics.metricName(name + ".p999", group);
 
             sensor.add(new Percentiles(
-                4000,
+                SIZE_IN_BYTES,
                 maxLatency,
                 BucketSizing.CONSTANT,
                 new Percentile(latencyP99Name, 99),
@@ -123,6 +123,16 @@ public final class ForwardingManagerMetrics implements AutoCloseable {
 
         public void record(long latencyMs) {
             sensor.record(latencyMs);
+        }
+
+        // visible for test
+        public MetricName latencyP99Name() {
+            return latencyP99Name;
+        }
+
+        // visible for test
+        public MetricName latencyP999Name() {
+            return latencyP999Name;
         }
     }
 }
