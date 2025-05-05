@@ -24,6 +24,7 @@ import org.apache.kafka.common.requests.{DescribeUserScramCredentialsRequest, De
 import org.apache.kafka.metadata.authorizer.StandardAuthorizer
 import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import java.util.Properties
 
@@ -37,6 +38,7 @@ class DescribeUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTe
     properties.put(BrokerSecurityConfigs.PRINCIPAL_BUILDER_CLASS_CONFIG, classOf[DescribeCredentialsTest.TestPrincipalBuilderReturningUnauthorized].getName)
   }
 
+  @Test
   def testDescribeNotAuthorized(): Unit = {
     val request = new DescribeUserScramCredentialsRequest.Builder(
       new DescribeUserScramCredentialsRequestData()).build()

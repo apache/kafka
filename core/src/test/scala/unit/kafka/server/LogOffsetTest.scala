@@ -26,7 +26,7 @@ import org.apache.kafka.common.requests.{FetchRequest, FetchResponse, ListOffset
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.apache.kafka.storage.internals.log.{LogStartOffsetIncrementReason, OffsetResultHolder, UnifiedLog}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.Timeout
+import org.junit.jupiter.api.{Test, Timeout}
 
 import java.io.File
 import java.util.{Optional, Properties, Random}
@@ -45,6 +45,7 @@ class LogOffsetTest extends BaseRequestTest {
     props.put("log.retention.check.interval.ms", (5 * 1000 * 60).toString)
   }
 
+  @Test
   def testGetOffsetsForUnknownTopic(): Unit = {
     val topicPartition = new TopicPartition("foo", 0)
     val request = ListOffsetsRequest.Builder.forConsumer(false, IsolationLevel.READ_UNCOMMITTED)
@@ -54,6 +55,7 @@ class LogOffsetTest extends BaseRequestTest {
   }
 
   @deprecated("ListOffsetsRequest V0", since = "")
+  @Test
   def testGetOffsetsAfterDeleteRecords(): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
@@ -78,6 +80,7 @@ class LogOffsetTest extends BaseRequestTest {
     assertEquals(20L, consumerOffset)
   }
 
+  @Test
   def testFetchOffsetByTimestampForMaxTimestampAfterTruncate(): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
@@ -98,6 +101,7 @@ class LogOffsetTest extends BaseRequestTest {
     assertEquals(Optional.empty, log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP, Optional.empty).timestampAndOffsetOpt)
   }
 
+  @Test
   def testFetchOffsetByTimestampForMaxTimestampWithUnorderedTimestamps(): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
@@ -115,6 +119,7 @@ class LogOffsetTest extends BaseRequestTest {
     assertEquals(6L, maxTimestampOffset.get.timestamp)
   }
 
+  @Test
   def testGetOffsetsBeforeLatestTime(): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
@@ -146,6 +151,7 @@ class LogOffsetTest extends BaseRequestTest {
     assertFalse(FetchResponse.recordsOrFail(fetchResponse.responseData(topicNames, ApiKeys.FETCH.latestVersion).get(topicPartition)).batches.iterator.hasNext)
   }
 
+  @Test
   def testEmptyLogsGetOffsets(): Unit = {
     val random = new Random
     val topic = "kafka-"
@@ -168,6 +174,7 @@ class LogOffsetTest extends BaseRequestTest {
     assertFalse(offsetChanged)
   }
 
+  @Test
   def testFetchOffsetByTimestampForMaxTimestampWithEmptyLog(): Unit = {
     val topic = "kafka-"
     val topicPartition = new TopicPartition(topic, 0)
@@ -179,6 +186,7 @@ class LogOffsetTest extends BaseRequestTest {
     assertEquals(new OffsetResultHolder(Optional.empty[FileRecords.TimestampAndOffset]()), log.fetchOffsetByTimestamp(ListOffsetsRequest.MAX_TIMESTAMP, Optional.empty))
   }
 
+  @Test
   def testGetOffsetsBeforeEarliestTime(): Unit = {
     val random = new Random
     val topic = "kafka-"

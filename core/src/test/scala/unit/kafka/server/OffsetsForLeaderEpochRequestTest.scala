@@ -26,11 +26,13 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.record.RecordBatch
 import org.apache.kafka.common.requests.{OffsetsForLeaderEpochRequest, OffsetsForLeaderEpochResponse}
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
 class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
 
+  @Test
   def testOffsetsForLeaderEpochErrorCodes(): Unit = {
     val topic = "topic"
     val partition = new TopicPartition(topic, 0)
@@ -53,6 +55,7 @@ class OffsetsForLeaderEpochRequestTest extends BaseRequestTest {
     assertResponseError(Errors.NOT_LEADER_OR_FOLLOWER, nonReplica, request)
   }
 
+  @Test
   def testCurrentEpochValidation(): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)

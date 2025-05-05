@@ -24,11 +24,13 @@ import org.apache.kafka.common.message.CreateTopicsRequestData.CreatableTopicCol
 import org.apache.kafka.common.protocol.{ApiKeys, Errors}
 import org.apache.kafka.common.requests.CreateTopicsRequest
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
 class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
 
+  @Test
   def testValidCreateTopicsRequests(): Unit = {
     // Generated assignments
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic1"))))
@@ -57,6 +59,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
       topicReq("topic14", replicationFactor = -1, numPartitions = 2))))
   }
 
+  @Test
   def testErrorCreateTopicsRequests(): Unit = {
     val existingTopic = "existing-topic"
     createTopic(existingTopic)
@@ -93,6 +96,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     validateTopicExists("partial-none")
   }
 
+  @Test
   def testInvalidCreateTopicsRequests(): Unit = {
     // Partitions/ReplicationFactor and ReplicaAssignment
     validateErrorCreateTopicsRequests(topicsReq(Seq(
@@ -106,6 +110,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
       Map("bad-args-topic" -> error(Errors.INVALID_REQUEST)), checkErrorMessage = false)
   }
 
+  @Test
   def testCreateTopicsRequestVersions(): Unit = {
     for (version <- ApiKeys.CREATE_TOPICS.oldestVersion to ApiKeys.CREATE_TOPICS.latestVersion) {
       val topic = s"topic_$version"
@@ -143,6 +148,7 @@ class CreateTopicsRequestTest extends AbstractCreateTopicsRequestTest {
     }
   }
 
+  @Test
   def testCreateClusterMetadataTopic(): Unit = {
     validateErrorCreateTopicsRequests(
       topicsReq(Seq(topicReq(Topic.CLUSTER_METADATA_TOPIC_NAME))),

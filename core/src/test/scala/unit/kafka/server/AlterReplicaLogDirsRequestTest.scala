@@ -27,6 +27,7 @@ import org.apache.kafka.common.requests.{AlterReplicaLogDirsRequest, AlterReplic
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.storage.internals.log.LogFileUtils
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import java.util.Properties
 import scala.jdk.CollectionConverters._
@@ -50,6 +51,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
       .find(p => p.partitionIndex == tp.partition).get.errorCode)
   }
 
+  @Test
   def testAlterReplicaLogDirsRequest(): Unit = {
     val partitionNum = 5
 
@@ -84,6 +86,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     }
   }
 
+  @Test
   def testAlterReplicaLogDirsRequestErrorCode(): Unit = {
     val offlineDir = new File(brokers.head.config.logDirs.tail.head).getAbsolutePath
     val validDir1 = new File(brokers.head.config.logDirs(1)).getAbsolutePath
@@ -121,6 +124,7 @@ class AlterReplicaLogDirsRequestTest extends BaseRequestTest {
     assertEquals(Errors.KAFKA_STORAGE_ERROR, findErrorForPartition(alterReplicaDirResponse3, new TopicPartition(topic, 2)))
   }
 
+  @Test
   def testAlterReplicaLogDirsRequestWithRetention(): Unit = {
     val partitionNum = 1
 

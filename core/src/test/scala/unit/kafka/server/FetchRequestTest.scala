@@ -26,6 +26,7 @@ import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.common.{IsolationLevel, TopicIdPartition, TopicPartition, Uuid}
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import java.util
 import java.util.Optional
@@ -39,6 +40,7 @@ import scala.util.Random
   */
 class FetchRequestTest extends BaseFetchRequestTest {
 
+  @Test
   def testBrokerRespectsPartitionsOrderAndSizeLimits(): Unit = {
     initProducer()
 
@@ -140,6 +142,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     evaluateResponse4(fetchResponse4V12, 12)
   }
 
+  @Test
   def testFetchRequestV4WithReadCommitted(): Unit = {
     initProducer()
     val maxPartitionBytes = 200
@@ -157,6 +160,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertTrue(records(partitionData).map(_.sizeInBytes).sum > 0)
   }
 
+  @Test
   def testFetchRequestToNonReplica(): Unit = {
     val topic = "topic"
     val partition = 0
@@ -186,10 +190,12 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(Errors.NOT_LEADER_OR_FOLLOWER.code, oldPartitionData.errorCode)
   }
 
+  @Test
   def testLastFetchedEpochValidation(): Unit = {
     checkLastFetchedEpochValidation(ApiKeys.FETCH.latestVersion())
   }
 
+  @Test
   def testLastFetchedEpochValidationV12(): Unit = {
     checkLastFetchedEpochValidation(12)
   }
@@ -237,10 +243,12 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(firstEpochEndOffset, divergingEpoch.endOffset)
   }
 
+  @Test
   def testCurrentEpochValidation(): Unit = {
     checkCurrentEpochValidation(ApiKeys.FETCH.latestVersion())
   }
 
+  @Test
   def testCurrentEpochValidationV12(): Unit = {
     checkCurrentEpochValidation(12)
   }
@@ -283,10 +291,12 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertResponseErrorForEpoch(Errors.FENCED_LEADER_EPOCH, followerId, Optional.of(secondLeaderEpoch - 1))
   }
 
+  @Test
   def testEpochValidationWithinFetchSession(): Unit = {
     checkEpochValidationWithinFetchSession(ApiKeys.FETCH.latestVersion())
   }
 
+  @Test
   def testEpochValidationWithinFetchSessionV12(): Unit = {
     checkEpochValidationWithinFetchSession(12)
   }
@@ -347,6 +357,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
    * those partitions are returned in all incremental fetch requests.
    * This tests using FetchRequests that don't use topic IDs
    */
+  @Test
   def testCreateIncrementalFetchWithPartitionsInErrorV12(): Unit = {
     def createConsumerFetchRequest(topicPartitions: Seq[TopicPartition],
                            metadata: JFetchMetadata,
@@ -408,6 +419,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
   /**
    * Test that when a Fetch Request receives an unknown topic ID, it returns a top level error.
    */
+  @Test
   def testFetchWithPartitionsWithIdError(): Unit = {
     def createConsumerFetchRequest(fetchData: util.LinkedHashMap[TopicPartition, FetchRequest.PartitionData],
                            metadata: JFetchMetadata,
@@ -451,6 +463,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(Errors.UNKNOWN_TOPIC_ID.code, responseData1.get(bar0).errorCode)
   }
 
+  @Test
   def testZStdCompressedTopic(): Unit = {
     // ZSTD compressed topic
     val topicConfig = Map(TopicConfig.COMPRESSION_TYPE_CONFIG -> BrokerCompressionType.ZSTD.name)
@@ -497,6 +510,7 @@ class FetchRequestTest extends BaseFetchRequestTest {
     assertEquals(3, records(data2).size)
   }
 
+  @Test
   def testZStdCompressedRecords(): Unit = {
     // Producer compressed topic
     val topicConfig = Map(TopicConfig.COMPRESSION_TYPE_CONFIG -> BrokerCompressionType.PRODUCER.name)

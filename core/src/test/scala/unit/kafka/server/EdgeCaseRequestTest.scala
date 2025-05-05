@@ -33,9 +33,10 @@ import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceResponse, ResponseHeader}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.ByteUtils
-import org.apache.kafka.common.{TopicPartition, Uuid, requests}
+import org.apache.kafka.common.{requests, TopicPartition, Uuid}
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.jdk.CollectionConverters._
 
@@ -116,6 +117,7 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     }
   }
 
+  @Test
   def testProduceRequestWithNullClientId(): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)
@@ -162,18 +164,22 @@ class EdgeCaseRequestTest extends KafkaServerTestHarness {
     assertEquals(Errors.NONE, Errors.forCode(partitionProduceResponse.errorCode), "There should be no error")
   }
 
+  @Test
   def testHeaderOnlyRequest(): Unit = {
     verifyDisconnect(requestHeaderBytes(ApiKeys.PRODUCE.id, 1))
   }
 
+  @Test
   def testInvalidApiKeyRequest(): Unit = {
     verifyDisconnect(requestHeaderBytes(-1, 0))
   }
 
+  @Test
   def testInvalidApiVersionRequest(): Unit = {
     verifyDisconnect(requestHeaderBytes(ApiKeys.PRODUCE.id, -1))
   }
 
+  @Test
   def testMalformedHeaderRequest(): Unit = {
     val serializedBytes = {
       // Only send apiKey and apiVersion

@@ -25,6 +25,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DeleteRecordsRequest, DeleteRecordsResponse}
 import org.apache.kafka.common.serialization.StringSerializer
 import org.junit.jupiter.api.Assertions.{assertEquals, assertTrue}
+import org.junit.jupiter.api.Test
 
 import java.util.Collections
 import java.util.concurrent.TimeUnit
@@ -34,6 +35,7 @@ class DeleteRecordsRequestTest extends BaseRequestTest {
   private val TIMEOUT_MS = 1000
   private val MESSAGES_PRODUCED_PER_PARTITION = 10
 
+  @Test
   def testDeleteRecordsHappyCase(): Unit = {
     val (topicPartition: TopicPartition, leaderId: Int) = createTopicAndSendRecords
 
@@ -57,6 +59,7 @@ class DeleteRecordsRequestTest extends BaseRequestTest {
     validateLogStartOffsetForTopic(topicPartition, offsetToDelete)
   }
 
+  @Test
   def testErrorWhenDeletingRecordsWithInvalidOffset(): Unit = {
     val (topicPartition: TopicPartition, leaderId: Int) = createTopicAndSendRecords
 
@@ -80,6 +83,7 @@ class DeleteRecordsRequestTest extends BaseRequestTest {
     validateLogStartOffsetForTopic(topicPartition, 0)
   }
 
+  @Test
   def testErrorWhenDeletingRecordsWithInvalidTopic(): Unit = {
     val invalidTopicPartition = new TopicPartition("invalid-topic", 0)
     // Create the DeleteRecord request requesting deletion of offset which is not present

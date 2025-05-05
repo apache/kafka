@@ -24,6 +24,7 @@ import org.apache.kafka.common.requests.{ListOffsetsRequest, ListOffsetsResponse
 import org.apache.kafka.common.{IsolationLevel, TopicPartition}
 import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import java.util.{Optional, Properties}
 import scala.collection.Seq
@@ -41,6 +42,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     }
   }
 
+  @Test
   def testListOffsetsErrorCodes(): Unit = {
     val targetTimes = List(new ListOffsetsTopic()
       .setName(topic)
@@ -104,6 +106,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     assertResponseError(error, brokerId, request)
   }
 
+  @Test
   def testCurrentEpochValidation(): Unit = {
     val topic = "topic"
     val topicPartition = new TopicPartition(topic, 0)
@@ -162,6 +165,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     (partitionData.offset, partitionData.leaderEpoch, partitionData.errorCode())
   }
 
+  @Test
   def testResponseIncludesLeaderEpoch(): Unit = {
     val partitionToLeader = createTopic(numPartitions = 1, replicationFactor = 3)
     val firstLeaderId = partitionToLeader(partition.partition)
@@ -201,6 +205,7 @@ class ListOffsetsRequestTest extends BaseRequestTest {
     assertEquals((9L, firstLeaderEpoch, Errors.NONE.code), fetchOffsetAndEpochWithError(secondLeaderId, ListOffsetsRequest.MAX_TIMESTAMP, -1))
   }
 
+  @Test
   def testResponseDefaultOffsetAndLeaderEpochForAllVersions(): Unit = {
     val partitionToLeader = createTopic(numPartitions = 1, replicationFactor = 3)
     val firstLeaderId = partitionToLeader(partition.partition)

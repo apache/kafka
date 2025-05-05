@@ -27,7 +27,7 @@ import org.apache.kafka.common.serialization.{IntegerSerializer, StringSerialize
 import org.apache.kafka.server.config.ReplicationConfigs
 import org.apache.kafka.storage.internals.checkpoint.OffsetCheckpointFile
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import java.io.File
 import java.util.Properties
@@ -102,6 +102,7 @@ class LogRecoveryTest extends QuorumTestHarness {
     super.tearDown()
   }
 
+  @Test
   def testHWCheckpointNoFailuresSingleLogSegment(): Unit = {
     val numMessages = 2L
     sendMessages(numMessages.toInt)
@@ -118,6 +119,7 @@ class LogRecoveryTest extends QuorumTestHarness {
     assertEquals(numMessages, followerHW)
   }
 
+  @Test
   def testHWCheckpointWithFailuresSingleLogSegment(): Unit = {
     var leader = getLeaderIdForPartition(servers, topicPartition)
 
@@ -177,6 +179,7 @@ class LogRecoveryTest extends QuorumTestHarness {
     assertEquals(hw, hwFile2.read().getOrDefault(topicPartition, 0L))
   }
 
+  @Test
   def testHWCheckpointNoFailuresMultipleLogSegments(): Unit = {
     sendMessages(20)
     val hw = 20L
@@ -192,6 +195,7 @@ class LogRecoveryTest extends QuorumTestHarness {
     assertEquals(hw, followerHW)
   }
 
+  @Test
   def testHWCheckpointWithFailuresMultipleLogSegments(): Unit = {
     var leader = getLeaderIdForPartition(servers, topicPartition)
 

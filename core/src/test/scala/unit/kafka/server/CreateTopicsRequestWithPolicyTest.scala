@@ -26,7 +26,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.server.config.ServerLogConfigs.CREATE_TOPIC_POLICY_CLASS_NAME_CONFIG
 import org.apache.kafka.server.policy.CreateTopicPolicy
 import org.apache.kafka.server.policy.CreateTopicPolicy.RequestMetadata
-import org.junit.jupiter.api.TestInfo
+import org.junit.jupiter.api.{Test, TestInfo}
 
 import scala.jdk.CollectionConverters._
 
@@ -44,6 +44,7 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
     Seq(properties)
   }
 
+  @Test
   def testValidCreateTopicsRequests(): Unit = {
     validateValidCreateTopicsRequests(topicsReq(Seq(topicReq("topic1",
       numPartitions = 5))))
@@ -61,6 +62,7 @@ class CreateTopicsRequestWithPolicyTest extends AbstractCreateTopicsRequestTest 
       assignment = Map(0 -> List(1, 0), 1 -> List(0, 1))))))
   }
 
+  @Test
   def testErrorCreateTopicsRequests(): Unit = {
     val existingTopic = "existing-topic"
     createTopic(existingTopic, 5)

@@ -25,7 +25,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{DeleteTopicsRequest, DeleteTopicsResponse}
 import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.TestInfo
+import org.junit.jupiter.api.{Test, TestInfo}
 
 class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
 
@@ -46,6 +46,7 @@ class DeleteTopicsRequestWithDeletionDisabledTest extends BaseRequestTest {
     props.map(KafkaConfig.fromProps)
   }
 
+  @Test
   def testDeleteRecordsRequest(): Unit = {
     val topic = "topic-1"
     val request = new DeleteTopicsRequest.Builder(

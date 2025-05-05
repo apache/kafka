@@ -25,7 +25,7 @@ import org.apache.kafka.common.protocol.Errors
 import org.apache.kafka.common.requests.{AlterUserScramCredentialsRequest, AlterUserScramCredentialsResponse}
 import org.apache.kafka.server.config.ServerConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.TestInfo
+import org.junit.jupiter.api.{Test, TestInfo}
 
 import java.util
 import java.util.Properties
@@ -52,6 +52,7 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
   private val user1 = "user1"
   private val user2 = "user2"
 
+  @Test
   def testAlterNothingNotAuthorized(): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()
@@ -63,6 +64,7 @@ class AlterUserScramCredentialsRequestNotAuthorizedTest extends BaseRequestTest 
     assertEquals(0, results.size)
   }
 
+  @Test
   def testAlterSomethingNotAuthorized(): Unit = {
     val request = new AlterUserScramCredentialsRequest.Builder(
       new AlterUserScramCredentialsRequestData()

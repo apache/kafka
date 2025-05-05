@@ -30,15 +30,15 @@ import org.apache.kafka.common.record.{MemoryRecords, SimpleRecord}
 import org.apache.kafka.common.requests.{ProduceRequest, ProduceResponse}
 import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.test.api.Flaky
-import org.apache.kafka.common.{KafkaException, Uuid, requests}
+import org.apache.kafka.common.{requests, KafkaException, Uuid}
 import org.apache.kafka.network.SocketServerConfigs
 import org.apache.kafka.server.config.QuotaConfig
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import java.io.IOException
 import java.net.{InetAddress, Socket}
-import java.util.concurrent.{ExecutorService, Executors, TimeUnit}
+import java.util.concurrent.{Executors, ExecutorService, TimeUnit}
 import java.util.{Collections, Properties}
 import scala.collection.Map
 import scala.jdk.CollectionConverters._
@@ -82,6 +82,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
   @Flaky("KAFKA-17999")
+  @Test
   def testDynamicConnectionQuota(): Unit = {
     val maxConnectionsPerIP = 5
 
@@ -108,6 +109,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     verifyMaxConnections(maxConnectionsPerIPOverride, connectAndVerify)
   }
 
+  @Test
   def testDynamicListenerConnectionQuota(): Unit = {
     val initialConnectionCount = connectionCount
 
@@ -179,6 +181,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
   }
 
 
+  @Test
   def testDynamicListenerConnectionCreationRateQuota(): Unit = {
     // Create another listener. PLAINTEXT is an inter-broker listener
     // keep default limits
@@ -239,6 +242,7 @@ class DynamicConnectionQuotaTest extends BaseRequestTest {
     waitForConnectionCount(initialConnectionCount)
   }
 
+  @Test
   def testDynamicIpConnectionRateQuota(): Unit = {
     val connRateLimit = 10
     val initialConnectionCount = connectionCount

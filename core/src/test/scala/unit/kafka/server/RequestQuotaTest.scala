@@ -43,7 +43,7 @@ import org.apache.kafka.server.authorizer.{Action, AuthorizableRequestContext, A
 import org.apache.kafka.server.config.{QuotaConfig, ServerConfigs}
 import org.apache.kafka.server.quota.QuotaType
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import java.net.InetAddress
 import java.util
@@ -131,6 +131,7 @@ class RequestQuotaTest extends BaseRequestTest {
     finally super.tearDown()
   }
 
+  @Test
   def testResponseThrottleTime(): Unit = {
     for (apiKey <- clientActions ++ clusterActionsWithThrottleForBroker)
       submitTest(apiKey, () => checkRequestThrottleTime(apiKey))
@@ -138,16 +139,19 @@ class RequestQuotaTest extends BaseRequestTest {
     waitAndCheckResults()
   }
 
+  @Test
   def testResponseThrottleTimeWhenBothProduceAndRequestQuotasViolated(): Unit = {
     submitTest(ApiKeys.PRODUCE, () => checkSmallQuotaProducerRequestThrottleTime())
     waitAndCheckResults()
   }
 
+  @Test
   def testResponseThrottleTimeWhenBothFetchAndRequestQuotasViolated(): Unit = {
     submitTest(ApiKeys.FETCH, () => checkSmallQuotaConsumerRequestThrottleTime())
     waitAndCheckResults()
   }
 
+  @Test
   def testUnthrottledClient(): Unit = {
     for (apiKey <- clientActions) {
       submitTest(apiKey, () => checkUnthrottledClient(apiKey))
@@ -156,6 +160,7 @@ class RequestQuotaTest extends BaseRequestTest {
     waitAndCheckResults()
   }
 
+  @Test
   def testExemptRequestTime(): Unit = {
     // Exclude `DESCRIBE_QUORUM`, maybe it shouldn't be a cluster action
     val actions = clusterActions -- clusterActionsWithThrottleForBroker -- RequestQuotaTest.Envelope -- RequestQuotaTest.ShareGroupState - ApiKeys.DESCRIBE_QUORUM
@@ -166,6 +171,7 @@ class RequestQuotaTest extends BaseRequestTest {
     waitAndCheckResults()
   }
 
+  @Test
   def testUnauthorizedThrottle(): Unit = {
     RequestQuotaTest.principal = RequestQuotaTest.UnauthorizedPrincipal
 

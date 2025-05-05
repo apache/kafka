@@ -24,7 +24,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.server.config.QuotaConfig
 import org.apache.kafka.server.metrics.MetricConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import java.net.Socket
 import java.util.concurrent.atomic.AtomicInteger
@@ -61,6 +61,7 @@ class KafkaMetricReporterExceptionHandlingTest extends BaseRequestTest {
     super.tearDown()
   }
 
+  @Test
   def testBothReportersAreInvoked(): Unit = {
     val port = anySocketServer.boundPort(ListenerName.forSecurityProtocol(SecurityProtocol.PLAINTEXT))
     val socket = new Socket("localhost", port)

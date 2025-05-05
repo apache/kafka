@@ -23,7 +23,7 @@ import org.apache.kafka.clients.consumer.{Consumer, ConsumerConfig}
 import org.apache.kafka.clients.producer.{KafkaProducer, ProducerConfig, ProducerRecord}
 import org.apache.kafka.common.{KafkaException, TopicPartition}
 import org.apache.kafka.common.errors.SaslAuthenticationException
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import kafka.utils.{TestInfoUtils, TestUtils}
 import org.apache.kafka.common.config.SaslConfigs
@@ -111,6 +111,7 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     verifyWithRetry(sendOneRecord(producer2))()
   }
 
+  @Test
   def testTransactionalProducerWithAuthenticationFailure(): Unit = {
     val txProducer = createTransactionalProducer()
     verifyAuthenticationException(txProducer.initTransactions())
@@ -155,6 +156,7 @@ class SaslClientsWithInvalidCredentialsTest extends AbstractSaslTest {
     verifyWithRetry(consumer.poll(Duration.ofMillis(1000)))(_.count == 1)
   }
 
+  @Test
   def testKafkaAdminClientWithAuthenticationFailure(): Unit = {
     val props = JaasTestUtils.adminClientSecurityConfigs(securityProtocol, OptionConverters.toJava(trustStoreFile), OptionConverters.toJava(clientSaslProperties))
     props.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers())

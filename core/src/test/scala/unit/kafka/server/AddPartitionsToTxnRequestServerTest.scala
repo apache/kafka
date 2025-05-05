@@ -32,7 +32,7 @@ import org.apache.kafka.common.requests.FindCoordinatorRequest.CoordinatorType
 import org.apache.kafka.common.requests.{AddPartitionsToTxnRequest, AddPartitionsToTxnResponse, FindCoordinatorRequest, FindCoordinatorResponse, InitProducerIdRequest, InitProducerIdResponse}
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
@@ -110,6 +110,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     assertEquals(Errors.UNKNOWN_TOPIC_OR_PARTITION, errors.get(nonExistentTopic))
   }
 
+  @Test
   def testOneSuccessOneErrorInBatchedRequest(): Unit = {
     val tp0 = new TopicPartition(topic1, 0)
     val transactionalId1 = "foobar"
@@ -147,6 +148,7 @@ class AddPartitionsToTxnRequestServerTest extends BaseRequestTest {
     assertEquals(expectedErrors, errors)
   }
 
+  @Test
   def testVerifyOnly(): Unit = {
     val tp0 = new TopicPartition(topic1, 0)
 

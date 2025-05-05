@@ -25,7 +25,7 @@ import org.apache.kafka.clients.admin.{Admin, NewPartitions, NewTopic}
 import org.apache.kafka.common.errors.InvalidReplicaAssignmentException
 import org.apache.kafka.common.requests.{MetadataRequest, MetadataResponse}
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{BeforeEach, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 
 import java.util
 import java.util.Arrays.asList
@@ -63,6 +63,7 @@ class AddPartitionsTest extends BaseRequestTest {
     admin = createAdminClient()
   }
 
+  @Test
   def testWrongReplicaCount(): Unit = {
     assertEquals(classOf[InvalidReplicaAssignmentException], assertThrows(classOf[ExecutionException], () => {
         admin.createPartitions(Collections.singletonMap(topic1,
@@ -74,6 +75,7 @@ class AddPartitionsTest extends BaseRequestTest {
    * Test that when we supply a manual partition assignment to createTopics, it must be 0-based
    * and consecutive.
    */
+  @Test
   def testMissingPartitionsInCreateTopics(): Unit = {
     val topic6Placements = new util.HashMap[Integer, util.List[Integer]]
     topic6Placements.put(1, asList(0, 1))
@@ -98,6 +100,7 @@ class AddPartitionsTest extends BaseRequestTest {
    * Test that when we supply a manual partition assignment to createPartitions, it must contain
    * enough partitions.
    */
+  @Test
   def testMissingPartitionsInCreatePartitions(): Unit = {
     val cause = assertThrows(classOf[ExecutionException], () =>
       admin.createPartitions(Collections.singletonMap(topic1,
@@ -107,6 +110,7 @@ class AddPartitionsTest extends BaseRequestTest {
       "were specified."), "Unexpected error message: " + cause.getMessage)
   }
 
+  @Test
   def testIncrementPartitions(): Unit = {
     admin.createPartitions(Collections.singletonMap(topic1, NewPartitions.increaseTo(3))).all().get()
 
@@ -134,6 +138,7 @@ class AddPartitionsTest extends BaseRequestTest {
     }
   }
 
+  @Test
   def testManualAssignmentOfReplicas(): Unit = {
     // Add 2 partitions
     admin.createPartitions(Collections.singletonMap(topic2, NewPartitions.increaseTo(3,
@@ -161,6 +166,7 @@ class AddPartitionsTest extends BaseRequestTest {
     assertEquals(Set(0, 1), replicas.asScala.toSet)
   }
 
+  @Test
   def testReplicaPlacementAllServers(): Unit = {
     admin.createPartitions(Collections.singletonMap(topic3, NewPartitions.increaseTo(7))).all().get()
 
@@ -187,6 +193,7 @@ class AddPartitionsTest extends BaseRequestTest {
     }
   }
 
+  @Test
   def testReplicaPlacementPartialServers(): Unit = {
     admin.createPartitions(Collections.singletonMap(topic2, NewPartitions.increaseTo(3))).all().get()
 

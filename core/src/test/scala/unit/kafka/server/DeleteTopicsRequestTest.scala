@@ -28,12 +28,14 @@ import org.apache.kafka.common.requests.DeleteTopicsResponse
 import org.apache.kafka.common.requests.MetadataRequest
 import org.apache.kafka.common.requests.MetadataResponse
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 
 import scala.collection.Seq
 import scala.jdk.CollectionConverters._
 
 class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
 
+  @Test
   def testTopicDeletionClusterHasOfflinePartitions(): Unit = {
     // Create two topics with one partition/replica. Make one of them offline.
     val offlineTopic = "topic-1"
@@ -66,6 +68,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
       "The topics are found in the Broker's cache")
   }
 
+  @Test
   def testValidDeleteTopicRequests(): Unit = {
     val timeout = 10000
     // Single topic
@@ -132,6 +135,7 @@ class DeleteTopicsRequestTest extends BaseRequestTest with Logging {
     connectAndReceive[DeleteTopicsResponse](request, destination = socketServer)
   }
 
+  @Test
   def testDeleteTopicsVersions(): Unit = {
     val timeout = 10000
     for (version <- ApiKeys.DELETE_TOPICS.oldestVersion to ApiKeys.DELETE_TOPICS.latestVersion) {

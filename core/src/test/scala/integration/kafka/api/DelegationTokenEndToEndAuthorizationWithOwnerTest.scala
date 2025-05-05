@@ -26,6 +26,7 @@ import org.apache.kafka.common.resource.ResourcePattern
 import org.apache.kafka.common.security.auth.KafkaPrincipal
 import org.apache.kafka.common.security.token.delegation.DelegationToken
 import org.junit.jupiter.api.Assertions.{assertThrows, assertTrue}
+import org.junit.jupiter.api.Test
 
 import java.util.Collections
 import scala.concurrent.ExecutionException
@@ -92,6 +93,7 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
     createScramAdminClient(kafkaClientSaslMechanism, tokenRequesterPrincipal.getName, tokenRequesterPassword)
   }
 
+  @Test
   def testCreateTokenForOtherUserFails(): Unit = {
     val thrown = assertThrows(classOf[ExecutionException], () => {
       createDelegationTokens(() => new CreateDelegationTokenOptions().owner(otherClientPrincipal), assert = false)
@@ -99,6 +101,7 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
     assertTrue(thrown.getMessage.contains("Delegation Token authorization failed"))
   }
 
+  @Test
   def testDescribeTokenForOtherUserFails(): Unit = {
     Using.resource(createScramAdminClient(kafkaClientSaslMechanism, describeTokenFailPrincipal.getName, describeTokenFailPassword)) { describeTokenFailAdminClient =>
       Using.resource(createScramAdminClient(kafkaClientSaslMechanism, otherClientPrincipal.getName, otherClientPassword)) { otherClientAdminClient =>
@@ -111,6 +114,7 @@ class DelegationTokenEndToEndAuthorizationWithOwnerTest extends DelegationTokenE
     }
   }
 
+  @Test
   def testDescribeTokenForOtherUserPasses(): Unit = {
     val adminClient = createTokenRequesterAdminClient()
     try {

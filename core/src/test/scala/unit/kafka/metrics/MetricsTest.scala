@@ -36,7 +36,7 @@ import org.apache.kafka.common.utils.Time
 import org.apache.kafka.server.config.ServerLogConfigs
 import org.apache.kafka.server.metrics.{KafkaMetricsGroup, KafkaYammerMetrics, LinuxIoMetricsCollector}
 import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
-import org.junit.jupiter.api.Timeout
+import org.junit.jupiter.api.{Test, Timeout}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
@@ -56,6 +56,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
 
   val nMessages = 2
 
+  @Test
   def testMetricsReporterAfterDeletingTopic(): Unit = {
     val topic = "test-topic-metric"
     createTopic(topic)
@@ -64,6 +65,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertEquals(Set.empty, topicMetricGroups(topic), "Topic metrics exists after deleteTopic")
   }
 
+  @Test
   def testBrokerTopicMetricsUnregisteredAfterDeletingTopic(): Unit = {
     val topic = "test-broker-topic-metric"
     createTopic(topic, 2)
@@ -77,24 +79,28 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertEquals(Set.empty, topicMetricGroups(topic), "Topic metrics exists after deleteTopic")
   }
 
+  @Test
   def testClusterIdMetric(): Unit = {
     // Check if clusterId metric exists.
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=ClusterId"), 1)
   }
 
+  @Test
   def testBrokerStateMetric(): Unit = {
     // Check if BrokerState metric exists.
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=BrokerState"), 1)
   }
 
+  @Test
   def testYammerMetricsCountMetric(): Unit = {
     // Check if yammer-metrics-count metric exists.
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
     assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=yammer-metrics-count"), 1)
   }
 
+  @Test
   def testLinuxIoMetrics(): Unit = {
     // Check if linux-disk-{read,write}-bytes metrics either do or do not exist depending on whether we are or are not
     // able to collect those metrics on the platform where this test is running.
@@ -105,6 +111,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
       assertEquals(metrics.keySet.asScala.count(_.getMBeanName == s"$requiredKafkaServerPrefix=$name"), expectedCount))
   }
 
+  @Test
   def testJMXFilter(): Unit = {
     // Check if cluster id metrics is not exposed in JMX
     assertTrue(ManagementFactory.getPlatformMBeanServer
@@ -113,6 +120,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
                   .isRegistered(new ObjectName(s"$requiredKafkaServerPrefix=ClusterId")))
   }
 
+  @Test
   def testUpdateJMXFilter(): Unit = {
     // verify previously exposed metrics are removed and existing matching metrics are added
     brokers.foreach(broker => broker.kafkaYammerMetrics.reconfigure(
@@ -124,6 +132,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
                   .isRegistered(new ObjectName(s"$requiredKafkaServerPrefix=ClusterId")))
   }
 
+  @Test
   def testGeneralBrokerTopicMetricsAreGreedilyRegistered(): Unit = {
     val topic = "test-broker-topic-metric"
     createTopic(topic, 2)
@@ -138,6 +147,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertTrue(topicMetricGroups(topic).nonEmpty, "Topic metrics aren't registered")
   }
 
+  @Test
   def testWindowsStyleTagNames(): Unit = {
     val path = "C:\\windows-path\\kafka-logs"
     val tags = Map("dir" -> path)
@@ -193,6 +203,7 @@ class MetricsTest extends KafkaServerTestHarness with Logging {
     assertTrue(TestUtils.meterCount(bytesOut) > initialBytesOut)
   }
 
+  @Test
   def testKRaftControllerMetrics(): Unit = {
     val metrics = KafkaYammerMetrics.defaultRegistry.allMetrics
     Set(

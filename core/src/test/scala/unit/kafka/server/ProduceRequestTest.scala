@@ -32,6 +32,7 @@ import org.apache.kafka.server.metrics.KafkaYammerMetrics
 import org.apache.kafka.server.record.BrokerCompressionType
 import org.apache.kafka.storage.log.metrics.BrokerTopicMetrics
 import org.junit.jupiter.api.Assertions._
+import org.junit.jupiter.api.Test
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.{Arguments, MethodSource}
 
@@ -46,6 +47,7 @@ class ProduceRequestTest extends BaseRequestTest {
 
   val metricsKeySet = KafkaYammerMetrics.defaultRegistry.allMetrics.keySet.asScala
 
+  @Test
   def testSimpleProduceRequest(): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
 
@@ -160,6 +162,7 @@ class ProduceRequestTest extends BaseRequestTest {
     assertEquals("One or more records have been rejected due to invalid timestamp", partitionProduceResponse.errorMessage)
   }
 
+  @Test
   def testProduceToNonReplica(): Unit = {
     val topic = "topic"
     val partition = 0
@@ -207,6 +210,7 @@ class ProduceRequestTest extends BaseRequestTest {
     }.getOrElse(throw new AssertionError(s"No leader elected for topic $topic"))
   }
 
+  @Test
   def testCorruptLz4ProduceRequest(): Unit = {
     val (partition, leader) = createTopicAndFindPartitionWithLeader("topic")
     val topicId = getTopicIds().get("topic").get
@@ -240,6 +244,7 @@ class ProduceRequestTest extends BaseRequestTest {
     assertTrue(TestUtils.meterCount(s"${BrokerTopicMetrics.INVALID_MESSAGE_CRC_RECORDS_PER_SEC}") > 0)
   }
 
+  @Test
   def testZSTDProduceRequest(): Unit = {
     val topic = "topic"
     val partition = 0

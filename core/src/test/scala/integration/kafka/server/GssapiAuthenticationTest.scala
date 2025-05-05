@@ -38,7 +38,7 @@ import org.apache.kafka.common.security.kerberos.KerberosLogin
 import org.apache.kafka.common.utils.{LogContext, MockTime}
 import org.apache.kafka.network.SocketServerConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 import org.junit.jupiter.params.ParameterizedTest
 import org.junit.jupiter.params.provider.MethodSource
 
@@ -92,6 +92,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
    * Tests that Kerberos replay error `Request is a replay (34)` is not handled as an authentication exception
    * since replay detection used to detect DoS attacks may occasionally reject valid concurrent requests.
    */
+  @Test
   def testRequestIsAReplay(): Unit = {
     val successfulAuthsPerThread = 10
     val futures = (0 until numThreads).map(_ => executor.submit(new Runnable {
@@ -108,6 +109,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
    * are able to connect after the second re-login. Verifies that logout is performed only once
    * since duplicate logouts without successful login results in NPE from Java 9 onwards.
    */
+  @Test
   def testLoginFailure(): Unit = {
     val selector = createSelectorWithRelogin()
     try {
@@ -130,6 +132,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
    * is performed when credentials are unavailable between logout and login, we handle it as a
    * transient error and not an authentication failure so that clients may retry.
    */
+  @Test
   def testReLogin(): Unit = {
     val selector = createSelectorWithRelogin()
     try {
@@ -160,6 +163,7 @@ class GssapiAuthenticationTest extends IntegrationTestHarness with SaslSetup {
    * Tests that Kerberos error `Server not found in Kerberos database (7)` is handled
    * as a fatal authentication failure.
    */
+  @Test
   def testServerNotFoundInKerberosDatabase(): Unit = {
     val jaasConfig = clientConfig.getProperty(SaslConfigs.SASL_JAAS_CONFIG)
     val invalidServiceConfig = jaasConfig.replace("serviceName=\"kafka\"", "serviceName=\"invalid-service\"")

@@ -29,7 +29,7 @@ import org.apache.kafka.server.policy.AlterConfigPolicy
 import org.apache.kafka.storage.internals.log.LogConfig
 import org.apache.kafka.test.TestUtils.assertFutureThrows
 import org.junit.jupiter.api.Assertions.{assertEquals, assertNull, assertTrue}
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo, Timeout}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo, Timeout}
 
 import scala.collection.mutable
 import scala.jdk.CollectionConverters._
@@ -77,6 +77,7 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     props.put(ServerLogConfigs.ALTER_CONFIG_POLICY_CLASS_NAME_CONFIG, classOf[Policy])
   }
 
+  @Test
   def testValidAlterConfigs(): Unit = {
     client = Admin.create(createConfig)
     // Create topics
@@ -96,11 +97,13 @@ class AdminClientWithPoliciesIntegrationTest extends KafkaServerTestHarness with
     PlaintextAdminIntegrationTest.checkValidAlterConfigs(client, this, topicResource1, topicResource2, maxMessageBytes, retentionMs)
   }
 
+  @Test
   def testInvalidAlterConfigs(): Unit = {
     client = Admin.create(createConfig)
     PlaintextAdminIntegrationTest.checkInvalidAlterConfigs(this, client)
   }
 
+  @Test
   def testInvalidAlterConfigsDueToPolicy(): Unit = {
     client = Admin.create(createConfig)
 

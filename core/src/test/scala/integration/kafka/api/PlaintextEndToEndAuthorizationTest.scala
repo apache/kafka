@@ -21,7 +21,7 @@ import org.apache.kafka.common.network.ListenerName
 import org.apache.kafka.common.security.auth._
 import org.apache.kafka.common.security.authenticator.DefaultKafkaPrincipalBuilder
 import org.apache.kafka.clients.admin.AdminClientConfig
-import org.junit.jupiter.api.{BeforeEach, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 import org.junit.jupiter.api.Assertions._
 import org.apache.kafka.common.errors.TopicAuthorizationException
 
@@ -86,6 +86,7 @@ class PlaintextEndToEndAuthorizationTest extends EndToEndAuthorizationTest {
     superuserClientConfig.put(AdminClientConfig.BOOTSTRAP_SERVERS_CONFIG, bootstrapServers(interBrokerListenerName))
   }
 
+  @Test
   def testListenerName(): Unit = {
     // To check the client listener name, establish a session on the server by sending any request eg sendRecords
     val producer = createProducer()

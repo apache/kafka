@@ -19,16 +19,17 @@ package kafka.integration
 
 import java.util.Properties
 import scala.collection.Seq
-
 import kafka.server.KafkaConfig
 import kafka.utils.TestUtils
 import org.apache.kafka.server.config.ServerLogConfigs
+import org.junit.jupiter.api.Test
 
 class MinIsrConfigTest extends KafkaServerTestHarness {
   val overridingProps = new Properties()
   overridingProps.put(ServerLogConfigs.MIN_IN_SYNC_REPLICAS_CONFIG, "5")
   def generateConfigs: Seq[KafkaConfig] = TestUtils.createBrokerConfigs(1).map(KafkaConfig.fromProps(_, overridingProps))
 
+  @Test
   def testDefaultKafkaConfig(): Unit = {
     assert(brokers.head.logManager.initialDefaultConfig.minInSyncReplicas == 5)
   }

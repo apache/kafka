@@ -22,7 +22,7 @@ import kafka.server.KafkaConfig
 import kafka.utils.{Logging, TestUtils}
 
 import scala.jdk.CollectionConverters._
-import org.junit.jupiter.api.{BeforeEach, TestInfo}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo}
 import com.yammer.metrics.core.Gauge
 import org.apache.kafka.server.config.{ReplicationConfigs, ServerConfigs, ServerLogConfigs}
 import org.apache.kafka.server.metrics.KafkaYammerMetrics
@@ -67,6 +67,7 @@ class MetricsDuringTopicCreationDeletionTest extends KafkaServerTestHarness with
   /*
    * checking all metrics we care in a single test is faster though it would be more elegant to have 3 @Test methods
    */
+  @Test
   def testMetricsDuringTopicCreateDelete(): Unit = {
 
     // For UnderReplicatedPartitions, because of https://issues.apache.org/jira/browse/KAFKA-4605

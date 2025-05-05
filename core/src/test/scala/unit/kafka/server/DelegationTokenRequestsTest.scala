@@ -25,7 +25,7 @@ import org.apache.kafka.common.security.auth.SecurityProtocol
 import org.apache.kafka.common.utils.SecurityUtils
 import org.apache.kafka.server.config.DelegationTokenManagerConfigs
 import org.junit.jupiter.api.Assertions._
-import org.junit.jupiter.api.{AfterEach, BeforeEach, TestInfo}
+import org.junit.jupiter.api.{AfterEach, BeforeEach, Test, TestInfo}
 
 import java.util
 import scala.concurrent.ExecutionException
@@ -63,6 +63,7 @@ class DelegationTokenRequestsTest extends IntegrationTestHarness with SaslSetup 
     config
   }
 
+  @Test
   def testDelegationTokenRequests(): Unit = {
     adminClient = Admin.create(createAdminConfig)
 

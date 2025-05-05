@@ -29,7 +29,7 @@ import org.apache.kafka.common.utils.Exit
 import org.apache.kafka.metadata.BrokerState
 import org.apache.kafka.server.config.{KRaftConfigs, ServerLogConfigs}
 import org.apache.kafka.storage.internals.log.LogManager
-import org.junit.jupiter.api.{BeforeEach, TestInfo, Timeout}
+import org.junit.jupiter.api.{BeforeEach, Test, TestInfo, Timeout}
 import org.junit.jupiter.api.Assertions._
 import org.junit.jupiter.api.function.Executable
 import org.junit.jupiter.params.ParameterizedTest
@@ -134,6 +134,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     producer.close()
   }
 
+  @Test
   def testCleanShutdownAfterFailedStartup(): Unit = {
     propsToChangeUponRestart.setProperty(KRaftConfigs.INITIAL_BROKER_REGISTRATION_TIMEOUT_MS_CONFIG, "1000")
     shutdownBroker()
@@ -141,6 +142,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     verifyCleanShutdownAfterFailedStartup[CancellationException]
   }
 
+  @Test
   def testNoCleanShutdownAfterFailedStartupDueToCorruptLogs(): Unit = {
     createTopic(topic)
     shutdownBroker()
@@ -170,6 +172,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
     }
   }
 
+  @Test
   def testShutdownWithKRaftControllerUnavailable(): Unit = {
     shutdownKRaftController()
     killBroker(0, Duration.ofSeconds(1))
@@ -214,6 +217,7 @@ class ServerShutdownTest extends KafkaServerTestHarness {
       .count(isNonDaemonKafkaThread))
   }
 
+  @Test
   def testConsecutiveShutdown(): Unit = {
     shutdownBroker()
     brokers.head.shutdown()

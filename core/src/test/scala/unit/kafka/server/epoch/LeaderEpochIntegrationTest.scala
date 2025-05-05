@@ -34,7 +34,7 @@ import org.apache.kafka.common.serialization.StringSerializer
 import org.apache.kafka.common.utils.{LogContext, Time}
 import org.apache.kafka.server.network.BrokerEndPoint
 import org.apache.kafka.test.{TestUtils => JTestUtils}
-import org.junit.jupiter.api.AfterEach
+import org.junit.jupiter.api.{AfterEach, Test}
 import org.junit.jupiter.api.Assertions._
 
 import scala.collection.mutable.ListBuffer
@@ -62,6 +62,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     super.tearDown()
   }
 
+  @Test
   def shouldAddCurrentLeaderEpochToMessagesAsTheyAreWrittenToLeader(): Unit = {
     brokers ++= (0 to 1).map { id => createBroker(fromProps(createBrokerConfig(id))) }
 
@@ -93,6 +94,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     waitUntilTrue(() => messagesHaveLeaderEpoch(brokers(0), expectedLeaderEpoch, 4), "Leader epoch should be 1")
   }
 
+  @Test
   def shouldSendLeaderEpochRequestAndGetAResponse(): Unit = {
 
     //3 brokers, put partition on 100/101 and then pretend to be 102
@@ -139,6 +141,7 @@ class LeaderEpochIntegrationTest extends QuorumTestHarness with Logging {
     fetcher1.close()
   }
 
+  @Test
   def shouldIncreaseLeaderEpochBetweenLeaderRestarts(): Unit = {
     //Setup: we are only interested in the single partition on broker 101
     brokers += createBroker(fromProps(createBrokerConfig(100)))
