@@ -16,9 +16,6 @@
  */
 package org.apache.kafka.tools.streams;
 
-import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectReader;
-import com.fasterxml.jackson.databind.ObjectWriter;
 import org.apache.kafka.clients.CommonClientConfigs;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.DescribeStreamsGroupsResult;
@@ -43,6 +40,11 @@ import org.apache.kafka.common.errors.GroupIdNotFoundException;
 import org.apache.kafka.common.requests.ListOffsetsResponse;
 import org.apache.kafka.common.utils.Utils;
 import org.apache.kafka.server.util.CommandLineUtils;
+import org.apache.kafka.tools.consumer.group.CsvUtils;
+
+import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectReader;
+import com.fasterxml.jackson.databind.ObjectWriter;
 
 import java.io.IOException;
 import java.text.ParseException;
@@ -66,7 +68,6 @@ import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
 import joptsimple.OptionException;
-import org.apache.kafka.tools.consumer.group.CsvUtils;
 
 import static org.apache.kafka.tools.streams.StreamsGroupCommandOptions.LOGGER;
 
@@ -492,7 +493,8 @@ public class StreamsGroupCommand {
                     topics.add(topicArg);
             });
 
-            List<TopicPartition> specifiedPartitions = topicsWithPartitions.stream().flatMap(this::parseTopicsWithPartitions).collect(Collectors.toList());
+            List<TopicPartition> specifiedPartitions =
+                topicsWithPartitions.stream().flatMap(this::parseTopicsWithPartitions).collect(Collectors.toList());
 
             List<TopicPartition> unspecifiedPartitions = new ArrayList<>();
 

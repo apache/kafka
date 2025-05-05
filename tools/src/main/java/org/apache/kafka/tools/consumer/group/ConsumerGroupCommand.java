@@ -29,6 +29,7 @@ import org.apache.kafka.clients.admin.DescribeTopicsOptions;
 import org.apache.kafka.clients.admin.DescribeTopicsResult;
 import org.apache.kafka.clients.admin.GroupListing;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsOptions;
+import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsResult;
 import org.apache.kafka.clients.admin.ListConsumerGroupOffsetsSpec;
 import org.apache.kafka.clients.admin.ListGroupsOptions;
 import org.apache.kafka.clients.admin.ListGroupsResult;
@@ -1089,10 +1090,11 @@ public class ConsumerGroupCommand {
 
         private Map<TopicPartition, OffsetAndMetadata> getCommittedOffsets(String groupId) {
             try {
-                return adminClient.listConsumerGroupOffsets(
+                ListConsumerGroupOffsetsResult res = adminClient.listConsumerGroupOffsets(
                     Collections.singletonMap(groupId, new ListConsumerGroupOffsetsSpec()),
-                    withTimeoutMs(new ListConsumerGroupOffsetsOptions())
-                ).partitionsToOffsetAndMetadata(groupId).get();
+                    withTimeoutMs(new ListConsumerGroupOffsetsOptions()));
+                return res.
+                partitionsToOffsetAndMetadata(groupId).get();
             } catch (InterruptedException | ExecutionException e) {
                 throw new RuntimeException(e);
             }
