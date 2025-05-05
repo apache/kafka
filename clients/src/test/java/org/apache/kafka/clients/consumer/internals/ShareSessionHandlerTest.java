@@ -31,6 +31,8 @@ import org.apache.kafka.common.utils.LogContext;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.Timeout;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.EnumSource;
 
 import java.util.ArrayList;
 import java.util.Collections;
@@ -149,8 +151,9 @@ public class ShareSessionHandlerTest {
         return topicIdPartitionToPartition;
     }
 
-    @Test
-    public void testShareSession() {
+    @ParameterizedTest
+    @EnumSource(value = Errors.class, names = {"INVALID_SHARE_SESSION_EPOCH", "SHARE_SESSION_NOT_FOUND", "SHARE_SESSION_LIMIT_REACHED"})
+    public void testShareSession(Errors error) {
         String groupId = "G1";
         Uuid memberId = Uuid.randomUuid();
         ShareSessionHandler handler = new ShareSessionHandler(LOG_CONTEXT, 1, memberId);
@@ -199,7 +202,7 @@ public class ShareSessionHandlerTest {
         handler.handleResponse(resp2, ApiKeys.SHARE_FETCH.latestVersion(true));
 
         // A top-level error code will reset the session epoch
-        ShareFetchResponse resp3 = ShareFetchResponse.of(Errors.INVALID_SHARE_SESSION_EPOCH, 0, new LinkedHashMap<>(), List.of(), 0);
+        ShareFetchResponse resp3 = ShareFetchResponse.of(error, 0, new LinkedHashMap<>(), List.of(), 0);
         handler.handleResponse(resp3, ApiKeys.SHARE_FETCH.latestVersion(true));
 
         ShareFetchRequestData requestData4 = handler.newShareFetchBuilder(groupId, fetchConfig).build().data();
