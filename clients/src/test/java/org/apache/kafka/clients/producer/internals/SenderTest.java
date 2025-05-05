@@ -2413,7 +2413,7 @@ public class SenderTest {
             // Create a two broker cluster, with partition 0 on broker 0 and partition 1 on broker 1
             MetadataResponse metadataUpdate1 = RequestTestUtils.metadataUpdateWithIds(2, Collections.singletonMap(topic, 2), TOPIC_IDS);
             client.prepareMetadataUpdate(metadataUpdate1);
-            metadataUpdate1.brokers().stream().forEach(node ->
+            metadataUpdate1.brokers().forEach(node ->
                     apiVersions.update(node.idString(), NodeApiVersions.create(ApiKeys.PRODUCE.id, ApiKeys.PRODUCE.oldestVersion(), ApiKeys.PRODUCE.latestVersion()))
             );
 
