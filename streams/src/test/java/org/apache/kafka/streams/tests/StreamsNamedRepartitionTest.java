@@ -55,7 +55,7 @@ public class StreamsNamedRepartitionTest {
 
         final String inputTopic = (String) (Objects.requireNonNull(streamsProperties.remove("input.topic")));
         final String aggregationTopic = (String) (Objects.requireNonNull(streamsProperties.remove("aggregation.topic")));
-        final boolean addOperators = Boolean.valueOf(Objects.requireNonNull((String) streamsProperties.remove("add.operations")));
+        final boolean addOperators = Boolean.parseBoolean(Objects.requireNonNull((String) streamsProperties.remove("add.operations")));
 
 
         final Initializer<Integer> initializer = () -> 0;

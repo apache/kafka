@@ -56,7 +56,7 @@ public final class EndpointReadyFuturesTest {
             Endpoint... endpoints
     ) {
         for (Endpoint endpoint : endpoints) {
-            String name = endpoint.listenerName().get();
+            String name = endpoint.listener();
             CompletableFuture<Void> future = readyFutures.futures().get(endpoint);
             assertNotNull(future, "Unable to find future for " + name);
             assertTrue(future.isDone(), "Future for " + name + " is not done.");

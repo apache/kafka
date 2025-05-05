@@ -24,8 +24,8 @@ import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
 import org.apache.kafka.controller.metrics.QuorumControllerMetrics;
 import org.apache.kafka.raft.Batch;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.snapshot.Snapshots;
 import org.apache.kafka.timeline.SnapshotRegistry;
 

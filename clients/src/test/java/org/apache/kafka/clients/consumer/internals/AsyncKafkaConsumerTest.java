@@ -223,10 +223,10 @@ public class AsyncKafkaConsumerTest {
             new StringDeserializer(),
             new StringDeserializer(),
             time,
-            (a, b, c, d, e, f, g, h) -> applicationEventHandler,
-            a -> backgroundEventReaper,
-            (a, b, c, d, e, f, g) -> fetchCollector,
-            (a, b, c, d) -> metadata,
+            (logContext, time, applicationEventBlockingQueue, completableEventReaper, applicationEventProcessorSupplier, networkClientDelegateSupplier, requestManagersSupplier, asyncConsumerMetrics) -> applicationEventHandler,
+            logContext -> backgroundEventReaper,
+            (logContext, consumerMetadata, subscriptionState, fetchConfig, deserializers, fetchMetricsManager, time) -> fetchCollector,
+            (consumerConfig, subscriptionState, logContext, clusterResourceListeners) -> metadata,
             backgroundEventQueue,
             Optional.ofNullable(streamsRebalanceData)
         );
@@ -238,10 +238,10 @@ public class AsyncKafkaConsumerTest {
             new StringDeserializer(),
             new StringDeserializer(),
             time,
-            (a, b, c, d, e, f, g, h) -> applicationEventHandler,
-            a -> backgroundEventReaper,
-            (a, b, c, d, e, f, g) -> fetchCollector,
-            (a, b, c, d) -> metadata,
+            (logContext, time, applicationEventBlockingQueue, completableEventReaper, applicationEventProcessorSupplier, networkClientDelegateSupplier, requestManagersSupplier, asyncConsumerMetrics) -> applicationEventHandler,
+            logContext -> backgroundEventReaper,
+            (logContext, consumerMetadata, subscriptionState, fetchConfig, deserializers, fetchMetricsManager, time) -> fetchCollector,
+            (consumerConfig, subscriptionState, logContext, clusterResourceListeners) -> metadata,
             backgroundEventQueue,
             Optional.empty()
         );
@@ -993,9 +993,8 @@ public class AsyncKafkaConsumerTest {
         TopicPartition tp = new TopicPartition("topic1", 0);
         Map<TopicPartition, Long> result =
                 assertDoesNotThrow(() -> consumer.beginningOffsets(Collections.singletonList(tp), Duration.ZERO));
-        // The result should be {tp=null}
-        assertTrue(result.containsKey(tp));
-        assertNull(result.get(tp));
+        assertNotNull(result);
+        assertEquals(0, result.size());
         verify(applicationEventHandler).add(ArgumentMatchers.isA(ListOffsetsEvent.class));
     }
 
