@@ -19,6 +19,7 @@ package org.apache.kafka.connect.runtime.isolation;
 
 import org.apache.kafka.common.config.ConfigDef;
 import org.apache.kafka.connect.runtime.ConnectorConfig;
+
 import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
