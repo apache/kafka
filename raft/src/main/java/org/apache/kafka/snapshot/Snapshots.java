@@ -161,8 +161,8 @@ public final class Snapshots {
     }
 
     public static long lastContainedLogTimestamp(RawSnapshotReader reader, LogContext logContext) {
-        try (var bufferSupplier = new BufferSupplier.GrowableBufferSupplier()) {
-            try (RecordsSnapshotReader<ByteBuffer> recordsSnapshotReader =
+        try (var bufferSupplier = new BufferSupplier.GrowableBufferSupplier();
+             RecordsSnapshotReader<ByteBuffer> recordsSnapshotReader =
                 RecordsSnapshotReader.of(
                     reader,
                     IdentitySerde.INSTANCE,
@@ -171,9 +171,8 @@ public final class Snapshots {
                     true,
                     logContext
                 )
-            ) {
-                return recordsSnapshotReader.lastContainedLogTimestamp();
-            }
+        ) {
+            return recordsSnapshotReader.lastContainedLogTimestamp();
         }
     }
 
