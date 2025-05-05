@@ -2040,6 +2040,8 @@ public class GroupCoordinatorService implements GroupCoordinator {
             ).toArray(new CompletableFuture<?>[0])
         ).get();
 
+        // At this point the metadata will not have been updated
+        // with the deleted topics.
         Set<Uuid> topicIds = topicPartitions.stream()
             .map(tp -> metadataImage.topics().getTopic(tp.topic()).id())
             .collect(Collectors.toSet());
