@@ -75,8 +75,6 @@ public class MetricsDuringTopicCreationDeletionTest {
         final int initialPreferredReplicaImbalanceCount = getGauge("PreferredReplicaImbalanceCount").value();
         final int initialUnderReplicatedPartitionsCount = getGauge("UnderReplicatedPartitions").value();
 
-        running = true;
-
         CompletableFuture<Void> future = CompletableFuture.runAsync(() -> {
             while (running) {
                 int offlinePartitionsCount = getGauge("OfflinePartitionsCount").value();
@@ -111,11 +109,11 @@ public class MetricsDuringTopicCreationDeletionTest {
         final int finalUnderReplicatedPartitionsCount = getGauge("UnderReplicatedPartitions").value();
 
         assertEquals(initialOfflinePartitionsCount, finalOfflinePartitionsCount,
-    "Expect offlinePartitionsCount to be " + initialOfflinePartitionsCount + ", but got: " + finalOfflinePartitionsCount);
+            "Expect offlinePartitionsCount to be " + initialOfflinePartitionsCount + ", but got: " + finalOfflinePartitionsCount);
         assertEquals(initialPreferredReplicaImbalanceCount, finalPreferredReplicaImbalanceCount,
-    "Expect PreferredReplicaImbalanceCount to be " + initialPreferredReplicaImbalanceCount + ", but got: " + finalPreferredReplicaImbalanceCount);
+            "Expect PreferredReplicaImbalanceCount to be " + initialPreferredReplicaImbalanceCount + ", but got: " + finalPreferredReplicaImbalanceCount);
         assertEquals(initialUnderReplicatedPartitionsCount, finalUnderReplicatedPartitionsCount,
-    "Expect UnderReplicatedPartitionCount to be " + initialUnderReplicatedPartitionsCount + ", but got: " + finalUnderReplicatedPartitionsCount);
+            "Expect UnderReplicatedPartitionCount to be " + initialUnderReplicatedPartitionsCount + ", but got: " + finalUnderReplicatedPartitionsCount);
     }
 
     private void createAndDeleteTopics() {
