@@ -1971,7 +1971,7 @@ project(':clients:clients-integration-tests') {
   }
 
   dependencies {
-    testImplementation 'com.yammer.metrics:metrics-core:2.2.0'
+    testImplementation libs.metrics
     testImplementation libs.slf4jApi
     testImplementation project(':test-common:test-common-internal-api')
     testImplementation project(':test-common:test-common-runtime')
