@@ -60,6 +60,7 @@ public class MetricsDuringTopicCreationDeletionTest {
      */
     @ClusterTest(
         types = {Type.KRAFT},
+        brokers = 1,
         serverProperties = {
             @ClusterConfigProperty(key = ServerConfigs.DELETE_TOPIC_ENABLE_CONFIG, value = "true"),
             @ClusterConfigProperty(key = "log.initial.task.delay.ms", value = "100"),
