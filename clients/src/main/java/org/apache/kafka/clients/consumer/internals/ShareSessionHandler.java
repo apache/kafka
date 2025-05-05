@@ -219,7 +219,8 @@ public class ShareSessionHandler {
      */
     public boolean handleResponse(ShareFetchResponse response, short version) {
         if ((response.error() == Errors.SHARE_SESSION_NOT_FOUND) ||
-                (response.error() == Errors.INVALID_SHARE_SESSION_EPOCH)) {
+                (response.error() == Errors.INVALID_SHARE_SESSION_EPOCH) ||
+                (response.error() == Errors.SHARE_SESSION_LIMIT_REACHED)) {
             log.info("Node {} was unable to process the ShareFetch request with {}: {}.",
                     node, nextMetadata, response.error());
             nextMetadata = nextMetadata.nextCloseExistingAttemptNew();
