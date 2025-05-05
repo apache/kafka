@@ -17,10 +17,8 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.server.util.ShutdownableThread;
 
-import java.time.Duration;
 import java.util.Collection;
 import java.util.HashSet;
 import java.util.List;
@@ -28,15 +26,10 @@ import java.util.Set;
 
 public class ConsumerAssignmentPoller extends ShutdownableThread {
     private final Consumer<byte[], byte[]> consumer;
-    private final Set<TopicPartition> partitionsToAssign;
-    private final ConsumerRebalanceListener userRebalanceListener;
-
-    private volatile Throwable thrownException = null;
-    private volatile int receivedMessages = 0;
 
     private final Set<TopicPartition> partitionAssignment = new HashSet<>();
     private volatile boolean subscriptionChanged = false;
-    private List<String> topicsSubscription;
+    private final List<String> topicsSubscription;
     private final ConsumerRebalanceListener rebalanceListener;
 
     public ConsumerAssignmentPoller(
@@ -55,8 +48,6 @@ public class ConsumerAssignmentPoller extends ShutdownableThread {
         super("daemon-consumer-assignment", false);
         this.consumer = consumer;
         this.topicsSubscription = topicsToSubscribe;
-        this.partitionsToAssign = partitionsToAssign;
-        this.userRebalanceListener = userRebalanceListener;
 
         this.rebalanceListener = new ConsumerRebalanceListener() {
             @Override
@@ -85,27 +76,6 @@ public class ConsumerAssignmentPoller extends ShutdownableThread {
         return Set.copyOf(partitionAssignment);
     }
 
-    /**
-     * Subscribe consumer to a new set of topics.
-     * Since this method is most likely to be called from a different thread, this function
-     * just "schedules" the subscription change, and actual call to {@link org.apache.kafka.clients.consumer.Consumer#subscribe(Collection)} is done
-     * in the doWork() method
-     * <p>
-     * This method does not allow changing the subscription until doWork processes the previous call
-     * to this method. This is just to avoid race conditions and provide enough functionality for testing purposes
-     *
-     * @param newTopicsToSubscribe new topics to subscribe to
-     */
-    public void subscribe(List<String> newTopicsToSubscribe) {
-        if (subscriptionChanged)
-            throw new IllegalStateException("Do not call subscribe until the previous subscribe request is processed.");
-        if (!partitionsToAssign.isEmpty())
-            throw new IllegalStateException("Cannot call subscribe when configured to use manual partition assignment");
-
-        topicsSubscription = newTopicsToSubscribe;
-        subscriptionChanged = true;
-    }
-
     @Override
     public boolean initiateShutdown() {
         boolean res = super.initiateShutdown();
@@ -118,14 +88,6 @@ public class ConsumerAssignmentPoller extends ShutdownableThread {
         if (subscriptionChanged) {
             consumer.subscribe(topicsSubscription, rebalanceListener);
             subscriptionChanged = false;
-        }
-        try {
-            receivedMessages += consumer.poll(Duration.ofMillis(50)).count();
-        } catch (WakeupException e) {
-            // ignore for shutdown
-        } catch (Throwable e) {
-            thrownException = e;
-            throw e;
         }
     }
 }
