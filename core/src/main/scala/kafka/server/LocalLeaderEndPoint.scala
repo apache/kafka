@@ -63,7 +63,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
 
   override def brokerEndPoint(): BrokerEndPoint = sourceBroker
 
-  override def fetch(fetchRequest: FetchRequest.Builder): java.util.Map[TopicPartition, FetchResponseData.PartitionData] = {
+  override def fetch(fetchRequest: FetchRequest.Builder): util.Map[TopicPartition, FetchResponseData.PartitionData] = {
     var partitionData: Seq[(TopicPartition, FetchResponseData.PartitionData)] = null
     val request = fetchRequest.build()
 
@@ -135,7 +135,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     new OffsetAndEpoch(localLogStartOffset, epoch.orElse(0))
   }
 
-  override def fetchEpochEndOffsets(partitions: java.util.Map[TopicPartition, OffsetForLeaderEpochRequestData.OffsetForLeaderPartition]): java.util.Map[TopicPartition, EpochEndOffset] = {
+  override def fetchEpochEndOffsets(partitions: util.Map[TopicPartition, OffsetForLeaderEpochRequestData.OffsetForLeaderPartition]): util.Map[TopicPartition, EpochEndOffset] = {
     val tmpPartitions = partitions.asScala.toMap
     tmpPartitions.map { case (tp, epochData) =>
       try {
@@ -161,22 +161,22 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
     }.asJava
   }
 
-  override def buildFetch(partitions: java.util.Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[java.util.Optional[ReplicaFetch]] = {
+  override def buildFetch(partitions: util.Map[TopicPartition, PartitionFetchState]): ResultWithPartitions[util.Optional[ReplicaFetch]] = {
     // Only include replica in the fetch request if it is not throttled.
     if (quota.isQuotaExceeded) {
-      new ResultWithPartitions(java.util.Optional.empty[ReplicaFetch](), java.util.Collections.emptySet[TopicPartition]())
+      new ResultWithPartitions(util.Optional.empty[ReplicaFetch](), util.Collections.emptySet[TopicPartition]())
     } else {
       val selectPartition = selectPartitionToFetch(partitions)
       if (selectPartition.isPresent) {
         val (tp, fetchState) = selectPartition.get()
         buildFetchForPartition(tp, fetchState)
       } else {
-        new ResultWithPartitions(java.util.Optional.empty[ReplicaFetch](), java.util.Collections.emptySet[TopicPartition]())
+        new ResultWithPartitions(util.Optional.empty[ReplicaFetch](), util.Collections.emptySet[TopicPartition]())
       }
     }
   }
 
-  private def selectPartitionToFetch(partitions: java.util.Map[TopicPartition, PartitionFetchState]): Optional[(TopicPartition, PartitionFetchState)] = {
+  private def selectPartitionToFetch(partitions: util.Map[TopicPartition, PartitionFetchState]): Optional[(TopicPartition, PartitionFetchState)] = {
     // Only move one partition at a time to increase its catch-up rate and thus reduce the time spent on
     // moving any given replica. Replicas are selected in ascending order (lexicographically by topic) from the
     // partitions that are ready to fetch. Once selected, we will continue fetching the same partition until it
@@ -233,7 +233,7 @@ class LocalLeaderEndPoint(sourceBroker: BrokerEndPoint,
       Optional.of(new ReplicaFetch(requestMap, requestBuilder))
     }
 
-    new ResultWithPartitions[java.util.Optional[ReplicaFetch]](fetchRequestOpt, partitionsWithError.asJava)
+    new ResultWithPartitions[util.Optional[ReplicaFetch]](fetchRequestOpt, partitionsWithError.asJava)
   }
 
   private def nextReadyPartition(partitions: Map[TopicPartition, PartitionFetchState]): Option[(TopicPartition, PartitionFetchState)] = {
