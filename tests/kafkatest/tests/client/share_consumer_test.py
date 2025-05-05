@@ -208,17 +208,15 @@ class ShareConsumerTest(VerifiableShareConsumerTest):
         clean_shutdown=[True, False],
         metadata_quorum=[quorum.isolated_kraft],
         num_failed_brokers=[1, 2],
-        use_share_groups=[True],
-        offsets_commit_timeout=[20000]
+        use_share_groups=[True]
     )
     @matrix(
         clean_shutdown=[True, False],
         metadata_quorum=[quorum.combined_kraft],
         num_failed_brokers=[1],
-        use_share_groups=[True],
-        offsets_commit_timeout=[20000]
+        use_share_groups=[True]
     )
-    def test_broker_failure(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft, num_failed_brokers=1, use_share_groups=True, offsets_commit_timeout=20000):
+    def test_broker_failure(self, clean_shutdown, metadata_quorum=quorum.isolated_kraft, num_failed_brokers=1, use_share_groups=True):
 
         producer = self.setup_producer(self.TOPIC2["name"])
         consumer = self.setup_share_group(self.TOPIC2["name"], offset_reset_strategy="earliest")
