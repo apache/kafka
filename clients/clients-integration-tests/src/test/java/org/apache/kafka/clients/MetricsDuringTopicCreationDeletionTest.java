@@ -84,8 +84,8 @@ public class MetricsDuringTopicCreationDeletionTest {
                 int underReplicatedPartitionsCount = getGauge("UnderReplicatedPartitions").value();
 
                 if (offlinePartitionsCount != initialOfflinePartitionsCount ||
-                        preferredReplicaImbalanceCount != initialPreferredReplicaImbalanceCount ||
-                        underReplicatedPartitionsCount != initialUnderReplicatedPartitionsCount) {
+                    preferredReplicaImbalanceCount != initialPreferredReplicaImbalanceCount ||
+                    underReplicatedPartitionsCount != initialUnderReplicatedPartitionsCount) {
                     running = false;
                 }
 
@@ -111,11 +111,11 @@ public class MetricsDuringTopicCreationDeletionTest {
         final int finalUnderReplicatedPartitionsCount = getGauge("UnderReplicatedPartitions").value();
 
         assertEquals(initialOfflinePartitionsCount, finalOfflinePartitionsCount,
-                "Expect offlinePartitionsCount to be " + initialOfflinePartitionsCount + ", but got: " + finalOfflinePartitionsCount);
+    "Expect offlinePartitionsCount to be " + initialOfflinePartitionsCount + ", but got: " + finalOfflinePartitionsCount);
         assertEquals(initialPreferredReplicaImbalanceCount, finalPreferredReplicaImbalanceCount,
-                "Expect PreferredReplicaImbalanceCount to be " + initialPreferredReplicaImbalanceCount + ", but got: " + finalPreferredReplicaImbalanceCount);
+    "Expect PreferredReplicaImbalanceCount to be " + initialPreferredReplicaImbalanceCount + ", but got: " + finalPreferredReplicaImbalanceCount);
         assertEquals(initialUnderReplicatedPartitionsCount, finalUnderReplicatedPartitionsCount,
-                "Expect UnderReplicatedPartitionCount to be " + initialUnderReplicatedPartitionsCount + ", but got: " + finalUnderReplicatedPartitionsCount);
+    "Expect UnderReplicatedPartitionCount to be " + initialUnderReplicatedPartitionsCount + ", but got: " + finalUnderReplicatedPartitionsCount);
     }
 
     private void createAndDeleteTopics() {
