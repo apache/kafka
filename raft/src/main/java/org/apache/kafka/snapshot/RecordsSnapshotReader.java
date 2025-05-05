@@ -21,8 +21,8 @@ import org.apache.kafka.common.message.SnapshotHeaderRecord;
 import org.apache.kafka.common.record.ControlRecordType;
 import org.apache.kafka.common.utils.BufferSupplier;
 import org.apache.kafka.raft.Batch;
-import org.apache.kafka.raft.OffsetAndEpoch;
 import org.apache.kafka.raft.internals.RecordsIterator;
+import org.apache.kafka.server.common.OffsetAndEpoch;
 import org.apache.kafka.server.common.serialization.RecordSerde;
 
 import java.util.NoSuchElementException;
