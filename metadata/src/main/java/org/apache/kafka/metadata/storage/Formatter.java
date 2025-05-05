@@ -305,6 +305,19 @@ public class Formatter {
                     throw new FormatterException("Unsupported feature: " + featureName +
                             ". Supported features are: " + String.join(", ", nameToSupportedFeature.keySet()));
                 }
+                /*
+                 * KAFKA-19228: Do not allow the user to explicitly set the kraft.version feature level with `--feature`
+                 * This value should be inferred from the following arguments:
+                 * --initial-controllers, --no-initial-controllers, or --standalone.
+                 * In the case of `--no-initial-controllers`, the feature level will end up unset because it is not
+                 * used to write the bootstrap snapshot like with `--initial-controllers` and `--standalone`.
+                 * Instead, the node will default to kraft.version 0 or discover a higher feature level by fetching the log.
+                 */
+                if (featureName.equals(KRaftVersion.FEATURE_NAME)) {
+                    throw new FormatterException("Explicitly setting " + KRaftVersion.FEATURE_NAME +
+                            " feature level is unsupported. The feature level is inferred by setting one of " +
+                            "the `--standalone`, `--initial-controllers`, or `--no-initial-controllers` flags.");
+                }
             }
             newFeatureLevels.put(featureName, level);
         }
@@ -312,8 +325,7 @@ public class Formatter {
         // Add default values for features that were not specified.
         supportedFeatures.forEach(supportedFeature -> {
             if (supportedFeature.featureName().equals(KRaftVersion.FEATURE_NAME)) {
-                newFeatureLevels.put(KRaftVersion.FEATURE_NAME, effectiveKRaftFeatureLevel(
-                    Optional.ofNullable(newFeatureLevels.get(KRaftVersion.FEATURE_NAME))));
+                newFeatureLevels.put(KRaftVersion.FEATURE_NAME, effectiveKRaftFeatureLevel());
             } else if (!newFeatureLevels.containsKey(supportedFeature.featureName())) {
                 newFeatureLevels.put(supportedFeature.featureName(),
                     supportedFeature.defaultLevel(releaseVersion));
@@ -340,33 +352,10 @@ public class Formatter {
      * voter quorum arguments were provided. As a convenience, if dynamic voter quorum arguments
      * were passed, we set the latest kraft.version. (Currently there is only 1 non-zero version).
      *
-     * @param configuredKRaftVersionLevel   The configured level for kraft.version
-     * @return                              The effective feature level.
+     * @return The effective feature level.
      */
-    private short effectiveKRaftFeatureLevel(Optional<Short> configuredKRaftVersionLevel) {
-        if (configuredKRaftVersionLevel.isPresent()) {
-            if (configuredKRaftVersionLevel.get() == 0) {
-                if (hasDynamicQuorum()) {
-                    throw new FormatterException(
-                        "Cannot set kraft.version to " +
-                        configuredKRaftVersionLevel.get() +
-                        " if one of the flags --standalone, --initial-controllers, or --no-initial-controllers is used. " +
-                        "For dynamic controllers support, try removing the --feature flag for kraft.version."
-                    );
-                }
-            } else {
-                if (!hasDynamicQuorum()) {
-                    throw new FormatterException(
-                        "Cannot set kraft.version to " +
-                        configuredKRaftVersionLevel.get() +
-                        " unless one of the flags --standalone, --initial-controllers, or --no-initial-controllers is used. " +
-                        "For dynamic controllers support, try using one of --standalone, --initial-controllers, or " +
-                        "--no-initial-controllers."
-                    );
-                }
-            }
-            return configuredKRaftVersionLevel.get();
-        } else if (hasDynamicQuorum()) {
+    private short effectiveKRaftFeatureLevel() {
+        if (hasDynamicQuorum()) {
             return KRAFT_VERSION_1.featureLevel();
         } else {
             return KRAFT_VERSION_0.featureLevel();

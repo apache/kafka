@@ -332,41 +332,41 @@ Found problem:
   }
 
   @Test
-  def testFormatWithInvalidKRaftVersionLevel(): Unit = {
+  def testFormatFailsWhenExplicitlySettingKRaftVersion(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
     properties.putAll(defaultDynamicQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
-    assertEquals("No feature:kraft.version with feature level 999",
-      assertThrows(classOf[IllegalArgumentException], () =>
+    assertEquals("Explicitly setting kraft.version feature level is unsupported. " +
+      "The feature level is inferred by setting one of the `--standalone`, `--initial-controllers`, " +
+      "or `--no-initial-controllers` flags.",
+      assertThrows(classOf[FormatterException], () =>
         runFormatCommand(new ByteArrayOutputStream(), properties,
           Seq("--feature", "kraft.version=999", "--standalone"))).getMessage)
   }
 
   @Test
-  def testFormatWithReleaseVersionAndKRaftVersion(): Unit = {
+  def testFormatWithReleaseVersion37IV0(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
     properties.putAll(defaultStaticQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     assertEquals(0, runFormatCommand(stream, properties, Seq(
-      "--release-version", "3.7-IV0",
-      "--feature", "kraft.version=0")))
+      "--release-version", "3.7-IV0")))
     assertTrue(stream.toString().contains("3.7-IV0"),
       "Failed to find content in output: " + stream.toString())
   }
 
   @Test
-  def testFormatWithReleaseVersionDefaultAndReleaseVersion(): Unit = {
+  def testFormatWithReleaseVersion36Iv0(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
     properties.putAll(defaultStaticQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     assertEquals(0, runFormatCommand(stream, properties, Seq(
-      "--release-version", "3.6-IV0",
-      "--feature", "kraft.version=0")))
+      "--release-version", "3.6-IV0")))
     assertTrue(stream.toString().contains("3.6-IV0"),
       "Failed to find content in output: " + stream.toString())
   }
@@ -384,19 +384,14 @@ Found problem:
         () => runFormatCommand(stream, properties, arguments.toSeq)).getMessage)
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = Array(false, true))
-  def testFormatWithStandaloneFlag(setKraftVersionFeature: Boolean): Unit = {
+  @Test
+  def testFormatWithStandaloneFlag(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
     properties.putAll(defaultDynamicQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     val arguments = ListBuffer[String]("--release-version", "3.9-IV0", "--standalone")
-    if (setKraftVersionFeature) {
-      arguments += "--feature"
-      arguments += "kraft.version=1"
-    }
     assertEquals(0, runFormatCommand(stream, properties, arguments.toSeq))
     assertTrue(stream.toString().
       contains("Formatting dynamic metadata voter directory %s".format(availableDirs.head)),
@@ -414,9 +409,8 @@ Found problem:
     assertThrows(classOf[ArgumentParserException], () => StorageTool.parseArguments(arguments.toArray))
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = Array(false, true))
-  def testFormatWithInitialControllersFlag(setKraftVersionFeature: Boolean): Unit = {
+  @Test
+  def testFormatWithInitialControllersFlag(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
     properties.putAll(defaultDynamicQuorumProperties)
@@ -428,10 +422,6 @@ Found problem:
       "0@localhost:8020:K90IZ-0DRNazJ49kCZ1EMQ," +
         "1@localhost:8030:aUARLskQTCW4qCZDtS_cwA," +
         "2@localhost:8040:2ggvsS4kQb-fSJ_-zC_Ang")
-    if (setKraftVersionFeature) {
-      arguments += "--feature"
-      arguments += "kraft.version=1"
-    }
     assertEquals(0, runFormatCommand(stream, properties, arguments.toSeq))
     assertTrue(stream.toString().
       contains("Formatting dynamic metadata voter directory %s".format(availableDirs.head)),
@@ -458,19 +448,14 @@ Found problem:
               Seq("--release-version", "3.9-IV0"))).getMessage)
   }
 
-  @ParameterizedTest
-  @ValueSource(booleans = Array(false, true))
-  def testFormatWithNoInitialControllersSucceedsOnController(setKraftVersionFeature: Boolean): Unit = {
+  @Test
+  def testFormatWithNoInitialControllersSucceedsOnController(): Unit = {
     val availableDirs = Seq(TestUtils.tempDir())
     val properties = new Properties()
     properties.putAll(defaultDynamicQuorumProperties)
     properties.setProperty("log.dirs", availableDirs.mkString(","))
     val stream = new ByteArrayOutputStream()
     val arguments = ListBuffer[String]("--release-version", "3.9-IV0", "--no-initial-controllers")
-    if (setKraftVersionFeature) {
-      arguments += "--feature"
-      arguments += "kraft.version=1"
-    }
     assertEquals(0, runFormatCommand(stream, properties, arguments.toSeq))
     assertTrue(stream.toString().
       contains("Formatting metadata directory %s".format(availableDirs.head)),
