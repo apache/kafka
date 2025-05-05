@@ -782,11 +782,12 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * Make the following check to make sure the AlterShareGroupOffsetsRequest request is valid:
      * 1. Checks whether the provided group is empty
      * 2. Checks the requested topics are presented in the metadataImage
-     * 3. Checks the requested share partitions are initialized for the group
+     * 3. Checks the corresponding share partitions in AlterShareGroupOffsetsRequest are existing
      *
      * @param groupId - The group ID
      * @param alterShareGroupOffsetsRequestData - The request data for AlterShareGroupOffsetsRequestData
-     * the final response {@link AlterShareGroupOffsetsResponseData} for the AlterShareGroupOffsetsRequest
+     * @return A Result containing a pair of AlterShareGroupOffsets InitializeShareGroupStateParameters
+     *         and a list of records to update the state machine.
      */
     public CoordinatorResult<Map.Entry<AlterShareGroupOffsetsResponseData, InitializeShareGroupStateParameters>, CoordinatorRecord> alterShareGroupOffsets(
         String groupId,
