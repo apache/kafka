@@ -49,6 +49,7 @@ import org.apache.kafka.common.message.JoinGroupRequestData;
 import org.apache.kafka.common.message.JoinGroupResponseData;
 import org.apache.kafka.common.message.OffsetCommitRequestData;
 import org.apache.kafka.common.message.OffsetCommitResponseData;
+import org.apache.kafka.common.message.OffsetFetchRequestData;
 import org.apache.kafka.common.metrics.Measurable;
 import org.apache.kafka.common.metrics.Metrics;
 import org.apache.kafka.common.metrics.Sensor;
@@ -1477,9 +1478,27 @@ public final class ConsumerCoordinator extends AbstractCoordinator {
             return RequestFuture.coordinatorNotAvailable();
 
         log.debug("Fetching committed offsets for partitions: {}", partitions);
+
         // construct the request
-        OffsetFetchRequest.Builder requestBuilder =
-            new OffsetFetchRequest.Builder(this.rebalanceConfig.groupId, true, new ArrayList<>(partitions), throwOnFetchStableOffsetsUnsupported);
+        List<OffsetFetchRequestData.OffsetFetchRequestTopics> topics = partitions.stream()
+            .collect(Collectors.groupingBy(TopicPartition::topic))
+            .entrySet()
+            .stream()
+            .map(entry -> new OffsetFetchRequestData.OffsetFetchRequestTopics()
+                .setName(entry.getKey())
+                .setPartitionIndexes(entry.getValue().stream()
+                    .map(TopicPartition::partition)
+                    .collect(Collectors.toList())))
+            .collect(Collectors.toList());
+
+        OffsetFetchRequest.Builder requestBuilder = new OffsetFetchRequest.Builder(
+            new OffsetFetchRequestData()
+                .setRequireStable(true)
+                .setGroups(List.of(
+                    new OffsetFetchRequestData.OffsetFetchRequestGroup()
+                        .setGroupId(this.rebalanceConfig.groupId)
+                        .setTopics(topics))),
+            throwOnFetchStableOffsetsUnsupported);
 
         // send the request with a callback
         return client.send(coordinator, requestBuilder)

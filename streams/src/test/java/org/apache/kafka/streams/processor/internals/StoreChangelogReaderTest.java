@@ -388,7 +388,7 @@ public class StoreChangelogReaderTest {
 
             adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
 
-            final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+            final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
                 @Override
                 public long position(final TopicPartition partition) {
                     throw new TimeoutException("KABOOM!");
@@ -637,7 +637,7 @@ public class StoreChangelogReaderTest {
         when(activeStateManager.taskId()).thenReturn(taskId);
 
         final AtomicBoolean clearException = new AtomicBoolean(false);
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public long position(final TopicPartition partition) {
                 if (clearException.get()) {
@@ -683,7 +683,7 @@ public class StoreChangelogReaderTest {
         when(activeStateManager.taskId()).thenReturn(taskId);
         when(storeMetadata.offset()).thenReturn(10L);
 
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public long position(final TopicPartition partition) {
                 throw kaboom;
@@ -733,7 +733,7 @@ public class StoreChangelogReaderTest {
         };
         adminClient.updateEndOffsets(Collections.singletonMap(tp, 10L));
 
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public Map<TopicPartition, OffsetAndMetadata> committed(final Set<TopicPartition> partitions) {
                 throw new AssertionError("Should not trigger this function");
@@ -891,7 +891,7 @@ public class StoreChangelogReaderTest {
 
     @Test
     public void shouldThrowIfUnsubscribeFail() {
-        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<byte[], byte[]>(AutoOffsetResetStrategy.EARLIEST.name()) {
+        final MockConsumer<byte[], byte[]> consumer = new MockConsumer<>(AutoOffsetResetStrategy.EARLIEST.name()) {
             @Override
             public void unsubscribe() {
                 throw kaboom;

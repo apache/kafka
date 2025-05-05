@@ -19,7 +19,7 @@ package kafka.cluster
 import java.lang.{Long => JLong}
 import java.util.concurrent.locks.ReentrantReadWriteLock
 import java.util.Optional
-import java.util.concurrent.{CompletableFuture, CopyOnWriteArrayList}
+import java.util.concurrent.{CompletableFuture, ConcurrentHashMap, CopyOnWriteArrayList}
 import kafka.controller.StateChangeLogger
 import kafka.log._
 import kafka.server._
@@ -322,7 +322,7 @@ class Partition(val topicPartition: TopicPartition,
   def partitionId: Int = topicPartition.partition
 
   private val stateChangeLogger = new StateChangeLogger(localBrokerId, inControllerContext = false, None)
-  private val remoteReplicasMap = new Pool[Int, Replica]
+  private val remoteReplicasMap = new ConcurrentHashMap[Int, Replica]
   // The read lock is only required when multiple reads are executed and needs to be in a consistent manner
   private val leaderIsrUpdateLock = new ReentrantReadWriteLock
 
@@ -604,7 +604,7 @@ class Partition(val topicPartition: TopicPartition,
 
   // remoteReplicas will be called in the hot path, and must be inexpensive
   def remoteReplicas: Iterable[Replica] =
-    remoteReplicasMap.values
+    remoteReplicasMap.values.asScala
 
   def futureReplicaDirChanged(newDestinationDir: String): Boolean = {
     inReadLock(leaderIsrUpdateLock) {
@@ -983,12 +983,11 @@ class Partition(val topicPartition: TopicPartition,
   ): Unit = {
     if (isLeader) {
       val followers = replicas.filter(_ != localBrokerId)
-      val removedReplicas = remoteReplicasMap.keys.filterNot(followers.contains(_))
 
       // Due to code paths accessing remoteReplicasMap without a lock,
       // first add the new replicas and then remove the old ones.
-      followers.foreach(id => remoteReplicasMap.getAndMaybePut(id, new Replica(id, topicPartition, metadataCache)))
-      remoteReplicasMap.removeAll(removedReplicas)
+      followers.foreach(id => remoteReplicasMap.computeIfAbsent(id, _ => new Replica(id, topicPartition, metadataCache)))
+      remoteReplicasMap.keySet.removeIf(replica => !followers.contains(replica))
     } else {
       remoteReplicasMap.clear()
     }
@@ -1158,7 +1157,7 @@ class Partition(val topicPartition: TopicPartition,
     // avoid unnecessary collection generation
     val leaderLogEndOffset = leaderLog.logEndOffsetMetadata
     var newHighWatermark = leaderLogEndOffset
-    remoteReplicasMap.values.foreach { replica =>
+    remoteReplicasMap.forEach { (_, replica) =>
       val replicaState = replica.stateSnapshot
 
       def shouldWaitForReplicaToJoinIsr: Boolean = {
@@ -1731,7 +1730,7 @@ class Partition(val topicPartition: TopicPartition,
             case Some(epochAndOffset) => new EpochEndOffset()
               .setPartition(partitionId)
               .setErrorCode(Errors.NONE.code)
-              .setLeaderEpoch(epochAndOffset.leaderEpoch)
+              .setLeaderEpoch(epochAndOffset.epoch())
               .setEndOffset(epochAndOffset.offset)
             case None => new EpochEndOffset()
               .setPartition(partitionId)

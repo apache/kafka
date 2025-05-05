@@ -51,7 +51,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 @Timeout(600)
 @Tag("integration")
 public class SmokeTestDriverIntegrationTest {
-    public static final EmbeddedKafkaCluster CLUSTER = EmbeddedKafkaCluster.withStreamsRebalanceProtocol(3);
+    public static final EmbeddedKafkaCluster CLUSTER = new EmbeddedKafkaCluster(3);
     public TestInfo testInfo;
 
     @BeforeAll
