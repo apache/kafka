@@ -38,6 +38,7 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicLong;
 import java.util.stream.IntStream;
@@ -157,7 +158,7 @@ public class PlaintextConsumerPollTest {
 
             // after we extend longer than max.poll a rebalance should be triggered
             // NOTE we need to have a relatively much larger value than max.poll to let heartbeat expired for sure
-            Thread.sleep(3000);
+            TimeUnit.MILLISECONDS.sleep(3000);
 
             awaitRebalance(consumer, listener);
             assertEquals(2, listener.callsToAssigned);
@@ -409,7 +410,7 @@ public class PlaintextConsumerPollTest {
         // use consumers defined in this class plus one additional consumer
         // Use topic defined in this class + one additional topic
         try (Producer<byte[], byte[]> producer = cluster.producer();
-             // create one more consumer and add it to the group; we will timeout this consumer
+             // create one more consumer and add it to the group; we will time out this consumer
              Consumer<byte[], byte[]> consumer1 = cluster.consumer(config);
              Consumer<byte[], byte[]> consumer2 = cluster.consumer(config);
              Consumer<byte[], byte[]> timeoutConsumer = cluster.consumer(config)

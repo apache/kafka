@@ -17,7 +17,6 @@
 package org.apache.kafka.clients.consumer;
 
 import org.apache.kafka.common.TopicPartition;
-import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.server.util.ShutdownableThread;
 
 import java.time.Duration;
@@ -91,12 +90,6 @@ public class ConsumerAssignmentPoller extends ShutdownableThread {
             consumer.subscribe(topicsSubscription, rebalanceListener);
             subscriptionChanged = false;
         }
-        try {
-            consumer.poll(Duration.ofMillis(50)).count();
-        } catch (WakeupException e) {
-            // ignore for shutdown
-        } catch (Throwable e) {
-            throw e;
-        }
+        consumer.poll(Duration.ofMillis(50)).count();
     }
 }
