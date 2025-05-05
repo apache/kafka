@@ -21,6 +21,7 @@ import org.apache.kafka.common.Uuid;
 import org.apache.kafka.common.requests.ShareRequestMetadata;
 import org.apache.kafka.common.utils.ImplicitLinkedHashCollection;
 import org.apache.kafka.server.metrics.KafkaMetricsGroup;
+import org.apache.kafka.server.network.ConnectionDisconnectListener;
 import org.apache.kafka.server.share.CachedSharePartition;
 
 import com.yammer.metrics.core.Meter;
@@ -53,9 +54,12 @@ public class ShareSessionCache {
 
     private final int maxEntries;
     private long numPartitions = 0;
+    private final ConnectionDisconnectListener connectionDisconnectListener;
 
     // A map of session key to ShareSession.
     private final Map<ShareSessionKey, ShareSession> sessions = new HashMap<>();
+
+    private final Map<String, ShareSessionKey> connectionIdToSessionMap;
 
     @SuppressWarnings("this-escape")
     public ShareSessionCache(int maxEntries) {
@@ -64,6 +68,8 @@ public class ShareSessionCache {
         KafkaMetricsGroup metricsGroup = new KafkaMetricsGroup("kafka.server", "ShareSessionCache");
         metricsGroup.newGauge(SHARE_SESSIONS_COUNT, this::size);
         metricsGroup.newGauge(SHARE_PARTITIONS_COUNT, this::totalPartitions);
+        this.connectionIdToSessionMap = new HashMap<>();
+        this.connectionDisconnectListener = new ClientConnectionDisconnectListener();
         this.evictionsMeter = metricsGroup.newMeter(SHARE_SESSION_EVICTIONS_PER_SEC, "evictions", TimeUnit.SECONDS);
     }
 
@@ -123,21 +129,48 @@ public class ShareSessionCache {
      * @param groupId - The group id in the share fetch request.
      * @param memberId - The member id in the share fetch request.
      * @param partitionMap - The topic partitions to be added to the session.
+     * @param clientConnectionId - The client connection id.
      * @return - The session key if the session was created, or null if the session was not created.
      */
-    public synchronized ShareSessionKey maybeCreateSession(String groupId, Uuid memberId, ImplicitLinkedHashCollection<CachedSharePartition> partitionMap) {
+    public synchronized ShareSessionKey maybeCreateSession(
+        String groupId,
+        Uuid memberId,
+        ImplicitLinkedHashCollection<CachedSharePartition> partitionMap,
+        String clientConnectionId
+    ) {
         if (sessions.size() < maxEntries) {
             ShareSession session = new ShareSession(new ShareSessionKey(groupId, memberId), partitionMap,
                 ShareRequestMetadata.nextEpoch(ShareRequestMetadata.INITIAL_EPOCH));
             sessions.put(session.key(), session);
             updateNumPartitions(session);
+            connectionIdToSessionMap.put(clientConnectionId, session.key());
             return session.key();
         }
         return null;
     }
 
+    public ConnectionDisconnectListener connectionDisconnectListener() {
+        return connectionDisconnectListener;
+    }
+
     // Visible for testing.
     Meter evictionsMeter() {
         return evictionsMeter;
+    }
+
+    private final class ClientConnectionDisconnectListener implements ConnectionDisconnectListener {
+
+        // When the client disconnects, the corresponding session should be removed from the cache.
+        @Override
+        public void onDisconnect(String connectionId) {
+            ShareSessionKey shareSessionKey = connectionIdToSessionMap.remove(connectionId);
+            if (shareSessionKey != null) {
+                // Remove the session from the cache.
+                ShareSession removedSession = remove(shareSessionKey);
+                if (removedSession != null) {
+                    evictionsMeter.mark();
+                }
+            }
+        }
     }
 }

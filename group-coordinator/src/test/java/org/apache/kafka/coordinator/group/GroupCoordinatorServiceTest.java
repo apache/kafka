@@ -3929,7 +3929,6 @@ public class GroupCoordinatorServiceTest {
             .setGroupId(groupId)
             .setTopics(List.of(new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
                 .setTopicName(TOPIC_NAME)
-                .setPartitions(List.of(partition))
             ));
 
         DeleteShareGroupOffsetsResponseData responseData = new DeleteShareGroupOffsetsResponseData()
@@ -3937,10 +3936,8 @@ public class GroupCoordinatorServiceTest {
                 List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
                     .setTopicName(TOPIC_NAME)
                     .setTopicId(TOPIC_ID)
-                    .setPartitions(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
-                        .setPartitionIndex(partition)
-                        .setErrorCode(PartitionFactory.DEFAULT_ERROR_CODE)
-                        .setErrorMessage(null))))
+                    .setErrorCode(PartitionFactory.DEFAULT_ERROR_CODE)
+                    .setErrorMessage(null))
             );
 
         GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder deleteShareGroupOffsetsResultHolder =
@@ -3962,11 +3959,19 @@ public class GroupCoordinatorServiceTest {
                 )
             );
 
-        when(runtime.scheduleReadOperation(
-            ArgumentMatchers.eq("share-group-delete-offsets-request"),
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("complete-delete-share-group-offsets"),
+            ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(responseData));
 
         CompletableFuture<DeleteShareGroupOffsetsResponseData> future =
             service.deleteShareGroupOffsets(requestContext(ApiKeys.DESCRIBE_SHARE_GROUP_OFFSETS), requestData);
@@ -3992,7 +3997,6 @@ public class GroupCoordinatorServiceTest {
             .setGroupId(groupId)
             .setTopics(List.of(new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
                 .setTopicName(TOPIC_NAME)
-                .setPartitions(List.of(partition))
             ));
 
         DeleteShareGroupStateRequestData deleteShareGroupStateRequestData = new DeleteShareGroupStateRequestData()
@@ -4007,10 +4011,8 @@ public class GroupCoordinatorServiceTest {
                 List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
                     .setTopicName(TOPIC_NAME)
                     .setTopicId(TOPIC_ID)
-                    .setPartitions(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
-                        .setPartitionIndex(partition)
-                        .setErrorCode(Errors.NONE.code())
-                        .setErrorMessage(null))))
+                    .setErrorCode(Errors.NONE.code())
+                    .setErrorMessage(null))
             );
 
         DeleteShareGroupStateResponseData deleteShareGroupStateResponseData = new DeleteShareGroupStateResponseData()
@@ -4032,11 +4034,19 @@ public class GroupCoordinatorServiceTest {
                 DeleteShareGroupStateParameters.from(deleteShareGroupStateRequestData)
             );
 
-        when(runtime.scheduleReadOperation(
-            ArgumentMatchers.eq("share-group-delete-offsets-request"),
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("complete-delete-share-group-offsets"),
+            ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(responseData));
 
         DeleteShareGroupStateParameters deleteShareGroupStateParameters = DeleteShareGroupStateParameters.from(deleteShareGroupStateRequestData);
         DeleteShareGroupStateResult deleteShareGroupStateResult = DeleteShareGroupStateResult.from(deleteShareGroupStateResponseData);
@@ -4058,12 +4068,10 @@ public class GroupCoordinatorServiceTest {
             .setRuntime(runtime)
             .build();
 
-        int partition = 1;
         DeleteShareGroupOffsetsRequestData requestData = new DeleteShareGroupOffsetsRequestData()
             .setGroupId("share-group-id")
             .setTopics(List.of(new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
                 .setTopicName(TOPIC_NAME)
-                .setPartitions(List.of(partition))
             ));
 
         DeleteShareGroupOffsetsResponseData responseData = new DeleteShareGroupOffsetsResponseData()
@@ -4087,12 +4095,10 @@ public class GroupCoordinatorServiceTest {
         // Forcing a null Metadata Image
         service.onNewMetadataImage(null, null);
 
-        int partition = 1;
         DeleteShareGroupOffsetsRequestData requestData = new DeleteShareGroupOffsetsRequestData()
             .setGroupId("share-group-id")
             .setTopics(List.of(new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
                 .setTopicName(TOPIC_NAME)
-                .setPartitions(List.of(partition))
             ));
 
         DeleteShareGroupOffsetsResponseData responseData = new DeleteShareGroupOffsetsResponseData()
@@ -4116,12 +4122,10 @@ public class GroupCoordinatorServiceTest {
             .build(true);
         service.startup(() -> 1);
 
-        int partition = 1;
         DeleteShareGroupOffsetsRequestData requestData = new DeleteShareGroupOffsetsRequestData()
             .setGroupId("")
             .setTopics(List.of(new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
                 .setTopicName(TOPIC_NAME)
-                .setPartitions(List.of(partition))
             ));
 
         DeleteShareGroupOffsetsResponseData responseData = new DeleteShareGroupOffsetsResponseData()
@@ -4157,6 +4161,29 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
+    public void testDeleteShareGroupOffsetsNullTopicsInRequest() throws InterruptedException, ExecutionException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        Persister persister = mock(DefaultStatePersister.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .setPersister(persister)
+            .build(true);
+        service.startup(() -> 1);
+
+        DeleteShareGroupOffsetsRequestData requestData = new DeleteShareGroupOffsetsRequestData()
+            .setGroupId("share-group-id")
+            .setTopics(null);
+
+        DeleteShareGroupOffsetsResponseData responseData = new DeleteShareGroupOffsetsResponseData();
+
+        CompletableFuture<DeleteShareGroupOffsetsResponseData> future =
+            service.deleteShareGroupOffsets(requestContext(ApiKeys.DELETE_SHARE_GROUP_OFFSETS), requestData);
+
+        assertEquals(responseData, future.get());
+    }
+
+    @Test
     public void testDeleteShareGroupOffsetsRequestThrowsError() throws InterruptedException, ExecutionException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
@@ -4169,23 +4196,22 @@ public class GroupCoordinatorServiceTest {
 
         String groupId = "share-group-id";
 
-        int partition = 1;
         DeleteShareGroupOffsetsRequestData requestData = new DeleteShareGroupOffsetsRequestData()
             .setGroupId(groupId)
             .setTopics(List.of(new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
                 .setTopicName(TOPIC_NAME)
-                .setPartitions(List.of(partition))
             ));
 
         DeleteShareGroupOffsetsResponseData responseData = new DeleteShareGroupOffsetsResponseData()
             .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
             .setErrorMessage(Errors.UNKNOWN_SERVER_ERROR.message());
 
-        when(runtime.scheduleReadOperation(
-            ArgumentMatchers.eq("share-group-delete-offsets-request"),
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
-        )).thenReturn(CompletableFuture.completedFuture(FutureUtils.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception())));
+        )).thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
 
         CompletableFuture<DeleteShareGroupOffsetsResponseData> future =
             service.deleteShareGroupOffsets(requestContext(ApiKeys.DELETE_SHARE_GROUP_OFFSETS), requestData);
@@ -4194,7 +4220,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testDeleteShareGroupOffsetsRequestReturnsNull() throws InterruptedException, ExecutionException {
+    public void testDeleteShareGroupOffsetsRequestNullResultHolder() throws InterruptedException, ExecutionException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -4206,21 +4232,20 @@ public class GroupCoordinatorServiceTest {
 
         String groupId = "share-group-id";
 
-        int partition = 1;
         DeleteShareGroupOffsetsRequestData requestData = new DeleteShareGroupOffsetsRequestData()
             .setGroupId(groupId)
             .setTopics(List.of(new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
                 .setTopicName(TOPIC_NAME)
-                .setPartitions(List.of(partition))
             ));
 
         DeleteShareGroupOffsetsResponseData responseData = new DeleteShareGroupOffsetsResponseData()
             .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
             .setErrorMessage(Errors.UNKNOWN_SERVER_ERROR.message());
 
-        when(runtime.scheduleReadOperation(
-            ArgumentMatchers.eq("share-group-delete-offsets-request"),
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(null));
 
@@ -4243,12 +4268,10 @@ public class GroupCoordinatorServiceTest {
 
         String groupId = "share-group-id";
 
-        int partition = 1;
         DeleteShareGroupOffsetsRequestData requestData = new DeleteShareGroupOffsetsRequestData()
             .setGroupId(groupId)
             .setTopics(List.of(new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
                 .setTopicName(TOPIC_NAME)
-                .setPartitions(List.of(partition))
             ));
 
         DeleteShareGroupOffsetsResponseData responseData = new DeleteShareGroupOffsetsResponseData()
@@ -4263,9 +4286,10 @@ public class GroupCoordinatorServiceTest {
                 null
             );
 
-        when(runtime.scheduleReadOperation(
-            ArgumentMatchers.eq("share-group-delete-offsets-request"),
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
@@ -4288,12 +4312,10 @@ public class GroupCoordinatorServiceTest {
 
         String groupId = "share-group-id";
 
-        int partition = 1;
         DeleteShareGroupOffsetsRequestData requestData = new DeleteShareGroupOffsetsRequestData()
             .setGroupId(groupId)
             .setTopics(List.of(new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
                 .setTopicName(TOPIC_NAME)
-                .setPartitions(List.of(partition))
             ));
 
         DeleteShareGroupOffsetsResponseData responseData = new DeleteShareGroupOffsetsResponseData()
@@ -4308,9 +4330,10 @@ public class GroupCoordinatorServiceTest {
                 null
             );
 
-        when(runtime.scheduleReadOperation(
-            ArgumentMatchers.eq("share-group-delete-offsets-request"),
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
@@ -4333,12 +4356,10 @@ public class GroupCoordinatorServiceTest {
 
         String groupId = "share-group-id";
 
-        int partition = 1;
         DeleteShareGroupOffsetsRequestData requestData = new DeleteShareGroupOffsetsRequestData()
             .setGroupId(groupId)
             .setTopics(List.of(new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
                 .setTopicName(TOPIC_NAME)
-                .setPartitions(List.of(partition))
             ));
 
         DeleteShareGroupOffsetsResponseData responseData = new DeleteShareGroupOffsetsResponseData();
@@ -4351,9 +4372,10 @@ public class GroupCoordinatorServiceTest {
                 null
             );
 
-        when(runtime.scheduleReadOperation(
-            ArgumentMatchers.eq("share-group-delete-offsets-request"),
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
@@ -4378,27 +4400,22 @@ public class GroupCoordinatorServiceTest {
         Uuid badTopicId = Uuid.randomUuid();
         String groupId = "share-group-id";
 
-        int partition = 1;
         DeleteShareGroupOffsetsRequestData requestData = new DeleteShareGroupOffsetsRequestData()
             .setGroupId(groupId)
             .setTopics(List.of(
                 new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
-                    .setTopicName(TOPIC_NAME)
-                    .setPartitions(List.of(partition)),
+                    .setTopicName(TOPIC_NAME),
                 new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
                     .setTopicName(badTopicName)
-                    .setPartitions(List.of(partition))
             ));
 
         DeleteShareGroupOffsetsResponseData responseData = new DeleteShareGroupOffsetsResponseData()
             .setResponses(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
                 .setTopicName(badTopicName)
                 .setTopicId(badTopicId)
-                .setPartitions(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
-                    .setPartitionIndex(partition)
-                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                    .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
-                ))));
+                .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
+            ));
 
         GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder deleteShareGroupOffsetsResultHolder =
             new GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder(
@@ -4407,17 +4424,16 @@ public class GroupCoordinatorServiceTest {
                 List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
                     .setTopicName(badTopicName)
                     .setTopicId(badTopicId)
-                    .setPartitions(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
-                        .setPartitionIndex(partition)
-                        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                        .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
-                    ))),
+                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                    .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
+                    ),
                 null
             );
 
-        when(runtime.scheduleReadOperation(
-            ArgumentMatchers.eq("share-group-delete-offsets-request"),
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
@@ -4428,7 +4444,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testDeleteShareGroupOffsetsWithDefaultPersisterThrowsError() throws InterruptedException, ExecutionException {
+    public void testDeleteShareGroupOffsetsPersisterThrowsError() throws InterruptedException, ExecutionException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -4445,7 +4461,6 @@ public class GroupCoordinatorServiceTest {
             .setGroupId(groupId)
             .setTopics(List.of(new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
                 .setTopicName(TOPIC_NAME)
-                .setPartitions(List.of(partition))
             ));
 
         Exception persisterException = new Exception("Unable to validate delete share group state request");
@@ -4473,9 +4488,10 @@ public class GroupCoordinatorServiceTest {
                 )
             );
 
-        when(runtime.scheduleReadOperation(
-            ArgumentMatchers.eq("share-group-delete-offsets-request"),
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
@@ -4489,7 +4505,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testDeleteShareGroupOffsetsWithDefaultPersisterNullResult() throws InterruptedException, ExecutionException {
+    public void testDeleteShareGroupOffsetsPersisterReturnsNull() throws InterruptedException, ExecutionException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -4506,7 +4522,6 @@ public class GroupCoordinatorServiceTest {
             .setGroupId(groupId)
             .setTopics(List.of(new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
                 .setTopicName(TOPIC_NAME)
-                .setPartitions(List.of(partition))
             ));
 
         Exception persisterException = new IllegalStateException("Result is null for the delete share group state");
@@ -4534,9 +4549,10 @@ public class GroupCoordinatorServiceTest {
                 )
             );
 
-        when(runtime.scheduleReadOperation(
-            ArgumentMatchers.eq("share-group-delete-offsets-request"),
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
@@ -4550,7 +4566,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testDeleteShareGroupOffsetsWithDefaultPersisterNullTopicData() throws InterruptedException, ExecutionException {
+    public void testDeleteShareGroupOffsetsPersisterReturnsNullTopicData() throws InterruptedException, ExecutionException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -4567,7 +4583,6 @@ public class GroupCoordinatorServiceTest {
             .setGroupId(groupId)
             .setTopics(List.of(new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
                 .setTopicName(TOPIC_NAME)
-                .setPartitions(List.of(partition))
             ));
 
         Exception persisterException = new IllegalStateException("Result is null for the delete share group state");
@@ -4595,9 +4610,10 @@ public class GroupCoordinatorServiceTest {
                 )
             );
 
-        when(runtime.scheduleReadOperation(
-            ArgumentMatchers.eq("share-group-delete-offsets-request"),
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
@@ -4614,7 +4630,7 @@ public class GroupCoordinatorServiceTest {
     }
 
     @Test
-    public void testDeleteShareGroupOffsetsSuccessWithErrorTopicPartitions() throws InterruptedException, ExecutionException {
+    public void testDeleteShareGroupOffsetsPersisterReturnsNoSuccessfulTopics() throws InterruptedException, ExecutionException {
         CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
         Persister persister = mock(DefaultStatePersister.class);
         GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
@@ -4624,21 +4640,19 @@ public class GroupCoordinatorServiceTest {
             .build(true);
         service.startup(() -> 1);
 
-        String badTopicName = "bad-topic";
-        Uuid badTopicId = Uuid.randomUuid();
         String groupId = "share-group-id";
 
-        int partition = 1;
+        String badTopicName = "bad-topic";
+        Uuid badTopicId = Uuid.randomUuid();
 
+        int partition = 1;
         DeleteShareGroupOffsetsRequestData requestData = new DeleteShareGroupOffsetsRequestData()
             .setGroupId(groupId)
             .setTopics(List.of(
                 new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
-                    .setTopicName(TOPIC_NAME)
-                    .setPartitions(List.of(partition)),
+                .setTopicName(TOPIC_NAME),
                 new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
                     .setTopicName(badTopicName)
-                    .setPartitions(List.of(partition))
             ));
 
         DeleteShareGroupStateRequestData deleteShareGroupStateRequestData = new DeleteShareGroupStateRequestData()
@@ -4649,28 +4663,18 @@ public class GroupCoordinatorServiceTest {
                     .setPartition(partition)))));
 
         DeleteShareGroupOffsetsResponseData responseData = new DeleteShareGroupOffsetsResponseData()
-            .setResponses(
-                List.of(
-                    new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
-                        .setTopicName(badTopicName)
-                        .setTopicId(badTopicId)
-                        .setPartitions(List.of(
-                            new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
-                                .setPartitionIndex(partition)
-                                .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                                .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
-                        )),
-                    new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
-                        .setTopicName(TOPIC_NAME)
-                        .setTopicId(TOPIC_ID)
-                        .setPartitions(List.of(
-                            new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
-                                .setPartitionIndex(partition)
-                                .setErrorCode(Errors.NONE.code())
-                                .setErrorMessage(null)
-                        ))
-                )
-            );
+            .setResponses(List.of(
+                new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                    .setTopicName(badTopicName)
+                    .setTopicId(badTopicId)
+                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                    .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message()),
+                new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                    .setTopicName(TOPIC_NAME)
+                    .setTopicId(TOPIC_ID)
+                    .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+                    .setErrorMessage(Errors.UNKNOWN_SERVER_ERROR.message())
+            ));
 
         DeleteShareGroupStateResponseData deleteShareGroupStateResponseData = new DeleteShareGroupStateResponseData()
             .setResults(
@@ -4678,8 +4682,8 @@ public class GroupCoordinatorServiceTest {
                     .setTopicId(TOPIC_ID)
                     .setPartitions(List.of(new DeleteShareGroupStateResponseData.PartitionResult()
                         .setPartition(partition)
-                        .setErrorCode(Errors.NONE.code())
-                        .setErrorMessage(null)))
+                        .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+                        .setErrorMessage(Errors.UNKNOWN_SERVER_ERROR.message())))
                 )
             );
 
@@ -4687,20 +4691,20 @@ public class GroupCoordinatorServiceTest {
             new GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder(
                 Errors.NONE.code(),
                 null,
-                List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
-                    .setTopicName(badTopicName)
-                    .setTopicId(badTopicId)
-                    .setPartitions(List.of(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
-                            .setPartitionIndex(partition)
+                List.of(
+                    new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                        .setTopicId(badTopicId)
+                        .setTopicName(badTopicName)
                         .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
                         .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
-                    ))),
+                ),
                 DeleteShareGroupStateParameters.from(deleteShareGroupStateRequestData)
             );
 
-        when(runtime.scheduleReadOperation(
-            ArgumentMatchers.eq("share-group-delete-offsets-request"),
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
             ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
             ArgumentMatchers.any()
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
 
@@ -4709,6 +4713,211 @@ public class GroupCoordinatorServiceTest {
         when(persister.deleteState(
             ArgumentMatchers.eq(deleteShareGroupStateParameters)
         )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupStateResult));
+
+        CompletableFuture<DeleteShareGroupOffsetsResponseData> future =
+            service.deleteShareGroupOffsets(requestContext(ApiKeys.DELETE_SHARE_GROUP_OFFSETS), requestData);
+
+        assertEquals(responseData, future.get());
+    }
+
+    @Test
+    public void testDeleteShareGroupOffsetsCompleteDeleteStateReturnsError() throws InterruptedException, ExecutionException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        Persister persister = mock(DefaultStatePersister.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .setPersister(persister)
+            .build(true);
+        service.startup(() -> 1);
+
+        String groupId = "share-group-id";
+
+        int partition = 1;
+        DeleteShareGroupOffsetsRequestData requestData = new DeleteShareGroupOffsetsRequestData()
+            .setGroupId(groupId)
+            .setTopics(List.of(
+                new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
+                    .setTopicName(TOPIC_NAME)
+            ));
+
+        DeleteShareGroupStateRequestData deleteShareGroupStateRequestData = new DeleteShareGroupStateRequestData()
+            .setGroupId(groupId)
+            .setTopics(List.of(new DeleteShareGroupStateRequestData.DeleteStateData()
+                .setTopicId(TOPIC_ID)
+                .setPartitions(List.of(new DeleteShareGroupStateRequestData.PartitionData()
+                    .setPartition(partition)))));
+
+        DeleteShareGroupOffsetsResponseData responseData = new DeleteShareGroupOffsetsResponseData()
+            .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+            .setErrorMessage(Errors.UNKNOWN_SERVER_ERROR.message());
+
+        DeleteShareGroupStateResponseData deleteShareGroupStateResponseData = new DeleteShareGroupStateResponseData()
+            .setResults(
+                List.of(new DeleteShareGroupStateResponseData.DeleteStateResult()
+                    .setTopicId(TOPIC_ID)
+                    .setPartitions(List.of(
+                        new DeleteShareGroupStateResponseData.PartitionResult()
+                        .setPartition(partition)
+                            .setErrorCode(Errors.NONE.code())
+                            .setErrorMessage(null)
+                    ))
+                )
+            );
+
+        GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder deleteShareGroupOffsetsResultHolder =
+            new GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder(
+                Errors.NONE.code(),
+                null,
+                List.of(),
+                DeleteShareGroupStateParameters.from(deleteShareGroupStateRequestData)
+            );
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
+            ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
+
+        DeleteShareGroupStateParameters deleteShareGroupStateParameters = DeleteShareGroupStateParameters.from(deleteShareGroupStateRequestData);
+        DeleteShareGroupStateResult deleteShareGroupStateResult = DeleteShareGroupStateResult.from(deleteShareGroupStateResponseData);
+        when(persister.deleteState(
+            ArgumentMatchers.eq(deleteShareGroupStateParameters)
+        )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupStateResult));
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("complete-delete-share-group-offsets"),
+            ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(FutureUtils.failedFuture(Errors.UNKNOWN_SERVER_ERROR.exception()));
+
+        CompletableFuture<DeleteShareGroupOffsetsResponseData> future =
+            service.deleteShareGroupOffsets(requestContext(ApiKeys.DELETE_SHARE_GROUP_OFFSETS), requestData);
+
+        assertEquals(responseData, future.get());
+    }
+
+    @Test
+    public void testDeleteShareGroupOffsetsSuccessWithErrorTopics() throws InterruptedException, ExecutionException {
+        CoordinatorRuntime<GroupCoordinatorShard, CoordinatorRecord> runtime = mockRuntime();
+        Persister persister = mock(DefaultStatePersister.class);
+        GroupCoordinatorService service = new GroupCoordinatorServiceBuilder()
+            .setConfig(createConfig())
+            .setRuntime(runtime)
+            .setPersister(persister)
+            .build(true);
+        service.startup(() -> 1);
+
+        String groupId = "share-group-id";
+
+        String badTopicName1 = "bad-topic-1";
+        Uuid badTopicId1 = Uuid.randomUuid();
+        String badTopicName2 = "bad-topic-2";
+        Uuid badTopicId2 = Uuid.randomUuid();
+
+        int partition = 1;
+        DeleteShareGroupOffsetsRequestData requestData = new DeleteShareGroupOffsetsRequestData()
+            .setGroupId(groupId)
+            .setTopics(List.of(
+                new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
+                    .setTopicName(TOPIC_NAME),
+                new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
+                    .setTopicName(badTopicName1),
+                new DeleteShareGroupOffsetsRequestData.DeleteShareGroupOffsetsRequestTopic()
+                    .setTopicName(badTopicName2)
+            ));
+
+        DeleteShareGroupStateRequestData deleteShareGroupStateRequestData = new DeleteShareGroupStateRequestData()
+            .setGroupId(groupId)
+            .setTopics(List.of(
+                new DeleteShareGroupStateRequestData.DeleteStateData()
+                    .setTopicId(TOPIC_ID)
+                    .setPartitions(List.of(
+                        new DeleteShareGroupStateRequestData.PartitionData()
+                            .setPartition(partition)
+                    )),
+                new DeleteShareGroupStateRequestData.DeleteStateData()
+                    .setTopicId(badTopicId2)
+                    .setPartitions(List.of(
+                        new DeleteShareGroupStateRequestData.PartitionData()
+                            .setPartition(partition)
+                    ))
+            ));
+
+        DeleteShareGroupOffsetsResponseData responseData = new DeleteShareGroupOffsetsResponseData()
+            .setResponses(List.of(
+                new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                    .setTopicName(badTopicName1)
+                    .setTopicId(badTopicId1)
+                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                    .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message()),
+                new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                    .setTopicName(badTopicName2)
+                    .setTopicId(badTopicId2)
+                    .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+                    .setErrorMessage(Errors.UNKNOWN_SERVER_ERROR.message()),
+                new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                    .setTopicName(TOPIC_NAME)
+                    .setTopicId(TOPIC_ID)
+                    .setErrorCode(Errors.NONE.code())
+                    .setErrorMessage(null)
+            ));
+
+        DeleteShareGroupStateResponseData deleteShareGroupStateResponseData = new DeleteShareGroupStateResponseData()
+            .setResults(List.of(
+                new DeleteShareGroupStateResponseData.DeleteStateResult()
+                    .setTopicId(badTopicId2)
+                    .setPartitions(List.of(
+                        new DeleteShareGroupStateResponseData.PartitionResult()
+                            .setPartition(partition)
+                            .setErrorCode(Errors.UNKNOWN_SERVER_ERROR.code())
+                            .setErrorMessage(Errors.UNKNOWN_SERVER_ERROR.message())
+                    )),
+                new DeleteShareGroupStateResponseData.DeleteStateResult()
+                    .setTopicId(TOPIC_ID)
+                    .setPartitions(List.of(
+                        new DeleteShareGroupStateResponseData.PartitionResult()
+                            .setPartition(partition)
+                            .setErrorCode(Errors.NONE.code())
+                            .setErrorMessage(null)
+                    ))
+            ));
+
+        GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder deleteShareGroupOffsetsResultHolder =
+            new GroupCoordinatorShard.DeleteShareGroupOffsetsResultHolder(
+                Errors.NONE.code(),
+                null,
+                List.of(
+                    new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                        .setTopicId(badTopicId1)
+                        .setTopicName(badTopicName1)
+                        .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                        .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
+                ),
+                DeleteShareGroupStateParameters.from(deleteShareGroupStateRequestData)
+            );
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("initiate-delete-share-group-offsets"),
+            ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupOffsetsResultHolder));
+
+        DeleteShareGroupStateParameters deleteShareGroupStateParameters = DeleteShareGroupStateParameters.from(deleteShareGroupStateRequestData);
+        DeleteShareGroupStateResult deleteShareGroupStateResult = DeleteShareGroupStateResult.from(deleteShareGroupStateResponseData);
+        when(persister.deleteState(
+            ArgumentMatchers.eq(deleteShareGroupStateParameters)
+        )).thenReturn(CompletableFuture.completedFuture(deleteShareGroupStateResult));
+
+        when(runtime.scheduleWriteOperation(
+            ArgumentMatchers.eq("complete-delete-share-group-offsets"),
+            ArgumentMatchers.eq(new TopicPartition(Topic.GROUP_METADATA_TOPIC_NAME, 0)),
+            ArgumentMatchers.eq(Duration.ofMillis(5000)),
+            ArgumentMatchers.any()
+        )).thenReturn(CompletableFuture.completedFuture(responseData));
 
         CompletableFuture<DeleteShareGroupOffsetsResponseData> future =
             service.deleteShareGroupOffsets(requestContext(ApiKeys.DELETE_SHARE_GROUP_OFFSETS), requestData);

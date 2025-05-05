@@ -158,6 +158,7 @@ import org.apache.kafka.coordinator.group.streams.assignor.StickyTaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignor;
 import org.apache.kafka.coordinator.group.streams.assignor.TaskAssignorException;
 import org.apache.kafka.coordinator.group.streams.topics.ConfiguredTopology;
+import org.apache.kafka.coordinator.group.streams.topics.EndpointToPartitionsManager;
 import org.apache.kafka.coordinator.group.streams.topics.InternalTopicManager;
 import org.apache.kafka.coordinator.group.streams.topics.TopicConfigurationException;
 import org.apache.kafka.image.MetadataDelta;
@@ -1982,7 +1983,8 @@ public class GroupMetadataManager {
         StreamsGroupHeartbeatResponseData response = new StreamsGroupHeartbeatResponseData()
             .setMemberId(updatedMember.memberId())
             .setMemberEpoch(updatedMember.memberEpoch())
-            .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId));
+            .setHeartbeatIntervalMs(streamsGroupHeartbeatIntervalMs(groupId))
+            .setPartitionsByUserEndpoint(maybeBuildEndpointToPartitions(group));
 
         // The assignment is only provided in the following cases:
         // 1. The member is joining.
@@ -2091,6 +2093,25 @@ public class GroupMetadataManager {
                 .setSubtopologyId(entry.getKey())
                 .setPartitions(entry.getValue().stream().sorted().toList()))
             .collect(Collectors.toList());
+    }
+
+    private List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> maybeBuildEndpointToPartitions(StreamsGroup group) {
+        List<StreamsGroupHeartbeatResponseData.EndpointToPartitions> endpointToPartitionsList = new ArrayList<>();
+        final Map<String, StreamsGroupMember> members = group.members();
+        for (Map.Entry<String, StreamsGroupMember> entry : members.entrySet()) {
+            final String memberIdForAssignment = entry.getKey();
+            final Optional<StreamsGroupMemberMetadataValue.Endpoint> endpointOptional = members.get(memberIdForAssignment).userEndpoint();
+            StreamsGroupMember groupMember = entry.getValue();
+            if (endpointOptional.isPresent()) {
+                final StreamsGroupMemberMetadataValue.Endpoint endpoint = endpointOptional.get();
+                final StreamsGroupHeartbeatResponseData.Endpoint responseEndpoint = new StreamsGroupHeartbeatResponseData.Endpoint();
+                responseEndpoint.setHost(endpoint.host());
+                responseEndpoint.setPort(endpoint.port());
+                StreamsGroupHeartbeatResponseData.EndpointToPartitions endpointToPartitions = EndpointToPartitionsManager.endpointToPartitions(groupMember, responseEndpoint, group);
+                endpointToPartitionsList.add(endpointToPartitions);
+            }
+        }
+        return endpointToPartitionsList.isEmpty() ? null : endpointToPartitionsList;
     }
 
     /**
@@ -2663,7 +2684,12 @@ public class GroupMetadataManager {
 
         Map<Uuid, Set<Integer>> topicPartitionChangeMap = new HashMap<>();
         ShareGroupStatePartitionMetadataInfo info = shareGroupPartitionMetadata.get(groupId);
-        Map<Uuid, Set<Integer>> alreadyInitialized = info == null ? new HashMap<>() : mergeShareGroupInitMaps(info.initializedTopics(), info.initializingTopics());
+
+        // We are only considering initialized TPs here. This is because it could happen
+        // that some topics have been moved to initializing but the corresponding persister request
+        // could not be made/failed (invoked by the group coordinator). Then there would be no way to try
+        // the persister call. This way we get the opportunity to retry.
+        Map<Uuid, Set<Integer>> alreadyInitialized = info == null ? new HashMap<>() : info.initializedTopics();
 
         subscriptionMetadata.forEach((topicName, topicMetadata) -> {
             Set<Integer> alreadyInitializedPartSet = alreadyInitialized.getOrDefault(topicMetadata.id(), Set.of());
@@ -7986,48 +8012,129 @@ public class GroupMetadataManager {
 
     /**
      * Returns a list of delete share group state request topic objects to be used with the persister.
-     * @param groupId - group ID of the share group
-     * @param requestData - the request data for DeleteShareGroupOffsets request
-     * @param errorTopicResponseList - the list of topics not found in the metadata image
+     * @param groupId                    group ID of the share group
+     * @param requestData                the request data for DeleteShareGroupOffsets request
+     * @param errorTopicResponseList     the list of topics not found in the metadata image
+     * @param records                    List of coordinator records to append to
+     *
      * @return List of objects representing the share group state delete request for topics.
      */
     public List<DeleteShareGroupStateRequestData.DeleteStateData> sharePartitionsEligibleForOffsetDeletion(
         String groupId,
         DeleteShareGroupOffsetsRequestData requestData,
-        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList
+        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList,
+        List<CoordinatorRecord> records
     ) {
         List<DeleteShareGroupStateRequestData.DeleteStateData> deleteShareGroupStateRequestTopicsData = new ArrayList<>();
+        Map<Uuid, Set<Integer>> initializedTopics = new HashMap<>();
 
-        Map<Uuid, Set<Integer>> initializedSharePartitions = initializedShareGroupPartitions(groupId);
+        ShareGroupStatePartitionMetadataInfo currentMap = shareGroupPartitionMetadata.get(groupId);
+
+        if (currentMap == null) {
+            return deleteShareGroupStateRequestTopicsData;
+        }
+
+        currentMap.initializedTopics().forEach((topicId, partitions) -> initializedTopics.put(topicId, new HashSet<>(partitions)));
+        Set<Uuid> deletingTopics = new HashSet<>(currentMap.deletingTopics());
+
         requestData.topics().forEach(topic -> {
-            Uuid topicId = metadataImage.topics().topicNameToIdView().get(topic.topicName());
-            if (topicId != null) {
+            TopicImage topicImage = metadataImage.topics().getTopic(topic.topicName());
+            if (topicImage != null) {
+                Uuid topicId = topicImage.id();
                 // A deleteState request to persister should only be sent with those topic partitions for which corresponding
                 // share partitions are initialized for the group.
-                if (initializedSharePartitions.containsKey(topicId)) {
+                if (initializedTopics.containsKey(topicId)) {
                     List<DeleteShareGroupStateRequestData.PartitionData> partitions = new ArrayList<>();
-                    topic.partitions().forEach(partition -> {
-                        if (initializedSharePartitions.get(topicId).contains(partition)) {
-                            partitions.add(new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition));
-                        }
-                    });
-                    deleteShareGroupStateRequestTopicsData.add(new DeleteShareGroupStateRequestData.DeleteStateData()
-                        .setTopicId(topicId)
-                        .setPartitions(partitions));
+                    initializedTopics.get(topicId).forEach(partition ->
+                        partitions.add(new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition)));
+                    deleteShareGroupStateRequestTopicsData.add(
+                        new DeleteShareGroupStateRequestData.DeleteStateData()
+                            .setTopicId(topicId)
+                            .setPartitions(partitions)
+                    );
+                    // Removing the topic from initializedTopics map.
+                    initializedTopics.remove(topicId);
+                    // Adding the topic to deletingTopics map.
+                    deletingTopics.add(topicId);
+                } else if (deletingTopics.contains(topicId)) {
+                    // If the topic for which delete share group offsets request is sent is already present in the deletingTopics set,
+                    // we will include that topic in the delete share group state request.
+                    List<DeleteShareGroupStateRequestData.PartitionData> partitions = new ArrayList<>();
+                    topicImage.partitions().keySet().forEach(partition ->
+                        partitions.add(new DeleteShareGroupStateRequestData.PartitionData().setPartition(partition)));
+                    deleteShareGroupStateRequestTopicsData.add(
+                        new DeleteShareGroupStateRequestData.DeleteStateData()
+                            .setTopicId(topicId)
+                            .setPartitions(partitions)
+                    );
+                } else {
+                    errorTopicResponseList.add(
+                        new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                            .setTopicName(topic.topicName())
+                            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                            .setErrorMessage("There is no offset information to delete."));
                 }
             } else {
                 errorTopicResponseList.add(new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
                     .setTopicName(topic.topicName())
-                    .setPartitions(topic.partitions().stream().map(
-                        partition -> new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponsePartition()
-                            .setPartitionIndex(partition)
-                            .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
-                            .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
-                    ).collect(Collectors.toCollection(ArrayList::new))));
+                    .setErrorCode(Errors.UNKNOWN_TOPIC_OR_PARTITION.code())
+                    .setErrorMessage(Errors.UNKNOWN_TOPIC_OR_PARTITION.message())
+                );
             }
         });
 
+        records.add(
+            GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                attachTopicName(currentMap.initializingTopics()),
+                attachTopicName(initializedTopics),
+                attachTopicName(deletingTopics)
+            )
+        );
+
         return deleteShareGroupStateRequestTopicsData;
+    }
+
+    /**
+     * Returns a list of {@link DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic} corresponding to the
+     * topics for which persister delete share group state request was successful
+     * @param groupId                    group ID of the share group
+     * @param topics                     a map of topicId to topic name
+     * @param records                    List of coordinator records to append to
+     *
+     * @return List of objects for which request was successful
+     */
+    public List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> completeDeleteShareGroupOffsets(
+        String groupId,
+        Map<Uuid, String> topics,
+        List<CoordinatorRecord> records
+    ) {
+        ShareGroupStatePartitionMetadataInfo currentMap = shareGroupPartitionMetadata.get(groupId);
+
+        if (currentMap == null) {
+            return List.of();
+        }
+
+        Set<Uuid> updatedDeletingTopics = new HashSet<>(currentMap.deletingTopics());
+
+        topics.keySet().forEach(updatedDeletingTopics::remove);
+
+        records.add(
+            GroupCoordinatorRecordHelpers.newShareGroupStatePartitionMetadataRecord(
+                groupId,
+                attachTopicName(currentMap.initializingTopics()),
+                attachTopicName(currentMap.initializedTopics()),
+                attachTopicName(updatedDeletingTopics)
+            )
+        );
+
+        return topics.entrySet().stream().map(entry ->
+            new DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic()
+                .setTopicId(entry.getKey())
+                .setTopicName(entry.getValue())
+                .setErrorCode(Errors.NONE.code())
+                .setErrorMessage(null)
+        ).toList();
     }
 
     /**

@@ -3864,11 +3864,11 @@ public class KafkaAdminClient extends AdminClient {
     }
 
     @Override
-    public DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<TopicPartition> partitions, DeleteShareGroupOffsetsOptions options) {
-        SimpleAdminApiFuture<CoordinatorKey, Map<TopicPartition, ApiException>> future = DeleteShareGroupOffsetsHandler.newFuture(groupId);
-        DeleteShareGroupOffsetsHandler handler = new DeleteShareGroupOffsetsHandler(groupId, partitions, logContext);
+    public DeleteShareGroupOffsetsResult deleteShareGroupOffsets(String groupId, Set<String> topics, DeleteShareGroupOffsetsOptions options) {
+        SimpleAdminApiFuture<CoordinatorKey, Map<String, ApiException>> future = DeleteShareGroupOffsetsHandler.newFuture(groupId);
+        DeleteShareGroupOffsetsHandler handler = new DeleteShareGroupOffsetsHandler(groupId, topics, logContext);
         invokeDriver(handler, future, options.timeoutMs);
-        return new DeleteShareGroupOffsetsResult(future.get(CoordinatorKey.byGroupId(groupId)), partitions);
+        return new DeleteShareGroupOffsetsResult(future.get(CoordinatorKey.byGroupId(groupId)), topics);
     }
 
     @Override
@@ -4505,8 +4505,8 @@ public class KafkaAdminClient extends AdminClient {
                  * Be sure to do this after the NOT_CONTROLLER error check above
                  * so that all errors are consistent in that case.
                  */
-                userIllegalAlterationExceptions.entrySet().stream().forEach(entry ->
-                    futures.get(entry.getKey()).completeExceptionally(entry.getValue())
+                userIllegalAlterationExceptions.forEach((key, value) ->
+                    futures.get(key).completeExceptionally(value)
                 );
                 response.data().results().forEach(result -> {
                     KafkaFutureImpl<Void> future = futures.get(result.user());
@@ -4966,7 +4966,7 @@ public class KafkaAdminClient extends AdminClient {
                     new AddRaftVoterRequestData.ListenerCollection();
                 endpoints.forEach(endpoint ->
                     listeners.add(new AddRaftVoterRequestData.Listener().
-                        setName(endpoint.name()).
+                        setName(endpoint.listener()).
                         setHost(endpoint.host()).
                         setPort(endpoint.port())));
                 return new AddRaftVoterRequest.Builder(
