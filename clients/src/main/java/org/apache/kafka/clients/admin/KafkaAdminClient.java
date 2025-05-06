@@ -4907,7 +4907,10 @@ public class KafkaAdminClient extends AdminClient {
 
             @Override
             ListConfigResourcesRequest.Builder createRequest(int timeoutMs) {
-                return new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData());
+                return new ListConfigResourcesRequest.Builder(
+                    new ListConfigResourcesRequestData()
+                        .setResourceTypes(List.of(ConfigResource.Type.CLIENT_METRICS.id()))
+                );
             }
 
             @Override

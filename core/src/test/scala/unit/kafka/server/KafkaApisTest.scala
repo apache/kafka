@@ -10945,7 +10945,7 @@ class KafkaApisTest extends Logging {
             new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource)
           ).toList)
     )
-    assertEquals(response.data, expectedResponse.data)
+    assertEquals(expectedResponse.data, response.data)
 
     verify(metadataCache, never).getAllTopics
     verify(groupConfigManager, never).groupIds
@@ -10953,7 +10953,7 @@ class KafkaApisTest extends Logging {
   }
 
   @Test
-  def testListConfigResourcesV1(): Unit = {
+  def testListConfigResourcesV1WithEmptyResourceTypes(): Unit = {
     val request = buildRequest(new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData()).build(1))
     metadataCache = mock(classOf[KRaftMetadataCache])
 
@@ -10973,29 +10973,168 @@ class KafkaApisTest extends Logging {
       new ListConfigResourcesResponseData()
         .setConfigResources(
           util.stream.Stream.of(
-            clientMetrics.stream.map(resource =>
-              new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource).setResourceType(ConfigResource.Type.CLIENT_METRICS.id)
-            ).toList,
-            topics.stream().map(resource =>
-              new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource).setResourceType(ConfigResource.Type.TOPIC.id)
-            ).toList,
             groupIds.stream().map(resource =>
               new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource).setResourceType(ConfigResource.Type.GROUP.id)
             ).toList,
+            clientMetrics.stream.map(resource =>
+              new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource).setResourceType(ConfigResource.Type.CLIENT_METRICS.id)
+            ).toList,
+            nodeIds.stream().map(resource =>
+              new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource.toString).setResourceType(ConfigResource.Type.BROKER_LOGGER.id)
+            ).toList,
             nodeIds.stream().map(resource =>
               new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource.toString).setResourceType(ConfigResource.Type.BROKER.id)
+            ).toList,
+            topics.stream().map(resource =>
+              new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource).setResourceType(ConfigResource.Type.TOPIC.id)
             ).toList
           ).flatMap(s => s.stream).toList)
     )
-    assertEquals(response.data, expectedResponse.data)
+    assertEquals(expectedResponse.data, response.data)
+  }
+
+  @Test
+  def testListConfigResourcesV1WithGroup(): Unit = {
+    val request = buildRequest(new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData()
+      .setResourceTypes(util.List.of(ConfigResource.Type.GROUP.id))).build(1))
+    metadataCache = mock(classOf[KRaftMetadataCache])
+
+    val groupIds = util.List.of("group1", "group2")
+    when(groupConfigManager.groupIds).thenReturn(groupIds)
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(request, RequestLocal.noCaching)
+    val response = verifyNoThrottling[ListConfigResourcesResponse](request)
+    val expectedResponse = new ListConfigResourcesResponse(
+      new ListConfigResourcesResponseData()
+        .setConfigResources(
+          groupIds.stream().map(resource =>
+            new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource).setResourceType(ConfigResource.Type.GROUP.id)
+          ).toList,
+        )
+    )
+    assertEquals(expectedResponse.data, response.data)
+
+    verify(metadataCache, never).getAllTopics
+    verify(clientMetricsManager, never).listClientMetricsResources
+    verify(metadataCache, never).getBrokerNodes(any)
+  }
+
+  @Test
+  def testListConfigResourcesV1WithClientMetrics(): Unit = {
+    val request = buildRequest(new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData()
+      .setResourceTypes(util.List.of(ConfigResource.Type.CLIENT_METRICS.id))).build(1))
+    metadataCache = mock(classOf[KRaftMetadataCache])
+
+    val clientMetrics = util.Set.of("client-metric1", "client-metric2")
+    when(clientMetricsManager.listClientMetricsResources).thenReturn(clientMetrics)
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(request, RequestLocal.noCaching)
+    val response = verifyNoThrottling[ListConfigResourcesResponse](request)
+    val expectedResponse = new ListConfigResourcesResponse(
+      new ListConfigResourcesResponseData()
+        .setConfigResources(
+          clientMetrics.stream.map(resource =>
+            new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource).setResourceType(ConfigResource.Type.CLIENT_METRICS.id)
+          ).toList
+        )
+    )
+    assertEquals(expectedResponse.data, response.data)
+
+    verify(metadataCache, never).getAllTopics
+    verify(groupConfigManager, never).groupIds
+    verify(metadataCache, never).getBrokerNodes(any)
+  }
+
+  @Test
+  def testListConfigResourcesV1WithBrokerLogger(): Unit = {
+    val request = buildRequest(new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData()
+      .setResourceTypes(util.List.of(ConfigResource.Type.BROKER_LOGGER.id))).build(1))
+    metadataCache = mock(classOf[KRaftMetadataCache])
+
+    val nodeIds = util.List.of(1, 2)
+    when(metadataCache.getBrokerNodes(any())).thenReturn(nodeIds.stream().map(id => new Node(id, "localhost", 1234)).toList)
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(request, RequestLocal.noCaching)
+    val response = verifyNoThrottling[ListConfigResourcesResponse](request)
+    val expectedResponse = new ListConfigResourcesResponse(
+      new ListConfigResourcesResponseData()
+        .setConfigResources(
+          nodeIds.stream().map(resource =>
+            new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource.toString).setResourceType(ConfigResource.Type.BROKER_LOGGER.id)
+          ).toList)
+    )
+    assertEquals(expectedResponse.data, response.data)
+
+    verify(metadataCache, never).getAllTopics
+    verify(groupConfigManager, never).groupIds
+    verify(clientMetricsManager, never).listClientMetricsResources
+  }
+
+  @Test
+  def testListConfigResourcesV1WithBroker(): Unit = {
+    val request = buildRequest(new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData()
+      .setResourceTypes(util.List.of(ConfigResource.Type.BROKER.id))).build(1))
+    metadataCache = mock(classOf[KRaftMetadataCache])
+
+    val nodeIds = util.List.of(1, 2)
+    when(metadataCache.getBrokerNodes(any())).thenReturn(nodeIds.stream().map(id => new Node(id, "localhost", 1234)).toList)
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(request, RequestLocal.noCaching)
+    val response = verifyNoThrottling[ListConfigResourcesResponse](request)
+    val expectedResponse = new ListConfigResourcesResponse(
+      new ListConfigResourcesResponseData()
+        .setConfigResources(
+          nodeIds.stream().map(resource =>
+            new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource.toString).setResourceType(ConfigResource.Type.BROKER.id)
+          ).toList)
+    )
+    assertEquals(expectedResponse.data, response.data)
+
+    verify(metadataCache, never).getAllTopics
+    verify(groupConfigManager, never).groupIds
+    verify(clientMetricsManager, never).listClientMetricsResources
+  }
+
+  @Test
+  def testListConfigResourcesV1WithTopic(): Unit = {
+    val request = buildRequest(new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData()
+      .setResourceTypes(util.List.of(ConfigResource.Type.TOPIC.id))).build(1))
+    metadataCache = mock(classOf[KRaftMetadataCache])
+
+    val topics = util.Set.of("topic1", "topic2")
+    when(metadataCache.getAllTopics).thenReturn(topics)
+
+    kafkaApis = createKafkaApis()
+    kafkaApis.handle(request, RequestLocal.noCaching)
+    val response = verifyNoThrottling[ListConfigResourcesResponse](request)
+    val expectedResponse = new ListConfigResourcesResponse(
+      new ListConfigResourcesResponseData()
+        .setConfigResources(
+          topics.stream().map(resource =>
+            new ListConfigResourcesResponseData.ConfigResource().setResourceName(resource).setResourceType(ConfigResource.Type.TOPIC.id)
+          ).toList)
+    )
+    assertEquals(expectedResponse.data, response.data)
+
+    verify(groupConfigManager, never).groupIds
+    verify(clientMetricsManager, never).listClientMetricsResources
+    verify(metadataCache, never).getBrokerNodes(any)
   }
 
   @Test
   def testListConfigResourcesEmptyResponse(): Unit = {
     val request = buildRequest(new ListConfigResourcesRequest.Builder(new ListConfigResourcesRequestData()).build())
-    metadataCache = new KRaftMetadataCache(brokerId, () => KRaftVersion.KRAFT_VERSION_0)
+    metadataCache = mock(classOf[KRaftMetadataCache])
 
     when(clientMetricsManager.listClientMetricsResources).thenReturn(util.Set.of)
+    when(metadataCache.getAllTopics).thenReturn(util.Set.of)
+    when(groupConfigManager.groupIds).thenReturn(util.List.of)
+    when(metadataCache.getBrokerNodes(any())).thenReturn(util.List.of)
+
     kafkaApis = createKafkaApis()
     kafkaApis.handle(request, RequestLocal.noCaching)
     val response = verifyNoThrottling[ListConfigResourcesResponse](request)
