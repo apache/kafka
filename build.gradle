@@ -2111,6 +2111,8 @@ project(':server-common') {
     implementation libs.slf4jApi
 
     testImplementation project(':clients')
+    testImplementation project(':storage')
+    testImplementation project(':transaction-coordinator')
     testImplementation project(':clients').sourceSets.test.output
     testImplementation libs.jacksonDatabindYaml
     testImplementation libs.junitJupiter

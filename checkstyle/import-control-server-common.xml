@@ -121,6 +121,10 @@
             <allow pkg="com.fasterxml.jackson" />
             <allow pkg="org.apache.kafka.server.util.json" />
 
+            <allow pkg="org.apache.kafka.storage.internals.log" />
+            <allow pkg="org.apache.kafka.storage.internals.epoch" />
+            <allow pkg="org.apache.kafka.coordinator.transaction" />
+            <allow pkg="org.apache.kafka.storage.log.metrics" />
             <allow class="org.apache.kafka.server.util.TopicFilter.IncludeList" />
             <allow class="org.apache.kafka.test.TestUtils" />
             <subpackage name="timer">
