@@ -81,4 +81,23 @@ public class AlterUserScramCredentialsRequest extends AbstractRequest {
                         .collect(Collectors.toList());
         return new AlterUserScramCredentialsResponse(new AlterUserScramCredentialsResponseData().setResults(results));
     }
+
+    // Do not print salt or saltedPassword
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("AlterUserScramCredentialsRequestData(deletions=");
+        sb.append(data.deletions());
+        sb.append(", upsertions=[");
+        sb.append(data.upsertions().stream()
+            .map(upsertion -> String.format(
+                "ScramCredentialUpsertion(name='%s', mechanism=%d, iterations=%d)",
+                upsertion.name(),
+                upsertion.mechanism(),
+                upsertion.iterations()))
+            .collect(Collectors.joining(", ")));
+        sb.append("])");
+
+        return sb.toString();
+    }
 }

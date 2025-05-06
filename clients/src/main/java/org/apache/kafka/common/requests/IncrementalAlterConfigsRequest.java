@@ -28,6 +28,7 @@ import org.apache.kafka.common.protocol.Readable;
 
 import java.util.Collection;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 public class IncrementalAlterConfigsRequest extends AbstractRequest {
 
@@ -105,5 +106,36 @@ public class IncrementalAlterConfigsRequest extends AbstractRequest {
                     .setErrorMessage(apiError.message()));
         }
         return new IncrementalAlterConfigsResponse(response);
+    }
+
+    // It is not safe to print all config values
+    @Override
+    public String toString() {
+        StringBuilder sb = new StringBuilder();
+        sb.append("IncrementalAlterConfigsRequestData(resources=[");
+
+        String resourcesString = data.resources().stream()
+            .map(resource -> {
+                String configsString = resource.configs().stream()
+                    .map(config -> String.format(
+                        // Exclude the config value for security reasons
+                        "AlterableConfig(name='%s', configOperation=%d)",
+                        config.name(),
+                        config.configOperation()))
+                    .collect(Collectors.joining(", "));
+
+                return String.format(
+                    "AlterConfigsResource(resourceType=%d, resourceName='%s', configs=[%s])",
+                    resource.resourceType(),
+                    resource.resourceName(),
+                    configsString);
+            })
+            .collect(Collectors.joining(", "));
+
+        sb.append(resourcesString);
+        sb.append("], validateOnly=").append(data.validateOnly());
+        sb.append(")");
+
+        return sb.toString();
     }
 }
