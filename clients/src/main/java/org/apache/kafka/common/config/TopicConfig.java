@@ -111,10 +111,14 @@ public class TopicConfig {
         "The largest record batch size allowed by Kafka (after compression if compression is enabled).";
 
     public static final String INDEX_INTERVAL_BYTES_CONFIG = "index.interval.bytes";
-    public static final String INDEX_INTERVAL_BYTES_DOC = "This setting controls how frequently " +
-        "Kafka adds an index entry to its offset index. The default setting ensures that we index a " +
-        "message roughly every 4096 bytes. More indexing allows reads to jump closer to the exact " +
-        "position in the log but makes the index larger. You probably don't need to change this.";
+    public static final String INDEX_INTERVAL_BYTES_DOC = "This setting controls how frequently Kafka " +
+            "adds entries to its offset index and, conditionally, to its time index. After appending a batch of messages, " +
+            "if the total bytes written since the last index entry exceed this value, Kafka will: <br/>" +
+            "Add an entry to the offset index for the batch's last offset. <br/>" +
+            "Attempt to add an entry to the time index if the batch's maximum timestamp is greater than the last indexed timestamp. <br/>"+
+            "The default setting ensures that we index a message roughly every 4096 bytes. " +
+            "More frequent indexing allows reads to jump closer to the exact position in the log " +
+            "but results in larger index files. You probably don't need to change this.";
 
     public static final String FILE_DELETE_DELAY_MS_CONFIG = "file.delete.delay.ms";
     public static final String FILE_DELETE_DELAY_MS_DOC = "The time to wait before deleting a file from the " +
