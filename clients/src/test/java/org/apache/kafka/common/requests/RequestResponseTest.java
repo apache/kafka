@@ -1124,7 +1124,7 @@ public class RequestResponseTest {
             case ALTER_CLIENT_QUOTAS: return createAlterClientQuotasResponse();
             case DESCRIBE_USER_SCRAM_CREDENTIALS: return createDescribeUserScramCredentialsResponse();
             case ALTER_USER_SCRAM_CREDENTIALS: return createAlterUserScramCredentialsResponse();
-            case VOTE: return createVoteResponse(version);
+            case VOTE: return createVoteResponse();
             case BEGIN_QUORUM_EPOCH: return createBeginQuorumEpochResponse();
             case END_QUORUM_EPOCH: return createEndQuorumEpochResponse();
             case DESCRIBE_QUORUM: return createDescribeQuorumResponse();
@@ -1187,7 +1187,7 @@ public class RequestResponseTest {
                     .setGroupEpoch(0)
                     .setAssignmentEpoch(0)
                     .setAssignorName("range")
-                    .setMembers(new ArrayList<ConsumerGroupDescribeResponseData.Member>(0))
+                    .setMembers(new ArrayList<>(0))
             ))
             .setThrottleTimeMs(1000);
         return new ConsumerGroupDescribeResponse(data);
@@ -1660,7 +1660,7 @@ public class RequestResponseTest {
         return new VoteRequest.Builder(data).build(version);
     }
 
-    private VoteResponse createVoteResponse(short version) {
+    private VoteResponse createVoteResponse() {
         VoteResponseData.PartitionData partitionData = new VoteResponseData.PartitionData()
             .setErrorCode(Errors.NONE.code())
             .setLeaderEpoch(0)
