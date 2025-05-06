@@ -222,7 +222,6 @@ public class FormatterTest {
             addLogDirs(testEnv.directories).
             load();
         MetaProperties logDirProps0 = ensemble.logDirProps().get(testEnv.directory(0));
-        assertNotNull(logDirProps0);
         assertEquals(expectedDirectoryId, logDirProps0.directoryId().get());
     }
 
