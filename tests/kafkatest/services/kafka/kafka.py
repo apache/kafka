@@ -206,7 +206,8 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
                  consumer_group_migration_policy=None,
                  dynamicRaftQuorum=False,
                  use_transactions_v2=False,
-                 use_share_groups=None
+                 use_share_groups=None,
+                 use_streams_groups=False
                  ):
         """
         :param context: test context
@@ -271,6 +272,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         :param dynamicRaftQuorum: When true, controller_quorum_bootstrap_servers, and bootstraps the first controller using the standalone flag
         :param use_transactions_v2: When true, uses transaction.version=2 which utilizes the new transaction protocol introduced in KIP-890
         :param use_share_groups: When true, enables the use of share groups introduced in KIP-932
+        :param use_streams_groups: When true, enables the use of streams groups introduced in KIP-1071
         """
 
         self.zk = zk
@@ -296,6 +298,7 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
         # Assign the determined value.
         self.use_transactions_v2 = use_transactions_v2
         self.use_share_groups = use_share_groups
+        self.use_streams_groups = use_streams_groups
 
         # Set consumer_group_migration_policy based on context and arguments.
         if consumer_group_migration_policy is None:
@@ -778,7 +781,10 @@ class KafkaService(KafkaPathResolverMixin, JmxMixin, Service):
 
         if self.use_share_groups is not None and self.use_share_groups is True:
             override_configs[config_property.SHARE_GROUP_ENABLE] = str(self.use_share_groups)
-            override_configs[config_property.GROUP_COORDINATOR_REBALANCE_PROTOCOLS] = 'classic,consumer,share'
+
+        if self.use_streams_groups is True:
+            override_configs[config_property.UNSTABLE_API_VERSIONS_ENABLE] = str(True)
+            override_configs[config_property.UNSTABLE_FEATURE_VERSIONS_ENABLE] = str(True)
 
         #update template configs with test override configs
         configs.update(override_configs)

@@ -271,7 +271,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     private void setupRecordPruning() {
-        log.info("Scheduling share-group state topic prune job.");
+        log.debug("Scheduling share-group state topic prune job.");
         timer.add(new TimerTask(config.shareCoordinatorTopicPruneIntervalMs()) {
             @Override
             public void run() {
@@ -291,7 +291,6 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     private CompletableFuture<Void> performRecordPruning(TopicPartition tp) {
-        // This future will always be completed normally, exception or not.
         CompletableFuture<Void> fut = new CompletableFuture<>();
 
         runtime.scheduleWriteOperation(
@@ -322,11 +321,11 @@ public class ShareCoordinatorService implements ShareCoordinator {
                     return;
                 }
 
-                log.info("Pruning records in {} till offset {}.", tp, off);
+                log.debug("Pruning records in {} till offset {}.", tp, off);
                 writer.deleteRecords(tp, off)
                     .whenComplete((res, exp) -> {
                         if (exp != null) {
-                            log.debug("Exception while deleting records in {} till offset {}.", tp, off, exp);
+                            log.error("Exception while deleting records in {} till offset {}.", tp, off, exp);
                             fut.completeExceptionally(exp);
                             return;
                         }
@@ -347,7 +346,7 @@ public class ShareCoordinatorService implements ShareCoordinator {
     }
 
     private void setupSnapshotColdPartitions() {
-        log.info("Scheduling cold share-partition snapshotting.");
+        log.debug("Scheduling cold share-partition snapshotting.");
         timer.add(new TimerTask(config.shareCoordinatorColdPartitionSnapshotIntervalMs()) {
             @Override
             public void run() {

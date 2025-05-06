@@ -17,7 +17,6 @@
 package org.apache.kafka.tools;
 
 import org.apache.kafka.common.errors.TimeoutException;
-import org.apache.kafka.server.common.AdminCommandFailedException;
 
 import org.junit.jupiter.api.Test;
 
