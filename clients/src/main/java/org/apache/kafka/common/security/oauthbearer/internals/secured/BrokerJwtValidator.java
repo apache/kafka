@@ -191,11 +191,6 @@ public class BrokerJwtValidator implements JwtValidator {
             issuedAt);
     }
 
-    @Override
-    public void close() throws IOException {
-        // Do nothing...
-    }
-
     private <T> T getClaim(ClaimSupplier<T> supplier, String claimName) throws ValidateException {
         try {
             T value = supplier.get();

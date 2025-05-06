@@ -124,11 +124,6 @@ public class ClientJwtValidator implements JwtValidator {
             issuedAt);
     }
 
-    @Override
-    public void close() throws IOException {
-        // Do nothing...
-    }
-
     private Object getClaim(Map<String, Object> payload, String claimName) {
         Object value = payload.get(claimName);
         log.debug("getClaim - {}: {}", claimName, value);

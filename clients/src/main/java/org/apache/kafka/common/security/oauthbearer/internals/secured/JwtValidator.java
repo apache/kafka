@@ -20,6 +20,7 @@ package org.apache.kafka.common.security.oauthbearer.internals.secured;
 import org.apache.kafka.common.security.oauthbearer.OAuthBearerToken;
 
 import java.io.Closeable;
+import java.io.IOException;
 
 /**
  * An instance of <code>JwtValidator</code> acts as a function object that, given an access
@@ -62,4 +63,10 @@ public interface JwtValidator extends Initable, Closeable {
 
     OAuthBearerToken validate(String accessToken) throws ValidateException;
 
+    /**
+     * Closes any resources that were initialized by {@link #init()}.
+     */
+    default void close() throws IOException {
+        // Do nothing...
+    }
 }
