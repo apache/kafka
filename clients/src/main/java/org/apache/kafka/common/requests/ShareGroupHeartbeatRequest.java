@@ -37,11 +37,7 @@ public class ShareGroupHeartbeatRequest extends AbstractRequest {
         private final ShareGroupHeartbeatRequestData data;
 
         public Builder(ShareGroupHeartbeatRequestData data) {
-            this(data, true);
-        }
-
-        public Builder(ShareGroupHeartbeatRequestData data, boolean enableUnstableLastVersion) {
-            super(ApiKeys.SHARE_GROUP_HEARTBEAT, enableUnstableLastVersion);
+            super(ApiKeys.SHARE_GROUP_HEARTBEAT);
             this.data = data;
         }
 

@@ -14,14 +14,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.kafka.raft;
+package org.apache.kafka.raft.internals;
 
-public record OffsetAndEpoch(long offset, int epoch) implements Comparable<OffsetAndEpoch> {
-
-    @Override
-    public int compareTo(OffsetAndEpoch o) {
-        if (epoch == o.epoch)
-            return Long.compare(offset, o.offset);
-        return Integer.compare(epoch, o.epoch);
+/**
+ * Type to capture the atempt to send a request.
+ *
+ * @param requestSent true if the request was sent
+ * @param timeToWaitMs the amount of time to wait in milliseconds before attempting to resend the
+ *                     request.
+ */
+public record RequestSendResult(boolean requestSent, long timeToWaitMs) {
+    public static RequestSendResult of(boolean requestSent, long timeToWaitMs) {
+        return new RequestSendResult(requestSent, timeToWaitMs);
     }
 }

@@ -14,15 +14,16 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
+package org.apache.kafka.common.errors;
 
-package org.apache.kafka.server.common;
+/**
+ * Indicates that a new share session could not be opened because the limit of share sessions has been reached.
+ */
+public class ShareSessionLimitReachedException extends RetriableException {
 
-public class AdminCommandFailedException extends RuntimeException {
-    public AdminCommandFailedException(String message) {
+    private static final long serialVersionUID = 1L;
+
+    public ShareSessionLimitReachedException(String message) {
         super(message);
-    }
-
-    public AdminCommandFailedException(String message, Throwable cause) {
-        super(message, cause);
     }
 }

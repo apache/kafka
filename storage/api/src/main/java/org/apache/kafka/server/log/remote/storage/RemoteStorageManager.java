@@ -39,6 +39,10 @@ import java.util.Optional;
  * <p>
  * All properties prefixed with the config: "remote.log.storage.manager.impl.prefix"
  * (default value is "rsm.config.") are passed when {@link #configure(Map)} is invoked on this instance.
+ *
+ * Implement {@link org.apache.kafka.common.metrics.Monitorable} to enable the manager to register metrics.
+ * The following tags are automatically added to all metrics registered: <code>config</code> set to
+ * <code>remote.log.storage.manager.class.name</code>, and <code>class</code> set to the RemoteStorageManager class name.
  */
 public interface RemoteStorageManager extends Configurable, Closeable {
 

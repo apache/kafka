@@ -420,11 +420,18 @@ public class SharePartitionManager implements AutoCloseable {
      * @param shareFetchData The topic-partitions in the share fetch request.
      * @param toForget The topic-partitions to forget present in the share fetch request.
      * @param reqMetadata The metadata in the share fetch request.
-     * @param isAcknowledgeDataPresent This tells whether the fetch request received includes piggybacked acknowledgements or not
+     * @param isAcknowledgeDataPresent This tells whether the fetch request received includes piggybacked acknowledgements or not.
+     * @param clientConnectionId The client connection id.
      * @return The new share fetch context object
      */
-    public ShareFetchContext newContext(String groupId, List<TopicIdPartition> shareFetchData,
-                                        List<TopicIdPartition> toForget, ShareRequestMetadata reqMetadata, Boolean isAcknowledgeDataPresent) {
+    public ShareFetchContext newContext(
+        String groupId,
+        List<TopicIdPartition> shareFetchData,
+        List<TopicIdPartition> toForget,
+        ShareRequestMetadata reqMetadata,
+        Boolean isAcknowledgeDataPresent,
+        String clientConnectionId
+    ) {
         ShareFetchContext context;
         // If the request's epoch is FINAL_EPOCH or INITIAL_EPOCH, we should remove the existing sessions. Also, start a
         // new session in case it is INITIAL_EPOCH. Hence, we need to treat them as special cases.
@@ -449,7 +456,7 @@ public class SharePartitionManager implements AutoCloseable {
                 shareFetchData.forEach(topicIdPartition ->
                     cachedSharePartitions.mustAdd(new CachedSharePartition(topicIdPartition, false)));
                 ShareSessionKey responseShareSessionKey = cache.maybeCreateSession(groupId, reqMetadata.memberId(),
-                        time.milliseconds(), cachedSharePartitions);
+                    cachedSharePartitions, clientConnectionId);
                 if (responseShareSessionKey == null) {
                     log.error("Could not create a share session for group {} member {}", groupId, reqMetadata.memberId());
                     throw Errors.SHARE_SESSION_NOT_FOUND.exception();
@@ -476,7 +483,7 @@ public class SharePartitionManager implements AutoCloseable {
                 }
                 Map<ShareSession.ModifiedTopicIdPartitionType, List<TopicIdPartition>> modifiedTopicIdPartitions = shareSession.update(
                     shareFetchData, toForget);
-                cache.touch(shareSession, time.milliseconds());
+                cache.updateNumPartitions(shareSession);
                 shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
                 log.debug("Created a new ShareSessionContext for session key {}, epoch {}: " +
                                 "added {}, updated {}, removed {}", shareSession.key(), shareSession.epoch,
@@ -517,7 +524,7 @@ public class SharePartitionManager implements AutoCloseable {
                             shareSession.epoch, reqMetadata.epoch());
                     throw Errors.INVALID_SHARE_SESSION_EPOCH.exception();
                 }
-                cache.touch(shareSession, time.milliseconds());
+                cache.updateNumPartitions(shareSession);
                 shareSession.epoch = ShareRequestMetadata.nextEpoch(shareSession.epoch);
             }
         }

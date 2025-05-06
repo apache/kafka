@@ -51,6 +51,8 @@ class StreamsStandbyTask(BaseStreamsTest):
     def test_standby_tasks_rebalance(self, metadata_quorum):
         # TODO KIP-441: consider rewriting the test for HighAvailabilityTaskAssignor
         configs = self.get_configs(
+            group_protocol="classic",
+            extra_configs=
             ",sourceTopic=%s,sinkTopic1=%s,sinkTopic2=%s,internal.task.assignor.class=org.apache.kafka.streams.processor.internals.assignment.LegacyStickyTaskAssignor" % (
             self.streams_source_topic,
             self.streams_sink_topic_1,

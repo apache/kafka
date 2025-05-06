@@ -55,7 +55,6 @@ import org.apache.kafka.common.message.TxnOffsetCommitRequestData;
 import org.apache.kafka.common.message.TxnOffsetCommitResponseData;
 import org.apache.kafka.common.protocol.ApiMessage;
 import org.apache.kafka.common.protocol.Errors;
-import org.apache.kafka.common.requests.RequestContext;
 import org.apache.kafka.common.requests.TransactionResult;
 import org.apache.kafka.common.utils.LogContext;
 import org.apache.kafka.common.utils.Time;
@@ -122,6 +121,7 @@ import org.apache.kafka.coordinator.group.modern.share.ShareGroup;
 import org.apache.kafka.coordinator.group.streams.StreamsGroupHeartbeatResult;
 import org.apache.kafka.image.MetadataDelta;
 import org.apache.kafka.image.MetadataImage;
+import org.apache.kafka.server.authorizer.AuthorizableRequestContext;
 import org.apache.kafka.server.authorizer.Authorizer;
 import org.apache.kafka.server.common.ApiMessageAndVersion;
 import org.apache.kafka.server.share.persister.DeleteShareGroupStateParameters;
@@ -456,7 +456,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<ConsumerGroupHeartbeatResponseData, CoordinatorRecord> consumerGroupHeartbeat(
-        RequestContext context,
+        AuthorizableRequestContext context,
         ConsumerGroupHeartbeatRequestData request
     ) {
         return groupMetadataManager.consumerGroupHeartbeat(context, request);
@@ -472,7 +472,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<StreamsGroupHeartbeatResult, CoordinatorRecord> streamsGroupHeartbeat(
-        RequestContext context,
+        AuthorizableRequestContext context,
         StreamsGroupHeartbeatRequestData request
     ) {
         return groupMetadataManager.streamsGroupHeartbeat(context, request);
@@ -488,7 +488,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      *         and a list of records to update the state machine.
      */
     public CoordinatorResult<Map.Entry<ShareGroupHeartbeatResponseData, Optional<InitializeShareGroupStateParameters>>, CoordinatorRecord> shareGroupHeartbeat(
-        RequestContext context,
+        AuthorizableRequestContext context,
         ShareGroupHeartbeatRequestData request
     ) {
         return groupMetadataManager.shareGroupHeartbeat(context, request);
@@ -557,7 +557,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<Void, CoordinatorRecord> classicGroupJoin(
-        RequestContext context,
+        AuthorizableRequestContext context,
         JoinGroupRequestData request,
         CompletableFuture<JoinGroupResponseData> responseFuture
     ) {
@@ -578,7 +578,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<Void, CoordinatorRecord> classicGroupSync(
-        RequestContext context,
+        AuthorizableRequestContext context,
         SyncGroupRequestData request,
         CompletableFuture<SyncGroupResponseData> responseFuture
     ) {
@@ -599,7 +599,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<HeartbeatResponseData, CoordinatorRecord> classicGroupHeartbeat(
-        RequestContext context,
+        AuthorizableRequestContext context,
         HeartbeatRequestData request
     ) {
         return groupMetadataManager.classicGroupHeartbeat(
@@ -617,7 +617,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<DeleteGroupsResponseData.DeletableGroupResultCollection, CoordinatorRecord> deleteGroups(
-        RequestContext context,
+        AuthorizableRequestContext context,
         List<String> groupIds
     ) throws ApiException {
         final DeleteGroupsResponseData.DeletableGroupResultCollection resultCollection =
@@ -662,7 +662,9 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @param groupIds - A list of groupIds as string
      * @return A result object containing a map keyed on groupId and value pair (req, error) and related coordinator records.
      */
-    public CoordinatorResult<Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>>, CoordinatorRecord> sharePartitionDeleteRequests(List<String> groupIds) {
+    public CoordinatorResult<Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>>, CoordinatorRecord> sharePartitionDeleteRequests(
+        List<String> groupIds
+    ) {
         Map<String, Map.Entry<DeleteShareGroupStateParameters, Errors>> responseMap = new HashMap<>();
         List<CoordinatorRecord> records = new ArrayList<>();
         for (String groupId : groupIds) {
@@ -682,20 +684,23 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
     }
 
     /**
-     * Does the following checks to make sure that a DeleteShareGroupOffsets request is valid and can be processed further
+     * Ensure the following checks are true to make sure that a DeleteShareGroupOffsets request is valid and can be processed further
      * 1. Checks whether the provided group is empty
      * 2. Checks the requested topics are presented in the metadataImage
      * 3. Checks the requested share partitions are initialized for the group
+     * Once these checks are passed, an appropriate ShareGroupStatePartitionMetadataRecord is created by adding the topics to
+     * deleting topics list and removing them from the initialized topics list.
      *
      * @param groupId - The group ID
      * @param requestData - The request data for DeleteShareGroupOffsetsRequest
      * @return {@link DeleteShareGroupOffsetsResultHolder} an object containing top level error code, list of topic responses
      *                                               and persister deleteState request parameters
      */
-    public DeleteShareGroupOffsetsResultHolder shareGroupDeleteOffsetsRequest(
+    public CoordinatorResult<DeleteShareGroupOffsetsResultHolder, CoordinatorRecord> initiateDeleteShareGroupOffsets(
         String groupId,
         DeleteShareGroupOffsetsRequestData requestData
     ) {
+        List<CoordinatorRecord> records = new ArrayList<>();
         try {
             ShareGroup group = groupMetadataManager.shareGroup(groupId);
             group.validateDeleteGroup();
@@ -705,31 +710,79 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
                 groupMetadataManager.sharePartitionsEligibleForOffsetDeletion(
                     groupId,
                     requestData,
-                    errorTopicResponseList
+                    errorTopicResponseList,
+                    records
                 );
 
             if (deleteShareGroupStateRequestTopicsData.isEmpty()) {
-                return new DeleteShareGroupOffsetsResultHolder(Errors.NONE.code(), null, errorTopicResponseList);
+                return new CoordinatorResult<>(
+                    records,
+                    new DeleteShareGroupOffsetsResultHolder(Errors.NONE.code(), null, errorTopicResponseList)
+                );
             }
 
             DeleteShareGroupStateRequestData deleteShareGroupStateRequestData = new DeleteShareGroupStateRequestData()
                 .setGroupId(requestData.groupId())
                 .setTopics(deleteShareGroupStateRequestTopicsData);
 
-            return new DeleteShareGroupOffsetsResultHolder(
-                Errors.NONE.code(),
-                null,
-                errorTopicResponseList,
-                DeleteShareGroupStateParameters.from(deleteShareGroupStateRequestData)
+            return new CoordinatorResult<>(
+                records,
+                new DeleteShareGroupOffsetsResultHolder(
+                    Errors.NONE.code(),
+                    null,
+                    errorTopicResponseList,
+                    DeleteShareGroupStateParameters.from(deleteShareGroupStateRequestData)
+                )
             );
 
         } catch (GroupIdNotFoundException exception) {
             log.error("groupId {} not found", groupId, exception);
-            return new DeleteShareGroupOffsetsResultHolder(Errors.GROUP_ID_NOT_FOUND.code(), exception.getMessage());
+            return new CoordinatorResult<>(
+                records,
+                new DeleteShareGroupOffsetsResultHolder(Errors.GROUP_ID_NOT_FOUND.code(), exception.getMessage())
+            );
         } catch (GroupNotEmptyException exception) {
             log.error("Provided group {} is not empty", groupId);
-            return new DeleteShareGroupOffsetsResultHolder(Errors.NON_EMPTY_GROUP.code(), exception.getMessage());
+            return new CoordinatorResult<>(
+                records,
+                new DeleteShareGroupOffsetsResultHolder(Errors.NON_EMPTY_GROUP.code(), exception.getMessage())
+            );
         }
+    }
+
+    /**
+     * Completes the share group offset deletion by creating a ShareGroupStatePartitionMetadataRecord removing the
+     * deleted topics from deletingTopics set. Returns the final response for DeleteShareGroupOffsetsRequest
+     *
+     * @param groupId - The group ID
+     * @param topics - The set of topics which were deleted successfully by the persister
+     * @return the final response {@link DeleteShareGroupOffsetsResponseData} for the DeleteShareGroupOffsetsRequest
+     */
+    public CoordinatorResult<DeleteShareGroupOffsetsResponseData, CoordinatorRecord> completeDeleteShareGroupOffsets(
+        String groupId,
+        Map<Uuid, String> topics,
+        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> errorTopicResponseList
+    ) {
+        List<CoordinatorRecord> records = new ArrayList<>();
+        List<DeleteShareGroupOffsetsResponseData.DeleteShareGroupOffsetsResponseTopic> topicResponseList = new ArrayList<>();
+
+        topicResponseList.addAll(
+            groupMetadataManager.completeDeleteShareGroupOffsets(
+                groupId,
+                topics,
+                records
+            )
+        );
+
+        topicResponseList.addAll(errorTopicResponseList);
+
+        return new CoordinatorResult<>(
+            records,
+            new DeleteShareGroupOffsetsResponseData()
+                .setErrorCode(Errors.NONE.code())
+                .setErrorMessage(null)
+                .setResponses(topicResponseList)
+        );
     }
 
     /**
@@ -774,7 +827,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<OffsetCommitResponseData, CoordinatorRecord> commitOffset(
-        RequestContext context,
+        AuthorizableRequestContext context,
         OffsetCommitRequestData request
     ) throws ApiException {
         return offsetMetadataManager.commitOffset(context, request);
@@ -790,7 +843,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<TxnOffsetCommitResponseData, CoordinatorRecord> commitTransactionalOffset(
-        RequestContext context,
+        AuthorizableRequestContext context,
         TxnOffsetCommitRequestData request
     ) throws ApiException {
         return offsetMetadataManager.commitTransactionalOffset(context, request);
@@ -875,7 +928,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      * @return A list containing the DescribeGroupsResponseData.DescribedGroup.
      */
     public List<DescribeGroupsResponseData.DescribedGroup> describeGroups(
-        RequestContext context,
+        AuthorizableRequestContext context,
         List<String> groupIds,
         long committedOffset
     ) {
@@ -892,7 +945,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<LeaveGroupResponseData, CoordinatorRecord> classicGroupLeave(
-        RequestContext context,
+        AuthorizableRequestContext context,
         LeaveGroupRequestData request
     ) throws ApiException {
         return groupMetadataManager.classicGroupLeave(context, request);
@@ -908,7 +961,7 @@ public class GroupCoordinatorShard implements CoordinatorShard<CoordinatorRecord
      *         a list of records to update the state machine.
      */
     public CoordinatorResult<OffsetDeleteResponseData, CoordinatorRecord> deleteOffsets(
-        RequestContext context,
+        AuthorizableRequestContext context,
         OffsetDeleteRequestData request
     ) throws ApiException {
         return offsetMetadataManager.deleteOffsets(request);
