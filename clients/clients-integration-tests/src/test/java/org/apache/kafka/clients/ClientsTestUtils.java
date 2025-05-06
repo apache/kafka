@@ -21,7 +21,11 @@ import org.apache.kafka.clients.consumer.ConsumerRecord;
 import org.apache.kafka.clients.producer.Producer;
 import org.apache.kafka.clients.producer.ProducerRecord;
 import org.apache.kafka.common.TopicPartition;
+import org.apache.kafka.common.header.Header;
+import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.record.TimestampType;
+import org.apache.kafka.common.serialization.Deserializer;
+import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.TestUtils;
 
@@ -31,11 +35,14 @@ import java.util.List;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.fail;
 
 public class ClientsTestUtils {
 
     private static final String KEY_PREFIX = "key ";
     private static final String VALUE_PREFIX = "value ";
+    public static final String KEY = "content-type";
+    public static final String VALUE = "application/octet-stream";
 
     private ClientsTestUtils() {}
 
@@ -192,5 +199,36 @@ public class ClientsTestUtils {
         );
         producer.send(record);
         return record;
+    }
+
+    public static class SerializerImpl implements Serializer<byte[]> {
+
+        @Override
+        public byte[] serialize(String topic, Headers headers, byte[] data) {
+            headers.add(KEY, VALUE.getBytes());
+            return data;
+        }
+
+        @Override
+        public byte[] serialize(String topic, byte[] data) {
+            fail("method should not be invoked");
+            return null;
+        }
+    }
+
+    public static class DeserializerImpl implements Deserializer<byte[]> {
+
+        @Override
+        public byte[] deserialize(String topic, Headers headers, byte[] data) {
+            Header header = headers.lastHeader(KEY);
+            assertEquals(VALUE, header == null ? null : new String(header.value()));
+            return data;
+        }
+
+        @Override
+        public byte[] deserialize(String topic, byte[] data) {
+            fail("method should not be invoked");
+            return null;
+        }
     }
 }

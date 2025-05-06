@@ -18,6 +18,7 @@ package org.apache.kafka.clients.consumer;
 
 import kafka.server.KafkaBroker;
 
+import org.apache.kafka.clients.ClientsTestUtils;
 import org.apache.kafka.clients.admin.Admin;
 import org.apache.kafka.clients.admin.AlterConfigOp;
 import org.apache.kafka.clients.admin.AlterConfigsOptions;
@@ -43,7 +44,6 @@ import org.apache.kafka.common.errors.InvalidRecordStateException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.WakeupException;
 import org.apache.kafka.common.header.Header;
-import org.apache.kafka.common.header.Headers;
 import org.apache.kafka.common.internals.Topic;
 import org.apache.kafka.common.network.ListenerName;
 import org.apache.kafka.common.record.TimestampType;
@@ -129,8 +129,6 @@ public class ShareConsumerTest {
     private final TopicPartition tp2 = new TopicPartition("topic2", 0);
     private final TopicPartition warmupTp = new TopicPartition("warmup", 0);
     private List<TopicPartition> sgsTopicPartitions;
-    private static final String KEY = "content-type";
-    private static final String VALUE = "application/octet-stream";
     private static final String EXPLICIT = "explicit";
     private static final String IMPLICIT = "implicit";
 
@@ -506,7 +504,7 @@ public class ShareConsumerTest {
 
     @ClusterTest
     public void testHeadersSerializerDeserializer() {
-        testHeadersSerializeDeserialize(new SerializerImpl(), new DeserializerImpl());
+        testHeadersSerializeDeserialize(new ClientsTestUtils.SerializerImpl(), new ClientsTestUtils.DeserializerImpl());
         verifyShareGroupStateTopicRecordsProduced();
     }
 
@@ -2962,37 +2960,6 @@ public class ShareConsumerTest {
             );
         } catch (Exception e) {
             throw new RuntimeException(e);
-        }
-    }
-
-    public static class SerializerImpl implements Serializer<byte[]> {
-
-        @Override
-        public byte[] serialize(String topic, Headers headers, byte[] data) {
-            headers.add(KEY, VALUE.getBytes());
-            return data;
-        }
-
-        @Override
-        public byte[] serialize(String topic, byte[] data) {
-            fail("method should not be invoked");
-            return null;
-        }
-    }
-
-    public static class DeserializerImpl implements Deserializer<byte[]> {
-
-        @Override
-        public byte[] deserialize(String topic, Headers headers, byte[] data) {
-            Header header = headers.lastHeader(KEY);
-            assertEquals("application/octet-stream", header == null ? null : new String(header.value()));
-            return data;
-        }
-
-        @Override
-        public byte[] deserialize(String topic, byte[] data) {
-            fail("method should not be invoked");
-            return null;
         }
     }
 }
