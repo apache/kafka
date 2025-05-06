@@ -24,7 +24,6 @@ import org.apache.kafka.common.security.oauthbearer.internals.unsecured.OAuthBea
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
-import java.io.IOException;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.Map;
