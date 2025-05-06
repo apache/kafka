@@ -1170,7 +1170,7 @@ public class MemoryRecordsTest {
      */
     @ParameterizedTest
     @ArgumentsSource(MemoryRecordsArgumentsProvider.class)
-    public void testSliceForAlreadySlicedFileRecords(Args args) throws IOException {
+    public void testSliceForAlreadySlicedMemoryRecords(Args args) throws IOException {
         LinkedHashMap<Long, Integer> recordsPerOffset = new LinkedHashMap<>();
         recordsPerOffset.put(args.firstOffset, 5);
         recordsPerOffset.put(args.firstOffset + 5L, 10);

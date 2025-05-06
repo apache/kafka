@@ -100,7 +100,8 @@ public interface Records extends TransferableRecords {
      *
      * If this records set is already sliced, the position will be taken relative to that slicing.
      *
-     * @param position The start position to begin the read from
+     * @param position The start position to begin the read from. The position should be aligned to
+     *                 the batch boundary, else the returned records can't be iterated.
      * @param size The number of bytes after the start position to include
      * @return A sliced wrapper on this message set limited based on the given position and size
      */

@@ -300,17 +300,6 @@ public class MemoryRecords extends AbstractRecords {
         return buffer.duplicate();
     }
 
-    /**
-     * Return a slice of records from this instance, which is a view into this set starting from the
-     * given position and with the given size limit.
-     *
-     * If the size is beyond the end of the buffer, the end will be based on the size of the buffer
-     * at the time of the read.
-     *
-     * @param position The start position to begin the read from
-     * @param size The number of bytes after the start position to include
-     * @return A sliced buffer on this message set limited based on the given position and size
-     */
     @Override
     public Records slice(int position, int size) {
         if (position < 0)
