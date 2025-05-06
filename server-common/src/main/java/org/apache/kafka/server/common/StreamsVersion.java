@@ -18,24 +18,28 @@ package org.apache.kafka.server.common;
 
 import java.util.Map;
 
-public enum ShareVersion implements FeatureVersion {
+public enum StreamsVersion implements FeatureVersion {
 
-    // Version 0 does not enable share groups.
+    // Version 0 keeps "streams" groups disabled (KIP-1071).
     SV_0(0, MetadataVersion.MINIMUM_VERSION, Map.of()),
 
-    // Version 1 enables share groups (KIP-932).
-    // This is a preview in 4.1, and production-ready in 4.2.
-    SV_1(1, MetadataVersion.IBP_4_2_IV0, Map.of());
+    // Version 1 enables "streams" groups (KIP-1071).
+    // Using metadata version IBP_4_2_IV1 disables it by default in AK 4.1 release, and enables it by default in AK 4.2 release.
+    //  - in AK 4.1, this can be enabled as "early access [unstable]"
+    //  - in AK 4.2, it is planned to go GA (cf `LATEST_PRODUCTION`)
+    SV_1(1, MetadataVersion.IBP_4_2_IV1, Map.of());
 
-    public static final String FEATURE_NAME = "share.version";
+    public static final String FEATURE_NAME = "streams.version";
 
-    public static final ShareVersion LATEST_PRODUCTION = SV_0;
+    // Mark "streams" group as unstable in AK 4.1 release
+    // Needs to be updated to SV_1 in AK 4.2, to mark as stable
+    public static final StreamsVersion LATEST_PRODUCTION = SV_0;
 
     private final short featureLevel;
     private final MetadataVersion bootstrapMetadataVersion;
     private final Map<String, Short> dependencies;
 
-    ShareVersion(
+    StreamsVersion(
         int featureLevel,
         MetadataVersion bootstrapMetadataVersion,
         Map<String, Short> dependencies
@@ -65,18 +69,15 @@ public enum ShareVersion implements FeatureVersion {
         return dependencies;
     }
 
-    public boolean supportsShareGroups() {
+    public boolean streamsGroupSupported() {
         return featureLevel >= SV_1.featureLevel;
     }
 
-    public static ShareVersion fromFeatureLevel(short version) {
-        switch (version) {
-            case 0:
-                return SV_0;
-            case 1:
-                return SV_1;
-            default:
-                throw new RuntimeException("Unknown share feature level: " + (int) version);
-        }
+    public static StreamsVersion fromFeatureLevel(short version) {
+        return switch (version) {
+            case 0 -> SV_0;
+            case 1 -> SV_1;
+            default -> throw new RuntimeException("Unknown streams feature level: " + (int) version);
+        };
     }
 }
