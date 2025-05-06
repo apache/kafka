@@ -411,7 +411,7 @@ class KafkaApis(val requestChannel: RequestChannel,
         }
 
         val topicPartition = new TopicPartition(topicName, partition.index())
-        if (topicName.isEmpty)
+        if (topicName.isEmpty && !topic.topicId().equals(Uuid.ZERO_UUID))
           nonExistingTopicResponses += new TopicIdPartition(topicId, topicPartition) -> new PartitionResponse(Errors.UNKNOWN_TOPIC_ID)
         else
           topicIdToPartitionData += new TopicIdPartition(topicId, topicPartition) -> partition
