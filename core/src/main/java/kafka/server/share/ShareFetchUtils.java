@@ -205,8 +205,8 @@ public class ShareFetchUtils {
      *
      * @param records The records to be sliced.
      * @param shareAcquiredRecords The share acquired records containing the non-empty acquired records.
-     * @return The sliced records, if the records are of type FileRecords and the acquired records are a subset
-     *        of the fetched records. Otherwise, the original records are returned.
+     * @return The sliced records, if the acquired records are a subset of the fetched records. Otherwise,
+     *         the original records are returned.
      */
     static Records maybeSliceFetchRecords(Records records, ShareAcquiredRecords shareAcquiredRecords) {
         // The acquired records should be non-empty, do not check as the method is called only when the

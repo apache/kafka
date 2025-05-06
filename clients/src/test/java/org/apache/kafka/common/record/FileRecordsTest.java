@@ -442,9 +442,7 @@ public class FileRecordsTest {
             assertEquals(items.subList(3, items.size()), batches(sliced), "Read starting from the fourth message");
 
             // Further slice the already sliced file records, from fifth message until the end. Now the
-            // bytes available in the sliced file records are less than the start position. However, the
-            // position to slice is relative hence reset position to second message in the sliced file
-            // records i.e. reset with the size of the fourth message from the original file records.
+            // bytes available in the sliced file records are less than the start position.
             position = items.get(3).sizeInBytes();
             Records finalSliced = sliced.slice(position, sliced.sizeInBytes() - position);
             assertEquals(sliced.sizeInBytes() - position, finalSliced.sizeInBytes());
