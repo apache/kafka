@@ -35,6 +35,12 @@ import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_EXPECT
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SCOPE_CLAIM_NAME;
 import static org.apache.kafka.common.config.SaslConfigs.SASL_OAUTHBEARER_SUB_CLAIM_NAME;
 
+/**
+ * This {@link JwtValidator} uses the delegation approach, instantiating and delegating calls to a
+ * more concrete implementation. The underlying implementation is determined by the presence/absence
+ * of the {@link VerificationKeyResolver}: if it's present, a {@link BrokerJwtValidator} is
+ * created, otherwise a {@link ClientJwtValidator} is created.
+ */
 public class DefaultJwtValidator implements JwtValidator {
 
     private final Map<String, ?> configs;
