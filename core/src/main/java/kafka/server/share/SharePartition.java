@@ -198,6 +198,16 @@ public class SharePartition {
     }
 
     /**
+     * The DeliveryCountOps is used to specify the behavior on the delivery count: increase, decrease,
+     * or do nothing.
+     */
+    private enum DeliveryCountOps {
+        INCREASE,
+        DECREASE,
+        NO_OP
+    }
+
+    /**
      * The group id of the share partition belongs to.
      */
     private final String groupId;
@@ -319,6 +329,12 @@ public class SharePartition {
     private final OffsetMetadata fetchOffsetMetadata;
 
     /**
+     * The delayed share fetch key is used to track the delayed share fetch requests that are waiting
+     * for the respective share partition.
+     */
+    private final DelayedShareFetchKey delayedShareFetchKey;
+
+    /**
      * The state epoch is used to track the version of the state of the share partition.
      */
     private int stateEpoch;
@@ -404,6 +420,7 @@ public class SharePartition {
         this.replicaManager = replicaManager;
         this.groupConfigManager = groupConfigManager;
         this.fetchOffsetMetadata = new OffsetMetadata();
+        this.delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition);
         this.listener = listener;
         this.sharePartitionMetrics = sharePartitionMetrics;
         this.registerGaugeMetrics();
@@ -541,6 +558,9 @@ public class SharePartition {
                 }
                 // Release the lock.
                 lock.writeLock().unlock();
+                // Avoid triggering the listener for waiting share fetch requests in purgatory as the
+                // share partition manager keeps track of same and will trigger the listener for the
+                // respective share partition.
                 // Complete the future.
                 if (isFailed) {
                     future.completeExceptionally(throwable);
@@ -832,7 +852,7 @@ public class SharePartition {
                     continue;
                 }
 
-                InFlightState updateResult = inFlightBatch.tryUpdateBatchState(RecordState.ACQUIRED, true, maxDeliveryCount, memberId);
+                InFlightState updateResult = inFlightBatch.tryUpdateBatchState(RecordState.ACQUIRED, DeliveryCountOps.INCREASE, maxDeliveryCount, memberId);
                 if (updateResult == null) {
                     log.info("Unable to acquire records for the batch: {} in share partition: {}-{}",
                         inFlightBatch, groupId, topicIdPartition);
@@ -1024,9 +1044,10 @@ public class SharePartition {
                 return Optional.empty();
             }
             if (offsetState.getValue().state == RecordState.ACQUIRED) {
+                // These records were fetched but they were not actually delivered to the client.
                 InFlightState updateResult = offsetState.getValue().startStateTransition(
                         offsetState.getKey() < startOffset ? RecordState.ARCHIVED : recordState,
-                        false,
+                        DeliveryCountOps.DECREASE,
                         this.maxDeliveryCount,
                         EMPTY_MEMBER_ID
                 );
@@ -1072,7 +1093,7 @@ public class SharePartition {
         if (inFlightBatch.batchState() == RecordState.ACQUIRED) {
             InFlightState updateResult = inFlightBatch.startBatchStateTransition(
                     inFlightBatch.lastOffset() < startOffset ? RecordState.ARCHIVED : recordState,
-                    false,
+                    DeliveryCountOps.DECREASE,
                     this.maxDeliveryCount,
                     EMPTY_MEMBER_ID
             );
@@ -1624,8 +1645,8 @@ public class SharePartition {
                     continue;
                 }
 
-                InFlightState updateResult =  offsetState.getValue().tryUpdateState(RecordState.ACQUIRED, true, maxDeliveryCount,
-                    memberId);
+                InFlightState updateResult =  offsetState.getValue().tryUpdateState(RecordState.ACQUIRED, DeliveryCountOps.INCREASE,
+                    maxDeliveryCount, memberId);
                 if (updateResult == null) {
                     log.trace("Unable to acquire records for the offset: {} in batch: {}"
                             + " for the share partition: {}-{}", offsetState.getKey(), inFlightBatch,
@@ -1897,7 +1918,7 @@ public class SharePartition {
                         recordStateDefault;
                 InFlightState updateResult = offsetState.getValue().startStateTransition(
                     recordState,
-                    false,
+                    DeliveryCountOps.NO_OP,
                     this.maxDeliveryCount,
                     EMPTY_MEMBER_ID
                 );
@@ -1950,7 +1971,7 @@ public class SharePartition {
             // is only important when the batch is acquired.
             InFlightState updateResult = inFlightBatch.startBatchStateTransition(
                 recordState,
-                false,
+                DeliveryCountOps.NO_OP,
                 this.maxDeliveryCount,
                 EMPTY_MEMBER_ID
             );
@@ -2037,6 +2058,10 @@ public class SharePartition {
         }
 
         writeShareGroupState(stateBatches).whenComplete((result, exception) -> {
+            // There can be a pending delayed share fetch requests for the share partition which are waiting
+            // on the startOffset to move ahead, hence track if the state is updated in the cache. If
+            // yes, then notify the delayed share fetch purgatory to complete the pending requests.
+            boolean cacheStateUpdated = false;
             lock.writeLock().lock();
             try {
                 if (exception != null) {
@@ -2055,27 +2080,31 @@ public class SharePartition {
                     state.cancelAndClearAcquisitionLockTimeoutTask();
                 });
                 // Update the cached state and start and end offsets after acknowledging/releasing the acquired records.
-                maybeUpdateCachedStateAndOffsets();
+                cacheStateUpdated  = maybeUpdateCachedStateAndOffsets();
                 future.complete(null);
             } finally {
                 lock.writeLock().unlock();
+                // Maybe complete the delayed share fetch request if the state has been changed in cache
+                // which might have moved start offset ahead. Hence, the pending delayed share fetch
+                // request can be completed. The call should be made outside the lock to avoid deadlock.
+                maybeCompleteDelayedShareFetchRequest(cacheStateUpdated);
             }
         });
     }
 
-    private void maybeUpdateCachedStateAndOffsets() {
+    private boolean maybeUpdateCachedStateAndOffsets() {
         lock.writeLock().lock();
         try {
             if (!canMoveStartOffset()) {
-                return;
+                return false;
             }
 
             // This will help to find the next position for the startOffset.
             // The new position of startOffset will be lastOffsetAcknowledged + 1
             long lastOffsetAcknowledged = findLastOffsetAcknowledged();
-            // If lastOffsetAcknowledged is -1, this means we cannot move out startOffset ahead
+            // If lastOffsetAcknowledged is -1, this means we cannot move startOffset ahead
             if (lastOffsetAcknowledged == -1) {
-                return;
+                return false;
             }
 
             // This is true if all records in the cachedState have been acknowledged (either Accept or Reject).
@@ -2086,7 +2115,7 @@ public class SharePartition {
                 endOffset = lastCachedOffset + 1;
                 cachedState.clear();
                 // Nothing further to do.
-                return;
+                return true;
             }
 
             /*
@@ -2133,6 +2162,7 @@ public class SharePartition {
             if (lastKeyToRemove != -1) {
                 cachedState.subMap(firstKeyToRemove, true, lastKeyToRemove, true).clear();
             }
+            return true;
         } finally {
             lock.writeLock().unlock();
         }
@@ -2394,13 +2424,10 @@ public class SharePartition {
             lock.writeLock().unlock();
         }
 
+        // If we have an acquisition lock timeout for a share-partition, then we should check if
+        // there is a pending share fetch request for the share-partition and complete it.
         // Skip null check for stateBatches, it should always be initialized if reached here.
-        if (!stateBatches.isEmpty()) {
-            // If we have an acquisition lock timeout for a share-partition, then we should check if
-            // there is a pending share fetch request for the share-partition and complete it.
-            DelayedShareFetchKey delayedShareFetchKey = new DelayedShareFetchGroupKey(groupId, topicIdPartition.topicId(), topicIdPartition.partition());
-            replicaManager.completeDelayedShareFetchRequest(delayedShareFetchKey);
-        }
+        maybeCompleteDelayedShareFetchRequest(!stateBatches.isEmpty());
     }
 
     private void releaseAcquisitionLockOnTimeoutForCompleteBatch(InFlightBatch inFlightBatch,
@@ -2409,7 +2436,7 @@ public class SharePartition {
         if (inFlightBatch.batchState() == RecordState.ACQUIRED) {
             InFlightState updateResult = inFlightBatch.tryUpdateBatchState(
                     inFlightBatch.lastOffset() < startOffset ? RecordState.ARCHIVED : RecordState.AVAILABLE,
-                    false,
+                    DeliveryCountOps.NO_OP,
                     maxDeliveryCount,
                     EMPTY_MEMBER_ID);
             if (updateResult == null) {
@@ -2455,7 +2482,7 @@ public class SharePartition {
             }
             InFlightState updateResult = offsetState.getValue().tryUpdateState(
                     offsetState.getKey() < startOffset ? RecordState.ARCHIVED : RecordState.AVAILABLE,
-                    false,
+                    DeliveryCountOps.NO_OP,
                     maxDeliveryCount,
                     EMPTY_MEMBER_ID);
             if (updateResult == null) {
@@ -2472,6 +2499,12 @@ public class SharePartition {
             if (updateResult.state != RecordState.ARCHIVED) {
                 findNextFetchOffset.set(true);
             }
+        }
+    }
+
+    private void maybeCompleteDelayedShareFetchRequest(boolean shouldComplete) {
+        if (shouldComplete) {
+            replicaManager.completeDelayedShareFetchRequest(delayedShareFetchKey);
         }
     }
 
@@ -2875,19 +2908,19 @@ public class SharePartition {
             inFlightState().archive(newMemberId);
         }
 
-        private InFlightState tryUpdateBatchState(RecordState newState, boolean incrementDeliveryCount, int maxDeliveryCount, String newMemberId) {
+        private InFlightState tryUpdateBatchState(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId) {
             if (batchState == null) {
                 throw new IllegalStateException("The batch state update is not available as the offset state is maintained");
             }
-            return batchState.tryUpdateState(newState, incrementDeliveryCount, maxDeliveryCount, newMemberId);
+            return batchState.tryUpdateState(newState, ops, maxDeliveryCount, newMemberId);
         }
 
-        private InFlightState startBatchStateTransition(RecordState newState, boolean incrementDeliveryCount, int maxDeliveryCount,
+        private InFlightState startBatchStateTransition(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount,
                                                         String newMemberId) {
             if (batchState == null) {
                 throw new IllegalStateException("The batch state update is not available as the offset state is maintained");
             }
-            return batchState.startStateTransition(newState, incrementDeliveryCount, maxDeliveryCount, newMemberId);
+            return batchState.startStateTransition(newState, ops, maxDeliveryCount, newMemberId);
         }
 
         private void maybeInitializeOffsetStateUpdate() {
@@ -2999,23 +3032,23 @@ public class SharePartition {
 
         /**
          * Try to update the state of the records. The state of the records can only be updated if the
-         * new state is allowed to be transitioned from old state. The delivery count is not incremented
+         * new state is allowed to be transitioned from old state. The delivery count is not changed
          * if the state update is unsuccessful.
          *
          * @param newState The new state of the records.
-         * @param incrementDeliveryCount Whether to increment the delivery count.
+         * @param ops      The behavior on the delivery count.
          *
          * @return {@code InFlightState} if update succeeds, null otherwise. Returning state
          *         helps update chaining.
          */
-        private InFlightState tryUpdateState(RecordState newState, boolean incrementDeliveryCount, int maxDeliveryCount, String newMemberId) {
+        private InFlightState tryUpdateState(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId) {
             try {
-                if (newState == RecordState.AVAILABLE && deliveryCount >= maxDeliveryCount) {
+                if (newState == RecordState.AVAILABLE && ops != DeliveryCountOps.DECREASE && deliveryCount >= maxDeliveryCount) {
                     newState = RecordState.ARCHIVED;
                 }
                 state = state.validateTransition(newState);
-                if (incrementDeliveryCount && newState != RecordState.ARCHIVED) {
-                    deliveryCount++;
+                if (newState != RecordState.ARCHIVED) {
+                    deliveryCount = updatedDeliveryCount(ops);
                 }
                 memberId = newMemberId;
                 return this;
@@ -3025,14 +3058,23 @@ public class SharePartition {
             }
         }
 
+        private int updatedDeliveryCount(DeliveryCountOps ops) {
+            return switch (ops) {
+                case INCREASE -> deliveryCount + 1;
+                case DECREASE -> deliveryCount - 1;
+                // do nothing
+                case NO_OP -> deliveryCount;
+            };
+        }
+
         private void archive(String newMemberId) {
             state = RecordState.ARCHIVED;
             memberId = newMemberId;
         }
 
-        private InFlightState startStateTransition(RecordState newState, boolean incrementDeliveryCount, int maxDeliveryCount, String newMemberId) {
+        private InFlightState startStateTransition(RecordState newState, DeliveryCountOps ops, int maxDeliveryCount, String newMemberId) {
             rollbackState = new InFlightState(state, deliveryCount, memberId, acquisitionLockTimeoutTask);
-            return tryUpdateState(newState, incrementDeliveryCount, maxDeliveryCount, newMemberId);
+            return tryUpdateState(newState, ops, maxDeliveryCount, newMemberId);
         }
 
         private void completeStateTransition(boolean commit) {

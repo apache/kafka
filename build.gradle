@@ -1020,6 +1020,7 @@ project(':core') {
     implementation libs.scalaReflect
     implementation libs.scalaLogging
     implementation libs.slf4jApi
+    implementation libs.re2j
 
     testImplementation project(':clients').sourceSets.test.output
     testImplementation project(':group-coordinator').sourceSets.test.output
@@ -2232,6 +2233,7 @@ project(':storage') {
     implementation project(':clients')
     implementation(libs.caffeine) {
       exclude group: 'org.checkerframework', module: 'checker-qual'
+      exclude group: 'com.google.errorprone', module: 'error_prone_annotations'
     }
     implementation libs.slf4jApi
     implementation libs.jacksonDatabind

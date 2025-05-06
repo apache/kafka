@@ -2497,7 +2497,13 @@ class KafkaApis(val requestChannel: RequestChannel,
     val filteredProducerIds = listTransactionsRequest.data.producerIdFilters.asScala.map(Long.unbox).toSet
     val filteredStates = listTransactionsRequest.data.stateFilters.asScala.toSet
     val durationFilter = listTransactionsRequest.data.durationFilter()
-    val response = txnCoordinator.handleListTransactions(filteredProducerIds, filteredStates, durationFilter)
+    val transactionalIdPatternFilter = listTransactionsRequest.data.transactionalIdPattern
+    val response = txnCoordinator.handleListTransactions(
+      filteredProducerIds,
+      filteredStates,
+      durationFilter,
+      transactionalIdPatternFilter
+    )
 
     // The response should contain only transactionalIds that the principal
     // has `Describe` permission to access.
@@ -3041,7 +3047,7 @@ class KafkaApis(val requestChannel: RequestChannel,
 
     try {
       // Creating the shareFetchContext for Share Session Handling. if context creation fails, the request is failed directly here.
-      shareFetchContext = sharePartitionManager.newContext(groupId, shareFetchData, forgottenTopics, newReqMetadata, isAcknowledgeDataPresent)
+      shareFetchContext = sharePartitionManager.newContext(groupId, shareFetchData, forgottenTopics, newReqMetadata, isAcknowledgeDataPresent, request.context.connectionId)
     } catch {
       case e: Exception =>
         requestHelper.sendMaybeThrottle(request, shareFetchRequest.getErrorResponse(AbstractResponse.DEFAULT_THROTTLE_TIME, e))

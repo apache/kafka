@@ -2684,7 +2684,12 @@ public class GroupMetadataManager {
 
         Map<Uuid, Set<Integer>> topicPartitionChangeMap = new HashMap<>();
         ShareGroupStatePartitionMetadataInfo info = shareGroupPartitionMetadata.get(groupId);
-        Map<Uuid, Set<Integer>> alreadyInitialized = info == null ? new HashMap<>() : mergeShareGroupInitMaps(info.initializedTopics(), info.initializingTopics());
+
+        // We are only considering initialized TPs here. This is because it could happen
+        // that some topics have been moved to initializing but the corresponding persister request
+        // could not be made/failed (invoked by the group coordinator). Then there would be no way to try
+        // the persister call. This way we get the opportunity to retry.
+        Map<Uuid, Set<Integer>> alreadyInitialized = info == null ? new HashMap<>() : info.initializedTopics();
 
         subscriptionMetadata.forEach((topicName, topicMetadata) -> {
             Set<Integer> alreadyInitializedPartSet = alreadyInitialized.getOrDefault(topicMetadata.id(), Set.of());
