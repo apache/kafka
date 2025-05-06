@@ -1347,7 +1347,7 @@ public class SharePartition {
         if (stateNotActive()) {
             return false;
         }
-        boolean acquired = fetchLock.compareAndSet(null, fetchId);
+        boolean acquired = fetchLock.compareAndSet(null, Objects.requireNonNull(fetchId));
         if (acquired) {
             long currentTime = time.hiResClockMs();
             fetchLockAcquiredTimeMs = currentTime;
@@ -1365,23 +1365,21 @@ public class SharePartition {
         // Register the metric for the duration the fetch lock was held. Do not register the metric
         // if the fetch lock was not acquired.
         long currentTime = time.hiResClockMs();
-        if (fetchLock.compareAndSet(fetchId, null)) {
-            long acquiredDurationMs = currentTime - fetchLockAcquiredTimeMs;
-            // Update the metric for the fetch lock time.
-            sharePartitionMetrics.recordFetchLockTimeMs(acquiredDurationMs);
-            // Update fetch lock ratio metric.
-            recordFetchLockRatioMetric(acquiredDurationMs);
-            fetchLockReleasedTimeMs = currentTime;
-        } else {
+        if (!fetchLock.compareAndSet(Objects.requireNonNull(fetchId), null)) {
             // This code should not be reached unless we are in error-prone scenarios. Since we are releasing the fetch
             // lock for multiple share partitions at different places in DelayedShareFetch (due to tackling remote
             // storage fetch and local log fetch from a single purgatory), in order to safeguard ourselves from bad code,
             // we are logging when an instance that does not hold the fetch lock tries to release it.
-            log.info("Instance {} does not hold the fetch lock, yet trying to release it for share partition {}-{}",
-                fetchId, groupId, topicIdPartition);
-            fetchLock.set(null);
+            Uuid fetchLockAcquiredBy = fetchLock.getAndSet(null);
+            log.info("Instance {} does not hold the fetch lock, yet trying to release it for share partition {}-{}. The lock was held by {}",
+                fetchId, groupId, topicIdPartition, fetchLockAcquiredBy);
         }
-
+        long acquiredDurationMs = currentTime - fetchLockAcquiredTimeMs;
+        // Update the metric for the fetch lock time.
+        sharePartitionMetrics.recordFetchLockTimeMs(acquiredDurationMs);
+        // Update fetch lock ratio metric.
+        recordFetchLockRatioMetric(acquiredDurationMs);
+        fetchLockReleasedTimeMs = currentTime;
     }
 
     /**
