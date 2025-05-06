@@ -192,11 +192,6 @@ public class BrokerJwtValidator implements JwtValidator {
     }
 
     @Override
-    public void init() throws IOException {
-        // Do nothing...
-    }
-
-    @Override
     public void close() throws IOException {
         // Do nothing...
     }
