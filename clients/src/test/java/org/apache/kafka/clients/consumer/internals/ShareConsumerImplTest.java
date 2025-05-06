@@ -35,6 +35,7 @@ import org.apache.kafka.common.KafkaException;
 import org.apache.kafka.common.TopicIdPartition;
 import org.apache.kafka.common.TopicPartition;
 import org.apache.kafka.common.Uuid;
+import org.apache.kafka.common.errors.GroupAuthorizationException;
 import org.apache.kafka.common.errors.InvalidGroupIdException;
 import org.apache.kafka.common.errors.InvalidTopicException;
 import org.apache.kafka.common.errors.TimeoutException;
@@ -670,6 +671,33 @@ public class ShareConsumerImplTest {
         completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
         consumer.close();
         verify(applicationEventHandler).addAndGet(any(ShareAcknowledgeOnCloseEvent.class));
+    }
+
+    @Test
+    public void testCloseWithBackgroundQueueErrorsAfterUnsubscribe() {
+        SubscriptionState subscriptions = new SubscriptionState(new LogContext(), AutoOffsetResetStrategy.NONE);
+        consumer = newConsumer(subscriptions);
+
+        // Complete the acknowledge on close event successfully
+        completeShareAcknowledgeOnCloseApplicationEventSuccessfully();
+        
+        // Complete the unsubscribe event successfully
+        completeShareUnsubscribeApplicationEventSuccessfully(subscriptions);
+
+        // Mock the applicationEventHandler to add errors to the queue after unsubscribe
+        doAnswer(invocation -> {
+            // Add errors to the queue after unsubscribe event is processed
+            backgroundEventQueue.add(new ErrorEvent(new TopicAuthorizationException("test-topic")));
+            backgroundEventQueue.add(new ErrorEvent(new InvalidTopicException("test-topic")));
+            backgroundEventQueue.add(new ErrorEvent(new GroupAuthorizationException("test-group")));
+            return null;
+        }).when(applicationEventHandler).add(any(StopFindCoordinatorOnCloseEvent.class));
+
+        // Close should complete successfully despite the errors in the background queue
+        assertDoesNotThrow(() -> consumer.close());
+
+        // Verify that the background queue was processed
+        assertTrue(backgroundEventQueue.isEmpty(), "Background queue should be empty after close");
     }
 
     private Properties requiredConsumerPropertiesAndGroupId(final String groupId) {
