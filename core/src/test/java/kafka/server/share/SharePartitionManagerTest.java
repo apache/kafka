@@ -105,7 +105,6 @@ import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutionException;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 
@@ -124,7 +123,6 @@ import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
-import static org.junit.jupiter.api.Assertions.fail;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -2805,33 +2803,6 @@ public class SharePartitionManagerTest {
         validateRotatedListEquals(topicIdPartitions, resultShareFetch.topicIdPartitions(), 1);
     }
 
-    @Test
-    public void testCreateDelayedErrorFuture() throws InterruptedException {
-        sharePartitionManager = SharePartitionManagerBuilder.builder().build();
-        long maxWaitMs = 500; // 500 milliseconds
-        Exception expectedError = Errors.SHARE_SESSION_LIMIT_REACHED.exception();
-
-        // Create the delayed error future
-        CompletableFuture<Void> future = sharePartitionManager.createDelayedErrorFuture(maxWaitMs, expectedError);
-
-        // Ensure the future does not complete before maxWaitMs
-        assertFalse(future.isDone());
-
-        // Wait for less than maxWaitMs and check that the future is still not completed
-        Thread.sleep(maxWaitMs / 2);
-        assertFalse(future.isDone());
-
-        // Wait for maxWaitMs and check that the future is completed exceptionally
-        Thread.sleep(maxWaitMs);
-        assertTrue(future.isDone());
-        try {
-            future.get();
-            fail("Expected an Exception to be thrown, but future completed successfully");
-        } catch (ExecutionException e) {
-            assertEquals(expectedError, e.getCause());
-        }
-    }
-
     private Timer systemTimerReaper() {
         return new SystemTimerReaper(
             TIMER_NAME_PREFIX + "-test-reaper",
@@ -3046,7 +3017,6 @@ public class SharePartitionManagerTest {
         private Timer timer = new MockTimer();
         private ShareGroupMetrics shareGroupMetrics = new ShareGroupMetrics(time);
         private BrokerTopicStats brokerTopicStats;
-        private final ScheduledExecutorService sessionCacheFullResponseScheduler = Executors.newSingleThreadScheduledExecutor();
 
         private SharePartitionManagerBuilder withReplicaManager(ReplicaManager replicaManager) {
             this.replicaManager = replicaManager;
@@ -3099,8 +3069,7 @@ public class SharePartitionManagerTest {
                 persister,
                 mock(GroupConfigManager.class),
                 shareGroupMetrics,
-                brokerTopicStats,
-                sessionCacheFullResponseScheduler
+                brokerTopicStats
             );
         }
     }

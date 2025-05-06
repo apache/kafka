@@ -31,7 +31,7 @@ import org.apache.kafka.common.acl.AclOperation
 import org.apache.kafka.common.compress.Compression
 import org.apache.kafka.common.config.ConfigResource
 import org.apache.kafka.common.config.ConfigResource.Type.{BROKER, BROKER_LOGGER}
-import org.apache.kafka.common.errors.{ClusterAuthorizationException, UnsupportedVersionException}
+import org.apache.kafka.common.errors.{ClusterAuthorizationException, ShareSessionLimitReachedException, UnsupportedVersionException}
 import org.apache.kafka.common.internals.{Plugin, Topic}
 import org.apache.kafka.common.internals.Topic.SHARE_GROUP_STATE_TOPIC_NAME
 import org.apache.kafka.common.memory.MemoryPool
@@ -6378,6 +6378,42 @@ class KafkaApisTest extends Logging {
     assertEquals(Errors.NONE.code, topicResponses.get(0).partitions.get(0).acknowledgeErrorCode)
     assertEquals(MemoryRecords.EMPTY, topicResponses.get(0).partitions.get(0).records)
     assertEquals(0, topicResponses.get(0).partitions.get(0).acquiredRecords.toArray().length)
+  }
+
+  @Test
+  def handleShareFetchRequestThrottlingWhenSessionCacheIsFull(): Unit = {
+    metadataCache = initializeMetadataCacheWithShareGroupsEnabled()
+
+    val groupId = "group"
+    val memberId: Uuid = Uuid.ZERO_UUID
+    val maxWaitMs: Int = 2000
+
+    doThrow(new ShareSessionLimitReachedException("Share session exceeded"))
+      .when(sharePartitionManager).newContext(any(), any(), any(), any(), any(), any());
+
+    val shareFetchRequestData = new ShareFetchRequestData().
+      setGroupId(groupId).
+      setMemberId(memberId.toString).
+      setShareSessionEpoch(ShareRequestMetadata.INITIAL_EPOCH).
+      setTopics(List().asJava).
+      setMaxWaitMs(maxWaitMs)
+
+    val shareFetchRequest = new ShareFetchRequest.Builder(shareFetchRequestData).build(ApiKeys.SHARE_FETCH.latestVersion)
+    val request = buildRequest(shareFetchRequest)
+    kafkaApis = createKafkaApis()
+    kafkaApis.handleShareFetchRequest(request)
+    val response = verifyNoThrottling[ShareFetchResponse](request)
+    val responseData = response.data()
+
+    val expectedThrottleTimeMs = maxWaitMs
+
+    verify(clientRequestQuotaManager).throttle(
+      ArgumentMatchers.eq(request),
+      any[ThrottleCallback](),
+      ArgumentMatchers.eq(expectedThrottleTimeMs)
+    )
+
+    assertEquals(expectedThrottleTimeMs, responseData.throttleTimeMs)
   }
 
   @Test

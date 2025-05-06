@@ -2052,7 +2052,6 @@ class ShareFetchAcknowledgeRequestTest(cluster: ClusterInstance) extends GroupCo
       val shareFetchRequest = createShareFetchRequest(groupId, metadata, send, Seq.empty, Map.empty, maxWaitMs=1000)
       val shareFetchResponse = connectAndReceiveWithoutClosingSocket[ShareFetchResponse](shareFetchRequest)
       val shareFetchResponseData = shareFetchResponse.data()
-      println("error code received: " + shareFetchResponseData.errorCode)
       shareFetchResponseData.errorCode == Errors.SHARE_SESSION_LIMIT_REACHED.code
     }, "Share fetch request failed", 5000)
 
