@@ -26,113 +26,35 @@ import org.apache.kafka.common.serialization.Deserializer;
 import org.apache.kafka.common.serialization.Serializer;
 import org.apache.kafka.common.test.ClusterInstance;
 import org.apache.kafka.common.test.TestUtils;
-import org.apache.kafka.common.test.api.ClusterConfigProperty;
-import org.apache.kafka.common.test.api.ClusterTest;
-import org.apache.kafka.common.test.api.ClusterTestDefaults;
-import org.apache.kafka.common.test.api.Type;
-
-import org.junit.jupiter.api.BeforeEach;
 
 import java.time.Duration;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import static org.apache.kafka.clients.ClientsTestUtils.consumeAndVerifyRecords;
 import static org.apache.kafka.clients.ClientsTestUtils.sendRecords;
-import static org.apache.kafka.clients.CommonClientConfigs.MAX_POLL_INTERVAL_MS_CONFIG;
-import static org.apache.kafka.clients.consumer.BaseConsumerTest.Testcase.testClusterResourceListener;
-import static org.apache.kafka.clients.consumer.BaseConsumerTest.Testcase.testCoordinatorFailover;
-import static org.apache.kafka.clients.consumer.BaseConsumerTest.Testcase.testSimpleConsumption;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.GROUP_PROTOCOL_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.HEARTBEAT_INTERVAL_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.KEY_DESERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.clients.consumer.ConsumerConfig.SESSION_TIMEOUT_MS_CONFIG;
 import static org.apache.kafka.clients.consumer.ConsumerConfig.VALUE_DESERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.KEY_SERIALIZER_CLASS_CONFIG;
 import static org.apache.kafka.clients.producer.ProducerConfig.VALUE_SERIALIZER_CLASS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_PARTITIONS_CONFIG;
-import static org.apache.kafka.coordinator.group.GroupCoordinatorConfig.OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
-@ClusterTestDefaults(
-    types = {Type.KRAFT},
-    brokers = BaseConsumerTest.BROKER_COUNT,
-    serverProperties = {
-        @ClusterConfigProperty(key = OFFSETS_TOPIC_PARTITIONS_CONFIG, value = "1"),
-        @ClusterConfigProperty(key = OFFSETS_TOPIC_REPLICATION_FACTOR_CONFIG, value = "3"),
-        @ClusterConfigProperty(key = GROUP_MIN_SESSION_TIMEOUT_MS_CONFIG, value = "100"),
-    }
-)
 public class BaseConsumerTest {
 
-    private final ClusterInstance cluster;
     public static final AtomicInteger UPDATE_PRODUCER_COUNT = new AtomicInteger();
     public static final AtomicInteger UPDATE_CONSUMER_COUNT = new AtomicInteger();
     public static final int BROKER_COUNT = 3;
 
-    public BaseConsumerTest(ClusterInstance cluster) {
-        this.cluster = cluster;
-    }
-    
-    @BeforeEach
-    public void setUp() throws InterruptedException {
-        cluster.createTopic(Testcase.TOPIC, 2, (short) BROKER_COUNT);
-    }
-
-    @ClusterTest
-    public void testClassicConsumerSimpleConsumption() throws InterruptedException {
-        testSimpleConsumption(cluster, Map.of(GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT)));
-    }
-
-    @ClusterTest
-    public void testAsyncConsumerSimpleConsumption() throws InterruptedException {
-        testSimpleConsumption(cluster, Map.of(GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)));
-    }
-
-    @ClusterTest
-    public void testClassicConsumerClusterResourceListener() throws InterruptedException {
-        testClusterResourceListener(cluster, Map.of(GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT)));
-    }
-
-    @ClusterTest
-    public void testAsyncConsumerClusterResourceListener() throws InterruptedException {
-        testClusterResourceListener(cluster, Map.of(GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT)));
-    }
-
-    @ClusterTest
-    public void testClassicConsumerCoordinatorFailover() throws InterruptedException {
-        Map<String, Object> config = Map.of(
-            GROUP_PROTOCOL_CONFIG, GroupProtocol.CLASSIC.name().toLowerCase(Locale.ROOT),
-            SESSION_TIMEOUT_MS_CONFIG, 5001,
-            HEARTBEAT_INTERVAL_MS_CONFIG, 1000,
-            // Use higher poll timeout to avoid consumer leaving the group due to timeout
-            MAX_POLL_INTERVAL_MS_CONFIG, 15000
-        );
-        testCoordinatorFailover(cluster, config);
-    }
-
-    @ClusterTest
-    public void testAsyncConsumeCoordinatorFailover() throws InterruptedException {
-        Map<String, Object> config = Map.of(
-            GROUP_PROTOCOL_CONFIG, GroupProtocol.CONSUMER.name().toLowerCase(Locale.ROOT),
-            // Use higher poll timeout to avoid consumer leaving the group due to timeout
-            MAX_POLL_INTERVAL_MS_CONFIG, 15000
-        );
-        testCoordinatorFailover(cluster, config);
-    }
-
     public static class Testcase {
 
-        private static final String TOPIC = "topic";
-        private static final TopicPartition TP = new TopicPartition(TOPIC, 0);
+        public static final String TOPIC = "topic";
+        public static final TopicPartition TP = new TopicPartition(TOPIC, 0);
         
         public static void testSimpleConsumption(
             ClusterInstance cluster, 
