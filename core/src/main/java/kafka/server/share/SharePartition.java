@@ -245,7 +245,7 @@ public class SharePartition {
 
     /**
      * The lock to ensure that the same share partition does not enter a fetch queue
-     * while another one is being fetched within the queue. The DelayedShareFetch instance uuid that acquires the fetch
+     * while another one is being fetched within the queue. The caller's id that acquires the fetch
      * lock is utilized for ensuring the above.
      */
     private final AtomicReference<Uuid> fetchLock;
@@ -1340,7 +1340,7 @@ public class SharePartition {
      * share partition is not fetched concurrently by multiple clients. The fetch lock is released once
      * the records are fetched and acquired.
      *
-     * @param fetchId - the DelayedShareFetch instance uuid that is trying to acquire the fetch lock.
+     * @param fetchId - the caller's id that is trying to acquire the fetch lock.
      * @return A boolean which indicates whether the fetch lock is acquired.
      */
     public boolean maybeAcquireFetchLock(Uuid fetchId) {
@@ -1357,9 +1357,9 @@ public class SharePartition {
     }
 
     /**
-     * Release the fetch lock once the records are fetched from the leader. It is imperative that the DelayedShareFetch instance
+     * Release the fetch lock once the records are fetched from the leader. It is imperative that the caller
      * that acquired the fetch lock should be the one releasing it.
-     * @param fetchId - The DelayedShareFetch instance uuid that is trying to release the fetch lock.
+     * @param fetchId - The caller's id that is trying to release the fetch lock.
      */
     void releaseFetchLock(Uuid fetchId) {
         // Register the metric for the duration the fetch lock was held. Do not register the metric

@@ -1849,7 +1849,7 @@ public class DelayedShareFetchTest {
         private Time time = new MockTime();
         private final Optional<PendingRemoteFetches> pendingRemoteFetches = Optional.empty();
         private ShareGroupMetrics shareGroupMetrics = mock(ShareGroupMetrics.class);
-        private Uuid fetchId = mock(Uuid.class);
+        private Uuid fetchId = Uuid.randomUuid();
 
         DelayedShareFetchBuilder withShareFetchData(ShareFetch shareFetch) {
             this.shareFetch = shareFetch;

@@ -98,7 +98,7 @@ public class DelayedShareFetch extends DelayedOperation {
      */
     private final Meter expiredRequestMeter;
     /**
-     * fetchId serves as a token while acquiring/releasing share partition's fetch lock from a DelayedShareFetch instance.
+     * fetchId serves as a token while acquiring/releasing share partition's fetch lock.
      */
     private final Uuid fetchId;
     // Tracks the start time to acquire any share partition for a fetch request.
@@ -396,7 +396,7 @@ public class DelayedShareFetch extends DelayedOperation {
                             "cannot acquire more records. Releasing the fetch lock by {}", shareFetch.groupId(), topicIdPartition, fetchId);
                     }
                 } catch (Exception e) {
-                    log.error("Error checking condition for SharePartition: {}", sharePartition, e);
+                    log.error("Error checking condition for SharePartition: {}-{}", shareFetch.groupId(), topicIdPartition, e);
                     // Release the lock, if error occurred.
                     sharePartition.releaseFetchLock(fetchId);
                     log.trace("Fetch lock for share partition {}-{} is being released by {}", shareFetch.groupId(), topicIdPartition, fetchId);

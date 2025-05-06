@@ -1603,7 +1603,7 @@ public class SharePartitionTest {
             .withSharePartitionMetrics(sharePartitionMetrics)
             .build();
 
-        Uuid fetchId = mock(Uuid.class);
+        Uuid fetchId = Uuid.randomUuid();
 
         sharePartition.maybeInitialize();
         assertTrue(sharePartition.maybeAcquireFetchLock(fetchId));
@@ -1649,7 +1649,7 @@ public class SharePartitionTest {
             .thenReturn(80L) // for time when lock is released
             .thenReturn(160L); // to update lock idle duration while acquiring lock again.
 
-        Uuid fetchId = mock(Uuid.class);
+        Uuid fetchId = Uuid.randomUuid();
         assertTrue(sharePartition.maybeAcquireFetchLock(fetchId));
         sharePartition.releaseFetchLock(fetchId);
         // Acquired time is 70 but last lock acquisition time was still 0, as it's the first request
@@ -7142,14 +7142,17 @@ public class SharePartitionTest {
         SharePartition sharePartition = SharePartitionBuilder.builder()
             .withState(SharePartitionState.ACTIVE)
             .build();
-        Uuid fetchId1 = mock(Uuid.class);
-        Uuid fetchId2 = mock(Uuid.class);
+        Uuid fetchId1 = Uuid.randomUuid();
+        Uuid fetchId2 = Uuid.randomUuid();
 
         // Initially, fetch lock is not acquired.
         assertNull(sharePartition.fetchLock());
         // fetchId1 acquires the fetch lock.
         assertTrue(sharePartition.maybeAcquireFetchLock(fetchId1));
-        // If we release fetch lock by fetchId2, it will work.
+        // If we release fetch lock by fetchId2, it will work. Currently, we have kept the release of fetch lock as non-strict
+        // such that even if the caller's id for releasing fetch lock does not match the id that holds the lock, we will
+        // still release it. This has been done to avoid the scenarios where we hold the fetch lock for a share partition
+        // forever due to faulty code. In the future, we plan to make the locks handling strict, then this test case needs to be updated.
         sharePartition.releaseFetchLock(fetchId2);
         assertNull(sharePartition.fetchLock()); // Fetch lock has been released.
     }
