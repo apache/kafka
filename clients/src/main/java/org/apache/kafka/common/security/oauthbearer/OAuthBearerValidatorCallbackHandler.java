@@ -147,13 +147,13 @@ public class OAuthBearerValidatorCallbackHandler implements AuthenticateCallback
         try {
             this.jwtValidator.init();
         } catch (IOException e) {
-            throw new KafkaException("The OAuth validator configuration encountered an error when initializing the JwtValidator", e);
+            throw new KafkaException("The OAuth validator callback encountered an error when initializing the JwtValidator", e);
         }
 
         try {
             verificationKeyResolver.init();
         } catch (Exception e) {
-            throw new KafkaException("The OAuth validator configuration encountered an error when initializing the VerificationKeyResolver", e);
+            throw new KafkaException("The OAuth validator callback encountered an error when initializing the VerificationKeyResolver", e);
         }
 
         isInitialized = true;
